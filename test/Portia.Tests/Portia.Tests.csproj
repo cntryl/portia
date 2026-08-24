@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/Portia/Portia.csproj" />
+    <ProjectReference Include="../../src/Portia.Core/Portia.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

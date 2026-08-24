@@ -2,7 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Portia.Abstractions/Portia.Abstractions.csproj" />
     <Project Path="src/Portia.Generators/Portia.Generators.csproj" />
-    <Project Path="src/Portia/Portia.csproj" />
+    <Project Path="src/Portia.Core/Portia.Core.csproj" />
   </Folder>
   <Folder Name="/test/">
     <Project Path="test/Portia.Tests/Portia.Tests.csproj" />
