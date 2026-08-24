@@ -1,5 +1,32 @@
 **/bin/
 **/obj/
+TestResults/
 artifacts/
+coverage/
+coverage.*
+BenchmarkDotNet.Artifacts/
+*.coverage
+*.coveragexml
+*.nupkg
+*.snupkg
+
+# User- and IDE-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+.idea/
+
+# Local configuration and logs
+.env
+.env.*
+!.env.example
+*.log
+
+# OS-generated files
 .DS_Store
+._*
+Thumbs.db
 
