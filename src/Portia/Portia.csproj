@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>Portia</PackageId>
+    <AssemblyName>Portia</AssemblyName>
+    <RootNamespace>Portia</RootNamespace>
+    <Description>Event sourcing, CQRS, and fleet management for .NET.</Description>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj" />
+  </ItemGroup>
+</Project>
