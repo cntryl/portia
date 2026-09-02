@@ -1,4 +1,20 @@
 <Project>
+  <Target Name="BuildProjectReferencedAnalyzersForDesignTime"
+          BeforeTargets="CoreCompile"
+          Condition="'$(DesignTimeBuild)' == 'true'">
+    <ItemGroup>
+      <_ProjectReferencedAnalyzer Include="@(ProjectReference)"
+                                  Condition="'%(ProjectReference.OutputItemType)' == 'Analyzer'" />
+    </ItemGroup>
+
+    <MSBuild Projects="@(_ProjectReferencedAnalyzer)"
+             Targets="Build"
+             BuildInParallel="false"
+             RemoveProperties="DesignTimeBuild;SkipCompilerExecution;ProvideCommandLineArgs;BuildingProject;BuildingInsideVisualStudio;TargetFramework;TargetFrameworks;RuntimeIdentifier;SelfContained"
+             Properties="Configuration=$(Configuration)"
+             Condition="'@(_ProjectReferencedAnalyzer)' != ''" />
+  </Target>
+
   <Target Name="ValidatePackageMetadata" BeforeTargets="Pack" Condition="'$(IsPackable)' == 'true'">
     <Error Condition="'$(PackageId)' == ''" Text="Packable projects must define PackageId." />
     <Error Condition="'$(Description)' == ''" Text="Packable projects must define Description." />
