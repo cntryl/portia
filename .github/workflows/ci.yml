@@ -6,6 +6,10 @@ on:
 
 permissions:
   contents: read
+  packages: read
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   ci:
