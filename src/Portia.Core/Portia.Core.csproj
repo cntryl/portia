@@ -3,12 +3,15 @@
     <TargetFramework>net10.0</TargetFramework>
     <PackageId>Portia.Core</PackageId>
     <AssemblyName>Portia.Core</AssemblyName>
-    <RootNamespace>Portia.Core</RootNamespace>
     <Description>Event sourcing, CQRS, and fleet management for .NET.</Description>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Portia.Tests" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,63 @@
+namespace Cntryl.Portia;
+
+/// <summary>
+/// The transports a request declared itself reachable through, by implementing
+/// <see cref="ICallable" />, <see cref="IQueuable" />, <see cref="INotifiable" />, and/or
+/// <see cref="ISchedulable" />.
+/// </summary>
+[Flags]
+public enum RequestTransports
+{
+    /// <summary>
+    /// No transport marker.
+    /// </summary>
+    None = 0,
+
+    /// <summary>
+    /// The request implements <see cref="ICallable" />.
+    /// </summary>
+    Callable = 1,
+
+    /// <summary>
+    /// The request implements <see cref="IQueuable" />.
+    /// </summary>
+    Queuable = 2,
+
+    /// <summary>
+    /// The request implements <see cref="INotifiable" />.
+    /// </summary>
+    Notifiable = 4,
+
+    /// <summary>
+    /// The request implements <see cref="ISchedulable" />.
+    /// </summary>
+    Schedulable = 8,
+}
+
+/// <summary>
+/// Describes one out-of-process-reachable request discovered at compile time — its route and
+/// which transports it declared itself reachable through — so a host can wire up the RPC
+/// workers, queue consumers, notice consumers, and schedule consumers it actually needs without
+/// runtime assembly scanning or reflection.
+/// </summary>
+/// <param name="requestType">The concrete request type.</param>
+/// <param name="transports">The transports the request declared itself reachable through.</param>
+/// <param name="route">The request's declared route (segments may be
+/// <see cref="RequestRouteAttribute.Wildcard" />).</param>
+public sealed class RequestTransportRegistration(Type requestType, RequestTransports transports, RequestRouteAttribute route)
+{
+    /// <summary>
+    /// Gets the concrete request type.
+    /// </summary>
+    public Type RequestType { get; } = requestType ?? throw new ArgumentNullException(nameof(requestType));
+
+    /// <summary>
+    /// Gets the transports the request declared itself reachable through.
+    /// </summary>
+    public RequestTransports Transports { get; } = transports;
+
+    /// <summary>
+    /// Gets the request's declared route (segments may be <see cref="RequestRouteAttribute.Wildcard" />).
+    /// </summary>
+    public RequestRouteAttribute Route { get; } = route ?? throw new ArgumentNullException(nameof(route));
+}

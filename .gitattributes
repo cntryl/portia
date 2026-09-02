@@ -1,15 +1,24 @@
 * text=auto eol=lf
 
 # Source and project files
+.editorconfig text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
 *.cs text eol=lf
+*.cshtml text eol=lf
 *.csproj text eol=lf
+*.config text eol=lf
 *.props text eol=lf
+*.razor text eol=lf
+*.resx text eol=lf
+*.ruleset text eol=lf
 *.targets text eol=lf
 *.sln text eol=lf
 *.slnx text eol=lf
 *.json text eol=lf
 *.md text eol=lf
 *.sh text eol=lf
+*.xml text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
 
@@ -29,5 +38,14 @@
 *.jpeg -text
 *.gif -text
 *.ico -text
+*.bmp -text
+*.tif -text
+*.tiff -text
+*.webp -text
+*.woff -text
+*.woff2 -text
 *.pdf -text
 *.zip -text
+*.7z -text
+*.gz -text
+*.tar -text

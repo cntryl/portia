@@ -5,19 +5,30 @@ artifacts/
 coverage/
 coverage.*
 BenchmarkDotNet.Artifacts/
+*.binlog
 *.coverage
 *.coveragexml
+*.trx
 *.nupkg
 *.snupkg
 
+# Repository-local SDK and package caches
+.dotnet/
+.nuget/
+packages/
+
 # User- and IDE-specific files
 *.user
+*.rsuser
 *.suo
 *.userosscache
 *.sln.docstates
+*.DotSettings.user
 .vs/
 .vscode/
 .idea/
+.fleet/
+.ionide/
 
 # Local configuration and logs
 .env
@@ -29,4 +40,3 @@ BenchmarkDotNet.Artifacts/
 .DS_Store
 ._*
 Thumbs.db
-

@@ -3,7 +3,6 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <PackageId>Portia.Generators</PackageId>
     <AssemblyName>Portia.Generators</AssemblyName>
-    <RootNamespace>Portia.Generators</RootNamespace>
     <Description>Roslyn source generators for Portia.</Description>
     <IsPackable>true</IsPackable>
     <IsRoslynComponent>true</IsRoslynComponent>
@@ -19,5 +18,9 @@
   <ItemGroup>
     <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
-</Project>
 
+  <ItemGroup>
+    <AdditionalFiles Include="../../docs/AnalyzerReleases.Shipped.md" />
+    <AdditionalFiles Include="../../docs/AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
+</Project>

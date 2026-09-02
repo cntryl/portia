@@ -1,0 +1,289 @@
+namespace Cntryl.Portia;
+
+/// <summary>
+/// Verifies the aggregate event lifecycle.
+/// </summary>
+public sealed class AggregateTests
+{
+    /// <summary>
+    /// Verifies that an aggregate cannot have an empty identity.
+    /// </summary>
+    [Fact]
+    public void ShouldRejectEmptyAggregateIdWhenConstructed()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => new TestAggregate(Uuid.Empty));
+
+        Assert.Equal("id", exception.ParamName);
+    }
+
+    /// <summary>
+    /// Verifies that raising an event updates state and tracks the event for persistence.
+    /// </summary>
+    [Fact]
+    public void ShouldApplyAndTrackEventWhenRaised()
+    {
+        var aggregate = new TestAggregate(Uuid.CreateVersion7());
+
+        aggregate.ChangeValue(42);
+
+        var ev = Assert.Single(aggregate.UncommittedEvents);
+        var valueChanged = Assert.IsType<ValueChanged>(ev);
+        Assert.NotEqual(Uuid.Empty, valueChanged.Metadata.EventId);
+        Assert.Equal(aggregate.Id, valueChanged.Metadata.AggregateId);
+        Assert.Equal(1UL, valueChanged.Metadata.AggregateVersion);
+        Assert.Equal(42, valueChanged.Value);
+        Assert.Equal(42, aggregate.Value);
+        Assert.Equal(1UL, aggregate.Version);
+        Assert.Empty(aggregate.CommittedEvents);
+    }
+
+    /// <summary>
+    /// Verifies that replay updates state, version, and committed history only.
+    /// </summary>
+    [Fact]
+    public void ShouldTrackCommittedEventWhenReplayed()
+    {
+        var id = Uuid.CreateVersion7();
+        var aggregate = new TestAggregate(id);
+        var ev = Committed(new ValueChanged(42), id, 1);
+
+        aggregate.Load([ev]);
+
+        Assert.Equal(42, aggregate.Value);
+        Assert.Equal(1UL, aggregate.Version);
+        Assert.Same(ev, Assert.Single(aggregate.CommittedEvents));
+        Assert.Empty(aggregate.UncommittedEvents);
+    }
+
+    /// <summary>
+    /// Verifies that generated dispatch invokes the concrete overload for each event type.
+    /// </summary>
+    [Fact]
+    public void ShouldDispatchEachEventToConcreteOnEventMethodWhenLoaded()
+    {
+        var id = Uuid.CreateVersion7();
+        var aggregate = new TestAggregate(id);
+
+        aggregate.Load([
+            Committed(new ValueChanged(40), id, 1),
+            Committed(new ValueIncremented(2), id, 2),
+        ]);
+
+        Assert.Equal(42, aggregate.Value);
+        Assert.Equal(2UL, aggregate.Version);
+        Assert.Equal(2, aggregate.CommittedEvents.Count);
+    }
+
+    /// <summary>
+    /// Verifies that a cached aggregate can catch up from the next committed event.
+    /// </summary>
+    [Fact]
+    public void ShouldLoadAdditionalCommittedEventsAfterCachedHistory()
+    {
+        var id = Uuid.CreateVersion7();
+        var aggregate = new TestAggregate(id);
+        aggregate.Load([Committed(new ValueChanged(40), id, 1)]);
+
+        aggregate.Load([
+            Committed(new ValueIncremented(1), id, 2),
+            Committed(new ValueIncremented(1), id, 3),
+        ]);
+
+        Assert.Equal(42, aggregate.Value);
+        Assert.Equal(3UL, aggregate.Version);
+        Assert.Equal(3, aggregate.CommittedEvents.Count);
+        Assert.Empty(aggregate.UncommittedEvents);
+    }
+
+    /// <summary>
+    /// Verifies that a catch-up batch must continue directly after the cached version.
+    /// </summary>
+    [Fact]
+    public void ShouldRejectAdditionalCommittedEventsWhenVersionIsNotContiguous()
+    {
+        var id = Uuid.CreateVersion7();
+        var aggregate = new TestAggregate(id);
+        aggregate.Load([Committed(new ValueChanged(40), id, 1)]);
+
+        _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([
+            Committed(new ValueIncremented(2), id, 3),
+        ]));
+
+        Assert.Equal(40, aggregate.Value);
+        Assert.Equal(1UL, aggregate.Version);
+        _ = Assert.Single(aggregate.CommittedEvents);
+    }
+
+    /// <summary>
+    /// Verifies that duplicate event identities cannot appear in committed history.
+    /// </summary>
+    [Fact]
+    public void ShouldRejectAdditionalCommittedEventWhenEventIdIsAlreadyLoaded()
+    {
+        var id = Uuid.CreateVersion7();
+        var eventId = Uuid.CreateVersion7();
+        var aggregate = new TestAggregate(id);
+        aggregate.Load([Committed(new ValueChanged(40), eventId, id, 1)]);
+
+        _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([
+            Committed(new ValueIncremented(2), eventId, id, 2),
+        ]));
+
+        Assert.Equal(40, aggregate.Value);
+        Assert.Equal(1UL, aggregate.Version);
+        _ = Assert.Single(aggregate.CommittedEvents);
+    }
+
+    /// <summary>
+    /// Verifies that catch-up cannot overwrite pending local decisions.
+    /// </summary>
+    [Fact]
+    public void ShouldRejectCommittedEventsWhenAggregateHasUncommittedChanges()
+    {
+        var id = Uuid.CreateVersion7();
+        var aggregate = new TestAggregate(id);
+        aggregate.ChangeValue(40);
+
+        _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([
+            Committed(new ValueIncremented(2), id, 2),
+        ]));
+
+        Assert.Equal(40, aggregate.Value);
+        Assert.Equal(1UL, aggregate.Version);
+        _ = Assert.Single(aggregate.UncommittedEvents);
+        Assert.Empty(aggregate.CommittedEvents);
+    }
+
+    /// <summary>
+    /// Verifies that an audit is pending without changing aggregate state or version.
+    /// </summary>
+    [Fact]
+    public void ShouldTrackAuditWithoutChangingStateWhenAudited()
+    {
+        var aggregate = new TestAggregate(Uuid.CreateVersion7());
+
+        aggregate.Audit("value inspected");
+
+        var audit = Assert.IsType<ValueAudited>(Assert.Single(aggregate.UncommittedAudits));
+        Assert.Equal("value inspected", audit.Reason);
+        Assert.Equal(aggregate.Id, audit.Metadata.AggregateId);
+        Assert.Equal(0UL, audit.Metadata.AggregateVersion);
+        Assert.Equal(0, aggregate.Value);
+        Assert.Equal(0UL, aggregate.Version);
+        Assert.Empty(aggregate.CommittedEvents);
+        Assert.Empty(aggregate.UncommittedEvents);
+    }
+
+    /// <summary>
+    /// Verifies that committing promotes events and clears both pending buffers.
+    /// </summary>
+    [Fact]
+    public void ShouldPromoteEventsAndClearPendingChangesWhenCommitted()
+    {
+        var aggregate = new TestAggregate(Uuid.CreateVersion7());
+        aggregate.ChangeValue(42);
+        aggregate.Audit("value changed");
+        var ev = Assert.Single(aggregate.UncommittedEvents);
+
+        aggregate.Save();
+
+        Assert.Same(ev, Assert.Single(aggregate.CommittedEvents));
+        Assert.Empty(aggregate.UncommittedEvents);
+        Assert.Empty(aggregate.UncommittedAudits);
+        Assert.Equal(42, aggregate.Value);
+        Assert.Equal(1UL, aggregate.Version);
+    }
+
+    /// <summary>
+    /// Verifies that events cannot be associated with a different aggregate instance.
+    /// </summary>
+    [Fact]
+    public void ShouldRejectEventWhenAggregateIdDoesNotMatch()
+    {
+        var aggregate = new TestAggregate(Uuid.CreateVersion7());
+        var ev = Committed(new ValueChanged(42), Uuid.CreateVersion7(), 1);
+
+        _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([ev]));
+        Assert.Equal(0, aggregate.Value);
+        Assert.Equal(0UL, aggregate.Version);
+        Assert.Empty(aggregate.CommittedEvents);
+        Assert.Empty(aggregate.UncommittedEvents);
+    }
+
+    /// <summary>
+    /// Verifies that an event with no <see cref="Aggregate.On{TEvent}" /> registration at all —
+    /// not even a base type's — fails the same way an unhandled event always has.
+    /// </summary>
+    [Fact]
+    public void ShouldThrowWhenApplyingEventWithNoRegisteredHandler()
+    {
+        var id = Uuid.CreateVersion7();
+        var aggregate = new TestAggregate(id);
+        var ev = Committed(new UnhandledEvent(), id, 1);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => aggregate.Load([ev]));
+
+        Assert.Contains("UnhandledEvent", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that registering two handlers for the same event type fails fast — at
+    /// construction, not silently overwriting the first registration or only surfacing once the
+    /// event is eventually applied.
+    /// </summary>
+    [Fact]
+    public void ShouldThrowWhenRegisteringDuplicateHandlerForSameEventType() =>
+        Assert.Throws<InvalidOperationException>(() => new DuplicateHandlerAggregate(Uuid.CreateVersion7()));
+
+    static T Committed<T>(T ev, Uuid aggregateId, ulong aggregateVersion)
+        where T : DomainEvent
+        => Committed(ev, Uuid.CreateVersion7(), aggregateId, aggregateVersion);
+
+    static T Committed<T>(T ev, Uuid eventId, Uuid aggregateId, ulong aggregateVersion)
+        where T : DomainEvent
+    {
+        ev.AttachMetadata(new DomainEventMetadata(
+            eventId,
+            aggregateId,
+            aggregateVersion,
+            DateTimeOffset.UtcNow));
+        return ev;
+    }
+
+}
+
+sealed class TestAggregate : Aggregate
+{
+    public TestAggregate(Uuid id)
+        : base(id, new EventStreamAddress("test", "aggregates", id.ToString()))
+    {
+        On<ValueChanged>(ev => Value = ev.Value);
+        On<ValueIncremented>(ev => Value += ev.Amount);
+    }
+
+    public int Value { get; private set; }
+
+    public void ChangeValue(int value) => RaiseEvent(new ValueChanged(value));
+
+    public void Audit(string reason) => AuditEvent(new ValueAudited(reason));
+}
+
+sealed class DuplicateHandlerAggregate : Aggregate
+{
+    public DuplicateHandlerAggregate(Uuid id)
+        : base(id, new EventStreamAddress("test", "aggregates", id.ToString()))
+    {
+        On<ValueChanged>(ev => Value = ev.Value);
+        On<ValueChanged>(ev => Value = ev.Value * 2);
+    }
+
+    public int Value { get; private set; }
+}
+
+sealed record ValueChanged(int Value) : DomainEvent;
+
+sealed record ValueIncremented(int Amount) : DomainEvent;
+
+sealed record ValueAudited(string Reason) : DomainEvent;
+
+sealed record UnhandledEvent : DomainEvent;

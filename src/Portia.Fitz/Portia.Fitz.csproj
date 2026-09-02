@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>Portia.Fitz</PackageId>
+    <AssemblyName>Portia.Fitz</AssemblyName>
+    <Description>Fitz-backed request transports (RPC, queue) for Portia.</Description>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Cntryl.Fitz.Abstractions" Version="0.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Portia.Tests" />
+  </ItemGroup>
+</Project>

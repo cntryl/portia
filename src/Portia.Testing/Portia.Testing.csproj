@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>Portia.Testing</PackageId>
+    <AssemblyName>Portia.Testing</AssemblyName>
+    <Description>Testing utilities for Portia aggregates and event streams.</Description>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

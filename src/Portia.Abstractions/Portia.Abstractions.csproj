@@ -3,9 +3,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <PackageId>Portia.Abstractions</PackageId>
     <AssemblyName>Portia.Abstractions</AssemblyName>
-    <RootNamespace>Portia.Abstractions</RootNamespace>
     <Description>Public contracts for the Portia event-sourcing and CQRS framework.</Description>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
-</Project>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Portia.Core" />
+    <InternalsVisibleTo Include="Portia.Fitz" />
+    <InternalsVisibleTo Include="Portia.Testing" />
+    <InternalsVisibleTo Include="Portia.Tests" />
+  </ItemGroup>
+</Project>
