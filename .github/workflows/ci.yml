@@ -32,4 +32,9 @@ jobs:
         run: dotnet build Portia.slnx --configuration Release
 
       - name: Test solution
-        run: dotnet test Portia.slnx --configuration Release --no-build
+        env:
+          PORTIA_FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
+        run: |
+          trap 'docker compose down --volumes' EXIT
+          docker compose up --detach fitz
+          dotnet test Portia.slnx --configuration Release --no-build

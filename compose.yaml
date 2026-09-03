@@ -1,0 +1,20 @@
+name: portia-integration
+
+services:
+  fitz:
+    image: ${PORTIA_FITZ_TEST_IMAGE:-ghcr.io/cntryl/fitz@sha256:987770b7039873313a1c4d0102f06ea8eed0e5435550ea28d5d8107521f0b287}
+    environment:
+      FITZ_ADMIN_AUTH_MODE: open
+      FITZ_AUTH_REQUIRED: "false"
+      FITZ_HTTP_PORT: "4090"
+      FITZ_STORAGE_MODE: local
+      FITZ_STORAGE_PATH: /tmp/fitz
+      FITZ_TCP_ENABLED: "false"
+    init: true
+    ports:
+      - "127.0.0.1:${PORTIA_FITZ_TEST_PORT:-4090}:4090"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp/fitz:rw,noexec,nosuid,size=64m,mode=1777
