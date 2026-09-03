@@ -20,7 +20,7 @@ public sealed class PortiaGeneratedServiceCollectionExtensionsTests
         // RequestAuthorizationTests), so the generated bus needs an IPermissionEvaluator too —
         // not registered by AddPortiaGeneratedComponents itself, same as any other app-provided
         // dependency (IEventStore, IRequestSerializer, ...).
-        _ = services.AddSingleton<IPermissionEvaluator>(RequestAuthorizationTests.FakePermissionEvaluator.AllowAll());
+        _ = services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
         _ = services.AddPortiaGeneratedComponents();
         using var provider = services.BuildServiceProvider();
 

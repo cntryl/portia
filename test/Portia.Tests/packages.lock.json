@@ -160,7 +160,8 @@
       "portia.dependencyinjection": {
         "type": "Project",
         "dependencies": {
-          "Portia.Abstractions": "[1.0.0, )"
+          "Portia.Abstractions": "[1.0.0, )",
+          "Portia.Core": "[1.0.0, )"
         }
       },
       "portia.fitz": {

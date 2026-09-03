@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -9,11 +11,22 @@ namespace Cntryl.Portia;
 /// <param name="actorValidator">Re-validates each request's carried actor token — signature and
 /// expiry included — at the moment it's actually dequeued, not just at the moment it was
 /// enqueued.</param>
-public sealed class QueueRunner(IRequestQueueConsumer consumer, IRequestBus bus, IRequestActorValidator actorValidator)
+/// <param name="logger">
+/// Reports a dropped or abandoned request even when nothing is listening to
+/// <see cref="PortiaTelemetry.ActivitySource" />. Supply it explicitly, or configure
+/// Microsoft.Extensions.Logging with at least one provider before resolving the runner through
+/// DI; a bare <c>ServiceCollection</c> registration does not create or emit logs.
+/// </param>
+public sealed class QueueRunner(
+    IRequestQueueConsumer consumer,
+    IRequestBus bus,
+    IRequestActorValidator actorValidator,
+    ILogger<QueueRunner>? logger = null)
 {
     readonly IRequestQueueConsumer _consumer = consumer ?? throw new ArgumentNullException(nameof(consumer));
     readonly IRequestBus _bus = bus ?? throw new ArgumentNullException(nameof(bus));
     readonly IRequestActorValidator _actorValidator = actorValidator ?? throw new ArgumentNullException(nameof(actorValidator));
+    readonly ILogger<QueueRunner>? _logger = logger;
 
     /// <summary>
     /// Reserves and dispatches queued requests until the queue is exhausted or cancellation is
@@ -37,7 +50,7 @@ public sealed class QueueRunner(IRequestQueueConsumer consumer, IRequestBus bus,
 
                 if (actorResult is not { IsSuccess: true, Value: { } actor })
                 {
-                    PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "actor validation failed");
+                    PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "actor validation failed", logger: _logger);
                     await queued.CompleteAsync(ct).ConfigureAwait(false);
                     continue;
                 }
@@ -53,7 +66,7 @@ public sealed class QueueRunner(IRequestQueueConsumer consumer, IRequestBus bus,
             {
                 // An unrecognized exception's retriability is unknown; abandoning (rather than
                 // silently dropping the request) is the safer default.
-                PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "unrecognized exception", ex);
+                PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "unrecognized exception", ex, _logger);
                 await queued.AbandonAsync(ct).ConfigureAwait(false);
             }
         }

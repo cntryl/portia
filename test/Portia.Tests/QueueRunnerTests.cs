@@ -20,7 +20,7 @@ public sealed class QueueRunnerTests
             new FakeQueuedRequest(new ChangeValue(3)),
         };
         var consumer = new FakeQueueConsumer(items);
-        var runner = new QueueRunner(consumer, bus, new FakeRequestActorValidator());
+        var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator());
 
         await runner.RunAsync();
 
@@ -41,7 +41,7 @@ public sealed class QueueRunnerTests
         var failing = new FakeQueuedRequest(new ChangeValue(1), throwOnDispatch: true);
         var succeeding = new FakeQueuedRequest(new ChangeValue(2));
         var consumer = new FakeQueueConsumer([failing, succeeding]);
-        var runner = new QueueRunner(consumer, bus, new FakeRequestActorValidator());
+        var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator());
 
         await runner.RunAsync();
 
@@ -61,7 +61,7 @@ public sealed class QueueRunnerTests
         var bus = TestRequestBus.Create();
         var invalid = new FakeQueuedRequest(new InvalidChangeValue(1));
         var consumer = new FakeQueueConsumer([invalid]);
-        var runner = new QueueRunner(consumer, bus, new FakeRequestActorValidator());
+        var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator());
 
         await runner.RunAsync();
 
@@ -83,7 +83,7 @@ public sealed class QueueRunnerTests
         var bus = TestRequestBus.Create(changeValueHandler: handler);
         var expired = new FakeQueuedRequest(new ChangeValue(1), actorToken: "expired-token");
         var consumer = new FakeQueueConsumer([expired]);
-        var runner = new QueueRunner(consumer, bus, new FakeRequestActorValidator(rejectToken: "expired-token"));
+        var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired-token"));
 
         await runner.RunAsync();
 
@@ -104,7 +104,7 @@ public sealed class QueueRunnerTests
         var expired = new FakeQueuedRequest(new ChangeValue(1), actorToken: "expired-token");
         var valid = new FakeQueuedRequest(new ChangeValue(2), actorToken: "valid-token");
         var consumer = new FakeQueueConsumer([expired, valid]);
-        var runner = new QueueRunner(consumer, bus, new FakeRequestActorValidator(rejectToken: "expired-token"));
+        var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired-token"));
 
         await runner.RunAsync();
 
@@ -150,14 +150,6 @@ public sealed class QueueRunnerTests
             Abandoned = true;
             return ValueTask.CompletedTask;
         }
-    }
-
-    sealed class FakeRequestActorValidator(string? rejectToken = null) : IRequestActorValidator
-    {
-        public ValueTask<Result<System.Security.Claims.ClaimsPrincipal>> ValidateAsync(string? token, CancellationToken ct = default) =>
-            ValueTask.FromResult(token is not null && token == rejectToken
-                ? Result<System.Security.Claims.ClaimsPrincipal>.Failure(new RequestError(RequestErrorKind.Unauthorized, "Token expired."))
-                : Result<System.Security.Claims.ClaimsPrincipal>.Success(RequestActor.System));
     }
 
     sealed record ThrowingChangeValue(int Value) : IRequest;

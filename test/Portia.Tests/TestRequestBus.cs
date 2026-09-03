@@ -63,5 +63,5 @@ static class TestRequestBus
             httpListWidgetsHandler: httpListWidgetsHandler ?? new HttpListWidgetsHandler(),
             authorizedActionAuthorizer: authorizedActionAuthorizer ?? new AuthorizedActionAuthorizer(),
             recordingGuardedAndAuthorizedActionAuthorizer: guardedAndAuthorizedActionAuthorizer ?? new RecordingGuardedAndAuthorizedActionAuthorizer(),
-            permissionEvaluator: permissionEvaluator ?? RequestAuthorizationTests.FakePermissionEvaluator.AllowAll());
+            permissionEvaluator: permissionEvaluator ?? TestPermissionEvaluator.AllowAll());
 }

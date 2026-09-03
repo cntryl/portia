@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
@@ -10,7 +11,7 @@ namespace Cntryl.Portia;
 /// by construction — an app wires up the actual OpenTelemetry SDK and exporters itself; Portia
 /// only needs to produce activities, never take a dependency on OpenTelemetry packages directly.
 /// </summary>
-public static class PortiaTelemetry
+public static partial class PortiaTelemetry
 {
     /// <summary>
     /// Gets the name every Portia activity and instrument is emitted under, for an app's
@@ -48,16 +49,31 @@ public static class PortiaTelemetry
 
     /// <summary>
     /// Records a background runner (<c>QueueRunner</c>, <c>LiveRequestRunner</c>,
-    /// <c>MultiTenantRunner</c>, ...) silently dropping or abandoning work, so it's visible to
-    /// whatever's observing <see cref="ActivitySource" /> instead of vanishing — nothing in
-    /// Portia should ever require debugging the framework itself to explain a stalled or
-    /// disappearing request.
+    /// <c>MultiTenantRunner</c>, <c>FleetPartitionRunner</c>, ...) silently dropping or
+    /// abandoning work, so it's visible to whatever's observing <see cref="ActivitySource" />
+    /// instead of vanishing — nothing in Portia should ever require debugging the framework
+    /// itself to explain a stalled or disappearing request.
+    ///
+    /// <c>ActivitySource.StartActivity(string)</c> returns <see langword="null" /> —
+    /// silently, with no other signal — unless something has already registered an
+    /// <see cref="ActivityListener" /> for <see cref="SourceName" />: the
+    /// default state for an app that hasn't configured OpenTelemetry yet, which is exactly the
+    /// app most likely to need this visibility. <paramref name="logger" /> is the fallback for
+    /// that case — logged unconditionally at <see cref="LogLevel.Error" /> whenever it's
+    /// supplied, independent of whether anything is listening to the activity source.
     /// </summary>
     /// <param name="runnerName">The runner reporting the fault (typically <c>nameof(...)</c>).</param>
     /// <param name="reason">A short, stable description of what went wrong.</param>
     /// <param name="exception">The exception that caused the fault, if any.</param>
-    public static void RecordRunnerFault(string runnerName, string reason, Exception? exception = null)
+    /// <param name="logger">
+    /// A logger to also report the fault through, independent of OpenTelemetry configuration.
+    /// Every runner accepts one as an optional constructor parameter for exactly this purpose.
+    /// </param>
+    public static void RecordRunnerFault(string runnerName, string reason, Exception? exception = null, ILogger? logger = null)
     {
+        if (logger is not null)
+            LogRunnerFault(logger, runnerName, reason, exception);
+
         using var activity = ActivitySource.StartActivity($"Portia {runnerName} fault");
 
         if (activity is null)
@@ -71,4 +87,7 @@ public static class PortiaTelemetry
 
         _ = activity.SetStatus(ActivityStatusCode.Error, exception?.Message ?? reason);
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Portia {RunnerName} fault: {Reason}")]
+    static partial void LogRunnerFault(ILogger logger, string runnerName, string reason, Exception? exception);
 }

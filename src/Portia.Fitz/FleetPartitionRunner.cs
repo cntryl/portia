@@ -1,4 +1,5 @@
 using Cntryl.Fitz.Abstractions.Domains.Lease;
+using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
@@ -24,9 +25,16 @@ namespace Cntryl.Portia;
 /// not yet as an integration-tested guarantee.
 /// </summary>
 /// <param name="leases">The Fitz lease client every partition is competed for through.</param>
-public sealed class FleetPartitionRunner(ILeaseClient leases)
+/// <param name="logger">
+/// Reports a partition that can't be acquired or whose callback faults even when nothing is
+/// listening to <see cref="PortiaTelemetry.ActivitySource" />. Supply it explicitly, or
+/// configure Microsoft.Extensions.Logging with at least one provider before resolving the
+/// runner through DI; a bare <c>ServiceCollection</c> registration does not create or emit logs.
+/// </param>
+public sealed class FleetPartitionRunner(ILeaseClient leases, ILogger<FleetPartitionRunner>? logger = null)
 {
     readonly ILeaseClient _leases = leases ?? throw new ArgumentNullException(nameof(leases));
+    readonly ILogger<FleetPartitionRunner>? _logger = logger;
 
     /// <summary>
     /// Competes for every partition's lease and, while holding one, runs
@@ -116,7 +124,7 @@ public sealed class FleetPartitionRunner(ILeaseClient leases)
                 var reason = acquired
                     ? $"partition '{partition}' callback faulted while held"
                     : $"partition '{partition}' could not be acquired";
-                PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), reason, ex);
+                PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), reason, ex, _logger);
             }
 
             // Reached whenever WithLeaseAsync returned for any reason other than our own

@@ -4,7 +4,7 @@ namespace Cntryl.Portia;
 /// Proves the RPC path actually round-trips end to end: <see cref="FitzRemoteRequestSender" />
 /// sending a request all the way through <see cref="FitzRpcRequestServer" />, the same
 /// <see cref="IRequestBus" /> dispatch every other transport uses, and back — not just that each
-/// side compiles against the shared contract in isolation. <see cref="FakeRpcClient" /> stands in
+/// side compiles against the shared contract in isolation. <see cref="InMemoryRpcClient" /> stands in
 /// for the real Fitz broker, wiring a registered worker directly to a caller's <c>CallAsync</c>.
 /// </summary>
 public sealed class FitzRpcRoundTripTests
@@ -16,7 +16,7 @@ public sealed class FitzRpcRoundTripTests
     [Fact]
     public async Task ShouldRoundTripResultBearingRequestOverRpc()
     {
-        var rpc = new FakeRpcClient();
+        var rpc = new InMemoryRpcClient();
         var serializer = new JsonRequestSerializer();
         var bus = TestRequestBus.Create();
         var actorValidator = new AlwaysValidActorValidator();
@@ -36,7 +36,7 @@ public sealed class FitzRpcRoundTripTests
     [Fact]
     public async Task ShouldRoundTripNoResultRequestOverRpc()
     {
-        var rpc = new FakeRpcClient();
+        var rpc = new InMemoryRpcClient();
         var serializer = new JsonRequestSerializer();
         var handler = new RpcChangeValueHandler();
         var bus = TestRequestBus.Create(rpcChangeValueHandler: handler);
@@ -58,7 +58,7 @@ public sealed class FitzRpcRoundTripTests
     [Fact]
     public async Task ShouldRejectRequestWhenActorTokenFailsRevalidationOnReceipt()
     {
-        var rpc = new FakeRpcClient();
+        var rpc = new InMemoryRpcClient();
         var serializer = new JsonRequestSerializer();
         var handler = new RpcChangeValueHandler();
         var bus = TestRequestBus.Create(rpcChangeValueHandler: handler);
@@ -83,7 +83,7 @@ public sealed class FitzRpcRoundTripTests
     [Fact]
     public async Task ShouldDispatchRequestRegisteredEntirelyByGeneratedRpcWorkerRegistration()
     {
-        var rpc = new FakeRpcClient();
+        var rpc = new InMemoryRpcClient();
         var serializer = new JsonRequestSerializer();
         var bus = TestRequestBus.Create();
         var server = new FitzRpcRequestServer(rpc, serializer, bus, new AlwaysValidActorValidator());

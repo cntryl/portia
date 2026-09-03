@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
@@ -17,9 +18,16 @@ namespace Cntryl.Portia;
 /// already running on. Every worker runs the same code, so the two concerns compose freely.
 /// </summary>
 /// <param name="tenantDirectory">Reports active tenants and lifecycle changes.</param>
-public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory)
+/// <param name="logger">
+/// Reports a tenant's start callback faulting even when nothing is listening to
+/// <see cref="PortiaTelemetry.ActivitySource" />. Supply it explicitly, or configure
+/// Microsoft.Extensions.Logging with at least one provider before resolving the runner through
+/// DI; a bare <c>ServiceCollection</c> registration does not create or emit logs.
+/// </param>
+public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<MultiTenantRunner>? logger = null)
 {
     readonly ITenantDirectory _tenantDirectory = tenantDirectory ?? throw new ArgumentNullException(nameof(tenantDirectory));
+    readonly ILogger<MultiTenantRunner>? _logger = logger;
 
     /// <summary>
     /// Starts an instance for every currently active tenant, then keeps starting and stopping
@@ -48,14 +56,14 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory)
         try
         {
             await foreach (var tenantId in _tenantDirectory.GetActiveTenantsAsync(ct).WithCancellation(ct).ConfigureAwait(false))
-                Start(tenantId, onTenantStarted, active, ct);
+                Start(tenantId, onTenantStarted, active, _logger, ct);
 
             await foreach (var change in _tenantDirectory.WatchAsync(ct).WithCancellation(ct).ConfigureAwait(false))
             {
                 switch (change.Kind)
                 {
                     case TenantLifecycleChangeKind.Added:
-                        Start(change.TenantId, onTenantStarted, active, ct);
+                        Start(change.TenantId, onTenantStarted, active, _logger, ct);
                         break;
 
                     case TenantLifecycleChangeKind.Removed:
@@ -83,6 +91,7 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory)
         TenantId tenantId,
         Func<TenantId, CancellationToken, Task> onTenantStarted,
         ConcurrentDictionary<TenantId, TenantRun> active,
+        ILogger<MultiTenantRunner>? logger,
         CancellationToken ct)
     {
         // RunAsync only ever calls Start/StopAsync sequentially from its own loops — never
@@ -101,7 +110,8 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory)
             faulted => PortiaTelemetry.RecordRunnerFault(
                 nameof(MultiTenantRunner),
                 $"tenant '{tenantId}' start callback faulted",
-                faulted.Exception?.GetBaseException()),
+                faulted.Exception?.GetBaseException(),
+                logger),
             CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);

@@ -23,7 +23,7 @@ public sealed class FleetPartitionRunnerTests
     [Fact]
     public async Task ShouldBackOffWhenCallbackReturnsImmediately()
     {
-        var leases = new FakeLeaseClient();
+        var leases = new InMemoryLeaseClient();
         var runner = new FleetPartitionRunner(leases);
         using var cts = new CancellationTokenSource();
 
@@ -43,7 +43,7 @@ public sealed class FleetPartitionRunnerTests
     [Fact]
     public async Task ShouldRejectNonPositiveLeaseTtl()
     {
-        var leases = new FakeLeaseClient();
+        var leases = new InMemoryLeaseClient();
         var runner = new FleetPartitionRunner(leases);
 
         _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
@@ -58,7 +58,7 @@ public sealed class FleetPartitionRunnerTests
     [Fact]
     public async Task ShouldRejectDuplicatePartitionKeys()
     {
-        var leases = new FakeLeaseClient();
+        var leases = new InMemoryLeaseClient();
         var runner = new FleetPartitionRunner(leases);
 
         _ = await Assert.ThrowsAsync<ArgumentException>(() =>
@@ -75,7 +75,7 @@ public sealed class FleetPartitionRunnerTests
     [Fact]
     public async Task ShouldReportDifferentFaultReasonForFailedAcquisitionThanFailedCallback()
     {
-        var leases = new FakeLeaseClient();
+        var leases = new InMemoryLeaseClient();
         var runner = new FleetPartitionRunner(leases);
         using var listener = Listen(out var activities);
         using var cts = new CancellationTokenSource();
@@ -135,7 +135,7 @@ public sealed class FleetPartitionRunnerTests
     [Fact]
     public async Task ShouldAcquireEveryPartitionWhenNoWorkerContestsThem()
     {
-        var leases = new FakeLeaseClient();
+        var leases = new InMemoryLeaseClient();
         var runner = new FleetPartitionRunner(leases);
         var held = new ConcurrentDictionary<string, bool>();
         using var cts = new CancellationTokenSource();
@@ -162,7 +162,7 @@ public sealed class FleetPartitionRunnerTests
     [Fact]
     public async Task ShouldGrantPartitionToExactlyOneCompetingWorker()
     {
-        var leases = new FakeLeaseClient();
+        var leases = new InMemoryLeaseClient();
         var runnerA = new FleetPartitionRunner(leases);
         var runnerB = new FleetPartitionRunner(leases);
         var concurrentHolders = 0;
@@ -213,7 +213,7 @@ public sealed class FleetPartitionRunnerTests
     [Fact]
     public async Task ShouldOnlyMoveThePartitionThatWasReleasedWhenAWorkerStops()
     {
-        var leases = new FakeLeaseClient();
+        var leases = new InMemoryLeaseClient();
         var runnerA = new FleetPartitionRunner(leases);
         var runnerB = new FleetPartitionRunner(leases);
         var stablePartitionRestarts = new int[1];

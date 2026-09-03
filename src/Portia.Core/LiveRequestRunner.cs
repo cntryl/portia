@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -9,11 +11,22 @@ namespace Cntryl.Portia;
 /// <param name="bus">The request bus.</param>
 /// <param name="actorValidator">Re-validates each request's carried actor token — signature and
 /// expiry included — at the moment it's actually delivered.</param>
-public sealed class LiveRequestRunner(ILiveRequestConsumer consumer, IRequestBus bus, IRequestActorValidator actorValidator)
+/// <param name="logger">
+/// Reports a lost delivery even when nothing is listening to
+/// <see cref="PortiaTelemetry.ActivitySource" />. Supply it explicitly, or configure
+/// Microsoft.Extensions.Logging with at least one provider before resolving the runner through
+/// DI; a bare <c>ServiceCollection</c> registration does not create or emit logs.
+/// </param>
+public sealed class LiveRequestRunner(
+    ILiveRequestConsumer consumer,
+    IRequestBus bus,
+    IRequestActorValidator actorValidator,
+    ILogger<LiveRequestRunner>? logger = null)
 {
     readonly ILiveRequestConsumer _consumer = consumer ?? throw new ArgumentNullException(nameof(consumer));
     readonly IRequestBus _bus = bus ?? throw new ArgumentNullException(nameof(bus));
     readonly IRequestActorValidator _actorValidator = actorValidator ?? throw new ArgumentNullException(nameof(actorValidator));
+    readonly ILogger<LiveRequestRunner>? _logger = logger;
 
     /// <summary>
     /// Reads and dispatches requests as they are delivered, until cancellation is requested.
@@ -33,7 +46,7 @@ public sealed class LiveRequestRunner(ILiveRequestConsumer consumer, IRequestBus
 
                 if (actorResult is not { IsSuccess: true, Value: { } actor })
                 {
-                    PortiaTelemetry.RecordRunnerFault(nameof(LiveRequestRunner), "actor validation failed");
+                    PortiaTelemetry.RecordRunnerFault(nameof(LiveRequestRunner), "actor validation failed", logger: _logger);
                     continue;
                 }
 
@@ -45,7 +58,7 @@ public sealed class LiveRequestRunner(ILiveRequestConsumer consumer, IRequestBus
             {
                 // Nothing to abandon or redeliver at this transport's level; a failed dispatch
                 // is simply lost. Continue processing later deliveries.
-                PortiaTelemetry.RecordRunnerFault(nameof(LiveRequestRunner), "unrecognized exception", ex);
+                PortiaTelemetry.RecordRunnerFault(nameof(LiveRequestRunner), "unrecognized exception", ex, _logger);
             }
         }
     }

@@ -64,7 +64,7 @@ public sealed class PortiaTelemetryTests
     public async Task ShouldRecordPermissionDenialAsErrorStatus()
     {
         using var listener = Listen(out var activities);
-        var bus = TestRequestBus.Create(permissionEvaluator: RequestAuthorizationTests.FakePermissionEvaluator.DenyAll());
+        var bus = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.DenyAll());
 
         _ = await bus.SendAsync(new TelemetryGuardedAction(), RequestActor.Anonymous);
 

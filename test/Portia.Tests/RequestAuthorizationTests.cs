@@ -36,7 +36,7 @@ public sealed class RequestAuthorizationTests
     public async Task ShouldBlockNoResultRequestWhenPermissionDenied()
     {
         var handler = new GuardedActionHandler();
-        var bus = TestRequestBus.Create(guardedActionHandler: handler, permissionEvaluator: FakePermissionEvaluator.DenyAll());
+        var bus = TestRequestBus.Create(guardedActionHandler: handler, permissionEvaluator: TestPermissionEvaluator.DenyAll());
 
         var result = await bus.SendAsync(new GuardedAction(), RequestActor.Anonymous);
 
@@ -53,7 +53,7 @@ public sealed class RequestAuthorizationTests
     public async Task ShouldDispatchNoResultRequestWhenPermissionGranted()
     {
         var handler = new GuardedActionHandler();
-        var bus = TestRequestBus.Create(guardedActionHandler: handler, permissionEvaluator: FakePermissionEvaluator.AllowAll());
+        var bus = TestRequestBus.Create(guardedActionHandler: handler, permissionEvaluator: TestPermissionEvaluator.AllowAll());
 
         var result = await bus.SendAsync(new GuardedAction(), RequestActor.System);
 
@@ -68,7 +68,7 @@ public sealed class RequestAuthorizationTests
     [Fact]
     public async Task ShouldBlockWithResultRequestWhenPermissionDenied()
     {
-        var bus = TestRequestBus.Create(permissionEvaluator: FakePermissionEvaluator.DenyAll());
+        var bus = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.DenyAll());
 
         var result = await bus.SendAsync(new GuardedQuery(), RequestActor.Anonymous);
 
@@ -85,7 +85,7 @@ public sealed class RequestAuthorizationTests
     [Fact]
     public async Task ShouldInterpolateRequestPropertyIntoPermissionString()
     {
-        var evaluator = FakePermissionEvaluator.AllowAll();
+        var evaluator = TestPermissionEvaluator.AllowAll();
         var bus = TestRequestBus.Create(permissionEvaluator: evaluator);
 
         _ = await bus.SendAsync(new GetOrder(42), RequestActor.System);
@@ -140,7 +140,7 @@ public sealed class RequestAuthorizationTests
         var authorizer = new RecordingGuardedAndAuthorizedActionAuthorizer();
         var bus = TestRequestBus.Create(
             guardedAndAuthorizedActionAuthorizer: authorizer,
-            permissionEvaluator: FakePermissionEvaluator.DenyAll());
+            permissionEvaluator: TestPermissionEvaluator.DenyAll());
 
         var result = await bus.SendAsync(new GuardedAndAuthorizedAction(), RequestActor.System);
 
@@ -158,7 +158,7 @@ public sealed class RequestAuthorizationTests
         var authorizer = new RecordingGuardedAndAuthorizedActionAuthorizer(grant: false);
         var bus = TestRequestBus.Create(
             guardedAndAuthorizedActionAuthorizer: authorizer,
-            permissionEvaluator: FakePermissionEvaluator.AllowAll());
+            permissionEvaluator: TestPermissionEvaluator.AllowAll());
 
         var result = await bus.SendAsync(new GuardedAndAuthorizedAction(), RequestActor.System);
 
@@ -175,7 +175,7 @@ public sealed class RequestAuthorizationTests
     public async Task ShouldThrowForStreamedRequestWhenPermissionDenied()
     {
         var handler = new GuardedSequenceHandler();
-        var bus = TestRequestBus.Create(guardedSequenceHandler: handler, permissionEvaluator: FakePermissionEvaluator.DenyAll());
+        var bus = TestRequestBus.Create(guardedSequenceHandler: handler, permissionEvaluator: TestPermissionEvaluator.DenyAll());
 
         var exception = await Assert.ThrowsAsync<RequestAuthorizationException>(async () =>
         {
@@ -195,7 +195,7 @@ public sealed class RequestAuthorizationTests
     [Fact]
     public async Task ShouldStreamItemsWhenPermissionGranted()
     {
-        var bus = TestRequestBus.Create(permissionEvaluator: FakePermissionEvaluator.AllowAll());
+        var bus = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.AllowAll());
 
         var items = new List<int>();
 
@@ -205,22 +205,6 @@ public sealed class RequestAuthorizationTests
         Assert.Equal([1, 2, 3], items);
     }
 
-    internal sealed class FakePermissionEvaluator(bool defaultGrant) : IPermissionEvaluator
-    {
-        public List<string> EvaluatedPermissions { get; } = [];
-
-        public static FakePermissionEvaluator AllowAll() => new(defaultGrant: true);
-
-        public static FakePermissionEvaluator DenyAll() => new(defaultGrant: false);
-
-        public ValueTask<Result> EvaluateAsync(ClaimsPrincipal actor, string permission, CancellationToken ct = default)
-        {
-            EvaluatedPermissions.Add(permission);
-            return ValueTask.FromResult(defaultGrant
-                ? Result.Success
-                : Result.Failure(new RequestError(RequestErrorKind.Forbidden, $"Missing '{permission}'.")));
-        }
-    }
 }
 
 [RequiresPermission("guarded:action")]

@@ -25,7 +25,7 @@ public sealed class RunnerFaultVisibilityTests
         var consumer = new FakeQueueConsumer([
             new FakeQueuedRequest(new RunnerFaultAction(), actorToken: "expired"),
         ]);
-        var runner = new QueueRunner(consumer, bus, new FakeRequestActorValidator(rejectToken: "expired"));
+        var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired"));
 
         await runner.RunAsync();
 
@@ -48,7 +48,7 @@ public sealed class RunnerFaultVisibilityTests
         using var listener = Listen(out var activities);
         var bus = TestRequestBus.Create();
         var consumer = new FakeQueueConsumer([new FakeQueuedRequest(new UnregisteredRunnerFaultAction())]);
-        var runner = new QueueRunner(consumer, bus, new FakeRequestActorValidator());
+        var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator());
 
         await runner.RunAsync();
 
@@ -72,7 +72,7 @@ public sealed class RunnerFaultVisibilityTests
         using var listener = Listen(out var activities);
         var bus = TestRequestBus.Create();
         var consumer = new FakeLiveRequestConsumer([new LiveRequest(new RunnerFaultAction(), ActorToken: "expired")]);
-        var runner = new LiveRequestRunner(consumer, bus, new FakeRequestActorValidator(rejectToken: "expired"));
+        var runner = new LiveRequestRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired"));
 
         await runner.RunAsync();
 
@@ -94,7 +94,7 @@ public sealed class RunnerFaultVisibilityTests
         using var listener = Listen(out var activities);
         var bus = TestRequestBus.Create();
         var consumer = new FakeLiveRequestConsumer([new LiveRequest(new UnregisteredRunnerFaultAction(), ActorToken: null)]);
-        var runner = new LiveRequestRunner(consumer, bus, new FakeRequestActorValidator());
+        var runner = new LiveRequestRunner(consumer, bus, new TestRequestActorValidator());
 
         await runner.RunAsync();
 
@@ -195,14 +195,6 @@ public sealed class RunnerFaultVisibilityTests
                 yield return item;
             }
         }
-    }
-
-    sealed class FakeRequestActorValidator(string? rejectToken = null) : IRequestActorValidator
-    {
-        public ValueTask<Result<System.Security.Claims.ClaimsPrincipal>> ValidateAsync(string? token, CancellationToken ct = default) =>
-            ValueTask.FromResult(token is not null && token == rejectToken
-                ? Result<System.Security.Claims.ClaimsPrincipal>.Failure(new RequestError(RequestErrorKind.Unauthorized, "Token expired."))
-                : Result<System.Security.Claims.ClaimsPrincipal>.Success(RequestActor.System));
     }
 
     sealed class FakeTenantDirectory(IReadOnlyList<TenantId> initial) : ITenantDirectory

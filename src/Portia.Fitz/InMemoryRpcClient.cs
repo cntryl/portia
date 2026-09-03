@@ -3,13 +3,17 @@ using Cntryl.Fitz.Abstractions.Domains.Rpc;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Stands in for the real Fitz RPC broker: routes a caller's <see cref="CallAsync" /> directly to
-/// whichever worker last registered against that exact route.
+/// Stands in for a real Fitz RPC broker for tests: routes a caller's <see cref="CallAsync" />
+/// directly to whichever worker last registered against that exact route, in-process, with no
+/// network hop. Shipped from <c>Portia.Fitz</c> (not <c>Portia.Testing</c>) since it depends on
+/// <c>Cntryl.Fitz.Abstractions</c> — an app testing its own RPC-based code can reuse this exact
+/// type instead of writing its own fake.
 /// </summary>
-sealed class FakeRpcClient : IRpcClient
+public sealed class InMemoryRpcClient : IRpcClient
 {
     readonly Dictionary<string, Func<RpcRequest, IRpcResponseWriter, CancellationToken, ValueTask>> _workers = [];
 
+    /// <inheritdoc />
     public async IAsyncEnumerable<RpcResponseFrame> CallAsync(
         string route,
         ReadOnlyMemory<byte> body,
@@ -25,6 +29,7 @@ sealed class FakeRpcClient : IRpcClient
             yield return frame;
     }
 
+    /// <inheritdoc />
     public Task<RpcWorkerRegistration> RegisterWorkerAsync(
         string pattern,
         Func<RpcRequest, IRpcResponseWriter, CancellationToken, ValueTask> handler,

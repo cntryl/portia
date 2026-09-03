@@ -21,7 +21,7 @@ public sealed class LiveRequestRunnerTests
             new LiveRequest(new ChangeValue(2), ActorToken: null),
             new LiveRequest(new ChangeValue(3), ActorToken: null),
         ]);
-        var runner = new LiveRequestRunner(consumer, bus, new FakeRequestActorValidator());
+        var runner = new LiveRequestRunner(consumer, bus, new TestRequestActorValidator());
 
         await runner.RunAsync();
 
@@ -42,7 +42,7 @@ public sealed class LiveRequestRunnerTests
             new LiveRequest(new ThrowingChangeValue(0), ActorToken: null),
             new LiveRequest(new ChangeValue(2), ActorToken: null),
         ]);
-        var runner = new LiveRequestRunner(consumer, bus, new FakeRequestActorValidator());
+        var runner = new LiveRequestRunner(consumer, bus, new TestRequestActorValidator());
 
         await runner.RunAsync();
 
@@ -63,7 +63,7 @@ public sealed class LiveRequestRunnerTests
         var consumer = new FakeLiveRequestConsumer([
             new LiveRequest(new ChangeValue(1), ActorToken: "expired-token"),
         ]);
-        var runner = new LiveRequestRunner(consumer, bus, new FakeRequestActorValidator(rejectToken: "expired-token"));
+        var runner = new LiveRequestRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired-token"));
 
         await runner.RunAsync();
 
@@ -83,7 +83,7 @@ public sealed class LiveRequestRunnerTests
             new LiveRequest(new ChangeValue(1), ActorToken: "expired-token"),
             new LiveRequest(new ChangeValue(2), ActorToken: "valid-token"),
         ]);
-        var runner = new LiveRequestRunner(consumer, bus, new FakeRequestActorValidator(rejectToken: "expired-token"));
+        var runner = new LiveRequestRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired-token"));
 
         await runner.RunAsync();
 
@@ -102,14 +102,6 @@ public sealed class LiveRequestRunnerTests
                 yield return item;
             }
         }
-    }
-
-    sealed class FakeRequestActorValidator(string? rejectToken = null) : IRequestActorValidator
-    {
-        public ValueTask<Result<System.Security.Claims.ClaimsPrincipal>> ValidateAsync(string? token, CancellationToken ct = default) =>
-            ValueTask.FromResult(token is not null && token == rejectToken
-                ? Result<System.Security.Claims.ClaimsPrincipal>.Failure(new RequestError(RequestErrorKind.Unauthorized, "Token expired."))
-                : Result<System.Security.Claims.ClaimsPrincipal>.Success(RequestActor.System));
     }
 
     sealed record ThrowingChangeValue(int Value) : IRequest;

@@ -32,7 +32,7 @@ public sealed class AllTransportsSharedHandlerTests
 
         // RPC — a real send through FitzRemoteRequestSender, over FitzRpcRequestServer, into the
         // same bus, and back.
-        var rpc = new FakeRpcClient();
+        var rpc = new InMemoryRpcClient();
         var serializer = new JsonRequestSerializer();
         var server = new FitzRpcRequestServer(rpc, serializer, bus, new AlwaysValidActorValidator());
         _ = await server.RegisterAsync<UniversalAction>();
