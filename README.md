@@ -51,7 +51,7 @@ running.
 | `Portia.AspNetCore` | `MapPortiaGet`/`Post`/`Put`/`Patch`/`Delete`/`GetStream`/`GetSse` — the minimal-API extension methods the HTTP binding generator intercepts. |
 | `Portia.Fitz` | Fitz-backed transports: RPC send/receive, queue publish/consume, notice/schedule live delivery, `FitzEventStore`, and `FleetPartitionRunner` (fleet distribution via Fitz leases). |
 | `Portia.Jwt` | A JWT-backed `IRequestActorValidator` — re-validates a request's carried actor token, no ASP.NET Core dependency. |
-| `Portia.DependencyInjection` | `Microsoft.Extensions.DependencyInjection` integration for reactors and projectors. |
+| `Portia.DependencyInjection` | Wires Portia's background runners into a host as `IHostedService`s — `AddPortiaQueueRunner()`, `AddPortiaLiveRequestRunner()`, `AddPortiaMultiTenantRunner()`, `AddPortiaProjectorRunner<T>()`, `AddPortiaReactorRunner<T>()`. Fleet's `AddPortiaFleetPartitionRunner()` lives in `Portia.Fitz` instead, since it depends on Fitz leases. |
 | `Portia.Testing` | Testing utilities for downstream apps: `InMemoryEventStore`, `TestPermissionEvaluator`, `TestRequestActorValidator`. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
 
 ## Core concepts, briefly
@@ -86,6 +86,13 @@ running.
   before DI constructs the runner. A bare `ServiceCollection` registration does not provide a
   logger. If neither an activity listener nor a configured logger is present, no runner-fault
   signal is emitted.
+- **Hosting**: a runner's `RunAsync` is never called automatically just by constructing it —
+  `Portia.DependencyInjection` (and `Portia.Fitz`, for fleet) provides `IHostedService` wrappers
+  (`AddPortiaQueueRunner()`, `AddPortiaProjectorRunner<T>()`, etc.) that start when the host
+  starts and stop cleanly on shutdown. `ProjectorRunner`/`ReactorRunner` are batch-pass methods,
+  not run-forever loops, so their hosted wrappers also need an `IProjectionCheckpointStore` —
+  `InMemoryProjectionCheckpointStore` (`Portia.Testing`) for tests or a single-instance
+  deployment; anything durable needs its own implementation.
 
 ## Known gaps, stated plainly
 

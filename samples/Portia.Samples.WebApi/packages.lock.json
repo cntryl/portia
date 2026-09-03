@@ -25,10 +25,17 @@
           "Portia.Abstractions": "[1.0.0, )"
         }
       },
-      "portia.dependencyinjection": {
+      "portia.core": {
         "type": "Project",
         "dependencies": {
           "Portia.Abstractions": "[1.0.0, )"
+        }
+      },
+      "portia.dependencyinjection": {
+        "type": "Project",
+        "dependencies": {
+          "Portia.Abstractions": "[1.0.0, )",
+          "Portia.Core": "[1.0.0, )"
         }
       }
     }
