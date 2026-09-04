@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsTestProject>false</IsTestProject>
+    <RootNamespace>Cntryl.Portia.Consumer</RootNamespace>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Remove="Xunit" />
+    <ProjectReference Include="../../src/Portia.Abstractions/Portia.Abstractions.csproj" />
+  </ItemGroup>
+</Project>
