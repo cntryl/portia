@@ -3,13 +3,8 @@ using System.Security.Claims;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies that authorization declared on a request — <see cref="RequiresPermissionAttribute" />
-/// (including <c>{Token}</c> interpolation) and <see cref="IRequestAuthorizer{TRequest}" /> — is
-/// enforced by the generated request bus before a handler runs, for every dispatch shape
-/// (no-result, with-result, streamed). <see cref="GeneratedRequestBus" /> is generated once for
-/// the whole test compilation, so every test here builds it through <see cref="TestRequestBus.Create" />,
-/// which supplies every handler/authorizer/evaluator the generator actually wired in, overriding
-/// only the ones a given test cares about.
+/// Verifies permission and authorizer ordering across all dispatch shapes using the public
+/// module registration and an owned dependency-injection scope.
 /// </summary>
 public sealed class RequestAuthorizationTests
 {
@@ -21,7 +16,8 @@ public sealed class RequestAuthorizationTests
     [Fact]
     public async Task ShouldDispatchUnguardedRequestWithoutConsultingAnyEvaluator()
     {
-        var bus = TestRequestBus.Create();
+        using var busHost = TestRequestBus.Create();
+        var bus = busHost.Bus;
 
         var result = await bus.SendAsync(new GetValue(), RequestActor.System);
 
@@ -36,7 +32,8 @@ public sealed class RequestAuthorizationTests
     public async Task ShouldBlockNoResultRequestWhenPermissionDenied()
     {
         var handler = new GuardedActionHandler();
-        var bus = TestRequestBus.Create(guardedActionHandler: handler, permissionEvaluator: TestPermissionEvaluator.DenyAll());
+        using var busHost = TestRequestBus.Create(guardedActionHandler: handler, permissionEvaluator: TestPermissionEvaluator.DenyAll());
+        var bus = busHost.Bus;
 
         var result = await bus.SendAsync(new GuardedAction(), RequestActor.Anonymous);
 
@@ -53,7 +50,8 @@ public sealed class RequestAuthorizationTests
     public async Task ShouldDispatchNoResultRequestWhenPermissionGranted()
     {
         var handler = new GuardedActionHandler();
-        var bus = TestRequestBus.Create(guardedActionHandler: handler, permissionEvaluator: TestPermissionEvaluator.AllowAll());
+        using var busHost = TestRequestBus.Create(guardedActionHandler: handler, permissionEvaluator: TestPermissionEvaluator.AllowAll());
+        var bus = busHost.Bus;
 
         var result = await bus.SendAsync(new GuardedAction(), RequestActor.System);
 
@@ -68,7 +66,8 @@ public sealed class RequestAuthorizationTests
     [Fact]
     public async Task ShouldBlockWithResultRequestWhenPermissionDenied()
     {
-        var bus = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.DenyAll());
+        using var busHost = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.DenyAll());
+        var bus = busHost.Bus;
 
         var result = await bus.SendAsync(new GuardedQuery(), RequestActor.Anonymous);
 
@@ -86,7 +85,8 @@ public sealed class RequestAuthorizationTests
     public async Task ShouldInterpolateRequestPropertyIntoPermissionString()
     {
         var evaluator = TestPermissionEvaluator.AllowAll();
-        var bus = TestRequestBus.Create(permissionEvaluator: evaluator);
+        using var busHost = TestRequestBus.Create(permissionEvaluator: evaluator);
+        var bus = busHost.Bus;
 
         _ = await bus.SendAsync(new GetOrder(42), RequestActor.System);
         _ = await bus.SendAsync(new GetOrder(99), RequestActor.System);
@@ -103,7 +103,8 @@ public sealed class RequestAuthorizationTests
     public async Task ShouldBlockRequestWhenAuthorizerDenies()
     {
         var handler = new AuthorizedActionHandler();
-        var bus = TestRequestBus.Create(authorizedActionHandler: handler, authorizedActionAuthorizer: new AuthorizedActionAuthorizer());
+        using var busHost = TestRequestBus.Create(authorizedActionHandler: handler, authorizedActionAuthorizer: new AuthorizedActionAuthorizer());
+        var bus = busHost.Bus;
 
         var result = await bus.SendAsync(new AuthorizedAction(OwnerId: 8), RequestActor.System);
 
@@ -119,7 +120,8 @@ public sealed class RequestAuthorizationTests
     [Fact]
     public async Task ShouldGrantOrDenyBasedOnRequestInstanceData()
     {
-        var bus = TestRequestBus.Create(authorizedActionAuthorizer: new AuthorizedActionAuthorizer());
+        using var busHost = TestRequestBus.Create(authorizedActionAuthorizer: new AuthorizedActionAuthorizer());
+        var bus = busHost.Bus;
 
         var ownedResult = await bus.SendAsync(new AuthorizedAction(OwnerId: 7), RequestActor.System);
         var deniedResult = await bus.SendAsync(new AuthorizedAction(OwnerId: 8), RequestActor.System);
@@ -138,9 +140,10 @@ public sealed class RequestAuthorizationTests
     public async Task ShouldCheckPermissionBeforeAuthorizerAndShortCircuitOnDenial()
     {
         var authorizer = new RecordingGuardedAndAuthorizedActionAuthorizer();
-        var bus = TestRequestBus.Create(
+        using var busHost = TestRequestBus.Create(
             guardedAndAuthorizedActionAuthorizer: authorizer,
             permissionEvaluator: TestPermissionEvaluator.DenyAll());
+        var bus = busHost.Bus;
 
         var result = await bus.SendAsync(new GuardedAndAuthorizedAction(), RequestActor.System);
 
@@ -156,9 +159,10 @@ public sealed class RequestAuthorizationTests
     public async Task ShouldRunAuthorizerAfterPermissionIsGranted()
     {
         var authorizer = new RecordingGuardedAndAuthorizedActionAuthorizer(grant: false);
-        var bus = TestRequestBus.Create(
+        using var busHost = TestRequestBus.Create(
             guardedAndAuthorizedActionAuthorizer: authorizer,
             permissionEvaluator: TestPermissionEvaluator.AllowAll());
+        var bus = busHost.Bus;
 
         var result = await bus.SendAsync(new GuardedAndAuthorizedAction(), RequestActor.System);
 
@@ -175,7 +179,8 @@ public sealed class RequestAuthorizationTests
     public async Task ShouldThrowForStreamedRequestWhenPermissionDenied()
     {
         var handler = new GuardedSequenceHandler();
-        var bus = TestRequestBus.Create(guardedSequenceHandler: handler, permissionEvaluator: TestPermissionEvaluator.DenyAll());
+        using var busHost = TestRequestBus.Create(guardedSequenceHandler: handler, permissionEvaluator: TestPermissionEvaluator.DenyAll());
+        var bus = busHost.Bus;
 
         var exception = await Assert.ThrowsAsync<RequestAuthorizationException>(async () =>
         {
@@ -195,7 +200,8 @@ public sealed class RequestAuthorizationTests
     [Fact]
     public async Task ShouldStreamItemsWhenPermissionGranted()
     {
-        var bus = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.AllowAll());
+        using var busHost = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.AllowAll());
+        var bus = busHost.Bus;
 
         var items = new List<int>();
 

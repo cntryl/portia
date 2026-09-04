@@ -88,7 +88,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
             .AppendLine("/// <summary>")
             .AppendLine("/// Registers Portia reactors, projectors, and routed requests discovered at compile time.")
             .AppendLine("/// </summary>")
-            .AppendLine("public static class PortiaGeneratedServiceCollectionExtensions")
+            .AppendLine("internal static class PortiaGeneratedServiceCollectionExtensions")
             .AppendLine("{")
             .AppendLine("    /// <summary>")
             .AppendLine("    /// Registers every concrete reactor and projector declared in this compilation, wires")
@@ -130,7 +130,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         {
             var declaration = (ClassDeclarationSyntax)context.Node;
 
-            if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol || symbol.IsAbstract)
+            if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol || symbol.IsAbstract || !GeneratedTypeShape.IsSupported(symbol))
                 return null;
 
             if (InheritsFrom(symbol, ReactorMetadataName))
@@ -241,7 +241,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         {
             var declaration = (ClassDeclarationSyntax)context.Node;
 
-            if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol { IsAbstract: false } symbol)
+            if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol { IsAbstract: false } symbol || !GeneratedTypeShape.IsSupported(symbol))
                 return null;
 
             var isHandler = symbol.AllInterfaces.Any(iface =>
@@ -272,8 +272,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
             if (ordered.Length > 0)
             {
                 _ = source
-                    .AppendLine("        _ = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<")
-                    .AppendLine("            global::Cntryl.Portia.IRequestBus, global::Cntryl.Portia.GeneratedRequestBus>(services);");
+                    .AppendLine("        global::Cntryl.Portia.PortiaGeneratedRequestRegistrations.Register(services);");
             }
         }
     }

@@ -18,7 +18,8 @@ public sealed class FitzRpcRoundTripTests
     {
         var rpc = new InMemoryRpcClient();
         var serializer = new JsonRequestSerializer();
-        var bus = TestRequestBus.Create();
+        using var busHost = TestRequestBus.Create();
+        var bus = busHost.Bus;
         var actorValidator = new AlwaysValidActorValidator();
         var server = new FitzRpcRequestServer(rpc, serializer, serializer, bus, actorValidator);
         _ = await server.RegisterAsync<RpcGetValue, int>();
@@ -39,7 +40,8 @@ public sealed class FitzRpcRoundTripTests
         var rpc = new InMemoryRpcClient();
         var serializer = new JsonRequestSerializer();
         var handler = new RpcChangeValueHandler();
-        var bus = TestRequestBus.Create(rpcChangeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(rpcChangeValueHandler: handler);
+        var bus = busHost.Bus;
         var server = new FitzRpcRequestServer(rpc, serializer, serializer, bus, new AlwaysValidActorValidator());
         _ = await server.RegisterAsync<RpcChangeValue>();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
@@ -61,7 +63,8 @@ public sealed class FitzRpcRoundTripTests
         var rpc = new InMemoryRpcClient();
         var serializer = new JsonRequestSerializer();
         var handler = new RpcChangeValueHandler();
-        var bus = TestRequestBus.Create(rpcChangeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(rpcChangeValueHandler: handler);
+        var bus = busHost.Bus;
         var server = new FitzRpcRequestServer(rpc, serializer, serializer, bus, new RejectingActorValidator());
         _ = await server.RegisterAsync<RpcChangeValue>();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
@@ -86,7 +89,8 @@ public sealed class FitzRpcRoundTripTests
     {
         var rpc = new InMemoryRpcClient();
         var serializer = new JsonRequestSerializer();
-        var bus = TestRequestBus.Create();
+        using var busHost = TestRequestBus.Create();
+        var bus = busHost.Bus;
         var server = new FitzRpcRequestServer(rpc, serializer, serializer, bus, new AlwaysValidActorValidator());
 
         // No server.RegisterAsync<RpcGetValue, int>() call anywhere — this alone must cover it.

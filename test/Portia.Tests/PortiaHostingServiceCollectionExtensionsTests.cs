@@ -66,7 +66,8 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     {
         var handler = new ChangeValueHandler();
         var services = new ServiceCollection();
-        _ = services.AddSingleton<IRequestBus>(TestRequestBus.Create(changeValueHandler: handler));
+        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        _ = services.AddSingleton(busHost.Bus);
         _ = services.AddSingleton<IRequestQueueConsumer>(new HostingFakeQueueConsumer([new ChangeValue(42)]));
         _ = services.AddSingleton<IRequestActorValidator>(new TestRequestActorValidator());
         _ = services.AddPortiaQueueRunner();

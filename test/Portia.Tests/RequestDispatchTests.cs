@@ -15,7 +15,8 @@ public sealed class RequestDispatchTests
     public async Task ShouldReturnValidationFailureWithoutDispatchingWhenActorValidationFails()
     {
         var handler = new ChangeValueHandler();
-        var bus = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        var bus = busHost.Bus;
         var validator = new TestRequestActorValidator(rejectToken: "expired-token");
 
         var dispatch = await RequestDispatch.SendAsync(
@@ -35,7 +36,8 @@ public sealed class RequestDispatchTests
     public async Task ShouldDispatchToBusAndReturnItsResultWhenActorValidationSucceeds()
     {
         var handler = new ChangeValueHandler();
-        var bus = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        var bus = busHost.Bus;
         var validator = new TestRequestActorValidator();
 
         var dispatch = await RequestDispatch.SendAsync(

@@ -15,7 +15,8 @@ public sealed class RequestNotificationRunnerTests
     public async Task ShouldDispatchEveryDeliveredRequest()
     {
         var handler = new ChangeValueHandler();
-        var bus = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        var bus = busHost.Bus;
         var consumer = new FakeRequestNotificationConsumer([
             new RequestNotification(new ChangeValue(1), ActorToken: "valid-token"),
             new RequestNotification(new ChangeValue(2), ActorToken: "valid-token"),
@@ -37,7 +38,8 @@ public sealed class RequestNotificationRunnerTests
     public async Task ShouldContinueAfterDispatchFailure()
     {
         var handler = new ChangeValueHandler();
-        var bus = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        var bus = busHost.Bus;
         var consumer = new FakeRequestNotificationConsumer([
             new RequestNotification(new ThrowingChangeValue(0), ActorToken: "valid-token"),
             new RequestNotification(new ChangeValue(2), ActorToken: "valid-token"),
@@ -59,7 +61,8 @@ public sealed class RequestNotificationRunnerTests
     public async Task ShouldSkipDispatchWhenActorTokenFailsRevalidation()
     {
         var handler = new ChangeValueHandler();
-        var bus = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        var bus = busHost.Bus;
         var consumer = new FakeRequestNotificationConsumer([
             new RequestNotification(new ChangeValue(1), ActorToken: "expired-token"),
         ]);
@@ -78,7 +81,8 @@ public sealed class RequestNotificationRunnerTests
     public async Task ShouldContinueAfterActorTokenRevalidationFailure()
     {
         var handler = new ChangeValueHandler();
-        var bus = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        var bus = busHost.Bus;
         var consumer = new FakeRequestNotificationConsumer([
             new RequestNotification(new ChangeValue(1), ActorToken: "expired-token"),
             new RequestNotification(new ChangeValue(2), ActorToken: "valid-token"),

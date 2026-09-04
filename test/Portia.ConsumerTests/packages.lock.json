@@ -128,7 +128,7 @@
       "consumer.contracts": {
         "type": "Project",
         "dependencies": {
-          "Portia.Abstractions": "[1.0.0, )"
+          "Portia.DependencyInjection": "[1.0.0, )"
         }
       },
       "consumer.featureone": {

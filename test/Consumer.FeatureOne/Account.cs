@@ -17,4 +17,5 @@ public sealed class Account : Aggregate
     public void Audit(DomainEvent ev) => AuditEvent(ev);
 }
 
+[PortiaModule(typeof(ContractsModule))]
 public partial class AccountsModule;

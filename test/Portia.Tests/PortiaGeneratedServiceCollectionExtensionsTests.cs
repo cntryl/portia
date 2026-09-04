@@ -21,7 +21,7 @@ public sealed class PortiaGeneratedServiceCollectionExtensionsTests
         // not registered by AddPortiaGeneratedComponents itself, same as any other app-provided
         // dependency (IEventStore, IRequestSerializer, ...).
         _ = services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
-        _ = services.AddPortiaGeneratedComponents();
+        _ = services.AddPortiaModule<FrameworkTestModule>();
         using var provider = services.BuildServiceProvider();
 
         var bus = provider.GetRequiredService<IRequestBus>();
@@ -37,7 +37,7 @@ public sealed class PortiaGeneratedServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
         _ = services.AddSingleton<IAggregateRepository>(new RecordingAggregateRepository());
-        _ = services.AddPortiaGeneratedComponents();
+        _ = services.AddPortiaModule<FrameworkTestModule>();
         using var provider = services.BuildServiceProvider();
 
         var reactor = provider.GetRequiredService<TestReactor>();
@@ -53,7 +53,7 @@ public sealed class PortiaGeneratedServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
         _ = services.AddSingleton<IProjectionTarget<TestProjection>>(new UnusedProjectionTarget());
-        _ = services.AddPortiaGeneratedComponents();
+        _ = services.AddPortiaModule<FrameworkTestModule>();
         using var provider = services.BuildServiceProvider();
 
         var projector = provider.GetRequiredService<TestProjector>();
@@ -70,7 +70,7 @@ public sealed class PortiaGeneratedServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
         _ = services.AddSingleton<IAggregateRepository>(new RecordingAggregateRepository());
-        _ = services.AddPortiaGeneratedComponents();
+        _ = services.AddPortiaModule<FrameworkTestModule>();
         using var provider = services.BuildServiceProvider();
 
         var registration = Assert.Single(provider.GetServices<ReactorRegistration>(), r => r.ReactorType == typeof(TestReactor));
@@ -95,7 +95,7 @@ public sealed class PortiaGeneratedServiceCollectionExtensionsTests
         var target = new RecordingProjectionTarget();
         var services = new ServiceCollection();
         _ = services.AddSingleton<IProjectionTarget<TestProjection>>(target);
-        _ = services.AddPortiaGeneratedComponents();
+        _ = services.AddPortiaModule<FrameworkTestModule>();
         using var provider = services.BuildServiceProvider();
         var runner = new ProjectorRunner(store);
 
@@ -115,7 +115,7 @@ public sealed class PortiaGeneratedServiceCollectionExtensionsTests
         var services = new ServiceCollection();
         _ = services.AddSingleton<IAggregateRepository>(new RecordingAggregateRepository());
         _ = services.AddSingleton<IProjectionTarget<TestProjection>>(new UnusedProjectionTarget());
-        _ = services.AddPortiaGeneratedComponents();
+        _ = services.AddPortiaModule<FrameworkTestModule>();
         using var provider = services.BuildServiceProvider();
         var registrations = provider.GetServices<RequestTransportRegistration>().ToList();
 

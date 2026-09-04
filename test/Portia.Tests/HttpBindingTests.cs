@@ -256,7 +256,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddSingleton<IPermissionEvaluator, DebugHeaderPermissionEvaluator>();
         configureServices?.Invoke(builder.Services);
-        _ = builder.Services.AddPortiaGeneratedComponents();
+        _ = builder.Services.AddPortiaModule<FrameworkTestModule>();
 
         _app = builder.Build();
 

@@ -7,6 +7,17 @@ namespace Cntryl.Portia.Consumer;
 
 static class GeneratorCompilation
 {
+    public static IReadOnlyList<Diagnostic> Diagnostics(string source, params IIncrementalGenerator[] generators)
+    {
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Select(path => MetadataReference.CreateFromFile(path));
+        var compilation = CSharpCompilation.Create("Diagnostics", [CSharpSyntaxTree.ParseText(source)], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generators.Select(generator => generator.AsSourceGenerator()));
+        driver = driver.RunGenerators(compilation);
+        return driver.GetRunResult().Diagnostics;
+    }
+
     public static Assembly Compile(string source, params IIncrementalGenerator[] generators)
     {
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)

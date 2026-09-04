@@ -1,0 +1,64 @@
+namespace Cntryl.Portia.Consumer;
+
+public sealed class ComponentCompilationTests
+{
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task GlobalNestedAndPartialComponentsCompileAndExecute(bool nested, bool partial)
+    {
+        var components = """
+            public partial class Watcher : Reactor, IReactorHandler<Ev>
+            {
+                public Watcher() : base("watcher", EventStreamPattern.ForPattern("test")) { }
+                public int Count { get; private set; }
+                public ValueTask HandleAsync(IReactorContext<Ev> context, CancellationToken ct) { Count++; return ValueTask.CompletedTask; }
+                public ValueTask Process() => ReactToEventAsync(new DomainEventRecord(new EventStreamAddress("test", "area", "id"), new Ev(), 0, 0, 0), default);
+            }
+            public partial class View : Projector<object>, IProjectorHandler<Ev, object>
+            {
+                public View() : base("view", EventStreamPattern.ForPattern("test"), new Target()) { }
+                public int Count { get; private set; }
+                public ValueTask HandleAsync(Ev ev, IProjectorContext<object> context, CancellationToken ct) { Count++; return ValueTask.CompletedTask; }
+                public ValueTask Process() => ProjectEventAsync(new DomainEventRecord(new EventStreamAddress("test", "area", "id"), new Ev(), 0, 0, 0), new Context(), default);
+            }
+            """;
+        if (partial)
+            components += "public partial class Watcher { } public partial class View { }";
+        if (nested)
+            components = "public partial class Container { " + components + " }";
+        var prefix = nested ? "Container." : "";
+        var assembly = GeneratorCompilation.Compile("""
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Cntryl.Portia;
+            public sealed record Ev : DomainEvent;
+            public sealed class Context : IProjectorContext<object>
+            {
+                public object Projection { get; } = new();
+                public bool IsRebuild => false;
+            }
+            public sealed class Target : IProjectionTarget<object>
+            {
+                public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(string name, CancellationToken ct = default) => throw new NotSupportedException();
+                public ValueTask<IProjectionBatch<object>> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default) => throw new NotSupportedException();
+            }
+            """ + components + $$"""
+            public static class Scenario
+            {
+                public static async Task<int> Run()
+                {
+                    var watcher = new {{prefix}}Watcher();
+                    var view = new {{prefix}}View();
+                    await watcher.Process();
+                    await view.Process();
+                    return watcher.Count + view.Count;
+                }
+            }
+            """, new ProjectorReactorEventDispatcherGenerator());
+        var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<int>>>();
+        Assert.Equal(2, await run());
+    }
+}

@@ -85,3 +85,29 @@ and execution (except explicit diagnostic tests for unsupported inputs).
 - Additional persistence coverage passes for 1,025-record audit sessions, concrete
   offsets across audit-only pages, missing stored `is_audit` defaulting to false,
   aggregate-owned classification, and stable session identity across failed saves.
+
+## Dispatch and module composition
+
+- Nested dispatch and selected construction: observed DI circular dependency and
+  unrelated-handler constructor exception; both now pass with shared scoped
+  `RequestBus`, typed descriptors, and on-demand dependency resolution.
+- Multi-interface/partial discovery: observed missing second handler and false
+  `PORTIA008` duplicate handler; both now pass. Multi-interface authorizers are also
+  covered, and unselected authorizers are not constructed.
+- Explicit module API: consumer compilation initially failed for missing
+  `AddPortiaModule`; named `[PortiaModule]` partial types now compose idempotently.
+- Contract transports: both module registration orders initially produced zero
+  registrations. Explicit imported `ContractsModule` supplies contracts once; both
+  feature modules contribute events/handlers, and the shared catalog sees all three.
+- Global/nested/partial component compilation: observed invalid namespace emission,
+  missing overrides and repeated-source failures; all three cases now compile and
+  execute projector and reactor dispatch. Source identities include a full-symbol
+  SHA-256 suffix. Unsupported shapes receive `PORTIA014`/`PORTIA015` diagnostics.
+- Additional checks pass for conflicting handler/authorizer modules with registration
+  rollback, and two handlers sharing a simple name in different namespaces.
+- Existing test bus construction now uses an owned DI scope and public module
+  registration; it no longer manually constructs every generated bus dependency.
+- Boundary: Release build and format verification passed; Compose tests passed
+  196 existing + 41 consumer tests, then the added name-collision test passed.
+  An earlier full run failed because Docker had stopped Fitz (broker logged SIGTERM);
+  Compose restart and the full rerun resolved the environmental failure.

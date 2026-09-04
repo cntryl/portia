@@ -111,11 +111,12 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         await using var workerClient = await _broker.CreateClientAsync();
         await using var callerClient = await _broker.CreateClientAsync();
         var serializer = new JsonRequestSerializer();
+        using var busHost = TestRequestBus.Create();
         var server = new FitzRpcRequestServer(
             workerClient.Rpc,
             serializer,
             serializer,
-            TestRequestBus.Create(),
+            busHost.Bus,
             new AlwaysValidActorValidator());
         await using var registration = await server.RegisterAsync<RpcGetValue, int>();
         var sender = new FitzRemoteRequestSender(callerClient.Rpc, serializer, serializer);

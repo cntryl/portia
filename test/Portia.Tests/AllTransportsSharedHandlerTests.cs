@@ -17,7 +17,8 @@ public sealed class AllTransportsSharedHandlerTests
     public async Task ShouldInvokeSameHandlerAcrossDirectQueueRpcAndNotificationTransports()
     {
         var handler = new UniversalActionHandler();
-        var bus = TestRequestBus.Create(universalActionHandler: handler);
+        using var busHost = TestRequestBus.Create(universalActionHandler: handler);
+        var bus = busHost.Bus;
 
         // Direct in-process dispatch — no transport at all.
         var directResult = await bus.SendAsync(new UniversalAction(1), RequestActor.System);

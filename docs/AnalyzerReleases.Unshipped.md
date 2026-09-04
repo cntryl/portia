@@ -11,3 +11,5 @@ PORTIA010 | Portia | Error | A request cannot have more than one registered IReq
 PORTIA011 | Portia | Error | RequiresPermission references an unknown request property
 PORTIA012 | Portia | Warning | IJsonDomainEventUpcaster.EventName references an unknown event name
 PORTIA013 | Portia | Error | RequiresPermission references a nullable request property
+PORTIA014 | Portia | Error | Modules must be accessible non-generic top-level partial classes
+PORTIA015 | Portia | Error | Generated components must have supported accessible non-generic declarations
