@@ -16,8 +16,8 @@ namespace Cntryl.Portia;
 /// real ASP.NET Core <see cref="TestServer" /> — an actual HTTP request/response round trip, not
 /// an assertion on generated source text. Nothing in this repository tested this path before:
 /// every gap here (most notably <see cref="ShouldReturnBadRequestWhenNestedBodyPropertyIsMalformed" />,
-/// a regression test for a bug that previously only surfaced by hand-curling a running instance
-/// of the sample app) had no automated coverage at all.
+/// a regression test for a bug that previously only surfaced during manual HTTP probing) had no
+/// automated coverage at all.
 /// </summary>
 public sealed class HttpBindingTests : IAsyncDisposable
 {
@@ -77,7 +77,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     /// Regression test: a nested body property whose JSON shape doesn't match its target type
     /// (a string where an array was expected) must be a 400, not an unhandled 500 — this exact
     /// case previously threw an uncaught <see cref="JsonException" /> straight through to the
-    /// client, discovered only by hand-curling a running instance of the sample app.
+    /// client, discovered only through a manual HTTP request.
     /// </summary>
     [Fact]
     public async Task ShouldReturnBadRequestWhenNestedBodyPropertyIsMalformed()

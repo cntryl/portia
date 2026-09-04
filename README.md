@@ -13,20 +13,15 @@ compile-time discovery (Roslyn source generators), not runtime reflection or ass
 The two deliberate exceptions are wire boundaries (`JsonRequestSerializer`,
 `JsonDomainEventSerializer`) where a byte payload has no way around naming its own type.
 
-## Quickstart
+## Documentation
 
-The fastest way to see the shape of an app built on Portia is to read
-[`samples/Portia.Samples.WebApi/Program.cs`](samples/Portia.Samples.WebApi/Program.cs) — it's
-short, heavily commented, and runs standalone:
+Start with [Getting started](docs/getting-started.md) for package selection, generated
+registration, request/handler definitions, HTTP endpoints, authorization, asynchronous dispatch,
+and streaming. Runnable applications intentionally live outside this framework repository;
+dedicated sample repositories can evolve and release independently without becoming part of
+Portia's own build.
 
-```
-dotnet run --project samples/Portia.Samples.WebApi
-```
-
-It demonstrates, in order: a guarded command (`[RequiresPermission]`), the `Prefer:
-respond-async` queue pivot (no separate "Async"-suffixed endpoint), route/query/body binding
-with no attributes and no ASP.NET Core reference on the request type itself, and both streaming
-shapes (incremental JSON array, Server-Sent Events) off the same handler.
+## Development
 
 To run the test suite:
 
@@ -109,8 +104,6 @@ running.
 - **No aggregate snapshotting.** `Aggregate.Load` replays the full committed-event history every
   time; there's no checkpoint mechanism yet. Fine at low event counts, a real scaling concern
   for anything long-lived.
-- **The sample app is CQRS-only.** No event-sourced aggregate, multi-tenancy, or fleet
-  distribution example exists yet, despite all three being implemented and tested.
 - **`ReactorRunner`'s bounded, checkpointed batching is opt-in, not automatic.** Found during
   adversarial review: a reactor's job is raising commands against other aggregates, not generally
   safe to redo, but a failure partway through an unbounded pass used to return no checkpoint at
