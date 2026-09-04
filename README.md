@@ -7,7 +7,11 @@ Write a command and its handler:
 ```csharp
 using Cntryl.Portia;
 
+[RequestRoute("public", "greetings", "messages", "create")]
 public sealed record CreateGreeting(string Name) : IRequest<string>, ICallable;
+
+[PortiaModule]
+public partial class GreetingsModule;
 
 sealed class CreateGreetingHandler : IRequestHandler<CreateGreeting, string>
 {
@@ -26,7 +30,7 @@ Wire the command to an HTTP route:
 using Cntryl.Portia;
 
 var builder = WebApplication.CreateBuilder(args);
-_ = builder.Services.AddPortiaGeneratedComponents();
+_ = builder.Services.AddPortiaModule<GreetingsModule>();
 
 var app = builder.Build();
 app.MapPortiaPost<CreateGreeting, string>("/greetings");
@@ -50,7 +54,7 @@ available over HTTP.
 - `IRequest<string>` says that `CreateGreeting` returns text.
 - `ICallable` says that the application may expose it to callers, including over HTTP.
 - `IRequestHandler<CreateGreeting, string>` connects that command to its handler.
-- `AddPortiaGeneratedComponents()` adds the command and handler to the application.
+- `AddPortiaModule<GreetingsModule>()` adds the command and handler to the application.
 - `MapPortiaPost` reads the HTTP request, calls the handler, and writes the HTTP response.
 
 Portia writes the repetitive connection code when the project builds. It is ordinary C# checked
@@ -69,8 +73,9 @@ into the ways it may be called, so behavior stays visible in its type rather tha
 code.
 
 [Read the getting-started guide](docs/getting-started.md) for package setup, authorization,
-asynchronous work, and streaming. Runnable applications will live in dedicated sample
-repositories rather than in this framework repository.
+asynchronous work, persistence, and streaming. The [consumer fixture](test/Portia.ConsumerTests/CompleteWorkflowTests.cs)
+executes two feature modules through direct dispatch, HTTP, RPC, and queues.
+See the [breaking-change migration notes](docs/migration.md) before upgrading.
 
 ## Development
 
@@ -78,27 +83,28 @@ To run the test suite:
 
 ```
 docker compose up --detach fitz
-dotnet test test/Portia.Tests/Portia.Tests.csproj
+dotnet format Portia.slnx --verify-no-changes
+dotnet build Portia.slnx --configuration Release
+dotnet test Portia.slnx --configuration Release --no-build
 docker compose down --volumes
 ```
 
-`FitzBrokerIntegrationTests` connects to the Compose-managed broker at
+The Fitz integration and public consumer tests connect to the Compose-managed broker at
 `ws://127.0.0.1:4090/ws` by default; override `FITZ_TEST_ENDPOINT` when using another
-broker. CI starts and removes the Compose stack automatically. Everything else needs nothing
-running.
+broker. CI starts and removes the Compose stack automatically. The remaining tests run in process.
 
 ## The projects
 
 | Project | What it's for |
 |---|---|
 | `Portia.Abstractions` | The public contracts everything else implements — `Aggregate`, `DomainEvent`, `IRequest`/`IRequestHandler`/`IRequestBus`, `Result`, the transport marker interfaces (`ICallable`/`IQueuable`/`INotifiable`/`ISchedulable`), permission/authorization interfaces, `PortiaTelemetry`. |
-| `Portia.Core` | The runtime pieces built on those contracts: `QueueRunner`, `RequestNotificationRunner`, `ProjectorRunner`/`ReactorRunner`, `MultiTenantRunner`, `EventSourcedTenantDirectory`. |
+| `Portia.Core` | The runtime pieces built on those contracts: `AggregateRepository`, `RequestBus`, `QueueRunner`, `RequestNotificationRunner`, `ProjectorRunner`/`ReactorRunner`, `MultiTenantRunner`, `EventSourcedTenantDirectory`. |
 | `Portia.Generators` | The Roslyn source generators — DI registration, RPC worker registration, HTTP binding interceptors, the domain-event catalog, and the analyzers backing them (`PORTIA0xx` diagnostics). |
 | `Portia.AspNetCore` | `MapPortiaGet`/`Post`/`Put`/`Patch`/`Delete`/`GetStream`/`GetSse` — the minimal-API extension methods the HTTP binding generator intercepts. |
 | `Portia.Fitz` | Fitz-backed transports: RPC send/receive, queue publish/consume, notice/schedule notifications, `FitzEventStore`, and `FleetPartitionRunner` (fleet distribution via Fitz leases). |
 | `Portia.Jwt` | A JWT-backed `IRequestActorValidator` — re-validates a request's carried actor token, no ASP.NET Core dependency. |
 | `Portia.DependencyInjection` | Wires Portia's background runners into a host as `IHostedService`s — `AddPortiaQueueRunner()`, `AddPortiaRequestNotificationRunner()`, `AddPortiaMultiTenantRunner<TWorkload>()`, `AddPortiaProjectorRunner<T>()`, `AddPortiaReactorRunner<T>()`. Fleet's scoped `AddPortiaFleetPartitionRunner<TWorkload>()` lives in `Portia.Fitz` instead, since it depends on Fitz leases. |
-| `Portia.Testing` | Testing utilities for downstream apps: `InMemoryEventStore`, `TestPermissionEvaluator`, `TestRequestActorValidator`. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
+| `Portia.Testing` | Testing utilities for downstream apps: `AggregateScenario<T>`, `DomainEventSeed`, `InMemoryEventStore`, `TestPermissionEvaluator`, `TestRequestActorValidator`. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
 
 ## Core concepts, briefly
 
@@ -106,8 +112,10 @@ running.
   in the constructor — no source generator, no naming convention, a mismatched signature is an
   ordinary compile error. A stale `AppendAsync` (someone else committed to the stream first)
   throws `EventStreamConcurrencyException` from every `IEventStore` implementation — one stable
-  type to catch and retry against, confirmed against a real Fitz broker, not just
-  `InMemoryEventStore`'s own in-process check.
+  type to catch. Portia never reruns the business command automatically.
+  Register `AddPortiaAggregate<T>((services, id) => ...)` and inject `IAggregateRepository`
+  to load/save. Raised events use the aggregate stream; audits use a fresh UUIDv4 session
+  stream per batch in the same realm/area and leave aggregate OCC unchanged.
 - **CQRS dispatch**: `Result`/`Result<T>` instead of exceptions for expected failures; a request
   opts into each transport by implementing that transport's marker interface, checked at compile
   time.
@@ -129,8 +137,8 @@ running.
 - **Schema evolution**: `DomainEventTypeCatalog` maps a logical event name + schema version to a
   CLR type. An exact match resolves directly (old and new versions can simply coexist forever);
   a missing version falls through a chain of JSON-adapter-specific
-  `IJsonDomainEventUpcaster`s. Populated automatically by `DomainEventCatalogGenerator` from every
-  `DomainEvent` type in the compilation.
+  `IJsonDomainEventUpcaster`s. Each explicitly registered module contributes its compile-time-discovered event types
+  to the shared catalog, including imported contract modules.
 - **Multi-tenancy vs. fleet distribution — deliberately orthogonal**: `MultiTenantRunner`
   decides which tenants a component instance runs for, on whichever worker it's already on.
   `FleetPartitionRunner` decides which worker gets to run a given partition at all, using Fitz
@@ -156,7 +164,7 @@ running.
 
 ## Known gaps, stated plainly
 
-- **No aggregate snapshotting.** `Aggregate.Load` replays the full committed-event history every
+- **No aggregate snapshotting.** `IAggregateRepository.LoadAsync<T>` replays the full raised-event history every
   time; there's no checkpoint mechanism yet. Fine at low event counts, a real scaling concern
   for anything long-lived.
 - **`ReactorRunner`'s bounded, checkpointed batching is opt-in, not automatic.** Found during

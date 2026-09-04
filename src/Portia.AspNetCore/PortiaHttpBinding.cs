@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Json;
@@ -27,6 +28,25 @@ public static class PortiaHttpBinding
         return !context.Request.Query.TryGetValue(name, out var values)
             ? null
             : values.Count == 1 ? values[0] : throw new BadHttpRequestException($"Expected one value for '{name}'.");
+    }
+
+    /// <summary>Reads a constructor-bound property using the application's request JSON metadata.</summary>
+    public static TValue ReadBody<TRequest, TValue>(JsonElement body, JsonSerializerOptions options, string memberName,
+        string fallbackName, bool nullable, bool hasDefault, TValue defaultValue)
+    {
+        var info = options.GetTypeInfo(typeof(TRequest));
+        var property = info.Properties.FirstOrDefault(property =>
+            property.AttributeProvider is MemberInfo member && string.Equals(member.Name, memberName, StringComparison.OrdinalIgnoreCase))
+            ?? info.Properties.FirstOrDefault(property => property.Name == fallbackName);
+        if (property?.CustomConverter is not null || property?.NumberHandling is not null)
+        {
+            options = new JsonSerializerOptions(options);
+            if (property.CustomConverter is not null)
+                options.Converters.Insert(0, property.CustomConverter);
+            if (property.NumberHandling is { } numberHandling)
+                options.NumberHandling = numberHandling;
+        }
+        return ReadBody(body, options, property?.Name ?? fallbackName, nullable, hasDefault, defaultValue);
     }
 
     /// <summary>Reads a body property with the configured naming, converters and null contract.</summary>

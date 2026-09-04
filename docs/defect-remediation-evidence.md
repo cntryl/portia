@@ -35,7 +35,7 @@ and execution (except explicit diagnostic tests for unsupported inputs).
 | Queue ownership | Malformed JSON ended enumeration; defaults were 5,000 seconds/16 items; no lease renewal; pending acknowledgment stopped renewal; hosted consumers terminated on faults/EOF | 16 public tests pass, including real broker handoff; format, Release build and Compose suite (196 + 102) green | Queue runner, Fitz consumer and hosted lifecycle |
 | Tenant lifecycle | Independent watcher/snapshot changes disappeared; no injected polling clock; failed workloads never scheduled restart | Clock-driven regressions pass; format, Release build and Compose suite (196 + 109) green | Tenant directory and runner |
 | Complete workflow | Composed RPC registration API absent; business request initially had no registered handler | Both stores pass the same public workflow with real Fitz RPC/queue, two modules and four components; boundary 196 + 113 tests | Consumer host fixture and module RPC descriptors |
-| Final readiness | Pending: full format/build/Compose tests; complete review; rebase; final SHA hosted CI; squash merge and main readback | Pending | Single coordinated PR |
+| Final readiness | Complete-diff review added seven reproduced defects and public cleanup/shape coverage | Format verification, Release build (zero warnings/errors), Compose suite 196 + 124 green; refreshed main unchanged | Final hosted checks and merge metadata on PR #6 |
 
 ## Commands
 
@@ -229,3 +229,43 @@ and execution (except explicit diagnostic tests for unsupported inputs).
   checked separately from aggregate state and durable stream contents.
 - Format verification, Release build (zero warnings/errors) and Compose-backed
   solution tests passed: 196 existing + 113 consumer tests.
+
+## Complete-diff review regressions
+
+- Four generator/binding regressions reproduced module hint-name collisions, ignored
+  property converters, ignored JSON metadata names (HTTP 400 instead of 200), and
+  absent diagnostics for result-bearing queued endpoints. Full-symbol hint names,
+  request JSON property metadata and a targeted PORTIA016 diagnostic correct them.
+- Qualified static endpoint calls already passed; no production change was needed.
+  An invalid C# unqualified static extension invocation was discarded from the
+  initial test draft rather than treated as a framework defect.
+- Two further consumer compilation failures reproduced an escaped module identifier
+  emitted without escaping and a nested interface emitted as a class. Both now
+  compile and execute. The compilation harness also rejects generator exceptions.
+- A reservation-loss cancellation callback throwing from application code faulted
+  renewal cleanup and stopped later deliveries. The callback failure is now reported
+  without faulting renewal completion; the failed reservation is not acknowledged
+  and the following valid item completes.
+- Additional already-green coverage verifies property number-handling overrides,
+  partial RPC registration cleanup, cleanup attempts for every worker despite an
+  unregister failure, primary registration-error preservation, and repeat disposal.
+- Expanded HTTP/module/workflow checks passed 13 existing + 47 consumer cases;
+  queue cleanup passed 7 public cases. Final solution validation passed below.
+- Review covered aggregate pending/history and metadata invariants, source versus
+  session routes, both event-store readers/writers, generated dispatch and shapes,
+  authorization order, scoped hosted execution, stream enumeration/disposal,
+  reservation ownership, tenant progress/restarts, and migration examples.
+
+## Final local readiness
+
+- `dotnet format Portia.slnx --verify-no-changes`: passed.
+- `dotnet build Portia.slnx --configuration Release`: passed, zero warnings/errors.
+- Compose-backed `dotnet test Portia.slnx --configuration Release --no-build`:
+  **320 passed, zero failed/skipped** (196 existing + 124 public consumer tests).
+- Refreshed `origin/main` remains `0ab2048a534be84632e2a74a977d6563fdf1f0cd`;
+  no upstream changes are omitted. The branch is rebased onto that current base.
+- No review comments, submitted reviews, or unresolved review discussions were
+  present at readiness. Final SHA hosted checks and squash-merge/main readback are
+  recorded in [PR #6](https://github.com/cntryl/portia/pull/6) and its CI runs.
+- Breaking changes are listed in `docs/migration.md`. The publication workflow is
+  manual-only; no publishing or tagging is performed by this change.

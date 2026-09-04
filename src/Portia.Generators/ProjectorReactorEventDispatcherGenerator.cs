@@ -252,7 +252,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         foreach (var parent in parents)
         {
             var kind = parent.IsRecord ? (parent.IsValueType ? "record struct" : "record")
-                : parent.IsValueType ? "struct" : "class";
+                : parent.TypeKind == TypeKind.Interface ? "interface" : parent.IsValueType ? "struct" : "class";
             _ = source.Append("partial ").Append(kind).Append(" @").Append(parent.Name).AppendLine(" {");
         }
         return source.Append("partial class @").Append(symbol.Name).AppendLine(" {");

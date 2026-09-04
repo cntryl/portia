@@ -32,7 +32,8 @@ static class GeneratorCompilation
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generators.Select(generator => generator.AsSourceGenerator()), parseOptions: parseOptions);
-        _ = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+        Assert.All(driver.GetRunResult().Results, result => Assert.Null(result.Exception));
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         using var stream = new MemoryStream();
         var result = output.Emit(stream);

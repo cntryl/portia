@@ -125,7 +125,11 @@ public sealed class FitzRequestQueueConsumer(
             {
                 _renewalError = ex;
                 PortiaTelemetry.RecordRunnerFault(nameof(FitzRequestQueueConsumer), "reservation renewal failed", ex, logger);
-                await _lost.CancelAsync().ConfigureAwait(false);
+                try { await _lost.CancelAsync().ConfigureAwait(false); }
+                catch (Exception callbackError)
+                {
+                    PortiaTelemetry.RecordRunnerFault(nameof(FitzRequestQueueConsumer), "reservation cancellation callback failed", callbackError, logger);
+                }
             }
         }
 

@@ -3,10 +3,11 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ComponentCompilationTests
 {
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public async Task GlobalNestedAndPartialComponentsCompileAndExecute(bool nested, bool partial)
+    [InlineData(false, false, "class")]
+    [InlineData(true, false, "class")]
+    [InlineData(true, false, "interface")]
+    [InlineData(false, true, "class")]
+    public async Task GlobalNestedAndPartialComponentsCompileAndExecute(bool nested, bool partial, string containerKind)
     {
         var components = """
             public partial class Watcher : Reactor, IReactorHandler<Ev>
@@ -27,7 +28,7 @@ public sealed class ComponentCompilationTests
         if (partial)
             components += "public partial class Watcher { } public partial class View { }";
         if (nested)
-            components = "public partial class Container { " + components + " }";
+            components = "public partial " + containerKind + " Container { " + components + " }";
         var prefix = nested ? "Container." : "";
         var assembly = GeneratorCompilation.Compile("""
             using System;

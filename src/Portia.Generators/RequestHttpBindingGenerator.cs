@@ -115,6 +115,9 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             _ => CallKind.Send,
         };
 
+        if (kind == CallKind.Queue && method.TypeArguments.Length == 2)
+            return Invalid(invocation, "asynchronous queue dispatch requires a no-result IRequest; remove IQueuable from a result-bearing request");
+
         var resultType = kind is CallKind.Queue
             ? null
             : method.TypeArguments.Length == 2
@@ -301,7 +304,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             if (parameter.Source == ParameterSource.Body)
             {
                 _ = source.Append("                value").Append(i).Append(" = global::Cntryl.Portia.PortiaHttpBinding.ReadBody<")
-                    .Append(parameter.Type).Append(">(body.RootElement, jsonOptions, ").Append(name)
+                    .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
+                    .Append(">(body.RootElement, jsonOptions, ").Append(Literal(parameter.Name)).Append(", ").Append(name)
                     .Append(parameter.Nullable ? ", true" : ", false")
                     .Append(parameter.Default is not null ? ", true, " : ", false, ")
                     .Append(parameter.Default ?? "default!").AppendLine(");");

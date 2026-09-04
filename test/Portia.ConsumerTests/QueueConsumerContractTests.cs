@@ -94,6 +94,31 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
+    public async Task FailingCancellationCallbackDoesNotPreventReservationCleanupOrLaterWork()
+    {
+        var clock = new ManualClock();
+        var serializer = new JsonRequestSerializer();
+        var failed = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion7()), null), 1) { FailExtension = true };
+        var success = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion7()), null), 1);
+        var consumer = new FitzRequestQueueConsumer(new QueueClient([failed, success]), serializer,
+            "queue://consumer/scopes/delivery", visibilityTimeoutSeconds: 4, timeProvider: clock);
+        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        Assert.True(await reader.MoveNextAsync());
+        var lost = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var failingCallback = reader.Current.ReservationCancellation.Register(() => throw new IOException("Application cancellation callback failed"));
+        using var observed = reader.Current.ReservationCancellation.Register(lost.SetResult);
+        _ = await clock.WaitForDelayAsync();
+        _ = await clock.WaitForDelayAsync();
+        clock.Advance(TimeSpan.FromSeconds(2));
+        await lost.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await reader.Current.AbandonAsync();
+        Assert.True(await reader.MoveNextAsync());
+        await reader.Current.CompleteAsync();
+        Assert.Equal(0, failed.Completions);
+        Assert.Equal(1, success.Completions);
+    }
+
+    [Fact]
     public async Task DefaultReserveUsesSecondsAndOneItemWithoutChangingAttempt()
     {
         var serializer = new JsonRequestSerializer();

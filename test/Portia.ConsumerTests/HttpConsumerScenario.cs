@@ -4,7 +4,7 @@ namespace Cntryl.Portia.Consumer;
 
 static class HttpConsumerScenario
 {
-    public static Assembly Compile(string declaration, string handle, string mapping)
+    public static Assembly Compile(string declaration, string handle, string mapping, string configuration = "")
         => GeneratorCompilation.Compile($$"""
             using System;
             using System.Globalization;
@@ -42,6 +42,7 @@ static class HttpConsumerScenario
                         if (snake) options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
                         if (converter) options.SerializerOptions.Converters.Add(new HexConverter());
                     });
+                    {{configuration}}
                     await using var app = builder.Build();
                     {{mapping}}
                     await app.StartAsync();
