@@ -254,6 +254,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
     {
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.ConfigureHttpJsonOptions(options =>
+            options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
         _ = builder.Services.AddSingleton<IPermissionEvaluator, DebugHeaderPermissionEvaluator>();
         configureServices?.Invoke(builder.Services);
         _ = builder.Services.AddPortiaModule<FrameworkTestModule>();

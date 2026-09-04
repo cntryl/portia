@@ -31,7 +31,7 @@ and execution (except explicit diagnostic tests for unsupported inputs).
 | Aggregate persistence | Public API initially missing; wrong mixed-stream position, audit-before-creation and concurrent-operation regressions observed | 27 consumer tests pass, including UUIDv4 sessions, OCC, long audit pages, stored metadata compatibility and append/commit cleanup | Repository, factories, both stores, serializer, testing helpers |
 | Dispatch and modules | Observed circular dependency, unrelated construction, missing/duplicate interfaces, invalid shapes and missing module contributions | Compile-and-execute regressions pass; module order, conflicts, idempotence and authorization covered | Shared dispatcher and generated module descriptors |
 | Hosting and lifetimes | Observed one reactor instead of two; missing generated projector resolution; root/scoped resolution failures for components and all three inbound transports | Public scope/multiplicity and recovery tests pass; format, Release build, Compose suite (196 + 54) green | DI hosting, transports, projector/reactor runners |
-| HTTP contracts | Pending: nullable/default/required/null; constants; configured JSON names/converters; invalid kinds; invariant scalar binding; diagnostics; interception identity; streaming authorization/disposal; async route values | Pending | HTTP generator and endpoint mapping |
+| HTTP contracts | Nullable compilation, constant route fallback, ignored defaults/options, invalid roots, missing diagnostics, streaming authorization/disposal, missing async route resolver and optional token failures observed | 32 public consumer HTTP tests pass; format, Release build and Compose suite (196 + 86) green | HTTP generator and endpoint mapping |
 | Queue ownership | Pending: malformed/failed delivery; unchanged reservations; recovery/backoff/cancellation; acknowledgments; seconds; renewal; real broker redelivery handoff | Pending | Queue runner, Fitz consumer and hosted lifecycle |
 | Tenant lifecycle | Pending: idle polling; restart/backoff; removal; duplicates; independent watchers; shutdown | Pending | Tenant directory and runner |
 | Complete workflow | Pending: two modules, persistence, two reactors/projectors, direct/HTTP/RPC/queue, declined audit, state/stream/projections | Pending | Consumer host fixture and onboarding |
@@ -132,3 +132,28 @@ and execution (except explicit diagnostic tests for unsupported inputs).
 - Hosting boundary: format verification, Release build (zero warnings/errors), and
   Compose tests passed (196 existing + 54 consumer). Fixture transport count was
   updated to include its new scope-test request while retaining both feature checks.
+
+## HTTP binding and streaming
+
+- Passing consumer HTTP baseline preceded regressions. Ten failures reproduced
+  nullable scalar compile errors, literal/constant binding differences, missing
+  defaults, ignored JSON names/converters and invalid-root exceptions. All fifteen
+  baseline/binding cases now compile and execute with configured ASP.NET JSON options.
+- Two unsupported-shape tests failed to find any diagnostic. They now report
+  `PORTIA016` with constant-route or scalar-binding guidance. Invariant decimal
+  parsing and semantic exclusion of unrelated mapping methods also pass.
+- Streaming regressions produced four unhandled authorization failures and three
+  disposal timeouts. All ten JSON/SSE cases now pass: authorization before response
+  start, one enumeration, disposal on success/cancellation/failure, and abort after
+  an error once streaming has begun.
+- Async-route consumer compilation failed for missing `WithPortiaRouteValues` and
+  generated code relying on an implicit LINQ import. Both are fixed; endpoint realm,
+  resource, bearer token and payload reach the queue publisher correctly.
+- Optional route regression returned null for `/binding/7` with `{id?}`. Optional,
+  constrained, default and catch-all token prefixes are now recognized; the nullable
+  optional-route cases pass. HTTP targeted gate: 32 consumer tests passed.
+- Existing HTTP tests configure snake case explicitly; new consumer tests verify
+  both the ASP.NET camel-case default and explicitly configured snake case.
+
+- HTTP boundary: format verification, Release build (zero warnings/errors), and
+  the Compose-backed suite passed (196 existing + 86 consumer tests).

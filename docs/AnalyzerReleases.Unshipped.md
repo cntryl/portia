@@ -13,3 +13,4 @@ PORTIA012 | Portia | Warning | IJsonDomainEventUpcaster.EventName references an 
 PORTIA013 | Portia | Error | RequiresPermission references a nullable request property
 PORTIA014 | Portia | Error | Modules must be accessible non-generic top-level partial classes
 PORTIA015 | Portia | Error | Generated components must have supported accessible non-generic declarations
+PORTIA016 | Portia | Error | Unsupported HTTP binding requires a constant route and supported constructor and scalar types

@@ -6,9 +6,9 @@ namespace Cntryl.Portia;
 /// <summary>
 /// Hosts a <see cref="Projector{TProjection}" /> as a continuous background loop: loads its
 /// checkpoint from its projection target, runs one <see cref="ProjectorRunner" /> pass, waits,
-/// and repeats — reloading authoritative progress after faults until the host shuts down. Register via
-/// <c>IServiceCollection.AddPortiaProjectorRunner&lt;TProjection&gt;()</c>
-/// (<c>Portia.DependencyInjection</c>) rather than constructing this directly.
+/// and repeats — reloading authoritative progress after faults until the host shuts down. Application hosting uses
+/// <c>IServiceCollection.AddPortiaProjectorRunner&lt;TProjector&gt;()</c> for scoped concrete components.
+/// This direct wrapper uses caller-owned runner and projector dependencies.
 /// </summary>
 /// <typeparam name="TProjection">The projection-specific application port.</typeparam>
 /// <param name="runner">Runs one batched pass over currently readable events.</param>

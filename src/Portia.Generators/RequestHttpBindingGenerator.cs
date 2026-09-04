@@ -4,12 +4,13 @@ using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Intercepts every <c>app.MapPortiaGet/Post/Put/Patch/Delete[Async]&lt;TRequest[,TOut]&gt;(pattern)</c>
+/// Intercepts every <c>app.MapPortiaGet/Post/Put/Patch/Delete&lt;TRequest[,TOut]&gt;(pattern)</c>
 /// call site and replaces it with generated code that builds <c>TRequest</c> straight from the
 /// route, query string, and JSON body — no attributes, no <c>BindAsync</c> on the request type, and
 /// no ASP.NET Core reference required by whatever project declares <c>TRequest</c>. A primary
@@ -24,7 +25,10 @@ namespace Cntryl.Portia;
 [Generator(LanguageNames.CSharp)]
 public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 {
-    static readonly Regex RouteTokenPattern = new(@"\{([A-Za-z_][A-Za-z0-9_]*)(?::[^}]*)?\}", RegexOptions.Compiled);
+    static readonly DiagnosticDescriptor UnsupportedBinding = new("PORTIA016", "Unsupported HTTP binding",
+        "Cannot generate Portia HTTP binding: {0}", "Portia", DiagnosticSeverity.Error, isEnabledByDefault: true);
+
+    static readonly Regex RouteTokenPattern = new(@"\{\*{0,2}([A-Za-z_][A-Za-z0-9_]*)(?:[:=?][^}]*)?\}", RegexOptions.Compiled);
 
     static readonly HashSet<string> MappingMethodNames =
     [
@@ -38,12 +42,21 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         var calls = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => IsCandidateInvocation(node),
-                static (syntaxContext, _) => GetCallModel(syntaxContext))
+                static (syntaxContext, _) => AnalyzeCall(syntaxContext))
             .Where(static call => call is not null)
             .Select(static (call, _) => call!)
             .Collect();
 
-        context.RegisterSourceOutput(calls, static (sourceContext, calls) => Generate(sourceContext, calls));
+        context.RegisterSourceOutput(calls, static (sourceContext, calls) =>
+        {
+            foreach (var call in calls)
+            {
+                if (call.Diagnostic is { } diagnostic)
+                    sourceContext.ReportDiagnostic(diagnostic);
+            }
+
+            Generate(sourceContext, [.. calls.Where(call => call.Model is not null).Select(call => call.Model!)]);
+        });
     }
 
     static bool IsCandidateInvocation(SyntaxNode node) =>
@@ -51,25 +64,29 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         {
             Expression: MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.ValueText: var name } },
             ArgumentList.Arguments.Count: > 0,
-        } invocation
-        && invocation.ArgumentList.Arguments[0].Expression.IsKind(SyntaxKind.StringLiteralExpression)
+        }
         && MappingMethodNames.Contains(name);
 
-    static CallModel? GetCallModel(GeneratorSyntaxContext context)
+    static CallAnalysis? AnalyzeCall(GeneratorSyntaxContext context)
     {
         var invocation = (InvocationExpressionSyntax)context.Node;
 
         if (context.SemanticModel.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
             return null;
 
-        if (method.TypeArguments.Length is not (1 or 2))
+        if (method.ContainingType.ToDisplayString() != "Cntryl.Portia.PortiaEndpointRouteBuilderExtensions"
+            || method.TypeArguments.Length is not (1 or 2))
+        {
             return null;
+        }
 
-        if (method.TypeArguments[0] is not INamedTypeSymbol requestType)
-            return null;
+        if (method.TypeArguments[0] is not INamedTypeSymbol requestType || !GeneratedTypeShape.IsSupported(requestType))
+            return Invalid(invocation, "use an accessible, concrete, non-generic request type");
 
-        var pattern = (string)((LiteralExpressionSyntax)((InvocationExpressionSyntax)context.Node)
-            .ArgumentList.Arguments[0].Expression).Token.Value!;
+        var operation = context.SemanticModel.GetOperation(invocation) as IInvocationOperation;
+        var constant = operation?.Arguments.FirstOrDefault(a => a.Parameter?.Name == "pattern")?.Value.ConstantValue;
+        if (constant is not { HasValue: true, Value: string pattern })
+            return Invalid(invocation, "the route must be a compile-time string constant");
 
         var verb = method.Name switch
         {
@@ -104,18 +121,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 ? method.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                 : null;
 
-        var primaryConstructor = requestType.Constructors
-            .FirstOrDefault(ctor => ctor.Parameters.Length > 0 && ctor.DeclaredAccessibility == Accessibility.Public);
-
-        if (primaryConstructor is null && requestType.Constructors.Any(c => c.Parameters.Length == 0))
-        {
-            // A parameterless request (e.g. `Ping`) has nothing to bind — the interceptor still
-            // fires, it just skips straight to constructing the request with no arguments.
-            primaryConstructor = requestType.Constructors.First(c => c.Parameters.Length == 0);
-        }
-
-        if (primaryConstructor is null)
-            return null;
+        var constructors = requestType.Constructors.Where(c => c.DeclaredAccessibility == Accessibility.Public && !c.IsStatic).ToArray();
+        if (constructors.Length != 1)
+            return Invalid(invocation, "the request must expose exactly one public constructor");
+        var primaryConstructor = constructors[0];
 
         var routeTokens = RouteTokenPattern.Matches(pattern)
             .Cast<Match>()
@@ -132,44 +141,69 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     ? ParameterSource.Route
                     : bodyCapable ? ParameterSource.Body : ParameterSource.Query;
 
+                var underlying = parameter.Type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } named
+                    ? named.TypeArguments[0] : parameter.Type;
+                var property = requestType.GetMembers().OfType<IPropertySymbol>()
+                    .FirstOrDefault(p => string.Equals(p.Name, parameter.Name, StringComparison.OrdinalIgnoreCase));
+                var jsonName = property?.GetAttributes().FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonPropertyNameAttribute")
+                    ?.ConstructorArguments.FirstOrDefault().Value as string;
+                var typeName = parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
+                    SymbolDisplayMiscellaneousOptions.UseSpecialTypes | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier));
                 return new ParameterModel(
-                    parameter.Name,
-                    parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                    source,
-                    routeToken,
-                    HasTryParse(parameter.Type),
-                    parameter.Type.IsValueType);
+                    parameter.Name, typeName,
+                    underlying.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), source, routeToken,
+                    parameter.NullableAnnotation == NullableAnnotation.Annotated || !SymbolEqualityComparer.Default.Equals(underlying, parameter.Type),
+                    parameter.HasExplicitDefaultValue ? DefaultValue(parameter, typeName) : null,
+                    jsonName,
+                    underlying.TypeKind == TypeKind.Enum,
+                    underlying.GetMembers("TryParse").OfType<IMethodSymbol>().Any(m => m.IsStatic && m.Parameters.Length == 3
+                        && m.Parameters[1].Type.ToDisplayString() == "System.IFormatProvider"));
             })
             .ToArray();
 
+        for (var i = 0; i < parameters.Length; i++)
+        {
+            var parameter = primaryConstructor.Parameters[i];
+            var type = parameter.Type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
+                ? nullable.TypeArguments[0] : parameter.Type;
+            if (parameter.RefKind != RefKind.None || (parameters[i].Source != ParameterSource.Body
+                && type.SpecialType != SpecialType.System_String && type.TypeKind != TypeKind.Enum
+                && !type.GetMembers("TryParse").OfType<IMethodSymbol>().Any(m => m.IsStatic && m.DeclaredAccessibility == Accessibility.Public
+                    && m.ReturnType.SpecialType == SpecialType.System_Boolean && m.Parameters.Length is 2 or 3
+                    && m.Parameters[0].Type.SpecialType == SpecialType.System_String && m.Parameters.Last().RefKind == RefKind.Out)))
+            {
+                return Invalid(invocation, $"parameter '{parameter.Name}' requires a supported scalar TryParse for route/query binding; move complex values into a JSON body");
+            }
+        }
         var location = context.SemanticModel.GetInterceptableLocation(invocation);
 
         return location is null
             ? null
-            : new CallModel(
+            : new CallAnalysis(new CallModel(
                 requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 requestType.Name,
                 resultType,
                 kind,
                 verb,
                 parameters,
-                location);
+                location), null);
+    }
+
+    static CallAnalysis Invalid(InvocationExpressionSyntax invocation, string reason)
+        => new(null, Diagnostic.Create(UnsupportedBinding, invocation.GetLocation(), reason));
+
+    sealed class CallAnalysis(CallModel? model, Diagnostic? diagnostic)
+    {
+        public CallModel? Model { get; } = model;
+        public Diagnostic? Diagnostic { get; } = diagnostic;
     }
 
     static string Normalize(string name) => name.Replace("_", string.Empty).ToLowerInvariant();
 
-    // Route and query values only ever carry strings, so a scalar TryParse(string, out T) is the
-    // whole story there. A body property has no such restriction — a nested object or collection
-    // has no meaningful TryParse at all — so this decides, per body parameter, whether generated
-    // code can stay on the fast, reflection-free TryParse path or needs to fall back to a normal
-    // JsonElement.Deserialize<T>() call (see AppendInterceptor), which honors [JsonConverter] and
-    // handles arbitrary shapes the same way response serialization already does.
-    static bool HasTryParse(ITypeSymbol type) =>
-        type.GetMembers("TryParse").OfType<IMethodSymbol>().Any(method =>
-            method.IsStatic
-            && method.Parameters.Length == 2
-            && method.Parameters[0].Type.SpecialType == SpecialType.System_String
-            && method.Parameters[1].RefKind == RefKind.Out);
+    static string DefaultValue(IParameterSymbol parameter, string typeName) => parameter.ExplicitDefaultValue is null
+        ? "default!" : $"({typeName})({SymbolDisplay.FormatPrimitive(parameter.ExplicitDefaultValue, quoteStrings: true, useHexadecimalNumbers: false)})";
+
+    static string Literal(string value) => SymbolDisplay.FormatLiteral(value, quote: true);
 
     static void Generate(SourceProductionContext context, ImmutableArray<CallModel> calls)
     {
@@ -200,22 +234,6 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .AppendLine()
             .AppendLine("namespace Cntryl.Portia.Generated")
             .AppendLine("{");
-
-        // Body values are read directly off a JsonDocument in each interceptor below (see
-        // AppendInterceptor) rather than through a source-generated JsonSerializerContext: the
-        // System.Text.Json generator only sees the original user syntax trees, never types this
-        // generator adds during the same pass, so a context declared here would never get filled in.
-        // PortiaHttpJson.Options is only needed for the (rarer) complex-body-property fallback —
-        // internal rather than file-scoped since it's referenced from the file-scoped interceptors
-        // class below, and file-scoped types can't be seen from outside their own file anyway.
-        _ = source
-            .AppendLine("internal static class PortiaHttpJson")
-            .AppendLine("{")
-            .AppendLine("    internal static readonly global::System.Text.Json.JsonSerializerOptions Options = new(global::System.Text.Json.JsonSerializerDefaults.Web)")
-            .AppendLine("    {")
-            .AppendLine("        PropertyNamingPolicy = global::System.Text.Json.JsonNamingPolicy.SnakeCaseLower,")
-            .AppendLine("    };")
-            .AppendLine("}");
 
         _ = source.AppendLine("file static class PortiaHttpInterceptors").AppendLine("{");
 
@@ -249,13 +267,12 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             ? ", global::Cntryl.Portia.IRequestQueuePublisher queue"
             : string.Empty;
 
-        // Send/Queue dispatch through IRequestBus.SendAsync, which is awaited and wrapped in an
-        // IResult; Stream/Sse dispatch through StreamAsync, which returns its IAsyncEnumerable
-        // synchronously — ASP.NET Core's own minimal-API plumbing does the streaming from there.
+        // Streaming results defer enumeration to a writer that maps authorization before
+        // starting the response and owns the iterator through completion or cancellation.
         var returnType = call.Kind switch
         {
-            CallKind.Stream => $"global::System.Collections.Generic.IAsyncEnumerable<{call.ResultType}>",
-            CallKind.Sse => $"global::Microsoft.AspNetCore.Http.HttpResults.ServerSentEventsResult<{call.ResultType}>",
+            CallKind.Stream => "global::Microsoft.AspNetCore.Http.IResult",
+            CallKind.Sse => "global::Microsoft.AspNetCore.Http.IResult",
             CallKind.Send or CallKind.Queue => "global::System.Threading.Tasks.Task<global::Microsoft.AspNetCore.Http.IResult>",
             _ => throw new ArgumentOutOfRangeException(nameof(call)),
         };
@@ -271,125 +288,58 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .AppendLine(", global::System.Threading.CancellationToken ct)")
             .AppendLine("        {");
 
-        // Body parsed once, up front, via JsonDocument — a low-level, allocation-light parse with
-        // no reflection and no source-generated JsonSerializerContext (which can't see types this
-        // very generator adds, since generators don't see each other's output in the same pass).
-        // Every parameter, whatever its source, ultimately resolves to a raw string that's handed
-        // to the same TypeName.TryParse(...) convention already used for route and query values.
+        _ = source.AppendLine("            var jsonOptions = global::Cntryl.Portia.PortiaHttpBinding.GetJsonOptions(httpContext);");
+        foreach (var (parameter, i) in call.Parameters.Select((p, i) => (p, i)))
+            _ = source.Append("            ").Append(parameter.Type).Append(" value").Append(i).AppendLine(";");
+        _ = source.AppendLine("            try").AppendLine("            {");
         if (hasBody)
+            _ = source.AppendLine("                using var body = await global::System.Text.Json.JsonDocument.ParseAsync(httpContext.Request.Body, cancellationToken: ct).ConfigureAwait(false);");
+        foreach (var (parameter, i) in call.Parameters.Select((p, i) => (p, i)))
         {
-            _ = source
-                .AppendLine("            global::System.Text.Json.JsonDocument? bodyDoc;")
-                .AppendLine("            try")
-                .AppendLine("            {")
-                .AppendLine("                bodyDoc = await global::System.Text.Json.JsonDocument.ParseAsync(httpContext.Request.Body, cancellationToken: ct).ConfigureAwait(false);")
-                .AppendLine("            }")
-                .AppendLine("            catch (global::System.Text.Json.JsonException)")
-                .AppendLine("            {")
-                .AppendLine("                return global::Microsoft.AspNetCore.Http.Results.BadRequest();")
-                .AppendLine("            }")
-                .AppendLine()
-                .AppendLine("            using var body = bodyDoc;")
-                .AppendLine();
-        }
-
-        foreach (var parameter in call.Parameters)
-        {
-            if (parameter.Source == ParameterSource.Body && !parameter.HasTryParse && !IsString(parameter.Type))
+            var name = parameter.JsonName is not null ? Literal(parameter.JsonName)
+                : $"(jsonOptions.PropertyNamingPolicy?.ConvertName({Literal(parameter.Name)}) ?? {Literal(parameter.Name)})";
+            if (parameter.Source == ParameterSource.Body)
             {
-                // No TryParse to lean on and it's not a plain string — a nested object, a
-                // collection, or any other shape with no meaningful raw-string form. Falls back
-                // to a normal JsonElement.Deserialize<T>() for just this one property, which (unlike
-                // the TryParse path) honors [JsonConverter] the same way response serialization
-                // already does, and handles arbitrary shapes rather than only flat scalars.
-                var propertyName = ToSnakeCase(parameter.Name);
-                var propVariable = parameter.Name + "Prop";
-
-                // JsonElement.Deserialize<TValue>() returns TValue? — for a reference type
-                // that's just TValue with a nullable annotation, but for a value type (a record
-                // struct with no TryParse, say) it's genuinely Nullable<TValue>, which has no
-                // implicit conversion to TValue. Deserializing into a distinctly-named nullable
-                // local first, then unwrapping with .Value after the null check, handles both
-                // shapes with the same generated structure either way.
-                var deserializeTarget = parameter.IsValueType ? parameter.Name + "Nullable" : parameter.Name;
-                var deserializeType = parameter.IsValueType ? parameter.Type + "?" : parameter.Type;
-
-                _ = source
-                    .Append("            if (!body.RootElement.TryGetProperty(\"").Append(propertyName).Append("\", out var ").Append(propVariable).AppendLine("))")
-                    .Append("                ").AppendLine(bindingFailure)
-                    .Append("            ").Append(deserializeType).Append(' ').Append(deserializeTarget).AppendLine(";")
-                    .AppendLine("            try")
-                    .AppendLine("            {")
-                    .Append("                ").Append(deserializeTarget).Append(" = global::System.Text.Json.JsonSerializer.Deserialize<").Append(parameter.Type).Append(">(")
-                    .Append(propVariable).AppendLine(", global::Cntryl.Portia.Generated.PortiaHttpJson.Options)!;")
-                    .AppendLine("            }")
-                    // A property's JSON not matching its target shape (e.g. a string where an
-                    // object or array is expected) throws here — a client-facing 400, exactly
-                    // like every other binding failure above, not an unhandled 500 that would
-                    // otherwise send a caller straight into Portia's own generated code to
-                    // understand what went wrong.
-                    .AppendLine("            catch (global::System.Text.Json.JsonException)")
-                    .AppendLine("            {")
-                    .Append("                ").AppendLine(bindingFailure)
-                    .AppendLine("            }")
-                    .Append("            if (").Append(deserializeTarget).AppendLine(" is null)")
-                    .Append("                ").AppendLine(bindingFailure);
-
-                if (parameter.IsValueType)
-                {
-                    _ = source.Append("            var ").Append(parameter.Name).Append(" = ").Append(deserializeTarget).AppendLine(".Value;");
-                }
-
+                _ = source.Append("                value").Append(i).Append(" = global::Cntryl.Portia.PortiaHttpBinding.ReadBody<")
+                    .Append(parameter.Type).Append(">(body.RootElement, jsonOptions, ").Append(name)
+                    .Append(parameter.Nullable ? ", true" : ", false")
+                    .Append(parameter.Default is not null ? ", true, " : ", false, ")
+                    .Append(parameter.Default ?? "default!").AppendLine(");");
                 continue;
             }
-
-            var rawValue = parameter.Source switch
+            var raw = parameter.Source == ParameterSource.Route
+                ? $"global::System.Convert.ToString(httpContext.Request.RouteValues[{Literal(parameter.RouteToken!)}], global::System.Globalization.CultureInfo.InvariantCulture)"
+                : $"global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name})";
+            // Convert.ToString(null) returns an empty string; an absent route is still missing.
+            if (parameter.Source == ParameterSource.Route)
+                raw = $"(httpContext.Request.RouteValues[{Literal(parameter.RouteToken!)}] is null ? null : {raw})";
+            _ = source.Append("                var raw").Append(i).Append(" = ").Append(raw).AppendLine(";")
+                .Append("                if (raw").Append(i).AppendLine(" is null)")
+                .AppendLine("                {");
+            _ = parameter.Default is not null || parameter.Nullable
+                ? source.Append("                    value").Append(i).Append(" = ").Append(parameter.Default ?? "default").AppendLine(";")
+                : source.AppendLine("                    throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Missing required value.\");");
+            _ = source.AppendLine("                }").AppendLine("                else").AppendLine("                {");
+            if (IsString(parameter.UnderlyingType))
             {
-                ParameterSource.Route => $"httpContext.Request.RouteValues[\"{parameter.RouteToken}\"]?.ToString()",
-                ParameterSource.Query => $"httpContext.Request.Query[\"{ToSnakeCase(parameter.Name)}\"].ToString()",
-                ParameterSource.Body => null,
-                _ => null,
-            };
-
-            if (rawValue is null)
-            {
-                var propertyName = ToSnakeCase(parameter.Name);
-                var propVariable = parameter.Name + "Prop";
-                var rawVariable = parameter.Name + "Raw";
-                _ = source
-                    .Append("            if (!body.RootElement.TryGetProperty(\"").Append(propertyName).Append("\", out var ").Append(propVariable).AppendLine("))")
-                    .Append("                ").AppendLine(bindingFailure)
-                    .Append("            var ").Append(rawVariable).Append(" = ").Append(propVariable)
-                    .AppendLine(".ValueKind == global::System.Text.Json.JsonValueKind.String")
-                    .Append("                ? ").Append(propVariable).Append(".GetString()")
-                    .Append("                : ").Append(propVariable).AppendLine(".GetRawText();");
-                rawValue = rawVariable;
+                _ = source.Append("                    value").Append(i).Append(" = raw").Append(i).AppendLine(";");
             }
-
-            if (IsString(parameter.Type))
+            else
             {
-                if (parameter.Type.EndsWith("?", StringComparison.Ordinal))
-                {
-                    _ = source.Append("            var ").Append(parameter.Name).Append(" = ").Append(rawValue).AppendLine(";");
-                    continue;
-                }
-
-                _ = source
-                    .Append("            if (").Append(rawValue).Append(" is not { } ").Append(parameter.Name).AppendLine("Str)")
-                    .Append("                ").AppendLine(bindingFailure)
-                    .Append("            var ").Append(parameter.Name).Append(" = ").Append(parameter.Name).AppendLine("Str;");
-                continue;
+                var parse = parameter.IsEnum ? $"global::System.Enum.TryParse<{parameter.UnderlyingType}>(raw{i}, true, out var parsed{i})"
+                    : $"{parameter.UnderlyingType}.TryParse(raw{i}, " + (parameter.HasProviderParse ? "global::System.Globalization.CultureInfo.InvariantCulture, " : "") + $"out var parsed{i})";
+                _ = source.Append("                    if (!").Append(parse).AppendLine(")")
+                    .AppendLine("                        throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Invalid scalar value.\");")
+                    .Append("                    value").Append(i).Append(" = parsed").Append(i).AppendLine(";");
             }
-
-            _ = source
-                .Append("            if (!").Append(parameter.Type).Append(".TryParse(").Append(rawValue)
-                .Append(", out var ").Append(parameter.Name).AppendLine("))")
-                .Append("                ").AppendLine(bindingFailure);
+            _ = source.AppendLine("                }");
         }
-
-        _ = source
+        _ = source.AppendLine("            }").AppendLine("            catch (global::System.Text.Json.JsonException)")
+            .AppendLine("            {").Append("                ").AppendLine(bindingFailure).AppendLine("            }")
+            .AppendLine("            catch (global::Microsoft.AspNetCore.Http.BadHttpRequestException)")
+            .AppendLine("            {").Append("                ").AppendLine(bindingFailure).AppendLine("            }")
             .Append("            var request = new ").Append(call.RequestTypeFullName).Append('(')
-            .Append(string.Join(", ", call.Parameters.Select(p => p.Name)))
+            .Append(string.Join(", ", call.Parameters.Select((_, i) => "value" + i)))
             .AppendLine(");");
 
         // The actor is never inferred beyond this point — httpContext.User is where "ambient"
@@ -400,12 +350,12 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         {
             _ = source
                 .AppendLine("            if (httpContext.Request.Headers.TryGetValue(\"Prefer\", out var prefer)")
-                .AppendLine("                && prefer.Any(value => value != null && value.Contains(\"respond-async\", global::System.StringComparison.OrdinalIgnoreCase)))")
+                .AppendLine("                && global::System.Linq.Enumerable.Any(prefer, value => value != null && value.Contains(\"respond-async\", global::System.StringComparison.OrdinalIgnoreCase)))")
                 .AppendLine("            {")
                 .AppendLine("                var actorToken = httpContext.Request.Headers.Authorization.ToString() is { Length: > 0 } authHeader")
                 .AppendLine("                    ? authHeader.StartsWith(\"Bearer \", global::System.StringComparison.OrdinalIgnoreCase) ? authHeader.Substring(7) : authHeader")
                 .AppendLine("                    : null;")
-                .AppendLine("                await queue.EnqueueAsync(request, global::Cntryl.Portia.RequestRouteValues.None, actorToken, ct).ConfigureAwait(false);")
+                .AppendLine("                await queue.EnqueueAsync(request, global::Cntryl.Portia.PortiaHttpBinding.ResolveRouteValues(httpContext), actorToken, ct).ConfigureAwait(false);")
                 .AppendLine("                return global::Microsoft.AspNetCore.Http.Results.Accepted();")
                 .AppendLine("            }")
                 .AppendLine();
@@ -413,8 +363,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
         _ = call.Kind switch
         {
-            CallKind.Stream => source.Append("            return bus.StreamAsync<").Append(call.ResultType).AppendLine(">(request, actor, ct);"),
-            CallKind.Sse => source.Append("            return global::Microsoft.AspNetCore.Http.TypedResults.ServerSentEvents(bus.StreamAsync<").Append(call.ResultType).AppendLine(">(request, actor, ct));"),
+            CallKind.Stream => source.Append("            return global::Cntryl.Portia.PortiaStreamResults.Json(bus.StreamAsync<").Append(call.ResultType).AppendLine(">(request, actor, ct));"),
+            CallKind.Sse => source.Append("            return global::Cntryl.Portia.PortiaStreamResults.Sse(bus.StreamAsync<").Append(call.ResultType).AppendLine(">(request, actor, ct));"),
             CallKind.Send or CallKind.Queue => source
                 .Append("            return (await bus.SendAsync")
                 .Append(call.ResultType is null ? string.Empty : $"<{call.ResultType}>")
@@ -431,25 +381,6 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     static bool IsString(string type) =>
         type is "string" or "string?" or "global::System.String" or "global::System.String?";
 
-    // Mirrors JsonNamingPolicy.SnakeCaseLower so query keys line up with the JSON body's wire
-    // casing (e.g. "includeArchived" -> "include_archived").
-    static string ToSnakeCase(string name)
-    {
-        var builder = new StringBuilder(name.Length + 4);
-
-        for (var i = 0; i < name.Length; i++)
-        {
-            var c = name[i];
-
-            if (char.IsUpper(c) && i > 0)
-                _ = builder.Append('_');
-
-            _ = builder.Append(char.ToLowerInvariant(c));
-        }
-
-        return builder.ToString();
-    }
-
     enum ParameterSource
     {
         Route,
@@ -465,23 +396,19 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         Sse,
     }
 
-    sealed class ParameterModel(string name, string type, ParameterSource source, string? routeToken, bool hasTryParse, bool isValueType)
+    sealed class ParameterModel(string name, string type, string underlyingType, ParameterSource source, string? routeToken,
+        bool nullable, string? defaultValue, string? jsonName, bool isEnum, bool hasProviderParse)
     {
         public string Name { get; } = name;
-
         public string Type { get; } = type;
-
+        public string UnderlyingType { get; } = underlyingType;
         public ParameterSource Source { get; } = source;
-
         public string? RouteToken { get; } = routeToken;
-
-        public bool HasTryParse { get; } = hasTryParse;
-
-        // JsonElement.Deserialize<TValue>() returns TValue?, which for a value type means
-        // Nullable<TValue> — the fallback JSON path below has to declare and null-check through
-        // that nullable shape, then unwrap with .Value, rather than assume the reference-type
-        // shape (where TValue? just means TValue, already nullable) works for both.
-        public bool IsValueType { get; } = isValueType;
+        public bool Nullable { get; } = nullable;
+        public string? Default { get; } = defaultValue;
+        public string? JsonName { get; } = jsonName;
+        public bool IsEnum { get; } = isEnum;
+        public bool HasProviderParse { get; } = hasProviderParse;
     }
 
     sealed class CallModel(
