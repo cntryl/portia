@@ -32,7 +32,7 @@ and execution (except explicit diagnostic tests for unsupported inputs).
 | Dispatch and modules | Observed circular dependency, unrelated construction, missing/duplicate interfaces, invalid shapes and missing module contributions | Compile-and-execute regressions pass; module order, conflicts, idempotence and authorization covered | Shared dispatcher and generated module descriptors |
 | Hosting and lifetimes | Observed one reactor instead of two; missing generated projector resolution; root/scoped resolution failures for components and all three inbound transports | Public scope/multiplicity and recovery tests pass; format, Release build, Compose suite (196 + 54) green | DI hosting, transports, projector/reactor runners |
 | HTTP contracts | Nullable compilation, constant route fallback, ignored defaults/options, invalid roots, missing diagnostics, streaming authorization/disposal, missing async route resolver and optional token failures observed | 32 public consumer HTTP tests pass; format, Release build and Compose suite (196 + 86) green | HTTP generator and endpoint mapping |
-| Queue ownership | Pending: malformed/failed delivery; unchanged reservations; recovery/backoff/cancellation; acknowledgments; seconds; renewal; real broker redelivery handoff | Pending | Queue runner, Fitz consumer and hosted lifecycle |
+| Queue ownership | Malformed JSON ended enumeration; defaults were 5,000 seconds/16 items; no lease renewal; pending acknowledgment stopped renewal; hosted consumers terminated on faults/EOF | 16 public tests pass, including real broker handoff; format, Release build and Compose suite (196 + 102) green | Queue runner, Fitz consumer and hosted lifecycle |
 | Tenant lifecycle | Pending: idle polling; restart/backoff; removal; duplicates; independent watchers; shutdown | Pending | Tenant directory and runner |
 | Complete workflow | Pending: two modules, persistence, two reactors/projectors, direct/HTTP/RPC/queue, declined audit, state/stream/projections | Pending | Consumer host fixture and onboarding |
 | Final readiness | Pending: full format/build/Compose tests; complete review; rebase; final SHA hosted CI; squash merge and main readback | Pending | Single coordinated PR |
@@ -157,3 +157,35 @@ and execution (except explicit diagnostic tests for unsupported inputs).
 
 - HTTP boundary: format verification, Release build (zero warnings/errors), and
   the Compose-backed suite passed (196 existing + 86 consumer tests).
+
+## Fitz queue ownership and consumer recovery
+
+- Two regressions failed: malformed JSON escaped reservation enumeration, and the
+  default reserve tuple was `(5000 seconds, 16 items)` instead of `(5, 1)`.
+  Deserialization now occurs inside each delivery boundary while its reservation
+  handle remains available. Failed/malformed deliveries are neither acknowledged
+  nor republished; successful and intentionally terminal outcomes retain acknowledgment.
+- Active-renewal regression timed out before any extension. It passed after Fitz
+  `ExtendAsync` renewal was added, then was refactored to deterministic clock control.
+  A follow-up regression caught renewal stopping during a pending acknowledgment;
+  renewal now continues until acknowledgment finishes. Abandonment, cancellation
+  and disposal stop renewal. Renewal loss cancels the active delivery and blocks ACK.
+- Four hosted recovery regressions failed on transport exceptions or clean EOF.
+  Queue and notification hosting now retry enumeration after a one-second delay
+  using `TimeProvider`. Eight clock-driven cases cover restart and shutdown during
+  both active execution and backoff. This loop never republishes a message.
+- Two real-broker tests prove valid acknowledgment, malformed reservation expiration,
+  retention through a three-second competing reserve with a one-second lease, and
+  redelivery after processing cancellation. Targeted queue gate: 16 tests passed.
+- The real-broker gate initially assumed an increasing SDK attempt value and failed.
+  The pinned Fitz .NET 0.1.1 source at commit
+  `ece2017e5b49eea08d52f731586bf81ae0dfeebe`,
+  `src/Core/Domains/Queue/QueueClient.cs`, constructs reserve results with attempt 1;
+  the wire result does not expose its durable broker counter. Tests preserve that
+  supplied value; separate controlled reservations prove values 6 and 9 are forwarded
+  unchanged. Portia does not infer or maintain a delivery counter.
+- Compose does not configure a dead-letter threshold. These tests prove redelivery
+  handoff, not a live DLQ threshold transition. DLQ activation remains Fitz configuration.
+
+- Queue boundary: format verification, Release build (zero warnings/errors), and
+  Compose tests passed (196 existing + 102 consumer).

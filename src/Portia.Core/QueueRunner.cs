@@ -65,11 +65,12 @@ public sealed class QueueRunner
         {
             try
             {
+                using var delivery = CancellationTokenSource.CreateLinkedTokenSource(ct, queued.ReservationCancellation);
                 await using var scope = _scopeFactory?.CreateAsyncScope();
                 var bus = scope?.ServiceProvider.GetRequiredService<IRequestBus>() ?? _bus!;
                 var actorValidator = scope?.ServiceProvider.GetRequiredService<IRequestActorValidator>() ?? _actorValidator!;
                 var dispatch = await RequestDispatch.SendAsync(
-                    actorValidator, bus, queued.Request, queued.ActorToken, ct).ConfigureAwait(false);
+                    actorValidator, bus, queued.Request, queued.ActorToken, delivery.Token).ConfigureAwait(false);
 
                 if (!dispatch.WasDispatched)
                 {

@@ -12,7 +12,8 @@ public sealed class ScopeHandler(IRequestBus bus, IConsumerScope scope, IConsume
             throw new InvalidOperationException("Consumer failure");
         if (context.Request.Behavior == 2)
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-        return Result.Success;
+        return context.Request.Behavior == 3
+            ? Result.Failure(new RequestError(RequestErrorKind.Validation, "Terminal rejection")) : Result.Success;
     }
 }
 

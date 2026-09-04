@@ -19,8 +19,8 @@ sealed class ManualClock : TimeProvider
         return timer;
     }
 
-    public async Task<TimeSpan> WaitForDelayAsync() =>
-        await _scheduled.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+    public async Task<TimeSpan> WaitForDelayAsync(CancellationToken ct = default) =>
+        await _scheduled.Reader.ReadAsync(ct).AsTask().WaitAsync(TimeSpan.FromSeconds(10), ct);
 
     public void Advance(TimeSpan duration)
     {
