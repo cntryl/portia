@@ -18,13 +18,14 @@ public abstract record DomainEvent
     public DomainEventMetadata Metadata => _metadata
         ?? throw new InvalidOperationException("The domain event has not been attached to an aggregate.");
 
-    internal void AttachMetadata(DomainEventMetadata metadata)
+    /// <summary>Attaches durable metadata once, for serializer adapters. Aggregate emissions assign their own metadata.</summary>
+    /// <param name="metadata">The original event metadata.</param>
+    /// <exception cref="InvalidOperationException">Metadata has already been attached.</exception>
+    public void AttachMetadata(DomainEventMetadata metadata)
     {
         ArgumentNullException.ThrowIfNull(metadata);
 
-        if (_metadata is not null)
+        if (Interlocked.CompareExchange(ref _metadata, metadata, null) is not null)
             throw new InvalidOperationException("Domain event metadata can only be attached once.");
-
-        _metadata = metadata;
     }
 }

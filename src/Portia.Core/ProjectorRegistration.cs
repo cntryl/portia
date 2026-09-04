@@ -1,25 +1,43 @@
+using Microsoft.Extensions.DependencyInjection;
+
 namespace Cntryl.Portia;
 
-/// <summary>
-/// Describes one projector discovered at compile time, so a runner can enumerate every
-/// projector without runtime assembly scanning or reflection. The projector's projection type
-/// is erased behind <see cref="Run" /> since <see cref="ProjectorRegistration" /> is not itself
-/// generic.
-/// </summary>
-/// <param name="projectorType">The concrete projector type.</param>
-/// <param name="run">Resolves and runs the projector against a <see cref="ProjectorRunner" />.</param>
-public sealed class ProjectorRegistration(
-    Type projectorType,
-    Func<ProjectorRunner, IServiceProvider, ProjectionCheckpoint, ProjectionRunOptions?, CancellationToken, ValueTask<ProjectionCheckpoint>> run)
+/// <summary>Describes a projector discovered at compile time.</summary>
+public sealed class ProjectorRegistration
 {
-    /// <summary>
-    /// Gets the concrete projector type.
-    /// </summary>
-    public Type ProjectorType { get; } = projectorType ?? throw new ArgumentNullException(nameof(projectorType));
+    ProjectorRegistration(
+        Type projectorType,
+        Func<ProjectorRunner, IServiceProvider, ProjectionCheckpoint, ProjectionRunOptions?, CancellationToken, ValueTask<ProjectionCheckpoint>> run,
+        Func<IServiceProvider, ProjectionRunOptions?, CancellationToken, ValueTask> runPass)
+    {
+        ProjectorType = projectorType;
+        Run = run;
+        RunPass = runPass;
+    }
 
-    /// <summary>
-    /// Gets the function that resolves and runs the projector.
-    /// </summary>
+    /// <summary>Gets the concrete projector type.</summary>
+    public Type ProjectorType { get; }
+
+    /// <summary>Resolves and runs the projector from an explicit checkpoint.</summary>
     public Func<ProjectorRunner, IServiceProvider, ProjectionCheckpoint, ProjectionRunOptions?, CancellationToken, ValueTask<ProjectionCheckpoint>> Run { get; }
-        = run ?? throw new ArgumentNullException(nameof(run));
+
+    /// <summary>Loads authoritative progress and runs one pass in the supplied scope.</summary>
+    public Func<IServiceProvider, ProjectionRunOptions?, CancellationToken, ValueTask> RunPass { get; }
+
+    /// <summary>Creates a typed descriptor for generated module registration.</summary>
+    /// <typeparam name="TProjector">The concrete component.</typeparam>
+    /// <typeparam name="TProjection">Its projection port.</typeparam>
+    /// <returns>The component descriptor.</returns>
+    public static ProjectorRegistration Create<TProjector, TProjection>()
+        where TProjector : Projector<TProjection> => new(
+            typeof(TProjector),
+            static (runner, services, checkpoint, options, ct) =>
+                runner.RunAsync(services.GetRequiredService<TProjector>(), checkpoint, options, ct),
+            static async (services, options, ct) =>
+            {
+                var projector = services.GetRequiredService<TProjector>();
+                var checkpoint = await projector.Target.LoadCheckpointAsync(projector.Name, ct).ConfigureAwait(false);
+                _ = await services.GetRequiredService<ProjectorRunner>()
+                    .RunAsync(projector, checkpoint, options, ct).ConfigureAwait(false);
+            });
 }

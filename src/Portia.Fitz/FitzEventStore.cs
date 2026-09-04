@@ -29,15 +29,15 @@ public sealed class FitzEventStore : IEventStore
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<DomainEvent> ReadAsync(
+    public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
         EventStreamAddress stream,
-        ulong afterVersion = 0,
+        ulong fromOffset = 0,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
         var route = stream.ToString();
-        var startOffset = afterVersion;
-        var nextVersion = checked(afterVersion + 1);
+        var startOffset = fromOffset;
+        var nextOffset = fromOffset;
         var eventIds = new HashSet<Uuid>();
 
         while (true)
@@ -52,7 +52,7 @@ public sealed class FitzEventStore : IEventStore
             {
                 var record = item.Record ?? throw new InvalidOperationException(
                     $"Fitz stream '{route}' contains a gap at offset '{item.Offset}'.");
-                var expectedOffset = nextVersion - 1;
+                var expectedOffset = nextOffset;
 
                 if (record.Offset != expectedOffset)
                 {
@@ -61,9 +61,10 @@ public sealed class FitzEventStore : IEventStore
                 }
 
                 var ev = _serializer.Deserialize(record.Body);
-                DomainEventInvariants.ValidateEvent(ev, nextVersion, eventIds);
-                yield return ev;
-                nextVersion++;
+                DomainEventInvariants.ValidateEvent(ev, eventIds);
+                yield return new DomainEventRecord(stream, ev, record.Offset,
+                    record.AreaOffset, record.RealmOffset);
+                nextOffset++;
             }
 
             if (!page.Cursor.HasMore)
@@ -103,10 +104,8 @@ public sealed class FitzEventStore : IEventStore
                 if (!FitzEventStreamPatternOffsets.Matches(stream, pattern))
                     throw new InvalidOperationException($"Stream '{stream}' does not match pattern '{pattern}'.");
 
-                var areaOffset = record.AreaOffset ?? throw new InvalidOperationException(
-                    "A Portia Fitz record does not contain an area offset.");
-                var realmOffset = record.RealmOffset ?? throw new InvalidOperationException(
-                    "A Portia Fitz record does not contain a realm offset.");
+                var areaOffset = record.AreaOffset;
+                var realmOffset = record.RealmOffset;
                 var scopeOffset = FitzEventStreamPatternOffsets.GetPatternOffset(pattern, record.Offset, areaOffset, realmOffset);
 
                 if (scopeOffset != nextOffset)
@@ -116,7 +115,7 @@ public sealed class FitzEventStore : IEventStore
                 }
 
                 var ev = _serializer.Deserialize(record.Body);
-                DomainEventInvariants.ValidateEventMetadata(ev, checked(record.Offset + 1));
+                DomainEventValidation.Validate(ev);
                 yield return new DomainEventRecord(stream, ev, record.Offset, areaOffset, realmOffset);
                 nextOffset++;
             }
@@ -131,29 +130,28 @@ public sealed class FitzEventStore : IEventStore
     /// <inheritdoc />
     public async ValueTask AppendAsync(
         EventStreamAddress stream,
-        ulong expectedVersion,
+        ulong expectedStreamPosition,
         IReadOnlyList<DomainEvent> events,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(events);
-        var eventIds = new HashSet<Uuid>();
-
-        for (var index = 0; index < events.Count; index++)
-            DomainEventInvariants.ValidateEvent(events[index], checked(expectedVersion + (ulong)index + 1), eventIds);
+        ct.ThrowIfCancellationRequested();
+        DomainEventValidation.ValidateBatch(events);
 
         if (events.Count == 0)
             return;
 
         var session = await _streams.BeginAsync(stream.ToString(), ct: ct).ConfigureAwait(false);
         var streamMetadata = Encoding.UTF8.GetBytes(stream.ToString());
+        var failed = false;
 
         try
         {
             for (var index = 0; index < events.Count; index++)
             {
                 var ev = events[index];
-                var expectedOffset = checked(expectedVersion + (ulong)index);
+                var expectedOffset = checked(expectedStreamPosition + (ulong)index);
                 _ = await session.AppendAsync(
                     expectedOffset,
                     _serializer.Serialize(ev),
@@ -165,6 +163,7 @@ public sealed class FitzEventStore : IEventStore
         }
         catch (Exception ex)
         {
+            failed = true;
             await RollbackAsync(session).ConfigureAwait(false);
 
             // A concurrency conflict — someone else committed to this stream first — is exactly
@@ -179,9 +178,20 @@ public sealed class FitzEventStore : IEventStore
             // confined to this one place — an app catching EventStreamConcurrencyException never
             // has to know or care.
             if (ex.Message.Contains("concurrency conflict", StringComparison.OrdinalIgnoreCase))
-                throw new EventStreamConcurrencyException($"Stream '{stream}' is not at the expected version.", ex);
+                throw new EventStreamConcurrencyException($"Stream '{stream}' is not at the expected physical stream position.", ex);
 
             throw;
+        }
+        finally
+        {
+            try
+            {
+                await session.DisposeAsync().ConfigureAwait(false);
+            }
+            catch when (failed)
+            {
+                // Cleanup must not replace the append/commit failure seen by the caller.
+            }
         }
     }
 

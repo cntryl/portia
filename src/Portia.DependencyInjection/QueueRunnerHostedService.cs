@@ -1,16 +1,37 @@
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
-/// <summary>
-/// Runs a <see cref="QueueRunner" /> for the life of the host. Registered by
-/// <see cref="PortiaHostingServiceCollectionExtensions.AddPortiaQueueRunner" /> — not meant to be
-/// constructed directly.
-/// </summary>
-/// <param name="runner">The runner to host.</param>
-sealed class QueueRunnerHostedService(QueueRunner runner) : BackgroundService
+// Restarts transport enumeration only. Individual message redelivery belongs to the broker.
+sealed class QueueRunnerHostedService(
+    QueueRunner runner,
+    TimeProvider? timeProvider = null,
+    ILogger<QueueRunnerHostedService>? logger = null) : BackgroundService
 {
     readonly QueueRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+    readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken) => _runner.RunAsync(stoppingToken);
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await _runner.RunAsync(stoppingToken).ConfigureAwait(false);
+                if (!stoppingToken.IsCancellationRequested)
+                    PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "consumer completed without cancellation", logger: logger);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            catch (Exception ex)
+            {
+                PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "consumer enumeration faulted", ex, logger);
+            }
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), _clock, stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+        }
+    }
 }

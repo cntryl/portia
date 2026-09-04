@@ -17,7 +17,8 @@ public sealed class AllTransportsSharedHandlerTests
     public async Task ShouldInvokeSameHandlerAcrossDirectQueueRpcAndNotificationTransports()
     {
         var handler = new UniversalActionHandler();
-        var bus = TestRequestBus.Create(universalActionHandler: handler);
+        using var busHost = TestRequestBus.Create(universalActionHandler: handler);
+        var bus = busHost.Bus;
 
         // Direct in-process dispatch — no transport at all.
         var directResult = await bus.SendAsync(new UniversalAction(1), RequestActor.System);
@@ -34,7 +35,7 @@ public sealed class AllTransportsSharedHandlerTests
         // same bus, and back.
         var rpc = new InMemoryRpcClient();
         var serializer = new JsonRequestSerializer();
-        var server = new FitzRpcRequestServer(rpc, serializer, serializer, bus, new AlwaysValidActorValidator());
+        var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
         _ = await server.RegisterAsync<UniversalAction>();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
         var rpcResult = await sender.SendAsync(new UniversalAction(3), new RequestRouteValues(), actorToken: null);

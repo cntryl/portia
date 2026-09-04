@@ -12,7 +12,8 @@ public sealed class QueueRunnerTests
     public async Task ShouldDispatchAndCompleteEveryQueuedRequest()
     {
         var handler = new ChangeValueHandler();
-        var bus = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        var bus = busHost.Bus;
         var items = new[]
         {
             new FakeQueuedRequest(new ChangeValue(1)),
@@ -37,7 +38,8 @@ public sealed class QueueRunnerTests
     public async Task ShouldAbandonFailedRequestAndContinue()
     {
         var handler = new ChangeValueHandler();
-        var bus = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        var bus = busHost.Bus;
         var failing = new FakeQueuedRequest(new ChangeValue(1), throwOnDispatch: true);
         var succeeding = new FakeQueuedRequest(new ChangeValue(2));
         var consumer = new FakeQueueConsumer([failing, succeeding]);
@@ -58,7 +60,8 @@ public sealed class QueueRunnerTests
     [Fact]
     public async Task ShouldCompleteNonTransientFailureInsteadOfAbandoning()
     {
-        var bus = TestRequestBus.Create();
+        using var busHost = TestRequestBus.Create();
+        var bus = busHost.Bus;
         var invalid = new FakeQueuedRequest(new InvalidChangeValue(1));
         var consumer = new FakeQueueConsumer([invalid]);
         var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator());
@@ -80,7 +83,8 @@ public sealed class QueueRunnerTests
     public async Task ShouldCompleteRequestWithoutDispatchingWhenActorTokenFailsRevalidation()
     {
         var handler = new ChangeValueHandler();
-        var bus = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        var bus = busHost.Bus;
         var expired = new FakeQueuedRequest(new ChangeValue(1), actorToken: "expired-token");
         var consumer = new FakeQueueConsumer([expired]);
         var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired-token"));
@@ -100,7 +104,8 @@ public sealed class QueueRunnerTests
     public async Task ShouldContinueAfterActorTokenRevalidationFailure()
     {
         var handler = new ChangeValueHandler();
-        var bus = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        var bus = busHost.Bus;
         var expired = new FakeQueuedRequest(new ChangeValue(1), actorToken: "expired-token");
         var valid = new FakeQueuedRequest(new ChangeValue(2), actorToken: "valid-token");
         var consumer = new FakeQueueConsumer([expired, valid]);

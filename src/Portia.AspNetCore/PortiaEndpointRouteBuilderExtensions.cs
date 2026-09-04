@@ -24,14 +24,20 @@ namespace Cntryl.Portia;
 /// <see cref="IQueuable" /> at all, gets the ordinary dispatch-and-wait behavior. The request
 /// itself decides whether the pivot is available, the same way it opts into every other transport.
 ///
-/// The methods below are the fallback used only when interception doesn't apply (e.g. the request
-/// has no matching primary constructor) — plain default JSON-body binding and always-synchronous
-/// dispatch, same as calling ASP.NET Core's own MapGet, etc. The Prefer-header pivot is only
-/// available through the generated interceptor, since it needs the concrete request type's own
-/// IQueuable-ness at compile time — something a single generic fallback method can't express.
+/// Consumer compilations must reference Portia.Generators. Mapping patterns must be compile-time
+/// constants and request constructors must have supported binding shapes; unsupported mappings
+/// receive compiler diagnostics. Generated body binding honors configured ASP.NET HTTP JSON options.
 /// </summary>
 public static class PortiaEndpointRouteBuilderExtensions
 {
+    /// <summary>Supplies explicit contextual route values for asynchronous HTTP dispatch.</summary>
+    public static RouteHandlerBuilder WithPortiaRouteValues(this RouteHandlerBuilder builder, Func<HttpContext, RequestRouteValues> resolver)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(resolver);
+        return builder.WithMetadata(new PortiaHttpRouteValues(resolver));
+    }
+
     /// <summary>
     /// Maps a no-result request to a GET endpoint dispatched through <see cref="IRequestBus" />.
     /// </summary>
@@ -136,7 +142,7 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// <typeparam name="TOut">The type of each item produced.</typeparam>
     public static RouteHandlerBuilder MapPortiaGetStream<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
         where TRequest : IStreamRequest<TOut>, ICallable =>
-        app.MapGet(pattern, (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) => bus.StreamAsync(request, httpContext.User, ct));
+        app.MapGet(pattern, (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) => PortiaStreamResults.Json(bus.StreamAsync(request, httpContext.User, ct)));
 
     /// <summary>
     /// Maps a request that produces a sequence of results to a GET endpoint, streamed to the
@@ -150,6 +156,8 @@ public static class PortiaEndpointRouteBuilderExtensions
     public static RouteHandlerBuilder MapPortiaGetSse<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
         where TRequest : IStreamRequest<TOut>, ICallable =>
         app.MapGet(pattern, (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) =>
-            TypedResults.ServerSentEvents(bus.StreamAsync(request, httpContext.User, ct)));
+            PortiaStreamResults.Sse(bus.StreamAsync(request, httpContext.User, ct)));
 
 }
+
+sealed record PortiaHttpRouteValues(Func<HttpContext, RequestRouteValues> Resolve);

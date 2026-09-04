@@ -12,7 +12,8 @@ public sealed class RequestBusTests
     public async Task ShouldDispatchRequestWithNoResult()
     {
         var handler = new ChangeValueHandler();
-        var bus = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        var bus = busHost.Bus;
 
         var result = await bus.SendAsync(new ChangeValue(42), RequestActor.System);
 
@@ -27,7 +28,8 @@ public sealed class RequestBusTests
     [Fact]
     public async Task ShouldDispatchRequestWithResult()
     {
-        var bus = TestRequestBus.Create();
+        using var busHost = TestRequestBus.Create();
+        var bus = busHost.Bus;
 
         var result = await bus.SendAsync(new GetValue(), RequestActor.System);
 

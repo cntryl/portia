@@ -24,6 +24,9 @@ public interface IQueuedRequest
     /// </summary>
     string? ActorToken { get; }
 
+    /// <summary>Signals that the transport can no longer maintain this reservation.</summary>
+    CancellationToken ReservationCancellation => CancellationToken.None;
+
     /// <summary>
     /// Marks the request as successfully handled, so it is not redelivered.
     /// </summary>
@@ -32,8 +35,8 @@ public interface IQueuedRequest
     ValueTask CompleteAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Releases the request back to the queue for redelivery, without waiting for its
-    /// reservation to expire.
+    /// Stops processing without acknowledging the request. The transport owns redelivery;
+    /// Fitz waits for reservation expiration according to broker configuration.
     /// </summary>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the abandonment.</returns>

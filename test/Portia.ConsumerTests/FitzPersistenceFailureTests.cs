@@ -1,0 +1,99 @@
+using Cntryl.Fitz.Abstractions.Domains.Stream;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Cntryl.Portia.Consumer;
+
+public sealed class FitzPersistenceFailureTests
+{
+    [Theory]
+    [InlineData("append", false)]
+    [InlineData("commit", false)]
+    [InlineData("commit", true)]
+    [InlineData("success", false)]
+    public async Task SessionDisposesAndPreservesOriginalFailureAndPendingBatch(string failureAt, bool cleanupFails)
+    {
+        var session = new Session(failureAt, cleanupFails);
+        var streams = new Streams(session);
+        var store = new FitzEventStore(streams, new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<Declined>()));
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IEventStore>(store);
+        _ = services.AddPortiaAggregate((_, id) => new Account(id));
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        await using var scope = provider.CreateAsyncScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
+        var account = new Account(Uuid.CreateVersion7());
+        var payload = new Declined("failure contract");
+        account.Audit(payload);
+        var scenario = new AggregateScenario<Account>(account);
+
+        if (failureAt == "success")
+        {
+            await repository.SaveAsync(account);
+            Assert.Empty(scenario.PendingAudits);
+            Assert.Equal(0, session.Rollbacks);
+        }
+        else
+        {
+            var error = await Assert.ThrowsAsync<IOException>(() => repository.SaveAsync(account).AsTask());
+            Assert.Same(session.Failure, error);
+            Assert.Same(payload, Assert.Single(scenario.PendingAudits));
+            Assert.Equal(1, session.Rollbacks);
+        }
+        Assert.Equal(0UL, account.CommittedStreamPosition);
+        Assert.Equal(4, Uuid.Parse(EventStreamAddress.Parse(streams.Route!).Resource).Version);
+        Assert.True(session.Disposed);
+    }
+
+    sealed class Session(string failureAt, bool cleanupFails) : IStreamSession
+    {
+        public IOException Failure { get; } = new("Injected session failure");
+
+        public int Rollbacks { get; private set; }
+
+        public bool Disposed { get; private set; }
+
+        public Task<ulong?> AppendAsync(ulong expectedOffset, ReadOnlyMemory<byte> body,
+            ReadOnlyMemory<byte>? metadata = null, string? discriminator = null, CancellationToken ct = default)
+            => failureAt == "append" ? throw Failure : Task.FromResult<ulong?>(expectedOffset);
+
+        public Task CommitAsync(CancellationToken ct = default)
+            => failureAt == "commit" ? throw Failure : Task.CompletedTask;
+
+        public Task RollbackAsync(CancellationToken ct = default)
+        {
+            Rollbacks++;
+            return cleanupFails ? throw new IOException("Rollback failed") : Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            Disposed = true;
+            return cleanupFails ? throw new IOException("Dispose failed") : ValueTask.CompletedTask;
+        }
+    }
+
+    sealed class Streams(IStreamSession session) : IStreamClient
+    {
+        public string? Route { get; private set; }
+
+        public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null, CancellationToken ct = default)
+        {
+            Route = route;
+            return Task.FromResult(session);
+        }
+
+        public IAsyncEnumerable<StreamRecord> ReadAsync(string route, ulong startOffset, ulong limit = 100,
+            StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
+            ulong? capturedWatermark = null, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public Task<StreamReadPage> ReadPageAsync(string route, ulong startOffset, ulong limit = 100,
+            StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
+            ulong? capturedWatermark = null, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public Task<StreamMetadata> MetadataAsync(string route, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public Task<StreamSubscription> SubscribeAsync(string pattern, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+}

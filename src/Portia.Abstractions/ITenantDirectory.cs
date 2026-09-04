@@ -18,8 +18,9 @@ public interface ITenantDirectory
     IAsyncEnumerable<TenantId> GetActiveTenantsAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Gets tenant lifecycle changes as they happen, live, after startup. Runs until
-    /// cancellation is requested.
+    /// Gets tenant lifecycle changes with independent progress for each enumeration. A watch
+    /// may begin with current membership updates to reconcile a preceding snapshot; consumers
+    /// must treat additions and removals idempotently. Runs until cancellation is requested.
     /// </summary>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>Tenant lifecycle changes in the order they occur.</returns>

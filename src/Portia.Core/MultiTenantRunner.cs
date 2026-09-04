@@ -24,10 +24,15 @@ namespace Cntryl.Portia;
 /// Microsoft.Extensions.Logging with at least one provider before resolving the runner through
 /// DI; a bare <c>ServiceCollection</c> registration does not create or emit logs.
 /// </param>
-public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<MultiTenantRunner>? logger = null)
+/// <param name="timeProvider">Schedules reconnect and workload restart delays.</param>
+/// <param name="restartInterval">Positive delay between attempts; defaults to one second.</param>
+public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<MultiTenantRunner>? logger = null,
+    TimeProvider? timeProvider = null, TimeSpan? restartInterval = null)
 {
     readonly ITenantDirectory _tenantDirectory = tenantDirectory ?? throw new ArgumentNullException(nameof(tenantDirectory));
     readonly ILogger<MultiTenantRunner>? _logger = logger;
+    readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
+    readonly TimeSpan _restartInterval = GetRestartInterval(restartInterval);
 
     /// <summary>
     /// Starts an instance for every currently active tenant, then keeps starting and stopping
@@ -71,7 +76,7 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
                     await foreach (var tenantId in _tenantDirectory.GetActiveTenantsAsync(ct).WithCancellation(ct).ConfigureAwait(false))
                     {
                         _ = snapshot.Add(tenantId);
-                        Start(tenantId, onTenantStarted, active, _logger, ct);
+                        Start(tenantId, onTenantStarted, active, ct);
                     }
 
                     foreach (var tenantId in active.Keys.ToArray())
@@ -85,7 +90,7 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
                         switch (change.Kind)
                         {
                             case TenantLifecycleChangeKind.Added:
-                                Start(change.TenantId, onTenantStarted, active, _logger, ct);
+                                Start(change.TenantId, onTenantStarted, active, ct);
                                 break;
 
                             case TenantLifecycleChangeKind.Removed:
@@ -122,7 +127,7 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
                 // fast as GetActiveTenantsAsync/WatchAsync allow, with no pause at all.
                 try
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(1), ct).ConfigureAwait(false);
+                    await Task.Delay(_restartInterval, _clock, ct).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -137,11 +142,10 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
         }
     }
 
-    static void Start(
+    void Start(
         TenantId tenantId,
         Func<TenantId, CancellationToken, Task> onTenantStarted,
         ConcurrentDictionary<TenantId, TenantRun> active,
-        ILogger<MultiTenantRunner>? logger,
         CancellationToken ct)
     {
         // RunAsync only ever calls Start/StopAsync sequentially from its own loops — never
@@ -151,22 +155,36 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
             return;
 
         var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var task = Task.Run(() => onTenantStarted(tenantId, cts.Token), cts.Token);
-
-        // Reported the moment it faults, not only discovered later when this tenant happens to
-        // be stopped and its task is finally awaited — a misbehaving tenant callback must be
-        // visible immediately, not just eventually.
-        _ = task.ContinueWith(
-            faulted => PortiaTelemetry.RecordRunnerFault(
-                nameof(MultiTenantRunner),
-                $"tenant '{tenantId}' start callback faulted",
-                faulted.Exception?.GetBaseException(),
-                logger),
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+        var task = Task.Run(() => RunTenantAsync(tenantId, onTenantStarted, cts.Token), cts.Token);
 
         active[tenantId] = new TenantRun(cts, task);
+    }
+
+    async Task RunTenantAsync(TenantId tenantId, Func<TenantId, CancellationToken, Task> onTenantStarted, CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                await onTenantStarted(tenantId, ct).ConfigureAwait(false);
+                if (!ct.IsCancellationRequested)
+                    PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), $"tenant '{tenantId}' workload completed without cancellation", logger: _logger);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch (Exception ex)
+            {
+                PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), $"tenant '{tenantId}' start callback faulted", ex, _logger);
+            }
+            try { await Task.Delay(_restartInterval, _clock, ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+        }
+    }
+
+    static TimeSpan GetRestartInterval(TimeSpan? restartInterval)
+    {
+        var interval = restartInterval ?? TimeSpan.FromSeconds(1);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(interval, TimeSpan.Zero, nameof(restartInterval));
+        return interval;
     }
 
     static async ValueTask StopAsync(
@@ -189,11 +207,8 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
         }
         catch (Exception)
         {
-            // Already recorded as a runner fault the moment it happened (see the fault-reporting
-            // continuation attached in Start) — awaiting it here is only to observe completion
-            // before disposal, not to learn about the failure for the first time. Letting it
-            // propagate out of StopAsync would crash an otherwise-unrelated shutdown or the next
-            // tenant lifecycle change over one tenant's already-reported failure.
+            // Observe termination before disposal without letting one workload's failure
+            // prevent shutdown of the other active tenants.
         }
         finally
         {

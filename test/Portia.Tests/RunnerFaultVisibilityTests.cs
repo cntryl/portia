@@ -21,7 +21,8 @@ public sealed class RunnerFaultVisibilityTests
     public async Task ShouldRecordFaultWhenQueuedRequestActorTokenFailsRevalidation()
     {
         using var listener = Listen(out var activities);
-        var bus = TestRequestBus.Create();
+        using var busHost = TestRequestBus.Create();
+        var bus = busHost.Bus;
         var consumer = new FakeQueueConsumer([
             new FakeQueuedRequest(new RunnerFaultAction(), actorToken: "expired"),
         ]);
@@ -46,7 +47,8 @@ public sealed class RunnerFaultVisibilityTests
     public async Task ShouldRecordFaultWithExceptionWhenQueuedRequestDispatchThrows()
     {
         using var listener = Listen(out var activities);
-        var bus = TestRequestBus.Create();
+        using var busHost = TestRequestBus.Create();
+        var bus = busHost.Bus;
         var consumer = new FakeQueueConsumer([new FakeQueuedRequest(new UnregisteredRunnerFaultAction())]);
         var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator());
 
@@ -70,7 +72,8 @@ public sealed class RunnerFaultVisibilityTests
     public async Task ShouldRecordFaultWhenRequestNotificationActorTokenFailsRevalidation()
     {
         using var listener = Listen(out var activities);
-        var bus = TestRequestBus.Create();
+        using var busHost = TestRequestBus.Create();
+        var bus = busHost.Bus;
         var consumer = new FakeRequestNotificationConsumer(
             [new RequestNotification(new RunnerFaultAction(), ActorToken: "expired")]);
         var runner = new RequestNotificationRunner(
@@ -96,7 +99,8 @@ public sealed class RunnerFaultVisibilityTests
     public async Task ShouldRecordFaultWithExceptionWhenRequestNotificationDispatchThrows()
     {
         using var listener = Listen(out var activities);
-        var bus = TestRequestBus.Create();
+        using var busHost = TestRequestBus.Create();
+        var bus = busHost.Bus;
         var consumer = new FakeRequestNotificationConsumer(
             [new RequestNotification(new UnregisteredRunnerFaultAction(), ActorToken: "valid-token")]);
         var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator());

@@ -8,11 +8,8 @@ using Microsoft.CodeAnalysis.Text;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Generates a request bus that dispatches every request discovered in the compilation to its
-/// single handler, using compile-time discovery instead of runtime reflection. Also wires each
-/// request's declared authorization — <c>[RequiresPermission]</c> and/or
-/// <c>IRequestAuthorizer&lt;TRequest&gt;</c> — in ahead of its handler, so every transport gets
-/// the same checks for free by funneling through this one generated dispatch point.
+/// Discovers every request-handler and authorizer interface and generates typed descriptors for
+/// the shared scoped dispatcher. Permission expressions are validated and emitted at compile time.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class RequestBusGenerator : IIncrementalGenerator
@@ -66,16 +63,14 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
             .CreateSyntaxProvider(
                 static (node, _) => node is ClassDeclarationSyntax,
                 static (syntaxContext, _) => GetRequestHandler(syntaxContext))
-            .Where(static handler => handler is not null)
-            .Select(static (handler, _) => handler!)
+            .SelectMany(static (handlers, _) => handlers)
             .Collect();
 
         var authorizers = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => node is ClassDeclarationSyntax,
                 static (syntaxContext, _) => GetRequestAuthorizer(syntaxContext))
-            .Where(static authorizer => authorizer is not null)
-            .Select(static (authorizer, _) => authorizer!)
+            .SelectMany(static (authorizers, _) => authorizers)
             .Collect();
 
         context.RegisterSourceOutput(
@@ -83,12 +78,12 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
             static (sourceContext, pair) => Generate(sourceContext, pair.Left, pair.Right));
     }
 
-    static RequestHandlerModel? GetRequestHandler(GeneratorSyntaxContext context)
+    static IEnumerable<RequestHandlerModel> GetRequestHandler(GeneratorSyntaxContext context)
     {
         var declaration = (ClassDeclarationSyntax)context.Node;
 
-        if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol || symbol.IsAbstract)
-            return null;
+        if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol || symbol.IsAbstract || !GeneratedTypeShape.IsSupported(symbol))
+            yield break;
 
         foreach (var iface in symbol.AllInterfaces)
         {
@@ -97,7 +92,7 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
 
             if (iface.OriginalDefinition.MetadataName == RequestHandlerMetadataName)
             {
-                return new RequestHandlerModel(
+                yield return new RequestHandlerModel(
                     symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     iface.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     resultType: null,
@@ -109,7 +104,7 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
 
             if (iface.OriginalDefinition.MetadataName == RequestHandlerWithResultMetadataName)
             {
-                return new RequestHandlerModel(
+                yield return new RequestHandlerModel(
                     symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     iface.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     iface.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
@@ -121,7 +116,7 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
 
             if (iface.OriginalDefinition.MetadataName == StreamRequestHandlerMetadataName)
             {
-                return new RequestHandlerModel(
+                yield return new RequestHandlerModel(
                     symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     iface.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     iface.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
@@ -132,7 +127,7 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
             }
         }
 
-        return null;
+        yield break;
     }
 
     static string? GetRequiredPermission(ITypeSymbol requestType) =>
@@ -159,12 +154,12 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
         type.NullableAnnotation == NullableAnnotation.Annotated
         || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
 
-    static AuthorizerModel? GetRequestAuthorizer(GeneratorSyntaxContext context)
+    static IEnumerable<AuthorizerModel> GetRequestAuthorizer(GeneratorSyntaxContext context)
     {
         var declaration = (ClassDeclarationSyntax)context.Node;
 
-        if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol { IsAbstract: false } symbol)
-            return null;
+        if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol { IsAbstract: false } symbol || !GeneratedTypeShape.IsSupported(symbol))
+            yield break;
 
         foreach (var iface in symbol.AllInterfaces)
         {
@@ -174,21 +169,23 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
                 continue;
             }
 
-            return new AuthorizerModel(
+            yield return new AuthorizerModel(
                 symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 iface.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 declaration.Identifier.GetLocation());
         }
 
-        return null;
+        yield break;
     }
 
     static void Generate(SourceProductionContext context, ImmutableArray<RequestHandlerModel> handlers, ImmutableArray<AuthorizerModel> authorizers)
     {
-        if (handlers.IsDefaultOrEmpty)
+        if (handlers.IsDefaultOrEmpty && authorizers.IsDefaultOrEmpty)
             return;
 
         var ordered = handlers
+            .GroupBy(handler => (handler.RequestType, handler.HandlerType))
+            .Select(group => group.First())
             .OrderBy(handler => handler.RequestType, StringComparer.Ordinal)
             .ToArray();
 
@@ -230,6 +227,7 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
             }
         }
 
+        authorizers = [.. authorizers.GroupBy(authorizer => (authorizer.RequestType, authorizer.AuthorizerType)).Select(group => group.First())];
         foreach (var group in authorizers.GroupBy(authorizer => authorizer.RequestType, StringComparer.Ordinal))
         {
             if (group.Count() <= 1)
@@ -247,289 +245,33 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
             return;
         }
 
-        var authorizerByRequestType = authorizers
-            .GroupBy(authorizer => authorizer.RequestType, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First().AuthorizerType, StringComparer.Ordinal);
-
-        var hasAnyPermission = ordered.Any(handler => handler.Permission is not null);
-
         var source = new StringBuilder()
             .AppendLine("// <auto-generated />")
             .AppendLine("#nullable enable")
             .AppendLine("namespace Cntryl.Portia;")
-            .AppendLine()
-            .AppendLine("/// <summary>")
-            .AppendLine("/// Dispatches every request discovered in this compilation to its single handler, after")
-            .AppendLine("/// running its declared authorization (if any) against the given actor.")
-            .AppendLine("/// </summary>")
-            .AppendLine("internal sealed class GeneratedRequestBus : global::Cntryl.Portia.IRequestBus")
-            .AppendLine("{");
+            .AppendLine("internal static class PortiaGeneratedRequestRegistrations")
+            .AppendLine("{")
+            .AppendLine("    public static void Register(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)")
+            .AppendLine("    {")
+            .AppendLine("        global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<global::Cntryl.Portia.IRequestBus, global::Cntryl.Portia.RequestBus>(services);")
+            .AppendLine("        global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<global::Cntryl.Portia.RequestRegistry>(services);");
 
         foreach (var handler in ordered)
         {
-            _ = source
-                .Append("    readonly ")
-                .Append(handler.HandlerType)
-                .Append(' ')
-                .Append(FieldName(handler.HandlerType))
-                .AppendLine(";");
+            var descriptor = handler.Kind == HandlerKind.Stream ? "StreamRequestRegistration" : "RequestRegistration";
+            var typeArguments = handler.RequestType + ", " + handler.HandlerType
+                + (handler.ResultType is null ? "" : ", " + handler.ResultType);
+            var permission = handler.Permission is null ? "null" : "static typed => " + BuildPermissionExpression(handler);
+            _ = source.Append("        _ = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::Cntryl.Portia.RequestHandlerRegistration>(services, new global::Cntryl.Portia.")
+                .Append(descriptor).Append('<').Append(typeArguments).Append(">(").Append(permission).AppendLine("));");
         }
-
-        foreach (var authorizerType in authorizerByRequestType.Values.Distinct(StringComparer.Ordinal))
+        foreach (var authorizer in authorizers)
         {
-            _ = source
-                .Append("    readonly ")
-                .Append(authorizerType)
-                .Append(' ')
-                .Append(FieldName(authorizerType))
-                .AppendLine(";");
+            _ = source.Append("        _ = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::Cntryl.Portia.RequestAuthorizerRegistration>(services, new global::Cntryl.Portia.RequestAuthorizerRegistration<")
+                .Append(authorizer.RequestType).Append(", ").Append(authorizer.AuthorizerType).AppendLine(">());");
         }
-
-        if (hasAnyPermission)
-        {
-            _ = source.AppendLine("    readonly global::Cntryl.Portia.IPermissionEvaluator _permissionEvaluator;");
-        }
-
-        var constructorParameters = ordered.Select(handler => (handler.HandlerType, ParameterName(handler.HandlerType)))
-            .Concat(authorizerByRequestType.Values.Distinct(StringComparer.Ordinal).Select(type => (type, ParameterName(type))))
-            .Concat(hasAnyPermission
-                ? [("global::Cntryl.Portia.IPermissionEvaluator", "permissionEvaluator")]
-                : [])
-            .ToArray();
-
-        _ = source
-            .AppendLine()
-            .AppendLine("    /// <summary>")
-            .AppendLine("    /// Creates a request bus over every handler discovered in this compilation.")
-            .AppendLine("    /// </summary>")
-            .Append("    public GeneratedRequestBus(")
-            .Append(string.Join(", ", constructorParameters.Select(p => $"{p.Item1} {p.Item2}")))
-            .AppendLine(")")
-            .AppendLine("    {");
-
-        foreach (var handler in ordered)
-        {
-            _ = source
-                .Append("        ")
-                .Append(FieldName(handler.HandlerType))
-                .Append(" = ")
-                .Append(ParameterName(handler.HandlerType))
-                .AppendLine(";");
-        }
-
-        foreach (var authorizerType in authorizerByRequestType.Values.Distinct(StringComparer.Ordinal))
-        {
-            _ = source
-                .Append("        ")
-                .Append(FieldName(authorizerType))
-                .Append(" = ")
-                .Append(ParameterName(authorizerType))
-                .AppendLine(";");
-        }
-
-        if (hasAnyPermission)
-        {
-            _ = source.AppendLine("        _permissionEvaluator = permissionEvaluator;");
-        }
-
-        _ = source
-            .AppendLine("    }")
-            .AppendLine()
-            .AppendLine("    /// <inheritdoc />")
-            .AppendLine("    public async global::System.Threading.Tasks.ValueTask<global::Cntryl.Portia.Result> SendAsync(")
-            .AppendLine("        global::Cntryl.Portia.IRequest request,")
-            .AppendLine("        global::System.Security.Claims.ClaimsPrincipal actor,")
-            .AppendLine("        global::System.Threading.CancellationToken ct = default)")
-            .AppendLine("    {")
-            .AppendLine("        switch (request)")
-            .AppendLine("        {");
-
-        foreach (var handler in ordered.Where(handler => handler.Kind == HandlerKind.NoResult))
-        {
-            var authorizerType = authorizerByRequestType.TryGetValue(handler.RequestType, out var found) ? found : null;
-
-            _ = source
-                .Append("            case ")
-                .Append(handler.RequestType)
-                .AppendLine(" typed:")
-                .AppendLine("            {");
-            AppendActivityStart(source, handler, "                ");
-            AppendAuthorizationChecks(source, handler, authorizerType, "                ", isStream: false);
-            _ = source
-                .Append("                var result = await ")
-                .Append(FieldName(handler.HandlerType))
-                .Append(".HandleAsync(new global::Cntryl.Portia.RequestContext<")
-                .Append(handler.RequestType)
-                .AppendLine(">(typed), ct).ConfigureAwait(false);")
-                .AppendLine("                global::Cntryl.Portia.PortiaTelemetry.RecordOutcome(activity, result.IsSuccess, result.Error);")
-                .AppendLine("                return result;")
-                .AppendLine("            }");
-        }
-
-        _ = source
-            .AppendLine("            default:")
-            .AppendLine("                throw new global::System.InvalidOperationException(")
-            .AppendLine("                    $\"No handler is registered for request type '{request.GetType()}'.\");")
-            .AppendLine("        }")
-            .AppendLine("    }")
-            .AppendLine()
-            .AppendLine("    /// <inheritdoc />")
-            .AppendLine("    public async global::System.Threading.Tasks.ValueTask<global::Cntryl.Portia.Result<TOut>> SendAsync<TOut>(")
-            .AppendLine("        global::Cntryl.Portia.IRequest<TOut> request,")
-            .AppendLine("        global::System.Security.Claims.ClaimsPrincipal actor,")
-            .AppendLine("        global::System.Threading.CancellationToken ct = default)")
-            .AppendLine("    {")
-            .AppendLine("        switch (request)")
-            .AppendLine("        {");
-
-        foreach (var handler in ordered.Where(handler => handler.Kind == HandlerKind.WithResult))
-        {
-            var authorizerType = authorizerByRequestType.TryGetValue(handler.RequestType, out var found) ? found : null;
-
-            _ = source
-                .Append("            case ")
-                .Append(handler.RequestType)
-                .AppendLine(" typed:")
-                .AppendLine("            {");
-            AppendActivityStart(source, handler, "                ");
-            AppendAuthorizationChecks(source, handler, authorizerType, "                ", isStream: false, resultTypeParameter: "TOut");
-            _ = source
-                .Append("                var result = (global::Cntryl.Portia.Result<TOut>)(object)await ")
-                .Append(FieldName(handler.HandlerType))
-                .Append(".HandleAsync(new global::Cntryl.Portia.RequestContext<")
-                .Append(handler.RequestType)
-                .AppendLine(">(typed), ct).ConfigureAwait(false);")
-                .AppendLine("                global::Cntryl.Portia.PortiaTelemetry.RecordOutcome(activity, result.IsSuccess, result.Error);")
-                .AppendLine("                return result;")
-                .AppendLine("            }");
-        }
-
-        _ = source
-            .AppendLine("            default:")
-            .AppendLine("                throw new global::System.InvalidOperationException(")
-            .AppendLine("                    $\"No handler is registered for request type '{request.GetType()}'.\");")
-            .AppendLine("        }")
-            .AppendLine("    }")
-            .AppendLine()
-            .AppendLine("    /// <inheritdoc />")
-            .AppendLine("    public global::System.Collections.Generic.IAsyncEnumerable<TOut> StreamAsync<TOut>(")
-            .AppendLine("        global::Cntryl.Portia.IStreamRequest<TOut> request,")
-            .AppendLine("        global::System.Security.Claims.ClaimsPrincipal actor,")
-            .AppendLine("        global::System.Threading.CancellationToken ct = default)")
-            .AppendLine("    {")
-            .AppendLine("        switch (request)")
-            .AppendLine("        {");
-
-        var streamIndex = 0;
-
-        foreach (var handler in ordered.Where(handler => handler.Kind == HandlerKind.Stream))
-        {
-            _ = source
-                .Append("            case ")
-                .Append(handler.RequestType)
-                .AppendLine(" typed:")
-                .Append("                return (global::System.Collections.Generic.IAsyncEnumerable<TOut>)(object)Stream_")
-                .Append(streamIndex)
-                .AppendLine("(typed, actor, ct);");
-            streamIndex++;
-        }
-
-        _ = source
-            .AppendLine("            default:")
-            .AppendLine("                throw new global::System.InvalidOperationException(")
-            .AppendLine("                    $\"No handler is registered for request type '{request.GetType()}'.\");")
-            .AppendLine("        }")
-            .AppendLine("    }");
-
-        streamIndex = 0;
-
-        foreach (var handler in ordered.Where(handler => handler.Kind == HandlerKind.Stream))
-        {
-            var authorizerType = authorizerByRequestType.TryGetValue(handler.RequestType, out var found) ? found : null;
-
-            _ = source
-                .AppendLine()
-                .Append("    async global::System.Collections.Generic.IAsyncEnumerable<")
-                .Append(handler.ResultType)
-                .Append("> Stream_")
-                .Append(streamIndex)
-                .Append('(')
-                .Append(handler.RequestType)
-                .AppendLine(" typed,")
-                .AppendLine("        global::System.Security.Claims.ClaimsPrincipal actor,")
-                .AppendLine("        [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken ct)")
-                .AppendLine("    {");
-            AppendActivityStart(source, handler, "        ");
-            AppendAuthorizationChecks(source, handler, authorizerType, "        ", isStream: true);
-            _ = source
-                .Append("        await foreach (var item in ")
-                .Append(FieldName(handler.HandlerType))
-                .Append(".HandleAsync(new global::Cntryl.Portia.RequestContext<")
-                .Append(handler.RequestType)
-                .AppendLine(">(typed), ct).WithCancellation(ct).ConfigureAwait(false))")
-                .AppendLine("            yield return item;")
-                .AppendLine("    }");
-
-            streamIndex++;
-        }
-
-        _ = source.AppendLine("}");
-
-        context.AddSource("GeneratedRequestBus.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
-    }
-
-    // Every transport funnels through this one dispatch point, so starting the activity here —
-    // rather than per-transport — is what makes tracing "just work" the same way authorization
-    // does: implemented once, applies everywhere. `using` disposes the activity (ending the span)
-    // on every exit from its enclosing block, including an early return from a denied
-    // authorization check, so no explicit "stop" call is needed anywhere else.
-    static void AppendActivityStart(StringBuilder source, RequestHandlerModel handler, string indent)
-    {
-        _ = source
-            .Append(indent).Append("using var activity = global::Cntryl.Portia.PortiaTelemetry.ActivitySource.StartActivity(\"Portia ")
-            .Append(SimpleTypeName(handler.RequestType)).AppendLine("\");")
-            .Append(indent).Append("_ = activity?.SetTag(\"portia.request_type\", \"").Append(SimpleTypeName(handler.RequestType)).AppendLine("\");");
-    }
-
-    static string SimpleTypeName(string fullyQualifiedType)
-    {
-        const string globalPrefix = "global::";
-        var unqualified = fullyQualifiedType.StartsWith(globalPrefix, StringComparison.Ordinal)
-            ? fullyQualifiedType.Substring(globalPrefix.Length)
-            : fullyQualifiedType;
-        return unqualified.Split('.').Last();
-    }
-
-    static void AppendAuthorizationChecks(
-        StringBuilder source,
-        RequestHandlerModel handler,
-        string? authorizerType,
-        string indent,
-        bool isStream,
-        string? resultTypeParameter = null)
-    {
-        if (handler.Permission is not null)
-        {
-            _ = source
-                .Append(indent).AppendLine("var permissionResult = await _permissionEvaluator.EvaluateAsync(")
-                .Append(indent).Append("    actor, ").Append(BuildPermissionExpression(handler)).AppendLine(", ct).ConfigureAwait(false);")
-                .Append(indent).AppendLine("if (!permissionResult.IsSuccess)")
-                .Append(indent).AppendLine("{");
-            AppendAuthorizationFailure(source, indent + "    ", isStream, resultTypeParameter, "permissionResult.Error!");
-            _ = source.Append(indent).AppendLine("}");
-        }
-
-        if (authorizerType is not null)
-        {
-            _ = source
-                .Append(indent).Append("var authorizeResult = await ").Append(FieldName(authorizerType))
-                .Append(".AuthorizeAsync(new global::Cntryl.Portia.RequestContext<").Append(handler.RequestType)
-                .AppendLine(">(typed), actor, ct).ConfigureAwait(false);")
-                .Append(indent).AppendLine("if (!authorizeResult.IsSuccess)")
-                .Append(indent).AppendLine("{");
-            AppendAuthorizationFailure(source, indent + "    ", isStream, resultTypeParameter, "authorizeResult.Error!");
-            _ = source.Append(indent).AppendLine("}");
-        }
+        _ = source.AppendLine("    }").AppendLine("}");
+        context.AddSource("PortiaGeneratedRequestRegistrations.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
     }
 
     // Builds the C# source expression evaluated at dispatch time for a RequiresPermission
@@ -567,41 +309,6 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
     // A static segment feeding into an interpolated string literal ($"...") also needs any
     // literal '{'/'}' doubled, so it isn't misread as another interpolation hole.
     static string EscapeInterpolatedSegment(string value) => EscapeStringLiteral(value).Replace("{", "{{").Replace("}", "}}");
-
-    static void AppendAuthorizationFailure(StringBuilder source, string indent, bool isStream, string? resultTypeParameter, string errorExpression)
-    {
-        if (isStream)
-        {
-            _ = source
-                .Append(indent).Append("global::Cntryl.Portia.PortiaTelemetry.RecordOutcome(activity, false, ").Append(errorExpression).AppendLine(");")
-                .Append(indent).Append("throw new global::Cntryl.Portia.RequestAuthorizationException(").Append(errorExpression).AppendLine(");");
-            return;
-        }
-
-        _ = source
-            .Append(indent).Append("global::Cntryl.Portia.PortiaTelemetry.RecordOutcome(activity, false, ").Append(errorExpression).AppendLine(");")
-            .Append(indent)
-            .Append("return ")
-            .Append(resultTypeParameter is null ? "global::Cntryl.Portia.Result.Failure(" : $"global::Cntryl.Portia.Result<{resultTypeParameter}>.Failure(")
-            .Append(errorExpression)
-            .AppendLine(");");
-    }
-
-    static string FieldName(string handlerType) => "_" + ParameterName(handlerType);
-
-    static string ParameterName(string handlerType)
-    {
-        // A type declared in the global namespace (e.g. top-level statements) has a fully
-        // qualified name of just "global::TypeName" — no further '.' to split on — so the
-        // "global::" prefix must be stripped explicitly before taking the last '.'-separated
-        // segment, rather than assuming a namespace-qualified name is always present.
-        const string globalPrefix = "global::";
-        var unqualified = handlerType.StartsWith(globalPrefix, StringComparison.Ordinal)
-            ? handlerType.Substring(globalPrefix.Length)
-            : handlerType;
-        var simpleName = unqualified.Split('.').Last().TrimStart('@');
-        return char.ToLowerInvariant(simpleName[0]) + simpleName.Substring(1);
-    }
 
     enum HandlerKind
     {

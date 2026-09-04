@@ -38,7 +38,7 @@ public sealed class DomainEventCatalogGeneratorTests
     public void ShouldResolveDomainEventSerializerAfterGeneratedRegistration()
     {
         var services = new ServiceCollection();
-        _ = services.AddPortiaGeneratedDomainEventSerialization();
+        _ = services.AddPortiaModule<FrameworkTestModule>();
         using var provider = services.BuildServiceProvider();
 
         var serializer = provider.GetRequiredService<IDomainEventSerializer>();
@@ -78,7 +78,7 @@ public sealed class DomainEventCatalogGeneratorTests
 
         var services = new ServiceCollection();
         _ = services.AddSingleton<IJsonDomainEventUpcaster, GadgetV1ToV2Upcaster>();
-        _ = services.AddPortiaGeneratedDomainEventSerialization();
+        _ = services.AddPortiaModule<FrameworkTestModule>();
         using var provider = services.BuildServiceProvider();
         var reader = provider.GetRequiredService<IDomainEventSerializer>();
 

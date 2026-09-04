@@ -4,7 +4,7 @@ using System.Diagnostics;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies that every dispatch through <see cref="GeneratedRequestBus" /> is traced via
+/// Verifies that every dispatch through <see cref="RequestBus" /> is traced via
 /// <see cref="PortiaTelemetry.ActivitySource" /> — instrumented once at the bus, the one
 /// chokepoint every transport already funnels through, so this is the whole tracing story
 /// regardless of transport. Uses a real <see cref="ActivityListener" />, the same mechanism an
@@ -21,7 +21,8 @@ public sealed class PortiaTelemetryTests
     public async Task ShouldRecordSuccessfulActivity()
     {
         using var listener = Listen(out var activities);
-        var bus = TestRequestBus.Create();
+        using var busHost = TestRequestBus.Create();
+        var bus = busHost.Bus;
 
         _ = await bus.SendAsync(new TelemetrySuccessAction(), RequestActor.System);
 
@@ -45,7 +46,8 @@ public sealed class PortiaTelemetryTests
     public async Task ShouldRecordHandlerFailureAsErrorStatus()
     {
         using var listener = Listen(out var activities);
-        var bus = TestRequestBus.Create();
+        using var busHost = TestRequestBus.Create();
+        var bus = busHost.Bus;
 
         _ = await bus.SendAsync(new TelemetryFailureAction(), RequestActor.System);
 
@@ -64,7 +66,8 @@ public sealed class PortiaTelemetryTests
     public async Task ShouldRecordPermissionDenialAsErrorStatus()
     {
         using var listener = Listen(out var activities);
-        var bus = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.DenyAll());
+        using var busHost = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.DenyAll());
+        var bus = busHost.Bus;
 
         _ = await bus.SendAsync(new TelemetryGuardedAction(), RequestActor.Anonymous);
 
@@ -81,7 +84,8 @@ public sealed class PortiaTelemetryTests
     public async Task ShouldRecordActivityForStreamedRequest()
     {
         using var listener = Listen(out var activities);
-        var bus = TestRequestBus.Create();
+        using var busHost = TestRequestBus.Create();
+        var bus = busHost.Bus;
 
         var items = new List<int>();
 

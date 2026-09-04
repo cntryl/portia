@@ -6,15 +6,15 @@ namespace Cntryl.Portia;
 public interface IDomainEventReader
 {
     /// <summary>
-    /// Reads committed events after a known aggregate version.
+    /// Reads committed records from an inclusive physical stream offset, including audits.
     /// </summary>
     /// <param name="stream">The aggregate stream identity.</param>
-    /// <param name="afterVersion">The last aggregate version already known by the caller.</param>
+    /// <param name="fromOffset">The first inclusive physical resource offset to read.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>The next contiguous committed events in ascending aggregate-version order.</returns>
-    IAsyncEnumerable<DomainEvent> ReadAsync(
+    /// <returns>The next contiguous committed records in ascending resource-offset order.</returns>
+    IAsyncEnumerable<DomainEventRecord> ReadAsync(
         EventStreamAddress stream,
-        ulong afterVersion = 0,
+        ulong fromOffset = 0,
         CancellationToken ct = default);
 
     /// <summary>

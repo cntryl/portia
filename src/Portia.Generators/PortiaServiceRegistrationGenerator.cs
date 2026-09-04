@@ -14,7 +14,7 @@ namespace Cntryl.Portia;
 /// and emitted independently below (see <see cref="ReactorsAndProjectors" />,
 /// <see cref="RequestTransportsRegistration" />, <see cref="RequestHandlers" />) and composed only in
 /// <see cref="Generate" />; registering an RPC worker per request is a separate, independent
-/// concern owned entirely by <see cref="FitzRpcWorkerRegistrationGenerator" />.
+/// concern owned entirely by generated typed RPC descriptors.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
@@ -88,7 +88,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
             .AppendLine("/// <summary>")
             .AppendLine("/// Registers Portia reactors, projectors, and routed requests discovered at compile time.")
             .AppendLine("/// </summary>")
-            .AppendLine("public static class PortiaGeneratedServiceCollectionExtensions")
+            .AppendLine("internal static class PortiaGeneratedServiceCollectionExtensions")
             .AppendLine("{")
             .AppendLine("    /// <summary>")
             .AppendLine("    /// Registers every concrete reactor and projector declared in this compilation, wires")
@@ -130,7 +130,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         {
             var declaration = (ClassDeclarationSyntax)context.Node;
 
-            if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol || symbol.IsAbstract)
+            if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol || symbol.IsAbstract || !GeneratedTypeShape.IsSupported(symbol))
                 return null;
 
             if (InheritsFrom(symbol, ReactorMetadataName))
@@ -177,13 +177,11 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
                 else if (canRegisterProjectors)
                 {
                     _ = source
-                        .Append("        _ = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton(services, new global::Cntryl.Portia.ProjectorRegistration(")
-                        .Append("typeof(")
+                        .Append("        _ = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton(services, global::Cntryl.Portia.ProjectorRegistration.Create<")
                         .Append(component.TypeName)
-                        .AppendLine("), static (runner, sp, checkpoint, options, ct) => runner.RunAsync(")
-                        .Append("            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<")
-                        .Append(component.TypeName)
-                        .AppendLine(">(sp), checkpoint, options, ct)));");
+                        .Append(", ")
+                        .Append(component.ProjectionType)
+                        .AppendLine(">());");
                 }
             }
         }
@@ -241,7 +239,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         {
             var declaration = (ClassDeclarationSyntax)context.Node;
 
-            if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol { IsAbstract: false } symbol)
+            if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol { IsAbstract: false } symbol || !GeneratedTypeShape.IsSupported(symbol))
                 return null;
 
             var isHandler = symbol.AllInterfaces.Any(iface =>
@@ -272,8 +270,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
             if (ordered.Length > 0)
             {
                 _ = source
-                    .AppendLine("        _ = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient<")
-                    .AppendLine("            global::Cntryl.Portia.IRequestBus, global::Cntryl.Portia.GeneratedRequestBus>(services);");
+                    .AppendLine("        global::Cntryl.Portia.PortiaGeneratedRequestRegistrations.Register(services);");
             }
         }
     }
@@ -282,8 +279,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
     /// Registers a <c>RequestTransportRegistration</c> for every routed, transport-marked
     /// request declared in a compilation — its own reason to change, independent of reactors,
     /// projectors, or request handlers. Discovery itself lives in
-    /// <see cref="RequestTransportDiscovery" />, shared with
-    /// <see cref="FitzRpcWorkerRegistrationGenerator" />.
+    /// <see cref="RequestTransportDiscovery" />.
     /// </summary>
     static class RequestTransportsRegistration
     {
@@ -311,7 +307,15 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
                     .Append(RequestTransportDiscovery.FormatStringLiteral(request.Resource))
                     .Append(", ")
                     .Append(RequestTransportDiscovery.FormatStringLiteral(request.Operation))
-                    .AppendLine(")));");
+                    .Append(')');
+                if (request.Transports.HasFlag(RequestTransports.Callable))
+                {
+                    _ = source.Append(", static (registrar, ct) => registrar.RegisterAsync<")
+                        .Append(request.TypeName)
+                        .Append(request.ResultType is null ? string.Empty : $", {request.ResultType}")
+                        .Append(">(ct)");
+                }
+                _ = source.AppendLine("));");
             }
         }
     }
