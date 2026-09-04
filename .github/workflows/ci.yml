@@ -28,13 +28,18 @@ jobs:
       - name: Check formatting
         run: dotnet format Portia.slnx --verify-no-changes
 
+      - name: Start Fitz server
+        run: docker compose up -d
+
       - name: Build solution
         run: dotnet build Portia.slnx --configuration Release
 
+
       - name: Test solution
         env:
-          PORTIA_FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
-        run: |
-          trap 'docker compose down --volumes' EXIT
-          docker compose up --detach fitz
-          dotnet test Portia.slnx --configuration Release --no-build
+          FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
+        run: dotnet test Portia.slnx --configuration Release --no-build
+
+      - name: Stop Fitz server
+        if: ${{ always() }}
+        run: docker compose down --volumes

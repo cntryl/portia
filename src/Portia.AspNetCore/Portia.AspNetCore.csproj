@@ -1,10 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <PackageId>Portia.AspNetCore</PackageId>
-    <AssemblyName>Portia.AspNetCore</AssemblyName>
     <Description>Minimal API wiring for Portia requests.</Description>
-    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>

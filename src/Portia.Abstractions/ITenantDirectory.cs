@@ -9,9 +9,9 @@ namespace Cntryl.Portia;
 public interface ITenantDirectory
 {
     /// <summary>
-    /// Gets the tenants active right now, read once at startup — before
-    /// <see cref="WatchAsync" /> is ever consulted, so a tenant that existed before the caller
-    /// started is not missed.
+    /// Gets a complete snapshot of the tenants active right now. Callers may read this again to
+    /// reconcile after <see cref="WatchAsync" /> is interrupted; every read must include tenants
+    /// whose state has not changed since a prior read, not only newly observed changes.
     /// </summary>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The currently active tenants.</returns>

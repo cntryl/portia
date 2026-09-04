@@ -15,6 +15,48 @@ namespace Cntryl.Portia;
 public sealed class PortiaHostingServiceCollectionExtensionsTests
 {
     /// <summary>
+    /// Preserves the original two-parameter CLR extension method for existing compiled callers.
+    /// </summary>
+    [Fact]
+    public void ShouldRetainOriginalReactorRegistrationOverload()
+    {
+        var overload = typeof(PortiaHostingServiceCollectionExtensions)
+            .GetMethods()
+            .SingleOrDefault(candidate =>
+            {
+                if (candidate.Name != nameof(PortiaHostingServiceCollectionExtensions.AddPortiaReactorRunner)
+                    || !candidate.IsGenericMethodDefinition)
+                {
+                    return false;
+                }
+
+                var parameters = candidate.GetParameters();
+                return parameters.Length == 2
+                    && parameters[0].ParameterType == typeof(IServiceCollection)
+                    && parameters[1].ParameterType == typeof(TimeSpan?);
+            });
+
+        Assert.NotNull(overload);
+    }
+
+    /// <summary>
+    /// Rejects an invalid reactor batch size during registration rather than deferring the error
+    /// until the hosted service is resolved and enters its retry loop.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void ShouldRejectNonPositiveReactorBatchSizeDuringRegistration(int maxBatchSize)
+    {
+        var services = new ServiceCollection();
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            services.AddPortiaReactorRunner<TestReactor>(maxBatchSize: maxBatchSize));
+
+        Assert.Equal(nameof(maxBatchSize), exception.ParamName);
+    }
+
+    /// <summary>
     /// Verifies that <c>AddPortiaQueueRunner</c> actually dispatches a queued request once the
     /// hosted service starts.
     /// </summary>
@@ -120,7 +162,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var services = new ServiceCollection();
         _ = services.AddSingleton<ILeaseClient>(new InMemoryLeaseClient());
         _ = services.AddPortiaFleetPartitionRunner(
-            ["partition-a"],
+            ["lease://portia/fleet/partition-a"],
             onPartitionAcquired: async (_, partition, _, ct) =>
             {
                 acquired.Add(partition);
@@ -141,7 +183,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         await WaitUntilAsync(() => acquired.Count == 1);
         await hostedService.StopAsync(default);
 
-        Assert.Equal(["partition-a"], acquired);
+        Assert.Equal(["lease://portia/fleet/partition-a"], acquired);
     }
 
     static async Task WaitUntilAsync(Func<bool> condition)

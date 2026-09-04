@@ -15,15 +15,33 @@ namespace Cntryl.Portia;
 /// do with, and knows nothing about, whatever separate credentials Fitz itself might use to
 /// authenticate its own RPC/queue/notice/schedule connections.
 /// </summary>
-/// <param name="validationParameters">The parameters (issuer, audience, signing keys, clock skew)
-/// every token is validated against — the same ones the live API's own JWT bearer authentication
-/// is configured with, so a token re-validated here is held to an identical standard.</param>
+/// <param name="validationParameters">The parameters (issuer, audience, signing keys) every
+/// token is validated against — the same ones the live API's own JWT bearer authentication is
+/// configured with, so a token re-validated here is held to an identical standard.
+/// <see cref="TokenValidationParameters.ClockSkew" /> is the one exception: this always
+/// overrides it to <see cref="TimeSpan.Zero" /> on its own copy of
+/// <paramref name="validationParameters" /> (the instance passed in is never mutated), rather
+/// than trust every caller to remember to set it. Left to
+/// <see cref="Microsoft.IdentityModel" />'s own default, a token that expired up to five minutes
+/// ago would otherwise still validate successfully — a real, easy-to-miss gap (most JWT setup
+/// guides never mention clock skew at all) this override closes unconditionally, verified
+/// directly against parameters constructed the ordinary way (no explicit
+/// <see cref="TokenValidationParameters.ClockSkew" /> at all) in
+/// <c>JwtRequestActorValidatorTests.ShouldRejectRecentlyExpiredTokenEvenWhenCallerUsesDefaultClockSkew</c>.</param>
 public sealed class JwtRequestActorValidator(TokenValidationParameters validationParameters) : IRequestActorValidator
 {
     static readonly JsonWebTokenHandler Handler = new();
 
-    readonly TokenValidationParameters _validationParameters = validationParameters
-        ?? throw new ArgumentNullException(nameof(validationParameters));
+    readonly TokenValidationParameters _validationParameters = Clone(validationParameters);
+
+    static TokenValidationParameters Clone(TokenValidationParameters validationParameters)
+    {
+        ArgumentNullException.ThrowIfNull(validationParameters);
+
+        var clone = validationParameters.Clone();
+        clone.ClockSkew = TimeSpan.Zero;
+        return clone;
+    }
 
     /// <inheritdoc />
     public async ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string? token, CancellationToken ct = default)

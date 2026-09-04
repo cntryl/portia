@@ -1,10 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <PackageId>Portia.Abstractions</PackageId>
-    <AssemblyName>Portia.Abstractions</AssemblyName>
     <Description>Public contracts for the Portia event-sourcing and CQRS framework.</Description>
-    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>

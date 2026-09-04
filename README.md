@@ -37,7 +37,7 @@ docker compose down --volumes
 ```
 
 `FitzBrokerIntegrationTests` connects to the Compose-managed broker at
-`ws://127.0.0.1:4090/ws` by default; override `PORTIA_FITZ_TEST_ENDPOINT` when using another
+`ws://127.0.0.1:4090/ws` by default; override `FITZ_TEST_ENDPOINT` when using another
 broker. CI starts and removes the Compose stack automatically. Everything else needs nothing
 running.
 
@@ -58,18 +58,28 @@ running.
 
 - **Event sourcing**: `Aggregate` with explicit `On<TEvent>(Action<TEvent> handler)` registration
   in the constructor — no source generator, no naming convention, a mismatched signature is an
-  ordinary compile error.
+  ordinary compile error. A stale `AppendAsync` (someone else committed to the stream first)
+  throws `EventStreamConcurrencyException` from every `IEventStore` implementation — one stable
+  type to catch and retry against, confirmed against a real Fitz broker, not just
+  `InMemoryEventStore`'s own in-process check.
 - **CQRS dispatch**: `Result`/`Result<T>` instead of exceptions for expected failures; a request
   opts into each transport by implementing that transport's marker interface, checked at compile
   time.
 - **Permissions**: `[RequiresPermission("orders:{OrderId}:read")]` — the `{Token}` interpolates
   against the request's own primary-constructor properties, resolved and validated at compile
-  time (`PORTIA011` catches an unknown token). `IPermissionEvaluator` (coarse) and
+  time (`PORTIA011` catches an unknown token, `PORTIA013` catches a nullable one — a null value
+  at dispatch time would otherwise silently collapse to an empty segment in the checked
+  permission string instead of failing clearly). `IPermissionEvaluator` (coarse) and
   `IRequestAuthorizer<T>` (row-level) are independent, pluggable hooks — permission is always
   checked before the authorizer.
 - **Actor propagation**: never ambient. Every `IRequestBus` call takes an explicit
   `ClaimsPrincipal`; queued/scheduled transports carry a raw JWT instead and re-validate it
   (signature and expiry) at the moment the request actually runs, not when it was enqueued.
+  `JwtRequestActorValidator` forces `TokenValidationParameters.ClockSkew` to zero on its own
+  clone of whatever's passed in, regardless of the caller's own setting — left to
+  `Microsoft.IdentityModel`'s five-minute default (which most JWT setup guides never mention
+  overriding), a token that expired minutes ago would otherwise still validate successfully,
+  found during adversarial review.
 - **Schema evolution**: `DomainEventTypeCatalog` maps a logical event name + schema version to a
   CLR type. An exact match resolves directly (old and new versions can simply coexist forever);
   a missing version falls through a chain of `IDomainEventUpcaster`s. Populated automatically by
@@ -101,3 +111,10 @@ running.
   for anything long-lived.
 - **The sample app is CQRS-only.** No event-sourced aggregate, multi-tenancy, or fleet
   distribution example exists yet, despite all three being implemented and tested.
+- **`ReactorRunner`'s bounded, checkpointed batching is opt-in, not automatic.** Found during
+  adversarial review: a reactor's job is raising commands against other aggregates, not generally
+  safe to redo, but a failure partway through an unbounded pass used to return no checkpoint at
+  all. Fixed — pass an `IProjectionCheckpointStore` and a `maxBatchSize` to `RunAsync` (as
+  `AddPortiaReactorRunner<T>()` already does) and a failure only loses the current batch, not the
+  whole pass. Omit them and you keep the older, whole-pass-only behavior; that's a deliberate
+  choice this class leaves to the caller.

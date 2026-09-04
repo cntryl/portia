@@ -36,6 +36,7 @@ static class TestRequestBus
         HttpSendPingHandler? httpSendPingHandler = null,
         HttpGuardedActionHandler? httpGuardedActionHandler = null,
         HttpListWidgetsHandler? httpListWidgetsHandler = null,
+        NoWorkerRegisteredPingHandler? noWorkerRegisteredPingHandler = null,
         IPermissionEvaluator? permissionEvaluator = null) =>
         new(
             authorizedActionHandler: authorizedActionHandler ?? new AuthorizedActionHandler(),
@@ -61,6 +62,7 @@ static class TestRequestBus
             httpSendPingHandler: httpSendPingHandler ?? new HttpSendPingHandler(),
             httpGuardedActionHandler: httpGuardedActionHandler ?? new HttpGuardedActionHandler(),
             httpListWidgetsHandler: httpListWidgetsHandler ?? new HttpListWidgetsHandler(),
+            noWorkerRegisteredPingHandler: noWorkerRegisteredPingHandler ?? new NoWorkerRegisteredPingHandler(),
             authorizedActionAuthorizer: authorizedActionAuthorizer ?? new AuthorizedActionAuthorizer(),
             recordingGuardedAndAuthorizedActionAuthorizer: guardedAndAuthorizedActionAuthorizer ?? new RecordingGuardedAndAuthorizedActionAuthorizer(),
             permissionEvaluator: permissionEvaluator ?? TestPermissionEvaluator.AllowAll());

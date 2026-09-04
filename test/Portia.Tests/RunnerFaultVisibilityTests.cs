@@ -124,20 +124,58 @@ public sealed class RunnerFaultVisibilityTests
             onTenantStopped: (_, _) => Task.CompletedTask,
             cts.Token);
 
+        // Matches on the specific "acme" start-callback fault, not just the runner name — since
+        // MultiTenantRunner can also report an unrelated "tenant directory watch faulted" fault
+        // (see MultiTenancyTests.ShouldReconnectAfterTenantDirectoryWatchStreamFaults) under the
+        // same runner tag, and this listener is process-wide: a concurrently-running test file
+        // hitting that other path really can land in this test's own capture bag.
+        static bool IsAcmeStartCallbackFault(Activity a)
+        {
+            return (a.GetTagItem("portia.runner") as string) == nameof(MultiTenantRunner)
+                && (a.GetTagItem("portia.fault_reason") as string)?.Contains("acme", StringComparison.Ordinal) == true;
+        }
+
         // Give the faulting start callback's continuation a chance to run before this test ever
         // stops the tenant — that's the whole point: it must be visible before shutdown, not
         // only as a byproduct of it.
         var deadline = DateTime.UtcNow.AddSeconds(2);
-        while (!activities.Any(a => (a.GetTagItem("portia.runner") as string) == nameof(MultiTenantRunner)) && DateTime.UtcNow < deadline)
+        while (!activities.Any(IsAcmeStartCallbackFault) && DateTime.UtcNow < deadline)
             await Task.Delay(10);
 
         cts.Cancel();
         await run;
 
-        Assert.Contains(activities, a => (a.GetTagItem("portia.runner") as string) == nameof(MultiTenantRunner));
-        var activity = activities.First(a => (a.GetTagItem("portia.runner") as string) == nameof(MultiTenantRunner));
+        Assert.Contains(activities, IsAcmeStartCallbackFault);
+        var activity = activities.First(IsAcmeStartCallbackFault);
         Assert.Contains("acme", (string?)activity.GetTagItem("portia.fault_reason"), StringComparison.Ordinal);
         Assert.Contains(activity.Events, e => e.Name == "exception");
+    }
+
+    /// <summary>
+    /// Verifies that a watch implementation which observes cancellation by completing normally
+    /// does not produce the fault reserved for an unexpected clean EOF.
+    /// </summary>
+    [Fact]
+    public async Task ShouldNotRecordWatchCompletionFaultDuringCancellation()
+    {
+        using var listener = Listen(out var activities);
+        var directory = new CancellationCompletingTenantDirectory();
+        var runner = new MultiTenantRunner(directory);
+        using var cts = new CancellationTokenSource();
+
+        var run = runner.RunAsync(
+            onTenantStarted: (_, _) => Task.CompletedTask,
+            onTenantStopped: (_, _) => Task.CompletedTask,
+            cts.Token);
+
+        await directory.WatchStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        cts.Cancel();
+        await run;
+
+        Assert.DoesNotContain(
+            activities,
+            activity => (activity.GetTagItem("portia.runner") as string) == nameof(MultiTenantRunner)
+                && (activity.GetTagItem("portia.fault_reason") as string) == "tenant directory watch completed without cancellation");
     }
 
     static ActivityListener Listen(out ConcurrentBag<Activity> activities)
@@ -216,6 +254,29 @@ public sealed class RunnerFaultVisibilityTests
             var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             await using (ct.Register(() => tcs.TrySetResult()))
                 await tcs.Task.ConfigureAwait(false);
+
+            yield break;
+        }
+    }
+
+    sealed class CancellationCompletingTenantDirectory : ITenantDirectory
+    {
+        public TaskCompletionSource WatchStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        {
+            await Task.Yield();
+            yield break;
+        }
+
+        public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        {
+            _ = WatchStarted.TrySetResult();
+            var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            await using (ct.Register(() => completed.TrySetResult()))
+                await completed.Task.ConfigureAwait(false);
 
             yield break;
         }

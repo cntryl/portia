@@ -38,7 +38,7 @@ public sealed class InMemoryEventStoreTests
         await store.AppendAsync(stream, 0, [first]);
 
         var stale = Committed(new ValueIncremented(2), id, 1);
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(
+        _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(
             async () => await store.AppendAsync(stream, 0, [stale]));
 
         var events = new List<DomainEvent>();

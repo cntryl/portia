@@ -47,6 +47,16 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    static readonly DiagnosticDescriptor NullablePermissionToken = new(
+        "PORTIA013",
+        "Permission token references a nullable property",
+        "RequiresPermission on '{0}' references '{{{1}}}', which is nullable — a null value at " +
+        "dispatch time would silently collapse to an empty segment in the checked permission " +
+        "string instead of failing clearly; use a non-nullable property",
+        "Portia",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     static readonly Regex PermissionTokenPattern = new(@"\{([A-Za-z_][A-Za-z0-9_]*)\}", RegexOptions.Compiled);
 
     /// <inheritdoc />
@@ -136,14 +146,18 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
     // Backs {Token} interpolation in a RequiresPermission string — the same "match a request's
     // primary-constructor parameter by name" convention RequestHttpBindingGenerator already uses
     // for route tokens, applied here to permission strings instead.
-    static string[] GetRequestParameterNames(ITypeSymbol requestType) =>
+    static RequestParameterModel[] GetRequestParameterNames(ITypeSymbol requestType) =>
         requestType is INamedTypeSymbol { InstanceConstructors: var constructors }
             ? constructors
                 .Where(ctor => ctor.Parameters.Length > 0 && ctor.DeclaredAccessibility == Accessibility.Public)
                 .OrderByDescending(ctor => ctor.Parameters.Length)
                 .FirstOrDefault()
-                ?.Parameters.Select(p => p.Name).ToArray() ?? []
+                ?.Parameters.Select(p => new RequestParameterModel(p.Name, IsNullableParameterType(p.Type))).ToArray() ?? []
             : [];
+
+    static bool IsNullableParameterType(ITypeSymbol type) =>
+        type.NullableAnnotation == NullableAnnotation.Annotated
+        || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
 
     static AuthorizerModel? GetRequestAuthorizer(GeneratorSyntaxContext context)
     {
@@ -200,10 +214,17 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
             foreach (Match match in PermissionTokenPattern.Matches(handler.Permission))
             {
                 var token = match.Groups[1].Value;
+                var parameter = handler.RequestParameters.FirstOrDefault(p => string.Equals(p.Name, token, StringComparison.OrdinalIgnoreCase));
 
-                if (!handler.RequestParameterNames.Any(name => string.Equals(name, token, StringComparison.OrdinalIgnoreCase)))
+                if (parameter is null)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(UnknownPermissionToken, handler.Location, handler.RequestType, token));
+                    return;
+                }
+
+                if (parameter.IsNullable)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(NullablePermissionToken, handler.Location, handler.RequestType, token));
                     return;
                 }
             }
@@ -531,7 +552,7 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
             _ = expression.Append(EscapeInterpolatedSegment(permission.Substring(lastIndex, match.Index - lastIndex)));
 
             var token = match.Groups[1].Value;
-            var parameterName = handler.RequestParameterNames.First(name => string.Equals(name, token, StringComparison.OrdinalIgnoreCase));
+            var parameterName = handler.RequestParameters.First(p => string.Equals(p.Name, token, StringComparison.OrdinalIgnoreCase)).Name;
             _ = expression.Append("{typed.").Append(parameterName).Append('}');
 
             lastIndex = match.Index + match.Length;
@@ -595,7 +616,7 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
         string? resultType,
         HandlerKind kind,
         string? permission,
-        string[] requestParameterNames,
+        RequestParameterModel[] requestParameters,
         Location location)
     {
         public string HandlerType { get; } = handlerType;
@@ -608,9 +629,20 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
 
         public string? Permission { get; } = permission;
 
-        public string[] RequestParameterNames { get; } = requestParameterNames;
+        public RequestParameterModel[] RequestParameters { get; } = requestParameters;
 
         public Location Location { get; } = location;
+    }
+
+    // Tracked alongside each request's primary-constructor parameter names specifically so a
+    // {Token} interpolated into a RequiresPermission string can be checked for nullability
+    // (PORTIA013), not just that the name exists at all (PORTIA011) — a null value at dispatch
+    // time otherwise silently collapses to an empty segment in the checked permission string.
+    sealed class RequestParameterModel(string name, bool isNullable)
+    {
+        public string Name { get; } = name;
+
+        public bool IsNullable { get; } = isNullable;
     }
 
     sealed class AuthorizerModel(string authorizerType, string requestType, Location location)

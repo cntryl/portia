@@ -107,6 +107,22 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
+    /// Verifies that a completely empty body on an endpoint that requires one is a 400, not an
+    /// unhandled exception — an empty stream isn't "malformed JSON" in the same sense as
+    /// truncated or garbled text, so it's worth checking <c>JsonDocument.ParseAsync</c> fails the
+    /// same clean way for it.
+    /// </summary>
+    [Fact]
+    public async Task ShouldReturnBadRequestWhenBodyIsCompletelyEmpty()
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpCreateOrder, Uuid>("/orders"));
+
+        var response = await client.PostAsync("/orders", new ByteArrayContent([]));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
     /// Verifies the <c>Prefer: respond-async</c> pivot: a request that's also
     /// <see cref="IQueuable" /> is enqueued and answered with 202 Accepted instead of dispatched
     /// synchronously, with no separate "Async"-suffixed endpoint to opt into it.

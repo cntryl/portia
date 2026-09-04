@@ -27,7 +27,7 @@ public sealed class FleetPartitionRunnerTests
         var runner = new FleetPartitionRunner(leases);
         using var cts = new CancellationTokenSource();
 
-        var run = runner.RunAsync(["p"], (_, _, _) => Task.CompletedTask, TimeSpan.FromSeconds(30), cts.Token);
+        var run = runner.RunAsync(["lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, TimeSpan.FromSeconds(30), cts.Token);
 
         await Task.Delay(300);
         cts.Cancel();
@@ -47,7 +47,70 @@ public sealed class FleetPartitionRunnerTests
         var runner = new FleetPartitionRunner(leases);
 
         _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            runner.RunAsync(["p"], (_, _, _) => Task.CompletedTask, TimeSpan.Zero));
+            runner.RunAsync(["lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, TimeSpan.Zero));
+    }
+
+    /// <summary>
+    /// Verifies that any partition route not shaped exactly like Fitz's required
+    /// <c>lease://{realm}/{area}/{resource}</c> is rejected up front, rather than failing every
+    /// single acquisition attempt forever with a silent per-attempt retry. A prefix check alone
+    /// (an earlier, incomplete version of this validation) still let a route with too few
+    /// segments, an empty segment, or a wildcard segment through — every one of those would still
+    /// have been rejected by a real broker on every single attempt, exactly the silent-forever-retry
+    /// case this validation exists to prevent, discovered only because a live broker actually
+    /// rejects a malformed route instead of this fake accepting anything.
+    /// </summary>
+    [Theory]
+    [InlineData("portia/fleet/not-a-lease-route", "missing the scheme entirely")]
+    [InlineData("lease://realm", "only one segment")]
+    [InlineData("lease://realm/area", "only two segments")]
+    [InlineData("lease://realm/area/resource/extra", "one segment too many")]
+    [InlineData("lease://realm//resource", "an empty middle segment")]
+    [InlineData("lease:///area/resource", "an empty leading segment")]
+    [InlineData("lease://realm/area/", "an empty trailing segment")]
+    [InlineData("lease://*/area/resource", "a wildcard realm segment")]
+    [InlineData("lease://realm/area/*", "a wildcard resource segment")]
+    [InlineData("lease://realm/area/**", "a recursive wildcard resource segment")]
+    [InlineData("lease://realm/a*ea/resource", "a wildcard embedded in the area segment")]
+    [InlineData("lease://realm/area/res*", "a wildcard embedded in the resource segment")]
+    public async Task ShouldRejectMalformedPartitionRoute(string route, string reason)
+    {
+        var leases = new InMemoryLeaseClient();
+        var runner = new FleetPartitionRunner(leases);
+        // Bounds the call: proper validation throws synchronously, well within this — but if
+        // validation is missing for this particular malformed shape, RunAsync instead returns a
+        // genuinely running (and, against this fake, endlessly "succeeding") task rather than
+        // ever throwing, so this keeps that failure mode a clean, fast assertion failure instead
+        // of hanging the test host waiting on a task that would otherwise never complete.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            runner.RunAsync([route], (_, _, _) => Task.CompletedTask, TimeSpan.FromSeconds(30), cts.Token));
+        Assert.Contains("lease://{realm}/{area}/{resource}", exception.Message, StringComparison.Ordinal);
+        _ = reason;
+    }
+
+    /// <summary>
+    /// Verifies that a properly-shaped route — the thing every other test in this class already
+    /// relies on working — is still accepted, so the stricter validation above hasn't become
+    /// overzealous.
+    /// </summary>
+    [Fact]
+    public async Task ShouldAcceptWellFormedPartitionRoute()
+    {
+        var leases = new InMemoryLeaseClient();
+        var runner = new FleetPartitionRunner(leases);
+        using var cts = new CancellationTokenSource();
+
+        var run = runner.RunAsync(
+            ["lease://portia/fleet/well-formed"],
+            (_, _, ct) => RunUntilCancelled("lease://portia/fleet/well-formed", new ConcurrentDictionary<string, bool>(), ct),
+            TimeSpan.FromSeconds(30),
+            cts.Token);
+
+        await WaitUntil(() => leases.Acquisitions.Count == 1);
+        cts.Cancel();
+        await AwaitCancelled(run);
     }
 
     /// <summary>
@@ -62,7 +125,7 @@ public sealed class FleetPartitionRunnerTests
         var runner = new FleetPartitionRunner(leases);
 
         _ = await Assert.ThrowsAsync<ArgumentException>(() =>
-            runner.RunAsync(["p", "p"], (_, _, _) => Task.CompletedTask, TimeSpan.FromSeconds(30)));
+            runner.RunAsync(["lease://portia/fleet/p", "lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, TimeSpan.FromSeconds(30)));
     }
 
     /// <summary>
@@ -80,11 +143,11 @@ public sealed class FleetPartitionRunnerTests
         using var listener = Listen(out var activities);
         using var cts = new CancellationTokenSource();
 
-        leases.FailNextAcquisition("never-acquired");
+        leases.FailNextAcquisition("lease://portia/fleet/never-acquired");
 
         var run = runner.RunAsync(
-            ["never-acquired", "acquired-then-fails"],
-            (partition, _, _) => partition == "acquired-then-fails"
+            ["lease://portia/fleet/never-acquired", "lease://portia/fleet/acquired-then-fails"],
+            (partition, _, _) => partition == "lease://portia/fleet/acquired-then-fails"
                 ? throw new InvalidOperationException("callback failure")
                 : Task.CompletedTask,
             TimeSpan.FromSeconds(30),
@@ -96,20 +159,20 @@ public sealed class FleetPartitionRunnerTests
                 && (a.GetTagItem("portia.fault_reason") as string)?.Contains(partition, StringComparison.Ordinal) == true;
         }
 
-        await WaitUntil(() => activities.Any(a => IsFor(a, "never-acquired")) && activities.Any(a => IsFor(a, "acquired-then-fails")));
+        await WaitUntil(() => activities.Any(a => IsFor(a, "lease://portia/fleet/never-acquired")) && activities.Any(a => IsFor(a, "lease://portia/fleet/acquired-then-fails")));
 
         cts.Cancel();
         await AwaitCancelled(run);
 
-        var neverAcquiredReason = activities.First(a => IsFor(a, "never-acquired")).GetTagItem("portia.fault_reason") as string;
-        var acquiredThenFailedReason = activities.First(a => IsFor(a, "acquired-then-fails")).GetTagItem("portia.fault_reason") as string;
+        var neverAcquiredReason = activities.First(a => IsFor(a, "lease://portia/fleet/never-acquired")).GetTagItem("portia.fault_reason") as string;
+        var acquiredThenFailedReason = activities.First(a => IsFor(a, "lease://portia/fleet/acquired-then-fails")).GetTagItem("portia.fault_reason") as string;
 
         // Strip the partition name itself out of each reason before comparing, so this asserts
         // the *category* of failure differs, not just that the (always-distinct) partition name
         // happens to appear in both strings.
         Assert.NotEqual(
-            neverAcquiredReason!.Replace("never-acquired", string.Empty, StringComparison.Ordinal),
-            acquiredThenFailedReason!.Replace("acquired-then-fails", string.Empty, StringComparison.Ordinal));
+            neverAcquiredReason!.Replace("lease://portia/fleet/never-acquired", string.Empty, StringComparison.Ordinal),
+            acquiredThenFailedReason!.Replace("lease://portia/fleet/acquired-then-fails", string.Empty, StringComparison.Ordinal));
     }
 
     static ActivityListener Listen(out ConcurrentBag<Activity> activities)
@@ -141,7 +204,7 @@ public sealed class FleetPartitionRunnerTests
         using var cts = new CancellationTokenSource();
 
         var run = runner.RunAsync(
-            ["partition-a", "partition-b"],
+            ["lease://portia/fleet/partition-a", "lease://portia/fleet/partition-b"],
             (partition, _, ct) => RunUntilCancelled(partition, held, ct),
             TimeSpan.FromSeconds(30),
             cts.Token);
@@ -150,8 +213,8 @@ public sealed class FleetPartitionRunnerTests
         cts.Cancel();
         await AwaitCancelled(run);
 
-        Assert.True(held["partition-a"]);
-        Assert.True(held["partition-b"]);
+        Assert.True(held["lease://portia/fleet/partition-a"]);
+        Assert.True(held["lease://portia/fleet/partition-b"]);
     }
 
     /// <summary>
@@ -189,8 +252,8 @@ public sealed class FleetPartitionRunnerTests
             }
         }
 
-        var runA = runnerA.RunAsync(["shared-partition"], OnAcquired, TimeSpan.FromSeconds(30), ctsA.Token);
-        var runB = runnerB.RunAsync(["shared-partition"], OnAcquired, TimeSpan.FromSeconds(30), ctsB.Token);
+        var runA = runnerA.RunAsync(["lease://portia/fleet/shared-partition"], OnAcquired, TimeSpan.FromSeconds(30), ctsA.Token);
+        var runB = runnerB.RunAsync(["lease://portia/fleet/shared-partition"], OnAcquired, TimeSpan.FromSeconds(30), ctsB.Token);
 
         await WaitUntil(() => leases.Acquisitions.Count >= 1);
         // Give the loser a real chance to have (incorrectly) run concurrently, if the
@@ -222,13 +285,13 @@ public sealed class FleetPartitionRunnerTests
         using var ctsB = new CancellationTokenSource();
 
         // Worker A holds both partitions initially (B starts later, contesting only one of them)
-        // — so "stable-partition" is never contested by B at all, and must never restart because
-        // of anything that happens to "moving-partition".
+        // — so "lease://portia/fleet/stable-partition" is never contested by B at all, and must never restart because
+        // of anything that happens to "lease://portia/fleet/moving-partition".
         var runA = runnerA.RunAsync(
-            ["stable-partition", "moving-partition"],
+            ["lease://portia/fleet/stable-partition", "lease://portia/fleet/moving-partition"],
             (partition, _, ct) => partition switch
             {
-                "stable-partition" => CountRestartsUntilCancelled(stablePartitionRestarts, ct),
+                "lease://portia/fleet/stable-partition" => CountRestartsUntilCancelled(stablePartitionRestarts, ct),
                 _ => RunUntilCancelledRecordingAcquisition(partition, movedPartitionAcquisitions, ct),
             },
             TimeSpan.FromSeconds(30),
@@ -236,26 +299,26 @@ public sealed class FleetPartitionRunnerTests
 
         await WaitUntil(() => leases.Acquisitions.Count >= 2);
 
-        // Worker B only ever contests "moving-partition" — it should never even attempt
-        // "stable-partition".
+        // Worker B only ever contests "lease://portia/fleet/moving-partition" — it should never even attempt
+        // "lease://portia/fleet/stable-partition".
         var runB = runnerB.RunAsync(
-            ["moving-partition"],
+            ["lease://portia/fleet/moving-partition"],
             (partition, _, ct) => RunUntilCancelledRecordingAcquisition(partition, movedPartitionAcquisitions, ct),
             TimeSpan.FromSeconds(30),
             ctsB.Token);
 
-        // Worker A gives up "moving-partition" only (simulated here as a full worker shutdown,
+        // Worker A gives up "lease://portia/fleet/moving-partition" only (simulated here as a full worker shutdown,
         // the simplest case — real deployments would cancel just that one partition's token).
         ctsA.Cancel();
         await AwaitCancelled(runA);
 
-        await WaitUntil(() => movedPartitionAcquisitions.Count(p => p == "moving-partition") >= 2);
+        await WaitUntil(() => movedPartitionAcquisitions.Count(p => p == "lease://portia/fleet/moving-partition") >= 2);
 
         ctsB.Cancel();
         await AwaitCancelled(runB);
 
         Assert.Equal(1, stablePartitionRestarts[0]);
-        Assert.Equal(2, movedPartitionAcquisitions.Count(p => p == "moving-partition"));
+        Assert.Equal(2, movedPartitionAcquisitions.Count(p => p == "lease://portia/fleet/moving-partition"));
     }
 
     static async Task RunUntilCancelled(string partition, ConcurrentDictionary<string, bool> held, CancellationToken ct)

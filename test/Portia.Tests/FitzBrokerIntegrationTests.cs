@@ -42,6 +42,66 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     }
 
     /// <summary>
+    /// Verifies schema evolution against real, persisted bytes rather than an in-memory JSON
+    /// round trip: an event written by an old serializer configuration (only the old CLR type
+    /// registered) is upcast correctly when a different serializer instance — only the new type
+    /// and an upcaster registered, simulating a later deploy with the old type gone entirely —
+    /// reads that same real Fitz stream back.
+    /// </summary>
+    [Fact]
+    public async Task ShouldUpcastEventReadFromRealFitzStreamWrittenByOlderSchemaVersion()
+    {
+        await using var client = await _broker.CreateClientAsync();
+        var aggregateId = Uuid.CreateVersion7();
+        var stream = new EventStreamAddress("portia-integration", "event-store-evolution", aggregateId.ToString());
+
+        var writerStore = new FitzEventStore(client.Stream, new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>()));
+        var original = new WidgetNamed("Sprocket");
+        original.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion7(), aggregateId, 1, DateTimeOffset.UtcNow));
+        await writerStore.AppendAsync(stream, 0, [original]);
+
+        var readerStore = new FitzEventStore(
+            client.Stream,
+            new JsonDomainEventSerializer(
+                new DomainEventTypeCatalog().Register<WidgetRenamed>(),
+                [new WidgetNamedToRenamedUpcaster()]));
+
+        var events = new List<DomainEvent>();
+        await foreach (var ev in readerStore.ReadAsync(stream))
+            events.Add(ev);
+
+        var widget = Assert.IsType<WidgetRenamed>(Assert.Single(events));
+        Assert.Equal("Sprocket", widget.DisplayName);
+    }
+
+    /// <summary>
+    /// Verifies that a stale writer against a real Fitz stream is rejected as
+    /// <see cref="EventStreamConcurrencyException" /> — the same type
+    /// <see cref="InMemoryEventStore" /> throws for the identical situation — rather than an
+    /// unnormalized, Fitz-specific exception a caller has no stable way to catch and retry on.
+    /// Fitz itself only distinguishes this from every other append failure by message text (no
+    /// structured error code for it, confirmed by inspecting the real exception directly), so
+    /// this is exactly the kind of implementation detail application code shouldn't have to know.
+    /// </summary>
+    [Fact]
+    public async Task ShouldThrowConcurrencyExceptionWhenAppendingWithStaleExpectedVersion()
+    {
+        await using var client = await _broker.CreateClientAsync();
+        var serializer = new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<ValueChanged>());
+        var store = new FitzEventStore(client.Stream, serializer);
+        var aggregateId = Uuid.CreateVersion7();
+        var stream = new EventStreamAddress("portia-integration", "event-store-conflict", aggregateId.ToString());
+        var first = new ValueChanged(1);
+        first.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion7(), aggregateId, 1, DateTimeOffset.UtcNow));
+        await store.AppendAsync(stream, 0, [first]);
+
+        var stale = new ValueChanged(2);
+        stale.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion7(), aggregateId, 1, DateTimeOffset.UtcNow));
+
+        _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() => store.AppendAsync(stream, 0, [stale]).AsTask());
+    }
+
+    /// <summary>
     /// Verifies that Portia's RPC sender and server exchange a typed request and result through
     /// two real Fitz client sessions.
     /// </summary>
@@ -68,6 +128,29 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         Assert.Equal(7, result.Value);
     }
 
+    /// <summary>
+    /// Verifies that calling a route with no registered worker fails fast and clearly, rather
+    /// than hanging — confirming, against a real broker, that <see cref="FitzRemoteRequestSender" />
+    /// deliberately imposing no timeout of its own (see its own remarks) is a safe choice: Fitz
+    /// itself already fails a call to an unregistered route in milliseconds, not by hanging until
+    /// some caller-supplied deadline.
+    /// </summary>
+    [Fact]
+    public async Task ShouldFailFastWhenNoWorkerIsRegisteredForRoute()
+    {
+        await using var client = await _broker.CreateClientAsync();
+        var sender = new FitzRemoteRequestSender(client.Rpc, new JsonRequestSerializer());
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        _ = await Assert.ThrowsAnyAsync<Exception>(() =>
+            sender.SendAsync(new NoWorkerRegisteredPing(), new RequestRouteValues(), actorToken: null, cts.Token).AsTask());
+
+        // Not just "it eventually throws before the 10s cap" — genuinely fast, proving this
+        // isn't relying on the test's own cancellation to end the call.
+        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(2), $"Took {elapsed.Elapsed} — too close to looking like a hang.");
+    }
+
     sealed class AlwaysValidActorValidator : IRequestActorValidator
     {
         public ValueTask<Result<System.Security.Claims.ClaimsPrincipal>> ValidateAsync(
@@ -75,4 +158,14 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             CancellationToken ct = default) =>
             ValueTask.FromResult(Result<System.Security.Claims.ClaimsPrincipal>.Success(RequestActor.System));
     }
+}
+
+// Deliberately never registered by any test — the whole point is a route no worker answers.
+[RequestRoute(realm: "portia-integration", area: "rpc", resource: "no-worker-registered", operation: "ping")]
+sealed record NoWorkerRegisteredPing : IRequest, ICallable;
+
+sealed class NoWorkerRegisteredPingHandler : IRequestHandler<NoWorkerRegisteredPing>
+{
+    public ValueTask<Result> HandleAsync(IRequestContext<NoWorkerRegisteredPing> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result.Success);
 }

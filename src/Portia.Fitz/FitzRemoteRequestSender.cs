@@ -8,9 +8,11 @@ namespace Cntryl.Portia;
 /// <remarks>
 /// This deliberately imposes no timeout of its own on <see cref="IRpcClient.CallAsync" /> — how
 /// (or whether) a call to a route with no registered worker fails is entirely Fitz's contract to
-/// honor, not Portia's to second-guess with an opinionated default. If a caller needs to bound
-/// how long it waits, pass a <see cref="CancellationToken" /> that cancels after however long is
-/// appropriate for that call.
+/// honor, not Portia's to second-guess with an opinionated default. Confirmed against a real
+/// broker (see <c>FitzBrokerIntegrationTests.ShouldFailFastWhenNoWorkerIsRegisteredForRoute</c>):
+/// Fitz itself fails a call to an unregistered route in milliseconds, not by hanging, so this
+/// isn't a gap left open on faith. If a caller needs to bound how long it waits regardless, pass
+/// a <see cref="CancellationToken" /> that cancels after however long is appropriate for that call.
 /// </remarks>
 /// <param name="rpc">The Fitz RPC client.</param>
 /// <param name="serializer">The request and outcome serializer.</param>

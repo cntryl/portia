@@ -1,10 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <PackageId>Portia.Testing</PackageId>
-    <AssemblyName>Portia.Testing</AssemblyName>
     <Description>Testing utilities for Portia: an in-memory event store, and fake permission/actor-validator implementations.</Description>
-    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>

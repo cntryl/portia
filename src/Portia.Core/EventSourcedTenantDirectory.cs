@@ -29,6 +29,7 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
     readonly EventStreamPattern _pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
     readonly Func<DomainEvent, TenantId> _getTenantId = getTenantId ?? throw new ArgumentNullException(nameof(getTenantId));
     readonly TimeSpan _pollInterval = pollInterval is { Ticks: > 0 } value ? value : TimeSpan.Zero;
+    readonly HashSet<TenantId> _active = [];
 
     ulong _offset;
 
@@ -36,26 +37,13 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
     public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
-        var active = new HashSet<TenantId>();
-
         await foreach (var record in _reader.ReadAsync(_pattern, _offset, ct).WithCancellation(ct).ConfigureAwait(false))
         {
             _offset = EventStreamOffsets.GetNextOffset(_pattern, record);
-
-            switch (record.Ev)
-            {
-                case TStartEvent:
-                    _ = active.Add(_getTenantId(record.Ev));
-                    break;
-                case TStopEvent:
-                    _ = active.Remove(_getTenantId(record.Ev));
-                    break;
-                default:
-                    break;
-            }
+            _ = Apply(record.Ev);
         }
 
-        foreach (var tenantId in active)
+        foreach (var tenantId in _active)
             yield return tenantId;
     }
 
@@ -73,21 +61,33 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                 _offset = EventStreamOffsets.GetNextOffset(_pattern, record);
                 sawAny = true;
 
-                switch (record.Ev)
-                {
-                    case TStartEvent:
-                        yield return new TenantLifecycleChange(TenantLifecycleChangeKind.Added, _getTenantId(record.Ev));
-                        break;
-                    case TStopEvent:
-                        yield return new TenantLifecycleChange(TenantLifecycleChangeKind.Removed, _getTenantId(record.Ev));
-                        break;
-                    default:
-                        break;
-                }
+                if (Apply(record.Ev) is { } change)
+                    yield return change;
             }
 
             if (!sawAny && _pollInterval > TimeSpan.Zero)
                 await Task.Delay(_pollInterval, ct).ConfigureAwait(false);
+        }
+    }
+
+    TenantLifecycleChange? Apply(DomainEvent ev)
+    {
+        switch (ev)
+        {
+            case TStartEvent:
+                {
+                    var tenantId = _getTenantId(ev);
+                    _ = _active.Add(tenantId);
+                    return new TenantLifecycleChange(TenantLifecycleChangeKind.Added, tenantId);
+                }
+            case TStopEvent:
+                {
+                    var tenantId = _getTenantId(ev);
+                    _ = _active.Remove(tenantId);
+                    return new TenantLifecycleChange(TenantLifecycleChangeKind.Removed, tenantId);
+                }
+            default:
+                return null;
         }
     }
 }

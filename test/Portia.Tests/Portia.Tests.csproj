@@ -1,8 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <IsPackable>false</IsPackable>
-    <IsTestProject>true</IsTestProject>
     <!-- RequestHttpBindingGenerator intercepts MapPortia* call sites to inline route/query/body
          binding — needed here so HttpBindingTests can exercise real generated bindings, not just
          the generator's own model, through a real ASP.NET Core TestServer. -->
@@ -38,9 +35,5 @@
     <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Using Include="Xunit" />
   </ItemGroup>
 </Project>

@@ -1,10 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <PackageId>Portia.Core</PackageId>
-    <AssemblyName>Portia.Core</AssemblyName>
     <Description>Event sourcing, CQRS, and fleet management for .NET.</Description>
-    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>

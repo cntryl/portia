@@ -1,10 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <PackageId>Portia.DependencyInjection</PackageId>
-    <AssemblyName>Portia.DependencyInjection</AssemblyName>
     <Description>Wires Portia's background runners (queue, live delivery, multi-tenancy, projectors, reactors) into a Microsoft.Extensions.Hosting host as IHostedServices.</Description>
-    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>

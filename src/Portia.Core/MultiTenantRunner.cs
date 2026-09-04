@@ -55,30 +55,80 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
 
         try
         {
-            await foreach (var tenantId in _tenantDirectory.GetActiveTenantsAsync(ct).WithCancellation(ct).ConfigureAwait(false))
-                Start(tenantId, onTenantStarted, active, _logger, ct);
-
-            await foreach (var change in _tenantDirectory.WatchAsync(ct).WithCancellation(ct).ConfigureAwait(false))
+            // A transient failure from the directory's live watch stream (a network blip in a
+            // real implementation) must not permanently end tenant management for the rest of
+            // the process — the same resilience QueueRunner/LiveRequestRunner already have for
+            // their own live streams.
+            while (!ct.IsCancellationRequested)
             {
-                switch (change.Kind)
+                try
                 {
-                    case TenantLifecycleChangeKind.Added:
-                        Start(change.TenantId, onTenantStarted, active, _logger, ct);
+                    // Re-running the complete snapshot on every reconnect closes the gap between
+                    // watch subscriptions: newly active tenants start, tenants removed during
+                    // the outage stop, and unchanged tenants remain active.
+                    var snapshot = new HashSet<TenantId>();
+
+                    await foreach (var tenantId in _tenantDirectory.GetActiveTenantsAsync(ct).WithCancellation(ct).ConfigureAwait(false))
+                    {
+                        _ = snapshot.Add(tenantId);
+                        Start(tenantId, onTenantStarted, active, _logger, ct);
+                    }
+
+                    foreach (var tenantId in active.Keys.ToArray())
+                    {
+                        if (!snapshot.Contains(tenantId))
+                            await StopAsync(tenantId, onTenantStopped, active).ConfigureAwait(false);
+                    }
+
+                    await foreach (var change in _tenantDirectory.WatchAsync(ct).WithCancellation(ct).ConfigureAwait(false))
+                    {
+                        switch (change.Kind)
+                        {
+                            case TenantLifecycleChangeKind.Added:
+                                Start(change.TenantId, onTenantStarted, active, _logger, ct);
+                                break;
+
+                            case TenantLifecycleChangeKind.Removed:
+                                await StopAsync(change.TenantId, onTenantStopped, active).ConfigureAwait(false);
+                                break;
+
+                            default:
+                                throw new InvalidOperationException($"Unrecognized tenant lifecycle change kind '{change.Kind}'.");
+                        }
+                    }
+
+                    // WatchAsync's enumerable ending on its own, without cancellation, is just as
+                    // unexpected as it throwing — a healthy watch stream is meant to run for the
+                    // life of this call. Reconnect rather than silently stop watching forever,
+                    // and still report it: a silently-repeating clean EOF is exactly the kind of
+                    // thing that must be visible, not just handled.
+                    if (ct.IsCancellationRequested)
                         break;
 
-                    case TenantLifecycleChangeKind.Removed:
-                        await StopAsync(change.TenantId, onTenantStopped, active).ConfigureAwait(false);
-                        break;
+                    PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), "tenant directory watch completed without cancellation", null, _logger);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), "tenant directory watch faulted", ex, _logger);
+                }
 
-                    default:
-                        throw new InvalidOperationException($"Unrecognized tenant lifecycle change kind '{change.Kind}'.");
+                // Reached after either a faulted or a normally-completed watch — always back off
+                // before reconnecting. Without this on the normal-completion path, a directory
+                // whose watch keeps ending cleanly (rather than throwing) would spin this loop as
+                // fast as GetActiveTenantsAsync/WatchAsync allow, with no pause at all.
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(1), ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
                 }
             }
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            // Fall through to the shutdown below rather than propagate — cancellation here means
-            // "stop running", not a failure.
         }
         finally
         {

@@ -10,3 +10,4 @@ PORTIA008 | Portia | Error | A request cannot have more than one registered hand
 PORTIA010 | Portia | Error | A request cannot have more than one registered IRequestAuthorizer<>
 PORTIA011 | Portia | Error | RequiresPermission references an unknown request property
 PORTIA012 | Portia | Warning | IDomainEventUpcaster.EventName references an unknown event name
+PORTIA013 | Portia | Error | RequiresPermission references a nullable request property

@@ -16,13 +16,13 @@ namespace Cntryl.Portia;
 ///
 /// The set of partitions is fixed at deployment time (e.g., a known list of shard routes) — only
 /// the number of workers competing to run them is dynamic. Rebalancing needs no explicit logic
-/// here at all: it's inferred from <c>ILeaseClient.WithLeaseAsync</c>'s own documented contract
-/// — renew the held lease for as long as its callback keeps running, and release it once the
-/// callback returns — rather than verified against a live Fitz backend, which this codebase has
-/// none of to test against. When a worker holding a partition's lease crashes, is shut down, or
-/// simply fails to renew in time, that lease should lapse and another worker's already-blocked
-/// acquire attempt should win it automatically; treat that as this component's design intent,
-/// not yet as an integration-tested guarantee.
+/// here at all: it falls entirely out of <c>ILeaseClient.WithLeaseAsync</c>'s own behavior —
+/// confirmed against a real Fitz broker (see <c>FitzBrokerFleetIntegrationTests</c>), not just
+/// inferred from its method shapes. A held lease really is renewed automatically for as long as
+/// its callback keeps running, well past its own TTL; and a worker that disappears without
+/// releasing gracefully (its connection torn down mid-hold, not a clean shutdown) really does
+/// free the lease for an already-waiting worker once the TTL lapses, with no extra coordination
+/// needed on either side.
 /// </summary>
 /// <param name="leases">The Fitz lease client every partition is competed for through.</param>
 /// <param name="logger">
@@ -64,6 +64,23 @@ public sealed class FleetPartitionRunner(ILeaseClient leases, ILogger<FleetParti
         if (leaseTtl <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(leaseTtl), leaseTtl, "A lease TTL must be positive.");
 
+        var malformed = partitions.FirstOrDefault(partition => !IsWellFormedLeaseRoute(partition));
+
+        if (malformed is not null)
+        {
+            // A malformed route (found the hard way against a real Fitz broker — the in-memory
+            // fake this project's own unit tests use never cared about route shape at all) fails
+            // every single acquisition attempt forever. A bare "starts with lease://" prefix
+            // check — an earlier, incomplete version of this validation — still let routes with
+            // too few/many segments, an empty segment, or a wildcard segment through, none of
+            // which a real broker accepts either; every one of those would still hit the exact
+            // silent, permanent per-second retry loop this validation exists to prevent. Fail
+            // once, at the start, against the complete required shape instead.
+            throw new ArgumentException(
+                $"Partition '{malformed}' is not a valid Fitz lease route — it must be exactly 'lease://{{realm}}/{{area}}/{{resource}}', with no empty or wildcard ('*') segments.",
+                nameof(partitions));
+        }
+
         var duplicate = partitions
             .GroupBy(partition => partition, StringComparer.Ordinal)
             .FirstOrDefault(group => group.Count() > 1);
@@ -81,6 +98,21 @@ public sealed class FleetPartitionRunner(ILeaseClient leases, ILogger<FleetParti
         var ttlSecs = checked((ulong)leaseTtl.TotalSeconds);
 
         return Task.WhenAll(partitions.Select(partition => CompeteAsync(partition, onPartitionAcquired, ttlSecs, ct)));
+    }
+
+    // Fitz requires a lease route to be the exact shape "lease://{realm}/{area}/{resource}" —
+    // three non-empty, non-wildcard segments, no more and no fewer. Confirmed directly against a
+    // real broker (it rejects anything else with its own "must be lease://{realm}/{area}/{resource}"
+    // error) rather than assumed from documentation.
+    const string LeaseScheme = "lease://";
+
+    static bool IsWellFormedLeaseRoute(string route)
+    {
+        if (!route.StartsWith(LeaseScheme, StringComparison.Ordinal))
+            return false;
+
+        var segments = route[LeaseScheme.Length..].Split('/');
+        return segments.Length == 3 && segments.All(segment => segment.Length > 0 && !segment.Contains('*'));
     }
 
     async Task CompeteAsync(

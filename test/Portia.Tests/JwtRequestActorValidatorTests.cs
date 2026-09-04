@@ -83,6 +83,63 @@ public sealed class JwtRequestActorValidatorTests
     }
 
     /// <summary>
+    /// Verifies that "expiry is always honored" holds even when the caller constructs
+    /// <see cref="TokenValidationParameters" /> the ordinary way — no explicit
+    /// <see cref="TokenValidationParameters.ClockSkew" /> at all (most JWT setup guides never
+    /// mention it). Left to <see cref="Microsoft.IdentityModel" />'s own default of five minutes,
+    /// a token that expired a minute ago would still validate successfully — confirmed as a real
+    /// gap during adversarial testing, before <see cref="JwtRequestActorValidator" /> started
+    /// unconditionally overriding it to zero on its own copy of the parameters. This is the
+    /// regression test for that fix, not a demonstration of the original gap — the whole point is
+    /// that a caller can no longer reproduce it, however they construct their own parameters.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRejectRecentlyExpiredTokenEvenWhenCallerUsesDefaultClockSkew()
+    {
+        var parametersWithDefaultClockSkew = new TokenValidationParameters
+        {
+            ValidIssuer = "portia-tests",
+            ValidAudience = "portia-tests-audience",
+            IssuerSigningKey = SigningKey,
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            // ClockSkew deliberately left unset — Microsoft.IdentityModel's own default is 5
+            // minutes, not zero. JwtRequestActorValidator must override this itself.
+        };
+        var validator = new JwtRequestActorValidator(parametersWithDefaultClockSkew);
+        var token = CreateToken(expires: DateTime.UtcNow.AddMinutes(-1), subject: "user-1", notBefore: DateTime.UtcNow.AddMinutes(-10));
+
+        var result = await validator.ValidateAsync(token);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RequestErrorKind.Unauthorized, result.Error!.Kind);
+    }
+
+    /// <summary>
+    /// Verifies that overriding clock skew doesn't mutate the caller's own
+    /// <see cref="TokenValidationParameters" /> instance — a caller might reasonably reuse it
+    /// elsewhere (e.g. ASP.NET Core's own JWT bearer options) and would be surprised to find its
+    /// clock skew silently zeroed everywhere just because it was also handed to this class.
+    /// </summary>
+    [Fact]
+    public void ShouldNotMutateCallersOwnValidationParameters()
+    {
+        var callerOwned = new TokenValidationParameters
+        {
+            ValidIssuer = "portia-tests",
+            ValidAudience = "portia-tests-audience",
+            IssuerSigningKey = SigningKey,
+            ClockSkew = TimeSpan.FromMinutes(5),
+        };
+
+        _ = new JwtRequestActorValidator(callerOwned);
+
+        Assert.Equal(TimeSpan.FromMinutes(5), callerOwned.ClockSkew);
+    }
+
+    /// <summary>
     /// Verifies that a missing token — the unauthenticated case — fails validation with a clear
     /// reason, rather than throwing or silently producing an anonymous principal.
     /// </summary>
@@ -115,13 +172,19 @@ public sealed class JwtRequestActorValidatorTests
         Assert.Equal(RequestErrorKind.Unauthorized, result.Error!.Kind);
     }
 
-    static string CreateToken(DateTime expires, string subject, SymmetricSecurityKey? signingKey = null)
+    static string CreateToken(DateTime expires, string subject, SymmetricSecurityKey? signingKey = null, DateTime? notBefore = null)
     {
         var handler = new JsonWebTokenHandler();
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = "portia-tests",
             Audience = "portia-tests-audience",
+            // Left unset, the token library defaults NotBefore to "now" — fine for every other
+            // token here, but for one deliberately expiring in the past, "now" lands after
+            // Expires and trips a *different* rejection ("NotBefore is after Expires") than the
+            // one actually under test. Callers testing an already-expired token need to pass an
+            // explicit, safely-past NotBefore to isolate the expiry check itself.
+            NotBefore = notBefore,
             Expires = expires,
             SigningCredentials = new SigningCredentials(signingKey ?? SigningKey, SecurityAlgorithms.HmacSha256),
             Claims = new Dictionary<string, object> { ["sub"] = subject },

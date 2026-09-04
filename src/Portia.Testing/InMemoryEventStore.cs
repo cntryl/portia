@@ -121,7 +121,7 @@ public sealed class InMemoryEventStore : IEventStore
 
             if ((ulong)committedRecords.Count != expectedVersion)
             {
-                throw new InvalidOperationException(
+                throw new EventStreamConcurrencyException(
                     $"Aggregate stream '{stream}' is at version '{committedRecords.Count}', not expected version '{expectedVersion}'.");
             }
 

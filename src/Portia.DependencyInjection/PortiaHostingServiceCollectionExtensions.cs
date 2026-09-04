@@ -117,15 +117,33 @@ public static class PortiaHostingServiceCollectionExtensions
     public static IServiceCollection AddPortiaReactorRunner<TReactor>(
         this IServiceCollection services,
         TimeSpan? pollInterval = null)
+        where TReactor : Reactor =>
+        AddPortiaReactorRunner<TReactor>(services, 512, pollInterval);
+
+    /// <summary>
+    /// Hosts a <see cref="Reactor" /> with bounded durable checkpoint batches.
+    /// </summary>
+    /// <typeparam name="TReactor">The concrete reactor type.</typeparam>
+    /// <param name="services">The service collection to add to.</param>
+    /// <param name="maxBatchSize">How many events to process between checkpoint saves.</param>
+    /// <param name="pollInterval">How long to wait between passes once caught up.</param>
+    /// <returns><paramref name="services" />, for chaining.</returns>
+    public static IServiceCollection AddPortiaReactorRunner<TReactor>(
+        this IServiceCollection services,
+        int maxBatchSize,
+        TimeSpan? pollInterval = null)
         where TReactor : Reactor
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBatchSize);
 
         services.TryAddSingleton<ReactorRunner>();
         _ = services.AddHostedService(sp => new ReactorHostedService(
             sp.GetRequiredService<ReactorRunner>(),
             sp.GetRequiredService<TReactor>(),
             sp.GetRequiredService<IProjectionCheckpointStore>(),
+            maxBatchSize,
             pollInterval,
             sp.GetService<ILogger<ReactorHostedService>>()));
         return services;

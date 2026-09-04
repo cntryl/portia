@@ -14,7 +14,7 @@ public sealed class FitzBrokerFixture
     /// </summary>
     public FitzBrokerFixture()
     {
-        var configuredEndpoint = Environment.GetEnvironmentVariable("PORTIA_FITZ_TEST_ENDPOINT")
+        var configuredEndpoint = Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT")
             ?? DefaultEndpoint;
         _endpoint = new Uri(configuredEndpoint, UriKind.Absolute);
     }

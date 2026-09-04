@@ -1,10 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <PackageId>Portia.Jwt</PackageId>
-    <AssemblyName>Portia.Jwt</AssemblyName>
     <Description>JWT-backed IRequestActorValidator for Portia — re-validates a request's carried actor token, no ASP.NET Core dependency.</Description>
-    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
