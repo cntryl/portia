@@ -1,25 +1,76 @@
 # Portia
 
-Event sourcing and CQRS for .NET, built around one bet: **a handler, written once, runs
-unmodified regardless of how the request arrived** — HTTP, Fitz RPC, a queue, a fired schedule
-entry, live notice fanout, or a direct in-process call. Every transport dispatches through the
-same generated `IRequestBus`, so permissions, row-level authorization, actor/JWT validation, and
-OpenTelemetry tracing are wired once, at that one chokepoint, and apply to every transport for
-free — never per-transport, never something a handler has to know about.
+Write a command and its handler:
 
-Zero-boilerplate is enforced by construction, not convention: DI registration, RPC worker
-registration, HTTP request binding, and domain-event-catalog population are all generated from
-compile-time discovery (Roslyn source generators), not runtime reflection or assembly scanning.
-The two deliberate exceptions are wire boundaries (`JsonRequestSerializer`,
-`JsonDomainEventSerializer`) where a byte payload has no way around naming its own type.
+`CreateGreeting.cs`:
 
-## Documentation
+```csharp
+using Cntryl.Portia;
 
-Start with [Getting started](docs/getting-started.md) for package selection, generated
-registration, request/handler definitions, HTTP endpoints, authorization, asynchronous dispatch,
-and streaming. Runnable applications intentionally live outside this framework repository;
-dedicated sample repositories can evolve and release independently without becoming part of
-Portia's own build.
+public sealed record CreateGreeting(string Name) : IRequest<string>, ICallable;
+
+sealed class CreateGreetingHandler : IRequestHandler<CreateGreeting, string>
+{
+    public ValueTask<Result<string>> HandleAsync(
+        IRequestContext<CreateGreeting> context,
+        CancellationToken ct) =>
+        ValueTask.FromResult(Result<string>.Success($"Hello, {context.Request.Name}!"));
+}
+```
+
+Wire the command to an HTTP route:
+
+`Program.cs`:
+
+```csharp
+using Cntryl.Portia;
+
+var builder = WebApplication.CreateBuilder(args);
+_ = builder.Services.AddPortiaGeneratedComponents();
+
+var app = builder.Build();
+app.MapPortiaPost<CreateGreeting, string>("/greetings");
+app.Run();
+```
+
+Call it:
+
+```console
+$ curl -X POST http://localhost:5000/greetings \
+    -H 'Content-Type: application/json' \
+    -d '{"name":"Portia"}'
+"Hello, Portia!"
+```
+
+That's it. The command holds the input, the handler does the work, and the route makes it
+available over HTTP.
+
+## Why it works
+
+- `IRequest<string>` says that `CreateGreeting` returns text.
+- `ICallable` says that the application may expose it to callers, including over HTTP.
+- `IRequestHandler<CreateGreeting, string>` connects that command to its handler.
+- `AddPortiaGeneratedComponents()` adds the command and handler to the application.
+- `MapPortiaPost` reads the HTTP request, calls the handler, and writes the HTTP response.
+
+Portia writes the repetitive connection code when the project builds. It is ordinary C# checked
+by the compiler—there is no runtime scanning, naming convention, controller, or registration list
+to keep in sync. If the command and handler disagree about their types, the build fails.
+
+## How we keep it simple
+
+The handler only knows about the command. It does not know about HTTP, queues, or any other way
+the command might arrive. That lets the same handler run without being copied or wrapped when the
+application adds another way to call it.
+
+Every command follows the same path to its handler. Permissions, identity checks, and tracing can
+be added to that path once instead of being repeated in every endpoint. A command explicitly opts
+into the ways it may be called, so behavior stays visible in its type rather than hidden in setup
+code.
+
+[Read the getting-started guide](docs/getting-started.md) for package setup, authorization,
+asynchronous work, and streaming. Runnable applications will live in dedicated sample
+repositories rather than in this framework repository.
 
 ## Development
 
