@@ -15,7 +15,8 @@ public interface IAggregateRepository
         where TAggregate : Aggregate;
 
     /// <summary>
-    /// Persists an aggregate's uncommitted state-changing events.
+    /// Persists raised events to the aggregate stream using OCC, or audits to a new UUIDv4 session stream.
+    /// A save contains only one kind; failed saves preserve pending changes and session identity.
     /// </summary>
     /// <param name="aggregate">The aggregate to save.</param>
     /// <param name="ct">A token that can cancel the operation.</param>

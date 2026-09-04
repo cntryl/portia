@@ -2,11 +2,9 @@ namespace Cntryl.Portia;
 
 /// <summary>
 /// Thrown by <see cref="IDomainEventWriter.AppendAsync" /> when a stream is not at the expected
-/// version — someone else committed to it first. This is the one exception type every
-/// <see cref="IEventStore" /> implementation throws for that specific case, so application code
-/// that retries on conflict (reload the aggregate, reapply the command) has a stable contract to
-/// catch regardless of which store backs it — a real, distinguishable signal instead of a
-/// generic, implementation-specific failure a caller can only tell apart by message text.
+/// physical position. Raised-event saves use the aggregate's committed event-stream position;
+/// audits use independent session streams. Reloading and re-evaluating a command after a
+/// conflict is an application decision; Portia never automatically reruns business commands.
 /// </summary>
 /// <param name="message">A description of the conflict.</param>
 /// <param name="innerException">

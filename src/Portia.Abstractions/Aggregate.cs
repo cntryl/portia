@@ -18,6 +18,8 @@ public abstract class Aggregate(
     readonly List<DomainEvent> _uncommittedEvents = [];
     readonly List<DomainEvent> _uncommittedAudits = [];
     readonly IDomainEventMetadataFactory _metadataFactory = metadataFactory ?? SystemDomainEventMetadataFactory.Instance;
+    int _operation;
+    EventStreamAddress? _auditSessionStream;
 
     /// <summary>
     /// Gets the stable identity of the aggregate.
@@ -36,14 +38,18 @@ public abstract class Aggregate(
     /// </summary>
     public ulong Version { get; private set; }
 
+    /// <summary>Gets the next physical offset in the raised-event stream. Audit sessions never advance this OCC position.</summary>
+    public ulong CommittedStreamPosition { get; private set; }
+
     internal IReadOnlyList<DomainEvent> CommittedEvents => _committedEvents;
 
     internal IReadOnlyList<DomainEvent> UncommittedEvents => _uncommittedEvents;
 
     internal IReadOnlyList<DomainEvent> UncommittedAudits => _uncommittedAudits;
 
-    internal void Load(DomainEvent[] committedEvents)
+    internal void Load(DomainEvent[] committedEvents, ulong? streamPosition = null)
     {
+        using var operation = BeginOperation();
         ArgumentNullException.ThrowIfNull(committedEvents);
 
         if (_uncommittedEvents.Count != 0 || _uncommittedAudits.Count != 0)
@@ -63,6 +69,8 @@ public abstract class Aggregate(
             _ = _committedEventIds.Add(ev.Metadata.EventId);
             Version++;
         }
+
+        CommittedStreamPosition = streamPosition ?? checked(CommittedStreamPosition + (ulong)committedEvents.Length);
     }
 
     /// <summary>
@@ -116,7 +124,11 @@ public abstract class Aggregate(
     /// <param name="ev">The event to raise.</param>
     protected void RaiseEvent(DomainEvent ev)
     {
-        AttachMetadata(ev, checked(Version + 1));
+        using var operation = BeginOperation();
+        if (_uncommittedAudits.Count != 0)
+            throw new InvalidOperationException("Save pending audits before raising state-changing events.");
+
+        AttachMetadata(ev, checked(Version + 1), isAudit: false);
         Apply(ev);
         _uncommittedEvents.Add(ev);
         Version++;
@@ -128,12 +140,17 @@ public abstract class Aggregate(
     /// <param name="ev">The audit event to record.</param>
     protected void AuditEvent(DomainEvent ev)
     {
-        AttachMetadata(ev, Version);
+        using var operation = BeginOperation();
+        if (_uncommittedEvents.Count != 0)
+            throw new InvalidOperationException("Save pending state-changing events before recording audits.");
+
+        AttachMetadata(ev, Version, isAudit: true);
         _uncommittedAudits.Add(ev);
     }
 
     internal void Save()
     {
+        CommittedStreamPosition = checked(CommittedStreamPosition + (ulong)_uncommittedEvents.Count);
         _committedEvents.AddRange(_uncommittedEvents);
 
         foreach (var ev in _uncommittedEvents)
@@ -144,9 +161,32 @@ public abstract class Aggregate(
 
         _uncommittedEvents.Clear();
         _uncommittedAudits.Clear();
+        _auditSessionStream = null;
     }
 
-    void AttachMetadata(DomainEvent ev, ulong aggregateVersion)
+    internal EventStreamAddress GetAuditSessionStream() =>
+        _auditSessionStream ??= new EventStreamAddress(Stream.Realm, Stream.Area, Guid.NewGuid().ToString("D"));
+
+    internal IDisposable BeginOperation()
+    {
+        return Interlocked.CompareExchange(ref _operation, 1, 0) != 0
+            ? throw new InvalidOperationException("Concurrent aggregate emission, replay, or save is not supported.")
+            : (IDisposable)new Operation(this);
+    }
+
+    sealed class Operation(Aggregate aggregate) : IDisposable
+    {
+        Aggregate? _aggregate = aggregate;
+
+        public void Dispose()
+        {
+            var owner = Interlocked.Exchange(ref _aggregate, null);
+            if (owner is not null)
+                Volatile.Write(ref owner._operation, 0);
+        }
+    }
+
+    void AttachMetadata(DomainEvent ev, ulong aggregateVersion, bool isAudit)
     {
         ArgumentNullException.ThrowIfNull(ev);
         var metadata = _metadataFactory.Create(Id, aggregateVersion)
@@ -172,13 +212,15 @@ public abstract class Aggregate(
         if (metadata.OccurredOn.Offset != TimeSpan.Zero)
             throw new InvalidOperationException("The event metadata factory returned a non-UTC occurrence time.");
 
-        ev.AttachMetadata(metadata);
+        ev.AttachMetadata(metadata with { IsAudit = isAudit });
     }
 
     void ValidateCommittedEvent(DomainEvent ev, ulong expectedVersion, HashSet<Uuid> eventIds)
     {
         ArgumentNullException.ThrowIfNull(ev);
         var metadata = ev.Metadata;
+        if (metadata.IsAudit)
+            throw new InvalidOperationException("Aggregate replay accepts only state-changing events.");
 
         if (metadata.EventId == Uuid.Empty)
             throw new InvalidOperationException("A committed event ID cannot be empty.");

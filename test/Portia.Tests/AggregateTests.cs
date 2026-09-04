@@ -248,7 +248,6 @@ public sealed class AggregateTests
     {
         var aggregate = new TestAggregate(Uuid.CreateVersion7());
         aggregate.ChangeValue(42);
-        aggregate.Audit("value changed");
         var ev = Assert.Single(aggregate.UncommittedEvents);
 
         aggregate.Save();
@@ -258,6 +257,15 @@ public sealed class AggregateTests
         Assert.Empty(aggregate.UncommittedAudits);
         Assert.Equal(42, aggregate.Value);
         Assert.Equal(1UL, aggregate.Version);
+
+        aggregate.Audit("value changed");
+        aggregate.Audit("value inspected");
+        Assert.Equal(2, aggregate.UncommittedAudits.Count);
+        aggregate.Save();
+        Assert.Same(ev, Assert.Single(aggregate.CommittedEvents));
+        Assert.Empty(aggregate.UncommittedAudits);
+        aggregate.ChangeValue(43);
+        _ = Assert.Single(aggregate.UncommittedEvents);
     }
 
     /// <summary>

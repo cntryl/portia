@@ -34,7 +34,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         await store.AppendAsync(stream, 0, [original]);
         var events = new List<DomainEvent>();
         await foreach (var ev in store.ReadAsync(stream))
-            events.Add(ev);
+            events.Add(ev.Ev);
 
         var roundTripped = Assert.IsType<ValueChanged>(Assert.Single(events));
         Assert.Equal(original.Value, roundTripped.Value);
@@ -68,7 +68,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
         var events = new List<DomainEvent>();
         await foreach (var ev in readerStore.ReadAsync(stream))
-            events.Add(ev);
+            events.Add(ev.Ev);
 
         var widget = Assert.IsType<WidgetRenamed>(Assert.Single(events));
         Assert.Equal("Sprocket", widget.DisplayName);

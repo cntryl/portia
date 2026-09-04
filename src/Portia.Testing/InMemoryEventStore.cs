@@ -11,14 +11,14 @@ public sealed class InMemoryEventStore : IEventStore
     readonly Dictionary<string, ulong> _realmOffsets = [];
 
     /// <inheritdoc />
-    public IAsyncEnumerable<DomainEvent> ReadAsync(
+    public IAsyncEnumerable<DomainEventRecord> ReadAsync(
         EventStreamAddress stream,
-        ulong afterVersion = 0,
+        ulong fromOffset = 0,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
         ct.ThrowIfCancellationRequested();
-        DomainEvent[] readBuffer;
+        DomainEventRecord[] readBuffer;
 
         lock (_gate)
         {
@@ -26,13 +26,13 @@ public sealed class InMemoryEventStore : IEventStore
                 ? committedRecords
                 : [];
 
-            readBuffer = afterVersion <= (ulong)records.Count
-                ? [.. records.Skip((int)afterVersion).Select(record => record.Ev)]
+            readBuffer = fromOffset <= (ulong)records.Count
+                ? [.. records.Skip((int)fromOffset)]
                 : throw new InvalidOperationException(
-                    $"Version '{afterVersion}' is beyond the end of aggregate stream '{stream}'.");
+                    $"Offset '{fromOffset}' is beyond the end of aggregate stream '{stream}'.");
         }
 
-        return new BufferedAsyncEnumerable<DomainEvent>(readBuffer, ct);
+        return new BufferedAsyncEnumerable<DomainEventRecord>(readBuffer, ct);
     }
 
     /// <inheritdoc />
@@ -102,7 +102,7 @@ public sealed class InMemoryEventStore : IEventStore
     /// <inheritdoc />
     public ValueTask AppendAsync(
         EventStreamAddress stream,
-        ulong expectedVersion,
+        ulong expectedStreamPosition,
         IReadOnlyList<DomainEvent> events,
         CancellationToken ct = default)
     {
@@ -110,6 +110,10 @@ public sealed class InMemoryEventStore : IEventStore
         ArgumentNullException.ThrowIfNull(events);
         ct.ThrowIfCancellationRequested();
 
+        if (events.Count == 0)
+            return ValueTask.CompletedTask;
+
+        DomainEventValidation.ValidateBatch(events);
         lock (_gate)
         {
             if (!_streams.TryGetValue(stream, out var committedRecords))
@@ -118,10 +122,10 @@ public sealed class InMemoryEventStore : IEventStore
                 _streams.Add(stream, committedRecords);
             }
 
-            if ((ulong)committedRecords.Count != expectedVersion)
+            if ((ulong)committedRecords.Count != expectedStreamPosition)
             {
                 throw new EventStreamConcurrencyException(
-                    $"Aggregate stream '{stream}' is at version '{committedRecords.Count}', not expected version '{expectedVersion}'.");
+                    $"Aggregate stream '{stream}' is at position '{committedRecords.Count}', not expected position '{expectedStreamPosition}'.");
             }
 
             var eventIds = committedRecords.Select(record => record.Ev.Metadata.EventId).ToHashSet();
@@ -129,7 +133,7 @@ public sealed class InMemoryEventStore : IEventStore
             for (var index = 0; index < events.Count; index++)
             {
                 var ev = events[index];
-                ValidateEvent(ev, checked(expectedVersion + (ulong)index + 1));
+                DomainEventValidation.Validate(ev);
 
                 if (!eventIds.Add(ev.Metadata.EventId))
                     throw new InvalidOperationException($"Event ID '{ev.Metadata.EventId}' has already been appended.");
@@ -144,7 +148,7 @@ public sealed class InMemoryEventStore : IEventStore
                 committedRecords.Add(new DomainEventRecord(
                     stream,
                     events[index],
-                    checked(expectedVersion + (ulong)index),
+                    checked(expectedStreamPosition + (ulong)index),
                     checked(areaOffset + (ulong)index),
                     checked(realmOffset + (ulong)index)));
             }
@@ -156,20 +160,6 @@ public sealed class InMemoryEventStore : IEventStore
         return ValueTask.CompletedTask;
     }
 
-    static void ValidateEvent(DomainEvent ev, ulong expectedVersion)
-    {
-        ArgumentNullException.ThrowIfNull(ev);
-
-        if (ev.Metadata.EventId == Uuid.Empty)
-            throw new InvalidOperationException("An event ID cannot be empty.");
-
-        if (ev.Metadata.AggregateVersion != expectedVersion)
-        {
-            throw new InvalidOperationException(
-                $"Event aggregate version '{ev.Metadata.AggregateVersion}' does not match expected version '{expectedVersion}'.");
-        }
-    }
-
     static bool Matches(EventStreamAddress stream, EventStreamPattern pattern) =>
         (pattern.Realm is null || stream.Realm == pattern.Realm)
         && (pattern.Area is null || stream.Area == pattern.Area)
@@ -178,8 +168,8 @@ public sealed class InMemoryEventStore : IEventStore
     static ulong GetPatternOffset(DomainEventRecord record, EventStreamPattern pattern) => pattern.Scope switch
     {
         EventStreamPatternScope.Resource => record.ResourceOffset,
-        EventStreamPatternScope.Area => record.AreaOffset,
-        EventStreamPatternScope.Realm => record.RealmOffset,
+        EventStreamPatternScope.Area => record.AreaOffset ?? throw new InvalidOperationException("Missing area offset."),
+        EventStreamPatternScope.Realm => record.RealmOffset ?? throw new InvalidOperationException("Missing realm offset."),
         _ => throw new ArgumentOutOfRangeException(nameof(pattern)),
     };
 }

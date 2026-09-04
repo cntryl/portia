@@ -9,10 +9,12 @@ namespace Cntryl.Portia;
 /// <param name="OccurredOn">The UTC time at which the event occurred.</param>
 /// <param name="CorrelationId">The optional identity shared by a correlated operation.</param>
 /// <param name="CausationId">The optional identity of the message that caused the event.</param>
+/// <param name="IsAudit">Whether the event records an audit without changing aggregate state. Missing stored values default to false.</param>
 public sealed record DomainEventMetadata(
     Uuid EventId,
     Uuid AggregateId,
     ulong AggregateVersion,
     DateTimeOffset OccurredOn,
     Uuid? CorrelationId = null,
-    Uuid? CausationId = null);
+    Uuid? CausationId = null,
+    bool IsAudit = false);
