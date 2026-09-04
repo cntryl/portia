@@ -114,10 +114,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         using var busHost = TestRequestBus.Create();
         var server = new FitzRpcRequestServer(
             workerClient.Rpc,
-            serializer,
-            serializer,
-            busHost.Bus,
-            new AlwaysValidActorValidator());
+            busHost.ScopeFactory);
         await using var registration = await server.RegisterAsync<RpcGetValue, int>();
         var sender = new FitzRemoteRequestSender(callerClient.Rpc, serializer, serializer);
 

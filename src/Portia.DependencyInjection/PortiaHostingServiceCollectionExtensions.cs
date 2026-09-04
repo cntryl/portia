@@ -30,7 +30,8 @@ public static class PortiaHostingServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.TryAddSingleton<QueueRunner>();
+        services.TryAddSingleton(sp => new QueueRunner(sp.GetRequiredService<IRequestQueueConsumer>(),
+            sp.GetRequiredService<IServiceScopeFactory>(), sp.GetService<ILogger<QueueRunner>>()));
         _ = services.AddHostedService<QueueRunnerHostedService>();
         return services;
     }
@@ -46,7 +47,8 @@ public static class PortiaHostingServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.TryAddSingleton<RequestNotificationRunner>();
+        services.TryAddSingleton(sp => new RequestNotificationRunner(sp.GetRequiredService<IRequestNotificationConsumer>(),
+            sp.GetRequiredService<IServiceScopeFactory>(), sp.GetService<ILogger<RequestNotificationRunner>>()));
         _ = services.AddHostedService<RequestNotificationRunnerHostedService>();
         return services;
     }
@@ -71,31 +73,34 @@ public static class PortiaHostingServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Hosts a <see cref="Projector{TProjection}" /> as a continuous, checkpointed polling loop
-    /// for the life of the host. Requires <typeparamref name="TProjection" />'s own
-    /// <see cref="Projector{TProjection}" /> to already be registered. Its
-    /// <see cref="IProjectionTarget{TProjection}" /> owns the authoritative checkpoint.
+    /// Hosts a generated concrete projector with a fresh scope and authoritative checkpoint per pass.
     /// </summary>
-    /// <typeparam name="TProjection">The projection-specific application port.</typeparam>
-    /// <param name="services">The service collection to add to.</param>
-    /// <param name="options">The batching and rebuild options for every pass.</param>
-    /// <param name="pollInterval">How long to wait between passes once caught up. Defaults to one
-    /// second.</param>
-    /// <returns><paramref name="services" />, for chaining.</returns>
-    public static IServiceCollection AddPortiaProjectorRunner<TProjection>(
+    /// <typeparam name="TProjector">The concrete projector registered by its module.</typeparam>
+    /// <param name="services">The services.</param>
+    /// <param name="options">Batching and rebuild options.</param>
+    /// <param name="pollInterval">Delay between passes; defaults to one second.</param>
+    /// <returns>The services.</returns>
+    public static IServiceCollection AddPortiaProjectorRunner<TProjector>(
         this IServiceCollection services,
         ProjectionRunOptions? options = null,
         TimeSpan? pollInterval = null)
+        where TProjector : class
     {
         ArgumentNullException.ThrowIfNull(services);
-
-        services.TryAddSingleton<ProjectorRunner>();
-        _ = services.AddHostedService(sp => new ProjectorHostedService<TProjection>(
-            sp.GetRequiredService<ProjectorRunner>(),
-            sp.GetRequiredService<Projector<TProjection>>(),
-            options,
-            pollInterval,
-            sp.GetService<ILogger<ProjectorHostedService<TProjection>>>()));
+        var interval = ValidateInterval(pollInterval);
+        services.TryAddScoped<ProjectorRunner>();
+        _ = services.AddHostedService(sp =>
+        {
+            var registration = sp.GetServices<ProjectorRegistration>()
+                .SingleOrDefault(r => r.ProjectorType == typeof(TProjector))
+                ?? throw new InvalidOperationException($"No generated projector registration for '{typeof(TProjector)}'. Register its Portia module first.");
+            return new ComponentHostedService<TProjector>(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                (scope, ct) => registration.RunPass(scope, options, ct),
+                interval,
+                sp.GetService<TimeProvider>() ?? TimeProvider.System,
+                sp.GetService<ILogger<ComponentHostedService<TProjector>>>());
+        });
         return services;
     }
 
@@ -133,14 +138,28 @@ public static class PortiaHostingServiceCollectionExtensions
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBatchSize);
 
-        services.TryAddSingleton<ReactorRunner>();
-        _ = services.AddHostedService(sp => new ReactorHostedService(
-            sp.GetRequiredService<ReactorRunner>(),
-            sp.GetRequiredService<TReactor>(),
-            sp.GetRequiredService<IProjectionCheckpointStore>(),
-            maxBatchSize,
-            pollInterval,
-            sp.GetService<ILogger<ReactorHostedService>>()));
+        var interval = ValidateInterval(pollInterval);
+        services.TryAddScoped<ReactorRunner>();
+        _ = services.AddHostedService(sp => new ComponentHostedService<TReactor>(
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            async (scope, ct) =>
+            {
+                var reactor = scope.GetRequiredService<TReactor>();
+                var checkpoints = scope.GetRequiredService<IProjectionCheckpointStore>();
+                var checkpoint = await checkpoints.LoadAsync(reactor.Name, ct).ConfigureAwait(false);
+                _ = await scope.GetRequiredService<ReactorRunner>()
+                    .RunAsync(reactor, checkpoint, checkpoints, maxBatchSize, ct).ConfigureAwait(false);
+            },
+            interval,
+            sp.GetService<TimeProvider>() ?? TimeProvider.System,
+            sp.GetService<ILogger<ComponentHostedService<TReactor>>>()));
         return services;
+    }
+
+    static TimeSpan ValidateInterval(TimeSpan? pollInterval)
+    {
+        var interval = pollInterval ?? TimeSpan.FromSeconds(1);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(interval, TimeSpan.Zero, nameof(pollInterval));
+        return interval;
     }
 }

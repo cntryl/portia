@@ -121,8 +121,9 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
         var services = new ServiceCollection();
         _ = services.AddSingleton<IDomainEventReader>(store);
-        _ = services.AddSingleton<Projector<TestProjection>>(new TestProjector(target));
-        _ = services.AddPortiaProjectorRunner<TestProjection>(pollInterval: TimeSpan.FromMilliseconds(20));
+        _ = services.AddPortiaModule<FrameworkTestModule>();
+        _ = services.AddSingleton(new TestProjector(target));
+        _ = services.AddPortiaProjectorRunner<TestProjector>(pollInterval: TimeSpan.FromMilliseconds(20));
         using var provider = services.BuildServiceProvider();
 
         var hostedService = Assert.Single(provider.GetServices<IHostedService>());
@@ -148,8 +149,9 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var target = new LateFaultProjectionTarget();
         var services = new ServiceCollection();
         _ = services.AddSingleton<IDomainEventReader>(store);
-        _ = services.AddSingleton<Projector<TestProjection>>(new TestProjector(target));
-        _ = services.AddPortiaProjectorRunner<TestProjection>(pollInterval: TimeSpan.FromMilliseconds(10));
+        _ = services.AddPortiaModule<FrameworkTestModule>();
+        _ = services.AddSingleton(new TestProjector(target));
+        _ = services.AddPortiaProjectorRunner<TestProjector>(pollInterval: TimeSpan.FromMilliseconds(10));
         using var provider = services.BuildServiceProvider();
         var hostedService = Assert.Single(provider.GetServices<IHostedService>());
 

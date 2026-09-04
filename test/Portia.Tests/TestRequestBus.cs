@@ -17,6 +17,8 @@ sealed class TestRequestBus : IDisposable
 
     public IRequestBus Bus { get; }
 
+    public IServiceScopeFactory ScopeFactory => _provider.GetRequiredService<IServiceScopeFactory>();
+
     public static TestRequestBus Create(
         ChangeValueHandler? changeValueHandler = null,
         GetValueHandler? getValueHandler = null,
@@ -44,10 +46,14 @@ sealed class TestRequestBus : IDisposable
         HttpGuardedActionHandler? httpGuardedActionHandler = null,
         HttpListWidgetsHandler? httpListWidgetsHandler = null,
         NoWorkerRegisteredPingHandler? noWorkerRegisteredPingHandler = null,
-        IPermissionEvaluator? permissionEvaluator = null)
+        IPermissionEvaluator? permissionEvaluator = null,
+        IRequestActorValidator? actorValidator = null)
     {
         var services = new ServiceCollection();
         _ = services.AddPortiaModule<FrameworkTestModule>();
+        _ = services.AddSingleton(actorValidator ?? new PassActorValidator());
+        _ = services.AddSingleton<IRequestDeserializer, JsonRequestSerializer>();
+        _ = services.AddSingleton<IRequestOutcomeSerializer, JsonRequestSerializer>();
         _ = services.AddSingleton(permissionEvaluator ?? TestPermissionEvaluator.AllowAll());
         if (changeValueHandler is not null)
             _ = services.AddSingleton(changeValueHandler);
@@ -102,6 +108,12 @@ sealed class TestRequestBus : IDisposable
         if (noWorkerRegisteredPingHandler is not null)
             _ = services.AddSingleton(noWorkerRegisteredPingHandler);
         return new TestRequestBus(services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }));
+    }
+
+    sealed class PassActorValidator : IRequestActorValidator
+    {
+        public ValueTask<Result<System.Security.Claims.ClaimsPrincipal>> ValidateAsync(string? token, CancellationToken ct = default)
+            => ValueTask.FromResult(Result<System.Security.Claims.ClaimsPrincipal>.Success(RequestActor.System));
     }
 
     public void Dispose()

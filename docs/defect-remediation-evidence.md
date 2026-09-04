@@ -28,9 +28,9 @@ and execution (except explicit diagnostic tests for unsupported inputs).
 | --- | --- | --- | --- |
 | Consumer infrastructure | Baseline established before introducing defects | `ConsumerBaselineTests`: 2 passed; separate contracts and feature assemblies; compile/execute harness | Public `Aggregate`; generator consumer compilation |
 | Exclusive pending kind | Both emission orders failed with `Assert.Throws: No exception was thrown` | Both now pass, including unchanged metadata calls/state/version and subsequent same-kind emission; internal history test uses separate saves | `Aggregate.RaiseEvent`, `Aggregate.AuditEvent`, repository save |
-| Aggregate persistence | Public API initially missing; wrong mixed-stream position, audit-before-creation and concurrent-operation regressions observed | Corrected UUIDv4 sessions and OCC pass in both stores; remaining checks: long audit pages, metadata compatibility, append/commit cleanup | Repository, factories, both stores, serializer, testing helpers |
-| Dispatch and modules | Pending: nested bus; selected dependencies; two modules/order/idempotence/conflicts; names/interfaces; partial/global/nested components; catalogs/transports; authorization order | Pending | Shared dispatcher and generated module descriptors |
-| Hosting and lifetimes | Pending: component multiplicity; generated projector hosting; delivery/pass scopes and disposal; uncertain checkpoint commit | Pending | DI hosting, transports, projector/reactor runners |
+| Aggregate persistence | Public API initially missing; wrong mixed-stream position, audit-before-creation and concurrent-operation regressions observed | 27 consumer tests pass, including UUIDv4 sessions, OCC, long audit pages, stored metadata compatibility and append/commit cleanup | Repository, factories, both stores, serializer, testing helpers |
+| Dispatch and modules | Observed circular dependency, unrelated construction, missing/duplicate interfaces, invalid shapes and missing module contributions | Compile-and-execute regressions pass; module order, conflicts, idempotence and authorization covered | Shared dispatcher and generated module descriptors |
+| Hosting and lifetimes | Observed one reactor instead of two; missing generated projector resolution; root/scoped resolution failures for components and all three inbound transports | Public scope/multiplicity and recovery tests pass; format, Release build, Compose suite (196 + 54) green | DI hosting, transports, projector/reactor runners |
 | HTTP contracts | Pending: nullable/default/required/null; constants; configured JSON names/converters; invalid kinds; invariant scalar binding; diagnostics; interception identity; streaming authorization/disposal; async route values | Pending | HTTP generator and endpoint mapping |
 | Queue ownership | Pending: malformed/failed delivery; unchanged reservations; recovery/backoff/cancellation; acknowledgments; seconds; renewal; real broker redelivery handoff | Pending | Queue runner, Fitz consumer and hosted lifecycle |
 | Tenant lifecycle | Pending: idle polling; restart/backoff; removal; duplicates; independent watchers; shutdown | Pending | Tenant directory and runner |
@@ -111,3 +111,24 @@ and execution (except explicit diagnostic tests for unsupported inputs).
   196 existing + 41 consumer tests, then the added name-collision test passed.
   An earlier full run failed because Docker had stopped Fitz (broker logged SIGTERM);
   Compose restart and the full rerun resolved the environmental failure.
+
+## Hosting and dependency lifetimes
+
+- Four component regressions failed: one reactor worker instead of two, scoped
+  reactor resolved from root, and missing `Projector<ConcreteProjector>` service for
+  both projector cases. Concrete component hosting now consumes module descriptors
+  and owns an async scope around each existing runner pass.
+- Queue and notification scope validation both failed on singleton runners capturing
+  the scoped bus. Both now pass, including fresh delivery scopes, nested dispatch
+  sharing the current scope, and disposal on success, failure and cancellation.
+- RPC scope validation failed on singleton server capturing scoped bus. The server
+  now takes a scope factory and resolves serializers, validator and bus per callback.
+  Multiple calls and handler failure dispose their scopes; no application dependency
+  is captured by a long-lived RPC registration.
+- Two clock-driven fresh-pass tests pass. Additional public tests cover interrupted
+  passes and a durable projection commit followed by a failed response and failed
+  checkpoint reload; authoritative progress must be reloaded before execution.
+
+- Hosting boundary: format verification, Release build (zero warnings/errors), and
+  Compose tests passed (196 existing + 54 consumer). Fixture transport count was
+  updated to include its new scope-test request while retaining both feature checks.

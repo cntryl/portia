@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
@@ -7,26 +8,44 @@ namespace Cntryl.Portia;
 /// the request bus, so a command's handler is the same regardless of origin. There is no queueing
 /// or redelivery for this transport shape — a failed dispatch is simply lost, not retried.
 /// </summary>
-/// <param name="consumer">The request-notification consumer.</param>
-/// <param name="bus">The request bus.</param>
-/// <param name="actorValidator">Re-validates each request's carried actor token — signature and
-/// expiry included — at the moment it's actually delivered.</param>
-/// <param name="logger">
-/// Reports a lost delivery even when nothing is listening to
-/// <see cref="PortiaTelemetry.ActivitySource" />. Supply it explicitly, or configure
-/// Microsoft.Extensions.Logging with at least one provider before resolving the runner through
-/// DI; a bare <c>ServiceCollection</c> registration does not create or emit logs.
-/// </param>
-public sealed class RequestNotificationRunner(
-    IRequestNotificationConsumer consumer,
-    IRequestBus bus,
-    IRequestActorValidator actorValidator,
-    ILogger<RequestNotificationRunner>? logger = null)
+public sealed class RequestNotificationRunner
 {
-    readonly IRequestNotificationConsumer _consumer = consumer ?? throw new ArgumentNullException(nameof(consumer));
-    readonly IRequestBus _bus = bus ?? throw new ArgumentNullException(nameof(bus));
-    readonly IRequestActorValidator _actorValidator = actorValidator ?? throw new ArgumentNullException(nameof(actorValidator));
-    readonly ILogger<RequestNotificationRunner>? _logger = logger;
+    readonly IRequestNotificationConsumer _consumer;
+    readonly IRequestBus? _bus;
+    readonly IRequestActorValidator? _actorValidator;
+    readonly IServiceScopeFactory? _scopeFactory;
+    readonly ILogger<RequestNotificationRunner>? _logger;
+
+    /// <summary>Creates a runner with explicitly owned application dependencies.</summary>
+    /// <param name="consumer">The request-notification consumer.</param>
+    /// <param name="bus">The request bus.</param>
+    /// <param name="actorValidator">Re-validates each request's carried actor token — signature and
+    /// expiry included — at the moment it's actually delivered.</param>
+    /// <param name="logger">
+    /// Reports a lost delivery even when nothing is listening to
+    /// <see cref="PortiaTelemetry.ActivitySource" />. Supply it explicitly, or configure
+    /// Microsoft.Extensions.Logging with at least one provider before resolving the runner through
+    /// DI; a bare <c>ServiceCollection</c> registration does not create or emit logs.
+    /// </param>
+    public RequestNotificationRunner(IRequestNotificationConsumer consumer, IRequestBus bus,
+        IRequestActorValidator actorValidator, ILogger<RequestNotificationRunner>? logger = null)
+    {
+        _consumer = consumer ?? throw new ArgumentNullException(nameof(consumer));
+        _bus = bus ?? throw new ArgumentNullException(nameof(bus));
+        _actorValidator = actorValidator ?? throw new ArgumentNullException(nameof(actorValidator));
+        _logger = logger;
+    }
+
+    /// <summary>Creates a runner that owns a fresh application scope for each delivery.</summary>
+    /// <param name="consumer">The long-lived transport consumer.</param>
+    /// <param name="scopeFactory">Creates each delivery's application scope.</param>
+    /// <param name="logger">Reports failed deliveries.</param>
+    public RequestNotificationRunner(IRequestNotificationConsumer consumer, IServiceScopeFactory scopeFactory, ILogger<RequestNotificationRunner>? logger = null)
+    {
+        _consumer = consumer ?? throw new ArgumentNullException(nameof(consumer));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _logger = logger;
+    }
 
     /// <summary>
     /// Reads and dispatches requests as they are delivered, until cancellation is requested.
@@ -42,10 +61,13 @@ public sealed class RequestNotificationRunner(
         {
             try
             {
+                await using var scope = _scopeFactory?.CreateAsyncScope();
+                var bus = scope?.ServiceProvider.GetRequiredService<IRequestBus>() ?? _bus!;
+                var actorValidator = scope?.ServiceProvider.GetRequiredService<IRequestActorValidator>() ?? _actorValidator!;
                 // The result's failure category can't change anything at this transport's level
                 // (no ack/redelivery). An unrecognized exception is still caught below.
                 var dispatch = await RequestDispatch.SendAsync(
-                    _actorValidator, _bus, delivered.Request, delivered.ActorToken, ct).ConfigureAwait(false);
+                    actorValidator, bus, delivered.Request, delivered.ActorToken, ct).ConfigureAwait(false);
 
                 if (!dispatch.WasDispatched)
                     PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), "actor validation failed", logger: _logger);

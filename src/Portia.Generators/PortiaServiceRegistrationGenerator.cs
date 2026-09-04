@@ -177,13 +177,11 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
                 else if (canRegisterProjectors)
                 {
                     _ = source
-                        .Append("        _ = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton(services, new global::Cntryl.Portia.ProjectorRegistration(")
-                        .Append("typeof(")
+                        .Append("        _ = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton(services, global::Cntryl.Portia.ProjectorRegistration.Create<")
                         .Append(component.TypeName)
-                        .AppendLine("), static (runner, sp, checkpoint, options, ct) => runner.RunAsync(")
-                        .Append("            global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<")
-                        .Append(component.TypeName)
-                        .AppendLine(">(sp), checkpoint, options, ct)));");
+                        .Append(", ")
+                        .Append(component.ProjectionType)
+                        .AppendLine(">());");
                 }
             }
         }

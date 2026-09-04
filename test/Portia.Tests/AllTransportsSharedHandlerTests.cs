@@ -35,7 +35,7 @@ public sealed class AllTransportsSharedHandlerTests
         // same bus, and back.
         var rpc = new InMemoryRpcClient();
         var serializer = new JsonRequestSerializer();
-        var server = new FitzRpcRequestServer(rpc, serializer, serializer, bus, new AlwaysValidActorValidator());
+        var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
         _ = await server.RegisterAsync<UniversalAction>();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
         var rpcResult = await sender.SendAsync(new UniversalAction(3), new RequestRouteValues(), actorToken: null);
