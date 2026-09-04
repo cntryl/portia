@@ -274,21 +274,33 @@ public sealed class MultiTenancyTests
     public async Task ShouldBackOffWhenWatchStreamCompletesCleanlyInsteadOfThrowing()
     {
         var directory = new CleanlyCompletingWatchDirectory();
-        var runner = new MultiTenantRunner(directory);
+        var clock = new WaitingClock();
+        var runner = new MultiTenantRunner(directory, timeProvider: clock);
         using var cts = new CancellationTokenSource();
-
         var run = runner.RunAsync(
             onTenantStarted: (_, ct) => WaitForCancellationAsync(ct),
             onTenantStopped: (_, _) => Task.CompletedTask,
             cts.Token);
-
-        // With a one-second backoff, a 250ms window should only ever observe the very first,
-        // un-delayed attempt — a spinning loop with no backoff would rack up dozens.
-        await Task.Delay(TimeSpan.FromMilliseconds(250));
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(5)));
         cts.Cancel();
         await AwaitRunAsync(run);
+        Assert.Equal(1, directory.WatchAttempts);
+    }
 
-        Assert.True(directory.WatchAttempts <= 2, $"Expected at most 2 watch attempts in 250ms with a 1s backoff, got {directory.WatchAttempts}.");
+    sealed class WaitingClock : TimeProvider
+    {
+        public TaskCompletionSource<TimeSpan> Scheduled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            _ = Scheduled.TrySetResult(dueTime);
+            return new WaitingTimer();
+        }
+        sealed class WaitingTimer : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 
     static EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered> CreateDirectory(InMemoryEventStore store) =>

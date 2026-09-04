@@ -33,7 +33,7 @@ and execution (except explicit diagnostic tests for unsupported inputs).
 | Hosting and lifetimes | Observed one reactor instead of two; missing generated projector resolution; root/scoped resolution failures for components and all three inbound transports | Public scope/multiplicity and recovery tests pass; format, Release build, Compose suite (196 + 54) green | DI hosting, transports, projector/reactor runners |
 | HTTP contracts | Nullable compilation, constant route fallback, ignored defaults/options, invalid roots, missing diagnostics, streaming authorization/disposal, missing async route resolver and optional token failures observed | 32 public consumer HTTP tests pass; format, Release build and Compose suite (196 + 86) green | HTTP generator and endpoint mapping |
 | Queue ownership | Malformed JSON ended enumeration; defaults were 5,000 seconds/16 items; no lease renewal; pending acknowledgment stopped renewal; hosted consumers terminated on faults/EOF | 16 public tests pass, including real broker handoff; format, Release build and Compose suite (196 + 102) green | Queue runner, Fitz consumer and hosted lifecycle |
-| Tenant lifecycle | Pending: idle polling; restart/backoff; removal; duplicates; independent watchers; shutdown | Pending | Tenant directory and runner |
+| Tenant lifecycle | Independent watcher/snapshot changes disappeared; no injected polling clock; failed workloads never scheduled restart | Clock-driven regressions pass; format, Release build and Compose suite (196 + 109) green | Tenant directory and runner |
 | Complete workflow | Pending: two modules, persistence, two reactors/projectors, direct/HTTP/RPC/queue, declined audit, state/stream/projections | Pending | Consumer host fixture and onboarding |
 | Final readiness | Pending: full format/build/Compose tests; complete review; rebase; final SHA hosted CI; squash merge and main readback | Pending | Single coordinated PR |
 
@@ -189,3 +189,24 @@ and execution (except explicit diagnostic tests for unsupported inputs).
 
 - Queue boundary: format verification, Release build (zero warnings/errors), and
   Compose tests passed (196 existing + 102 consumer).
+
+## Tenant lifecycle
+
+- Five regressions failed: two independent-watcher cases lost changes after another
+  watch or snapshot advanced the shared cursor, the polling clock API was absent,
+  and two failed-workload cases never scheduled a restart.
+- Each default directory enumeration now owns its cursor and active membership.
+  Initial watch updates reconcile current membership (including known removals)
+  without replaying historical start/stop cycles. Snapshot reads never consume
+  watch progress. Idle polling defaults to one second through `TimeProvider`.
+- Tenant workloads run under a cancellable supervisor. A completed/faulted workload
+  ends its scope, waits one second, and starts with a new scope while the tenant is
+  active. Removal and shutdown cancel both active execution and pending restart.
+- Clock-driven public hosting tests cover two workloads sharing one directory,
+  failed-scope disposal, fresh restart scopes, repeated additions, removal during
+  backoff and shutdown. The existing 250ms backoff assertion now uses a controlled
+  clock instead of a timing window. Expanded gate passed 15 existing + 6 consumer
+  cases; an additional historical-reconciliation regression is included below.
+
+- Tenant boundary passed: format verification, Release build (zero warnings/errors),
+  and Compose-backed solution tests: 196 existing + 109 consumer tests.
