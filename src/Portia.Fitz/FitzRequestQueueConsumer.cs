@@ -15,14 +15,14 @@ namespace Cntryl.Portia;
 /// <param name="waitMilliseconds">How long a reserve call may long-poll for items before returning empty.</param>
 public sealed class FitzRequestQueueConsumer(
     IQueueClient queue,
-    IRequestSerializer serializer,
+    IRequestDeserializer serializer,
     string route,
     ulong visibilityTimeoutSeconds = 30,
     int maxItemsPerReserve = 16,
     int waitMilliseconds = 5_000) : IRequestQueueConsumer
 {
     readonly IQueueClient _queue = queue ?? throw new ArgumentNullException(nameof(queue));
-    readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+    readonly IRequestDeserializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     readonly string _route = string.IsNullOrWhiteSpace(route)
         ? throw new ArgumentException("A queue route cannot be empty.", nameof(route))
         : route;
@@ -47,7 +47,7 @@ public sealed class FitzRequestQueueConsumer(
     {
         readonly IQueueReservedItem _item;
 
-        public FitzQueuedRequest(IQueueReservedItem item, IRequestSerializer serializer)
+        public FitzQueuedRequest(IQueueReservedItem item, IRequestDeserializer serializer)
         {
             _item = item;
             var (request, actorToken) = serializer.DeserializeRequest(item.Body);

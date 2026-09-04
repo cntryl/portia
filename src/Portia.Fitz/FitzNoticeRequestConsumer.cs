@@ -11,11 +11,11 @@ namespace Cntryl.Portia;
 /// <param name="route">The concrete Fitz notice route to subscribe to (<c>notice://realm/area/resource</c>).</param>
 public sealed class FitzNoticeRequestConsumer(
     INoticeClient notice,
-    IRequestSerializer serializer,
+    IRequestDeserializer serializer,
     string route) : IRequestNotificationConsumer
 {
     readonly INoticeClient _notice = notice ?? throw new ArgumentNullException(nameof(notice));
-    readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+    readonly IRequestDeserializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     readonly string _route = string.IsNullOrWhiteSpace(route)
         ? throw new ArgumentException("A notice route cannot be empty.", nameof(route))
         : route;

@@ -46,21 +46,24 @@ public sealed class QueueRunner(
         {
             try
             {
-                var actorResult = await _actorValidator.ValidateAsync(queued.ActorToken, ct).ConfigureAwait(false);
+                var dispatch = await RequestDispatch.SendAsync(
+                    _actorValidator, _bus, queued.Request, queued.ActorToken, ct).ConfigureAwait(false);
 
-                if (actorResult is not { IsSuccess: true, Value: { } actor })
+                if (!dispatch.WasDispatched)
                 {
+                    // Actor validation failed (e.g. an expired token) — retrying won't make it
+                    // valid, so the request is dropped rather than redelivered forever.
                     PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "actor validation failed", logger: _logger);
                     await queued.CompleteAsync(ct).ConfigureAwait(false);
-                    continue;
                 }
-
-                var result = await _bus.SendAsync(queued.Request, actor, ct).ConfigureAwait(false);
-
-                if (result.IsSuccess || result.Error is { IsTransient: false })
+                else if (dispatch.Outcome.IsSuccess || dispatch.Outcome.Error is { IsTransient: false })
+                {
                     await queued.CompleteAsync(ct).ConfigureAwait(false);
+                }
                 else
+                {
                     await queued.AbandonAsync(ct).ConfigureAwait(false);
+                }
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {

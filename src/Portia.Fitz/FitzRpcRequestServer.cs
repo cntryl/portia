@@ -10,18 +10,21 @@ namespace Cntryl.Portia;
 /// not recovered from an arbitrary incoming byte payload at dispatch time.
 /// </summary>
 /// <param name="rpc">The Fitz RPC client.</param>
-/// <param name="serializer">The request and outcome serializer.</param>
+/// <param name="requestDeserializer">Deserializes inbound requests.</param>
+/// <param name="outcomeSerializer">Serializes outbound outcomes.</param>
 /// <param name="bus">The request bus every registered worker dispatches through.</param>
 /// <param name="actorValidator">Re-validates each request's carried actor token — signature and
 /// expiry included — at the moment it's actually received, not just at the moment it was sent.</param>
 public sealed class FitzRpcRequestServer(
     IRpcClient rpc,
-    IRequestSerializer serializer,
+    IRequestDeserializer requestDeserializer,
+    IRequestOutcomeSerializer outcomeSerializer,
     IRequestBus bus,
     IRequestActorValidator actorValidator)
 {
     readonly IRpcClient _rpc = rpc ?? throw new ArgumentNullException(nameof(rpc));
-    readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+    readonly IRequestDeserializer _requestDeserializer = requestDeserializer ?? throw new ArgumentNullException(nameof(requestDeserializer));
+    readonly IRequestOutcomeSerializer _outcomeSerializer = outcomeSerializer ?? throw new ArgumentNullException(nameof(outcomeSerializer));
     readonly IRequestBus _bus = bus ?? throw new ArgumentNullException(nameof(bus));
     readonly IRequestActorValidator _actorValidator = actorValidator ?? throw new ArgumentNullException(nameof(actorValidator));
 
@@ -41,12 +44,12 @@ public sealed class FitzRpcRequestServer(
             pattern,
             async (request, writer, handlerCt) =>
             {
-                var (deserialized, actorToken) = _serializer.DeserializeRequest(request.Body);
+                var (deserialized, actorToken) = _requestDeserializer.DeserializeRequest(request.Body);
 
                 if (deserialized is not TRequest typed)
                 {
                     await writer.SendAsync(
-                        _serializer.SerializeOutcome(Result.Failure(new RequestError(
+                        _outcomeSerializer.SerializeOutcome(Result.Failure(new RequestError(
                             RequestErrorKind.Validation,
                             $"Expected a '{typeof(TRequest)}' payload."))),
                         true,
@@ -54,17 +57,9 @@ public sealed class FitzRpcRequestServer(
                     return;
                 }
 
-                if (await _actorValidator.ValidateAsync(actorToken, handlerCt).ConfigureAwait(false) is not { IsSuccess: true, Value: { } actor })
-                {
-                    await writer.SendAsync(
-                        _serializer.SerializeOutcome(Result.Failure(new RequestError(RequestErrorKind.Unauthorized, "Actor token failed validation."))),
-                        true,
-                        handlerCt).ConfigureAwait(false);
-                    return;
-                }
-
-                var result = await _bus.SendAsync(typed, actor, handlerCt).ConfigureAwait(false);
-                await writer.SendAsync(_serializer.SerializeOutcome(result), true, handlerCt).ConfigureAwait(false);
+                var dispatch = await RequestDispatch.SendAsync(
+                    _actorValidator, _bus, typed, actorToken, handlerCt).ConfigureAwait(false);
+                await writer.SendAsync(_outcomeSerializer.SerializeOutcome(dispatch.Outcome), true, handlerCt).ConfigureAwait(false);
             },
             ct: ct));
     }
@@ -86,12 +81,12 @@ public sealed class FitzRpcRequestServer(
             pattern,
             async (request, writer, handlerCt) =>
             {
-                var (deserialized, actorToken) = _serializer.DeserializeRequest(request.Body);
+                var (deserialized, actorToken) = _requestDeserializer.DeserializeRequest(request.Body);
 
                 if (deserialized is not TRequest typed)
                 {
                     await writer.SendAsync(
-                        _serializer.SerializeResult(Result<TOut>.Failure(new RequestError(
+                        _outcomeSerializer.SerializeResult(Result<TOut>.Failure(new RequestError(
                             RequestErrorKind.Validation,
                             $"Expected a '{typeof(TRequest)}' payload."))),
                         true,
@@ -99,17 +94,9 @@ public sealed class FitzRpcRequestServer(
                     return;
                 }
 
-                if (await _actorValidator.ValidateAsync(actorToken, handlerCt).ConfigureAwait(false) is not { IsSuccess: true, Value: { } actor })
-                {
-                    await writer.SendAsync(
-                        _serializer.SerializeResult(Result<TOut>.Failure(new RequestError(RequestErrorKind.Unauthorized, "Actor token failed validation."))),
-                        true,
-                        handlerCt).ConfigureAwait(false);
-                    return;
-                }
-
-                var result = await _bus.SendAsync(typed, actor, handlerCt).ConfigureAwait(false);
-                await writer.SendAsync(_serializer.SerializeResult(result), true, handlerCt).ConfigureAwait(false);
+                var dispatch = await RequestDispatch.SendAsync(
+                    _actorValidator, _bus, typed, actorToken, handlerCt).ConfigureAwait(false);
+                await writer.SendAsync(_outcomeSerializer.SerializeResult(dispatch.Outcome), true, handlerCt).ConfigureAwait(false);
             },
             ct: ct));
     }

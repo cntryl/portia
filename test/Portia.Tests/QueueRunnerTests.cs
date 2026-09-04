@@ -127,7 +127,7 @@ public sealed class QueueRunnerTests
         }
     }
 
-    sealed class FakeQueuedRequest(IRequest request, bool throwOnDispatch = false, string? actorToken = null) : IQueuedRequest
+    sealed class FakeQueuedRequest(IRequest request, bool throwOnDispatch = false, string? actorToken = "valid-token") : IQueuedRequest
     {
         public bool Completed { get; private set; }
 

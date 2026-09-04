@@ -8,11 +8,9 @@ namespace Cntryl.Portia;
 /// <param name="ResourceOffset">The zero-based offset within the resource stream.</param>
 /// <param name="AreaOffset">The zero-based offset within the area.</param>
 /// <param name="RealmOffset">The zero-based offset within the realm.</param>
-/// <param name="GlobalOffset">The zero-based global offset when supplied by the event source.</param>
 public sealed record DomainEventRecord(
     EventStreamAddress Stream,
     DomainEvent Ev,
     ulong ResourceOffset,
     ulong AreaOffset,
-    ulong RealmOffset,
-    ulong? GlobalOffset = null);
+    ulong RealmOffset);

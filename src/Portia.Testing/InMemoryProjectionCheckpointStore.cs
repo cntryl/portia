@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Keeps projector and reactor checkpoints in memory — for tests, and for any single-instance
+/// Keeps reactor checkpoints in memory — for tests, and for any single-instance
 /// deployment that doesn't need a checkpoint to survive a restart. A real deployment that does
 /// need that needs its own <see cref="IProjectionCheckpointStore" /> backed by durable storage.
 /// </summary>

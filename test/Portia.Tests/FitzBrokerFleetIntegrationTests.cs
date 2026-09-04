@@ -22,7 +22,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
     public async Task ShouldRenewLeaseAutomaticallyWhileCallbackOutlivesTtl()
     {
         await using var client = await _broker.CreateClientAsync();
-        var runner = new FleetPartitionRunner(client.Lease);
+        var runner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(client.Lease));
         var partition = $"lease://portia-integration/fleet/renewal-{Uuid.CreateVersion7()}";
         using var cts = new CancellationTokenSource();
         var iterationsCompleted = 0;
@@ -80,7 +80,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
         var holderAcquired = new TaskCompletionSource();
         var waiterAcquired = new TaskCompletionSource();
 
-        var holderRunner = new FleetPartitionRunner(holderClient.Lease);
+        var holderRunner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(holderClient.Lease));
         using var holderCts = new CancellationTokenSource();
         var holderRun = holderRunner.RunAsync(
             [partition],
@@ -94,7 +94,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
 
         await holderAcquired.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-        var waiterRunner = new FleetPartitionRunner(waiterClient.Lease);
+        var waiterRunner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(waiterClient.Lease));
         using var waiterCts = new CancellationTokenSource();
         var waiterRun = waiterRunner.RunAsync(
             [partition],

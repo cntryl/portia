@@ -97,7 +97,7 @@ running.
 | `Portia.AspNetCore` | `MapPortiaGet`/`Post`/`Put`/`Patch`/`Delete`/`GetStream`/`GetSse` — the minimal-API extension methods the HTTP binding generator intercepts. |
 | `Portia.Fitz` | Fitz-backed transports: RPC send/receive, queue publish/consume, notice/schedule notifications, `FitzEventStore`, and `FleetPartitionRunner` (fleet distribution via Fitz leases). |
 | `Portia.Jwt` | A JWT-backed `IRequestActorValidator` — re-validates a request's carried actor token, no ASP.NET Core dependency. |
-| `Portia.DependencyInjection` | Wires Portia's background runners into a host as `IHostedService`s — `AddPortiaQueueRunner()`, `AddPortiaRequestNotificationRunner()`, `AddPortiaMultiTenantRunner()`, `AddPortiaProjectorRunner<T>()`, `AddPortiaReactorRunner<T>()`. Fleet's `AddPortiaFleetPartitionRunner()` lives in `Portia.Fitz` instead, since it depends on Fitz leases. |
+| `Portia.DependencyInjection` | Wires Portia's background runners into a host as `IHostedService`s — `AddPortiaQueueRunner()`, `AddPortiaRequestNotificationRunner()`, `AddPortiaMultiTenantRunner<TWorkload>()`, `AddPortiaProjectorRunner<T>()`, `AddPortiaReactorRunner<T>()`. Fleet's scoped `AddPortiaFleetPartitionRunner<TWorkload>()` lives in `Portia.Fitz` instead, since it depends on Fitz leases. |
 | `Portia.Testing` | Testing utilities for downstream apps: `InMemoryEventStore`, `TestPermissionEvaluator`, `TestRequestActorValidator`. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
 
 ## Core concepts, briefly
@@ -128,13 +128,16 @@ running.
   found during adversarial review.
 - **Schema evolution**: `DomainEventTypeCatalog` maps a logical event name + schema version to a
   CLR type. An exact match resolves directly (old and new versions can simply coexist forever);
-  a missing version falls through a chain of `IDomainEventUpcaster`s. Populated automatically by
-  `DomainEventCatalogGenerator` from every `DomainEvent` type in the compilation.
+  a missing version falls through a chain of JSON-adapter-specific
+  `IJsonDomainEventUpcaster`s. Populated automatically by `DomainEventCatalogGenerator` from every
+  `DomainEvent` type in the compilation.
 - **Multi-tenancy vs. fleet distribution — deliberately orthogonal**: `MultiTenantRunner`
   decides which tenants a component instance runs for, on whichever worker it's already on.
   `FleetPartitionRunner` decides which worker gets to run a given partition at all, using Fitz
   leases for contention — rebalancing needs no explicit logic; it falls out of independent,
   per-partition lease contention.
+  Hosted workloads implement `ITenantWorkload` or `IPartitionWorkload`; each active tenant or
+  held lease receives its own dependency-injection scope, which is disposed when that run stops.
 - **Observability**: `PortiaTelemetry.ActivitySource` (`"Cntryl.Portia"`) traces every dispatch,
   wired once at the bus. Every background runner (`QueueRunner`, `RequestNotificationRunner`,
   `MultiTenantRunner`, `FleetPartitionRunner`) also accepts an optional `ILogger<TSelf>` —
@@ -145,10 +148,11 @@ running.
 - **Hosting**: a runner's `RunAsync` is never called automatically just by constructing it —
   `Portia.DependencyInjection` (and `Portia.Fitz`, for fleet) provides `IHostedService` wrappers
   (`AddPortiaQueueRunner()`, `AddPortiaProjectorRunner<T>()`, etc.) that start when the host
-  starts and stop cleanly on shutdown. `ProjectorRunner`/`ReactorRunner` are batch-pass methods,
-  not run-forever loops, so their hosted wrappers also need an `IProjectionCheckpointStore` —
-  `InMemoryProjectionCheckpointStore` (`Portia.Testing`) for tests or a single-instance
-  deployment; anything durable needs its own implementation.
+  starts and stop cleanly on shutdown. A projector loads the authoritative checkpoint from its
+  `IProjectionTarget`; each `IProjectionBatch` commits that checkpoint atomically with projection
+  changes. Reactors, whose effects cannot share that transaction, use an
+  `IProjectionCheckpointStore` — `InMemoryProjectionCheckpointStore` (`Portia.Testing`) for tests
+  or a single-instance deployment; anything durable needs its own implementation.
 
 ## Known gaps, stated plainly
 

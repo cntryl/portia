@@ -5,38 +5,35 @@ using Microsoft.Extensions.Hosting;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Runs a <see cref="FleetPartitionRunner" /> for the life of the host, resolving it from
-/// <paramref name="services" /> lazily (at <see cref="ExecuteAsync" /> time, not construction
-/// time) so its own dependencies don't have to be resolvable before hosted services start.
+/// Runs a <see cref="FleetPartitionRunner" /> for the life of the host and creates one dependency-
+/// injection scope per held partition lease.
 /// Registered by <see cref="PortiaFitzHostingServiceCollectionExtensions.AddPortiaFleetPartitionRunner" />
 /// — not meant to be constructed directly.
 /// </summary>
-/// <param name="services">The container the runner and per-partition callback resolve through.</param>
+/// <typeparam name="TWorkload">The typed workload resolved inside each lease scope.</typeparam>
+/// <param name="runner">The partition competition runner.</param>
+/// <param name="scopeFactory">Creates one scope per held partition lease.</param>
 /// <param name="partitions">The fixed, deployment-time-known set of partition routes.</param>
-/// <param name="onPartitionAcquired">
-/// Runs while this worker holds a partition's lease — <paramref name="services" /> lets it
-/// resolve its own dependencies the same way it would from a controller.
-/// </param>
 /// <param name="leaseTtl">How long a held lease survives without renewal.</param>
-sealed class FleetPartitionRunnerHostedService(
-    IServiceProvider services,
+sealed class FleetPartitionRunnerHostedService<TWorkload>(
+    FleetPartitionRunner runner,
+    IServiceScopeFactory scopeFactory,
     IReadOnlyCollection<string> partitions,
-    Func<IServiceProvider, string, LeaseAuthority, CancellationToken, Task> onPartitionAcquired,
     TimeSpan leaseTtl) : BackgroundService
+    where TWorkload : class, IPartitionWorkload
 {
-    readonly IServiceProvider _services = services ?? throw new ArgumentNullException(nameof(services));
+    readonly FleetPartitionRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+    readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
     readonly IReadOnlyCollection<string> _partitions = partitions ?? throw new ArgumentNullException(nameof(partitions));
-    readonly Func<IServiceProvider, string, LeaseAuthority, CancellationToken, Task> _onPartitionAcquired = onPartitionAcquired ?? throw new ArgumentNullException(nameof(onPartitionAcquired));
     readonly TimeSpan _leaseTtl = leaseTtl;
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        var runner = _services.GetRequiredService<FleetPartitionRunner>();
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+        _runner.RunAsync(_partitions, RunPartitionAsync, _leaseTtl, stoppingToken);
 
-        return runner.RunAsync(
-            _partitions,
-            (partition, authority, ct) => _onPartitionAcquired(_services, partition, authority, ct),
-            _leaseTtl,
-            stoppingToken);
+    async Task RunPartitionAsync(string partition, LeaseAuthority authority, CancellationToken ct)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var workload = scope.ServiceProvider.GetRequiredService<TWorkload>();
+        await workload.RunAsync(partition, authority, ct).ConfigureAwait(false);
     }
 }

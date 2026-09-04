@@ -130,6 +130,10 @@ sealed class TestProjection
 
 sealed class UnusedProjectionTarget : IProjectionTarget<TestProjection>
 {
+    public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+        string projectorName,
+        CancellationToken ct = default) => throw new NotSupportedException();
+
     public ValueTask<IProjectionBatch<TestProjection>> BeginAsync(
         ProjectionBatchContext context,
         CancellationToken ct = default) => throw new NotSupportedException();
@@ -137,11 +141,21 @@ sealed class UnusedProjectionTarget : IProjectionTarget<TestProjection>
 
 sealed class RecordingProjectionTarget : IProjectionTarget<TestProjection>
 {
+    ProjectionCheckpoint _checkpoint;
+
     public TestProjection Projection { get; } = new();
 
     public List<ProjectionBatchContext> Contexts { get; } = [];
 
     public List<ulong> CommittedOffsets { get; } = [];
+
+    public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+        string projectorName,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(_checkpoint);
+    }
 
     public ValueTask<IProjectionBatch<TestProjection>> BeginAsync(
         ProjectionBatchContext context,
@@ -150,13 +164,14 @@ sealed class RecordingProjectionTarget : IProjectionTarget<TestProjection>
         ct.ThrowIfCancellationRequested();
         Contexts.Add(context);
         return ValueTask.FromResult<IProjectionBatch<TestProjection>>(
-            new RecordingProjectionBatch(Projection, CommittedOffsets));
+            new RecordingProjectionBatch(Projection, CommittedOffsets, checkpoint => _checkpoint = checkpoint));
     }
 }
 
 sealed class RecordingProjectionBatch(
     TestProjection projection,
-    List<ulong> committedOffsets) : IProjectionBatch<TestProjection>
+    List<ulong> committedOffsets,
+    Action<ProjectionCheckpoint> saveCheckpoint) : IProjectionBatch<TestProjection>
 {
     public TestProjection Projection { get; } = projection;
 
@@ -164,6 +179,7 @@ sealed class RecordingProjectionBatch(
     {
         ct.ThrowIfCancellationRequested();
         committedOffsets.Add(checkpoint.NextOffset);
+        saveCheckpoint(checkpoint);
         return ValueTask.CompletedTask;
     }
 

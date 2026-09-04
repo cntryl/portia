@@ -15,26 +15,31 @@ public static class PortiaFitzHostingServiceCollectionExtensions
 {
     /// <summary>
     /// Hosts a <see cref="FleetPartitionRunner" /> for the life of the host. Requires
-    /// <see cref="ILeaseClient" /> to already be registered.
+    /// <see cref="ILeaseClient" /> (or a custom <see cref="IPartitionLeaseCompetitor" />) and
+    /// <typeparamref name="TWorkload" /> to already be registered. A fresh dependency-injection
+    /// scope and workload instance are used for every held lease.
     /// </summary>
+    /// <typeparam name="TWorkload">The partition-scoped component to run.</typeparam>
     /// <param name="services">The service collection to add to.</param>
     /// <param name="partitions">The fixed, deployment-time-known set of partition routes.</param>
-    /// <param name="onPartitionAcquired">Runs while this worker holds a partition's lease — see
-    /// <see cref="FleetPartitionRunner.RunAsync" />.</param>
     /// <param name="leaseTtl">How long a held lease survives without renewal.</param>
     /// <returns><paramref name="services" />, for chaining.</returns>
-    public static IServiceCollection AddPortiaFleetPartitionRunner(
+    public static IServiceCollection AddPortiaFleetPartitionRunner<TWorkload>(
         this IServiceCollection services,
         IReadOnlyCollection<string> partitions,
-        Func<IServiceProvider, string, LeaseAuthority, CancellationToken, Task> onPartitionAcquired,
         TimeSpan leaseTtl)
+        where TWorkload : class, IPartitionWorkload
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(partitions);
-        ArgumentNullException.ThrowIfNull(onPartitionAcquired);
 
+        services.TryAddSingleton<IPartitionLeaseCompetitor>(sp => new FitzPartitionLeaseCompetitor(sp.GetRequiredService<ILeaseClient>()));
         services.TryAddSingleton<FleetPartitionRunner>();
-        _ = services.AddHostedService(sp => new FleetPartitionRunnerHostedService(sp, partitions, onPartitionAcquired, leaseTtl));
+        _ = services.AddHostedService(sp => new FleetPartitionRunnerHostedService<TWorkload>(
+            sp.GetRequiredService<FleetPartitionRunner>(),
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            partitions,
+            leaseTtl));
         return services;
     }
 }

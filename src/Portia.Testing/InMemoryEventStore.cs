@@ -9,7 +9,6 @@ public sealed class InMemoryEventStore : IEventStore
     readonly Dictionary<EventStreamAddress, List<DomainEventRecord>> _streams = [];
     readonly Dictionary<(string Realm, string Area), ulong> _areaOffsets = [];
     readonly Dictionary<string, ulong> _realmOffsets = [];
-    ulong _nextGlobalOffset;
 
     /// <inheritdoc />
     public IAsyncEnumerable<DomainEvent> ReadAsync(
@@ -139,7 +138,6 @@ public sealed class InMemoryEventStore : IEventStore
             var areaKey = (stream.Realm, stream.Area);
             var areaOffset = _areaOffsets.GetValueOrDefault(areaKey);
             var realmOffset = _realmOffsets.GetValueOrDefault(stream.Realm);
-            var globalOffset = _nextGlobalOffset;
 
             for (var index = 0; index < events.Count; index++)
             {
@@ -148,13 +146,11 @@ public sealed class InMemoryEventStore : IEventStore
                     events[index],
                     checked(expectedVersion + (ulong)index),
                     checked(areaOffset + (ulong)index),
-                    checked(realmOffset + (ulong)index),
-                    checked(globalOffset + (ulong)index)));
+                    checked(realmOffset + (ulong)index)));
             }
 
             _areaOffsets[areaKey] = checked(areaOffset + (ulong)events.Count);
             _realmOffsets[stream.Realm] = checked(realmOffset + (ulong)events.Count);
-            _nextGlobalOffset = checked(globalOffset + (ulong)events.Count);
         }
 
         return ValueTask.CompletedTask;
@@ -184,8 +180,6 @@ public sealed class InMemoryEventStore : IEventStore
         EventStreamPatternScope.Resource => record.ResourceOffset,
         EventStreamPatternScope.Area => record.AreaOffset,
         EventStreamPatternScope.Realm => record.RealmOffset,
-        EventStreamPatternScope.Global => record.GlobalOffset
-            ?? throw new InvalidOperationException("An in-memory event does not contain a global offset."),
         _ => throw new ArgumentOutOfRangeException(nameof(pattern)),
     };
 }

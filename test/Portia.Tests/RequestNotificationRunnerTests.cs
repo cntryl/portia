@@ -17,9 +17,9 @@ public sealed class RequestNotificationRunnerTests
         var handler = new ChangeValueHandler();
         var bus = TestRequestBus.Create(changeValueHandler: handler);
         var consumer = new FakeRequestNotificationConsumer([
-            new RequestNotification(new ChangeValue(1), ActorToken: null),
-            new RequestNotification(new ChangeValue(2), ActorToken: null),
-            new RequestNotification(new ChangeValue(3), ActorToken: null),
+            new RequestNotification(new ChangeValue(1), ActorToken: "valid-token"),
+            new RequestNotification(new ChangeValue(2), ActorToken: "valid-token"),
+            new RequestNotification(new ChangeValue(3), ActorToken: "valid-token"),
         ]);
         var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator());
 
@@ -39,8 +39,8 @@ public sealed class RequestNotificationRunnerTests
         var handler = new ChangeValueHandler();
         var bus = TestRequestBus.Create(changeValueHandler: handler);
         var consumer = new FakeRequestNotificationConsumer([
-            new RequestNotification(new ThrowingChangeValue(0), ActorToken: null),
-            new RequestNotification(new ChangeValue(2), ActorToken: null),
+            new RequestNotification(new ThrowingChangeValue(0), ActorToken: "valid-token"),
+            new RequestNotification(new ChangeValue(2), ActorToken: "valid-token"),
         ]);
         var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator());
 

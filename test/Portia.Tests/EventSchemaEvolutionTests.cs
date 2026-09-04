@@ -30,7 +30,7 @@ public sealed class EventSchemaEvolutionTests
     /// <summary>
     /// Verifies that an event stored at schema version 1, with only the version-2 replacement
     /// type registered in the catalog, is upcast forward through a registered
-    /// <see cref="IDomainEventUpcaster" /> before being deserialized into the current type.
+    /// <see cref="IJsonDomainEventUpcaster" /> before being deserialized into the current type.
     /// </summary>
     [Fact]
     public void ShouldUpcastEventWhenOnlyLaterSchemaVersionIsRegistered()
@@ -114,7 +114,7 @@ sealed record WidgetNamed(string Name) : DomainEvent;
 [EventSchema("WidgetNamed", 2)]
 sealed record WidgetRenamed(string DisplayName) : DomainEvent;
 
-sealed class WidgetNamedToRenamedUpcaster : IDomainEventUpcaster
+sealed class WidgetNamedToRenamedUpcaster : IJsonDomainEventUpcaster
 {
     public string EventName => "WidgetNamed";
 

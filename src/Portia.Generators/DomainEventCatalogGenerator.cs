@@ -21,7 +21,7 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
 {
     const string DomainEventMetadataName = "Cntryl.Portia.DomainEvent";
     const string EventSchemaAttributeMetadataName = "Cntryl.Portia.EventSchemaAttribute";
-    const string DomainEventUpcasterMetadataName = "Cntryl.Portia.IDomainEventUpcaster";
+    const string JsonDomainEventUpcasterMetadataName = "Cntryl.Portia.IJsonDomainEventUpcaster";
     const string ServiceCollectionMetadataName = "Microsoft.Extensions.DependencyInjection.IServiceCollection";
     const string JsonDomainEventSerializerMetadataName = "Cntryl.Portia.JsonDomainEventSerializer";
 
@@ -117,7 +117,7 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         _ = diBuilder.AppendLine("        _ = services.AddSingleton(_ => new global::Cntryl.Portia.DomainEventTypeCatalog().AddPortiaGeneratedDomainEvents());");
         _ = diBuilder.AppendLine("        _ = services.AddSingleton<global::Cntryl.Portia.IDomainEventSerializer>(sp => new global::Cntryl.Portia.JsonDomainEventSerializer(");
         _ = diBuilder.AppendLine("            sp.GetRequiredService<global::Cntryl.Portia.DomainEventTypeCatalog>(),");
-        _ = diBuilder.AppendLine("            sp.GetServices<global::Cntryl.Portia.IDomainEventUpcaster>()));");
+        _ = diBuilder.AppendLine("            sp.GetServices<global::Cntryl.Portia.IJsonDomainEventUpcaster>()));");
         _ = diBuilder.AppendLine("        return services;");
         _ = diBuilder.AppendLine("    }");
         _ = diBuilder.AppendLine("}");
@@ -147,7 +147,7 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
 
         if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol
             || symbol.IsAbstract
-            || !ImplementsInterface(symbol, DomainEventUpcasterMetadataName))
+            || !ImplementsInterface(symbol, JsonDomainEventUpcasterMetadataName))
         {
             return null;
         }

@@ -10,7 +10,7 @@ namespace Cntryl.Portia;
 /// resolves the event's current CLR type via <see cref="DomainEventTypeCatalog" /> — an exact
 /// name-and-version match resolves directly, letting old, superseded CLR types stay registered
 /// and readable forever with no upcasting at all; anything else is walked forward one schema
-/// version at a time through registered <see cref="IDomainEventUpcaster" /> instances until it
+/// version at a time through registered <see cref="IJsonDomainEventUpcaster" /> instances until it
 /// lands on a version the catalog does have.
 /// </summary>
 public sealed class JsonDomainEventSerializer : IDomainEventSerializer
@@ -20,8 +20,7 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
-    readonly DomainEventTypeCatalog _catalog;
-    readonly Dictionary<(string Name, int FromVersion), IDomainEventUpcaster> _upcasters;
+    readonly DomainEventSchemaResolver _resolver;
 
     /// <summary>
     /// Creates a JSON domain-event serializer.
@@ -31,22 +30,23 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
     /// Bridges a stored schema version with no exact catalog registration forward to one that
     /// has. Each event name/version pair may have at most one registered upcaster.
     /// </param>
-    public JsonDomainEventSerializer(DomainEventTypeCatalog catalog, IEnumerable<IDomainEventUpcaster>? upcasters = null)
+    public JsonDomainEventSerializer(DomainEventTypeCatalog catalog, IEnumerable<IJsonDomainEventUpcaster>? upcasters = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
 
-        _catalog = catalog;
-        _upcasters = [];
+        var upcastersByKey = new Dictionary<(string Name, int FromVersion), IJsonDomainEventUpcaster>();
 
         foreach (var upcaster in upcasters ?? [])
         {
             var key = (upcaster.EventName, upcaster.FromVersion);
-            if (!_upcasters.TryAdd(key, upcaster))
+            if (!upcastersByKey.TryAdd(key, upcaster))
             {
                 throw new InvalidOperationException(
                     $"An upcaster from event '{upcaster.EventName}' schema version {upcaster.FromVersion} is already registered.");
             }
         }
+
+        _resolver = new DomainEventSchemaResolver(catalog, upcastersByKey);
     }
 
     /// <inheritdoc />
@@ -71,24 +71,8 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
         var envelope = JsonSerializer.Deserialize<EventEnvelope>(data.Span, Options)
             ?? throw new InvalidOperationException("The event envelope deserialized to null.");
 
-        var name = envelope.Name;
-        var version = envelope.Version;
-        var payload = envelope.Payload;
-
-        while (!_catalog.TryResolve(name, version, out _))
-        {
-            if (!_upcasters.TryGetValue((name, version), out var upcaster))
-            {
-                throw new InvalidOperationException(
-                    $"No registered type or upcaster can bring event '{name}' schema version {version} forward.");
-            }
-
-            payload = upcaster.Upcast(payload);
-            version++;
-        }
-
-        _ = _catalog.TryResolve(name, version, out var resolvedType);
-        var ev = (DomainEvent?)payload.Deserialize(resolvedType!, Options)
+        var (resolvedType, payload) = _resolver.Resolve(envelope.Name, envelope.Version, envelope.Payload);
+        var ev = (DomainEvent?)payload.Deserialize(resolvedType, Options)
             ?? throw new InvalidOperationException($"The '{resolvedType}' payload deserialized to null.");
 
         var metadata = envelope.Metadata.Deserialize<DomainEventMetadata>(Options)

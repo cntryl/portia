@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Cntryl.Fitz.Abstractions.Domains.Lease;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -80,50 +81,33 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     }
 
     /// <summary>
-    /// Verifies that <c>AddPortiaMultiTenantRunner</c> starts a tenant's callback when the
-    /// hosted service starts, with the app's own <see cref="IServiceProvider" /> available to it,
-    /// and stops it cleanly on shutdown.
+    /// Verifies that <c>AddPortiaMultiTenantRunner</c> resolves a typed workload in its own scope
+    /// and disposes that scope when the tenant stops.
     /// </summary>
     [Fact]
-    public async Task ShouldRunTenantCallbacksWhenHostedServiceStarts()
+    public async Task ShouldRunScopedTenantWorkloadWhenHostedServiceStarts()
     {
-        var started = new List<TenantId>();
-        var stopped = new List<TenantId>();
+        var state = new HostingWorkloadState();
         var services = new ServiceCollection();
         _ = services.AddSingleton<ITenantDirectory>(new HostingFakeTenantDirectory([new TenantId("acme")]));
-        _ = services.AddPortiaMultiTenantRunner(
-            onTenantStarted: async (_, tenantId, ct) =>
-            {
-                started.Add(tenantId);
-                try
-                {
-                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-                }
-                catch (OperationCanceledException)
-                {
-                    // Expected — the host is shutting this tenant's work down.
-                }
-            },
-            onTenantStopped: (_, tenantId, _) =>
-            {
-                stopped.Add(tenantId);
-                return Task.CompletedTask;
-            });
-        using var provider = services.BuildServiceProvider();
+        _ = services.AddSingleton(state);
+        _ = services.AddScoped<HostingTenantWorkload>();
+        _ = services.AddPortiaMultiTenantRunner<HostingTenantWorkload>();
+        using var provider = services.BuildServiceProvider(validateScopes: true);
 
         var hostedService = Assert.Single(provider.GetServices<IHostedService>());
         await hostedService.StartAsync(default);
-        await WaitUntilAsync(() => started.Count == 1);
+        await WaitUntilAsync(() => state.StartedTenants.Count == 1);
         await hostedService.StopAsync(default);
 
-        Assert.Equal([new TenantId("acme")], started);
-        Assert.Equal([new TenantId("acme")], stopped);
+        Assert.Equal([new TenantId("acme")], state.StartedTenants);
+        Assert.Equal([new TenantId("acme")], state.StoppedTenants);
+        _ = Assert.Single(state.WorkloadInstances);
     }
 
     /// <summary>
-    /// Verifies that <c>AddPortiaProjectorRunner</c> runs a pass and persists a checkpoint
-    /// through the app's own <see cref="IProjectionCheckpointStore" /> when the hosted service
-    /// starts.
+    /// Verifies that <c>AddPortiaProjectorRunner</c> runs a pass and resumes from the checkpoint
+    /// committed atomically by the projection target.
     /// </summary>
     [Fact]
     public async Task ShouldRunProjectorPassAndSaveCheckpointWhenHostedServiceStarts()
@@ -133,12 +117,10 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var store = new InMemoryEventStore();
         await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)]);
         var target = new RecordingProjectionTarget();
-        var checkpointStore = new InMemoryProjectionCheckpointStore();
 
         var services = new ServiceCollection();
         _ = services.AddSingleton<IDomainEventReader>(store);
         _ = services.AddSingleton<Projector<TestProjection>>(new TestProjector(target));
-        _ = services.AddSingleton<IProjectionCheckpointStore>(checkpointStore);
         _ = services.AddPortiaProjectorRunner<TestProjection>(pollInterval: TimeSpan.FromMilliseconds(20));
         using var provider = services.BuildServiceProvider();
 
@@ -148,42 +130,94 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         await hostedService.StopAsync(default);
 
         Assert.Equal(42, target.Projection.Value);
-        Assert.Equal(1UL, (await checkpointStore.LoadAsync("test-projector")).NextOffset);
+        Assert.Equal(1UL, (await target.LoadCheckpointAsync("test-projector")).NextOffset);
     }
 
     /// <summary>
-    /// Verifies that <c>Portia.Fitz</c>'s <c>AddPortiaFleetPartitionRunner</c> acquires its
-    /// partition and runs the caller's callback when the hosted service starts.
+    /// Verifies a late adapter failure after an atomic projection commit reloads the target's
+    /// authoritative checkpoint before retrying, so the committed event is not applied twice.
     /// </summary>
     [Fact]
-    public async Task ShouldAcquirePartitionWhenFleetHostedServiceStarts()
+    public async Task ShouldNotReplayCommittedProjectionBatchAfterLateCommitFailure()
     {
-        var acquired = new List<string>();
+        var id = Uuid.CreateVersion7();
+        var stream = new EventStreamAddress("test", "projectors", id.ToString());
+        var store = new InMemoryEventStore();
+        await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)]);
+        var target = new LateFaultProjectionTarget();
         var services = new ServiceCollection();
-        _ = services.AddSingleton<ILeaseClient>(new InMemoryLeaseClient());
-        _ = services.AddPortiaFleetPartitionRunner(
-            ["lease://portia/fleet/partition-a"],
-            onPartitionAcquired: async (_, partition, _, ct) =>
-            {
-                acquired.Add(partition);
-                try
-                {
-                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-                }
-                catch (OperationCanceledException)
-                {
-                    // Expected — the host is shutting this partition's work down.
-                }
-            },
-            leaseTtl: TimeSpan.FromSeconds(30));
+        _ = services.AddSingleton<IDomainEventReader>(store);
+        _ = services.AddSingleton<Projector<TestProjection>>(new TestProjector(target));
+        _ = services.AddPortiaProjectorRunner<TestProjection>(pollInterval: TimeSpan.FromMilliseconds(10));
         using var provider = services.BuildServiceProvider();
+        var hostedService = Assert.Single(provider.GetServices<IHostedService>());
+
+        await hostedService.StartAsync(default);
+        await WaitUntilAsync(() => target.CommitAttempts == 1);
+        await Task.Delay(50);
+        await hostedService.StopAsync(default);
+
+        Assert.Equal(1, target.Projection.HandlerCount);
+        Assert.Equal(1UL, (await target.LoadCheckpointAsync("test-projector")).NextOffset);
+    }
+
+    /// <summary>
+    /// Verifies a transient failure while reloading the authoritative checkpoint remains inside
+    /// the polling loop. The service must retry the load and must not run another projector pass
+    /// from its stale in-memory checkpoint while the target remains unavailable.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRetryCheckpointReloadWithoutReplayingFromStaleCheckpoint()
+    {
+        var id = Uuid.CreateVersion7();
+        var stream = new EventStreamAddress("test", "projectors", id.ToString());
+        var store = new InMemoryEventStore();
+        await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)]);
+        var target = new TransientReloadFailureProjectionTarget();
+        var hostedService = new ProjectorHostedService<TestProjection>(
+            new ProjectorRunner(store),
+            new TestProjector(target),
+            pollInterval: TimeSpan.FromMilliseconds(10));
+
+        await hostedService.StartAsync(default);
+        var executeTask = hostedService.ExecuteTask
+            ?? throw new InvalidOperationException("The projector hosted service did not start.");
+        var firstCompletion = await Task.WhenAny(target.CheckpointReloaded, executeTask);
+        Assert.Same(target.CheckpointReloaded, firstCompletion);
+        await target.CheckpointReloaded;
+        await hostedService.StopAsync(default);
+
+        Assert.False(executeTask.IsFaulted);
+        Assert.Equal(3, target.LoadAttempts);
+        Assert.Equal(1, target.Projection.HandlerCount);
+        Assert.Equal(1UL, (await target.LoadCheckpointAsync("test-projector")).NextOffset);
+    }
+
+    /// <summary>
+    /// Verifies that <c>Portia.Fitz</c>'s <c>AddPortiaFleetPartitionRunner</c> resolves a typed
+    /// workload in its own scope while the partition lease is held.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRunScopedPartitionWorkloadWhenFleetHostedServiceStarts()
+    {
+        var state = new HostingWorkloadState();
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IPartitionLeaseCompetitor>(new InMemoryLeaseClient());
+        _ = services.AddSingleton(state);
+        _ = services.AddScoped<HostingPartitionWorkload>();
+        _ = services.AddPortiaFleetPartitionRunner<HostingPartitionWorkload>(
+            ["lease://portia/fleet/partition-a"],
+            leaseTtl: TimeSpan.FromSeconds(30));
+        using var provider = services.BuildServiceProvider(validateScopes: true);
 
         var hostedService = Assert.Single(provider.GetServices<IHostedService>());
         await hostedService.StartAsync(default);
-        await WaitUntilAsync(() => acquired.Count == 1);
+        await WaitUntilAsync(() => state.StartedPartitions.Count == 1);
         await hostedService.StopAsync(default);
 
-        Assert.Equal(["lease://portia/fleet/partition-a"], acquired);
+        Assert.Equal(["lease://portia/fleet/partition-a"], state.StartedPartitions);
+        Assert.Equal(["lease://portia/fleet/partition-a"], state.StoppedPartitions);
+        _ = Assert.Single(state.WorkloadInstances);
     }
 
     static async Task WaitUntilAsync(Func<bool> condition)
@@ -227,7 +261,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     {
         public IRequest Request { get; } = request;
 
-        public string? ActorToken => null;
+        public string? ActorToken => "valid-token";
 
         public uint Attempt => 1;
 
@@ -258,5 +292,168 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
             yield break;
         }
+    }
+}
+
+sealed class HostingWorkloadState
+{
+    public ConcurrentQueue<TenantId> StartedTenants { get; } = [];
+
+    public ConcurrentQueue<TenantId> StoppedTenants { get; } = [];
+
+    public ConcurrentQueue<string> StartedPartitions { get; } = [];
+
+    public ConcurrentQueue<string> StoppedPartitions { get; } = [];
+
+    public ConcurrentQueue<Guid> WorkloadInstances { get; } = [];
+}
+
+sealed class HostingTenantWorkload(HostingWorkloadState state) : ITenantWorkload, IAsyncDisposable
+{
+    readonly Guid _instanceId = Guid.NewGuid();
+    TenantId? _tenantId;
+
+    public async Task RunAsync(TenantId tenantId, CancellationToken ct)
+    {
+        _tenantId = tenantId;
+        state.StartedTenants.Enqueue(tenantId);
+        state.WorkloadInstances.Enqueue(_instanceId);
+
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Expected when the tenant stops or the host shuts down.
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        if (_tenantId is { } tenantId)
+            state.StoppedTenants.Enqueue(tenantId);
+
+        return ValueTask.CompletedTask;
+    }
+}
+
+sealed class HostingPartitionWorkload(HostingWorkloadState state) : IPartitionWorkload, IAsyncDisposable
+{
+    readonly Guid _instanceId = Guid.NewGuid();
+    string? _partition;
+
+    public async Task RunAsync(string partition, LeaseAuthority authority, CancellationToken ct)
+    {
+        _partition = partition;
+        state.StartedPartitions.Enqueue(partition);
+        state.WorkloadInstances.Enqueue(_instanceId);
+
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Expected when the lease is lost or the host shuts down.
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        if (_partition is { } partition)
+            state.StoppedPartitions.Enqueue(partition);
+
+        return ValueTask.CompletedTask;
+    }
+}
+
+sealed class LateFaultProjectionTarget : IProjectionTarget<TestProjection>
+{
+    ProjectionCheckpoint _checkpoint;
+    public TestProjection Projection { get; } = new();
+
+    public int CommitAttempts { get; private set; }
+
+    public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+        string projectorName,
+        CancellationToken ct = default) => ValueTask.FromResult(_checkpoint);
+
+    public ValueTask<IProjectionBatch<TestProjection>> BeginAsync(
+        ProjectionBatchContext context,
+        CancellationToken ct = default) =>
+        ValueTask.FromResult<IProjectionBatch<TestProjection>>(new LateFaultProjectionBatch(this));
+
+    sealed class LateFaultProjectionBatch(LateFaultProjectionTarget target) : IProjectionBatch<TestProjection>
+    {
+        public TestProjection Projection => target.Projection;
+
+        public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+        {
+            target._checkpoint = checkpoint;
+            var commitAttempt = ++target.CommitAttempts;
+
+            return commitAttempt == 1
+                ? ValueTask.FromException(new InvalidOperationException("Simulated late commit acknowledgement failure."))
+                : ValueTask.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+}
+
+sealed class TransientReloadFailureProjectionTarget : IProjectionTarget<TestProjection>
+{
+    readonly TaskCompletionSource _checkpointReloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    ProjectionCheckpoint _checkpoint;
+
+    public TestProjection Projection { get; } = new();
+
+    public int LoadAttempts { get; private set; }
+
+    public int CommitAttempts { get; private set; }
+
+    public Task CheckpointReloaded => _checkpointReloaded.Task;
+
+    public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+        string projectorName,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        LoadAttempts++;
+
+        if (LoadAttempts == 2)
+        {
+            return ValueTask.FromException<ProjectionCheckpoint>(
+                new InvalidOperationException("Simulated transient checkpoint reload failure."));
+        }
+
+        if (LoadAttempts == 3)
+            _ = _checkpointReloaded.TrySetResult();
+
+        return ValueTask.FromResult(_checkpoint);
+    }
+
+    public ValueTask<IProjectionBatch<TestProjection>> BeginAsync(
+        ProjectionBatchContext context,
+        CancellationToken ct = default) =>
+        ValueTask.FromResult<IProjectionBatch<TestProjection>>(new TransientReloadFailureProjectionBatch(this));
+
+    sealed class TransientReloadFailureProjectionBatch(TransientReloadFailureProjectionTarget target)
+        : IProjectionBatch<TestProjection>
+    {
+        public TestProjection Projection => target.Projection;
+
+        public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+        {
+            target._checkpoint = checkpoint;
+            target.CommitAttempts++;
+
+            return target.CommitAttempts == 1
+                ? ValueTask.FromException(new InvalidOperationException("Simulated late commit acknowledgement failure."))
+                : ValueTask.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

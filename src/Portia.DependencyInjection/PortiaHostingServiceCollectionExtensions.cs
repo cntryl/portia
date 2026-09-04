@@ -53,32 +53,28 @@ public static class PortiaHostingServiceCollectionExtensions
 
     /// <summary>
     /// Hosts a <see cref="MultiTenantRunner" /> for the life of the host. Requires
-    /// <see cref="ITenantDirectory" /> to already be registered.
+    /// <see cref="ITenantDirectory" /> and <typeparamref name="TWorkload" /> to already be
+    /// registered. A fresh dependency-injection scope and workload instance are used for every
+    /// active tenant.
     /// </summary>
+    /// <typeparam name="TWorkload">The tenant-scoped component to run.</typeparam>
     /// <param name="services">The service collection to add to.</param>
-    /// <param name="onTenantStarted">Runs for a tenant once it becomes active, until it's removed
-    /// or the host shuts down — see <see cref="MultiTenantRunner.RunAsync" />.</param>
-    /// <param name="onTenantStopped">Runs once for a tenant after it's removed.</param>
     /// <returns><paramref name="services" />, for chaining.</returns>
-    public static IServiceCollection AddPortiaMultiTenantRunner(
-        this IServiceCollection services,
-        Func<IServiceProvider, TenantId, CancellationToken, Task> onTenantStarted,
-        Func<IServiceProvider, TenantId, CancellationToken, Task> onTenantStopped)
+    public static IServiceCollection AddPortiaMultiTenantRunner<TWorkload>(this IServiceCollection services)
+        where TWorkload : class, ITenantWorkload
     {
         ArgumentNullException.ThrowIfNull(services);
-        ArgumentNullException.ThrowIfNull(onTenantStarted);
-        ArgumentNullException.ThrowIfNull(onTenantStopped);
 
         services.TryAddSingleton<MultiTenantRunner>();
-        _ = services.AddHostedService(sp => new MultiTenantRunnerHostedService(sp, onTenantStarted, onTenantStopped));
+        _ = services.AddHostedService<MultiTenantRunnerHostedService<TWorkload>>();
         return services;
     }
 
     /// <summary>
     /// Hosts a <see cref="Projector{TProjection}" /> as a continuous, checkpointed polling loop
     /// for the life of the host. Requires <typeparamref name="TProjection" />'s own
-    /// <see cref="Projector{TProjection}" /> and an <see cref="IProjectionCheckpointStore" /> to
-    /// already be registered.
+    /// <see cref="Projector{TProjection}" /> to already be registered. Its
+    /// <see cref="IProjectionTarget{TProjection}" /> owns the authoritative checkpoint.
     /// </summary>
     /// <typeparam name="TProjection">The projection-specific application port.</typeparam>
     /// <param name="services">The service collection to add to.</param>
@@ -97,7 +93,6 @@ public static class PortiaHostingServiceCollectionExtensions
         _ = services.AddHostedService(sp => new ProjectorHostedService<TProjection>(
             sp.GetRequiredService<ProjectorRunner>(),
             sp.GetRequiredService<Projector<TProjection>>(),
-            sp.GetRequiredService<IProjectionCheckpointStore>(),
             options,
             pollInterval,
             sp.GetService<ILogger<ProjectorHostedService<TProjection>>>()));

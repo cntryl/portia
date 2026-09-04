@@ -4,35 +4,29 @@ using Microsoft.Extensions.Hosting;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Runs a <see cref="MultiTenantRunner" /> for the life of the host, resolving the
-/// <see cref="MultiTenantRunner" /> from <paramref name="services" /> lazily (at
-/// <see cref="ExecuteAsync" /> time, not construction time) so its own dependencies don't have to
-/// be resolvable before hosted services start. Registered by
+/// Runs a <see cref="MultiTenantRunner" /> for the life of the host and creates one dependency-
+/// injection scope per active tenant. Registered by
 /// <see cref="PortiaHostingServiceCollectionExtensions.AddPortiaMultiTenantRunner" /> — not meant
 /// to be constructed directly.
 /// </summary>
-/// <param name="services">The container the runner and per-tenant callbacks resolve through.</param>
-/// <param name="onTenantStarted">
-/// Runs for a tenant once it becomes active — <paramref name="services" /> lets it resolve its
-/// own dependencies (e.g. a tenant-scoped repository) the same way it would from a controller.
-/// </param>
-/// <param name="onTenantStopped">Runs once for a tenant after it's removed.</param>
-sealed class MultiTenantRunnerHostedService(
-    IServiceProvider services,
-    Func<IServiceProvider, TenantId, CancellationToken, Task> onTenantStarted,
-    Func<IServiceProvider, TenantId, CancellationToken, Task> onTenantStopped) : BackgroundService
+/// <typeparam name="TWorkload">The typed workload resolved inside each tenant scope.</typeparam>
+/// <param name="runner">The tenant lifecycle runner.</param>
+/// <param name="scopeFactory">Creates one scope per active tenant.</param>
+sealed class MultiTenantRunnerHostedService<TWorkload>(
+    MultiTenantRunner runner,
+    IServiceScopeFactory scopeFactory) : BackgroundService
+    where TWorkload : class, ITenantWorkload
 {
-    readonly IServiceProvider _services = services ?? throw new ArgumentNullException(nameof(services));
-    readonly Func<IServiceProvider, TenantId, CancellationToken, Task> _onTenantStarted = onTenantStarted ?? throw new ArgumentNullException(nameof(onTenantStarted));
-    readonly Func<IServiceProvider, TenantId, CancellationToken, Task> _onTenantStopped = onTenantStopped ?? throw new ArgumentNullException(nameof(onTenantStopped));
+    readonly MultiTenantRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+    readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+        _runner.RunAsync(RunTenantAsync, static (_, _) => Task.CompletedTask, stoppingToken);
+
+    async Task RunTenantAsync(TenantId tenantId, CancellationToken ct)
     {
-        var runner = _services.GetRequiredService<MultiTenantRunner>();
-
-        return runner.RunAsync(
-            (tenantId, ct) => _onTenantStarted(_services, tenantId, ct),
-            (tenantId, ct) => _onTenantStopped(_services, tenantId, ct),
-            stoppingToken);
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var workload = scope.ServiceProvider.GetRequiredService<TWorkload>();
+        await workload.RunAsync(tenantId, ct).ConfigureAwait(false);
     }
 }

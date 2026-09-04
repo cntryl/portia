@@ -4,9 +4,9 @@ using Microsoft.Extensions.Logging;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Hosts a <see cref="Reactor" /> as a continuous background loop: loads its checkpoint once at
-/// startup, runs one <see cref="ReactorRunner" /> pass, persists whatever checkpoint that pass
-/// reaches, waits, and repeats — until the host shuts down. Register via
+/// Hosts a <see cref="Reactor" /> as a continuous background loop: loads its durable checkpoint,
+/// runs one <see cref="ReactorRunner" /> pass, persists whatever checkpoint that pass reaches,
+/// waits, and repeats — reloading progress after faults until the host shuts down. Register via
 /// <c>IServiceCollection.AddPortiaReactorRunner&lt;TReactor&gt;()</c>
 /// (<c>Portia.DependencyInjection</c>) rather than constructing this directly.
 /// </summary>
@@ -71,18 +71,28 @@ public sealed class ReactorHostedService : BackgroundService
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var checkpoint = await _checkpointStore.LoadAsync(_reactor.Name, stoppingToken).ConfigureAwait(false);
+        ProjectionCheckpoint? checkpoint = null;
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            var operation = "checkpoint load";
+
             try
             {
+                checkpoint ??= await _checkpointStore
+                    .LoadAsync(_reactor.Name, stoppingToken)
+                    .ConfigureAwait(false);
+
+                operation = "pass";
+
                 // Passing _checkpointStore through means progress is durably saved every batch,
                 // not only once this whole pass finishes — a mid-pass failure only loses the
                 // current batch, not everything back to this call's starting checkpoint.
-                var next = await _runner.RunAsync(_reactor, checkpoint, _checkpointStore, _maxBatchSize, stoppingToken).ConfigureAwait(false);
+                var next = await _runner
+                    .RunAsync(_reactor, checkpoint.Value, _checkpointStore, _maxBatchSize, stoppingToken)
+                    .ConfigureAwait(false);
 
-                if (next != checkpoint)
+                if (next != checkpoint.Value)
                 {
                     await _checkpointStore.SaveAsync(_reactor.Name, next, stoppingToken).ConfigureAwait(false);
                     checkpoint = next;
@@ -94,22 +104,18 @@ public sealed class ReactorHostedService : BackgroundService
             }
             catch (Exception ex)
             {
-                PortiaTelemetry.RecordRunnerFault(nameof(ReactorHostedService), $"reactor '{_reactor.Name}' pass faulted", ex, _logger);
+                PortiaTelemetry.RecordRunnerFault(
+                    nameof(ReactorHostedService),
+                    $"reactor '{_reactor.Name}' {operation} faulted",
+                    ex,
+                    _logger);
 
                 // RunAsync can fault after already durably saving one or more batches internally
                 // — this loop's own local `checkpoint` only advances on a *successful* return, so
-                // without reloading here it would retry from the stale, pre-pass value and redo
-                // every batch RunAsync had already saved and moved past. Reloading from the store
-                // (rather than trusting any in-memory value) is what actually reflects how far
-                // the failed pass really got.
-                try
-                {
-                    checkpoint = await _checkpointStore.LoadAsync(_reactor.Name, stoppingToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    break;
-                }
+                // discard it after every fault. The next polling iteration must successfully
+                // reload durable progress before another pass can run. A reload failure remains
+                // inside this same backoff/retry loop instead of terminating the hosted service.
+                checkpoint = null;
             }
 
             if (stoppingToken.IsCancellationRequested)

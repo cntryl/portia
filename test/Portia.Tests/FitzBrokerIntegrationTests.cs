@@ -114,10 +114,11 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var server = new FitzRpcRequestServer(
             workerClient.Rpc,
             serializer,
+            serializer,
             TestRequestBus.Create(),
             new AlwaysValidActorValidator());
         await using var registration = await server.RegisterAsync<RpcGetValue, int>();
-        var sender = new FitzRemoteRequestSender(callerClient.Rpc, serializer);
+        var sender = new FitzRemoteRequestSender(callerClient.Rpc, serializer, serializer);
 
         var result = await sender.SendAsync<RpcGetValue, int>(
             new RpcGetValue(),
@@ -139,7 +140,8 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     public async Task ShouldFailFastWhenNoWorkerIsRegisteredForRoute()
     {
         await using var client = await _broker.CreateClientAsync();
-        var sender = new FitzRemoteRequestSender(client.Rpc, new JsonRequestSerializer());
+        var serializer = new JsonRequestSerializer();
+        var sender = new FitzRemoteRequestSender(client.Rpc, serializer, serializer);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         var elapsed = System.Diagnostics.Stopwatch.StartNew();

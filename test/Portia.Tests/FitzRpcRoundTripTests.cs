@@ -20,9 +20,9 @@ public sealed class FitzRpcRoundTripTests
         var serializer = new JsonRequestSerializer();
         var bus = TestRequestBus.Create();
         var actorValidator = new AlwaysValidActorValidator();
-        var server = new FitzRpcRequestServer(rpc, serializer, bus, actorValidator);
+        var server = new FitzRpcRequestServer(rpc, serializer, serializer, bus, actorValidator);
         _ = await server.RegisterAsync<RpcGetValue, int>();
-        var sender = new FitzRemoteRequestSender(rpc, serializer);
+        var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         var result = await sender.SendAsync<RpcGetValue, int>(new RpcGetValue(), new RequestRouteValues(), actorToken: null);
 
@@ -40,9 +40,9 @@ public sealed class FitzRpcRoundTripTests
         var serializer = new JsonRequestSerializer();
         var handler = new RpcChangeValueHandler();
         var bus = TestRequestBus.Create(rpcChangeValueHandler: handler);
-        var server = new FitzRpcRequestServer(rpc, serializer, bus, new AlwaysValidActorValidator());
+        var server = new FitzRpcRequestServer(rpc, serializer, serializer, bus, new AlwaysValidActorValidator());
         _ = await server.RegisterAsync<RpcChangeValue>();
-        var sender = new FitzRemoteRequestSender(rpc, serializer);
+        var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         var result = await sender.SendAsync(new RpcChangeValue(99), new RequestRouteValues(), actorToken: null);
 
@@ -62,14 +62,15 @@ public sealed class FitzRpcRoundTripTests
         var serializer = new JsonRequestSerializer();
         var handler = new RpcChangeValueHandler();
         var bus = TestRequestBus.Create(rpcChangeValueHandler: handler);
-        var server = new FitzRpcRequestServer(rpc, serializer, bus, new RejectingActorValidator());
+        var server = new FitzRpcRequestServer(rpc, serializer, serializer, bus, new RejectingActorValidator());
         _ = await server.RegisterAsync<RpcChangeValue>();
-        var sender = new FitzRemoteRequestSender(rpc, serializer);
+        var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         var result = await sender.SendAsync(new RpcChangeValue(1), new RequestRouteValues(), actorToken: "any-token");
 
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Unauthorized, result.Error!.Kind);
+        Assert.Equal("Token expired.", result.Error.Message);
         Assert.Null(handler.LastValue);
     }
 
@@ -86,12 +87,12 @@ public sealed class FitzRpcRoundTripTests
         var rpc = new InMemoryRpcClient();
         var serializer = new JsonRequestSerializer();
         var bus = TestRequestBus.Create();
-        var server = new FitzRpcRequestServer(rpc, serializer, bus, new AlwaysValidActorValidator());
+        var server = new FitzRpcRequestServer(rpc, serializer, serializer, bus, new AlwaysValidActorValidator());
 
         // No server.RegisterAsync<RpcGetValue, int>() call anywhere — this alone must cover it.
         await server.RegisterPortiaGeneratedRpcWorkersAsync();
 
-        var sender = new FitzRemoteRequestSender(rpc, serializer);
+        var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
         var result = await sender.SendAsync<RpcGetValue, int>(new RpcGetValue(), new RequestRouteValues(), actorToken: null);
 
         Assert.True(result.IsSuccess);

@@ -15,11 +15,16 @@ namespace Cntryl.Portia;
 /// a <see cref="CancellationToken" /> that cancels after however long is appropriate for that call.
 /// </remarks>
 /// <param name="rpc">The Fitz RPC client.</param>
-/// <param name="serializer">The request and outcome serializer.</param>
-public sealed class FitzRemoteRequestSender(IRpcClient rpc, IRequestSerializer serializer) : IRemoteRequestSender
+/// <param name="requestSerializer">Serializes outbound requests.</param>
+/// <param name="outcomeDeserializer">Deserializes inbound outcomes.</param>
+public sealed class FitzRemoteRequestSender(
+    IRpcClient rpc,
+    IRequestSerializer requestSerializer,
+    IRequestOutcomeDeserializer outcomeDeserializer) : IRemoteRequestSender
 {
     readonly IRpcClient _rpc = rpc ?? throw new ArgumentNullException(nameof(rpc));
-    readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+    readonly IRequestSerializer _requestSerializer = requestSerializer ?? throw new ArgumentNullException(nameof(requestSerializer));
+    readonly IRequestOutcomeDeserializer _outcomeDeserializer = outcomeDeserializer ?? throw new ArgumentNullException(nameof(outcomeDeserializer));
 
     /// <inheritdoc />
     public async ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
@@ -29,10 +34,10 @@ public sealed class FitzRemoteRequestSender(IRpcClient rpc, IRequestSerializer s
         ArgumentNullException.ThrowIfNull(routeValues);
 
         var route = FitzRouting.ResolveRpcRoute(request, routeValues);
-        var body = _serializer.Serialize(request, actorToken);
+        var body = _requestSerializer.Serialize(request, actorToken);
         var receivedFrame = await CallAsync(route, body, ct).ConfigureAwait(false);
 
-        return _serializer.DeserializeOutcome(receivedFrame.Body);
+        return _outcomeDeserializer.DeserializeOutcome(receivedFrame.Body);
     }
 
     /// <inheritdoc />
@@ -43,10 +48,10 @@ public sealed class FitzRemoteRequestSender(IRpcClient rpc, IRequestSerializer s
         ArgumentNullException.ThrowIfNull(routeValues);
 
         var route = FitzRouting.ResolveRpcRoute(request, routeValues);
-        var body = _serializer.Serialize(request, actorToken);
+        var body = _requestSerializer.Serialize(request, actorToken);
         var receivedFrame = await CallAsync(route, body, ct).ConfigureAwait(false);
 
-        return _serializer.DeserializeResult<TOut>(receivedFrame.Body);
+        return _outcomeDeserializer.DeserializeResult<TOut>(receivedFrame.Body);
     }
 
     async ValueTask<RpcResponseFrame> CallAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct)

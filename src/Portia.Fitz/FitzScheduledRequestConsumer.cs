@@ -11,11 +11,11 @@ namespace Cntryl.Portia;
 /// <param name="route">The concrete Fitz schedule route to subscribe to (<c>schedule://realm/area/resource/operation</c>).</param>
 public sealed class FitzScheduledRequestConsumer(
     IScheduleClient schedule,
-    IRequestSerializer serializer,
+    IRequestDeserializer serializer,
     string route) : IRequestNotificationConsumer
 {
     readonly IScheduleClient _schedule = schedule ?? throw new ArgumentNullException(nameof(schedule));
-    readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+    readonly IRequestDeserializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     readonly string _route = string.IsNullOrWhiteSpace(route)
         ? throw new ArgumentException("A schedule route cannot be empty.", nameof(route))
         : route;

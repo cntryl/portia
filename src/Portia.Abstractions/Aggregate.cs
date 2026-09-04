@@ -5,13 +5,19 @@ namespace Cntryl.Portia;
 /// </summary>
 /// <param name="id">The stable identity of the aggregate.</param>
 /// <param name="stream">The stream that stores the aggregate's event history.</param>
-public abstract class Aggregate(Uuid id, EventStreamAddress stream)
+/// <param name="metadataFactory">Creates metadata for newly raised events, or
+/// <see langword="null" /> to use Portia's system clock and UUID source.</param>
+public abstract class Aggregate(
+    Uuid id,
+    EventStreamAddress stream,
+    IDomainEventMetadataFactory? metadataFactory = null)
 {
     readonly Dictionary<Type, Action<DomainEvent>> _handlers = [];
     readonly List<DomainEvent> _committedEvents = [];
     readonly HashSet<Uuid> _committedEventIds = [];
     readonly List<DomainEvent> _uncommittedEvents = [];
     readonly List<DomainEvent> _uncommittedAudits = [];
+    readonly IDomainEventMetadataFactory _metadataFactory = metadataFactory ?? SystemDomainEventMetadataFactory.Instance;
 
     /// <summary>
     /// Gets the stable identity of the aggregate.
@@ -133,6 +139,9 @@ public abstract class Aggregate(Uuid id, EventStreamAddress stream)
         foreach (var ev in _uncommittedEvents)
             _ = _committedEventIds.Add(ev.Metadata.EventId);
 
+        foreach (var audit in _uncommittedAudits)
+            _ = _committedEventIds.Add(audit.Metadata.EventId);
+
         _uncommittedEvents.Clear();
         _uncommittedAudits.Clear();
     }
@@ -140,11 +149,30 @@ public abstract class Aggregate(Uuid id, EventStreamAddress stream)
     void AttachMetadata(DomainEvent ev, ulong aggregateVersion)
     {
         ArgumentNullException.ThrowIfNull(ev);
-        ev.AttachMetadata(new DomainEventMetadata(
-            Uuid.CreateVersion7(),
-            Id,
-            aggregateVersion,
-            DateTimeOffset.UtcNow));
+        var metadata = _metadataFactory.Create(Id, aggregateVersion)
+            ?? throw new InvalidOperationException("The event metadata factory returned null.");
+
+        if (metadata.EventId == Uuid.Empty)
+            throw new InvalidOperationException("The event metadata factory returned an empty event ID.");
+
+        if (_committedEventIds.Contains(metadata.EventId)
+            || _uncommittedEvents.Any(candidate => candidate.Metadata.EventId == metadata.EventId)
+            || _uncommittedAudits.Any(candidate => candidate.Metadata.EventId == metadata.EventId))
+        {
+            throw new InvalidOperationException(
+                $"The event metadata factory returned event ID '{metadata.EventId}', which this aggregate has already used.");
+        }
+
+        if (metadata.AggregateId != Id)
+            throw new InvalidOperationException("The event metadata factory returned a different aggregate ID.");
+
+        if (metadata.AggregateVersion != aggregateVersion)
+            throw new InvalidOperationException("The event metadata factory returned a different aggregate version.");
+
+        if (metadata.OccurredOn.Offset != TimeSpan.Zero)
+            throw new InvalidOperationException("The event metadata factory returned a non-UTC occurrence time.");
+
+        ev.AttachMetadata(metadata);
     }
 
     void ValidateCommittedEvent(DomainEvent ev, ulong expectedVersion, HashSet<Uuid> eventIds)

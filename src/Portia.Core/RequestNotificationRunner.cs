@@ -42,17 +42,13 @@ public sealed class RequestNotificationRunner(
         {
             try
             {
-                var actorResult = await _actorValidator.ValidateAsync(delivered.ActorToken, ct).ConfigureAwait(false);
+                // The result's failure category can't change anything at this transport's level
+                // (no ack/redelivery). An unrecognized exception is still caught below.
+                var dispatch = await RequestDispatch.SendAsync(
+                    _actorValidator, _bus, delivered.Request, delivered.ActorToken, ct).ConfigureAwait(false);
 
-                if (actorResult is not { IsSuccess: true, Value: { } actor })
-                {
+                if (!dispatch.WasDispatched)
                     PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), "actor validation failed", logger: _logger);
-                    continue;
-                }
-
-                // The result's failure category can't change anything at this transport's
-                // level (no ack/redelivery); an unrecognized exception is still caught below.
-                _ = await _bus.SendAsync(delivered.Request, actor, ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {

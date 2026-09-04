@@ -12,7 +12,7 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class MultiTenancyTests
 {
-    static readonly EventStreamPattern TenantRegistryPattern = EventStreamPattern.ForPattern(area: "tenants", resource: "registry");
+    static readonly EventStreamPattern TenantRegistryPattern = EventStreamPattern.ForPattern("global", "tenants", "registry");
 
     /// <summary>
     /// Verifies that a tenant already registered before the runner starts is picked up at

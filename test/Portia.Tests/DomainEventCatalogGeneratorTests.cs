@@ -50,8 +50,8 @@ public sealed class DomainEventCatalogGeneratorTests
     /// End-to-end proof for schema evolution through the DI-resolved, generator-populated
     /// <see cref="IDomainEventSerializer" />: bytes representing a schema version whose CLR type
     /// no longer exists in the codebase (so the generated catalog has nothing to auto-register
-    /// for it) are still upcast forward, via an app-registered <see cref="IDomainEventUpcaster" />
-    /// picked up automatically from DI's <c>IEnumerable&lt;IDomainEventUpcaster&gt;</c> — no
+    /// for it) are still upcast forward, via an app-registered <see cref="IJsonDomainEventUpcaster" />
+    /// picked up automatically from DI's <c>IEnumerable&lt;IJsonDomainEventUpcaster&gt;</c> — no
     /// manual serializer construction, matching how <see cref="FitzEventStore" /> would resolve
     /// one in a real app.
     /// </summary>
@@ -77,7 +77,7 @@ public sealed class DomainEventCatalogGeneratorTests
         var stored = JsonSerializer.SerializeToUtf8Bytes(envelope, options);
 
         var services = new ServiceCollection();
-        _ = services.AddSingleton<IDomainEventUpcaster, GadgetV1ToV2Upcaster>();
+        _ = services.AddSingleton<IJsonDomainEventUpcaster, GadgetV1ToV2Upcaster>();
         _ = services.AddPortiaGeneratedDomainEventSerialization();
         using var provider = services.BuildServiceProvider();
         var reader = provider.GetRequiredService<IDomainEventSerializer>();
@@ -92,7 +92,7 @@ public sealed class DomainEventCatalogGeneratorTests
 [EventSchema("Gadget", 2)]
 sealed record GadgetRenamed(string DisplayName) : DomainEvent;
 
-sealed class GadgetV1ToV2Upcaster : IDomainEventUpcaster
+sealed class GadgetV1ToV2Upcaster : IJsonDomainEventUpcaster
 {
     public string EventName => "Gadget";
 

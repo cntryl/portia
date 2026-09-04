@@ -98,7 +98,7 @@ public sealed class RunnerFaultVisibilityTests
         using var listener = Listen(out var activities);
         var bus = TestRequestBus.Create();
         var consumer = new FakeRequestNotificationConsumer(
-            [new RequestNotification(new UnregisteredRunnerFaultAction(), ActorToken: null)]);
+            [new RequestNotification(new UnregisteredRunnerFaultAction(), ActorToken: "valid-token")]);
         var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator());
 
         await runner.RunAsync();
@@ -213,7 +213,7 @@ public sealed class RunnerFaultVisibilityTests
         }
     }
 
-    sealed class FakeQueuedRequest(IRequest request, string? actorToken = null) : IQueuedRequest
+    sealed class FakeQueuedRequest(IRequest request, string? actorToken = "valid-token") : IQueuedRequest
     {
         public IRequest Request { get; } = request;
 

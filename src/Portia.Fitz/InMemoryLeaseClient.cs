@@ -11,11 +11,12 @@ namespace Cntryl.Portia;
 /// <c>Cntryl.Fitz.Abstractions</c> — an app testing its own lease-based code can reuse this exact
 /// type instead of writing its own fake.
 ///
-/// Only the one <c>WithLeaseAsync</c> overload <see cref="FleetPartitionRunner" /> actually calls
-/// is implemented; every other <see cref="ILeaseClient" /> member throws
-/// <see cref="NotSupportedException" /> — extend this type if a test needs one of them.
+/// Implements <see cref="IPartitionLeaseCompetitor" /> — the narrow interface
+/// <see cref="FleetPartitionRunner" /> actually depends on — rather than the full
+/// <see cref="ILeaseClient" />, so this is an honest, fully-substitutable stand-in with no
+/// throwing "not supported" members.
 /// </summary>
-public sealed class InMemoryLeaseClient : ILeaseClient
+public sealed class InMemoryLeaseClient : IPartitionLeaseCompetitor
 {
     readonly Dictionary<string, SemaphoreSlim> _locks = [];
     readonly HashSet<string> _acquisitionFailures = [];
@@ -71,36 +72,4 @@ public sealed class InMemoryLeaseClient : ILeaseClient
             return gate;
         }
     }
-
-    /// <inheritdoc />
-    public Task<ILease> AcquireAsync(string route, ulong ttlSecs, uint waitSeconds = 0, CancellationToken ct = default) =>
-        throw new NotSupportedException();
-
-    /// <inheritdoc />
-    public Task<T> WithLeaseAsync<T>(string route, ulong ttlSecs, Func<CancellationToken, ValueTask<T>> callback, LeaseExecutionOptions? options = null, CancellationToken ct = default) =>
-        throw new NotSupportedException();
-
-    /// <inheritdoc />
-    public Task<T> WithLeaseAsync<T>(string route, ulong ttlSecs, Func<LeaseAuthority, CancellationToken, ValueTask<T>> callback, LeaseExecutionOptions? options = null, CancellationToken ct = default) =>
-        throw new NotSupportedException();
-
-    /// <inheritdoc />
-    public Task WithLeaseAsync(string route, ulong ttlSecs, Func<CancellationToken, ValueTask> callback, LeaseExecutionOptions? options = null, CancellationToken ct = default) =>
-        throw new NotSupportedException();
-
-    /// <inheritdoc />
-    public Task<LeaseInfo> QueryAsync(string route, CancellationToken ct = default) =>
-        throw new NotSupportedException();
-
-    /// <inheritdoc />
-    public Task<LeaseSubscription> SubscribeAsync(string route, CancellationToken ct = default) =>
-        throw new NotSupportedException();
-
-    /// <inheritdoc />
-    public Task<LeaseListResult> ListAsync(string pattern, LeaseListCursor? cursor = null, int? limit = null, CancellationToken ct = default) =>
-        throw new NotSupportedException();
-
-    /// <inheritdoc />
-    public Task<ILeaseInventoryObserver> ObserveAsync(string pattern, LeaseObserveOptions? options = null, CancellationToken ct = default) =>
-        throw new NotSupportedException();
 }

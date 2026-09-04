@@ -24,16 +24,17 @@ namespace Cntryl.Portia;
 /// free the lease for an already-waiting worker once the TTL lapses, with no extra coordination
 /// needed on either side.
 /// </summary>
-/// <param name="leases">The Fitz lease client every partition is competed for through.</param>
+/// <param name="leases">Competes for each partition's lease — typically a <see cref="FitzPartitionLeaseCompetitor" />
+/// wrapping the app's registered <see cref="ILeaseClient" />.</param>
 /// <param name="logger">
 /// Reports a partition that can't be acquired or whose callback faults even when nothing is
 /// listening to <see cref="PortiaTelemetry.ActivitySource" />. Supply it explicitly, or
 /// configure Microsoft.Extensions.Logging with at least one provider before resolving the
 /// runner through DI; a bare <c>ServiceCollection</c> registration does not create or emit logs.
 /// </param>
-public sealed class FleetPartitionRunner(ILeaseClient leases, ILogger<FleetPartitionRunner>? logger = null)
+public sealed class FleetPartitionRunner(IPartitionLeaseCompetitor leases, ILogger<FleetPartitionRunner>? logger = null)
 {
-    readonly ILeaseClient _leases = leases ?? throw new ArgumentNullException(nameof(leases));
+    readonly IPartitionLeaseCompetitor _leases = leases ?? throw new ArgumentNullException(nameof(leases));
     readonly ILogger<FleetPartitionRunner>? _logger = logger;
 
     /// <summary>

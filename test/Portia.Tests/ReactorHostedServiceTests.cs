@@ -70,7 +70,7 @@ public sealed class ReactorHostedServiceTests
         ]);
         var reactor = new FlakyOnThirdAttemptReactor();
         var runner = new ReactorRunner(eventStore);
-        var checkpointStore = new InMemoryProjectionCheckpointStore();
+        var checkpointStore = new TransientReloadFailureCheckpointStore();
         var hostedService = new ReactorHostedService(
             runner,
             reactor,
@@ -79,6 +79,11 @@ public sealed class ReactorHostedServiceTests
             pollInterval: TimeSpan.FromMilliseconds(20));
 
         await hostedService.StartAsync(default);
+        var executeTask = hostedService.ExecuteTask
+            ?? throw new InvalidOperationException("The reactor hosted service did not start.");
+        var firstCompletion = await Task.WhenAny(checkpointStore.CheckpointReloaded, executeTask);
+        Assert.Same(checkpointStore.CheckpointReloaded, firstCompletion);
+        await checkpointStore.CheckpointReloaded;
         await WaitUntilAsync(() => reactor.HandledValues.Count >= 4);
         await hostedService.StopAsync(default);
 
@@ -86,6 +91,7 @@ public sealed class ReactorHostedServiceTests
         // loop had retried from its own stale, un-reloaded local checkpoint instead of the
         // store's, events 1-2 would appear a second time here.
         Assert.Equal([1, 2, 3, 4], reactor.HandledValues);
+        Assert.False(executeTask.IsFaulted);
     }
 
     static async Task WaitUntilAsync(Func<bool> condition)
@@ -104,6 +110,35 @@ public sealed class ReactorHostedServiceTests
         ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion7(), aggregateId, aggregateVersion, DateTimeOffset.UtcNow));
         return ev;
     }
+}
+
+sealed class TransientReloadFailureCheckpointStore : IProjectionCheckpointStore
+{
+    readonly InMemoryProjectionCheckpointStore _inner = new();
+    readonly TaskCompletionSource _checkpointReloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    int _loadAttempts;
+
+    public Task CheckpointReloaded => _checkpointReloaded.Task;
+
+    public async ValueTask<ProjectionCheckpoint> LoadAsync(string name, CancellationToken ct = default)
+    {
+        var loadAttempt = Interlocked.Increment(ref _loadAttempts);
+
+        if (loadAttempt == 2)
+            throw new InvalidOperationException("Simulated transient checkpoint reload failure.");
+
+        var checkpoint = await _inner.LoadAsync(name, ct);
+
+        if (loadAttempt == 3)
+            _ = _checkpointReloaded.TrySetResult();
+
+        return checkpoint;
+    }
+
+    public ValueTask SaveAsync(
+        string name,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct = default) => _inner.SaveAsync(name, checkpoint, ct);
 }
 
 sealed partial class FlakyOnThirdAttemptReactor : Reactor, IReactorHandler<ValueChanged>

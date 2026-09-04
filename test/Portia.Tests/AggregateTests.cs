@@ -38,6 +38,72 @@ public sealed class AggregateTests
     }
 
     /// <summary>
+    /// Verifies aggregate metadata creation is replaceable so applications can control time,
+    /// identity, correlation, and causation without modifying the aggregate base class.
+    /// </summary>
+    [Fact]
+    public void ShouldUseConfiguredMetadataFactoryWhenEventIsRaised()
+    {
+        var aggregateId = Uuid.CreateVersion7();
+        var eventId = Uuid.CreateVersion7();
+        var correlationId = Uuid.CreateVersion7();
+        var causationId = Uuid.CreateVersion7();
+        var occurredOn = new DateTimeOffset(2026, 9, 4, 12, 0, 0, TimeSpan.Zero);
+        var factory = new FixedDomainEventMetadataFactory(eventId, occurredOn, correlationId, causationId);
+        var aggregate = new TestAggregate(aggregateId, factory);
+
+        aggregate.ChangeValue(42);
+
+        var metadata = Assert.Single(aggregate.UncommittedEvents).Metadata;
+        Assert.Equal(eventId, metadata.EventId);
+        Assert.Equal(aggregateId, metadata.AggregateId);
+        Assert.Equal(1UL, metadata.AggregateVersion);
+        Assert.Equal(occurredOn, metadata.OccurredOn);
+        Assert.Equal(correlationId, metadata.CorrelationId);
+        Assert.Equal(causationId, metadata.CausationId);
+    }
+
+    /// <summary>
+    /// Verifies a custom metadata factory cannot assign one event ID to two pending events in the
+    /// same append batch.
+    /// </summary>
+    [Fact]
+    public void ShouldRejectFactoryEventIdAlreadyUsedByPendingEvent()
+    {
+        var eventId = Uuid.CreateVersion7();
+        var aggregate = new TestAggregate(Uuid.CreateVersion7(), new RepeatingDomainEventMetadataFactory(eventId));
+        aggregate.ChangeValue(40);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => aggregate.ChangeValue(42));
+
+        Assert.Contains(eventId.ToString(), exception.Message, StringComparison.Ordinal);
+        Assert.Equal(40, aggregate.Value);
+        Assert.Equal(1UL, aggregate.Version);
+        _ = Assert.Single(aggregate.UncommittedEvents);
+    }
+
+    /// <summary>
+    /// Verifies a custom metadata factory cannot reuse an event ID after the original event has
+    /// been committed.
+    /// </summary>
+    [Fact]
+    public void ShouldRejectFactoryEventIdAlreadyUsedByCommittedEvent()
+    {
+        var eventId = Uuid.CreateVersion7();
+        var aggregate = new TestAggregate(Uuid.CreateVersion7(), new RepeatingDomainEventMetadataFactory(eventId));
+        aggregate.ChangeValue(40);
+        aggregate.Save();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => aggregate.ChangeValue(42));
+
+        Assert.Contains(eventId.ToString(), exception.Message, StringComparison.Ordinal);
+        Assert.Equal(40, aggregate.Value);
+        Assert.Equal(1UL, aggregate.Version);
+        _ = Assert.Single(aggregate.CommittedEvents);
+        Assert.Empty(aggregate.UncommittedEvents);
+    }
+
+    /// <summary>
     /// Verifies that replay updates state, version, and committed history only.
     /// </summary>
     [Fact]
@@ -254,8 +320,8 @@ public sealed class AggregateTests
 
 sealed class TestAggregate : Aggregate
 {
-    public TestAggregate(Uuid id)
-        : base(id, new EventStreamAddress("test", "aggregates", id.ToString()))
+    public TestAggregate(Uuid id, IDomainEventMetadataFactory? metadataFactory = null)
+        : base(id, new EventStreamAddress("test", "aggregates", id.ToString()), metadataFactory)
     {
         On<ValueChanged>(ev => Value = ev.Value);
         On<ValueIncremented>(ev => Value += ev.Amount);
@@ -266,6 +332,22 @@ sealed class TestAggregate : Aggregate
     public void ChangeValue(int value) => RaiseEvent(new ValueChanged(value));
 
     public void Audit(string reason) => AuditEvent(new ValueAudited(reason));
+}
+
+sealed class FixedDomainEventMetadataFactory(
+    Uuid eventId,
+    DateTimeOffset occurredOn,
+    Uuid correlationId,
+    Uuid causationId) : IDomainEventMetadataFactory
+{
+    public DomainEventMetadata Create(Uuid aggregateId, ulong aggregateVersion) =>
+        new(eventId, aggregateId, aggregateVersion, occurredOn, correlationId, causationId);
+}
+
+sealed class RepeatingDomainEventMetadataFactory(Uuid eventId) : IDomainEventMetadataFactory
+{
+    public DomainEventMetadata Create(Uuid aggregateId, ulong aggregateVersion) =>
+        new(eventId, aggregateId, aggregateVersion, DateTimeOffset.UtcNow);
 }
 
 sealed class DuplicateHandlerAggregate : Aggregate

@@ -3,14 +3,18 @@ using System.Text.Json;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// A reflection-at-the-wire-boundary (not hot-path) <see cref="IRequestSerializer" /> for Fitz RPC
-/// and queue transports: a small JSON envelope carrying the request's assembly-qualified type
+/// A reflection-at-the-wire-boundary (not hot-path) serializer for Fitz RPC and queue transports:
+/// a small JSON envelope carrying the request's assembly-qualified type
 /// name, its own JSON payload, and the actor token that traveled with it. Resolving the type name
 /// back to a <see cref="Type" /> on deserialize is the one place this uses reflection — everywhere
 /// else in the framework stays reflection-free by design, but a wire deserializer has no way
 /// around needing to know what type it's even deserializing into.
 /// </summary>
-public sealed class JsonRequestSerializer : IRequestSerializer
+public sealed class JsonRequestSerializer :
+    IRequestSerializer,
+    IRequestDeserializer,
+    IRequestOutcomeSerializer,
+    IRequestOutcomeDeserializer
 {
     static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
