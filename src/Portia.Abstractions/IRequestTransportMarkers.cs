@@ -14,7 +14,7 @@ public interface IQueuable;
 
 /// <summary>
 /// Marks a request that can be published over live (ephemeral) fanout (Fitz notice, or another
-/// live-delivery transport). Combine with <see cref="RequestRouteAttribute" />.
+/// notification transport). Combine with <see cref="RequestRouteAttribute" />.
 /// </summary>
 public interface INotifiable;
 

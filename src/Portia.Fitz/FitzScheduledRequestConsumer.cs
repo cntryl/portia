@@ -12,7 +12,7 @@ namespace Cntryl.Portia;
 public sealed class FitzScheduledRequestConsumer(
     IScheduleClient schedule,
     IRequestSerializer serializer,
-    string route) : ILiveRequestConsumer
+    string route) : IRequestNotificationConsumer
 {
     readonly IScheduleClient _schedule = schedule ?? throw new ArgumentNullException(nameof(schedule));
     readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
@@ -21,7 +21,7 @@ public sealed class FitzScheduledRequestConsumer(
         : route;
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<LiveRequest> ReadAsync([EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<RequestNotification> ReadAsync([EnumeratorCancellation] CancellationToken ct = default)
     {
         // A Fitz schedule subscription is itself a pull-based IAsyncEnumerable (as of
         // Cntryl.Fitz.Abstractions 0.1.1) — no callback bridging needed here anymore.
@@ -33,7 +33,7 @@ public sealed class FitzScheduledRequestConsumer(
             var request = deserialized as IRequest
                 ?? throw new InvalidOperationException(
                     "A fired Fitz schedule entry deserialized to a result-bearing request; only no-result requests can be scheduled.");
-            yield return new LiveRequest(request, actorToken);
+            yield return new RequestNotification(request, actorToken);
         }
     }
 }

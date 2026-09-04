@@ -63,44 +63,49 @@ public sealed class RunnerFaultVisibilityTests
     }
 
     /// <summary>
-    /// Verifies that a live-delivered request whose actor token fails re-validation records a
+    /// Verifies that a request notification whose actor token fails re-validation records a
     /// visible fault instead of just silently skipping it.
     /// </summary>
     [Fact]
-    public async Task ShouldRecordFaultWhenLiveRequestActorTokenFailsRevalidation()
+    public async Task ShouldRecordFaultWhenRequestNotificationActorTokenFailsRevalidation()
     {
         using var listener = Listen(out var activities);
         var bus = TestRequestBus.Create();
-        var consumer = new FakeLiveRequestConsumer([new LiveRequest(new RunnerFaultAction(), ActorToken: "expired")]);
-        var runner = new LiveRequestRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired"));
+        var consumer = new FakeRequestNotificationConsumer(
+            [new RequestNotification(new RunnerFaultAction(), ActorToken: "expired")]);
+        var runner = new RequestNotificationRunner(
+            consumer,
+            bus,
+            new TestRequestActorValidator(rejectToken: "expired"));
 
         await runner.RunAsync();
 
         static bool Matches(Activity a)
         {
-            return (a.GetTagItem("portia.runner") as string) == nameof(LiveRequestRunner) && (a.GetTagItem("portia.fault_reason") as string) == "actor validation failed";
+            return (a.GetTagItem("portia.runner") as string) == nameof(RequestNotificationRunner) && (a.GetTagItem("portia.fault_reason") as string) == "actor validation failed";
         }
         Assert.Contains(activities, Matches);
         _ = activities.First(Matches);
     }
 
     /// <summary>
-    /// Verifies that an unrecognized exception during a live dispatch records a fault carrying
+    /// Verifies that an unrecognized exception during notification dispatch records a fault carrying
     /// the exception itself, not just a silently lost delivery.
     /// </summary>
     [Fact]
-    public async Task ShouldRecordFaultWithExceptionWhenLiveRequestDispatchThrows()
+    public async Task ShouldRecordFaultWithExceptionWhenRequestNotificationDispatchThrows()
     {
         using var listener = Listen(out var activities);
         var bus = TestRequestBus.Create();
-        var consumer = new FakeLiveRequestConsumer([new LiveRequest(new UnregisteredRunnerFaultAction(), ActorToken: null)]);
-        var runner = new LiveRequestRunner(consumer, bus, new TestRequestActorValidator());
+        var consumer = new FakeRequestNotificationConsumer(
+            [new RequestNotification(new UnregisteredRunnerFaultAction(), ActorToken: null)]);
+        var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator());
 
         await runner.RunAsync();
 
         static bool Matches(Activity a)
         {
-            return (a.GetTagItem("portia.runner") as string) == nameof(LiveRequestRunner) && (a.GetTagItem("portia.fault_reason") as string) == "unrecognized exception";
+            return (a.GetTagItem("portia.runner") as string) == nameof(RequestNotificationRunner) && (a.GetTagItem("portia.fault_reason") as string) == "unrecognized exception";
         }
         Assert.Contains(activities, Matches);
         var activity = activities.First(Matches);
@@ -221,9 +226,9 @@ public sealed class RunnerFaultVisibilityTests
         public ValueTask AbandonAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
     }
 
-    sealed class FakeLiveRequestConsumer(IReadOnlyList<LiveRequest> items) : ILiveRequestConsumer
+    sealed class FakeRequestNotificationConsumer(IReadOnlyList<RequestNotification> items) : IRequestNotificationConsumer
     {
-        public async IAsyncEnumerable<LiveRequest> ReadAsync(
+        public async IAsyncEnumerable<RequestNotification> ReadAsync(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
         {
             foreach (var item in items)

@@ -6,7 +6,7 @@ namespace Cntryl.Portia;
 /// An <see cref="IRequestActorValidator" /> for tests that don't need real JWT verification: any
 /// token succeeds as <see cref="RequestActor.System" /> except <paramref name="rejectToken" />,
 /// which fails as if it had expired — enough to exercise a transport's actor re-validation path
-/// (queue, live delivery, fleet) without a real signing key.
+/// (queue, notifications, fleet) without a real signing key.
 /// </summary>
 /// <param name="rejectToken">
 /// The one token this validator treats as invalid, or <see langword="null" /> to accept every

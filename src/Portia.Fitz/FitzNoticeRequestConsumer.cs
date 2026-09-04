@@ -4,7 +4,7 @@ using Cntryl.Fitz.Abstractions.Domains.Notice;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Receives requests published over Fitz live (ephemeral) notice fanout.
+/// Receives request notifications published over Fitz notice fanout.
 /// </summary>
 /// <param name="notice">The Fitz notice client.</param>
 /// <param name="serializer">The request serializer.</param>
@@ -12,7 +12,7 @@ namespace Cntryl.Portia;
 public sealed class FitzNoticeRequestConsumer(
     INoticeClient notice,
     IRequestSerializer serializer,
-    string route) : ILiveRequestConsumer
+    string route) : IRequestNotificationConsumer
 {
     readonly INoticeClient _notice = notice ?? throw new ArgumentNullException(nameof(notice));
     readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
@@ -21,7 +21,7 @@ public sealed class FitzNoticeRequestConsumer(
         : route;
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<LiveRequest> ReadAsync([EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<RequestNotification> ReadAsync([EnumeratorCancellation] CancellationToken ct = default)
     {
         // A Fitz notice subscription is itself a pull-based IAsyncEnumerable (as of
         // Cntryl.Fitz.Abstractions 0.1.1) — no callback bridging needed here anymore.
@@ -33,7 +33,7 @@ public sealed class FitzNoticeRequestConsumer(
             var request = deserialized as IRequest
                 ?? throw new InvalidOperationException(
                     "A Fitz notice message deserialized to a result-bearing request; only no-result requests can be published over notice.");
-            yield return new LiveRequest(request, actorToken);
+            yield return new RequestNotification(request, actorToken);
         }
     }
 }

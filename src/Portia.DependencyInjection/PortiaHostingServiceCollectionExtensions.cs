@@ -36,18 +36,18 @@ public static class PortiaHostingServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Hosts a <see cref="LiveRequestRunner" /> for the life of the host. Requires
-    /// <see cref="ILiveRequestConsumer" />, <see cref="IRequestBus" />, and
+    /// Hosts a <see cref="RequestNotificationRunner" /> for the life of the host. Requires
+    /// <see cref="IRequestNotificationConsumer" />, <see cref="IRequestBus" />, and
     /// <see cref="IRequestActorValidator" /> to already be registered.
     /// </summary>
     /// <param name="services">The service collection to add to.</param>
     /// <returns><paramref name="services" />, for chaining.</returns>
-    public static IServiceCollection AddPortiaLiveRequestRunner(this IServiceCollection services)
+    public static IServiceCollection AddPortiaRequestNotificationRunner(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.TryAddSingleton<LiveRequestRunner>();
-        _ = services.AddHostedService<LiveRequestRunnerHostedService>();
+        services.TryAddSingleton<RequestNotificationRunner>();
+        _ = services.AddHostedService<RequestNotificationRunnerHostedService>();
         return services;
     }
 

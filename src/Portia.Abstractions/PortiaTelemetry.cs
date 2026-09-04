@@ -48,7 +48,7 @@ public static partial class PortiaTelemetry
     }
 
     /// <summary>
-    /// Records a background runner (<c>QueueRunner</c>, <c>LiveRequestRunner</c>,
+    /// Records a background runner (<c>QueueRunner</c>, <c>RequestNotificationRunner</c>,
     /// <c>MultiTenantRunner</c>, <c>FleetPartitionRunner</c>, ...) silently dropping or
     /// abandoning work, so it's visible to whatever's observing <see cref="ActivitySource" />
     /// instead of vanishing — nothing in Portia should ever require debugging the framework

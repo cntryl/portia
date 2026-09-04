@@ -92,12 +92,12 @@ running.
 | Project | What it's for |
 |---|---|
 | `Portia.Abstractions` | The public contracts everything else implements — `Aggregate`, `DomainEvent`, `IRequest`/`IRequestHandler`/`IRequestBus`, `Result`, the transport marker interfaces (`ICallable`/`IQueuable`/`INotifiable`/`ISchedulable`), permission/authorization interfaces, `PortiaTelemetry`. |
-| `Portia.Core` | The runtime pieces built on those contracts: `QueueRunner`, `LiveRequestRunner`, `ProjectorRunner`/`ReactorRunner`, `MultiTenantRunner`, `EventSourcedTenantDirectory`. |
+| `Portia.Core` | The runtime pieces built on those contracts: `QueueRunner`, `RequestNotificationRunner`, `ProjectorRunner`/`ReactorRunner`, `MultiTenantRunner`, `EventSourcedTenantDirectory`. |
 | `Portia.Generators` | The Roslyn source generators — DI registration, RPC worker registration, HTTP binding interceptors, the domain-event catalog, and the analyzers backing them (`PORTIA0xx` diagnostics). |
 | `Portia.AspNetCore` | `MapPortiaGet`/`Post`/`Put`/`Patch`/`Delete`/`GetStream`/`GetSse` — the minimal-API extension methods the HTTP binding generator intercepts. |
-| `Portia.Fitz` | Fitz-backed transports: RPC send/receive, queue publish/consume, notice/schedule live delivery, `FitzEventStore`, and `FleetPartitionRunner` (fleet distribution via Fitz leases). |
+| `Portia.Fitz` | Fitz-backed transports: RPC send/receive, queue publish/consume, notice/schedule notifications, `FitzEventStore`, and `FleetPartitionRunner` (fleet distribution via Fitz leases). |
 | `Portia.Jwt` | A JWT-backed `IRequestActorValidator` — re-validates a request's carried actor token, no ASP.NET Core dependency. |
-| `Portia.DependencyInjection` | Wires Portia's background runners into a host as `IHostedService`s — `AddPortiaQueueRunner()`, `AddPortiaLiveRequestRunner()`, `AddPortiaMultiTenantRunner()`, `AddPortiaProjectorRunner<T>()`, `AddPortiaReactorRunner<T>()`. Fleet's `AddPortiaFleetPartitionRunner()` lives in `Portia.Fitz` instead, since it depends on Fitz leases. |
+| `Portia.DependencyInjection` | Wires Portia's background runners into a host as `IHostedService`s — `AddPortiaQueueRunner()`, `AddPortiaRequestNotificationRunner()`, `AddPortiaMultiTenantRunner()`, `AddPortiaProjectorRunner<T>()`, `AddPortiaReactorRunner<T>()`. Fleet's `AddPortiaFleetPartitionRunner()` lives in `Portia.Fitz` instead, since it depends on Fitz leases. |
 | `Portia.Testing` | Testing utilities for downstream apps: `InMemoryEventStore`, `TestPermissionEvaluator`, `TestRequestActorValidator`. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
 
 ## Core concepts, briefly
@@ -136,7 +136,7 @@ running.
   leases for contention — rebalancing needs no explicit logic; it falls out of independent,
   per-partition lease contention.
 - **Observability**: `PortiaTelemetry.ActivitySource` (`"Cntryl.Portia"`) traces every dispatch,
-  wired once at the bus. Every background runner (`QueueRunner`, `LiveRequestRunner`,
+  wired once at the bus. Every background runner (`QueueRunner`, `RequestNotificationRunner`,
   `MultiTenantRunner`, `FleetPartitionRunner`) also accepts an optional `ILogger<TSelf>` —
   supply one directly, or configure `Microsoft.Extensions.Logging` with at least one provider
   before DI constructs the runner. A bare `ServiceCollection` registration does not provide a

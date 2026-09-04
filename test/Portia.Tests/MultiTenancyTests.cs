@@ -194,7 +194,7 @@ public sealed class MultiTenancyTests
     /// network blip in a real implementation — doesn't permanently kill tenant management for
     /// the rest of the process. <see cref="MultiTenantRunner" /> must reconnect and keep
     /// discovering tenant changes, the same resilience <see cref="QueueRunner" /> and
-    /// <see cref="LiveRequestRunner" /> already have for their own live streams.
+    /// <see cref="RequestNotificationRunner" /> already has for its own notification stream.
     /// </summary>
     [Fact]
     public async Task ShouldReconnectAfterTenantDirectoryWatchStreamFaults()

@@ -2,7 +2,7 @@ namespace Cntryl.Portia;
 
 /// <summary>
 /// Proves the framework's central claim directly: one handler, unmodified, runs identically
-/// whether reached by direct in-process dispatch, a queue, RPC, or a live delivery (the shape
+/// whether reached by direct in-process dispatch, a queue, RPC, or a notification (the shape
 /// shared by Fitz notice fanout and a fired Fitz schedule entry). <see cref="UniversalAction" />
 /// and <see cref="UniversalActionHandler" /> are dispatched through all four transport runners in
 /// this one test — not four different handlers that merely look alike.
@@ -11,10 +11,10 @@ public sealed class AllTransportsSharedHandlerTests
 {
     /// <summary>
     /// Verifies that the same handler instance is invoked by direct dispatch, a queue, RPC, and a
-    /// live delivery — four separate transport paths, one shared implementation.
+    /// notification — four separate transport paths, one shared implementation.
     /// </summary>
     [Fact]
-    public async Task ShouldInvokeSameHandlerAcrossDirectQueueRpcAndLiveTransports()
+    public async Task ShouldInvokeSameHandlerAcrossDirectQueueRpcAndNotificationTransports()
     {
         var handler = new UniversalActionHandler();
         var bus = TestRequestBus.Create(universalActionHandler: handler);
@@ -41,10 +41,14 @@ public sealed class AllTransportsSharedHandlerTests
         Assert.True(rpcResult.IsSuccess);
         Assert.Equal([1, 2, 3], handler.HandledValues);
 
-        // Live delivery — the shape shared by Fitz notice fanout and a fired schedule entry.
-        var liveConsumer = new FakeLiveRequestConsumer([new LiveRequest(new UniversalAction(4), ActorToken: null)]);
-        var liveRunner = new LiveRequestRunner(liveConsumer, bus, new AlwaysValidActorValidator());
-        await liveRunner.RunAsync();
+        // Notification — the shape shared by Fitz notice fanout and a fired schedule entry.
+        var notificationConsumer = new FakeRequestNotificationConsumer(
+            [new RequestNotification(new UniversalAction(4), ActorToken: null)]);
+        var notificationRunner = new RequestNotificationRunner(
+            notificationConsumer,
+            bus,
+            new AlwaysValidActorValidator());
+        await notificationRunner.RunAsync();
         Assert.Equal([1, 2, 3, 4], handler.HandledValues);
     }
 
@@ -81,9 +85,9 @@ public sealed class AllTransportsSharedHandlerTests
         public ValueTask AbandonAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
     }
 
-    sealed class FakeLiveRequestConsumer(IReadOnlyList<LiveRequest> items) : ILiveRequestConsumer
+    sealed class FakeRequestNotificationConsumer(IReadOnlyList<RequestNotification> items) : IRequestNotificationConsumer
     {
-        public async IAsyncEnumerable<LiveRequest> ReadAsync(
+        public async IAsyncEnumerable<RequestNotification> ReadAsync(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
         {
             foreach (var item in items)

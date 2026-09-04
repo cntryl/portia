@@ -3,11 +3,11 @@ using Microsoft.Extensions.Logging;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Dispatches requests delivered live (Fitz notice fanout, a fired Fitz schedule entry) to the
-/// request bus, so a command's handler is the same regardless of origin. There is no queueing
+/// Dispatches one-way request notifications (Fitz notice fanout, a fired Fitz schedule entry) to
+/// the request bus, so a command's handler is the same regardless of origin. There is no queueing
 /// or redelivery for this transport shape — a failed dispatch is simply lost, not retried.
 /// </summary>
-/// <param name="consumer">The live-delivery consumer.</param>
+/// <param name="consumer">The request-notification consumer.</param>
 /// <param name="bus">The request bus.</param>
 /// <param name="actorValidator">Re-validates each request's carried actor token — signature and
 /// expiry included — at the moment it's actually delivered.</param>
@@ -17,16 +17,16 @@ namespace Cntryl.Portia;
 /// Microsoft.Extensions.Logging with at least one provider before resolving the runner through
 /// DI; a bare <c>ServiceCollection</c> registration does not create or emit logs.
 /// </param>
-public sealed class LiveRequestRunner(
-    ILiveRequestConsumer consumer,
+public sealed class RequestNotificationRunner(
+    IRequestNotificationConsumer consumer,
     IRequestBus bus,
     IRequestActorValidator actorValidator,
-    ILogger<LiveRequestRunner>? logger = null)
+    ILogger<RequestNotificationRunner>? logger = null)
 {
-    readonly ILiveRequestConsumer _consumer = consumer ?? throw new ArgumentNullException(nameof(consumer));
+    readonly IRequestNotificationConsumer _consumer = consumer ?? throw new ArgumentNullException(nameof(consumer));
     readonly IRequestBus _bus = bus ?? throw new ArgumentNullException(nameof(bus));
     readonly IRequestActorValidator _actorValidator = actorValidator ?? throw new ArgumentNullException(nameof(actorValidator));
-    readonly ILogger<LiveRequestRunner>? _logger = logger;
+    readonly ILogger<RequestNotificationRunner>? _logger = logger;
 
     /// <summary>
     /// Reads and dispatches requests as they are delivered, until cancellation is requested.
@@ -46,7 +46,7 @@ public sealed class LiveRequestRunner(
 
                 if (actorResult is not { IsSuccess: true, Value: { } actor })
                 {
-                    PortiaTelemetry.RecordRunnerFault(nameof(LiveRequestRunner), "actor validation failed", logger: _logger);
+                    PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), "actor validation failed", logger: _logger);
                     continue;
                 }
 
@@ -58,7 +58,7 @@ public sealed class LiveRequestRunner(
             {
                 // Nothing to abandon or redeliver at this transport's level; a failed dispatch
                 // is simply lost. Continue processing later deliveries.
-                PortiaTelemetry.RecordRunnerFault(nameof(LiveRequestRunner), "unrecognized exception", ex, _logger);
+                PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), "unrecognized exception", ex, _logger);
             }
         }
     }

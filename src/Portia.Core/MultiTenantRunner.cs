@@ -57,7 +57,7 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
         {
             // A transient failure from the directory's live watch stream (a network blip in a
             // real implementation) must not permanently end tenant management for the rest of
-            // the process — the same resilience QueueRunner/LiveRequestRunner already have for
+            // the process — the same resilience QueueRunner/RequestNotificationRunner already have for
             // their own live streams.
             while (!ct.IsCancellationRequested)
             {
