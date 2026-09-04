@@ -34,7 +34,7 @@ and execution (except explicit diagnostic tests for unsupported inputs).
 | HTTP contracts | Nullable compilation, constant route fallback, ignored defaults/options, invalid roots, missing diagnostics, streaming authorization/disposal, missing async route resolver and optional token failures observed | 32 public consumer HTTP tests pass; format, Release build and Compose suite (196 + 86) green | HTTP generator and endpoint mapping |
 | Queue ownership | Malformed JSON ended enumeration; defaults were 5,000 seconds/16 items; no lease renewal; pending acknowledgment stopped renewal; hosted consumers terminated on faults/EOF | 16 public tests pass, including real broker handoff; format, Release build and Compose suite (196 + 102) green | Queue runner, Fitz consumer and hosted lifecycle |
 | Tenant lifecycle | Independent watcher/snapshot changes disappeared; no injected polling clock; failed workloads never scheduled restart | Clock-driven regressions pass; format, Release build and Compose suite (196 + 109) green | Tenant directory and runner |
-| Complete workflow | Pending: two modules, persistence, two reactors/projectors, direct/HTTP/RPC/queue, declined audit, state/stream/projections | Pending | Consumer host fixture and onboarding |
+| Complete workflow | Composed RPC registration API absent; business request initially had no registered handler | Both stores pass the same public workflow with real Fitz RPC/queue, two modules and four components; boundary 196 + 113 tests | Consumer host fixture and module RPC descriptors |
 | Final readiness | Pending: full format/build/Compose tests; complete review; rebase; final SHA hosted CI; squash merge and main readback | Pending | Single coordinated PR |
 
 ## Commands
@@ -210,3 +210,22 @@ and execution (except explicit diagnostic tests for unsupported inputs).
 
 - Tenant boundary passed: format verification, Release build (zero warnings/errors),
   and Compose-backed solution tests: 196 existing + 109 consumer tests.
+
+## Complete consumer workflow
+
+- Composed RPC registration failed consumer compilation because `RegisterModulesAsync`
+  was absent. Modules now contribute typed callbacks through `IRequestRpcRegistrar`;
+  one server call registers them without requiring contracts to reference Fitz.
+  Both module orders pass, repeated module imports contribute once, and disposal
+  unregisters the workers. Partial registration cleans up completed registrations.
+- The workflow first failed at direct dispatch with no `DepositAccount` handler.
+  The feature assembly now provides one handler using scoped `IAggregateRepository`.
+  Direct dispatch, generated HTTP, real Fitz RPC and real Fitz queue each make a
+  deposit. A declined deposit persists an audit-only save.
+- Both in-memory and Fitz event stores reload balance 36, state version 4 and
+  committed position 4. Four source events share the aggregate route; the declined
+  audit occupies offset zero of a distinct UUIDv4 session and retains state version 4.
+  Both reactors and both projectors consume all five records, with projections
+  checked separately from aggregate state and durable stream contents.
+- Format verification, Release build (zero warnings/errors) and Compose-backed
+  solution tests passed: 196 existing + 113 consumer tests.

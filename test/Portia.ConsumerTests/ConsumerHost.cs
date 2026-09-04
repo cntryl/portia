@@ -8,6 +8,7 @@ static class ConsumerHost
     public static ServiceCollection CreateServices(bool scoped = true)
     {
         var services = new ServiceCollection();
+        _ = services.AddPortiaAggregate((_, id) => new Account(id));
         _ = services.AddSingleton<Effects>();
         _ = services.AddSingleton<IConsumerEffects>(provider => provider.GetRequiredService<Effects>());
         _ = services.AddSingleton<ProjectionStorage>();
@@ -57,14 +58,14 @@ static class ConsumerHost
             }
         }
 
-        public async Task WaitForAsync(string component, int count = 1)
+        public async Task WaitForAsync(string component, int count = 1, Uuid? aggregateId = null)
         {
             while (true)
             {
                 Task changed;
                 lock (_gate)
                 {
-                    if (_items.Count(item => item.Component == component) >= count)
+                    if (_items.Count(item => item.Component == component && (aggregateId is null || item.AggregateId == aggregateId)) >= count)
                         return;
                     changed = _changed.Task;
                 }

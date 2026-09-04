@@ -26,7 +26,7 @@ public sealed class ModuleConsumerTests
         Assert.Equal(11, (await bus.SendAsync(new FeatureOneRequest(10), RequestActor.System)).Value);
         Assert.Equal(12, (await bus.SendAsync(new FeatureTwoRequest(10), RequestActor.System)).Value);
         var transports = provider.GetServices<RequestTransportRegistration>().ToArray();
-        Assert.Equal(3, transports.Length);
+        Assert.Equal(4, transports.Length);
         Assert.Contains(transports, registration => registration.RequestType == typeof(FeatureOneRequest));
         Assert.Contains(transports, registration => registration.RequestType == typeof(FeatureTwoRequest));
         var serializer = provider.GetRequiredService<IDomainEventSerializer>();

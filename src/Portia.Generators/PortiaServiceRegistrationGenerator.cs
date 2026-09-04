@@ -14,7 +14,7 @@ namespace Cntryl.Portia;
 /// and emitted independently below (see <see cref="ReactorsAndProjectors" />,
 /// <see cref="RequestTransportsRegistration" />, <see cref="RequestHandlers" />) and composed only in
 /// <see cref="Generate" />; registering an RPC worker per request is a separate, independent
-/// concern owned entirely by <see cref="FitzRpcWorkerRegistrationGenerator" />.
+/// concern owned entirely by generated typed RPC descriptors.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
@@ -279,8 +279,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
     /// Registers a <c>RequestTransportRegistration</c> for every routed, transport-marked
     /// request declared in a compilation — its own reason to change, independent of reactors,
     /// projectors, or request handlers. Discovery itself lives in
-    /// <see cref="RequestTransportDiscovery" />, shared with
-    /// <see cref="FitzRpcWorkerRegistrationGenerator" />.
+    /// <see cref="RequestTransportDiscovery" />.
     /// </summary>
     static class RequestTransportsRegistration
     {
@@ -308,7 +307,15 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
                     .Append(RequestTransportDiscovery.FormatStringLiteral(request.Resource))
                     .Append(", ")
                     .Append(RequestTransportDiscovery.FormatStringLiteral(request.Operation))
-                    .AppendLine(")));");
+                    .Append(')');
+                if (request.Transports.HasFlag(RequestTransports.Callable))
+                {
+                    _ = source.Append(", static (registrar, ct) => registrar.RegisterAsync<")
+                        .Append(request.TypeName)
+                        .Append(request.ResultType is null ? string.Empty : $", {request.ResultType}")
+                        .Append(">(ct)");
+                }
+                _ = source.AppendLine("));");
             }
         }
     }

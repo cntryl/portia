@@ -12,10 +12,61 @@ namespace Cntryl.Portia;
 /// </summary>
 /// <param name="rpc">The Fitz RPC client.</param>
 /// <param name="scopeFactory">Owns application dependencies for each RPC invocation.</param>
-public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory scopeFactory)
+public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory scopeFactory) : IRequestRpcRegistrar
 {
     readonly IRpcClient _rpc = rpc ?? throw new ArgumentNullException(nameof(rpc));
     readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+
+    /// <summary>Registers callable descriptors contributed by the explicitly registered Portia modules.</summary>
+    /// <param name="ct">Cancels registration.</param>
+    /// <returns>Owns all worker registrations; dispose during host shutdown.</returns>
+    public async ValueTask<IAsyncDisposable> RegisterModulesAsync(CancellationToken ct = default)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var workers = new Workers();
+        try
+        {
+            foreach (var descriptor in scope.ServiceProvider.GetServices<RequestTransportRegistration>())
+            {
+                if (!descriptor.Transports.HasFlag(RequestTransports.Callable))
+                    continue;
+                var register = descriptor.RegisterRpc ?? throw new InvalidOperationException(
+                    $"Callable request '{descriptor.RequestType}' has no generated RPC registration.");
+                workers.Items.Add(await register(this, ct).ConfigureAwait(false));
+            }
+            return workers;
+        }
+        catch
+        {
+            try { await workers.DisposeAsync().ConfigureAwait(false); }
+            catch { /* Preserve the registration failure after attempting every cleanup. */ }
+            throw;
+        }
+    }
+
+    async ValueTask<IAsyncDisposable> IRequestRpcRegistrar.RegisterAsync<TRequest>(CancellationToken ct)
+        => await RegisterAsync<TRequest>(ct).ConfigureAwait(false);
+
+    async ValueTask<IAsyncDisposable> IRequestRpcRegistrar.RegisterAsync<TRequest, TOut>(CancellationToken ct)
+        => await RegisterAsync<TRequest, TOut>(ct).ConfigureAwait(false);
+
+    sealed class Workers : IAsyncDisposable
+    {
+        public List<IAsyncDisposable> Items { get; } = [];
+
+        public async ValueTask DisposeAsync()
+        {
+            List<Exception>? errors = null;
+            for (var i = Items.Count - 1; i >= 0; i--)
+            {
+                try { await Items[i].DisposeAsync().ConfigureAwait(false); }
+                catch (Exception error) { (errors ??= []).Add(error); }
+            }
+            Items.Clear();
+            if (errors is not null)
+                throw new AggregateException(errors);
+        }
+    }
 
     /// <summary>
     /// Registers a worker for a no-result request, at the pattern its own

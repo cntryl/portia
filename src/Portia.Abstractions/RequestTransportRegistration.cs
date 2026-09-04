@@ -44,7 +44,9 @@ public enum RequestTransports
 /// <param name="transports">The transports the request declared itself reachable through.</param>
 /// <param name="route">The request's declared route (segments may be
 /// <see cref="RequestRouteAttribute.Wildcard" />).</param>
-public sealed class RequestTransportRegistration(Type requestType, RequestTransports transports, RequestRouteAttribute route)
+/// <param name="registerRpc">Generated typed RPC registration, when callable.</param>
+public sealed class RequestTransportRegistration(Type requestType, RequestTransports transports, RequestRouteAttribute route,
+    Func<IRequestRpcRegistrar, CancellationToken, ValueTask<IAsyncDisposable>>? registerRpc = null)
 {
     /// <summary>
     /// Gets the concrete request type.
@@ -60,4 +62,7 @@ public sealed class RequestTransportRegistration(Type requestType, RequestTransp
     /// Gets the request's declared route (segments may be <see cref="RequestRouteAttribute.Wildcard" />).
     /// </summary>
     public RequestRouteAttribute Route { get; } = route ?? throw new ArgumentNullException(nameof(route));
+
+    /// <summary>Gets the generated typed RPC registration, when callable.</summary>
+    public Func<IRequestRpcRegistrar, CancellationToken, ValueTask<IAsyncDisposable>>? RegisterRpc { get; } = registerRpc;
 }

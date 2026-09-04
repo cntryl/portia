@@ -6,7 +6,7 @@ namespace Cntryl.Portia;
 /// <summary>
 /// Discovers every routed, transport-marked request in a compilation — shared by every generator
 /// that needs it (<see cref="PortiaServiceRegistrationGenerator" /> for the DI transport registry,
-/// <see cref="FitzRpcWorkerRegistrationGenerator" /> for RPC worker registration) so the discovery
+/// generated typed RPC descriptors for RPC worker registration) so the discovery
 /// rules live in exactly one place, not duplicated per generator.
 /// </summary>
 static class RequestTransportDiscovery
