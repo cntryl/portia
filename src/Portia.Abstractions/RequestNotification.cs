@@ -7,4 +7,6 @@ namespace Cntryl.Portia;
 /// <param name="ActorToken">The delivering actor's raw bearer token, or <see langword="null" />
 /// for an unauthenticated actor. Re-validate this (via <see cref="IRequestActorValidator" />)
 /// rather than trusting it as-is.</param>
-public readonly record struct RequestNotification(IRequest Request, string? ActorToken);
+/// <param name="Metadata">The logical identity of this notification.</param>
+/// <param name="Invocation">The concrete ingress facts.</param>
+public readonly record struct RequestNotification(IRequest Request, string? ActorToken, RequestMetadata Metadata, RequestInvocation Invocation);

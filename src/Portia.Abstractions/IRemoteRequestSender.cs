@@ -21,6 +21,11 @@ public interface IRemoteRequestSender
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
     ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+        where TRequest : IRequest, ICallable
+        => SendAsync(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+
+    /// <summary>Transmits a request with explicit logical identity and separately supplied credentials.</summary>
+    ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
         where TRequest : IRequest, ICallable;
 
     /// <summary>
@@ -37,5 +42,10 @@ public interface IRemoteRequestSender
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
     ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+        where TRequest : IRequest<TOut>, ICallable
+        => SendAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+
+    /// <summary>Transmits a request with explicit logical identity and separately supplied credentials.</summary>
+    ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
         where TRequest : IRequest<TOut>, ICallable;
 }

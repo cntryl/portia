@@ -2,6 +2,7 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed class AggregatePersistenceTests
 {
+    readonly RequestDispatchContext _saveContext = new(RequestActor.System);
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -9,21 +10,21 @@ public sealed class AggregatePersistenceTests
     {
         await using var fixture = await StoreFixture.CreateAsync(fitz);
         var repository = fixture.Repository;
-        var account = new Account(Uuid.CreateVersion7());
+        var account = new Account(Uuid.CreateVersion4());
         account.Deposit(10);
-        await repository.SaveAsync(account);
-        var competingWriter = Assert.IsType<Account>(await repository.LoadAsync<Account>(account.Id));
+        await repository.SaveAsync(account, _saveContext);
+        var competingWriter = Assert.IsType<Account>(await repository.HydrateAsync(new Account(account.Id)));
         account.Audit(new Declined("limit"));
         account.Audit(new Declined("reviewed"));
-        await repository.SaveAsync(account);
+        await repository.SaveAsync(account, _saveContext);
         Assert.Equal(1UL, account.CommittedStreamPosition);
         account.Audit(new Declined("next session"));
-        await repository.SaveAsync(account);
+        await repository.SaveAsync(account, _saveContext);
 
         // Audit writes do not conflict with a writer loaded from the same raised-event version.
         competingWriter.Deposit(5);
-        await repository.SaveAsync(competingWriter);
-        var reloaded = Assert.IsType<Account>(await repository.LoadAsync<Account>(account.Id));
+        await repository.SaveAsync(competingWriter, _saveContext);
+        var reloaded = Assert.IsType<Account>(await repository.HydrateAsync(new Account(account.Id)));
         Assert.Equal(15, reloaded.Balance);
         Assert.Equal(2UL, reloaded.Version);
         Assert.Equal(2UL, reloaded.CommittedStreamPosition);
@@ -63,16 +64,16 @@ public sealed class AggregatePersistenceTests
     public async Task AuditBeforeCreationLeavesAggregateStreamAbsent(bool fitz)
     {
         await using var fixture = await StoreFixture.CreateAsync(fitz);
-        var account = new Account(Uuid.CreateVersion7());
+        var account = new Account(Uuid.CreateVersion4());
         account.Audit(new Declined("declined before creation"));
-        await fixture.Repository.SaveAsync(account);
-        Assert.Null(await fixture.Repository.LoadAsync<Account>(account.Id));
+        await fixture.Repository.SaveAsync(account, _saveContext);
+        Assert.Equal(0UL, (await fixture.Repository.HydrateAsync(new Account(account.Id))).CommittedStreamPosition);
         Assert.Equal(0, account.Balance);
         Assert.Equal(0UL, account.Version);
         Assert.Equal(0UL, account.CommittedStreamPosition);
         account.Deposit(3);
-        await fixture.Repository.SaveAsync(account);
-        Assert.Equal(3, (await fixture.Repository.LoadAsync<Account>(account.Id))!.Balance);
+        await fixture.Repository.SaveAsync(account, _saveContext);
+        Assert.Equal(3, (await fixture.Repository.HydrateAsync(new Account(account.Id)))!.Balance);
     }
 
     [Theory]
@@ -81,18 +82,18 @@ public sealed class AggregatePersistenceTests
     public async Task CompetingRaisedEventsStillConflictAndKeepPendingChanges(bool fitz)
     {
         await using var fixture = await StoreFixture.CreateAsync(fitz);
-        var account = new Account(Uuid.CreateVersion7());
+        var account = new Account(Uuid.CreateVersion4());
         account.Deposit(1);
-        await fixture.Repository.SaveAsync(account);
-        var stale = Assert.IsType<Account>(await fixture.Repository.LoadAsync<Account>(account.Id));
+        await fixture.Repository.SaveAsync(account, _saveContext);
+        var stale = Assert.IsType<Account>(await fixture.Repository.HydrateAsync(new Account(account.Id)));
         account.Deposit(2);
-        await fixture.Repository.SaveAsync(account);
+        await fixture.Repository.SaveAsync(account, _saveContext);
         stale.Deposit(4);
-        _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() => fixture.Repository.SaveAsync(stale).AsTask());
+        _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() => fixture.Repository.SaveAsync(stale, _saveContext).AsTask());
         Assert.Equal(1UL, stale.CommittedStreamPosition);
         Assert.Equal(2UL, stale.Version);
         Assert.Equal(4, Assert.IsType<Deposited>(Assert.Single(new AggregateScenario<Account>(stale).PendingEvents)).Amount);
-        Assert.Equal(3, (await fixture.Repository.LoadAsync<Account>(account.Id))!.Balance);
+        Assert.Equal(3, (await fixture.Repository.HydrateAsync(new Account(account.Id)))!.Balance);
     }
 
     [Fact]
@@ -110,19 +111,19 @@ public sealed class AggregatePersistenceTests
                 {
                     var services = new ServiceCollection();
                     services.AddSingleton<IEventStore, InMemoryEventStore>();
-                    services.AddPortiaAggregate<Account>((sp, id) => new Account(id));
+                    services.AddPortia(_ => { });
                     await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
                     {
                         ValidateScopes = true, ValidateOnBuild = true,
                     });
                     await using var scope = provider.CreateAsyncScope();
                     var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
-                    var account = new Account(Uuid.CreateVersion7());
-                    if (await repository.LoadAsync<Account>(account.Id) is not null)
-                        throw new Exception("An absent stream must return null.");
+                    var account = new Account(Uuid.CreateVersion4());
+                    if ((await repository.HydrateAsync(new Account(account.Id))).CommittedStreamPosition != 0)
+                        throw new Exception("An absent stream must leave the constructed instance unchanged.");
                     account.Deposit(12);
-                    await repository.SaveAsync(account);
-                    var loaded = await repository.LoadAsync<Account>(account.Id);
+                    await repository.SaveAsync(account, new RequestDispatchContext(RequestActor.System));
+                    var loaded = await repository.HydrateAsync(new Account(account.Id));
                     return loaded?.Balance ?? -1;
                 }
             }

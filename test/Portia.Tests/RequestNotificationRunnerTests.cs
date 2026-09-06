@@ -18,9 +18,9 @@ public sealed class RequestNotificationRunnerTests
         using var busHost = TestRequestBus.Create(changeValueHandler: handler);
         var bus = busHost.Bus;
         var consumer = new FakeRequestNotificationConsumer([
-            new RequestNotification(new ChangeValue(1), ActorToken: "valid-token"),
-            new RequestNotification(new ChangeValue(2), ActorToken: "valid-token"),
-            new RequestNotification(new ChangeValue(3), ActorToken: "valid-token"),
+            new RequestNotification(new ChangeValue(1), ActorToken: "valid-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
+            new RequestNotification(new ChangeValue(2), ActorToken: "valid-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
+            new RequestNotification(new ChangeValue(3), ActorToken: "valid-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
         ]);
         var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator());
 
@@ -41,8 +41,8 @@ public sealed class RequestNotificationRunnerTests
         using var busHost = TestRequestBus.Create(changeValueHandler: handler);
         var bus = busHost.Bus;
         var consumer = new FakeRequestNotificationConsumer([
-            new RequestNotification(new ThrowingChangeValue(0), ActorToken: "valid-token"),
-            new RequestNotification(new ChangeValue(2), ActorToken: "valid-token"),
+            new RequestNotification(new ThrowingChangeValue(0), ActorToken: "valid-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
+            new RequestNotification(new ChangeValue(2), ActorToken: "valid-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
         ]);
         var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator());
 
@@ -64,7 +64,7 @@ public sealed class RequestNotificationRunnerTests
         using var busHost = TestRequestBus.Create(changeValueHandler: handler);
         var bus = busHost.Bus;
         var consumer = new FakeRequestNotificationConsumer([
-            new RequestNotification(new ChangeValue(1), ActorToken: "expired-token"),
+            new RequestNotification(new ChangeValue(1), ActorToken: "expired-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
         ]);
         var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired-token"));
 
@@ -84,8 +84,8 @@ public sealed class RequestNotificationRunnerTests
         using var busHost = TestRequestBus.Create(changeValueHandler: handler);
         var bus = busHost.Bus;
         var consumer = new FakeRequestNotificationConsumer([
-            new RequestNotification(new ChangeValue(1), ActorToken: "expired-token"),
-            new RequestNotification(new ChangeValue(2), ActorToken: "valid-token"),
+            new RequestNotification(new ChangeValue(1), ActorToken: "expired-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
+            new RequestNotification(new ChangeValue(2), ActorToken: "valid-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
         ]);
         var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired-token"));
 

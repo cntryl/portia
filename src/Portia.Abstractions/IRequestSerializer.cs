@@ -15,6 +15,9 @@ public interface IRequestSerializer
     /// actually dispatched — see <see cref="IRequestActorValidator" />.</param>
     /// <returns>The wire representation.</returns>
     ReadOnlyMemory<byte> Serialize(IRequestBase request, string? actorToken);
+
+    /// <summary>Serializes explicitly supplied logical identity without serializing execution authority.</summary>
+    ReadOnlyMemory<byte> Serialize(IRequestBase request, string? actorToken, RequestMetadata metadata);
 }
 
 /// <summary>
@@ -28,6 +31,9 @@ public interface IRequestDeserializer
     /// <param name="data">The wire representation.</param>
     /// <returns>The deserialized request and actor token.</returns>
     (IRequestBase Request, string? ActorToken) DeserializeRequest(ReadOnlyMemory<byte> data);
+
+    /// <summary>Reads and validates the propagated logical metadata.</summary>
+    DeserializedRequest DeserializeEnvelope(ReadOnlyMemory<byte> data);
 }
 
 /// <summary>
@@ -71,3 +77,6 @@ public interface IRequestOutcomeDeserializer
     /// <returns>The deserialized outcome.</returns>
     Result<TOut> DeserializeResult<TOut>(ReadOnlyMemory<byte> data);
 }
+
+/// <summary>A deserialized request with opaque credentials and validated propagated logical identity.</summary>
+public sealed record DeserializedRequest(IRequestBase Request, string? ActorToken, RequestMetadata Metadata);

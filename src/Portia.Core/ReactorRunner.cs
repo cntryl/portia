@@ -16,9 +16,11 @@ namespace Cntryl.Portia;
 /// existed — that's a real, deliberate choice this class leaves to the caller, not a default it
 /// imposes.
 /// </remarks>
-/// <param name="reader">The domain-event reader.</param>
-public sealed class ReactorRunner(IDomainEventReader reader)
+public sealed class ReactorRunner(IDomainEventReader reader, IReactorPrincipalProvider? principals = null, TimeProvider? timeProvider = null)
 {
+    readonly IReactorPrincipalProvider _principals = principals ?? new SystemReactorPrincipalProvider();
+    readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
+
     const int DefaultMaxBatchSize = 512;
 
     readonly IDomainEventReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
@@ -68,6 +70,9 @@ public sealed class ReactorRunner(IDomainEventReader reader)
     {
         ArgumentNullException.ThrowIfNull(reactor);
 
+        var actor = _principals.GetPrincipal(reactor);
+        if (!RequestActor.IsSystem(actor))
+            throw new InvalidOperationException("A reactor principal provider must return a system principal.");
         DomainEventRecord? lastRecord = null;
         var pendingInBatch = 0;
 
@@ -76,7 +81,7 @@ public sealed class ReactorRunner(IDomainEventReader reader)
             .WithCancellation(ct)
             .ConfigureAwait(false))
         {
-            await reactor.ReactAsync(record, ct).ConfigureAwait(false);
+            await reactor.ReactAsync(record, new ReactionExecutionContext(record, actor, _clock), ct).ConfigureAwait(false);
             lastRecord = record;
             pendingInBatch++;
 

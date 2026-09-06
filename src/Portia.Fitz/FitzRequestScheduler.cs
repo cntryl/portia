@@ -13,11 +13,22 @@ public sealed class FitzRequestScheduler(IScheduleClient schedule, IRequestSeria
     readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
     /// <inheritdoc />
+    public ValueTask<string> ScheduleAsync<TRequest>(
+        TRequest request,
+        RequestScheduleSpec spec,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        CancellationToken ct = default)
+        where TRequest : IRequest, ISchedulable
+        => ScheduleAsync(request, spec, routeValues, actorToken, RequestMetadata.Create(), ct);
+
+    /// <inheritdoc />
     public async ValueTask<string> ScheduleAsync<TRequest>(
         TRequest request,
         RequestScheduleSpec spec,
         RequestRouteValues routeValues,
         string? actorToken,
+        RequestMetadata metadata,
         CancellationToken ct = default)
         where TRequest : IRequest, ISchedulable
     {
@@ -26,7 +37,7 @@ public sealed class FitzRequestScheduler(IScheduleClient schedule, IRequestSeria
         ArgumentNullException.ThrowIfNull(routeValues);
 
         var route = FitzRouting.ResolveScheduleRoute(request, routeValues);
-        var body = _serializer.Serialize(request, actorToken);
+        var body = _serializer.Serialize(request, actorToken, metadata);
         var scheduleId = await _schedule
             .CreateAsync(route, spec.Cron, ToFitzDeliveryMode(spec.DeliveryMode), body.ToArray(), ct)
             .ConfigureAwait(false);

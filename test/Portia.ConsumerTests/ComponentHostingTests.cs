@@ -19,7 +19,7 @@ public sealed class ComponentHostingTests
         var storage = provider.GetRequiredService<ConsumerHost.ProjectionStorage>();
         storage.FailAfterCommit = true;
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
-        await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion7());
+        await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
         var worker = Assert.Single(provider.GetServices<IHostedService>());
         try
         {
@@ -98,7 +98,7 @@ public sealed class ComponentHostingTests
         await using var provider = ConsumerHost.Build(services);
         var worker = Assert.Single(provider.GetServices<IHostedService>());
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         await ConsumerHost.SeedAsync(provider, id);
         try
         {
@@ -135,7 +135,7 @@ public sealed class ComponentHostingTests
         _ = services.AddPortiaReactorRunner<FirstReactor>();
         _ = services.AddPortiaReactorRunner<SecondReactor>();
         await using var provider = ConsumerHost.Build(services);
-        await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion7());
+        await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
         var workers = provider.GetServices<IHostedService>().ToArray();
         Assert.Equal(2, workers.Length);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
@@ -169,7 +169,7 @@ public sealed class ComponentHostingTests
         _ = services.AddPortiaProjectorRunner<FirstProjector>();
         _ = services.AddPortiaProjectorRunner<SecondProjector>();
         await using var provider = ConsumerHost.Build(services);
-        await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion7());
+        await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
         var workers = provider.GetServices<IHostedService>().ToArray();
         Assert.Equal(2, workers.Length);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();

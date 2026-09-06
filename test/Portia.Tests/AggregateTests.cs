@@ -22,7 +22,7 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldApplyAndTrackEventWhenRaised()
     {
-        var aggregate = new TestAggregate(Uuid.CreateVersion7());
+        var aggregate = new TestAggregate(Uuid.CreateVersion4());
 
         aggregate.ChangeValue(42);
 
@@ -44,10 +44,10 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldUseConfiguredMetadataFactoryWhenEventIsRaised()
     {
-        var aggregateId = Uuid.CreateVersion7();
-        var eventId = Uuid.CreateVersion7();
-        var correlationId = Uuid.CreateVersion7();
-        var causationId = Uuid.CreateVersion7();
+        var aggregateId = Uuid.CreateVersion4();
+        var eventId = Uuid.CreateVersion4();
+        var correlationId = Uuid.CreateVersion4();
+        var causationId = Uuid.CreateVersion4();
         var occurredOn = new DateTimeOffset(2026, 9, 4, 12, 0, 0, TimeSpan.Zero);
         var factory = new FixedDomainEventMetadataFactory(eventId, occurredOn, correlationId, causationId);
         var aggregate = new TestAggregate(aggregateId, factory);
@@ -70,8 +70,8 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldRejectFactoryEventIdAlreadyUsedByPendingEvent()
     {
-        var eventId = Uuid.CreateVersion7();
-        var aggregate = new TestAggregate(Uuid.CreateVersion7(), new RepeatingDomainEventMetadataFactory(eventId));
+        var eventId = Uuid.CreateVersion4();
+        var aggregate = new TestAggregate(Uuid.CreateVersion4(), new RepeatingDomainEventMetadataFactory(eventId));
         aggregate.ChangeValue(40);
 
         var exception = Assert.Throws<InvalidOperationException>(() => aggregate.ChangeValue(42));
@@ -89,8 +89,8 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldRejectFactoryEventIdAlreadyUsedByCommittedEvent()
     {
-        var eventId = Uuid.CreateVersion7();
-        var aggregate = new TestAggregate(Uuid.CreateVersion7(), new RepeatingDomainEventMetadataFactory(eventId));
+        var eventId = Uuid.CreateVersion4();
+        var aggregate = new TestAggregate(Uuid.CreateVersion4(), new RepeatingDomainEventMetadataFactory(eventId));
         aggregate.ChangeValue(40);
         aggregate.Save();
 
@@ -109,7 +109,7 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldTrackCommittedEventWhenReplayed()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
         var ev = Committed(new ValueChanged(42), id, 1);
 
@@ -127,7 +127,7 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldDispatchEachEventToConcreteOnEventMethodWhenLoaded()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
 
         aggregate.Load([
@@ -146,7 +146,7 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldLoadAdditionalCommittedEventsAfterCachedHistory()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
         aggregate.Load([Committed(new ValueChanged(40), id, 1)]);
 
@@ -167,7 +167,7 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldRejectAdditionalCommittedEventsWhenVersionIsNotContiguous()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
         aggregate.Load([Committed(new ValueChanged(40), id, 1)]);
 
@@ -186,8 +186,8 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldRejectAdditionalCommittedEventWhenEventIdIsAlreadyLoaded()
     {
-        var id = Uuid.CreateVersion7();
-        var eventId = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
+        var eventId = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
         aggregate.Load([Committed(new ValueChanged(40), eventId, id, 1)]);
 
@@ -206,7 +206,7 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldRejectCommittedEventsWhenAggregateHasUncommittedChanges()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
         aggregate.ChangeValue(40);
 
@@ -226,7 +226,7 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldTrackAuditWithoutChangingStateWhenAudited()
     {
-        var aggregate = new TestAggregate(Uuid.CreateVersion7());
+        var aggregate = new TestAggregate(Uuid.CreateVersion4());
 
         aggregate.Audit("value inspected");
 
@@ -246,7 +246,7 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldPromoteEventsAndClearPendingChangesWhenCommitted()
     {
-        var aggregate = new TestAggregate(Uuid.CreateVersion7());
+        var aggregate = new TestAggregate(Uuid.CreateVersion4());
         aggregate.ChangeValue(42);
         var ev = Assert.Single(aggregate.UncommittedEvents);
 
@@ -274,8 +274,8 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldRejectEventWhenAggregateIdDoesNotMatch()
     {
-        var aggregate = new TestAggregate(Uuid.CreateVersion7());
-        var ev = Committed(new ValueChanged(42), Uuid.CreateVersion7(), 1);
+        var aggregate = new TestAggregate(Uuid.CreateVersion4());
+        var ev = Committed(new ValueChanged(42), Uuid.CreateVersion4(), 1);
 
         _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([ev]));
         Assert.Equal(0, aggregate.Value);
@@ -291,7 +291,7 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldThrowWhenApplyingEventWithNoRegisteredHandler()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
         var ev = Committed(new UnhandledEvent(), id, 1);
 
@@ -307,11 +307,11 @@ public sealed class AggregateTests
     /// </summary>
     [Fact]
     public void ShouldThrowWhenRegisteringDuplicateHandlerForSameEventType() =>
-        Assert.Throws<InvalidOperationException>(() => new DuplicateHandlerAggregate(Uuid.CreateVersion7()));
+        Assert.Throws<InvalidOperationException>(() => new DuplicateHandlerAggregate(Uuid.CreateVersion4()));
 
     static T Committed<T>(T ev, Uuid aggregateId, ulong aggregateVersion)
         where T : DomainEvent
-        => Committed(ev, Uuid.CreateVersion7(), aggregateId, aggregateVersion);
+        => Committed(ev, Uuid.CreateVersion4(), aggregateId, aggregateVersion);
 
     static T Committed<T>(T ev, Uuid eventId, Uuid aggregateId, ulong aggregateVersion)
         where T : DomainEvent

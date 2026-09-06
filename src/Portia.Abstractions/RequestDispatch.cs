@@ -29,6 +29,9 @@ public static class RequestDispatch
         IRequestBus bus,
         IRequest request,
         string? actorToken,
+        RequestInvocation invocation,
+        RequestMetadata metadata,
+        TimeProvider? timeProvider = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(actorValidator);
@@ -40,7 +43,7 @@ public static class RequestDispatch
         return actorResult is not { IsSuccess: true, Value: { } actor }
             ? new RequestDispatchOutcome(Result.Failure(actorResult.Error!), WasDispatched: false)
             : new RequestDispatchOutcome(
-                await bus.SendAsync(request, actor, ct).ConfigureAwait(false),
+                await bus.DispatchAsync(request, new RequestDispatchContext(actor, invocation, metadata, timeProvider), ct).ConfigureAwait(false),
                 WasDispatched: true);
     }
 
@@ -52,6 +55,9 @@ public static class RequestDispatch
         IRequestBus bus,
         IRequest<TOut> request,
         string? actorToken,
+        RequestInvocation invocation,
+        RequestMetadata metadata,
+        TimeProvider? timeProvider = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(actorValidator);
@@ -63,7 +69,7 @@ public static class RequestDispatch
         return actorResult is not { IsSuccess: true, Value: { } actor }
             ? new RequestDispatchOutcome<TOut>(Result<TOut>.Failure(actorResult.Error!), WasDispatched: false)
             : new RequestDispatchOutcome<TOut>(
-                await bus.SendAsync(request, actor, ct).ConfigureAwait(false),
+                await bus.DispatchAsync(request, new RequestDispatchContext(actor, invocation, metadata, timeProvider), ct).ConfigureAwait(false),
                 WasDispatched: true);
     }
 }

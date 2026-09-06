@@ -4,18 +4,18 @@
     "net10.0": {
       "Cntryl.Fitz": {
         "type": "Direct",
-        "requested": "[0.1.1, )",
-        "resolved": "0.1.1",
-        "contentHash": "YnoVDm0qsljGAVRKU+TQImgVN2wRKD+nD9FwiwB5stCsV2IpYxwiiY/MDnQqlYxQl0E9M6bkgYIgRmpPJFgtqg==",
+        "requested": "[0.1.2, )",
+        "resolved": "0.1.2",
+        "contentHash": "52tvRTdeJ/RHA1CbwI/Rhwv79b5/AOYJOY2IShjDy6a8gLkBGow8seEcp7+ViMW3+5I2wyiyV7SvVvinTmQYWA==",
         "dependencies": {
-          "Cntryl.Fitz.Abstractions": "0.1.1"
+          "Cntryl.Fitz.Abstractions": "0.1.2"
         }
       },
       "Microsoft.AspNetCore.TestHost": {
         "type": "Direct",
-        "requested": "[10.0.0, )",
-        "resolved": "10.0.0",
-        "contentHash": "Q3ia+k+wYM3Iv/Qq5IETOdpz/R0xizs3WNAXz699vEQx5TMVAfG715fBSq9Thzopvx8dYZkxQ/mumTn6AJ/vGQ=="
+        "requested": "[10.0.11, )",
+        "resolved": "10.0.11",
+        "contentHash": "IVGNbZVxLuL80y7cmXYfhIFoTGneHkp4D7xXarYe6V/wjo8/2qiSLUwWax1/h2eHtJ3Y5cuqmtpOyWMnXIsUMA=="
       },
       "Microsoft.CodeAnalysis.CSharp": {
         "type": "Direct",
@@ -172,8 +172,9 @@
       "portia.fitz": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Fitz": "[0.1.1, )",
-          "Portia.Abstractions": "[1.0.0, )"
+          "Cntryl.Fitz": "[0.1.2, )",
+          "Portia.Abstractions": "[1.0.0, )",
+          "Portia.DependencyInjection": "[1.0.0, )"
         }
       },
       "portia.generators": {
@@ -187,9 +188,9 @@
       },
       "Cntryl.Fitz.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.1.1, )",
-        "resolved": "0.1.1",
-        "contentHash": "x6+Ab8JIPpshUHfzQVd5AKq1H2HpKCJzJ12CcfPjpiYc5I3vfJaExsHneQAeIP7WsNRThoWAaj4mB/B5PTnraQ=="
+        "requested": "[0.1.2, )",
+        "resolved": "0.1.2",
+        "contentHash": "CPZ8GLWz8ax3A3QNdyGiS/vu/4sljO3OwxYSYw7PBJNaPwYaMQXXaF558h3KIRCzDYk29O2GTKwRhivr4cr7+g=="
       }
     }
   }

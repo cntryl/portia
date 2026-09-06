@@ -28,7 +28,7 @@ public sealed class CheckpointIdentityTests
         var target = new Target();
         var pattern = EventStreamPattern.ForPattern("tenant", "orders");
         var stream = new EventStreamAddress("tenant", "orders", "one");
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         await events.AppendAsync(stream, 0, [DomainEventSeed.Attach(new Declined("one"), id, 1)]);
         async Task Pass(string? rebuildId)
         {
@@ -78,7 +78,7 @@ public sealed class CheckpointIdentityTests
         };
         foreach (var pattern in patterns)
         {
-            var id = Uuid.CreateVersion7();
+            var id = Uuid.CreateVersion4();
             await events.AppendAsync(new EventStreamAddress(pattern.Realm, pattern.Area!, "one"), 0,
                 [DomainEventSeed.Attach(new Declined("one"), id, 1), DomainEventSeed.Attach(new Declined("two"), id, 2)]);
         }

@@ -66,7 +66,7 @@ public sealed class TenantDirectoryConsumerTests
     {
         var store = new InMemoryEventStore();
         var directory = CreateDirectory(store);
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         using var cancellation = new CancellationTokenSource();
         await using var first = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
         await using var second = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
@@ -99,7 +99,7 @@ public sealed class TenantDirectoryConsumerTests
         var store = new InMemoryEventStore();
         var clock = new ManualClock();
         var directory = CreateDirectory(store, clock);
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         await SeedAsync(store, id, 0, new Activated("acme"));
         await SeedAsync(store, id, 1, new Deactivated("acme"));
         await SeedAsync(store, id, 2, new Activated("acme"));

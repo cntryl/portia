@@ -23,13 +23,19 @@ public sealed class JsonRequestSerializer :
 
     /// <inheritdoc />
     public ReadOnlyMemory<byte> Serialize(IRequestBase request, string? actorToken)
+        => Serialize(request, actorToken, RequestMetadata.Create());
+
+    /// <inheritdoc />
+    public ReadOnlyMemory<byte> Serialize(IRequestBase request, string? actorToken, RequestMetadata metadata)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(metadata);
+        metadata.Validate();
 
         var envelope = new RequestEnvelope(
             request.GetType().AssemblyQualifiedName ?? throw new InvalidOperationException($"Type '{request.GetType()}' has no assembly-qualified name."),
             JsonSerializer.SerializeToElement(request, request.GetType(), Options),
-            actorToken);
+            actorToken, 1, metadata);
 
         return JsonSerializer.SerializeToUtf8Bytes(envelope, Options);
     }
@@ -37,14 +43,26 @@ public sealed class JsonRequestSerializer :
     /// <inheritdoc />
     public (IRequestBase Request, string? ActorToken) DeserializeRequest(ReadOnlyMemory<byte> data)
     {
+        var envelope = DeserializeEnvelope(data);
+        return (envelope.Request, envelope.ActorToken);
+    }
+
+    /// <inheritdoc />
+    public DeserializedRequest DeserializeEnvelope(ReadOnlyMemory<byte> data)
+    {
         var envelope = JsonSerializer.Deserialize<RequestEnvelope>(data.Span, Options)
             ?? throw new InvalidOperationException("The request envelope deserialized to null.");
 
+        if (envelope.Version != 1)
+            throw new InvalidOperationException("Unsupported request envelope version.");
+        if (envelope.Metadata is null)
+            throw new InvalidOperationException("A versioned request envelope requires logical metadata.");
+        envelope.Metadata.Validate();
         var type = Type.GetType(envelope.Type, throwOnError: true)!;
         var request = (IRequestBase?)envelope.Payload.Deserialize(type, Options)
             ?? throw new InvalidOperationException($"The '{type}' payload deserialized to null.");
 
-        return (request, envelope.ActorToken);
+        return new DeserializedRequest(request, envelope.ActorToken, envelope.Metadata);
     }
 
     /// <inheritdoc />
@@ -82,7 +100,7 @@ public sealed class JsonRequestSerializer :
             : Result<TOut>.Failure(envelope.Error!);
     }
 
-    sealed record RequestEnvelope(string Type, JsonElement Payload, string? ActorToken);
+    sealed record RequestEnvelope(string Type, JsonElement Payload, string? ActorToken, int? Version = null, RequestMetadata? Metadata = null);
 
     sealed record OutcomeEnvelope(bool IsSuccess, JsonElement? ValueElement, RequestError? Error);
 }

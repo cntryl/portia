@@ -89,9 +89,9 @@ public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory sc
                 var outcomeSerializer = scope.ServiceProvider.GetRequiredService<IRequestOutcomeSerializer>();
                 var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
                 var actorValidator = scope.ServiceProvider.GetRequiredService<IRequestActorValidator>();
-                var (deserialized, actorToken) = requestDeserializer.DeserializeRequest(request.Body);
+                var envelope = requestDeserializer.DeserializeEnvelope(request.Body);
 
-                if (deserialized is not TRequest typed)
+                if (envelope.Request is not TRequest typed)
                 {
                     await writer.SendAsync(
                         outcomeSerializer.SerializeOutcome(Result.Failure(new RequestError(
@@ -103,7 +103,7 @@ public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory sc
                 }
 
                 var dispatch = await RequestDispatch.SendAsync(
-                    actorValidator, bus, typed, actorToken, handlerCt).ConfigureAwait(false);
+                    actorValidator, bus, typed, envelope.ActorToken, new RpcInvocation(request.Route), envelope.Metadata, scope.ServiceProvider.GetService<TimeProvider>(), handlerCt).ConfigureAwait(false);
                 await writer.SendAsync(outcomeSerializer.SerializeOutcome(dispatch.Outcome), true, handlerCt).ConfigureAwait(false);
             },
             ct: ct));
@@ -131,9 +131,9 @@ public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory sc
                 var outcomeSerializer = scope.ServiceProvider.GetRequiredService<IRequestOutcomeSerializer>();
                 var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
                 var actorValidator = scope.ServiceProvider.GetRequiredService<IRequestActorValidator>();
-                var (deserialized, actorToken) = requestDeserializer.DeserializeRequest(request.Body);
+                var envelope = requestDeserializer.DeserializeEnvelope(request.Body);
 
-                if (deserialized is not TRequest typed)
+                if (envelope.Request is not TRequest typed)
                 {
                     await writer.SendAsync(
                         outcomeSerializer.SerializeResult(Result<TOut>.Failure(new RequestError(
@@ -145,7 +145,7 @@ public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory sc
                 }
 
                 var dispatch = await RequestDispatch.SendAsync(
-                    actorValidator, bus, typed, actorToken, handlerCt).ConfigureAwait(false);
+                    actorValidator, bus, typed, envelope.ActorToken, new RpcInvocation(request.Route), envelope.Metadata, scope.ServiceProvider.GetService<TimeProvider>(), handlerCt).ConfigureAwait(false);
                 await writer.SendAsync(outcomeSerializer.SerializeResult(dispatch.Outcome), true, handlerCt).ConfigureAwait(false);
             },
             ct: ct));

@@ -5,7 +5,7 @@ public sealed class ConsumerBaselineTests
     [Fact]
     public void PublicAggregateAppliesContractFromSeparateAssembly()
     {
-        var account = new Account(Uuid.CreateVersion7());
+        var account = new Account(Uuid.CreateVersion4());
         account.Deposit(12);
         Assert.Equal(12, account.Balance);
         Assert.Equal(1UL, account.Version);

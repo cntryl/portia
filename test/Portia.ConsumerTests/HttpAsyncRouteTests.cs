@@ -29,7 +29,7 @@ public sealed class HttpAsyncRouteTests
                 public RequestRouteValues? Values;
                 public string? Token;
                 public int Amount;
-                public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues values, string? actorToken, CancellationToken ct = default)
+                public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues values, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
                     where TRequest : IRequest, IQueuable
                 {
                     Values = values;

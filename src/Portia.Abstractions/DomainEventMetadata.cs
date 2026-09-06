@@ -17,4 +17,10 @@ public sealed record DomainEventMetadata(
     DateTimeOffset OccurredOn,
     Uuid? CorrelationId = null,
     Uuid? CausationId = null,
-    bool IsAudit = false);
+    bool IsAudit = false)
+{
+    /// <summary>Gets the execution that produced this event, when attribution was supplied at save.</summary>
+    public Uuid? ExecutionId { get; init; }
+    /// <summary>Gets the stable producing actor, without credentials or claims.</summary>
+    public ActorAttribution? Actor { get; init; }
+}

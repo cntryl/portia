@@ -66,7 +66,7 @@ public sealed class DomainEventCatalogGeneratorTests
         // Simulates bytes durably stored back when a "Gadget" v1 type still existed in the
         // codebase — that type is gone now, so nothing in this compilation can register it, and
         // the only way forward is the upcaster below.
-        var metadata = new DomainEventMetadata(Uuid.CreateVersion7(), Uuid.CreateVersion7(), 1, DateTimeOffset.UtcNow);
+        var metadata = new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), 1, DateTimeOffset.UtcNow);
         var envelope = new JsonObject
         {
             ["name"] = "Gadget",

@@ -11,7 +11,7 @@ public sealed class QueueBrokerTests
         var route = "queue://portia-consumer-tests/queue/" + Guid.NewGuid().ToString("N");
         var serializer = new JsonRequestSerializer();
         _ = await client.Queue.EnqueueAsync(route, "{"u8.ToArray());
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         _ = await client.Queue.EnqueueAsync(route, serializer.Serialize(new ScopeRequest(id), null));
         var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, visibilityTimeoutSeconds: 1);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
@@ -39,7 +39,7 @@ public sealed class QueueBrokerTests
         await using var competitor = await ConsumerBroker.ConnectAsync();
         var route = "queue://portia-consumer-tests/queue/" + Guid.NewGuid().ToString("N");
         var serializer = new JsonRequestSerializer();
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         _ = await client.Queue.EnqueueAsync(route, serializer.Serialize(new ScopeRequest(id, 2), null));
         var services = ConsumerHost.CreateServices();
         _ = services.AddPortiaModule<AccountsModule>();

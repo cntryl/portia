@@ -86,11 +86,11 @@ public sealed class PortiaGeneratedServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldRunProjectorThroughProjectorRegistration()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
         var ev = new ValueChanged(42);
-        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion7(), id, 1, DateTimeOffset.UtcNow));
+        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), id, 1, DateTimeOffset.UtcNow));
         await store.AppendAsync(stream, 0, [ev]);
         var target = new RecordingProjectionTarget();
         var services = new ServiceCollection();

@@ -46,4 +46,24 @@ public interface IRequestBus
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The items produced by handling the request, streamed as they become available.</returns>
     IAsyncEnumerable<TOut> StreamAsync<TOut>(IStreamRequest<TOut> request, ClaimsPrincipal actor, CancellationToken ct = default);
+    /// <summary>Dispatches a new child request, inheriting actor and correlation from an explicit parent.</summary>
+    ValueTask<Result> SendAsync(IRequest request, IExecutionContext parent, CancellationToken ct = default)
+        => DispatchAsync(request, new RequestDispatchContext(parent.Actor, metadata: RequestMetadata.FromParent(parent)), ct);
+
+    /// <summary>Dispatches a new result-bearing child request with explicit causal inheritance.</summary>
+    ValueTask<Result<TOut>> SendAsync<TOut>(IRequest<TOut> request, IExecutionContext parent, CancellationToken ct = default)
+        => DispatchAsync(request, new RequestDispatchContext(parent.Actor, metadata: RequestMetadata.FromParent(parent)), ct);
+
+    /// <summary>Streams a new child request with explicit causal inheritance.</summary>
+    IAsyncEnumerable<TOut> StreamAsync<TOut>(IStreamRequest<TOut> request, IExecutionContext parent, CancellationToken ct = default)
+        => DispatchStreamAsync(request, new RequestDispatchContext(parent.Actor, metadata: RequestMetadata.FromParent(parent)), ct);
+
+    /// <summary>Dispatches receiver-created execution state. </summary>
+    ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context, CancellationToken ct = default);
+
+    /// <summary>Dispatches a result-bearing request using receiver-created execution state.</summary>
+    ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context, CancellationToken ct = default);
+
+    /// <summary>Streams a request using receiver-created execution state.</summary>
+    IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request, RequestDispatchContext context, CancellationToken ct = default);
 }

@@ -13,7 +13,7 @@ public sealed class AggregateEventDispatcherOrderingTests
     [Fact]
     public void ShouldPreferDerivedEventHandlerWhenBaseHandlerAlsoRegistered()
     {
-        var aggregate = new HierarchyAggregate(Uuid.CreateVersion7());
+        var aggregate = new HierarchyAggregate(Uuid.CreateVersion4());
 
         aggregate.RaiseChild(7);
 

@@ -134,6 +134,8 @@ public sealed class QueueRunnerTests
 
     sealed class FakeQueuedRequest(IRequest request, bool throwOnDispatch = false, string? actorToken = "valid-token") : IQueuedRequest
     {
+        public RequestMetadata Metadata { get; } = RequestMetadata.Create();
+        public RequestInvocation Invocation => new QueueInvocation("queue://test/work/item", Attempt);
         public bool Completed { get; private set; }
 
         public bool Abandoned { get; private set; }

@@ -23,16 +23,13 @@ public abstract class Reactor(string name, EventStreamPattern pattern)
     /// </summary>
     public EventStreamPattern Pattern { get; } = pattern ?? throw new ArgumentNullException(nameof(pattern));
 
-    internal ValueTask ReactAsync(DomainEventRecord record, CancellationToken ct) => ReactToEventAsync(record, ct);
+    internal ValueTask ReactAsync(DomainEventRecord record, CancellationToken ct)
+        => ReactToEventAsync(record, new ReactionExecutionContext(record, RequestActor.System), ct);
 
-    /// <summary>
-    /// Dispatches one committed event through the reactor's handlers.
-    /// </summary>
-    /// <param name="record">The event and its source offsets.</param>
-    /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>A task representing asynchronous event handling.</returns>
-    protected virtual ValueTask ReactToEventAsync(
-        DomainEventRecord record,
-        CancellationToken ct) => throw new InvalidOperationException(
-            $"Reactor does not handle event type '{record.Ev.GetType()}'.");
+    internal ValueTask ReactAsync(DomainEventRecord record, IExecutionContext context, CancellationToken ct)
+        => ReactToEventAsync(record, context, ct);
+
+    /// <summary>Dispatches a triggering event with its system execution context.</summary>
+    protected virtual ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context, CancellationToken ct)
+        => throw new InvalidOperationException($"Reactor does not handle event type '{record.Ev.GetType()}'.");
 }

@@ -19,5 +19,10 @@ public interface IRequestQueuePublisher
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the enqueue.</returns>
     ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+        where TRequest : IRequest, IQueuable
+        => EnqueueAsync(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+
+    /// <summary>Transmits a request with explicit logical identity and separately supplied credentials.</summary>
+    ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
         where TRequest : IRequest, IQueuable;
 }

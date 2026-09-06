@@ -13,14 +13,19 @@ public sealed class FitzNoticeRequestSender(INoticeClient notice, IRequestSerial
     readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
     /// <inheritdoc />
-    public async ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+    public ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+        where TRequest : IRequest, INotifiable
+        => PublishAsync(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+
+    /// <inheritdoc />
+    public async ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
         where TRequest : IRequest, INotifiable
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(routeValues);
 
         var route = FitzRouting.ResolveNoticeRoute(request, routeValues);
-        var body = _serializer.Serialize(request, actorToken);
+        var body = _serializer.Serialize(request, actorToken, metadata);
         await _notice.PublishAsync(route, body, ct).ConfigureAwait(false);
     }
 }

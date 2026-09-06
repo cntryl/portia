@@ -19,6 +19,8 @@ public abstract class Aggregate(
     readonly List<DomainEvent> _uncommittedAudits = [];
     readonly IDomainEventMetadataFactory _metadataFactory = metadataFactory ?? SystemDomainEventMetadataFactory.Instance;
     int _operation;
+    bool _savePrepared;
+    EventAttribution? _saveAttribution;
     EventStreamAddress? _auditSessionStream;
 
     /// <summary>
@@ -50,6 +52,11 @@ public abstract class Aggregate(
     internal void Load(DomainEvent[] committedEvents, ulong? streamPosition = null)
     {
         using var operation = BeginOperation();
+        LoadDuringOperation(committedEvents, streamPosition);
+    }
+
+    internal void LoadDuringOperation(DomainEvent[] committedEvents, ulong? streamPosition = null)
+    {
         ArgumentNullException.ThrowIfNull(committedEvents);
 
         if (_uncommittedEvents.Count != 0 || _uncommittedAudits.Count != 0)
@@ -125,6 +132,8 @@ public abstract class Aggregate(
     protected void RaiseEvent(DomainEvent ev)
     {
         using var operation = BeginOperation();
+        if (_savePrepared)
+            throw new InvalidOperationException("Resolve the pending save before emitting more events.");
         if (_uncommittedAudits.Count != 0)
             throw new InvalidOperationException("Save pending audits before raising state-changing events.");
 
@@ -141,11 +150,27 @@ public abstract class Aggregate(
     protected void AuditEvent(DomainEvent ev)
     {
         using var operation = BeginOperation();
+        if (_savePrepared)
+            throw new InvalidOperationException("Resolve the pending save before emitting more events.");
         if (_uncommittedEvents.Count != 0)
             throw new InvalidOperationException("Save pending state-changing events before recording audits.");
 
         AttachMetadata(ev, Version, isAudit: true);
         _uncommittedAudits.Add(ev);
+    }
+
+    internal void PrepareSave(EventAttribution attribution)
+    {
+        if (_savePrepared && _saveAttribution != attribution)
+            throw new InvalidOperationException("Retry a pending save with the original execution context; event attribution is frozen.");
+        foreach (var ev in _uncommittedEvents.Concat(_uncommittedAudits))
+            ev.ValidateAttribution(attribution);
+        if (_savePrepared)
+            return;
+        foreach (var ev in _uncommittedEvents.Concat(_uncommittedAudits))
+            ev.StampAttribution(attribution);
+        _saveAttribution = attribution;
+        _savePrepared = true;
     }
 
     internal void Save()
@@ -162,6 +187,8 @@ public abstract class Aggregate(
         _uncommittedEvents.Clear();
         _uncommittedAudits.Clear();
         _auditSessionStream = null;
+        _savePrepared = false;
+        _saveAttribution = null;
     }
 
     internal EventStreamAddress GetAuditSessionStream() =>
@@ -212,7 +239,7 @@ public abstract class Aggregate(
         if (metadata.OccurredOn.Offset != TimeSpan.Zero)
             throw new InvalidOperationException("The event metadata factory returned a non-UTC occurrence time.");
 
-        ev.AttachMetadata(metadata with { IsAudit = isAudit });
+        ev.AttachAggregateMetadata(metadata with { IsAudit = isAudit });
     }
 
     void ValidateCommittedEvent(DomainEvent ev, ulong expectedVersion, HashSet<Uuid> eventIds)

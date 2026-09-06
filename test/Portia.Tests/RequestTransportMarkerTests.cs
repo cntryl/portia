@@ -40,7 +40,7 @@ public sealed class RequestTransportMarkerTests
         IRequestQueuePublisher queuePublisher = new FakeRequestQueuePublisher();
         INoticeRequestSender noticeSender = new FakeNoticeRequestSender();
         IRequestScheduler scheduler = new FakeRequestScheduler();
-        var request = new SendWelcomeEmail(Uuid.CreateVersion7());
+        var request = new SendWelcomeEmail(Uuid.CreateVersion4());
         var routeValues = new RequestRouteValues(Realm: "tenant-123");
 
         var sendResult = await remoteSender.SendAsync(request, routeValues, actorToken: null);
@@ -54,22 +54,22 @@ public sealed class RequestTransportMarkerTests
 
     sealed class FakeRemoteRequestSender : IRemoteRequestSender
     {
-        public ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+        public ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
             where TRequest : IRequest, ICallable => ValueTask.FromResult(Result.Success);
 
-        public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+        public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
             where TRequest : IRequest<TOut>, ICallable => ValueTask.FromResult(Result<TOut>.Success(default!));
     }
 
     sealed class FakeRequestQueuePublisher : IRequestQueuePublisher
     {
-        public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+        public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
             where TRequest : IRequest, IQueuable => ValueTask.CompletedTask;
     }
 
     sealed class FakeNoticeRequestSender : INoticeRequestSender
     {
-        public ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+        public ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
             where TRequest : IRequest, INotifiable => ValueTask.CompletedTask;
     }
 
@@ -80,6 +80,7 @@ public sealed class RequestTransportMarkerTests
             RequestScheduleSpec spec,
             RequestRouteValues routeValues,
             string? actorToken,
+            RequestMetadata metadata,
             CancellationToken ct = default)
             where TRequest : IRequest, ISchedulable => ValueTask.FromResult("schedule-id");
 

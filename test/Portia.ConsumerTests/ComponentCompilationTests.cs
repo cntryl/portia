@@ -15,7 +15,14 @@ public sealed class ComponentCompilationTests
                 public Watcher() : base("watcher", EventStreamPattern.ForPattern("test")) { }
                 public int Count { get; private set; }
                 public ValueTask HandleAsync(IReactorContext<Ev> context, CancellationToken ct) { Count++; return ValueTask.CompletedTask; }
-                public ValueTask Process() => ReactToEventAsync(new DomainEventRecord(new EventStreamAddress("test", "area", "id"), new Ev(), 0, 0, 0), default);
+                public ValueTask Process()
+                {
+                    var id = Uuid.CreateVersion4();
+                    var ev = new Ev();
+                    ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), id, 1, DateTimeOffset.UtcNow));
+                    var record = new DomainEventRecord(new EventStreamAddress("test", "area", id.ToString()), ev, 0, 0, 0);
+                    return ReactToEventAsync(record, new ReactionExecutionContext(record, RequestActor.System), default);
+                }
             }
             public partial class View : Projector<object>, IProjectorHandler<Ev, object>
             {

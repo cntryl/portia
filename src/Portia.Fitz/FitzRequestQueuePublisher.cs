@@ -13,14 +13,19 @@ public sealed class FitzRequestQueuePublisher(IQueueClient queue, IRequestSerial
     readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
     /// <inheritdoc />
-    public async ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+    public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+        where TRequest : IRequest, IQueuable
+        => EnqueueAsync(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+
+    /// <inheritdoc />
+    public async ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
         where TRequest : IRequest, IQueuable
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(routeValues);
 
         var route = FitzRouting.ResolveQueueRoute(request, routeValues);
-        var body = _serializer.Serialize(request, actorToken);
+        var body = _serializer.Serialize(request, actorToken, metadata);
         _ = await _queue.EnqueueAsync(route, body, null, ct).ConfigureAwait(false);
     }
 }

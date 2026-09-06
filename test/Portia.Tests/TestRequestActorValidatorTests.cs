@@ -38,7 +38,8 @@ public sealed class TestRequestActorValidatorTests
         var result = await validator.ValidateAsync("any-token");
 
         Assert.True(result.IsSuccess);
-        Assert.Same(RequestActor.System, result.Value);
+        Assert.NotNull(result.Value);
+        Assert.True(RequestActor.IsSystem(result.Value));
     }
 
     /// <summary>

@@ -6,6 +6,7 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed class FitzPersistenceFailureTests
 {
+    readonly RequestDispatchContext _saveContext = new(RequestActor.System);
     [Theory]
     [InlineData("append", false)]
     [InlineData("commit", false)]
@@ -18,24 +19,24 @@ public sealed class FitzPersistenceFailureTests
         var store = new FitzEventStore(streams, new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<Declined>()));
         var services = new ServiceCollection();
         _ = services.AddSingleton<IEventStore>(store);
-        _ = services.AddPortiaAggregate((_, id) => new Account(id));
+        _ = services.AddPortia(_ => { });
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         await using var scope = provider.CreateAsyncScope();
         var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
-        var account = new Account(Uuid.CreateVersion7());
+        var account = new Account(Uuid.CreateVersion4());
         var payload = new Declined("failure contract");
         account.Audit(payload);
         var scenario = new AggregateScenario<Account>(account);
 
         if (failureAt == "success")
         {
-            await repository.SaveAsync(account);
+            await repository.SaveAsync(account, _saveContext);
             Assert.Empty(scenario.PendingAudits);
             Assert.Equal(0, session.Rollbacks);
         }
         else
         {
-            var error = await Assert.ThrowsAsync<IOException>(() => repository.SaveAsync(account).AsTask());
+            var error = await Assert.ThrowsAsync<IOException>(() => repository.SaveAsync(account, _saveContext).AsTask());
             Assert.Same(session.Failure, error);
             Assert.Same(payload, Assert.Single(scenario.PendingAudits));
             Assert.Equal(1, session.Rollbacks);
@@ -56,11 +57,11 @@ public sealed class FitzPersistenceFailureTests
         var session = new Session(failureAt, true) { Failure = original };
         var store = new FitzEventStore(new Streams(session), new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<Declined>()));
         await using var provider = new ServiceCollection().BuildServiceProvider();
-        var repository = new AggregateRepository(store, provider);
-        var account = new Account(Uuid.CreateVersion7());
+        var repository = new AggregateRepository(store);
+        var account = new Account(Uuid.CreateVersion4());
         var payload = new Declined("pending");
         account.Audit(payload);
-        var error = await Record.ExceptionAsync(() => repository.SaveAsync(account).AsTask());
+        var error = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext).AsTask());
         if (conflict)
             Assert.Same(original, Assert.IsType<EventStreamConcurrencyException>(error).InnerException);
         else

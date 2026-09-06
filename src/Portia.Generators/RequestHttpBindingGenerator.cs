@@ -348,7 +348,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
         // The actor is never inferred beyond this point — httpContext.User is where "ambient"
         // stops and an explicit value starts, exactly like every other transport's call site.
-        _ = source.AppendLine("            var actor = httpContext.User;");
+        _ = source.AppendLine("            var context = global::Cntryl.Portia.PortiaHttpBinding.CreateDispatchContext(httpContext);");
 
         if (call.Kind is CallKind.Queue)
         {
@@ -359,7 +359,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 .AppendLine("                var actorToken = httpContext.Request.Headers.Authorization.ToString() is { Length: > 0 } authHeader")
                 .AppendLine("                    ? authHeader.StartsWith(\"Bearer \", global::System.StringComparison.OrdinalIgnoreCase) ? authHeader.Substring(7) : authHeader")
                 .AppendLine("                    : null;")
-                .AppendLine("                await queue.EnqueueAsync(request, global::Cntryl.Portia.PortiaHttpBinding.ResolveRouteValues(httpContext), actorToken, ct).ConfigureAwait(false);")
+                .AppendLine("                await queue.EnqueueAsync(request, global::Cntryl.Portia.PortiaHttpBinding.ResolveRouteValues(httpContext), actorToken, context.Metadata, ct).ConfigureAwait(false);")
                 .AppendLine("                return global::Microsoft.AspNetCore.Http.Results.Accepted();")
                 .AppendLine("            }")
                 .AppendLine();
@@ -367,12 +367,12 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
         _ = call.Kind switch
         {
-            CallKind.Stream => source.Append("            return global::Cntryl.Portia.PortiaStreamResults.Json(bus.StreamAsync<").Append(call.ResultType).AppendLine(">(request, actor, ct));"),
-            CallKind.Sse => source.Append("            return global::Cntryl.Portia.PortiaStreamResults.Sse(bus.StreamAsync<").Append(call.ResultType).AppendLine(">(request, actor, ct));"),
+            CallKind.Stream => source.Append("            return global::Cntryl.Portia.PortiaStreamResults.Json(bus.DispatchStreamAsync<").Append(call.ResultType).AppendLine(">(request, context, ct));"),
+            CallKind.Sse => source.Append("            return global::Cntryl.Portia.PortiaStreamResults.Sse(bus.DispatchStreamAsync<").Append(call.ResultType).AppendLine(">(request, context, ct));"),
             CallKind.Send or CallKind.Queue => source
-                .Append("            return (await bus.SendAsync")
+                .Append("            return (await bus.DispatchAsync")
                 .Append(call.ResultType is null ? string.Empty : $"<{call.ResultType}>")
-                .AppendLine("(request, actor, ct)).ToHttpResult();"),
+                .AppendLine("(request, context, ct)).ToHttpResult();"),
             _ => throw new ArgumentOutOfRangeException(nameof(call)),
         };
 

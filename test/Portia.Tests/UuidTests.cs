@@ -73,15 +73,15 @@ public sealed class UuidTests
     }
 
     /// <summary>
-    /// Verifies that generated UUID version 7 values report the correct version.
+    /// Verifies that generated UUID version 4 values report the correct version.
     /// </summary>
     [Fact]
-    public void ShouldCreateVersion7Uuid()
+    public void ShouldCreateVersion4Uuid()
     {
-        var uuid = Uuid.CreateVersion7();
+        var uuid = Uuid.CreateVersion4();
 
         Assert.NotEqual(Uuid.Empty, uuid);
-        Assert.Equal(7, uuid.Version);
+        Assert.Equal(4, uuid.Version);
     }
 
     /// <summary>

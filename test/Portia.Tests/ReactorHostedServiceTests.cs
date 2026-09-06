@@ -59,7 +59,7 @@ public sealed class ReactorHostedServiceTests
     [Fact]
     public async Task ShouldResumeFromStoreCheckpointAfterFaultedPassRatherThanStaleLocalValue()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "reactors", id.ToString());
         var eventStore = new InMemoryEventStore();
         await eventStore.AppendAsync(stream, 0, [
@@ -107,7 +107,7 @@ public sealed class ReactorHostedServiceTests
     static T Committed<T>(T ev, Uuid aggregateId, ulong aggregateVersion)
         where T : DomainEvent
     {
-        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion7(), aggregateId, aggregateVersion, DateTimeOffset.UtcNow));
+        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, aggregateVersion, DateTimeOffset.UtcNow));
         return ev;
     }
 }

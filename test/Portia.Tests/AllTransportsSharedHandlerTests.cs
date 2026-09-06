@@ -44,7 +44,7 @@ public sealed class AllTransportsSharedHandlerTests
 
         // Notification — the shape shared by Fitz notice fanout and a fired schedule entry.
         var notificationConsumer = new FakeRequestNotificationConsumer(
-            [new RequestNotification(new UniversalAction(4), ActorToken: null)]);
+            [new RequestNotification(new UniversalAction(4), ActorToken: null, Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item"))]);
         var notificationRunner = new RequestNotificationRunner(
             notificationConsumer,
             bus,
@@ -75,6 +75,8 @@ public sealed class AllTransportsSharedHandlerTests
 
     sealed class FakeQueuedItem(IRequest request) : IQueuedRequest
     {
+        public RequestMetadata Metadata { get; } = RequestMetadata.Create();
+        public RequestInvocation Invocation => new QueueInvocation("queue://test/work/item", Attempt);
         public IRequest Request { get; } = request;
 
         public string? ActorToken => null;

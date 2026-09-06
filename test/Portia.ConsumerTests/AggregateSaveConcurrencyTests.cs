@@ -4,6 +4,7 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed class AggregateSaveConcurrencyTests
 {
+    readonly RequestDispatchContext _saveContext = new(RequestActor.System);
     [Theory]
     [InlineData("event")]
     [InlineData("audit")]
@@ -14,17 +15,17 @@ public sealed class AggregateSaveConcurrencyTests
         await using var provider = CreateProvider(store);
         await using var scope = provider.CreateAsyncScope();
         var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
-        var aggregate = new Account(Uuid.CreateVersion7());
+        var aggregate = new Account(Uuid.CreateVersion4());
         if (operation == "audit")
             aggregate.Audit(new Declined("first"));
         else
             aggregate.Deposit(1);
-        var saving = repository.SaveAsync(aggregate).AsTask();
+        var saving = repository.SaveAsync(aggregate, _saveContext).AsTask();
         await store.Entered.Task;
         try
         {
             _ = operation == "save"
-                ? await Assert.ThrowsAsync<InvalidOperationException>(() => repository.SaveAsync(aggregate).AsTask())
+                ? await Assert.ThrowsAsync<InvalidOperationException>(() => repository.SaveAsync(aggregate, _saveContext).AsTask())
                 : operation == "audit"
                 ? Assert.Throws<InvalidOperationException>(() => aggregate.Audit(new Declined("second")))
                 : Assert.Throws<InvalidOperationException>(() => aggregate.Deposit(2));
@@ -47,7 +48,7 @@ public sealed class AggregateSaveConcurrencyTests
         await using var provider = CreateProvider(store);
         await using var scope = provider.CreateAsyncScope();
         var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
-        var aggregate = new Account(Uuid.CreateVersion7());
+        var aggregate = new Account(Uuid.CreateVersion4());
         var scenario = new AggregateScenario<Account>(aggregate);
         var payload = new Deposited(7);
         if (audit)
@@ -55,9 +56,15 @@ public sealed class AggregateSaveConcurrencyTests
         else
             aggregate.Raise(payload);
         var metadata = payload.Metadata;
-        _ = await Assert.ThrowsAsync<IOException>(() => repository.SaveAsync(aggregate).AsTask());
+        _ = await Assert.ThrowsAsync<IOException>(() => repository.SaveAsync(aggregate, _saveContext).AsTask());
         Assert.Same(payload, Assert.Single(audit ? scenario.PendingAudits : scenario.PendingEvents));
-        Assert.Same(metadata, payload.Metadata);
+        Assert.Equal(metadata, payload.Metadata with
+        {
+            CorrelationId = null,
+            CausationId = null,
+            ExecutionId = null,
+            Actor = null,
+        });
         Assert.Empty(scenario.CommittedEvents);
         Assert.Equal(0UL, aggregate.CommittedStreamPosition);
         Assert.Equal(audit ? 0UL : 1UL, aggregate.Version);
@@ -66,7 +73,7 @@ public sealed class AggregateSaveConcurrencyTests
             : Assert.Throws<InvalidOperationException>(() => aggregate.Audit(new Declined("rejected")));
 
         store.FailAppend = false;
-        await repository.SaveAsync(aggregate);
+        await repository.SaveAsync(aggregate, _saveContext);
         Assert.Empty(scenario.PendingAudits);
         Assert.Empty(scenario.PendingEvents);
         Assert.Equal(audit ? 0 : 1, scenario.CommittedEvents.Count);
@@ -77,7 +84,7 @@ public sealed class AggregateSaveConcurrencyTests
             Assert.Equal(4, Uuid.Parse(store.Routes[0].Resource).Version);
             Assert.NotEqual(aggregate.Stream, store.Routes[0]);
             aggregate.Audit(new Declined("new session"));
-            await repository.SaveAsync(aggregate);
+            await repository.SaveAsync(aggregate, _saveContext);
             Assert.NotEqual(store.Routes[0], store.Routes[2]);
         }
     }
@@ -88,7 +95,7 @@ public sealed class AggregateSaveConcurrencyTests
         var store = new ControlledStore { FailAppend = true };
         await using var provider = CreateProvider(store);
         await using var scope = provider.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<IAggregateRepository>().SaveAsync(new Account(Uuid.CreateVersion7()));
+        await scope.ServiceProvider.GetRequiredService<IAggregateRepository>().SaveAsync(new Account(Uuid.CreateVersion4()), _saveContext);
         Assert.Equal(0, store.AppendCalls);
     }
 
@@ -96,7 +103,7 @@ public sealed class AggregateSaveConcurrencyTests
     {
         var services = new ServiceCollection();
         _ = services.AddSingleton(store);
-        _ = services.AddPortiaAggregate((_, id) => new Account(id));
+        _ = services.AddPortia(_ => { });
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }
 

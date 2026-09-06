@@ -19,7 +19,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
     {
         await using var client = await _broker.CreateClientAsync();
         var runner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(client.Lease), new SingleWorkerMembership());
-        var partition = $"lease://portia-integration/fleet/renewal-{Uuid.CreateVersion7()}";
+        var partition = $"lease://portia-integration/fleet/renewal-{Uuid.CreateVersion4()}";
         using var cts = new CancellationTokenSource();
         var iterationsCompleted = 0;
         var everCancelledBeforeWeAskedIt = false;
@@ -72,7 +72,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
     {
         var holderClient = await _broker.CreateClientAsync();
         await using var waiterClient = await _broker.CreateClientAsync();
-        var partition = $"lease://portia-integration/fleet/crash-recovery-{Uuid.CreateVersion7()}";
+        var partition = $"lease://portia-integration/fleet/crash-recovery-{Uuid.CreateVersion4()}";
         var holderAcquired = new TaskCompletionSource();
         var waiterAcquired = new TaskCompletionSource();
 

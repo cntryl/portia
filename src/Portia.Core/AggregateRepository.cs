@@ -1,25 +1,24 @@
 namespace Cntryl.Portia;
 
-/// <summary>Persists aggregates through an event store and explicitly registered factories.</summary>
+/// <summary>Hydrates caller-constructed aggregates and persists their events.</summary>
 /// <param name="store">The aggregate event store.</param>
-/// <param name="services">The current application scope.</param>
-public sealed class AggregateRepository(IEventStore store, IServiceProvider services) : IAggregateRepository
+public sealed class AggregateRepository(IEventStore store) : IAggregateRepository
 {
     /// <inheritdoc />
-    public async ValueTask<TAggregate?> LoadAsync<TAggregate>(Uuid id, CancellationToken ct = default)
+    public async ValueTask<TAggregate> HydrateAsync<TAggregate>(TAggregate aggregate, CancellationToken ct = default)
         where TAggregate : Aggregate
     {
-        var factory = services.GetService(typeof(AggregateFactory<TAggregate>)) as AggregateFactory<TAggregate>
-            ?? throw new InvalidOperationException($"Register an aggregate factory for '{typeof(TAggregate)}' using AddPortiaAggregate.");
-        var aggregate = factory(services, id);
-        if (aggregate.Id != id)
-            throw new InvalidOperationException("The aggregate factory returned a different identity.");
-
+        ArgumentNullException.ThrowIfNull(aggregate);
+        using var operation = aggregate.BeginOperation();
+        ct.ThrowIfCancellationRequested();
+        if (aggregate.UncommittedEvents.Count != 0 || aggregate.UncommittedAudits.Count != 0)
+            throw new InvalidOperationException("Save pending aggregate changes before hydration.");
+        var id = aggregate.Id;
         var events = new List<DomainEvent>();
         var eventIds = new HashSet<Uuid>();
-        var position = 0UL;
-        var version = 0UL;
-        await foreach (var record in store.ReadAsync(aggregate.Stream, ct: ct).ConfigureAwait(false))
+        var position = aggregate.CommittedStreamPosition;
+        var version = aggregate.Version;
+        await foreach (var record in store.ReadAsync(aggregate.Stream, fromOffset: position, ct: ct).ConfigureAwait(false))
         {
             var ev = record.Ev;
             DomainEventValidation.Validate(ev);
@@ -36,15 +35,16 @@ public sealed class AggregateRepository(IEventStore store, IServiceProvider serv
             position = checked(position + 1);
         }
 
-        if (position == 0)
-            return null;
-
-        aggregate.Load([.. events], position);
+        ct.ThrowIfCancellationRequested();
+        aggregate.LoadDuringOperation([.. events], position);
         return aggregate;
     }
 
     /// <inheritdoc />
-    public async ValueTask SaveAsync<TAggregate>(TAggregate aggregate, CancellationToken ct = default)
+    public ValueTask SaveAsync<TAggregate>(TAggregate aggregate, IExecutionContext context, CancellationToken ct = default)
+        where TAggregate : Aggregate => SaveCoreAsync(aggregate, EventAttribution.FromContext(context), ct);
+
+    async ValueTask SaveCoreAsync<TAggregate>(TAggregate aggregate, EventAttribution attribution, CancellationToken ct)
         where TAggregate : Aggregate
     {
         ArgumentNullException.ThrowIfNull(aggregate);
@@ -59,6 +59,7 @@ public sealed class AggregateRepository(IEventStore store, IServiceProvider serv
         var isAudit = aggregate.UncommittedAudits.Count != 0;
         DomainEvent[] pending = isAudit ? [.. aggregate.UncommittedAudits] : [.. aggregate.UncommittedEvents];
         DomainEventValidation.ValidateBatch(pending);
+        aggregate.PrepareSave(attribution);
         var stream = isAudit ? aggregate.GetAuditSessionStream() : aggregate.Stream;
         var expectedPosition = isAudit ? 0 : aggregate.CommittedStreamPosition;
         await store.AppendAsync(stream, expectedPosition, pending, ct).ConfigureAwait(false);

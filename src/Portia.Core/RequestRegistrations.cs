@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
@@ -20,17 +19,17 @@ public abstract class RequestHandlerRegistration(Type requestType, Type handlerT
 
 interface IRequestInvocation
 {
-    ValueTask<Result> InvokeAsync(IServiceProvider services, IRequest request, CancellationToken ct);
+    ValueTask<Result> InvokeAsync(IServiceProvider services, IRequest request, RequestDispatchContext context, CancellationToken ct);
 }
 
 interface IRequestInvocation<TOut>
 {
-    ValueTask<Result<TOut>> InvokeAsync(IServiceProvider services, IRequest<TOut> request, CancellationToken ct);
+    ValueTask<Result<TOut>> InvokeAsync(IServiceProvider services, IRequest<TOut> request, RequestDispatchContext context, CancellationToken ct);
 }
 
 interface IStreamRequestInvocation<TOut>
 {
-    IAsyncEnumerable<TOut> Invoke(IServiceProvider services, IStreamRequest<TOut> request, CancellationToken ct);
+    IAsyncEnumerable<TOut> Invoke(IServiceProvider services, IStreamRequest<TOut> request, RequestDispatchContext context, CancellationToken ct);
 }
 
 /// <summary>Invokes one generated no-result handler registration from the current scope.</summary>
@@ -42,8 +41,8 @@ public sealed class RequestRegistration<TRequest, THandler>(Func<TRequest, strin
     where TRequest : IRequest
     where THandler : class, IRequestHandler<TRequest>
 {
-    ValueTask<Result> IRequestInvocation.InvokeAsync(IServiceProvider services, IRequest request, CancellationToken ct)
-        => services.GetRequiredService<THandler>().HandleAsync(new RequestContext<TRequest>((TRequest)request), ct);
+    ValueTask<Result> IRequestInvocation.InvokeAsync(IServiceProvider services, IRequest request, RequestDispatchContext context, CancellationToken ct)
+        => services.GetRequiredService<THandler>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), ct);
 }
 
 /// <summary>Invokes one generated result handler registration from the current scope.</summary>
@@ -56,8 +55,8 @@ public sealed class RequestRegistration<TRequest, THandler, TOut>(Func<TRequest,
     where TRequest : IRequest<TOut>
     where THandler : class, IRequestHandler<TRequest, TOut>
 {
-    ValueTask<Result<TOut>> IRequestInvocation<TOut>.InvokeAsync(IServiceProvider services, IRequest<TOut> request, CancellationToken ct)
-        => services.GetRequiredService<THandler>().HandleAsync(new RequestContext<TRequest>((TRequest)request), ct);
+    ValueTask<Result<TOut>> IRequestInvocation<TOut>.InvokeAsync(IServiceProvider services, IRequest<TOut> request, RequestDispatchContext context, CancellationToken ct)
+        => services.GetRequiredService<THandler>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), ct);
 }
 
 /// <summary>Invokes one generated streaming handler registration from the current scope.</summary>
@@ -70,8 +69,8 @@ public sealed class StreamRequestRegistration<TRequest, THandler, TOut>(Func<TRe
     where TRequest : IStreamRequest<TOut>
     where THandler : class, IStreamRequestHandler<TRequest, TOut>
 {
-    IAsyncEnumerable<TOut> IStreamRequestInvocation<TOut>.Invoke(IServiceProvider services, IStreamRequest<TOut> request, CancellationToken ct)
-        => services.GetRequiredService<THandler>().HandleAsync(new RequestContext<TRequest>((TRequest)request), ct);
+    IAsyncEnumerable<TOut> IStreamRequestInvocation<TOut>.Invoke(IServiceProvider services, IStreamRequest<TOut> request, RequestDispatchContext context, CancellationToken ct)
+        => services.GetRequiredService<THandler>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), ct);
 }
 
 /// <summary>Describes an authorizer independently of the module contributing its handler.</summary>
@@ -85,7 +84,7 @@ public abstract class RequestAuthorizerRegistration(Type requestType, Type autho
     /// <summary>Gets the concrete authorizer.</summary>
     public Type AuthorizerType { get; } = authorizerType;
 
-    internal abstract ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request, ClaimsPrincipal actor, CancellationToken ct);
+    internal abstract ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request, RequestDispatchContext context, CancellationToken ct);
 }
 
 /// <summary>Resolves and invokes the selected authorizer in the current scope.</summary>
@@ -96,6 +95,6 @@ public sealed class RequestAuthorizerRegistration<TRequest, TAuthorizer>()
     where TRequest : IRequestBase
     where TAuthorizer : class, IRequestAuthorizer<TRequest>
 {
-    internal override ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request, ClaimsPrincipal actor, CancellationToken ct)
-        => services.GetRequiredService<TAuthorizer>().AuthorizeAsync(new RequestContext<TRequest>((TRequest)request), actor, ct);
+    internal override ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request, RequestDispatchContext context, CancellationToken ct)
+        => services.GetRequiredService<TAuthorizer>().AuthorizeAsync(new RequestContext<TRequest>((TRequest)request, context), context.Actor, ct);
 }

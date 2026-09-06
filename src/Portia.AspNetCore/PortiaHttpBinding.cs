@@ -10,6 +10,13 @@ namespace Cntryl.Portia;
 /// <summary>Binding primitives used by generated Portia HTTP endpoints.</summary>
 public static class PortiaHttpBinding
 {
+    /// <summary>Creates execution context from authenticated HTTP state and concrete endpoint facts.</summary>
+    public static RequestDispatchContext CreateDispatchContext(HttpContext context)
+        => new(context.User, new HttpInvocation(context.Request.Method,
+            context.Request.PathBase.Add(context.Request.Path).Value ?? "/",
+            (context.GetEndpoint() as Microsoft.AspNetCore.Routing.RouteEndpoint)?.RoutePattern.RawText,
+            context.TraceIdentifier), timeProvider: context.RequestServices.GetService<TimeProvider>());
+
     /// <summary>Gets the application's configured ASP.NET HTTP JSON options.</summary>
     public static JsonSerializerOptions GetJsonOptions(HttpContext context)
         => context.RequestServices.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions;

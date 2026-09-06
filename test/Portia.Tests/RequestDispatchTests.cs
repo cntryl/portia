@@ -20,7 +20,7 @@ public sealed class RequestDispatchTests
         var validator = new TestRequestActorValidator(rejectToken: "expired-token");
 
         var dispatch = await RequestDispatch.SendAsync(
-            validator, bus, new ChangeValue(1), "expired-token");
+            validator, bus, new ChangeValue(1), "expired-token", new QueueInvocation("queue://test/work/item", 1), RequestMetadata.Create());
 
         Assert.False(dispatch.WasDispatched);
         Assert.False(dispatch.Outcome.IsSuccess);
@@ -41,7 +41,7 @@ public sealed class RequestDispatchTests
         var validator = new TestRequestActorValidator();
 
         var dispatch = await RequestDispatch.SendAsync(
-            validator, bus, new ChangeValue(42), "valid-token");
+            validator, bus, new ChangeValue(42), "valid-token", new QueueInvocation("queue://test/work/item", 1), RequestMetadata.Create());
 
         Assert.True(dispatch.WasDispatched);
         Assert.True(dispatch.Outcome.IsSuccess);

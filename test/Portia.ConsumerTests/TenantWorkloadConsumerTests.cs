@@ -70,7 +70,7 @@ public sealed class TenantWorkloadConsumerTests
         Assert.Equal(2, workers.Length);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         var store = provider.GetRequiredService<IEventStore>();
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         try
         {
             foreach (var worker in workers)

@@ -5,12 +5,14 @@
 
   <ItemGroup>
     <PackageReference Include="Cntryl.Fitz" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj" />
+    <ProjectReference Include="../Portia.DependencyInjection/Portia.DependencyInjection.csproj" />
   </ItemGroup>
 
   <ItemGroup>

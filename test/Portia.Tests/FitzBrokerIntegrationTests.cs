@@ -19,14 +19,14 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var serializer = new JsonDomainEventSerializer(
             new DomainEventTypeCatalog().Register<ValueChanged>());
         var store = new FitzEventStore(client.Stream, serializer);
-        var aggregateId = Uuid.CreateVersion7();
+        var aggregateId = Uuid.CreateVersion4();
         var stream = new EventStreamAddress(
             "portia-integration",
             "event-store",
             aggregateId.ToString());
         var original = new ValueChanged(42);
         original.AttachMetadata(new DomainEventMetadata(
-            Uuid.CreateVersion7(),
+            Uuid.CreateVersion4(),
             aggregateId,
             1,
             DateTimeOffset.UtcNow));
@@ -52,12 +52,12 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     public async Task ShouldUpcastEventReadFromRealFitzStreamWrittenByOlderSchemaVersion()
     {
         await using var client = await _broker.CreateClientAsync();
-        var aggregateId = Uuid.CreateVersion7();
+        var aggregateId = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("portia-integration", "event-store-evolution", aggregateId.ToString());
 
         var writerStore = new FitzEventStore(client.Stream, new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>()));
         var original = new WidgetNamed("Sprocket");
-        original.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion7(), aggregateId, 1, DateTimeOffset.UtcNow));
+        original.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, 1, DateTimeOffset.UtcNow));
         await writerStore.AppendAsync(stream, 0, [original]);
 
         var readerStore = new FitzEventStore(
@@ -89,14 +89,14 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         await using var client = await _broker.CreateClientAsync();
         var serializer = new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<ValueChanged>());
         var store = new FitzEventStore(client.Stream, serializer);
-        var aggregateId = Uuid.CreateVersion7();
+        var aggregateId = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("portia-integration", "event-store-conflict", aggregateId.ToString());
         var first = new ValueChanged(1);
-        first.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion7(), aggregateId, 1, DateTimeOffset.UtcNow));
+        first.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, 1, DateTimeOffset.UtcNow));
         await store.AppendAsync(stream, 0, [first]);
 
         var stale = new ValueChanged(2);
-        stale.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion7(), aggregateId, 1, DateTimeOffset.UtcNow));
+        stale.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, 1, DateTimeOffset.UtcNow));
 
         _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() => store.AppendAsync(stream, 0, [stale]).AsTask());
     }

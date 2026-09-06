@@ -12,7 +12,7 @@ public sealed class ReactorTests
     [Fact]
     public async Task ShouldDispatchAsyncHandlerAndRaiseCommandThroughRepository()
     {
-        var sourceId = Uuid.CreateVersion7();
+        var sourceId = Uuid.CreateVersion4();
         var repository = new RecordingAggregateRepository();
         var reactor = new TestReactor(repository);
         var stream = new EventStreamAddress("test", "reactors", sourceId.ToString());
@@ -33,7 +33,7 @@ public sealed class ReactorTests
         var repository = new RecordingAggregateRepository();
         var reactor = new TestReactor(repository);
         var stream = new EventStreamAddress("test", "reactors", "one");
-        var ev = Committed(new ValueIncremented(3), Uuid.CreateVersion7(), 1);
+        var ev = Committed(new ValueIncremented(3), Uuid.CreateVersion4(), 1);
 
         await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, 0, 0), default);
 
@@ -51,7 +51,7 @@ public sealed class ReactorTests
         var repository = new RecordingAggregateRepository();
         var reactor = new TestReactor(repository);
         var stream = new EventStreamAddress("test", "reactors", "one");
-        var ev = Committed(new ValueAudited("unhandled"), Uuid.CreateVersion7(), 1);
+        var ev = Committed(new ValueAudited("unhandled"), Uuid.CreateVersion4(), 1);
 
         await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, 0, 0), default);
 
@@ -63,7 +63,7 @@ public sealed class ReactorTests
         where T : DomainEvent
     {
         ev.AttachMetadata(new DomainEventMetadata(
-            Uuid.CreateVersion7(),
+            Uuid.CreateVersion4(),
             aggregateId,
             aggregateVersion,
             DateTimeOffset.UtcNow));
@@ -82,10 +82,9 @@ sealed partial class TestReactor(IAggregateRepository repository)
 
     public async ValueTask HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
     {
-        var target = await repository.LoadAsync<TestAggregate>(Uuid.CreateVersion7(), ct)
-            ?? new TestAggregate(Uuid.CreateVersion7());
+        var target = await repository.HydrateAsync(new TestAggregate(Uuid.CreateVersion4()), ct);
         target.ChangeValue(context.Ev.Value);
-        await repository.SaveAsync(target, ct);
+        await repository.SaveAsync(target, context, ct);
     }
 
     public ValueTask HandleAsync(IReactorContext<ValueIncremented> context, CancellationToken ct)
@@ -99,11 +98,11 @@ sealed class RecordingAggregateRepository : IAggregateRepository
 {
     public List<TestAggregate> SavedAggregates { get; } = [];
 
-    public ValueTask<TAggregate?> LoadAsync<TAggregate>(Uuid id, CancellationToken ct = default)
+    public ValueTask<TAggregate> HydrateAsync<TAggregate>(TAggregate aggregate, CancellationToken ct = default)
         where TAggregate : Aggregate
-        => ValueTask.FromResult<TAggregate?>(null);
+        => ValueTask.FromResult(aggregate);
 
-    public ValueTask SaveAsync<TAggregate>(TAggregate aggregate, CancellationToken ct = default)
+    public ValueTask SaveAsync<TAggregate>(TAggregate aggregate, IExecutionContext context, CancellationToken ct = default)
         where TAggregate : Aggregate
     {
         if (aggregate is TestAggregate testAggregate)

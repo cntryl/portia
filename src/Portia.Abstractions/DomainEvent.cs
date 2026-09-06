@@ -8,6 +8,7 @@ namespace Cntryl.Portia;
 public abstract record DomainEvent
 {
     DomainEventMetadata? _metadata;
+    bool _aggregateOwned;
 
     /// <summary>
     /// Gets the event-sourcing metadata attached by Portia. Excluded from JSON serialization —
@@ -17,6 +18,39 @@ public abstract record DomainEvent
     [JsonIgnore]
     public DomainEventMetadata Metadata => _metadata
         ?? throw new InvalidOperationException("The domain event has not been attached to an aggregate.");
+
+    internal DomainEventMetadata? AttachedMetadata => _metadata;
+
+    internal void AttachAggregateMetadata(DomainEventMetadata metadata)
+    {
+        AttachMetadata(metadata);
+        _aggregateOwned = true;
+    }
+
+    internal void ValidateAttribution(EventAttribution attribution)
+    {
+        var metadata = Metadata;
+        if (!_aggregateOwned)
+            throw new InvalidOperationException("Only pending aggregate emissions can receive save attribution.");
+        if ((metadata.CorrelationId is { } correlation && correlation != attribution.CorrelationId)
+            || (metadata.CausationId is { } cause && cause != attribution.CausationId)
+            || (metadata.ExecutionId is { } execution && execution != attribution.ExecutionId)
+            || (metadata.Actor is { } actor && actor != attribution.Actor))
+        {
+            throw new InvalidOperationException("Event metadata conflicts with the save execution context.");
+        }
+    }
+
+    internal void StampAttribution(EventAttribution attribution)
+    {
+        _metadata = Metadata with
+        {
+            CorrelationId = attribution.CorrelationId,
+            CausationId = attribution.CausationId,
+            ExecutionId = attribution.ExecutionId,
+            Actor = attribution.Actor,
+        };
+    }
 
     /// <summary>Attaches durable metadata once, for serializer adapters. Aggregate emissions assign their own metadata.</summary>
     /// <param name="metadata">The original event metadata.</param>

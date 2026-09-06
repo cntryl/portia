@@ -17,7 +17,7 @@ public static class DomainEventSeed
         where TEvent : DomainEvent
     {
         ArgumentNullException.ThrowIfNull(ev);
-        ev.AttachMetadata(new DomainEventMetadata(eventId ?? Uuid.CreateVersion7(), aggregateId,
+        ev.AttachMetadata(new DomainEventMetadata(eventId ?? Uuid.CreateVersion4(), aggregateId,
             aggregateVersion, occurredOn ?? DateTimeOffset.UtcNow, IsAudit: isAudit));
         return ev;
     }

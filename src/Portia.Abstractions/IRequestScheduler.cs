@@ -27,12 +27,23 @@ public interface IRequestScheduler
         RequestRouteValues routeValues,
         string? actorToken,
         CancellationToken ct = default)
+        where TRequest : IRequest, ISchedulable
+        => ScheduleAsync(request, spec, routeValues, actorToken, RequestMetadata.Create(), ct);
+
+    /// <summary>Schedules a template with explicit causal identity.</summary>
+    ValueTask<string> ScheduleAsync<TRequest>(
+        TRequest request,
+        RequestScheduleSpec spec,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestMetadata metadata,
+        CancellationToken ct = default)
         where TRequest : IRequest, ISchedulable;
 
     /// <summary>
     /// Cancels a previously scheduled request.
     /// </summary>
-    /// <param name="scheduleId">The identity returned by <see cref="ScheduleAsync{TRequest}" />.</param>
+    /// <param name="scheduleId">The identity returned by <c>ScheduleAsync</c>.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the cancellation.</returns>
     ValueTask CancelAsync(string scheduleId, CancellationToken ct = default);

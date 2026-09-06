@@ -12,8 +12,8 @@ public sealed class DeliveryScopeTests
     [InlineData(true)]
     public async Task EveryDeliveryOwnsScopeThroughNestedDispatchFailureAndCancellation(bool notification)
     {
-        var requests = new[] { new ScopeRequest(Uuid.CreateVersion7()), new ScopeRequest(Uuid.CreateVersion7(), 1),
-            new ScopeRequest(Uuid.CreateVersion7()), new ScopeRequest(Uuid.CreateVersion7(), 2) };
+        var requests = new[] { new ScopeRequest(Uuid.CreateVersion4()), new ScopeRequest(Uuid.CreateVersion4(), 1),
+            new ScopeRequest(Uuid.CreateVersion4()), new ScopeRequest(Uuid.CreateVersion4(), 2) };
         var services = ConsumerHost.CreateServices();
         _ = services.AddPortiaModule<AccountsModule>();
         _ = services.AddScoped<IRequestActorValidator, ScopeValidator>();
@@ -67,9 +67,9 @@ public sealed class DeliveryScopeTests
         var serializer = new JsonRequestSerializer();
         var sender = new FitzRemoteRequestSender(provider.GetRequiredService<Fitz.Abstractions.Domains.Rpc.IRpcClient>(), serializer, serializer);
         for (var i = 0; i < 2; i++)
-            Assert.True((await sender.SendAsync(new ScopeRequest(Uuid.CreateVersion7()), new RequestRouteValues(), actorToken: null)).IsSuccess);
+            Assert.True((await sender.SendAsync(new ScopeRequest(Uuid.CreateVersion4()), new RequestRouteValues(), actorToken: null)).IsSuccess);
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await sender.SendAsync(new ScopeRequest(Uuid.CreateVersion7(), 1), new RequestRouteValues(), actorToken: null));
+            await sender.SendAsync(new ScopeRequest(Uuid.CreateVersion4(), 1), new RequestRouteValues(), actorToken: null));
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         Assert.Equal(3, effects.Items.Where(item => item.Component == "delivery").Select(item => item.ScopeId).Distinct().Count());
         Assert.All(effects.Scopes.Values, Assert.True);
@@ -99,6 +99,8 @@ public sealed class DeliveryScopeTests
 
     sealed class Queued(IRequest request) : IQueuedRequest
     {
+        public RequestMetadata Metadata { get; } = RequestMetadata.Create();
+        public RequestInvocation Invocation => new QueueInvocation("queue://test/work/item", Attempt);
         public IRequest Request => request;
         public string? ActorToken => null;
         public uint Attempt => 1;
@@ -113,7 +115,7 @@ public sealed class DeliveryScopeTests
             foreach (var request in requests)
             {
                 ct.ThrowIfCancellationRequested();
-                yield return new RequestNotification(request, null);
+                yield return new RequestNotification(request, null, RequestMetadata.Create(), new NoticeInvocation("notice://test/work/item"));
             }
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
         }

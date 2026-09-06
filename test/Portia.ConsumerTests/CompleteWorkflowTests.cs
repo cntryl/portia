@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia.Consumer;
 
+[Collection("Account application workers")]
 public sealed class CompleteWorkflowTests
 {
     static readonly int[] Deposits = [5, 7, 11, 13];
@@ -35,7 +36,7 @@ public sealed class CompleteWorkflowTests
             builder.Services.Add(descriptor);
         _ = builder.Services.AddPortiaModule<ReportingModule>();
         _ = builder.Services.AddPortiaModule<AccountsModule>();
-        _ = builder.Services.AddPortiaAggregate((_, id) => new Account(id));
+        _ = builder.Services.AddPortia(_ => { });
         if (fitzStore)
             _ = builder.Services.AddSingleton<IEventStore>(provider => new FitzEventStore(client.Stream, provider.GetRequiredService<IDomainEventSerializer>()));
         _ = builder.Services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
@@ -47,7 +48,7 @@ public sealed class CompleteWorkflowTests
         _ = builder.Services.AddPortiaProjectorRunner<SecondProjector>();
         _ = builder.Services.AddPortiaReactorRunner<FirstReactor>();
         _ = builder.Services.AddPortiaReactorRunner<SecondReactor>();
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var route = new RequestRouteValues(Resource: id.ToString());
         _ = builder.Services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(client.Queue,
             new JsonRequestSerializer(), "queue://consumer/business/" + id));
@@ -75,7 +76,7 @@ public sealed class CompleteWorkflowTests
             {
                 var declined = await scope.ServiceProvider.GetRequiredService<IRequestBus>().SendAsync(new DepositAccount(id, -1), RequestActor.System);
                 Assert.False(declined.IsSuccess);
-                var account = await scope.ServiceProvider.GetRequiredService<IAggregateRepository>().LoadAsync<Account>(id);
+                var account = await scope.ServiceProvider.GetRequiredService<IAggregateRepository>().HydrateAsync(new Account(id));
                 Assert.NotNull(account);
                 Assert.Equal(36, account.Balance);
                 Assert.Equal(4UL, account.Version);
@@ -87,6 +88,13 @@ public sealed class CompleteWorkflowTests
                         records.Add(record);
                 }
                 Assert.Equal(5, records.Count);
+                Assert.All(records, record =>
+                {
+                    Assert.NotNull(record.Ev.Metadata.Actor);
+                    _ = Assert.NotNull(record.Ev.Metadata.ExecutionId);
+                    _ = Assert.NotNull(record.Ev.Metadata.CausationId);
+                    _ = Assert.NotNull(record.Ev.Metadata.CorrelationId);
+                });
                 var audit = Assert.Single(records, record => record.Ev.Metadata.IsAudit);
                 Assert.NotEqual(account.Stream, audit.Stream);
                 Assert.Equal('4', audit.Stream.Resource[14]);

@@ -196,6 +196,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         var source = OpenShape(reactor.Symbol)
             .AppendLine("    protected override global::System.Threading.Tasks.ValueTask ReactToEventAsync(")
             .AppendLine("        global::Cntryl.Portia.DomainEventRecord record,")
+            .AppendLine("        global::Cntryl.Portia.IExecutionContext execution,")
             .AppendLine("        global::System.Threading.CancellationToken ct)")
             .AppendLine("    {")
             .AppendLine("        switch (record.Ev)")
@@ -211,7 +212,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
                 .Append(eventType)
                 .AppendLine(">)this).HandleAsync(new global::Cntryl.Portia.ReactorContext<")
                 .Append(eventType)
-                .AppendLine(">(typed), ct);");
+                .AppendLine(">(typed, record, execution), ct);");
         }
 
         _ = source

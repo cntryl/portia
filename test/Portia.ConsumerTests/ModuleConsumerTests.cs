@@ -30,7 +30,7 @@ public sealed class ModuleConsumerTests
         Assert.Contains(transports, registration => registration.RequestType == typeof(FeatureOneRequest));
         Assert.Contains(transports, registration => registration.RequestType == typeof(FeatureTwoRequest));
         var serializer = provider.GetRequiredService<IDomainEventSerializer>();
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         DomainEvent[] events = [new Deposited(1), new FeatureOneObserved(2), new FeatureTwoObserved(3)];
         foreach (var ev in events)
         {

@@ -29,11 +29,11 @@ public sealed class FitzScheduledRequestConsumer(
 
         await foreach (var notification in subscription.WithCancellation(ct).ConfigureAwait(false))
         {
-            var (deserialized, actorToken) = _serializer.DeserializeRequest(notification.Payload);
-            var request = deserialized as IRequest
+            var envelope = _serializer.DeserializeEnvelope(notification.Payload);
+            var request = envelope.Request as IRequest
                 ?? throw new InvalidOperationException(
                     "A fired Fitz schedule entry deserialized to a result-bearing request; only no-result requests can be scheduled.");
-            yield return new RequestNotification(request, actorToken);
+            yield return new RequestNotification(request, envelope.ActorToken, new RequestMetadata(Uuid.CreateVersion4(), envelope.Metadata.CorrelationId, envelope.Metadata.RequestId), new ScheduleInvocation(notification.Route));
         }
     }
 }

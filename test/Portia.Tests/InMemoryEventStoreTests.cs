@@ -11,7 +11,7 @@ public sealed class InMemoryEventStoreTests
     [Fact]
     public async Task ShouldReadEventsAfterKnownVersionWhenAppended()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "aggregates", id.ToString());
         var store = new InMemoryEventStore();
         var first = Committed(new ValueChanged(40), id, 1);
@@ -31,7 +31,7 @@ public sealed class InMemoryEventStoreTests
     [Fact]
     public async Task ShouldRejectAppendWhenExpectedVersionIsStale()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "aggregates", id.ToString());
         var store = new InMemoryEventStore();
         var first = Committed(new ValueChanged(40), id, 1);
@@ -54,8 +54,8 @@ public sealed class InMemoryEventStoreTests
     [Fact]
     public async Task ShouldReadRealmPatternFromCheckpointAcrossStreams()
     {
-        var firstId = Uuid.CreateVersion7();
-        var secondId = Uuid.CreateVersion7();
+        var firstId = Uuid.CreateVersion4();
+        var secondId = Uuid.CreateVersion4();
         var firstStream = new EventStreamAddress("test", "orders", firstId.ToString());
         var secondStream = new EventStreamAddress("test", "customers", secondId.ToString());
         var store = new InMemoryEventStore();
@@ -79,7 +79,7 @@ public sealed class InMemoryEventStoreTests
         where T : DomainEvent
     {
         ev.AttachMetadata(new DomainEventMetadata(
-            Uuid.CreateVersion7(),
+            Uuid.CreateVersion4(),
             aggregateId,
             aggregateVersion,
             DateTimeOffset.UtcNow));

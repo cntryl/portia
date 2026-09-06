@@ -13,14 +13,14 @@ public sealed class DomainEventTests
     {
         var ev = new StubEvent();
         ev.AttachMetadata(new DomainEventMetadata(
-            Uuid.CreateVersion7(),
-            Uuid.CreateVersion7(),
+            Uuid.CreateVersion4(),
+            Uuid.CreateVersion4(),
             1,
             DateTimeOffset.UtcNow));
 
         _ = Assert.Throws<InvalidOperationException>(() => ev.AttachMetadata(new DomainEventMetadata(
-            Uuid.CreateVersion7(),
-            Uuid.CreateVersion7(),
+            Uuid.CreateVersion4(),
+            Uuid.CreateVersion4(),
             1,
             DateTimeOffset.UtcNow)));
     }

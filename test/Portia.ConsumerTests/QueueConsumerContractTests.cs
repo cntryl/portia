@@ -12,7 +12,7 @@ public sealed class QueueConsumerContractTests
     {
         var clock = new ManualClock();
         var serializer = new JsonRequestSerializer();
-        var item = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion7()), null), 1);
+        var item = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null), 1);
         var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer, "queue://consumer/scopes/delivery",
             visibilityTimeoutSeconds: 4, timeProvider: clock);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
@@ -35,7 +35,7 @@ public sealed class QueueConsumerContractTests
     {
         var clock = new ManualClock();
         var serializer = new JsonRequestSerializer();
-        var item = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion7()), null), 1) { BlockCompletion = true };
+        var item = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null), 1) { BlockCompletion = true };
         var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer, "queue://consumer/scopes/delivery",
             visibilityTimeoutSeconds: 4, timeProvider: clock);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
@@ -60,8 +60,8 @@ public sealed class QueueConsumerContractTests
     {
         var clock = new ManualClock();
         var serializer = new JsonRequestSerializer();
-        var failed = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion7(), 2), null), 6) { FailExtension = true };
-        var success = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion7()), null), 1);
+        var failed = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4(), 2), null), 6) { FailExtension = true };
+        var success = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null), 1);
         var queue = new QueueClient([failed, success]);
         var services = ConsumerHost.CreateServices();
         _ = services.AddPortiaModule<AccountsModule>();
@@ -98,8 +98,8 @@ public sealed class QueueConsumerContractTests
     {
         var clock = new ManualClock();
         var serializer = new JsonRequestSerializer();
-        var failed = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion7()), null), 1) { FailExtension = true };
-        var success = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion7()), null), 1);
+        var failed = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null), 1) { FailExtension = true };
+        var success = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null), 1);
         var consumer = new FitzRequestQueueConsumer(new QueueClient([failed, success]), serializer,
             "queue://consumer/scopes/delivery", visibilityTimeoutSeconds: 4, timeProvider: clock);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
@@ -122,7 +122,7 @@ public sealed class QueueConsumerContractTests
     public async Task DefaultReserveUsesSecondsAndOneItemWithoutChangingAttempt()
     {
         var serializer = new JsonRequestSerializer();
-        var item = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion7()), null), attempt: 9);
+        var item = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null), attempt: 9);
         var queue = new QueueClient([item]);
         var consumer = new FitzRequestQueueConsumer(queue, serializer, "queue://consumer/scopes/delivery");
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
@@ -139,9 +139,9 @@ public sealed class QueueConsumerContractTests
     {
         var serializer = new JsonRequestSerializer();
         var malformed = new Reserved("{"u8.ToArray(), 4);
-        var failed = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion7(), 1), null), 6);
-        var terminal = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion7(), 3), null), 1);
-        var success = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion7()), null), 1);
+        var failed = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4(), 1), null), 6);
+        var terminal = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4(), 3), null), 1);
+        var success = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null), 1);
         var queue = new QueueClient([malformed, failed, terminal, success]);
         var services = ConsumerHost.CreateServices();
         _ = services.AddPortiaModule<AccountsModule>();

@@ -6,21 +6,18 @@ namespace Cntryl.Portia;
 public interface IAggregateRepository
 {
     /// <summary>
-    /// Loads and rehydrates an aggregate by identity.
+    /// Applies raised events after the aggregate's committed stream position and returns that same instance.
+    /// An absent stream leaves the instance unchanged. Construction and dependencies belong to the caller.
+    /// Save pending changes first. Do not use the instance concurrently during hydration.
+    /// Discard the instance if a domain event handler throws during replay.
     /// </summary>
-    /// <param name="id">The aggregate identity.</param>
-    /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>The rehydrated aggregate, or <see langword="null" /> when its event stream does not exist.</returns>
-    ValueTask<TAggregate?> LoadAsync<TAggregate>(Uuid id, CancellationToken ct = default)
+    /// <param name="aggregate">The caller-constructed aggregate.</param>
+    /// <param name="ct">Cancels reading before replay begins.</param>
+    /// <returns>The supplied instance, hydrated from its own stream address.</returns>
+    ValueTask<TAggregate> HydrateAsync<TAggregate>(TAggregate aggregate, CancellationToken ct = default)
         where TAggregate : Aggregate;
 
-    /// <summary>
-    /// Persists raised events to the aggregate stream using OCC, or audits to a new UUIDv4 session stream.
-    /// A save contains only one kind; failed saves preserve pending changes and session identity.
-    /// </summary>
-    /// <param name="aggregate">The aggregate to save.</param>
-    /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>A task representing the save operation.</returns>
-    ValueTask SaveAsync<TAggregate>(TAggregate aggregate, CancellationToken ct = default)
+    /// <summary>Stamps pending raised events or audits with execution attribution, frozen across save retries.</summary>
+    ValueTask SaveAsync<TAggregate>(TAggregate aggregate, IExecutionContext context, CancellationToken ct = default)
         where TAggregate : Aggregate;
 }

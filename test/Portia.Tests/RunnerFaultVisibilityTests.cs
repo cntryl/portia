@@ -75,7 +75,7 @@ public sealed class RunnerFaultVisibilityTests
         using var busHost = TestRequestBus.Create();
         var bus = busHost.Bus;
         var consumer = new FakeRequestNotificationConsumer(
-            [new RequestNotification(new RunnerFaultAction(), ActorToken: "expired")]);
+            [new RequestNotification(new RunnerFaultAction(), ActorToken: "expired", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item"))]);
         var runner = new RequestNotificationRunner(
             consumer,
             bus,
@@ -102,7 +102,7 @@ public sealed class RunnerFaultVisibilityTests
         using var busHost = TestRequestBus.Create();
         var bus = busHost.Bus;
         var consumer = new FakeRequestNotificationConsumer(
-            [new RequestNotification(new UnregisteredRunnerFaultAction(), ActorToken: "valid-token")]);
+            [new RequestNotification(new UnregisteredRunnerFaultAction(), ActorToken: "valid-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item"))]);
         var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator());
 
         await runner.RunAsync();
@@ -219,6 +219,8 @@ public sealed class RunnerFaultVisibilityTests
 
     sealed class FakeQueuedRequest(IRequest request, string? actorToken = "valid-token") : IQueuedRequest
     {
+        public RequestMetadata Metadata { get; } = RequestMetadata.Create();
+        public RequestInvocation Invocation => new QueueInvocation("queue://test/work/item", Attempt);
         public IRequest Request { get; } = request;
 
         public string? ActorToken { get; } = actorToken;

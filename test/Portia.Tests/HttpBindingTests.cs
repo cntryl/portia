@@ -31,7 +31,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     public async Task ShouldBindRouteTokenAndFallBackToQueryString()
     {
         var client = await StartAsync(app => app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}"));
-        var widgetId = Uuid.CreateVersion7();
+        var widgetId = Uuid.CreateVersion4();
 
         var response = await client.GetAsync($"/widgets/{widgetId}?include_archived=true");
 
@@ -298,7 +298,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     {
         public List<object> Enqueued { get; } = [];
 
-        public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+        public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
             where TRequest : IRequest, IQueuable
         {
             Enqueued.Add(request);
@@ -327,7 +327,7 @@ sealed record HttpCreatePayment(HttpMoney Amount) : IRequest<Uuid>, ICallable;
 sealed class HttpCreatePaymentHandler : IRequestHandler<HttpCreatePayment, Uuid>
 {
     public ValueTask<Result<Uuid>> HandleAsync(IRequestContext<HttpCreatePayment> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result<Uuid>.Success(Uuid.CreateVersion7()));
+        ValueTask.FromResult(Result<Uuid>.Success(Uuid.CreateVersion4()));
 }
 
 [RequestRoute(realm: "*", area: "http-binding-tests", resource: "orders", operation: "create")]
@@ -336,7 +336,7 @@ sealed record HttpCreateOrder(List<HttpOrderLine> Lines) : IRequest<Uuid>, ICall
 sealed class HttpCreateOrderHandler : IRequestHandler<HttpCreateOrder, Uuid>
 {
     public ValueTask<Result<Uuid>> HandleAsync(IRequestContext<HttpCreateOrder> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result<Uuid>.Success(Uuid.CreateVersion7()));
+        ValueTask.FromResult(Result<Uuid>.Success(Uuid.CreateVersion4()));
 }
 
 [RequestRoute(realm: "*", area: "http-binding-tests", resource: "ping", operation: "ping")]

@@ -54,10 +54,10 @@ public readonly record struct Uuid
     public int Version => _value.Version;
 
     /// <summary>
-    /// Creates a new time-ordered UUID version 7.
+    /// Creates a new random UUID version 4.
     /// </summary>
     /// <returns>A new UUID.</returns>
-    public static Uuid CreateVersion7() => new(Guid.CreateVersion7());
+    public static Uuid CreateVersion4() => new(Guid.NewGuid());
 
     /// <summary>
     /// Creates a deterministic name-based UUID version 5 using a UTF-8 name.

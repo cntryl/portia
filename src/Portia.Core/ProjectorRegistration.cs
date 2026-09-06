@@ -7,16 +7,21 @@ public sealed class ProjectorRegistration
 {
     ProjectorRegistration(
         Type projectorType,
+        Type projectionTargetType,
         Func<ProjectorRunner, IServiceProvider, ProjectionCheckpoint, ProjectionRunOptions?, CancellationToken, ValueTask<ProjectionCheckpoint>> run,
         Func<IServiceProvider, ProjectionRunOptions?, CancellationToken, ValueTask> runPass)
     {
         ProjectorType = projectorType;
+        ProjectionTargetType = projectionTargetType;
         Run = run;
         RunPass = runPass;
     }
 
     /// <summary>Gets the concrete projector type.</summary>
     public Type ProjectorType { get; }
+
+    /// <summary>Gets the required projection target service type.</summary>
+    public Type ProjectionTargetType { get; }
 
     /// <summary>Resolves and runs the projector from an explicit checkpoint.</summary>
     public Func<ProjectorRunner, IServiceProvider, ProjectionCheckpoint, ProjectionRunOptions?, CancellationToken, ValueTask<ProjectionCheckpoint>> Run { get; }
@@ -31,6 +36,7 @@ public sealed class ProjectorRegistration
     public static ProjectorRegistration Create<TProjector, TProjection>()
         where TProjector : Projector<TProjection> => new(
             typeof(TProjector),
+            typeof(IProjectionTarget<TProjection>),
             static (runner, services, checkpoint, options, ct) =>
                 runner.RunAsync(services.GetRequiredService<TProjector>(), checkpoint, options, ct),
             static async (services, options, ct) =>

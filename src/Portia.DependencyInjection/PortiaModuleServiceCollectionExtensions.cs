@@ -38,6 +38,7 @@ public static class PortiaModuleServiceCollectionExtensions
         {
             _ = services.AddSingleton(new ModuleMarker<TModule>());
             services.TryAddScoped<IRequestBus, RequestBus>();
+            services.TryAddSingleton<IReactorPrincipalProvider, SystemReactorPrincipalProvider>();
             services.TryAddSingleton<RequestRegistry>();
             services.TryAddSingleton(BuildCatalog);
             TModule.Register(services);

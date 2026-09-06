@@ -30,7 +30,7 @@ Wire the command to an HTTP route:
 using Cntryl.Portia;
 
 var builder = WebApplication.CreateBuilder(args);
-_ = builder.Services.AddPortiaModule<GreetingsModule>();
+_ = builder.Services.AddPortia(portia => portia.AddModule<GreetingsModule>());
 
 var app = builder.Build();
 app.MapPortiaPost<CreateGreeting, string>("/greetings");
@@ -49,12 +49,20 @@ $ curl -X POST http://localhost:5000/greetings \
 That's it. The command holds the input, the handler does the work, and the route makes it
 available over HTTP.
 
+## API and worker deployments
+
+Declare modules, persistence, and background work once in a shared application
+project. The API host calls `AddAccountsApplication(configuration)`; the worker host
+calls the same setup followed by `.AddWorker()`. HTTP traffic and background work
+can scale independently. See [shared application setup](docs/application-setup.md)
+for connection ownership, worker fleet configuration, and incremental aggregate hydration.
+
 ## Why it works
 
 - `IRequest<string>` says that `CreateGreeting` returns text.
 - `ICallable` says that the application may expose it to callers, including over HTTP.
 - `IRequestHandler<CreateGreeting, string>` connects that command to its handler.
-- `AddPortiaModule<GreetingsModule>()` adds the command and handler to the application.
+- `AddModule<GreetingsModule>()` adds the command and handler to the application.
 - `MapPortiaPost` reads the HTTP request, calls the handler, and writes the HTTP response.
 
 Portia writes the repetitive connection code when the project builds. It is ordinary C# checked
@@ -113,8 +121,10 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   ordinary compile error. A stale `AppendAsync` (someone else committed to the stream first)
   throws `EventStreamConcurrencyException` from every `IEventStore` implementation — one stable
   type to catch. Portia never reruns the business command automatically.
-  Register `AddPortiaAggregate<T>((services, id) => ...)` and inject `IAggregateRepository`
-  to load/save. Raised events use the aggregate stream; audits use a fresh UUIDv4 session
+  Inject `IAggregateRepository`, construct normally, and call
+  `HydrateAsync(new Account(id))` followed by `SaveAsync(account, context, ct)`.
+  [Request and reaction context](docs/request-context.md) supplies causal and actor attribution. Rehydrating the same
+  instance reads only events after its committed position; no aggregate registration is needed. Raised events use the aggregate stream; audits use a fresh UUIDv4 session
   stream per batch in the same realm/area and leave aggregate OCC unchanged.
 - **CQRS dispatch**: `Result`/`Result<T>` instead of exceptions for expected failures; a request
   opts into each transport by implementing that transport's marker interface, checked at compile
@@ -172,14 +182,13 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   [migration notes](docs/migration.md#scoped-checkpoints-and-rebuilds).
 
 The architecture changes and their observed red → green results are recorded in
-[architecture evidence](docs/architecture-remediation-evidence.md). The pinned Fitz 0.1.1
-client does not populate append-conflict domain codes; strict structured classification
-therefore leaves two real-broker OCC assertions failing. This work is not fully qualified.
+[architecture evidence](docs/architecture-remediation-evidence.md). Its Fitz 0.1.1
+qualification note is historical; this checkout now uses Fitz 0.1.2.
 
 ## Known gaps, stated plainly
 
-- **No aggregate snapshotting.** `IAggregateRepository.LoadAsync<T>` replays the full raised-event history every
-  time; there's no checkpoint mechanism yet. Fine at low event counts, a real scaling concern
+- **No aggregate snapshotting.** A newly constructed aggregate replays its full raised-event history;
+  an existing hydrated instance reads only newer events. There is no durable snapshot mechanism yet. Fine at low event counts, a real scaling concern
   for anything long-lived.
 - **`ReactorRunner`'s bounded, checkpointed batching is opt-in, not automatic.** Found during
   adversarial review: a reactor's job is raising commands against other aggregates, not generally

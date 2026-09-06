@@ -27,28 +27,38 @@ public sealed class FitzRemoteRequestSender(
     readonly IRequestOutcomeDeserializer _outcomeDeserializer = outcomeDeserializer ?? throw new ArgumentNullException(nameof(outcomeDeserializer));
 
     /// <inheritdoc />
-    public async ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+    public ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+        where TRequest : IRequest, ICallable
+        => SendAsync(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+
+    /// <inheritdoc />
+    public async ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
         where TRequest : IRequest, ICallable
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(routeValues);
 
         var route = FitzRouting.ResolveRpcRoute(request, routeValues);
-        var body = _requestSerializer.Serialize(request, actorToken);
+        var body = _requestSerializer.Serialize(request, actorToken, metadata);
         var receivedFrame = await CallAsync(route, body, ct).ConfigureAwait(false);
 
         return _outcomeDeserializer.DeserializeOutcome(receivedFrame.Body);
     }
 
     /// <inheritdoc />
-    public async ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+    public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+        where TRequest : IRequest<TOut>, ICallable
+        => SendAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+
+    /// <inheritdoc />
+    public async ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
         where TRequest : IRequest<TOut>, ICallable
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(routeValues);
 
         var route = FitzRouting.ResolveRpcRoute(request, routeValues);
-        var body = _requestSerializer.Serialize(request, actorToken);
+        var body = _requestSerializer.Serialize(request, actorToken, metadata);
         var receivedFrame = await CallAsync(route, body, ct).ConfigureAwait(false);
 
         return _outcomeDeserializer.DeserializeResult<TOut>(receivedFrame.Body);

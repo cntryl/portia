@@ -12,7 +12,7 @@ public sealed class ReactorRunnerTests
     [Fact]
     public async Task ShouldDispatchReadableEventsAndAdvanceCheckpointWhenRun()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "reactors", id.ToString());
         var store = new InMemoryEventStore();
         await store.AppendAsync(stream, 0, [
@@ -59,7 +59,7 @@ public sealed class ReactorRunnerTests
     [Fact]
     public async Task ShouldReprocessAlreadyHandledEventsOnRetryAfterMidPassFailure()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "reactors", id.ToString());
         var store = new InMemoryEventStore();
         await store.AppendAsync(stream, 0, [
@@ -95,7 +95,7 @@ public sealed class ReactorRunnerTests
     [Fact]
     public async Task ShouldOnlyReprocessCurrentBatchWhenCheckpointStoreIsSuppliedAndMidPassFailureOccurs()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "reactors", id.ToString());
         var store = new InMemoryEventStore();
         await store.AppendAsync(stream, 0, [
@@ -144,7 +144,7 @@ public sealed class ReactorRunnerTests
         where T : DomainEvent
     {
         ev.AttachMetadata(new DomainEventMetadata(
-            Uuid.CreateVersion7(),
+            Uuid.CreateVersion4(),
             aggregateId,
             aggregateVersion,
             DateTimeOffset.UtcNow));

@@ -79,7 +79,7 @@ public sealed class ConsumerRecoveryTests
         async IAsyncEnumerable<RequestNotification> IRequestNotificationConsumer.ReadAsync([EnumeratorCancellation] CancellationToken ct)
         {
             await foreach (var request in ReadAsync(ct))
-                yield return new RequestNotification(request, null);
+                yield return new RequestNotification(request, null, RequestMetadata.Create(), new NoticeInvocation("notice://test/work/item"));
         }
 
         async IAsyncEnumerable<ScopeRequest> ReadAsync([EnumeratorCancellation] CancellationToken ct)
@@ -92,7 +92,7 @@ public sealed class ConsumerRecoveryTests
                         throw new IOException("Transport disconnected");
                     yield break;
                 }
-                yield return new ScopeRequest(Uuid.CreateVersion7());
+                yield return new ScopeRequest(Uuid.CreateVersion4());
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             }
             finally { Disposals++; }
@@ -101,6 +101,8 @@ public sealed class ConsumerRecoveryTests
 
     sealed class Queued(IRequest request) : IQueuedRequest
     {
+        public RequestMetadata Metadata { get; } = RequestMetadata.Create();
+        public RequestInvocation Invocation => new QueueInvocation("queue://test/work/item", Attempt);
         public IRequest Request => request;
         public string? ActorToken => null;
         public uint Attempt => 1;

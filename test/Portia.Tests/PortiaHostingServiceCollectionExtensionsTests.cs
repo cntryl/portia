@@ -113,7 +113,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldRunProjectorPassAndSaveCheckpointWhenHostedServiceStarts()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
         await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)]);
@@ -142,7 +142,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldNotReplayCommittedProjectionBatchAfterLateCommitFailure()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
         await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)]);
@@ -172,7 +172,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldRetryCheckpointReloadWithoutReplayingFromStaleCheckpoint()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
         await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)]);
@@ -237,7 +237,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     static T Committed<T>(T ev, Uuid aggregateId, ulong aggregateVersion)
         where T : DomainEvent
     {
-        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion7(), aggregateId, aggregateVersion, DateTimeOffset.UtcNow));
+        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, aggregateVersion, DateTimeOffset.UtcNow));
         return ev;
     }
 
@@ -263,6 +263,8 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     sealed class HostingFakeQueuedRequest(IRequest request) : IQueuedRequest
     {
+        public RequestMetadata Metadata { get; } = RequestMetadata.Create();
+        public RequestInvocation Invocation => new QueueInvocation("queue://test/work/item", Attempt);
         public IRequest Request { get; } = request;
 
         public string? ActorToken => "valid-token";

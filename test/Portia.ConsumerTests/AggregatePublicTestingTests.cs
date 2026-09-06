@@ -13,9 +13,9 @@ public sealed class AggregatePublicTestingTests
             {
                 public static int Run()
                 {
-                    var id = Uuid.CreateVersion7();
+                    var id = Uuid.CreateVersion4();
                     var ev = new Deposited(10);
-                    var metadata = new DomainEventMetadata(Uuid.CreateVersion7(), id, 1, DateTimeOffset.UtcNow);
+                    var metadata = new DomainEventMetadata(Uuid.CreateVersion4(), id, 1, DateTimeOffset.UtcNow);
                     ev.AttachMetadata(metadata);
                     try { ev.AttachMetadata(metadata); return -1; }
                     catch (InvalidOperationException) { }

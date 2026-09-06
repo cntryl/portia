@@ -5,16 +5,17 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed class AuditStorageContractTests
 {
+    readonly RequestDispatchContext _saveContext = new(RequestActor.System);
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task AuditOnlyPagesPreserveOffsetsAndDoNotEnterAggregateHistory(bool fitz)
     {
         await using var fixture = await StoreFixture.CreateAsync(fitz);
-        var account = new Account(Uuid.CreateVersion7());
+        var account = new Account(Uuid.CreateVersion4());
         for (var index = 0; index < 1025; index++)
             account.Audit(new Declined(index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-        await fixture.Repository.SaveAsync(account);
+        await fixture.Repository.SaveAsync(account, _saveContext);
         var scenario = new AggregateScenario<Account>(account);
         Assert.Empty(scenario.PendingAudits);
         Assert.Empty(scenario.CommittedEvents);
@@ -39,14 +40,14 @@ public sealed class AuditStorageContractTests
             Assert.True(record.Ev.Metadata.IsAudit);
             Assert.Equal(0UL, record.Ev.Metadata.AggregateVersion);
         });
-        Assert.Null(await fixture.Repository.LoadAsync<Account>(account.Id));
+        Assert.Equal(0UL, (await fixture.Repository.HydrateAsync(new Account(account.Id))).CommittedStreamPosition);
     }
 
     [Fact]
     public void StoredEventsWithoutAuditFlagRemainNonAudits()
     {
         var serializer = new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<Deposited>());
-        var ev = DomainEventSeed.Attach(new Deposited(3), Uuid.CreateVersion7(), 1);
+        var ev = DomainEventSeed.Attach(new Deposited(3), Uuid.CreateVersion4(), 1);
         var envelope = JsonNode.Parse(serializer.Serialize(ev).Span)!.AsObject();
         Assert.True(envelope["metadata"]!.AsObject().Remove("is_audit"));
         var stored = JsonSerializer.SerializeToUtf8Bytes(envelope);
@@ -60,7 +61,7 @@ public sealed class AuditStorageContractTests
     [InlineData(true)]
     public void AggregateEmissionOwnsAuditClassification(bool audit)
     {
-        var account = new Account(Uuid.CreateVersion7(), new MisclassifyingFactory(audit));
+        var account = new Account(Uuid.CreateVersion4(), new MisclassifyingFactory(audit));
         var ev = new Deposited(1);
         if (audit)
             account.Audit(ev);
@@ -74,6 +75,6 @@ public sealed class AuditStorageContractTests
     sealed class MisclassifyingFactory(bool audit) : IDomainEventMetadataFactory
     {
         public DomainEventMetadata Create(Uuid aggregateId, ulong aggregateVersion)
-            => new(Uuid.CreateVersion7(), aggregateId, aggregateVersion, DateTimeOffset.UtcNow, IsAudit: !audit);
+            => new(Uuid.CreateVersion4(), aggregateId, aggregateVersion, DateTimeOffset.UtcNow, IsAudit: !audit);
     }
 }

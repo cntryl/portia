@@ -10,9 +10,14 @@ public interface IQueuedRequest
     /// </summary>
     IRequest Request { get; }
 
+    /// <summary>Gets the logical identity preserved across deliveries.</summary>
+    RequestMetadata Metadata { get; }
+
+    /// <summary>Gets the concrete ingress facts supplied by this transport.</summary>
+    RequestInvocation Invocation { get; }
+
     /// <summary>
-    /// Gets the one-based number of times this request has been delivered, including this
-    /// delivery.
+    /// Gets the transport-reported delivery attempt. Portia does not synthesize a retry counter.
     /// </summary>
     uint Attempt { get; }
 

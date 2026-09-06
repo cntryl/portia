@@ -330,7 +330,7 @@ public sealed class MultiTenancyTests
     async Task AppendAsync(InMemoryEventStore store, DomainEvent ev)
     {
         var version = _registryVersions.GetOrCreateValue(store);
-        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion7(), Uuid.CreateVersion7(), version.Value + 1, DateTimeOffset.UtcNow));
+        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), version.Value + 1, DateTimeOffset.UtcNow));
         await store.AppendAsync(RegistryStream, version.Value, [ev]);
         version.Value++;
     }

@@ -112,7 +112,7 @@ public sealed class JsonRequestSerializerTests
     public void ShouldRoundTripUuidFieldOnRequest()
     {
         var serializer = new JsonRequestSerializer();
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var request = new SerializerTestUuidRequest(id);
 
         var bytes = serializer.Serialize(request, actorToken: null);

@@ -40,6 +40,8 @@ runtime assembly scan is required.
 
 ## Persist an aggregate
 
+Use `Uuid.CreateVersion4()` for a new random identity, or `Uuid.CreateVersion5(namespaceId, name)` when the same name must produce the same identity. Portia orders events using stream positions and aggregate versions; UUIDs do not define event order.
+
 Construction always receives an explicit identity and defines its stream address:
 
 ```csharp
@@ -57,23 +59,31 @@ public sealed class Account : Aggregate
 }
 ```
 
-Register a factory for loading and an event store. The factory receives the current
-service provider and UUID, so metadata factories and other construction dependencies
-can come from the caller's scope:
+Configure persistence once in the shared application setup:
 
 ```csharp
-services.AddPortiaModule<AccountsModule>();
-services.AddPortiaAggregate<Account>((provider, id) => new Account(id));
-services.AddSingleton<IEventStore>(provider =>
-    new FitzEventStore(fitz.Stream, provider.GetRequiredService<IDomainEventSerializer>()));
-services.AddSingleton<IDomainEventReader>(provider => provider.GetRequiredService<IEventStore>());
+services.AddPortia(portia =>
+{
+    portia.AddModule<AccountsModule>();
+    portia.AddFitz(configuration.GetSection("Fitz"), fitz => fitz.AddEventStore());
+});
 ```
 
-Inject nongeneric `IAggregateRepository` into a handler. Use
-`LoadAsync<Account>(id, ct)`, create `new Account(id)` when absent, perform the
-business operation, and `SaveAsync(account, ct)`. The
-[fixture handler](../test/Consumer.FeatureOne/DepositAccountHandler.cs) demonstrates
-both successful deposits and declined operations.
+Inject `IAggregateRepository` into a handler and construct the aggregate normally:
+
+```csharp
+var account = await repository.HydrateAsync(new Account(id), ct);
+account.Deposit(amount);
+await repository.SaveAsync(account, context, ct);
+```
+
+The same instance can be hydrated again later. Reads start at its committed stream
+position and apply only newer raised events. A missing stream leaves it unchanged.
+Save pending changes before refreshing; do not mutate the instance during hydration.
+No aggregate factory or aggregate registration is required. Constructor dependencies
+are passed by the application. See the
+[shared API and worker setup](application-setup.md) for two deployments
+using one application configuration.
 
 A pending save contains raised events **or** audits. Raising applies state and
 advances `Version` immediately. Auditing applies no state. Raised events append to
@@ -89,17 +99,14 @@ Do not emit or save concurrently on one aggregate instance. An OCC conflict thro
 
 ## Map HTTP endpoints
 
-Enable the generator's interceptor namespace in the host project:
-
-```xml
-<PropertyGroup>
-  <InterceptorsNamespaces>$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
-</PropertyGroup>
-```
+The installed `Portia.Generators` package supplies the interceptor namespace.
+Reference it directly in the HTTP host with `PrivateAssets="all"`; no manual
+`InterceptorsNamespaces` property is needed. Repository project references used to
+develop the generator still need their local compiler configuration.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddPortiaModule<AccountsModule>();
+builder.Services.AddPortia(portia => portia.AddModule<AccountsModule>());
 // Register persistence and application dependencies as above.
 var app = builder.Build();
 app.MapPortiaPost<DepositAccount>("/accounts/{id}");

@@ -2,7 +2,7 @@ name: portia-integration
 
 services:
   fitz:
-    image: ${FITZ_TEST_IMAGE:-ghcr.io/cntryl/fitz@sha256:987770b7039873313a1c4d0102f06ea8eed0e5435550ea28d5d8107521f0b287}
+    image: ${FITZ_TEST_IMAGE:-ghcr.io/cntryl/fitz@sha256:d44670dbd6af6dcc84e730215238ba83dc256074218c9f062af6340c825b577d}
     environment:
       FITZ_ADMIN_AUTH_MODE: open
       FITZ_AUTH_REQUIRED: "false"

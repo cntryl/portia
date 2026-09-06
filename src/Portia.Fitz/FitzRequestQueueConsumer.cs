@@ -73,7 +73,7 @@ public sealed class FitzRequestQueueConsumer(
     sealed class FitzQueuedRequest : IQueuedRequest, IAsyncDisposable
     {
         readonly IQueueReservedItem _item;
-        readonly Lazy<(IRequest Request, string? ActorToken)> _payload;
+        readonly Lazy<DeserializedRequest> _payload;
         readonly CancellationTokenSource _stop;
         readonly CancellationTokenSource _lost;
         readonly Task _renewal;
@@ -83,17 +83,15 @@ public sealed class FitzRequestQueueConsumer(
             TimeProvider clock, ILogger? logger, CancellationToken ct)
         {
             _item = item;
-            _payload = new Lazy<(IRequest, string?)>(() =>
-            {
-                var (request, actorToken) = serializer.DeserializeRequest(item.Body);
-                return (request as IRequest ?? throw new InvalidOperationException("Only no-result requests can be queued."), actorToken);
-            });
+            _payload = new Lazy<DeserializedRequest>(() => serializer.DeserializeEnvelope(item.Body));
             _stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
             _lost = CancellationTokenSource.CreateLinkedTokenSource(ct);
             _renewal = RenewAsync(leaseSeconds, interval, clock, logger);
         }
 
-        public IRequest Request => _payload.Value.Request;
+        public IRequest Request => _payload.Value.Request as IRequest ?? throw new InvalidOperationException("Only no-result requests can be queued.");
+        public RequestMetadata Metadata => _payload.Value.Metadata;
+        public RequestInvocation Invocation => new QueueInvocation(_item.Route, _item.Attempt);
         public string? ActorToken => _payload.Value.ActorToken;
         public uint Attempt => _item.Attempt;
         public CancellationToken ReservationCancellation => _lost.Token;

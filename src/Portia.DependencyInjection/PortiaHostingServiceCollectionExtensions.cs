@@ -89,6 +89,7 @@ public static class PortiaHostingServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         var interval = ValidateInterval(pollInterval);
         (options ?? ProjectionRunOptions.Default).Validate();
+        _ = services.AddSingleton(new PortiaHostedComponentRegistration(typeof(TProjector)));
         services.TryAddScoped<ProjectorRunner>();
         _ = services.AddHostedService(sp =>
         {
@@ -140,6 +141,7 @@ public static class PortiaHostingServiceCollectionExtensions
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBatchSize);
 
         var interval = ValidateInterval(pollInterval);
+        _ = services.AddSingleton(new PortiaHostedComponentRegistration(typeof(TReactor)));
         services.TryAddScoped<ReactorRunner>();
         _ = services.AddHostedService(sp => new ComponentHostedService<TReactor>(
             sp.GetRequiredService<IServiceScopeFactory>(),

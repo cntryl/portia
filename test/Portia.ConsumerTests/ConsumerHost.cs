@@ -8,7 +8,7 @@ static class ConsumerHost
     public static ServiceCollection CreateServices(bool scoped = true)
     {
         var services = new ServiceCollection();
-        _ = services.AddPortiaAggregate((_, id) => new Account(id));
+        _ = services.AddScoped<IAggregateRepository, AggregateRepository>();
         _ = services.AddSingleton<Effects>();
         _ = services.AddSingleton<IConsumerEffects>(provider => provider.GetRequiredService<Effects>());
         _ = services.AddSingleton<ProjectionStorage>();

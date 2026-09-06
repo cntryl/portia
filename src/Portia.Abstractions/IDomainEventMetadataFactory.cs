@@ -24,5 +24,5 @@ sealed class SystemDomainEventMetadataFactory : IDomainEventMetadataFactory
     }
 
     public DomainEventMetadata Create(Uuid aggregateId, ulong aggregateVersion) =>
-        new(Uuid.CreateVersion7(), aggregateId, aggregateVersion, DateTimeOffset.UtcNow);
+        new(Uuid.CreateVersion4(), aggregateId, aggregateVersion, DateTimeOffset.UtcNow);
 }

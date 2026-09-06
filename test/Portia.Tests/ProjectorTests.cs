@@ -31,7 +31,7 @@ public sealed class ProjectorTests
     [Fact]
     public async Task ShouldCommitBoundedBatchesAndAdvanceCheckpointWhenRun()
     {
-        var id = Uuid.CreateVersion7();
+        var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
         await store.AppendAsync(stream, 0, [
@@ -75,13 +75,13 @@ public sealed class ProjectorTests
 
     static T Committed<T>(T ev, ulong aggregateVersion)
         where T : DomainEvent
-        => Committed(ev, Uuid.CreateVersion7(), aggregateVersion);
+        => Committed(ev, Uuid.CreateVersion4(), aggregateVersion);
 
     static T Committed<T>(T ev, Uuid aggregateId, ulong aggregateVersion)
         where T : DomainEvent
     {
         ev.AttachMetadata(new DomainEventMetadata(
-            Uuid.CreateVersion7(),
+            Uuid.CreateVersion4(),
             aggregateId,
             aggregateVersion,
             DateTimeOffset.UtcNow));

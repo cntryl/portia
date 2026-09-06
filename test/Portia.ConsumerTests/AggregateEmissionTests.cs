@@ -8,7 +8,7 @@ public sealed class AggregateEmissionTests
     public void RejectsOppositeKindBeforeMetadataOrStateChanges(bool auditFirst)
     {
         var factory = new CountingMetadataFactory();
-        var account = new Account(Uuid.CreateVersion7(), factory);
+        var account = new Account(Uuid.CreateVersion4(), factory);
         var first = new Deposited(10);
         var rejected = new Deposited(20);
         if (auditFirst)
@@ -46,7 +46,7 @@ public sealed class AggregateEmissionTests
         public DomainEventMetadata Create(Uuid aggregateId, ulong aggregateVersion)
         {
             Calls++;
-            return new DomainEventMetadata(Uuid.CreateVersion7(), aggregateId, aggregateVersion, DateTimeOffset.UtcNow);
+            return new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, aggregateVersion, DateTimeOffset.UtcNow);
         }
     }
 }

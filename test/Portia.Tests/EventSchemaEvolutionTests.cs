@@ -101,8 +101,8 @@ public sealed class EventSchemaEvolutionTests
         where T : DomainEvent
     {
         ev.AttachMetadata(new DomainEventMetadata(
-            Uuid.CreateVersion7(),
-            Uuid.CreateVersion7(),
+            Uuid.CreateVersion4(),
+            Uuid.CreateVersion4(),
             1,
             DateTimeOffset.UtcNow));
         return ev;

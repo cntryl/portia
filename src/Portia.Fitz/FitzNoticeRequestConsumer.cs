@@ -29,11 +29,11 @@ public sealed class FitzNoticeRequestConsumer(
 
         await foreach (var message in subscription.WithCancellation(ct).ConfigureAwait(false))
         {
-            var (deserialized, actorToken) = _serializer.DeserializeRequest(message.Body);
-            var request = deserialized as IRequest
+            var envelope = _serializer.DeserializeEnvelope(message.Body);
+            var request = envelope.Request as IRequest
                 ?? throw new InvalidOperationException(
                     "A Fitz notice message deserialized to a result-bearing request; only no-result requests can be published over notice.");
-            yield return new RequestNotification(request, actorToken);
+            yield return new RequestNotification(request, envelope.ActorToken, envelope.Metadata, new NoticeInvocation(message.Route));
         }
     }
 }
