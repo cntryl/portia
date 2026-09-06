@@ -1,4 +1,5 @@
 using Cntryl.Fitz.Abstractions.Domains.Stream;
+using Cntryl.Fitz.Errors;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
@@ -44,9 +45,34 @@ public sealed class FitzPersistenceFailureTests
         Assert.True(session.Disposed);
     }
 
+    [Theory]
+    [InlineData("append", 2001u, "unrelated wording", true)]
+    [InlineData("commit", 2001u, "unrelated wording", true)]
+    [InlineData("append", 2002u, "concurrency conflict", false)]
+    [InlineData("commit", null, "concurrency conflict", false)]
+    public async Task OnlyStructuredConflictCodeIsTranslatedDespiteCleanupFailures(string failureAt, uint? code, string message, bool conflict)
+    {
+        var original = new StreamException(message, "APPEND_FAILED", domainCode: code);
+        var session = new Session(failureAt, true) { Failure = original };
+        var store = new FitzEventStore(new Streams(session), new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<Declined>()));
+        await using var provider = new ServiceCollection().BuildServiceProvider();
+        var repository = new AggregateRepository(store, provider);
+        var account = new Account(Uuid.CreateVersion7());
+        var payload = new Declined("pending");
+        account.Audit(payload);
+        var error = await Record.ExceptionAsync(() => repository.SaveAsync(account).AsTask());
+        if (conflict)
+            Assert.Same(original, Assert.IsType<EventStreamConcurrencyException>(error).InnerException);
+        else
+            Assert.Same(original, error);
+        Assert.Same(payload, Assert.Single(new AggregateScenario<Account>(account).PendingAudits));
+        Assert.Equal(1, session.Rollbacks);
+        Assert.True(session.Disposed);
+    }
+
     sealed class Session(string failureAt, bool cleanupFails) : IStreamSession
     {
-        public IOException Failure { get; } = new("Injected session failure");
+        public Exception Failure { get; init; } = new IOException("Injected session failure");
 
         public int Rollbacks { get; private set; }
 

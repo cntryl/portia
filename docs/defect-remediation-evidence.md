@@ -1,5 +1,8 @@
 # Framework defect remediation evidence
 
+This file records the earlier 320-test baseline. The subsequent architecture changes and
+current qualification limits are in [architecture evidence](architecture-remediation-evidence.md).
+
 This is a breaking API correction. Publication and tagging are outside this PR.
 The event stream remains the source of truth. Fitz owns reservation redelivery and
 dead-letter policy; this work adds no outbox or application redelivery loop.

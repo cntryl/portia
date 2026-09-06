@@ -35,8 +35,9 @@ public sealed class ProjectorRegistration
                 runner.RunAsync(services.GetRequiredService<TProjector>(), checkpoint, options, ct),
             static async (services, options, ct) =>
             {
+                (options ?? ProjectionRunOptions.Default).Validate();
                 var projector = services.GetRequiredService<TProjector>();
-                var checkpoint = await projector.Target.LoadCheckpointAsync(projector.Name, ct).ConfigureAwait(false);
+                var checkpoint = await projector.Target.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern, options?.RebuildId), ct).ConfigureAwait(false);
                 _ = await services.GetRequiredService<ProjectorRunner>()
                     .RunAsync(projector, checkpoint, options, ct).ConfigureAwait(false);
             });

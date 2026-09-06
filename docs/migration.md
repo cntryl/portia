@@ -72,6 +72,71 @@ the delivery scope. Projector/reactor dependencies resolve within each pass. Kee
 transport connections long-lived. Projectors reload the authoritative target
 checkpoint on every pass and retain atomic projection/checkpoint batch ownership.
 
+## Scoped checkpoints and rebuilds
+
+Replace name-only checkpoint parameters with immutable
+`CheckpointIdentity(componentName, pattern, rebuildId)`. The identity stores the pattern's
+canonical string. Component names and nonnull rebuild IDs must be nonblank. Reactors always
+use a null rebuild ID. `IProjectionCheckpointStore.LoadAsync/SaveAsync` and
+`IProjectionTarget<T>.LoadCheckpointAsync` now receive the complete identity.
+`ProjectionBatchContext` now contains `Identity` and starting `Checkpoint`.
+
+Storage keys must encode all three fields without ambiguous concatenation, distinguishing null
+from every rebuild ID. For a projection, both data and checkpoint storage must be selected by
+that identity and committed atomically. Remove `ProjectionRunOptions.IsRebuild`; use nullable
+`RebuildId`. Handler-facing `IsRebuild` remains derived from whether the ID is nonnull.
+Reusing an ID resumes that rebuild. A new ID begins at zero in separate data/checkpoint storage;
+live data and progress remain unchanged. Promotion remains application-owned.
+
+Before upgrading a deployed reactor or projector:
+
+1. Stop its old workers and back up the existing projection data and checkpoint records.
+2. Verify the exact component and stream pattern associated with each legacy name-only offset.
+   An offset cannot safely be copied across different scope patterns or tenants.
+3. Explicitly write each verified offset under its complete identity with a null rebuild ID.
+   For projections, migrate the matching data and checkpoint consistently in the target store.
+4. Verify the migrated data/progress before starting the new workers. Resolve ambiguous legacy
+   records manually. Do not infer tenant scope, fall back to old names, or automatically replay
+   existing reactor effects. There is no automatic migration or compatibility adapter.
+
+## Fleet membership and startup validation
+
+Replace the fleet runner's TTL argument with `FleetRunOptions` containing a required dedicated
+membership selector (`lease://realm/area/*`). Direct construction now requires
+`IFleetMembership` as well as `IPartitionLeaseCompetitor`. Hosting registers `FitzFleetMembership`
+and the partition competitor around the application's `ILeaseClient`; custom implementations
+must honor the membership cancellation and observer lifetime contract.
+
+The Fitz membership implementation holds a renewable worker lease and owns the inventory
+observer until its callback has stopped. Partition leases remain the exclusion boundary during
+handoffs. An assignment is the worker with the greatest SHA-256 digest of the route and worker
+ID: each UTF-8 byte sequence is preceded by its unsigned 32-bit big-endian byte length, route
+first. Digest ties choose the greatest ordinal worker ID. All workers must use this exact
+algorithm, membership selector, and partition set. Hashing does not guarantee equal counts.
+Do not rely on process-local hash codes or assignment alone for write exclusion: enforce fencing
+in downstream stores.
+
+Projector batching/rebuild settings, polling intervals, membership selectors, duplicate
+partitions, overlapping membership areas, worker IDs and TTLs fail before registration mutates
+services or workers start. Positive fractional TTLs round upward. Tenant shutdown cancels all
+remaining tenants before awaiting completion, contains cancellation/stop callback failures,
+observes each workload, and disposes every cancellation source. Cleanup errors are reported
+individually without terminating the directory loop.
+
+## Structured Fitz errors and current qualification limit
+
+`Portia.Fitz` now references centrally pinned `Cntryl.Fitz` 0.1.1 directly. Only
+`StreamException.DomainCode == 2001` becomes `EventStreamConcurrencyException`, with the original
+exception as `InnerException`. Wording and generic string codes are not classifiers. Other
+errors propagate unchanged. Append/commit failures retain pending aggregate batches even when
+rollback and disposal also fail. Portia never reruns commands automatically.
+
+The pinned client currently returns a null domain code for real stale APPEND responses.
+Consequently the two existing broker OCC tests still fail under strict classification.
+An upstream protocol/client change is required before this migration can be fully qualified;
+no Fitz repository changes or message-text fallback are included here. See
+[the observed evidence](architecture-remediation-evidence.md).
+
 ## HTTP contracts
 
 Generated endpoints honor ASP.NET HTTP JSON options. Default naming is camel case;

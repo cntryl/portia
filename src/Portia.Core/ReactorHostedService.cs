@@ -65,6 +65,7 @@ public sealed class ReactorHostedService : BackgroundService
 
         _maxBatchSize = maxBatchSize;
         _pollInterval = pollInterval ?? TimeSpan.FromSeconds(1);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(_pollInterval, TimeSpan.Zero, nameof(pollInterval));
         _logger = logger;
     }
 
@@ -80,7 +81,7 @@ public sealed class ReactorHostedService : BackgroundService
             try
             {
                 checkpoint ??= await _checkpointStore
-                    .LoadAsync(_reactor.Name, stoppingToken)
+                    .LoadAsync(new CheckpointIdentity(_reactor.Name, _reactor.Pattern), stoppingToken)
                     .ConfigureAwait(false);
 
                 operation = "pass";
@@ -94,7 +95,7 @@ public sealed class ReactorHostedService : BackgroundService
 
                 if (next != checkpoint.Value)
                 {
-                    await _checkpointStore.SaveAsync(_reactor.Name, next, stoppingToken).ConfigureAwait(false);
+                    await _checkpointStore.SaveAsync(new CheckpointIdentity(_reactor.Name, _reactor.Pattern), next, stoppingToken).ConfigureAwait(false);
                     checkpoint = next;
                 }
             }

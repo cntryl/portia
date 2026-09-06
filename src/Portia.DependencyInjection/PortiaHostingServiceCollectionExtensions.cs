@@ -88,6 +88,7 @@ public static class PortiaHostingServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         var interval = ValidateInterval(pollInterval);
+        (options ?? ProjectionRunOptions.Default).Validate();
         services.TryAddScoped<ProjectorRunner>();
         _ = services.AddHostedService(sp =>
         {
@@ -146,7 +147,7 @@ public static class PortiaHostingServiceCollectionExtensions
             {
                 var reactor = scope.GetRequiredService<TReactor>();
                 var checkpoints = scope.GetRequiredService<IProjectionCheckpointStore>();
-                var checkpoint = await checkpoints.LoadAsync(reactor.Name, ct).ConfigureAwait(false);
+                var checkpoint = await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
                 _ = await scope.GetRequiredService<ReactorRunner>()
                     .RunAsync(reactor, checkpoint, checkpoints, maxBatchSize, ct).ConfigureAwait(false);
             },

@@ -9,16 +9,16 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class InMemoryProjectionCheckpointStore : IProjectionCheckpointStore
 {
-    readonly ConcurrentDictionary<string, ProjectionCheckpoint> _checkpoints = new(StringComparer.Ordinal);
+    readonly ConcurrentDictionary<CheckpointIdentity, ProjectionCheckpoint> _checkpoints = new();
 
     /// <inheritdoc />
-    public ValueTask<ProjectionCheckpoint> LoadAsync(string name, CancellationToken ct = default) =>
-        ValueTask.FromResult(_checkpoints.GetValueOrDefault(name, ProjectionCheckpoint.Start));
+    public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default) =>
+        ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity, ProjectionCheckpoint.Start));
 
     /// <inheritdoc />
-    public ValueTask SaveAsync(string name, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+    public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
     {
-        _checkpoints[name] = checkpoint;
+        _checkpoints[identity] = checkpoint;
         return ValueTask.CompletedTask;
     }
 }

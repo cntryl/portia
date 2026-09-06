@@ -22,24 +22,28 @@ public static class PortiaFitzHostingServiceCollectionExtensions
     /// <typeparam name="TWorkload">The partition-scoped component to run.</typeparam>
     /// <param name="services">The service collection to add to.</param>
     /// <param name="partitions">The fixed, deployment-time-known set of partition routes.</param>
-    /// <param name="leaseTtl">How long a held lease survives without renewal.</param>
+    /// <param name="options">How long a held lease survives without renewal.</param>
     /// <returns><paramref name="services" />, for chaining.</returns>
     public static IServiceCollection AddPortiaFleetPartitionRunner<TWorkload>(
         this IServiceCollection services,
         IReadOnlyCollection<string> partitions,
-        TimeSpan leaseTtl)
+        FleetRunOptions options)
         where TWorkload : class, IPartitionWorkload
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(partitions);
 
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate(partitions);
+        partitions = [.. partitions];
+        services.TryAddSingleton<IFleetMembership, FitzFleetMembership>();
         services.TryAddSingleton<IPartitionLeaseCompetitor>(sp => new FitzPartitionLeaseCompetitor(sp.GetRequiredService<ILeaseClient>()));
         services.TryAddSingleton<FleetPartitionRunner>();
         _ = services.AddHostedService(sp => new FleetPartitionRunnerHostedService<TWorkload>(
             sp.GetRequiredService<FleetPartitionRunner>(),
             sp.GetRequiredService<IServiceScopeFactory>(),
             partitions,
-            leaseTtl));
+            options));
         return services;
     }
 }

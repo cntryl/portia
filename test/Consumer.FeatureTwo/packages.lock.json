@@ -72,10 +72,19 @@
       "portia.fitz": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Fitz.Abstractions": "[0.1.1, )",
+          "Cntryl.Fitz": "[0.1.1, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.0, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.0, )",
           "Portia.Abstractions": "[1.0.0, )"
+        }
+      },
+      "Cntryl.Fitz": {
+        "type": "CentralTransitive",
+        "requested": "[0.1.1, )",
+        "resolved": "0.1.1",
+        "contentHash": "YnoVDm0qsljGAVRKU+TQImgVN2wRKD+nD9FwiwB5stCsV2IpYxwiiY/MDnQqlYxQl0E9M6bkgYIgRmpPJFgtqg==",
+        "dependencies": {
+          "Cntryl.Fitz.Abstractions": "0.1.1"
         }
       },
       "Cntryl.Fitz.Abstractions": {

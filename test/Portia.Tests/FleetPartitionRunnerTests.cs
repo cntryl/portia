@@ -5,11 +5,8 @@ using Cntryl.Fitz.Abstractions.Domains.Lease;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies <see cref="FleetPartitionRunner" />'s fleet-distribution behavior: a fixed,
-/// deployment-time-known set of partitions competed for across a dynamically-sized pool of
-/// worker processes, using Fitz leases so exactly one worker holds each partition. No partition
-/// is ever assigned by a central coordinator — every guarantee here falls out of independent,
-/// per-partition lease contention.
+/// Lease exclusion, cancellation, and backoff regressions using independent singleton inventories.
+/// Fleet membership redistribution is covered by the public consumer and broker fleet tests.
 /// </summary>
 public sealed class FleetPartitionRunnerTests
 {
@@ -24,10 +21,10 @@ public sealed class FleetPartitionRunnerTests
     public async Task ShouldBackOffWhenCallbackReturnsImmediately()
     {
         var leases = new InMemoryLeaseClient();
-        var runner = new FleetPartitionRunner(leases);
+        var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
         using var cts = new CancellationTokenSource();
 
-        var run = runner.RunAsync(["lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, TimeSpan.FromSeconds(30), cts.Token);
+        var run = runner.RunAsync(["lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), cts.Token);
 
         await Task.Delay(300);
         cts.Cancel();
@@ -44,10 +41,10 @@ public sealed class FleetPartitionRunnerTests
     public async Task ShouldRejectNonPositiveLeaseTtl()
     {
         var leases = new InMemoryLeaseClient();
-        var runner = new FleetPartitionRunner(leases);
+        var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
 
         _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            runner.RunAsync(["lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, TimeSpan.Zero));
+            runner.RunAsync(["lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.Zero)));
     }
 
     /// <summary>
@@ -76,7 +73,7 @@ public sealed class FleetPartitionRunnerTests
     public async Task ShouldRejectMalformedPartitionRoute(string route, string reason)
     {
         var leases = new InMemoryLeaseClient();
-        var runner = new FleetPartitionRunner(leases);
+        var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
         // Bounds the call: proper validation throws synchronously, well within this — but if
         // validation is missing for this particular malformed shape, RunAsync instead returns a
         // genuinely running (and, against this fake, endlessly "succeeding") task rather than
@@ -85,7 +82,7 @@ public sealed class FleetPartitionRunnerTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            runner.RunAsync([route], (_, _, _) => Task.CompletedTask, TimeSpan.FromSeconds(30), cts.Token));
+            runner.RunAsync([route], (_, _, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), cts.Token));
         Assert.Contains("lease://{realm}/{area}/{resource}", exception.Message, StringComparison.Ordinal);
         _ = reason;
     }
@@ -99,13 +96,13 @@ public sealed class FleetPartitionRunnerTests
     public async Task ShouldAcceptWellFormedPartitionRoute()
     {
         var leases = new InMemoryLeaseClient();
-        var runner = new FleetPartitionRunner(leases);
+        var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
         using var cts = new CancellationTokenSource();
 
         var run = runner.RunAsync(
             ["lease://portia/fleet/well-formed"],
             (_, _, ct) => RunUntilCancelled("lease://portia/fleet/well-formed", new ConcurrentDictionary<string, bool>(), ct),
-            TimeSpan.FromSeconds(30),
+            SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
             cts.Token);
 
         await WaitUntil(() => leases.Acquisitions.Count == 1);
@@ -122,10 +119,10 @@ public sealed class FleetPartitionRunnerTests
     public async Task ShouldRejectDuplicatePartitionKeys()
     {
         var leases = new InMemoryLeaseClient();
-        var runner = new FleetPartitionRunner(leases);
+        var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
 
         _ = await Assert.ThrowsAsync<ArgumentException>(() =>
-            runner.RunAsync(["lease://portia/fleet/p", "lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, TimeSpan.FromSeconds(30)));
+            runner.RunAsync(["lease://portia/fleet/p", "lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30))));
     }
 
     /// <summary>
@@ -139,7 +136,7 @@ public sealed class FleetPartitionRunnerTests
     public async Task ShouldReportDifferentFaultReasonForFailedAcquisitionThanFailedCallback()
     {
         var leases = new InMemoryLeaseClient();
-        var runner = new FleetPartitionRunner(leases);
+        var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
         using var listener = Listen(out var activities);
         using var cts = new CancellationTokenSource();
 
@@ -150,7 +147,7 @@ public sealed class FleetPartitionRunnerTests
             (partition, _, _) => partition == "lease://portia/fleet/acquired-then-fails"
                 ? throw new InvalidOperationException("callback failure")
                 : Task.CompletedTask,
-            TimeSpan.FromSeconds(30),
+            SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
             cts.Token);
 
         static bool IsFor(Activity a, string partition)
@@ -199,14 +196,14 @@ public sealed class FleetPartitionRunnerTests
     public async Task ShouldAcquireEveryPartitionWhenNoWorkerContestsThem()
     {
         var leases = new InMemoryLeaseClient();
-        var runner = new FleetPartitionRunner(leases);
+        var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
         var held = new ConcurrentDictionary<string, bool>();
         using var cts = new CancellationTokenSource();
 
         var run = runner.RunAsync(
             ["lease://portia/fleet/partition-a", "lease://portia/fleet/partition-b"],
             (partition, _, ct) => RunUntilCancelled(partition, held, ct),
-            TimeSpan.FromSeconds(30),
+            SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
             cts.Token);
 
         await WaitUntil(() => held.Count == 2);
@@ -226,8 +223,8 @@ public sealed class FleetPartitionRunnerTests
     public async Task ShouldGrantPartitionToExactlyOneCompetingWorker()
     {
         var leases = new InMemoryLeaseClient();
-        var runnerA = new FleetPartitionRunner(leases);
-        var runnerB = new FleetPartitionRunner(leases);
+        var runnerA = new FleetPartitionRunner(leases, new SingleWorkerMembership());
+        var runnerB = new FleetPartitionRunner(leases, new SingleWorkerMembership());
         var concurrentHolders = 0;
         var maxObservedConcurrentHolders = 0;
         using var ctsA = new CancellationTokenSource();
@@ -252,8 +249,8 @@ public sealed class FleetPartitionRunnerTests
             }
         }
 
-        var runA = runnerA.RunAsync(["lease://portia/fleet/shared-partition"], OnAcquired, TimeSpan.FromSeconds(30), ctsA.Token);
-        var runB = runnerB.RunAsync(["lease://portia/fleet/shared-partition"], OnAcquired, TimeSpan.FromSeconds(30), ctsB.Token);
+        var runA = runnerA.RunAsync(["lease://portia/fleet/shared-partition"], OnAcquired, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), ctsA.Token);
+        var runB = runnerB.RunAsync(["lease://portia/fleet/shared-partition"], OnAcquired, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), ctsB.Token);
 
         await WaitUntil(() => leases.Acquisitions.Count >= 1);
         // Give the loser a real chance to have (incorrectly) run concurrently, if the
@@ -277,8 +274,8 @@ public sealed class FleetPartitionRunnerTests
     public async Task ShouldOnlyMoveThePartitionThatWasReleasedWhenAWorkerStops()
     {
         var leases = new InMemoryLeaseClient();
-        var runnerA = new FleetPartitionRunner(leases);
-        var runnerB = new FleetPartitionRunner(leases);
+        var runnerA = new FleetPartitionRunner(leases, new SingleWorkerMembership());
+        var runnerB = new FleetPartitionRunner(leases, new SingleWorkerMembership());
         var stablePartitionRestarts = new int[1];
         var movedPartitionAcquisitions = new ConcurrentBag<string>();
         using var ctsA = new CancellationTokenSource();
@@ -294,7 +291,7 @@ public sealed class FleetPartitionRunnerTests
                 "lease://portia/fleet/stable-partition" => CountRestartsUntilCancelled(stablePartitionRestarts, ct),
                 _ => RunUntilCancelledRecordingAcquisition(partition, movedPartitionAcquisitions, ct),
             },
-            TimeSpan.FromSeconds(30),
+            SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
             ctsA.Token);
 
         await WaitUntil(() => leases.Acquisitions.Count >= 2);
@@ -304,7 +301,7 @@ public sealed class FleetPartitionRunnerTests
         var runB = runnerB.RunAsync(
             ["lease://portia/fleet/moving-partition"],
             (partition, _, ct) => RunUntilCancelledRecordingAcquisition(partition, movedPartitionAcquisitions, ct),
-            TimeSpan.FromSeconds(30),
+            SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
             ctsB.Token);
 
         // Worker A gives up "lease://portia/fleet/moving-partition" only (simulated here as a full worker shutdown,

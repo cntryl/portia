@@ -43,7 +43,7 @@ public sealed class ComponentCompilationTests
             }
             public sealed class Target : IProjectionTarget<object>
             {
-                public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(string name, CancellationToken ct = default) => throw new NotSupportedException();
+                public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity name, CancellationToken ct = default) => throw new NotSupportedException();
                 public ValueTask<IProjectionBatch<object>> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default) => throw new NotSupportedException();
             }
             """ + components + $$"""

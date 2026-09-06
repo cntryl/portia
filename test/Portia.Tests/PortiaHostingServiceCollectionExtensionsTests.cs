@@ -132,7 +132,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         await hostedService.StopAsync(default);
 
         Assert.Equal(42, target.Projection.Value);
-        Assert.Equal(1UL, (await target.LoadCheckpointAsync("test-projector")).NextOffset);
+        Assert.Equal(1UL, (await target.LoadCheckpointAsync(new CheckpointIdentity("test-projector", EventStreamPattern.ForPattern("test", "projectors")))).NextOffset);
     }
 
     /// <summary>
@@ -161,7 +161,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         await hostedService.StopAsync(default);
 
         Assert.Equal(1, target.Projection.HandlerCount);
-        Assert.Equal(1UL, (await target.LoadCheckpointAsync("test-projector")).NextOffset);
+        Assert.Equal(1UL, (await target.LoadCheckpointAsync(new CheckpointIdentity("test-projector", EventStreamPattern.ForPattern("test", "projectors")))).NextOffset);
     }
 
     /// <summary>
@@ -193,7 +193,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         Assert.False(executeTask.IsFaulted);
         Assert.Equal(3, target.LoadAttempts);
         Assert.Equal(1, target.Projection.HandlerCount);
-        Assert.Equal(1UL, (await target.LoadCheckpointAsync("test-projector")).NextOffset);
+        Assert.Equal(1UL, (await target.LoadCheckpointAsync(new CheckpointIdentity("test-projector", EventStreamPattern.ForPattern("test", "projectors")))).NextOffset);
     }
 
     /// <summary>
@@ -208,9 +208,10 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton<IPartitionLeaseCompetitor>(new InMemoryLeaseClient());
         _ = services.AddSingleton(state);
         _ = services.AddScoped<HostingPartitionWorkload>();
+        _ = services.AddSingleton<IFleetMembership, SingleWorkerMembership>();
         _ = services.AddPortiaFleetPartitionRunner<HostingPartitionWorkload>(
             ["lease://portia/fleet/partition-a"],
-            leaseTtl: TimeSpan.FromSeconds(30));
+            options: SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)));
         using var provider = services.BuildServiceProvider(validateScopes: true);
 
         var hostedService = Assert.Single(provider.GetServices<IHostedService>());
@@ -379,7 +380,7 @@ sealed class LateFaultProjectionTarget : IProjectionTarget<TestProjection>
     public int CommitAttempts { get; private set; }
 
     public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
-        string projectorName,
+        CheckpointIdentity identity,
         CancellationToken ct = default) => ValueTask.FromResult(_checkpoint);
 
     public ValueTask<IProjectionBatch<TestProjection>> BeginAsync(
@@ -419,7 +420,7 @@ sealed class TransientReloadFailureProjectionTarget : IProjectionTarget<TestProj
     public Task CheckpointReloaded => _checkpointReloaded.Task;
 
     public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
-        string projectorName,
+        CheckpointIdentity identity,
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();

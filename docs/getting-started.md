@@ -184,13 +184,53 @@ services.AddPortiaReactorRunner<SecondReactor>();
 
 Provide `IProjectionTarget<T>` for projectors and `IProjectionCheckpointStore` for
 reactors. Each pass uses a fresh scope. A projection batch must atomically commit
-its projection changes and checkpoint. Each pass reloads the durable checkpoint,
+its projection changes and checkpoint under the same `ProjectionBatchContext.Identity`.
+`LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct)` loads exactly that
+identity. Store all three identity fields: component name, canonical pattern, and nullable
+rebuild ID. Each pass reloads the durable checkpoint,
 including after an uncertain commit. Pattern readers and components can consume
 raised events and audits; aggregate rehydration reads only its stable source stream.
 
 The event-sourced tenant directory and tenant restarts default to one second and
 accept `TimeProvider`. Each watcher owns independent progress. Failed active tenant
 workloads restart in new scopes; removal and shutdown cancel execution and backoff.
+
+## Rebuilds and fleet hosting
+
+A rebuild uses an explicit generation ID:
+
+```csharp
+services.AddPortiaProjectorRunner<FirstProjector>(
+    new ProjectionRunOptions { RebuildId = "accounts-2026-09", MaxBatchSize = 512 });
+```
+
+The target must use the complete checkpoint identity to select both data and progress.
+A new ID has no checkpoint and starts at zero; reusing an ID resumes its committed batches.
+Live processing has a null ID. Handlers still read `context.IsRebuild`, derived from the ID.
+Keep live and rebuilt data separate; the application decides when and how to promote rebuilt
+results. Do not seed rebuild progress from live progress.
+
+Register one shared Fitz `ILeaseClient`, the scoped partition workload, and fleet options:
+
+```csharp
+services.AddScoped<AccountPartitionWorkload>();
+services.AddPortiaFleetPartitionRunner<AccountPartitionWorkload>(
+    ["lease://accounts/partitions/0", "lease://accounts/partitions/1"],
+    new FleetRunOptions { MembershipSelector = "lease://accounts/workers/*" });
+```
+
+`AccountPartitionWorkload` implements `IPartitionWorkload`. Each acquired lease gets its own
+scope and `LeaseAuthority`; downstream writes must enforce its fencing token. The membership
+area must not contain partition leases or unrelated leases. All workers in the fleet must use
+identical selectors and partition sets. An omitted worker ID becomes one UUIDv4 per run,
+retained across reconnects; explicit IDs must be unique among live workers.
+
+Membership and partition TTLs default to 30 seconds; positive fractional TTLs round upward to
+whole seconds. Snapshot reconciliation defaults to one second. Rendezvous hashing gives stable
+assignments with minimal movement on joins/departures, without guaranteeing equal counts.
+Membership loss or an unready inventory cancels partition work. Membership faults retry after
+a cancellable one-second backoff through `TimeProvider`. Logs and tracing report membership
+faults and assignment changes.
 
 ## Authorization and streaming
 

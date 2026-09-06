@@ -1,0 +1,46 @@
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Cntryl.Portia.Consumer;
+
+public sealed class StartupValidationTests
+{
+    [Theory]
+    [InlineData(0, null)]
+    [InlineData(-1, null)]
+    [InlineData(1, "")]
+    [InlineData(1, " ")]
+    public void InvalidProjectionOptionsDoNotMutateRegistrations(int batchSize, string? rebuildId)
+    {
+        var services = new ServiceCollection();
+        _ = Assert.ThrowsAny<ArgumentException>(() => services.AddPortiaProjectorRunner<FirstProjector>(
+            new ProjectionRunOptions { MaxBatchSize = batchSize, RebuildId = rebuildId }));
+        Assert.Empty(services);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void DirectHostsRejectInvalidPollingIntervals(int milliseconds)
+    {
+        var reader = new InMemoryEventStore();
+        _ = Assert.ThrowsAny<ArgumentException>(() => new ReactorHostedService(new ReactorRunner(reader),
+            new TestReactor(), new InMemoryProjectionCheckpointStore(), pollInterval: TimeSpan.FromMilliseconds(milliseconds)));
+        _ = Assert.ThrowsAny<ArgumentException>(() => new ProjectorHostedService<object>(new ProjectorRunner(reader),
+            new TestProjection(), pollInterval: TimeSpan.FromMilliseconds(milliseconds)));
+    }
+
+    [Fact]
+    public void DirectProjectorHostRejectsInvalidBatchBeforeStarting()
+    {
+        _ = Assert.ThrowsAny<ArgumentException>(() => new ProjectorHostedService<object>(new ProjectorRunner(new InMemoryEventStore()),
+            new TestProjection(), new ProjectionRunOptions { MaxBatchSize = 0 }));
+    }
+
+    sealed class TestReactor() : Reactor("test", EventStreamPattern.ForPattern("test"));
+    sealed class TestProjection() : Projector<object>("test", EventStreamPattern.ForPattern("test"), new Target());
+    sealed class Target : IProjectionTarget<object>
+    {
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<IProjectionBatch<object>> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+}

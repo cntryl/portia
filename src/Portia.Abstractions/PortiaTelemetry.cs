@@ -88,6 +88,20 @@ public static partial class PortiaTelemetry
         _ = activity.SetStatus(ActivityStatusCode.Error, exception?.Message ?? reason);
     }
 
+    /// <summary>Records a worker gaining or relinquishing an assigned partition.</summary>
+    public static void RecordFleetAssignment(string workerId, string partition, bool assigned, ILogger? logger = null)
+    {
+        if (logger is not null)
+            LogFleetAssignment(logger, workerId, partition, assigned);
+        using var activity = ActivitySource.StartActivity("Portia fleet assignment");
+        _ = activity?.SetTag("portia.worker_id", workerId);
+        _ = activity?.SetTag("portia.partition", partition);
+        _ = activity?.SetTag("portia.assigned", assigned);
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Portia worker {WorkerId} partition {Partition} assigned: {Assigned}")]
+    static partial void LogFleetAssignment(ILogger logger, string workerId, string partition, bool assigned);
+
     [LoggerMessage(Level = LogLevel.Error, Message = "Portia {RunnerName} fault: {Reason}")]
     static partial void LogRunnerFault(ILogger logger, string runnerName, string reason, Exception? exception);
 }

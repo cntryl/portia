@@ -33,7 +33,11 @@ public sealed class InMemoryLeaseClient : IPartitionLeaseCompetitor
     /// while another holder still had it) rather than a callback that ran and then failed on
     /// its own.
     /// </summary>
-    public void FailNextAcquisition(string route) => _acquisitionFailures.Add(route);
+    public void FailNextAcquisition(string route)
+    {
+        lock (_locks)
+            _ = _acquisitionFailures.Add(route);
+    }
 
     /// <inheritdoc />
     public async Task WithLeaseAsync(
@@ -48,10 +52,13 @@ public sealed class InMemoryLeaseClient : IPartitionLeaseCompetitor
 
         try
         {
-            if (_acquisitionFailures.Remove(route))
-                throw new InvalidOperationException($"Simulated: '{route}' is still held by another owner.");
-
-            var authority = new LeaseAuthority(++_nextFencingToken);
+            LeaseAuthority authority;
+            lock (_locks)
+            {
+                if (_acquisitionFailures.Remove(route))
+                    throw new InvalidOperationException($"Simulated: '{route}' is still held by another owner.");
+                authority = new LeaseAuthority(++_nextFencingToken);
+            }
             lock (Acquisitions)
                 Acquisitions.Add(route);
 

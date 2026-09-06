@@ -31,9 +31,23 @@ public sealed class ProjectorHostedService<TProjection>(
 {
     readonly ProjectorRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
     readonly Projector<TProjection> _projector = projector ?? throw new ArgumentNullException(nameof(projector));
-    readonly ProjectionRunOptions? _options = options;
-    readonly TimeSpan _pollInterval = pollInterval ?? TimeSpan.FromSeconds(1);
+    readonly ProjectionRunOptions _options = ValidateOptions(options);
+    readonly TimeSpan _pollInterval = ValidateInterval(pollInterval);
     readonly ILogger<ProjectorHostedService<TProjection>>? _logger = logger;
+
+    static ProjectionRunOptions ValidateOptions(ProjectionRunOptions? options)
+    {
+        var value = options ?? ProjectionRunOptions.Default;
+        value.Validate();
+        return value;
+    }
+
+    static TimeSpan ValidateInterval(TimeSpan? interval)
+    {
+        var value = interval ?? TimeSpan.FromSeconds(1);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(value, TimeSpan.Zero, nameof(interval));
+        return value;
+    }
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -47,7 +61,7 @@ public sealed class ProjectorHostedService<TProjection>(
             try
             {
                 checkpoint ??= await _projector.Target
-                    .LoadCheckpointAsync(_projector.Name, stoppingToken)
+                    .LoadCheckpointAsync(new CheckpointIdentity(_projector.Name, _projector.Pattern, _options?.RebuildId), stoppingToken)
                     .ConfigureAwait(false);
 
                 operation = "pass";

@@ -142,8 +142,12 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
 - **Multi-tenancy vs. fleet distribution — deliberately orthogonal**: `MultiTenantRunner`
   decides which tenants a component instance runs for, on whichever worker it's already on.
   `FleetPartitionRunner` decides which worker gets to run a given partition at all, using Fitz
-  leases for contention — rebalancing needs no explicit logic; it falls out of independent,
-  per-partition lease contention.
+  renewable membership leases and deterministic rendezvous hashing. Workers periodically
+  reconcile an authoritative inventory, relinquish revoked assignments, and compete only for
+  assigned partition leases. Membership uses a dedicated `lease://realm/area/*` selector.
+  All workers must share the selector, partition set, and assignment algorithm. Hashing minimizes
+  movement but does not guarantee equal partition counts. Downstream writes must enforce fencing
+  against expired holders.
   Hosted workloads implement `ITenantWorkload` or `IPartitionWorkload`; each active tenant or
   held lease receives its own dependency-injection scope, which is disposed when that run stops.
 - **Observability**: `PortiaTelemetry.ActivitySource` (`"Cntryl.Portia"`) traces every dispatch,
@@ -160,7 +164,17 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   `IProjectionTarget`; each `IProjectionBatch` commits that checkpoint atomically with projection
   changes. Reactors, whose effects cannot share that transaction, use an
   `IProjectionCheckpointStore` — `InMemoryProjectionCheckpointStore` (`Portia.Testing`) for tests
-  or a single-instance deployment; anything durable needs its own implementation.
+  or a single-instance deployment; anything durable needs its own implementation. Both ports use
+  `CheckpointIdentity(componentName, pattern, rebuildId)`; persist its canonical `Pattern` and
+  nullable `RebuildId` alongside the component name. `ProjectionRunOptions.RebuildId` selects
+  separate data and progress: reuse it to resume, choose a new ID to start at zero. Applications
+  own rebuilt-data promotion and explicit migration of verified legacy checkpoints. See the
+  [migration notes](docs/migration.md#scoped-checkpoints-and-rebuilds).
+
+The architecture changes and their observed red → green results are recorded in
+[architecture evidence](docs/architecture-remediation-evidence.md). The pinned Fitz 0.1.1
+client does not populate append-conflict domain codes; strict structured classification
+therefore leaves two real-broker OCC assertions failing. This work is not fully qualified.
 
 ## Known gaps, stated plainly
 

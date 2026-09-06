@@ -1,12 +1,8 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies <see cref="FleetPartitionRunner" />'s central, previously-unverified behavioral
-/// claims against a real Fitz broker instead of inferring them from
-/// <c>ILeaseClient</c>'s method shapes: that a held lease is renewed automatically for as long as
-/// its callback keeps running, and that a lease whose holder disappears without releasing it
-/// gracefully (a crash, not a clean shutdown) still becomes available to another worker once its
-/// TTL lapses — the actual mechanism "auto rebalancing" depends on.
+/// Verifies renewable partition leases and disconnect handoff against Compose, with singleton
+/// membership fixtures. Public FleetBrokerTests separately verify real membership scale-out and TTL expiry.
 /// </summary>
 [Collection(FitzBrokerCollectionDefinition.Name)]
 public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
@@ -22,7 +18,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
     public async Task ShouldRenewLeaseAutomaticallyWhileCallbackOutlivesTtl()
     {
         await using var client = await _broker.CreateClientAsync();
-        var runner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(client.Lease));
+        var runner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(client.Lease), new SingleWorkerMembership());
         var partition = $"lease://portia-integration/fleet/renewal-{Uuid.CreateVersion7()}";
         using var cts = new CancellationTokenSource();
         var iterationsCompleted = 0;
@@ -43,7 +39,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
 
                 everCancelledBeforeWeAskedIt = ct.IsCancellationRequested;
             },
-            TimeSpan.FromSeconds(2),
+            SingleWorkerMembership.Options(TimeSpan.FromSeconds(2)),
             cts.Token);
 
         await Task.Delay(TimeSpan.FromSeconds(7));
@@ -66,7 +62,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
     }
 
     /// <summary>
-    /// Verifies the actual auto-rebalancing mechanism: a worker holding a partition's lease that
+    /// Verifies lease handoff: a worker holding a partition's lease that
     /// disappears without releasing it gracefully (its connection is torn down, not a clean
     /// shutdown) still frees that partition for another, already-waiting worker once the lease's
     /// TTL lapses — real crash recovery, not just a cooperative handoff.
@@ -80,7 +76,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
         var holderAcquired = new TaskCompletionSource();
         var waiterAcquired = new TaskCompletionSource();
 
-        var holderRunner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(holderClient.Lease));
+        var holderRunner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(holderClient.Lease), new SingleWorkerMembership());
         using var holderCts = new CancellationTokenSource();
         var holderRun = holderRunner.RunAsync(
             [partition],
@@ -89,12 +85,12 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
                 _ = holderAcquired.TrySetResult();
                 return Task.Delay(Timeout.InfiniteTimeSpan, ct);
             },
-            TimeSpan.FromSeconds(2),
+            SingleWorkerMembership.Options(TimeSpan.FromSeconds(2)),
             holderCts.Token);
 
         await holderAcquired.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-        var waiterRunner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(waiterClient.Lease));
+        var waiterRunner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(waiterClient.Lease), new SingleWorkerMembership());
         using var waiterCts = new CancellationTokenSource();
         var waiterRun = waiterRunner.RunAsync(
             [partition],
@@ -103,7 +99,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
                 _ = waiterAcquired.TrySetResult();
                 return Task.Delay(Timeout.InfiniteTimeSpan, ct);
             },
-            TimeSpan.FromSeconds(2),
+            SingleWorkerMembership.Options(TimeSpan.FromSeconds(2)),
             waiterCts.Token);
 
         // Simulate a crash: tear down the holder's connection without ever cancelling its own

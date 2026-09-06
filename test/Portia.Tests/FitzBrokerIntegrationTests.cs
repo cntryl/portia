@@ -79,9 +79,9 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     /// <see cref="EventStreamConcurrencyException" /> — the same type
     /// <see cref="InMemoryEventStore" /> throws for the identical situation — rather than an
     /// unnormalized, Fitz-specific exception a caller has no stable way to catch and retry on.
-    /// Fitz itself only distinguishes this from every other append failure by message text (no
-    /// structured error code for it, confirmed by inspecting the real exception directly), so
-    /// this is exactly the kind of implementation detail application code shouldn't have to know.
+    /// Retained as an acceptance gate: the pinned Fitz 0.1.1 client currently supplies no
+    /// DomainCode for APPEND, so strict structured classification leaves this assertion failing
+    /// until the upstream protocol/client carries code 2001. Do not reintroduce wording matching.
     /// </summary>
     [Fact]
     public async Task ShouldThrowConcurrencyExceptionWhenAppendingWithStaleExpectedVersion()

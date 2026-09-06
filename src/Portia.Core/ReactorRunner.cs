@@ -83,7 +83,7 @@ public sealed class ReactorRunner(IDomainEventReader reader)
             if (checkpointStore is not null && pendingInBatch == maxBatchSize)
             {
                 checkpoint = new ProjectionCheckpoint(EventStreamOffsets.GetNextOffset(reactor.Pattern, record));
-                await checkpointStore.SaveAsync(reactor.Name, checkpoint, ct).ConfigureAwait(false);
+                await checkpointStore.SaveAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), checkpoint, ct).ConfigureAwait(false);
                 pendingInBatch = 0;
                 lastRecord = null;
             }
@@ -94,7 +94,7 @@ public sealed class ReactorRunner(IDomainEventReader reader)
             checkpoint = new ProjectionCheckpoint(EventStreamOffsets.GetNextOffset(reactor.Pattern, lastReadRecord));
 
             if (checkpointStore is not null)
-                await checkpointStore.SaveAsync(reactor.Name, checkpoint, ct).ConfigureAwait(false);
+                await checkpointStore.SaveAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), checkpoint, ct).ConfigureAwait(false);
         }
 
         return checkpoint;

@@ -91,7 +91,7 @@ static class ConsumerHost
 
     public sealed class ProjectionStorage
     {
-        public ConcurrentDictionary<string, ProjectionCheckpoint> Checkpoints { get; } = new();
+        public ConcurrentDictionary<CheckpointIdentity, ProjectionCheckpoint> Checkpoints { get; } = new();
         public bool FailAfterCommit { get; set; }
         public bool FailReload { get; set; }
         public int LoadAttempts { get; set; }
@@ -99,7 +99,7 @@ static class ConsumerHost
 
     sealed class ProjectionTarget(ProjectionStorage storage, IConsumerEffects effects) : IProjectionTarget<IAccountProjection>
     {
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(string projectorName, CancellationToken ct = default)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default)
         {
             storage.LoadAttempts++;
             if (storage.FailReload)
@@ -107,14 +107,14 @@ static class ConsumerHost
                 storage.FailReload = false;
                 throw new InvalidOperationException("Checkpoint reload failed");
             }
-            return ValueTask.FromResult(storage.Checkpoints.GetValueOrDefault(projectorName, ProjectionCheckpoint.Start));
+            return ValueTask.FromResult(storage.Checkpoints.GetValueOrDefault(identity, ProjectionCheckpoint.Start));
         }
 
         public ValueTask<IProjectionBatch<IAccountProjection>> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
-            => ValueTask.FromResult<IProjectionBatch<IAccountProjection>>(new Batch(context.ProjectorName, storage, effects));
+            => ValueTask.FromResult<IProjectionBatch<IAccountProjection>>(new Batch(context.Identity, storage, effects));
     }
 
-    sealed class Batch(string name, ProjectionStorage storage, IConsumerEffects effects) : IProjectionBatch<IAccountProjection>, IAccountProjection
+    sealed class Batch(CheckpointIdentity name, ProjectionStorage storage, IConsumerEffects effects) : IProjectionBatch<IAccountProjection>, IAccountProjection
     {
         readonly List<(Uuid Id, int Amount, Guid ScopeId)> _pending = [];
 
@@ -125,7 +125,7 @@ static class ConsumerHost
         public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
         {
             foreach (var (id, amount, scopeId) in _pending)
-                effects.Record(name, id, amount, scopeId);
+                effects.Record(name.ComponentName, id, amount, scopeId);
             storage.Checkpoints[name] = checkpoint;
             if (storage.FailAfterCommit)
             {

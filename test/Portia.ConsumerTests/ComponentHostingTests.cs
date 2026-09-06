@@ -5,14 +5,16 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed class ComponentHostingTests
 {
-    [Fact]
-    public async Task UncertainProjectionCommitAndFailedReloadPreserveDurableProgress()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("repair")]
+    public async Task UncertainProjectionCommitAndFailedReloadPreserveDurableProgress(string? rebuildId)
     {
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
         _ = services.AddPortiaModule<AccountsModule>();
-        _ = services.AddPortiaProjectorRunner<FirstProjector>();
+        _ = services.AddPortiaProjectorRunner<FirstProjector>(new ProjectionRunOptions { RebuildId = rebuildId });
         await using var provider = ConsumerHost.Build(services);
         var storage = provider.GetRequiredService<ConsumerHost.ProjectionStorage>();
         storage.FailAfterCommit = true;
@@ -26,6 +28,7 @@ public sealed class ComponentHostingTests
             {
                 Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
                 Assert.Equal(pass, storage.LoadAttempts);
+                Assert.Equal(rebuildId, Assert.Single(storage.Checkpoints).Key.RebuildId);
                 _ = Assert.Single(effects.Items);
                 Assert.All(effects.Scopes.Values, Assert.True);
                 if (pass < 3)

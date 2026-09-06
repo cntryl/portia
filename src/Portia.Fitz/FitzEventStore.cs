@@ -166,18 +166,7 @@ public sealed class FitzEventStore : IEventStore
             failed = true;
             await RollbackAsync(session).ConfigureAwait(false);
 
-            // A concurrency conflict — someone else committed to this stream first — is exactly
-            // the case IEventStore consumers most need to catch and retry against, so it gets
-            // Portia's own EventStreamConcurrencyException, the same type InMemoryEventStore
-            // throws for the identical situation. Matched by message text, not exception type or
-            // a structured error code: confirmed directly against a real broker that Fitz's own
-            // client exposes neither for this (its StreamException.Code is the generic
-            // "APPEND_FAILED" for every append failure, and Portia.Fitz deliberately depends only
-            // on Cntryl.Fitz.Abstractions, not the concrete client package that type lives in, so
-            // it can't even be caught by type here). Fragile if Fitz's wording ever changes, but
-            // confined to this one place — an app catching EventStreamConcurrencyException never
-            // has to know or care.
-            if (ex.Message.Contains("concurrency conflict", StringComparison.OrdinalIgnoreCase))
+            if (ex is Fitz.Errors.StreamException { DomainCode: 2001 })
                 throw new EventStreamConcurrencyException($"Stream '{stream}' is not at the expected physical stream position.", ex);
 
             throw;

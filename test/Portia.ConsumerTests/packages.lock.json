@@ -172,7 +172,7 @@
       "portia.fitz": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Fitz.Abstractions": "[0.1.1, )",
+          "Cntryl.Fitz": "[0.1.1, )",
           "Portia.Abstractions": "[1.0.0, )"
         }
       },

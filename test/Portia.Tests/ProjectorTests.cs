@@ -46,7 +46,7 @@ public sealed class ProjectorTests
         var checkpoint = await runner.RunAsync(
             projector,
             ProjectionCheckpoint.Start,
-            new ProjectionRunOptions { MaxBatchSize = 2, IsRebuild = true });
+            new ProjectionRunOptions { MaxBatchSize = 2, RebuildId = "rebuild-1" });
 
         Assert.Equal(42, target.Projection.Value);
         Assert.Equal(3UL, checkpoint.NextOffset);
@@ -131,7 +131,7 @@ sealed class TestProjection
 sealed class UnusedProjectionTarget : IProjectionTarget<TestProjection>
 {
     public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
-        string projectorName,
+        CheckpointIdentity identity,
         CancellationToken ct = default) => throw new NotSupportedException();
 
     public ValueTask<IProjectionBatch<TestProjection>> BeginAsync(
@@ -150,7 +150,7 @@ sealed class RecordingProjectionTarget : IProjectionTarget<TestProjection>
     public List<ulong> CommittedOffsets { get; } = [];
 
     public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
-        string projectorName,
+        CheckpointIdentity identity,
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();

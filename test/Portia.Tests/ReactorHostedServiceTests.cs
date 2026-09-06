@@ -120,14 +120,14 @@ sealed class TransientReloadFailureCheckpointStore : IProjectionCheckpointStore
 
     public Task CheckpointReloaded => _checkpointReloaded.Task;
 
-    public async ValueTask<ProjectionCheckpoint> LoadAsync(string name, CancellationToken ct = default)
+    public async ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
     {
         var loadAttempt = Interlocked.Increment(ref _loadAttempts);
 
         if (loadAttempt == 2)
             throw new InvalidOperationException("Simulated transient checkpoint reload failure.");
 
-        var checkpoint = await _inner.LoadAsync(name, ct);
+        var checkpoint = await _inner.LoadAsync(identity, ct);
 
         if (loadAttempt == 3)
             _ = _checkpointReloaded.TrySetResult();
@@ -136,9 +136,9 @@ sealed class TransientReloadFailureCheckpointStore : IProjectionCheckpointStore
     }
 
     public ValueTask SaveAsync(
-        string name,
+        CheckpointIdentity identity,
         ProjectionCheckpoint checkpoint,
-        CancellationToken ct = default) => _inner.SaveAsync(name, checkpoint, ct);
+        CancellationToken ct = default) => _inner.SaveAsync(identity, checkpoint, ct);
 }
 
 sealed partial class FlakyOnThirdAttemptReactor : Reactor, IReactorHandler<ValueChanged>

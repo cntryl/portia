@@ -113,13 +113,13 @@ public sealed class ReactorRunnerTests
 
         // The first batch (events 1-2) must already be durably saved — not just held in memory —
         // by the time the second batch's failure propagates.
-        var savedAfterFailure = await checkpointStore.LoadAsync(reactor.Name);
+        var savedAfterFailure = await checkpointStore.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern));
         Assert.Equal(2UL, savedAfterFailure.NextOffset);
         Assert.Equal([1, 2], reactor.HandledValues);
 
         // Retrying from the saved checkpoint (not ProjectionCheckpoint.Start) only re-reacts to
         // events 3-4 — events 1-2 are never handled a second time.
-        var resumeFrom = await checkpointStore.LoadAsync(reactor.Name);
+        var resumeFrom = await checkpointStore.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern));
         var finalCheckpoint = await runner.RunAsync(reactor, resumeFrom, checkpointStore, maxBatchSize: 2);
 
         Assert.Equal([1, 2, 3, 4], reactor.HandledValues);

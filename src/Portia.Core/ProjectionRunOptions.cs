@@ -16,12 +16,15 @@ public sealed record ProjectionRunOptions
     public int MaxBatchSize { get; init; } = 512;
 
     /// <summary>
-    /// Gets whether the run writes to a rebuild generation.
+    /// Gets the rebuild generation, or null for live processing. Reuse an ID to resume its data and progress.
     /// </summary>
-    public bool IsRebuild { get; init; }
+    public string? RebuildId { get; init; }
 
-    internal void Validate()
+    /// <summary>Rejects invalid batching and generation settings before work starts.</summary>
+    public void Validate()
     {
+        if (RebuildId is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(RebuildId);
         if (MaxBatchSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(MaxBatchSize), "Batch size must be greater than zero.");
     }

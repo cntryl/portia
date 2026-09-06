@@ -137,6 +137,8 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
         }
         finally
         {
+            foreach (var (tenantId, run) in active)
+                Cancel(tenantId, run.Cancellation);
             foreach (var tenantId in active.Keys.ToArray())
                 await StopAsync(tenantId, onTenantStopped, active).ConfigureAwait(false);
         }
@@ -151,13 +153,15 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
         // RunAsync only ever calls Start/StopAsync sequentially from its own loops — never
         // concurrently with each other — so this reservation-then-fill isn't racing anything;
         // it's just how a TenantRun's Task can reference the same instance's own Cancellation.
+        ct.ThrowIfCancellationRequested();
         if (active.ContainsKey(tenantId))
             return;
 
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var cts = new CancellationTokenSource();
+        var registration = ct.Register(() => Cancel(tenantId, cts));
         var task = Task.Run(() => RunTenantAsync(tenantId, onTenantStarted, cts.Token), cts.Token);
 
-        active[tenantId] = new TenantRun(cts, task);
+        active[tenantId] = new TenantRun(cts, task, registration);
     }
 
     async Task RunTenantAsync(TenantId tenantId, Func<TenantId, CancellationToken, Task> onTenantStarted, CancellationToken ct)
@@ -187,7 +191,7 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
         return interval;
     }
 
-    static async ValueTask StopAsync(
+    async ValueTask StopAsync(
         TenantId tenantId,
         Func<TenantId, CancellationToken, Task> onTenantStopped,
         ConcurrentDictionary<TenantId, TenantRun> active)
@@ -195,7 +199,7 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
         if (!active.TryRemove(tenantId, out var run))
             return;
 
-        run.Cancellation.Cancel();
+        Cancel(tenantId, run.Cancellation);
 
         try
         {
@@ -205,18 +209,38 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
         {
             // Expected — the tenant's own run observed the cancellation it was just given.
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Observe termination before disposal without letting one workload's failure
-            // prevent shutdown of the other active tenants.
+            ReportCleanupFault(tenantId, "workload completion", ex);
         }
         finally
         {
+            run.Registration.Dispose();
             run.Cancellation.Dispose();
         }
 
-        await onTenantStopped(tenantId, CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            await onTenantStopped(tenantId, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            ReportCleanupFault(tenantId, "stop callback", ex);
+        }
     }
 
-    sealed record TenantRun(CancellationTokenSource Cancellation, Task Task);
+    void Cancel(TenantId tenantId, CancellationTokenSource cancellation)
+    {
+        try { cancellation.Cancel(); }
+        catch (Exception ex) { ReportCleanupFault(tenantId, "cancellation callback", ex); }
+    }
+
+    void ReportCleanupFault(TenantId tenantId, string operation, Exception exception)
+    {
+        var errors = exception is AggregateException aggregate ? aggregate.Flatten().InnerExceptions : [exception];
+        foreach (var error in errors)
+            PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), $"tenant '{tenantId}' {operation} faulted", error, _logger);
+    }
+
+    sealed record TenantRun(CancellationTokenSource Cancellation, Task Task, CancellationTokenRegistration Registration);
 }

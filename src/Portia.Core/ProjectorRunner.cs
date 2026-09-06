@@ -37,28 +37,28 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
 
             if (records.Count == options.MaxBatchSize)
             {
-                checkpoint = await CommitAsync(projector, records, checkpoint, options.IsRebuild, ct)
+                checkpoint = await CommitAsync(projector, records, checkpoint, options.RebuildId, ct)
                     .ConfigureAwait(false);
             }
         }
 
         return records.Count == 0
             ? checkpoint
-            : await CommitAsync(projector, records, checkpoint, options.IsRebuild, ct).ConfigureAwait(false);
+            : await CommitAsync(projector, records, checkpoint, options.RebuildId, ct).ConfigureAwait(false);
     }
 
     static async ValueTask<ProjectionCheckpoint> CommitAsync<TProjection>(
         Projector<TProjection> projector,
         List<DomainEventRecord> records,
         ProjectionCheckpoint checkpoint,
-        bool isRebuild,
+        string? rebuildId,
         CancellationToken ct)
     {
-        var context = new ProjectionBatchContext(projector.Name, projector.Pattern, checkpoint, isRebuild);
+        var context = new ProjectionBatchContext(new CheckpointIdentity(projector.Name, projector.Pattern, rebuildId), checkpoint);
         await using var batch = await projector.Target.BeginAsync(context, ct).ConfigureAwait(false);
 
         foreach (var record in records)
-            await projector.ProjectAsync(record, batch.Projection, isRebuild, ct).ConfigureAwait(false);
+            await projector.ProjectAsync(record, batch.Projection, rebuildId is not null, ct).ConfigureAwait(false);
 
         var lastRecord = records[^1];
         var nextOffset = EventStreamOffsets.GetNextOffset(projector.Pattern, lastRecord);

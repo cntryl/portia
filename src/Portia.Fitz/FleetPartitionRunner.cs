@@ -1,181 +1,186 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using System.Text;
 using Cntryl.Fitz.Abstractions.Domains.Lease;
 using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
-/// <summary>
-/// Runs one instance of a per-partition component across a dynamically-sized pool of worker
-/// processes, using Fitz leases so exactly one worker holds each partition at a time — the fleet
-/// distribution counterpart to <c>MultiTenantRunner</c>. The two are orthogonal and
-/// compose freely: <c>MultiTenantRunner</c> decides which tenants a component instance
-/// runs for on whichever worker it's already running on; <see cref="FleetPartitionRunner" />
-/// decides which worker gets to run a given partition at all. A common shape is a partition per
-/// tenant (or per tenant shard), with <c>MultiTenantRunner</c> driving work for the
-/// tenants a partition assigns to this worker once <see cref="FleetPartitionRunner" /> has won
-/// it.
-///
-/// The set of partitions is fixed at deployment time (e.g., a known list of shard routes) — only
-/// the number of workers competing to run them is dynamic. Rebalancing needs no explicit logic
-/// here at all: it falls entirely out of <c>ILeaseClient.WithLeaseAsync</c>'s own behavior —
-/// confirmed against a real Fitz broker (see <c>FitzBrokerFleetIntegrationTests</c>), not just
-/// inferred from its method shapes. A held lease really is renewed automatically for as long as
-/// its callback keeps running, well past its own TTL; and a worker that disappears without
-/// releasing gracefully (its connection torn down mid-hold, not a clean shutdown) really does
-/// free the lease for an already-waiting worker once the TTL lapses, with no extra coordination
-/// needed on either side.
-/// </summary>
-/// <param name="leases">Competes for each partition's lease — typically a <see cref="FitzPartitionLeaseCompetitor" />
-/// wrapping the app's registered <see cref="ILeaseClient" />.</param>
-/// <param name="logger">
-/// Reports a partition that can't be acquired or whose callback faults even when nothing is
-/// listening to <see cref="PortiaTelemetry.ActivitySource" />. Supply it explicitly, or
-/// configure Microsoft.Extensions.Logging with at least one provider before resolving the
-/// runner through DI; a bare <c>ServiceCollection</c> registration does not create or emit logs.
-/// </param>
-public sealed class FleetPartitionRunner(IPartitionLeaseCompetitor leases, ILogger<FleetPartitionRunner>? logger = null)
+/// <summary>Assigns fixed partitions by rendezvous hashing over renewable fleet membership, then acquires each assigned lease.</summary>
+/// <param name="leases">Acquires partition fencing authority.</param>
+/// <param name="membership">Owns this worker's renewable membership and inventory.</param>
+/// <param name="logger">Reports membership and partition failures and assignment changes.</param>
+/// <param name="timeProvider">Schedules reconciliation and cancellable retry backoff.</param>
+public sealed class FleetPartitionRunner(IPartitionLeaseCompetitor leases, IFleetMembership membership,
+    ILogger<FleetPartitionRunner>? logger = null, TimeProvider? timeProvider = null)
 {
     readonly IPartitionLeaseCompetitor _leases = leases ?? throw new ArgumentNullException(nameof(leases));
+    readonly IFleetMembership _membership = membership ?? throw new ArgumentNullException(nameof(membership));
     readonly ILogger<FleetPartitionRunner>? _logger = logger;
+    readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
 
-    /// <summary>
-    /// Competes for every partition's lease and, while holding one, runs
-    /// <paramref name="onPartitionAcquired" /> until either this worker loses that lease (lost
-    /// contention, a missed renewal) or <paramref name="ct" /> is cancelled — then competes for
-    /// it again, unless the whole run has been cancelled. Every partition is competed for
-    /// independently and concurrently; losing one doesn't affect the others.
-    /// </summary>
-    /// <param name="partitions">The fixed, deployment-time-known set of partition routes.</param>
-    /// <param name="onPartitionAcquired">Runs while this worker holds a partition's lease, until
-    /// its own token fires — typically a loop driving a runner against that partition's data,
-    /// not a single pass. Receives the lease's fencing token so downstream writes can detect and
-    /// reject a stale, already-superseded holder.</param>
-    /// <param name="leaseTtl">How long a held lease survives without renewal — Fitz renews it
-    /// automatically for as long as <paramref name="onPartitionAcquired" /> keeps running.</param>
-    /// <param name="ct">A token that can cancel the whole run, across every partition.</param>
-    /// <returns>A task representing every partition's competition loop.</returns>
-    public Task RunAsync(
-        IReadOnlyCollection<string> partitions,
+    /// <summary>Runs assigned partitions until cancellation. Every fleet worker must use the same selector, partitions, and algorithm.</summary>
+    /// <param name="partitions">The fixed set of exact lease routes outside the membership area.</param>
+    /// <param name="onPartitionAcquired">Runs under a lease's fencing authority and cancellation token.</param>
+    /// <param name="options">Membership, timing, and optional stable worker identity.</param>
+    /// <param name="ct">Cancels the run.</param>
+    /// <returns>The complete lifetime, including observation of all revoked work.</returns>
+    public Task RunAsync(IReadOnlyCollection<string> partitions,
         Func<string, LeaseAuthority, CancellationToken, Task> onPartitionAcquired,
-        TimeSpan leaseTtl,
-        CancellationToken ct = default)
+        FleetRunOptions options, CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(partitions);
+        ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(onPartitionAcquired);
-
-        if (leaseTtl <= TimeSpan.Zero)
-            throw new ArgumentOutOfRangeException(nameof(leaseTtl), leaseTtl, "A lease TTL must be positive.");
-
-        var malformed = partitions.FirstOrDefault(partition => !IsWellFormedLeaseRoute(partition));
-
-        if (malformed is not null)
-        {
-            // A malformed route (found the hard way against a real Fitz broker — the in-memory
-            // fake this project's own unit tests use never cared about route shape at all) fails
-            // every single acquisition attempt forever. A bare "starts with lease://" prefix
-            // check — an earlier, incomplete version of this validation — still let routes with
-            // too few/many segments, an empty segment, or a wildcard segment through, none of
-            // which a real broker accepts either; every one of those would still hit the exact
-            // silent, permanent per-second retry loop this validation exists to prevent. Fail
-            // once, at the start, against the complete required shape instead.
-            throw new ArgumentException(
-                $"Partition '{malformed}' is not a valid Fitz lease route — it must be exactly 'lease://{{realm}}/{{area}}/{{resource}}', with no empty or wildcard ('*') segments.",
-                nameof(partitions));
-        }
-
-        var duplicate = partitions
-            .GroupBy(partition => partition, StringComparer.Ordinal)
-            .FirstOrDefault(group => group.Count() > 1);
-
-        if (duplicate is not null)
-        {
-            // Two competition loops for the same route, from the same worker, isn't merely
-            // wasteful — the second one blocks forever waiting on the first, since nothing ever
-            // releases a lease this same process already holds. That's a caller mistake worth
-            // failing loudly on, not a silently-stuck task nobody notices.
-            throw new ArgumentException(
-                $"Partition '{duplicate.Key}' appears more than once.", nameof(partitions));
-        }
-
-        var ttlSecs = checked((ulong)leaseTtl.TotalSeconds);
-
-        return Task.WhenAll(partitions.Select(partition => CompeteAsync(partition, onPartitionAcquired, ttlSecs, ct)));
+        options.Validate(partitions);
+        var runOptions = options with { WorkerId = options.WorkerId ?? Guid.NewGuid().ToString("D") };
+        return RunMembershipAsync([.. partitions], onPartitionAcquired, runOptions, ct);
     }
 
-    // Fitz requires a lease route to be the exact shape "lease://{realm}/{area}/{resource}" —
-    // three non-empty, non-wildcard segments, no more and no fewer. Confirmed directly against a
-    // real broker (it rejects anything else with its own "must be lease://{realm}/{area}/{resource}"
-    // error) rather than assumed from documentation.
-    const string LeaseScheme = "lease://";
-
-    static bool IsWellFormedLeaseRoute(string route)
-    {
-        if (!route.StartsWith(LeaseScheme, StringComparison.Ordinal))
-            return false;
-
-        var segments = route[LeaseScheme.Length..].Split('/');
-        return segments.Length == 3 && segments.All(segment => segment.Length > 0 && !segment.Contains('*'));
-    }
-
-    async Task CompeteAsync(
-        string partition,
-        Func<string, LeaseAuthority, CancellationToken, Task> onPartitionAcquired,
-        ulong ttlSecs,
-        CancellationToken ct)
+    async Task RunMembershipAsync(string[] partitions, Func<string, LeaseAuthority, CancellationToken, Task> callback,
+        FleetRunOptions options, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
-            // Tracks whether the lease was actually acquired this attempt (the callback ran at
-            // all) — Fitz.Abstractions has no exception type of its own that distinguishes
-            // "still contested, WaitSeconds elapsed" (routine, expected under a busy fleet) from
-            // a genuine failure, so this is the one thing that actually can be known here. It
-            // keeps the two from being reported identically as a "fault".
-            var acquired = false;
-
             try
             {
-                await _leases.WithLeaseAsync(
-                    partition,
-                    ttlSecs,
-                    (authority, leaseCt) =>
-                    {
-                        acquired = true;
-                        return new ValueTask(onPartitionAcquired(partition, authority, leaseCt));
-                    },
-                    new LeaseExecutionOptions { WaitForAvailability = true },
-                    ct).ConfigureAwait(false);
+                await _membership.RunAsync(options, (observer, membershipCt) =>
+                    ReconcileAsync(partitions, callback, options, observer, membershipCt), ct).ConfigureAwait(false);
+                if (!ct.IsCancellationRequested)
+                    Fault("membership ended without cancellation");
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch (Exception ex) { Fault("membership failed", ex); }
+            if (!await BackoffAsync(ct).ConfigureAwait(false))
                 break;
-            }
-            catch (Exception ex)
-            {
-                // Visible via the same fault-reporting mechanism every other Portia runner uses —
-                // a partition that can't be acquired, or whose callback keeps failing, must never
-                // just vanish. The reason text differs so the two situations are distinguishable
-                // by whatever consumes this telemetry, not just by coincidence of message detail.
-                var reason = acquired
-                    ? $"partition '{partition}' callback faulted while held"
-                    : $"partition '{partition}' could not be acquired";
-                PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), reason, ex, _logger);
-            }
-
-            // Reached whenever WithLeaseAsync returned for any reason other than our own
-            // cancellation above — the callback returning on its own, a lost lease, or a caught
-            // exception. Always pause before competing again: without this, a callback that
-            // returns quickly (by its own design, or because the lease was lost) spins this loop
-            // as fast as the lease client allows, hammering it with no backoff at all.
-            if (ct.IsCancellationRequested)
-                break;
-
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(1), ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                break;
-            }
         }
     }
+
+    async Task ReconcileAsync(string[] partitions, Func<string, LeaseAuthority, CancellationToken, Task> callback,
+        FleetRunOptions options, ILeaseInventoryObserver observer, CancellationToken ct)
+    {
+        var active = new Dictionary<string, PartitionRun>(StringComparer.Ordinal);
+        var prefix = options.MembershipSelector[..^1];
+        var unavailable = false;
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var ready = observer.IsReady;
+                var snapshot = observer.View;
+                var workers = snapshot.Keys.Where(route => route.StartsWith(prefix, StringComparison.Ordinal))
+                    .Select(route => route[prefix.Length..]).Where(FleetRunOptions.IsSegment).ToArray();
+                ready &= observer.IsReady && workers.Contains(options.WorkerId, StringComparer.Ordinal);
+                if (!ready && !unavailable)
+                    Fault("membership snapshot is not ready or does not contain this worker");
+                unavailable = !ready;
+                var assigned = ready
+                    ? partitions.Where(partition => GetOwner(partition, workers) == options.WorkerId).ToHashSet(StringComparer.Ordinal)
+                    : new HashSet<string>(StringComparer.Ordinal);
+                var revoked = active.Keys.Where(partition => !assigned.Contains(partition)).ToArray();
+                foreach (var partition in revoked)
+                    Cancel(partition, active[partition].Cancellation);
+                foreach (var partition in revoked)
+                {
+                    await ObserveAsync(partition, active[partition]).ConfigureAwait(false);
+                    _ = active.Remove(partition);
+                    PortiaTelemetry.RecordFleetAssignment(options.WorkerId!, partition, false, _logger);
+                }
+                ct.ThrowIfCancellationRequested();
+                foreach (var partition in assigned)
+                {
+                    if (active.ContainsKey(partition))
+                        continue;
+                    ct.ThrowIfCancellationRequested();
+                    var cancellation = new CancellationTokenSource();
+                    var registration = ct.Register(() => Cancel(partition, cancellation));
+                    active.Add(partition, new PartitionRun(cancellation,
+                        Task.Run(() => CompeteAsync(partition, callback, options.TtlSeconds, cancellation.Token), CancellationToken.None), registration));
+                    PortiaTelemetry.RecordFleetAssignment(options.WorkerId!, partition, true, _logger);
+                }
+                await Task.Delay(options.ReconciliationInterval, _clock, ct).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            foreach (var (partition, run) in active)
+                Cancel(partition, run.Cancellation);
+            foreach (var (partition, run) in active)
+                await ObserveAsync(partition, run).ConfigureAwait(false);
+        }
+    }
+
+    // SHA-256 of [uint32 BE byte length][UTF-8 route][uint32 BE byte length][UTF-8 worker ID].
+    // Compare unsigned digests lexicographically; greatest ordinal worker ID wins digest ties.
+    static string? GetOwner(string partition, string[] workers)
+    {
+        string? winner = null;
+        byte[]? greatest = null;
+        var route = Encoding.UTF8.GetBytes(partition);
+        foreach (var worker in workers)
+        {
+            var id = Encoding.UTF8.GetBytes(worker);
+            var input = new byte[8 + route.Length + id.Length];
+            BinaryPrimitives.WriteInt32BigEndian(input, route.Length);
+            route.CopyTo(input, 4);
+            BinaryPrimitives.WriteInt32BigEndian(input.AsSpan(4 + route.Length), id.Length);
+            id.CopyTo(input, 8 + route.Length);
+            var digest = SHA256.HashData(input);
+            var comparison = greatest is null ? 1 : digest.AsSpan().SequenceCompareTo(greatest);
+            if (comparison > 0 || (comparison == 0 && string.CompareOrdinal(worker, winner) > 0))
+            {
+                greatest = digest;
+                winner = worker;
+            }
+        }
+        return winner;
+    }
+
+    async Task CompeteAsync(string partition, Func<string, LeaseAuthority, CancellationToken, Task> callback,
+        ulong ttl, CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            var acquired = false;
+            try
+            {
+                await _leases.WithLeaseAsync(partition, ttl, (authority, leaseCt) =>
+                {
+                    acquired = true;
+                    return new ValueTask(callback(partition, authority, leaseCt));
+                }, new LeaseExecutionOptions { WaitForAvailability = true }, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch (Exception ex)
+            {
+                Fault(acquired ? $"partition '{partition}' callback faulted while held" : $"partition '{partition}' could not be acquired", ex);
+            }
+            if (!await BackoffAsync(ct).ConfigureAwait(false))
+                break;
+        }
+    }
+
+    async Task<bool> BackoffAsync(CancellationToken ct)
+    {
+        try { await Task.Delay(TimeSpan.FromSeconds(1), _clock, ct).ConfigureAwait(false); return true; }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { return false; }
+    }
+
+    void Cancel(string partition, CancellationTokenSource cancellation)
+    {
+        try { cancellation.Cancel(); }
+        catch (Exception ex) { Fault($"partition '{partition}' cancellation failed", ex); }
+    }
+
+    async Task ObserveAsync(string partition, PartitionRun run)
+    {
+        try { await run.Task.ConfigureAwait(false); }
+        catch (OperationCanceledException) when (run.Cancellation.IsCancellationRequested) { }
+        catch (Exception ex) { Fault($"partition '{partition}' termination failed", ex); }
+        finally { run.Registration.Dispose(); run.Cancellation.Dispose(); }
+    }
+
+    void Fault(string reason, Exception? exception = null) =>
+        PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), reason, exception, _logger);
+
+    sealed record PartitionRun(CancellationTokenSource Cancellation, Task Task, CancellationTokenRegistration Registration);
 }

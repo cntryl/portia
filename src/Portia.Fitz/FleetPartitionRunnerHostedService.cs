@@ -14,21 +14,21 @@ namespace Cntryl.Portia;
 /// <param name="runner">The partition competition runner.</param>
 /// <param name="scopeFactory">Creates one scope per held partition lease.</param>
 /// <param name="partitions">The fixed, deployment-time-known set of partition routes.</param>
-/// <param name="leaseTtl">How long a held lease survives without renewal.</param>
+/// <param name="options">How long a held lease survives without renewal.</param>
 sealed class FleetPartitionRunnerHostedService<TWorkload>(
     FleetPartitionRunner runner,
     IServiceScopeFactory scopeFactory,
     IReadOnlyCollection<string> partitions,
-    TimeSpan leaseTtl) : BackgroundService
+    FleetRunOptions options) : BackgroundService
     where TWorkload : class, IPartitionWorkload
 {
     readonly FleetPartitionRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
     readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
     readonly IReadOnlyCollection<string> _partitions = partitions ?? throw new ArgumentNullException(nameof(partitions));
-    readonly TimeSpan _leaseTtl = leaseTtl;
+    readonly FleetRunOptions _options = options;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
-        _runner.RunAsync(_partitions, RunPartitionAsync, _leaseTtl, stoppingToken);
+        _runner.RunAsync(_partitions, RunPartitionAsync, _options, stoppingToken);
 
     async Task RunPartitionAsync(string partition, LeaseAuthority authority, CancellationToken ct)
     {
