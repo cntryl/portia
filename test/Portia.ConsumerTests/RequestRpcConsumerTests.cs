@@ -2,12 +2,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
 
-public sealed class ModuleRpcConsumerTests
+public sealed class RequestRpcConsumerTests
 {
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ModuleDescriptorsRegisterAllRpcWorkersAndOwnTheirLifetime(bool reverse)
+    public async Task RequestDescriptorsRegisterAllRpcWorkersAndOwnTheirLifetime(bool reverse)
     {
         var assembly = GeneratorCompilation.Compile("""
             using System;
@@ -16,22 +16,22 @@ public sealed class ModuleRpcConsumerTests
             public static class Scenario
             {
                 public static async Task<IAsyncDisposable> Run(FitzRpcRequestServer server)
-                    => await server.RegisterModulesAsync();
+                    => await server.RegisterRequestsAsync();
             }
             """);
         var register = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<FitzRpcRequestServer, Task<IAsyncDisposable>>>();
         var services = ConsumerHost.CreateServices();
         if (reverse)
         {
-            _ = services.AddPortiaModule<ReportingModule>();
-            _ = services.AddPortiaModule<AccountsModule>();
+            _ = services.AddReporting();
+            _ = services.AddAccounts();
         }
         else
         {
-            _ = services.AddPortiaModule<AccountsModule>();
-            _ = services.AddPortiaModule<ReportingModule>();
+            _ = services.AddAccounts();
+            _ = services.AddReporting();
         }
-        _ = services.AddPortiaModule<AccountsModule>();
+        _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
         _ = services.AddSingleton<IRequestDeserializer, JsonRequestSerializer>();
         _ = services.AddSingleton<IRequestOutcomeSerializer, JsonRequestSerializer>();

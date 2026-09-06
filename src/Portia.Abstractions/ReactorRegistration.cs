@@ -6,7 +6,7 @@ namespace Cntryl.Portia;
 /// </summary>
 /// <param name="reactorType">The concrete reactor type.</param>
 /// <param name="resolve">Resolves an instance of the reactor from a service provider.</param>
-public sealed class ReactorRegistration(Type reactorType, Func<IServiceProvider, Reactor> resolve)
+public sealed class ReactorRegistration(Type reactorType, Func<IServiceProvider, BaseReactor> resolve)
 {
     /// <summary>
     /// Gets the concrete reactor type.
@@ -16,5 +16,5 @@ public sealed class ReactorRegistration(Type reactorType, Func<IServiceProvider,
     /// <summary>
     /// Gets the function that resolves an instance of the reactor from a service provider.
     /// </summary>
-    public Func<IServiceProvider, Reactor> Resolve { get; } = resolve ?? throw new ArgumentNullException(nameof(resolve));
+    public Func<IServiceProvider, BaseReactor> Resolve { get; } = resolve ?? throw new ArgumentNullException(nameof(resolve));
 }

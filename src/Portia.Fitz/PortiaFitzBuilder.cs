@@ -12,7 +12,6 @@ public sealed class PortiaFitzBuilder
     readonly PortiaBuilder _application;
     readonly HashSet<string> _capabilities = new(StringComparer.Ordinal);
     readonly List<FitzWorkerDefinition> _workers = [];
-    readonly List<FitzComponentDefinition> _components = [];
 
     internal PortiaFitzBuilder(PortiaBuilder application)
     {
@@ -21,7 +20,6 @@ public sealed class PortiaFitzBuilder
     }
 
     internal IReadOnlyList<FitzWorkerDefinition> Workers => _workers;
-    internal IReadOnlyList<FitzComponentDefinition> Components => _components;
     internal FleetRunOptions? Fleet { get; private set; }
 
     /// <summary>Registers event persistence, its reader/writer aliases, and JSON event serialization.</summary>
@@ -58,7 +56,7 @@ public sealed class PortiaFitzBuilder
         return this;
     }
 
-    /// <summary>Declares RPC serving for callable requests in the included modules.</summary>
+    /// <summary>Declares RPC serving for explicitly registered callable requests.</summary>
     public PortiaFitzBuilder AddRpcServer() => AddListener("rpc", "");
 
     /// <summary>Declares a competing queue worker for an explicit queue route.</summary>
@@ -81,37 +79,6 @@ public sealed class PortiaFitzBuilder
         return this;
     }
 
-    /// <summary>Declares a projector that runs only while this replica owns its explicit lease route.</summary>
-    public PortiaFitzBuilder AddProjector<TProjector>(string leaseRoute, ProjectionRunOptions? options = null,
-        TimeSpan? pollInterval = null) where TProjector : class
-    {
-        var settings = options ?? ProjectionRunOptions.Default;
-        settings.Validate();
-        return AddComponent(new FitzComponentDefinition(typeof(TProjector), leaseRoute, true, settings, Interval(pollInterval)));
-    }
-
-    /// <summary>Declares a reactor that runs only while this replica owns its explicit lease route.</summary>
-    public PortiaFitzBuilder AddReactor<TReactor>(string leaseRoute, int maxBatchSize = 512,
-        TimeSpan? pollInterval = null) where TReactor : Reactor
-    {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBatchSize);
-        return AddComponent(new FitzComponentDefinition(typeof(TReactor), leaseRoute, false,
-            new ProjectionRunOptions { MaxBatchSize = maxBatchSize }, Interval(pollInterval)));
-    }
-
-    PortiaFitzBuilder AddComponent(FitzComponentDefinition definition)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(definition.LeaseRoute);
-        var existing = _components.FirstOrDefault(component => component.Type == definition.Type || component.LeaseRoute == definition.LeaseRoute);
-        if (existing is not null)
-            return existing == definition ? this : throw new InvalidOperationException($"Conflicting component registration for '{definition.Type}' or lease '{definition.LeaseRoute}'.");
-        _components.Add(definition);
-        _application.Services.TryAddScoped<ProjectorRunner>();
-        _application.Services.TryAddScoped<ReactorRunner>();
-        _application.Services.TryAddScoped<WorkerLeaseContext>();
-        return this;
-    }
-
     PortiaFitzBuilder AddListener(string kind, string route)
     {
         if (kind != "rpc")
@@ -129,13 +96,6 @@ public sealed class PortiaFitzBuilder
         return this;
     }
 
-    static TimeSpan Interval(TimeSpan? value)
-    {
-        var interval = value ?? TimeSpan.FromSeconds(1);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(interval, TimeSpan.Zero);
-        return interval;
-    }
-
     static void AddSerializers(IServiceCollection services)
     {
         services.TryAddSingleton<JsonRequestSerializer>();
@@ -149,6 +109,24 @@ public sealed class PortiaFitzBuilder
 /// <summary>Connects shared Portia application setup to Fitz.</summary>
 public static class PortiaFitzApplicationExtensions
 {
+    /// <summary>Adds Fitz persistence, request clients, and workload coordination to Portia registrations.</summary>
+    public static IServiceCollection AddPortiaFitz(this IServiceCollection services, IConfiguration configuration,
+        Action<PortiaFitzBuilder>? configure = null)
+    {
+        var portia = services.AddPortia(_ => { });
+        _ = portia.AddFitz(configuration, fitz =>
+        {
+            if (configuration["ApplicationName"] is { } name)
+            {
+                if (!FleetRunOptions.IsSegment(name))
+                    throw new ArgumentException("Fitz:ApplicationName must be an exact route segment.", nameof(configuration));
+                _ = fitz.UseFleet(new FleetRunOptions { MembershipSelector = $"lease://{name}/portia-members/*" });
+            }
+            configure?.Invoke(fitz);
+        });
+        return services;
+    }
+
     /// <summary>Configures an owned client from Endpoint and optional Token and StartupTimeoutSeconds settings.</summary>
     public static PortiaBuilder AddFitz(this PortiaBuilder application, IConfiguration configuration, Action<PortiaFitzBuilder> configure)
     {
@@ -207,6 +185,11 @@ public static class PortiaFitzApplicationExtensions
         _ = services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<FitzApplicationConnection>());
         var builder = new PortiaFitzBuilder(application);
         _ = services.AddSingleton(new FitzSetup(identity, builder));
+        services.TryAddSingleton<IWorkloadCoordinator>(provider => new FitzWorkloadCoordinator(
+            provider.GetRequiredService<FitzApplicationConnection>(), builder,
+            provider.GetService<Microsoft.Extensions.Logging.ILogger<FleetPartitionRunner>>(),
+            provider.GetService<TimeProvider>()));
+        _ = builder.AddEventStore().AddRequestClients();
         configure(builder);
         return application;
     }
@@ -215,4 +198,3 @@ public static class PortiaFitzApplicationExtensions
 }
 
 sealed record FitzWorkerDefinition(string Kind, string Route);
-sealed record FitzComponentDefinition(Type Type, string LeaseRoute, bool Projector, ProjectionRunOptions Options, TimeSpan Interval);

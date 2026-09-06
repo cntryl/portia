@@ -13,7 +13,7 @@ public sealed class ComponentHostingTests
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
-        _ = services.AddPortiaModule<AccountsModule>();
+        _ = services.AddAccounts();
         _ = services.AddPortiaProjectorRunner<FirstProjector>(new ProjectionRunOptions { RebuildId = rebuildId });
         await using var provider = ConsumerHost.Build(services);
         var storage = provider.GetRequiredService<ConsumerHost.ProjectionStorage>();
@@ -50,7 +50,7 @@ public sealed class ComponentHostingTests
         var services = ConsumerHost.CreateServices();
         var reader = new BlockingReader();
         _ = services.AddSingleton<IDomainEventReader>(reader);
-        _ = services.AddPortiaModule<AccountsModule>();
+        _ = services.AddAccounts();
         _ = projector ? services.AddPortiaProjectorRunner<FirstProjector>() : services.AddPortiaReactorRunner<FirstReactor>();
         await using var provider = ConsumerHost.Build(services);
         var worker = Assert.Single(provider.GetServices<IHostedService>());
@@ -93,7 +93,7 @@ public sealed class ComponentHostingTests
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
-        _ = services.AddPortiaModule<AccountsModule>();
+        _ = services.AddAccounts();
         _ = projector ? services.AddPortiaProjectorRunner<FirstProjector>() : services.AddPortiaReactorRunner<FirstReactor>();
         await using var provider = ConsumerHost.Build(services);
         var worker = Assert.Single(provider.GetServices<IHostedService>());
@@ -130,8 +130,8 @@ public sealed class ComponentHostingTests
     public async Task HostsBothConcreteReactorsWithScopes(bool scoped)
     {
         var services = ConsumerHost.CreateServices(scoped);
-        _ = services.AddPortiaModule<AccountsModule>();
-        _ = services.AddPortiaModule<ReportingModule>();
+        _ = services.AddAccounts();
+        _ = services.AddReporting();
         _ = services.AddPortiaReactorRunner<FirstReactor>();
         _ = services.AddPortiaReactorRunner<SecondReactor>();
         await using var provider = ConsumerHost.Build(services);
@@ -164,8 +164,8 @@ public sealed class ComponentHostingTests
     public async Task HostsGeneratedProjectorsSharingOneProjectionPort(bool scoped)
     {
         var services = ConsumerHost.CreateServices(scoped);
-        _ = services.AddPortiaModule<AccountsModule>();
-        _ = services.AddPortiaModule<ReportingModule>();
+        _ = services.AddAccounts();
+        _ = services.AddReporting();
         _ = services.AddPortiaProjectorRunner<FirstProjector>();
         _ = services.AddPortiaProjectorRunner<SecondProjector>();
         await using var provider = ConsumerHost.Build(services);

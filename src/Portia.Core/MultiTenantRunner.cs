@@ -6,7 +6,7 @@ namespace Cntryl.Portia;
 /// <summary>
 /// Runs one instance of a per-tenant component for every currently active tenant, starting a new
 /// instance as tenants are added and stopping it as they're removed — the tenant control plane.
-/// Deliberately decoupled from <see cref="Projector{TProjection}" />/<see cref="Reactor" />
+/// Deliberately decoupled from <see cref="BaseProjector" />/<see cref="BaseReactor" />
 /// specifics: a caller supplies what "start" and "stop" mean for one tenant (typically
 /// constructing a tenant-scoped <see cref="EventStreamPattern" /> — using the tenant's own id as
 /// its realm, the same convention <see cref="TenantId" /> documents — and driving

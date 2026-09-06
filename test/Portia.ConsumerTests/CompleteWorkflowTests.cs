@@ -34,8 +34,8 @@ public sealed class CompleteWorkflowTests
         _ = builder.Host.UseDefaultServiceProvider(options => { options.ValidateScopes = true; options.ValidateOnBuild = true; });
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
-        _ = builder.Services.AddPortiaModule<ReportingModule>();
-        _ = builder.Services.AddPortiaModule<AccountsModule>();
+        _ = builder.Services.AddReporting();
+        _ = builder.Services.AddAccounts();
         _ = builder.Services.AddPortia(_ => { });
         if (fitzStore)
             _ = builder.Services.AddSingleton<IEventStore>(provider => new FitzEventStore(client.Stream, provider.GetRequiredService<IDomainEventSerializer>()));
@@ -43,7 +43,7 @@ public sealed class CompleteWorkflowTests
         _ = builder.Services.AddSingleton<IRequestDeserializer, JsonRequestSerializer>();
         _ = builder.Services.AddSingleton<IRequestOutcomeSerializer, JsonRequestSerializer>();
         _ = builder.Services.AddSingleton<IRequestQueuePublisher>(new FitzRequestQueuePublisher(client.Queue, new JsonRequestSerializer()));
-        // Register all four workers through their concrete generated module descriptors.
+        // Register all four workers through their concrete typed descriptors.
         _ = builder.Services.AddPortiaProjectorRunner<FirstProjector>();
         _ = builder.Services.AddPortiaProjectorRunner<SecondProjector>();
         _ = builder.Services.AddPortiaReactorRunner<FirstReactor>();
@@ -66,7 +66,7 @@ public sealed class CompleteWorkflowTests
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
             var serializer = new JsonRequestSerializer();
             var server = new FitzRpcRequestServer(client.Rpc, app.Services.GetRequiredService<IServiceScopeFactory>());
-            await using var registrations = await server.RegisterModulesAsync();
+            await using var registrations = await server.RegisterRequestsAsync();
             var sender = new FitzRemoteRequestSender(client.Rpc, serializer, serializer);
             Assert.True((await sender.SendAsync(new DepositAccount(id, 11), route, null)).IsSuccess);
             var publisher = app.Services.GetRequiredService<IRequestQueuePublisher>();

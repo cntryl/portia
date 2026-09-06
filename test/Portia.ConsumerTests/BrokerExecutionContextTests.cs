@@ -61,7 +61,7 @@ public sealed class BrokerExecutionContextTests
     internal static ServiceCollection Services(Handler handler)
     {
         var services = new ServiceCollection();
-        _ = services.AddPortiaModule<ContractsModule>();
+        _ = services.AddContracts();
         _ = services.AddSingleton(handler);
         _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<Command, Handler>());
         _ = services.AddSingleton<IRequestDeserializer, JsonRequestSerializer>();

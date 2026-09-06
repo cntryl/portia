@@ -9,23 +9,6 @@ namespace Cntryl.Portia;
 public sealed class ReactorHostedServiceTests
 {
     /// <summary>
-    /// Preserves the original constructor signature for existing source and compiled callers.
-    /// </summary>
-    [Fact]
-    public void ShouldRetainOriginalConstructor()
-    {
-        var constructor = typeof(ReactorHostedService).GetConstructor([
-            typeof(ReactorRunner),
-            typeof(Reactor),
-            typeof(IProjectionCheckpointStore),
-            typeof(TimeSpan?),
-            typeof(Microsoft.Extensions.Logging.ILogger<ReactorHostedService>),
-        ]);
-
-        Assert.NotNull(constructor);
-    }
-
-    /// <summary>
     /// Rejects an invalid batch size when the service is constructed, before its retry loop can
     /// turn the configuration error into a permanent fault/backoff cycle.
     /// </summary>
@@ -36,12 +19,10 @@ public sealed class ReactorHostedServiceTests
     {
         var runner = new ReactorRunner(new InMemoryEventStore());
         var reactor = new TestReactor(new RecordingAggregateRepository());
-        var checkpointStore = new InMemoryProjectionCheckpointStore();
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() => new ReactorHostedService(
             runner,
             reactor,
-            checkpointStore,
             maxBatchSize,
             TimeSpan.FromMilliseconds(20)));
 
@@ -68,13 +49,12 @@ public sealed class ReactorHostedServiceTests
             Committed(new ValueChanged(3), id, 3),
             Committed(new ValueChanged(4), id, 4),
         ]);
-        var reactor = new FlakyOnThirdAttemptReactor();
         var runner = new ReactorRunner(eventStore);
         var checkpointStore = new TransientReloadFailureCheckpointStore();
+        var reactor = new FlakyOnThirdAttemptReactor(checkpointStore);
         var hostedService = new ReactorHostedService(
             runner,
             reactor,
-            checkpointStore,
             maxBatchSize: 2,
             pollInterval: TimeSpan.FromMilliseconds(20));
 
@@ -141,14 +121,11 @@ sealed class TransientReloadFailureCheckpointStore : IProjectionCheckpointStore
         CancellationToken ct = default) => _inner.SaveAsync(identity, checkpoint, ct);
 }
 
-sealed partial class FlakyOnThirdAttemptReactor : Reactor, IReactorHandler<ValueChanged>
+sealed partial class FlakyOnThirdAttemptReactor(IProjectionCheckpointStore? checkpoints = null)
+    : BaseBatchReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "flaky-on-third-attempt-reactor"), IReactorHandler<ValueChanged>
 {
     bool _hasFailedOnce;
 
-    public FlakyOnThirdAttemptReactor()
-        : base("flaky-on-third-attempt-reactor", EventStreamPattern.ForPattern("test", "reactors"))
-    {
-    }
 
     public List<int> HandledValues { get; } = [];
 

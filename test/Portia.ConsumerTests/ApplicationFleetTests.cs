@@ -43,19 +43,19 @@ public sealed class ApplicationFleetTests
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddSingleton<IDomainEventReader>(store);
         _ = builder.Services.AddSingleton<IProjectionCheckpointStore, InMemoryProjectionCheckpointStore>();
-        _ = builder.Services.AddScoped(provider => new ProbeReactor(worker, provider.GetRequiredService<WorkerLeaseContext>(), probe));
+        _ = builder.Services.AddScoped(provider => new ProbeReactor(worker, provider.GetRequiredService<WorkloadContext>(), probe));
         _ = builder.Services.AddSingleton(new ReactorRegistration(typeof(ProbeReactor), provider => provider.GetRequiredService<ProbeReactor>()));
-        _ = builder.Services.AddPortia(portia => portia.UseFitzClient(client, fitz =>
+        _ = builder.Services.AddPortia(portia =>
         {
-            _ = fitz.UseFleet(new FleetRunOptions
+            _ = portia.AddReactor<ProbeReactor>(o => { _ = o.Global(); o.PollInterval = TimeSpan.FromMilliseconds(10); });
+            _ = portia.UseFitzClient(client, fitz => _ = fitz.UseFleet(new FleetRunOptions
             {
                 MembershipSelector = $"lease://{realm}/members/*",
                 WorkerId = worker,
                 LeaseTtl = TimeSpan.FromSeconds(2),
                 ReconciliationInterval = TimeSpan.FromMilliseconds(50),
-            });
-            _ = fitz.AddReactor<ProbeReactor>($"lease://{realm}/components/probe", pollInterval: TimeSpan.FromMilliseconds(10));
-        })).AddWorker();
+            }));
+        }).AddWorker();
         return builder.Build();
     }
 
@@ -76,14 +76,14 @@ public sealed class ApplicationFleetTests
         public ulong LastFence;
     }
 
-    sealed class ProbeReactor : Reactor, IDisposable
+    sealed class ProbeReactor : BaseReactor, IDisposable
     {
         readonly string _worker;
-        readonly WorkerLeaseContext _lease;
+        readonly WorkloadContext _lease;
         readonly Probe _probe;
 
-        public ProbeReactor(string worker, WorkerLeaseContext lease, Probe probe)
-            : base("probe", EventStreamPattern.ForPattern("application-fleet", "events"))
+        public ProbeReactor(string worker, WorkloadContext lease, Probe probe)
+            : base(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("application-fleet", "events"), "probe")
         {
             _worker = worker;
             _lease = lease;
@@ -97,7 +97,7 @@ public sealed class ApplicationFleetTests
             {
                 _probe.Active++;
                 _probe.MaximumActive = Math.Max(_probe.MaximumActive, _probe.Active);
-                _probe.LastFence = _lease.Authority.FencingToken;
+                _probe.LastFence = _lease.FencingToken;
                 _probe.Owner = _worker;
             }
             try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }

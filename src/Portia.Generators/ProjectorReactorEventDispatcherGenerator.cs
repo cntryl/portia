@@ -6,228 +6,108 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace Cntryl.Portia;
 
-/// <summary>
-/// Generates event dispatchers for partial projector and reactor classes, discovering
-/// IProjectorHandler/IReactorHandler implementations, so a missing or mistyped handler is a
-/// compile error, not a silently unhandled event. Aggregates dispatch differently — an explicit
-/// <c>On&lt;TEvent&gt;(handler)</c> delegate registered in the constructor (see
-/// <c>Aggregate.On</c> in Portia.Abstractions) rather than a generated interface-driven switch — since forcing an
-/// aggregate's event-application methods to be public just to satisfy an interface isn't a
-/// tradeoff worth making there; <c>On&lt;TEvent&gt;</c> gets the same compile-time signature
-/// safety from a plain generic delegate conversion instead.
-/// </summary>
+/// <summary>Generates ordered, typed event and batch dispatch for explicitly registered processors.</summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGenerator
 {
-    const string ProjectorMetadataName = "Cntryl.Portia.Projector`1";
-    const string ReactorMetadataName = "Cntryl.Portia.Reactor";
-    const string ProjectorEventHandlerMetadataName = "Cntryl.Portia.IProjectorHandler`2";
-    const string ReactorEventHandlerMetadataName = "Cntryl.Portia.IReactorHandler`1";
-
-    static readonly DiagnosticDescriptor ProjectorMustBePartial = new(
-        "PORTIA002",
-        "Projector must be partial",
-        "Projector '{0}' must be partial so Portia can generate event dispatch",
-        "Portia",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    static readonly DiagnosticDescriptor ReactorMustBePartial = new(
-        "PORTIA005",
-        "Reactor must be partial",
-        "Reactor '{0}' must be partial so Portia can generate event dispatch",
-        "Portia",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+    static readonly DiagnosticDescriptor ProjectorMustBePartial = new("PORTIA002", "Projector must be partial",
+        "Projector '{0}' must be partial so Portia can generate event dispatch", "Portia", DiagnosticSeverity.Error, true);
+    static readonly DiagnosticDescriptor ReactorMustBePartial = new("PORTIA005", "Reactor must be partial",
+        "Reactor '{0}' must be partial so Portia can generate event dispatch", "Portia", DiagnosticSeverity.Error, true);
+    static readonly DiagnosticDescriptor InvalidBatchHandler = new("PORTIA017", "Invalid batch handler",
+        "Processor '{0}' must use a batch base for batch handlers and select only one handler mode per event type", "Portia", DiagnosticSeverity.Error, true);
 
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var projectors = context.SyntaxProvider
-            .CreateSyntaxProvider(
-                static (node, _) => node is ClassDeclarationSyntax,
-                static (syntaxContext, _) => GetProjector(syntaxContext))
-            .Where(static projector => projector is not null);
-
-        context.RegisterSourceOutput(projectors, static (sourceContext, projector) =>
-        {
-            if (projector is not null)
-                Generate(sourceContext, projector);
-        });
-
-        var reactors = context.SyntaxProvider
-            .CreateSyntaxProvider(
-                static (node, _) => node is ClassDeclarationSyntax,
-                static (syntaxContext, _) => GetReactor(syntaxContext))
-            .Where(static reactor => reactor is not null);
-
-        context.RegisterSourceOutput(reactors, static (sourceContext, reactor) =>
-        {
-            if (reactor is not null)
-                Generate(sourceContext, reactor);
-        });
+        var processors = context.SyntaxProvider.CreateSyntaxProvider(
+            static (node, _) => node is ClassDeclarationSyntax,
+            static (ctx, _) => GetProcessor(ctx)).Where(static item => item is not null);
+        context.RegisterSourceOutput(processors, static (ctx, item) => Generate(ctx, item!));
     }
 
-    static ProjectorModel? GetProjector(GeneratorSyntaxContext context)
+    static Processor? GetProcessor(GeneratorSyntaxContext context)
     {
         var declaration = (ClassDeclarationSyntax)context.Node;
-        var symbol = context.SemanticModel.GetDeclaredSymbol(declaration);
-        var projectorBase = symbol is null ? null : GetProjectorBase(symbol);
-
-        if (symbol is null || symbol.IsAbstract || projectorBase is null || !IsFirstDeclaration(symbol, declaration))
+        if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol || symbol.IsAbstract || !IsFirstDeclaration(symbol, declaration))
             return null;
-
-        var handlerInterface = context.SemanticModel.Compilation.GetTypeByMetadataName(ProjectorEventHandlerMetadataName);
-
-        if (handlerInterface is null)
+        var projector = InheritsFrom(symbol, "Cntryl.Portia.BaseProjector");
+        if (!projector && !InheritsFrom(symbol, "Cntryl.Portia.BaseReactor"))
             return null;
-
-        var projectionType = projectorBase.TypeArguments[0];
-        var handlers = symbol.AllInterfaces
-            .Where(iface => SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, handlerInterface)
-                && SymbolEqualityComparer.Default.Equals(iface.TypeArguments[1], projectionType))
-            .Select(iface => iface.TypeArguments[0])
-            .OrderByDescending(type => GetInheritanceDepth(type))
-            .ThenBy(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
-            .Select(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-            .ToArray();
-
-        return new ProjectorModel(
-            symbol,
-            declaration.Modifiers.Any(SyntaxKind.PartialKeyword),
-            declaration.Identifier.GetLocation(),
-            projectionType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-            handlers);
+        var singleName = projector ? "IProjectorHandler" : "IReactorHandler";
+        var batchName = projector ? "IBatchProjectorHandler" : "IBatchReactorHandler";
+        var handlers = symbol.AllInterfaces.Where(i => i.ContainingNamespace.ToDisplayString() == "Cntryl.Portia"
+                && i.TypeArguments.Length == 1 && (i.Name == singleName || i.Name == batchName))
+            .OrderByDescending(i => GetInheritanceDepth(i.TypeArguments[0]))
+            .ThenBy(i => i.TypeArguments[0].ToDisplayString(), StringComparer.Ordinal)
+            .Select(i => new Handler(i.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), i.Name == batchName)).ToArray();
+        return handlers.Length == 0 ? null : new Processor(symbol, declaration.Modifiers.Any(SyntaxKind.PartialKeyword), projector,
+            InheritsFrom(symbol, projector ? "Cntryl.Portia.BaseBatchProjector" : "Cntryl.Portia.BaseBatchReactor"), handlers);
     }
 
-    static void Generate(SourceProductionContext context, ProjectorModel projector)
+    static void Generate(SourceProductionContext context, Processor processor)
     {
-        if (!projector.IsPartial)
+        var symbol = processor.Symbol;
+        if (!processor.Partial)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                ProjectorMustBePartial,
-                projector.Location,
-                projector.Name));
+            context.ReportDiagnostic(Diagnostic.Create(processor.Projector ? ProjectorMustBePartial : ReactorMustBePartial, symbol.Locations.FirstOrDefault(), symbol.Name));
             return;
         }
-
-        if (!ValidateShape(context, projector.Symbol))
+        if (!ValidateShape(context, symbol))
             return;
-        var source = OpenShape(projector.Symbol)
-            .AppendLine("    protected override global::System.Threading.Tasks.ValueTask ProjectEventAsync(")
-            .AppendLine("        global::Cntryl.Portia.DomainEventRecord record,")
-            .Append("        global::Cntryl.Portia.IProjectorContext<")
-            .Append(projector.ProjectionType)
-            .AppendLine("> context,")
-            .AppendLine("        global::System.Threading.CancellationToken ct)")
-            .AppendLine("    {")
-            .AppendLine("        switch (record.Ev)")
-            .AppendLine("        {");
-
-        foreach (var eventType in projector.EventTypes)
+        if ((!processor.Batch && processor.Handlers.Any(h => h.Batch)) || processor.Handlers.GroupBy(h => h.Type).Any(g => g.Count() > 1))
         {
-            _ = source
-                .Append("            case ")
-                .Append(eventType)
-                .AppendLine(" typed:")
-                .Append("                return ((global::Cntryl.Portia.IProjectorHandler<")
-                .Append(eventType)
-                .Append(", ")
-                .Append(projector.ProjectionType)
-                .AppendLine(">)this).HandleAsync(typed, context, ct);");
+            context.ReportDiagnostic(Diagnostic.Create(InvalidBatchHandler, symbol.Locations.FirstOrDefault(), symbol.Name));
+            return;
         }
-
-        _ = source
-            // A projector's pattern is expected to span more than it handles — filtering is by
-            // event type (its handler interfaces), not by narrowing the route pattern — so an
-            // unhandled event type is silently skipped, not an error.
-            .AppendLine("            default:")
-            .AppendLine("                return global::System.Threading.Tasks.ValueTask.CompletedTask;")
-            .AppendLine("        }")
-            .AppendLine("    }")
-            .AppendLine("}");
-
-        for (var parent = projector.Symbol.ContainingType; parent is not null; parent = parent.ContainingType)
+        var source = OpenShape(symbol);
+        _ = source.AppendLine(processor.Projector
+            ? "protected override global::System.Threading.Tasks.ValueTask ProjectEventAsync(global::Cntryl.Portia.DomainEventRecord record, global::Cntryl.Portia.IProjectorContext context, global::System.Threading.CancellationToken ct) {"
+            : "protected override global::System.Threading.Tasks.ValueTask ReactToEventAsync(global::Cntryl.Portia.DomainEventRecord record, global::Cntryl.Portia.IExecutionContext execution, global::System.Threading.CancellationToken ct) {")
+            .AppendLine("switch (record.Ev) {");
+        foreach (var handler in processor.Handlers.Where(h => !h.Batch))
+        {
+            _ = source.Append("case ").Append(handler.Type).Append(" typed: return ((global::Cntryl.Portia.")
+                .Append(processor.Projector ? "IProjectorHandler<" : "IReactorHandler<").Append(handler.Type).Append(">)this).HandleAsync(")
+                .Append(processor.Projector ? "typed, context, ct);" : "new global::Cntryl.Portia.ReactorContext<" + handler.Type + ">(typed, record, execution), ct);").AppendLine();
+        }
+        _ = source.AppendLine("default: return global::System.Threading.Tasks.ValueTask.CompletedTask; } }");
+        if (processor.Handlers.Any(h => h.Batch))
+            AppendBatch(source, processor);
+        _ = source.AppendLine("}");
+        for (var parent = symbol.ContainingType; parent is not null; parent = parent.ContainingType)
             _ = source.AppendLine("}");
-        context.AddSource(GeneratedTypeShape.HintName(projector.Symbol) + ".ProjectorDispatcher.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        context.AddSource(GeneratedTypeShape.HintName(symbol) + ".EventDispatcher.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
     }
 
-    static ReactorModel? GetReactor(GeneratorSyntaxContext context)
+    static void AppendBatch(StringBuilder source, Processor processor)
     {
-        var declaration = (ClassDeclarationSyntax)context.Node;
-        var symbol = context.SemanticModel.GetDeclaredSymbol(declaration);
-
-        if (symbol is null || symbol.IsAbstract || !InheritsFrom(symbol, ReactorMetadataName) || !IsFirstDeclaration(symbol, declaration))
-            return null;
-
-        var handlerInterface = context.SemanticModel.Compilation.GetTypeByMetadataName(ReactorEventHandlerMetadataName);
-
-        if (handlerInterface is null)
-            return null;
-
-        var handlers = symbol.AllInterfaces
-            .Where(iface => SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, handlerInterface))
-            .Select(iface => iface.TypeArguments[0])
-            .OrderByDescending(type => GetInheritanceDepth(type))
-            .ThenBy(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
-            .Select(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-            .ToArray();
-
-        return new ReactorModel(
-            symbol,
-            declaration.Modifiers.Any(SyntaxKind.PartialKeyword),
-            declaration.Identifier.GetLocation(),
-            handlers);
-    }
-
-    static void Generate(SourceProductionContext context, ReactorModel reactor)
-    {
-        if (!reactor.IsPartial)
+        _ = source.AppendLine("private static int PortiaHandlerKind(global::Cntryl.Portia.DomainEvent ev) => ev switch {");
+        for (var i = 0; i < processor.Handlers.Length; i++)
+            _ = source.Append(processor.Handlers[i].Type).Append(" => ").Append(i).AppendLine(",");
+        _ = source.AppendLine("_ => -1 };");
+        _ = source.AppendLine(processor.Projector
+            ? "protected override async global::System.Threading.Tasks.ValueTask ProjectBatchAsync(global::System.Collections.Generic.IReadOnlyList<global::Cntryl.Portia.DomainEventRecord> records, global::Cntryl.Portia.IProjectorContext context, global::System.Threading.CancellationToken ct) {"
+            : "protected override async global::System.Threading.Tasks.ValueTask ReactBatchAsync(global::System.Collections.Generic.IReadOnlyList<global::Cntryl.Portia.IReactorContext> records, global::System.Threading.CancellationToken ct) {");
+        var ev = processor.Projector ? "records[i].Ev" : "records[i].Source.Ev";
+        _ = source.Append("for (var i = 0; i < records.Count;) { ct.ThrowIfCancellationRequested(); switch (PortiaHandlerKind(").Append(ev).AppendLine(")) {");
+        for (var i = 0; i < processor.Handlers.Length; i++)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                ReactorMustBePartial,
-                reactor.Location,
-                reactor.Name));
-            return;
+            var handler = processor.Handlers[i];
+            if (!handler.Batch)
+                continue;
+            var type = processor.Projector ? handler.Type : "global::Cntryl.Portia.IReactorContext<" + handler.Type + ">";
+            _ = source.Append("case ").Append(i).Append(": { var batch = new global::System.Collections.Generic.List<").Append(type).AppendLine(">();")
+                .Append("do { batch.Add(").Append(processor.Projector ? "(" + handler.Type + ")" + ev
+                    : "new global::Cntryl.Portia.ReactorContext<" + handler.Type + ">((" + handler.Type + ")" + ev + ", records[i].Source, records[i])")
+                .Append("); i++; } while (i < records.Count && PortiaHandlerKind(").Append(ev).Append(") == ").Append(i).AppendLine(");")
+                .Append("await ((global::Cntryl.Portia.").Append(processor.Projector ? "IBatchProjectorHandler<" : "IBatchReactorHandler<")
+                .Append(handler.Type).Append(">)this).HandleAsync(batch, ").Append(processor.Projector ? "context, " : "").AppendLine("ct).ConfigureAwait(false); break; }");
         }
-
-        if (!ValidateShape(context, reactor.Symbol))
-            return;
-        var source = OpenShape(reactor.Symbol)
-            .AppendLine("    protected override global::System.Threading.Tasks.ValueTask ReactToEventAsync(")
-            .AppendLine("        global::Cntryl.Portia.DomainEventRecord record,")
-            .AppendLine("        global::Cntryl.Portia.IExecutionContext execution,")
-            .AppendLine("        global::System.Threading.CancellationToken ct)")
-            .AppendLine("    {")
-            .AppendLine("        switch (record.Ev)")
-            .AppendLine("        {");
-
-        foreach (var eventType in reactor.EventTypes)
-        {
-            _ = source
-                .Append("            case ")
-                .Append(eventType)
-                .AppendLine(" typed:")
-                .Append("                return ((global::Cntryl.Portia.IReactorHandler<")
-                .Append(eventType)
-                .AppendLine(">)this).HandleAsync(new global::Cntryl.Portia.ReactorContext<")
-                .Append(eventType)
-                .AppendLine(">(typed, record, execution), ct);");
-        }
-
-        _ = source
-            // A reactor's pattern is expected to span more than it handles — filtering is by
-            // event type (its handler interfaces), not by narrowing the route pattern — so an
-            // unhandled event type is silently skipped, not an error.
-            .AppendLine("            default:")
-            .AppendLine("                return global::System.Threading.Tasks.ValueTask.CompletedTask;")
-            .AppendLine("        }")
-            .AppendLine("    }")
-            .AppendLine("}");
-
-        for (var parent = reactor.Symbol.ContainingType; parent is not null; parent = parent.ContainingType)
-            _ = source.AppendLine("}");
-        context.AddSource(GeneratedTypeShape.HintName(reactor.Symbol) + ".ReactorDispatcher.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        _ = source.AppendLine(processor.Projector
+            ? "default: await ProjectEventAsync(records[i++], context, ct).ConfigureAwait(false); break;"
+            : "default: var item = records[i++]; await ReactToEventAsync(item.Source, item, ct).ConfigureAwait(false); break;")
+            .AppendLine("} } }");
     }
 
     static bool IsFirstDeclaration(INamedTypeSymbol symbol, ClassDeclarationSyntax declaration) =>
@@ -259,20 +139,6 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         return source.Append("partial class @").Append(symbol.Name).AppendLine(" {");
     }
 
-    static INamedTypeSymbol? GetProjectorBase(INamedTypeSymbol symbol)
-    {
-        for (var current = symbol.BaseType; current is not null; current = current.BaseType)
-        {
-            if (current.OriginalDefinition.MetadataName == ProjectorMetadataName.Split('.').Last()
-                && current.OriginalDefinition.ContainingNamespace.ToDisplayString() == "Cntryl.Portia")
-            {
-                return current;
-            }
-        }
-
-        return null;
-    }
-
     static bool InheritsFrom(INamedTypeSymbol symbol, string metadataName)
     {
         for (var current = symbol.BaseType; current is not null; current = current.BaseType)
@@ -299,40 +165,17 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         return depth;
     }
 
-    sealed class ProjectorModel(
-        INamedTypeSymbol symbol,
-        bool isPartial,
-        Location location,
-        string projectionType,
-        string[] eventTypes)
+    sealed class Handler(string type, bool batch)
     {
-        public INamedTypeSymbol Symbol { get; } = symbol;
-
-        public string Name => Symbol.Name;
-
-        public bool IsPartial { get; } = isPartial;
-
-        public Location Location { get; } = location;
-
-        public string ProjectionType { get; } = projectionType;
-
-        public string[] EventTypes { get; } = eventTypes;
+        public string Type { get; } = type;
+        public bool Batch { get; } = batch;
     }
-
-    sealed class ReactorModel(
-        INamedTypeSymbol symbol,
-        bool isPartial,
-        Location location,
-        string[] eventTypes)
+    sealed class Processor(INamedTypeSymbol symbol, bool partial, bool projector, bool batch, Handler[] handlers)
     {
         public INamedTypeSymbol Symbol { get; } = symbol;
-
-        public string Name => Symbol.Name;
-
-        public bool IsPartial { get; } = isPartial;
-
-        public Location Location { get; } = location;
-
-        public string[] EventTypes { get; } = eventTypes;
+        public bool Partial { get; } = partial;
+        public bool Projector { get; } = projector;
+        public bool Batch { get; } = batch;
+        public Handler[] Handlers { get; } = handlers;
     }
 }

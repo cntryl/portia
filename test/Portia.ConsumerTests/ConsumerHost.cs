@@ -18,12 +18,12 @@ static class ConsumerHost
         if (scoped)
         {
             _ = services.AddScoped<IConsumerScope, ConsumerScope>();
-            _ = services.AddScoped<IProjectionTarget<IAccountProjection>, ProjectionTarget>();
+            _ = services.AddScoped<IAccountRepository, AccountRepository>();
         }
         else
         {
             _ = services.AddSingleton<IConsumerScope, ConsumerScope>();
-            _ = services.AddSingleton<IProjectionTarget<IAccountProjection>, ProjectionTarget>();
+            _ = services.AddSingleton<IAccountRepository, AccountRepository>();
         }
         return services;
     }
@@ -97,8 +97,11 @@ static class ConsumerHost
         public int LoadAttempts { get; set; }
     }
 
-    sealed class ProjectionTarget(ProjectionStorage storage, IConsumerEffects effects) : IProjectionTarget<IAccountProjection>
+    sealed class AccountRepository(ProjectionStorage storage, IConsumerEffects effects) : IAccountRepository, IAsyncDisposable
     {
+        Batch? _batch;
+        public ValueTask DisposeAsync() => _batch?.DisposeAsync() ?? ValueTask.CompletedTask;
+        public void Add(Uuid aggregateId, int amount, Guid scopeId) => (_batch ?? throw new InvalidOperationException("No active batch")).Add(aggregateId, amount, scopeId);
         public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default)
         {
             storage.LoadAttempts++;
@@ -110,15 +113,17 @@ static class ConsumerHost
             return ValueTask.FromResult(storage.Checkpoints.GetValueOrDefault(identity, ProjectionCheckpoint.Start));
         }
 
-        public ValueTask<IProjectionBatch<IAccountProjection>> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
-            => ValueTask.FromResult<IProjectionBatch<IAccountProjection>>(new Batch(context.Identity, storage, effects));
+        public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
+        {
+            _batch = new Batch(context.Identity, storage, effects, () => _batch = null);
+            return ValueTask.FromResult<IProjectionBatch>(_batch);
+        }
     }
 
-    sealed class Batch(CheckpointIdentity name, ProjectionStorage storage, IConsumerEffects effects) : IProjectionBatch<IAccountProjection>, IAccountProjection
+    sealed class Batch(CheckpointIdentity name, ProjectionStorage storage, IConsumerEffects effects, Action release) : IProjectionBatch
     {
         readonly List<(Uuid Id, int Amount, Guid ScopeId)> _pending = [];
 
-        public IAccountProjection Projection => this;
 
         public void Add(Uuid aggregateId, int amount, Guid scopeId) => _pending.Add((aggregateId, amount, scopeId));
 
@@ -136,6 +141,6 @@ static class ConsumerHost
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public ValueTask DisposeAsync() { release(); return ValueTask.CompletedTask; }
     }
 }

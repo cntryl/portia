@@ -27,20 +27,19 @@ public sealed class GeneratorShapeTests
                 public ValueTask<Result> AuthorizeAsync(IRequestContext<First> c, System.Security.Claims.ClaimsPrincipal actor, CancellationToken ct = default) { Calls++; return ValueTask.FromResult(Result.Success); }
                 public ValueTask<Result> AuthorizeAsync(IRequestContext<Second> c, System.Security.Claims.ClaimsPrincipal actor, CancellationToken ct = default) { Calls++; return ValueTask.FromResult(Result.Success); }
             }
-            [PortiaModule] public partial class TestModule;
             public static class Scenario
             {
                 public static async Task<int> Run()
                 {
                     var services = new ServiceCollection();
-                    services.AddPortiaModule<TestModule>();
+                    services.AddPortia(p => p.AddHandler<Handler>().AddAuthorizer<Authorizer>());
                     await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
                     await using var scope = provider.CreateAsyncScope();
                     var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
                     return (await bus.SendAsync(new First(), RequestActor.System)).Value + (await bus.SendAsync(new Second(), RequestActor.System)).Value + Authorizer.Calls;
                 }
             }
-            """ + extra, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator(), new PortiaModuleGenerator());
+            """ + extra, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator());
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<int>>>();
         Assert.Equal(5, await run());
     }

@@ -33,10 +33,23 @@ public sealed class FleetPartitionRunner(IPartitionLeaseCompetitor leases, IFlee
         ArgumentNullException.ThrowIfNull(onPartitionAcquired);
         options.Validate(partitions);
         var runOptions = options with { WorkerId = options.WorkerId ?? Guid.NewGuid().ToString("D") };
-        return RunMembershipAsync([.. partitions], onPartitionAcquired, runOptions, ct);
+        return RunMembershipAsync(() => partitions, onPartitionAcquired, runOptions, ct);
     }
 
-    async Task RunMembershipAsync(string[] partitions, Func<string, LeaseAuthority, CancellationToken, Task> callback,
+    /// <summary>Reconciles a changing partition snapshot without restarting retained assignments.</summary>
+    public Task RunAsync(Func<IReadOnlyCollection<string>> partitions,
+        Func<string, LeaseAuthority, CancellationToken, Task> onPartitionAcquired,
+        FleetRunOptions options, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(partitions);
+        ArgumentNullException.ThrowIfNull(onPartitionAcquired);
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate(partitions());
+        return RunMembershipAsync(partitions, onPartitionAcquired,
+            options with { WorkerId = options.WorkerId ?? Guid.NewGuid().ToString("D") }, ct);
+    }
+
+    async Task RunMembershipAsync(Func<IReadOnlyCollection<string>> partitions, Func<string, LeaseAuthority, CancellationToken, Task> callback,
         FleetRunOptions options, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -55,7 +68,7 @@ public sealed class FleetPartitionRunner(IPartitionLeaseCompetitor leases, IFlee
         }
     }
 
-    async Task ReconcileAsync(string[] partitions, Func<string, LeaseAuthority, CancellationToken, Task> callback,
+    async Task ReconcileAsync(Func<IReadOnlyCollection<string>> partitions, Func<string, LeaseAuthority, CancellationToken, Task> callback,
         FleetRunOptions options, ILeaseInventoryObserver observer, CancellationToken ct)
     {
         var active = new Dictionary<string, PartitionRun>(StringComparer.Ordinal);
@@ -73,8 +86,10 @@ public sealed class FleetPartitionRunner(IPartitionLeaseCompetitor leases, IFlee
                 if (!ready && !unavailable)
                     Fault("membership snapshot is not ready or does not contain this worker");
                 unavailable = !ready;
+                var current = partitions();
+                options.Validate(current);
                 var assigned = ready
-                    ? partitions.Where(partition => GetOwner(partition, workers) == options.WorkerId).ToHashSet(StringComparer.Ordinal)
+                    ? current.Where(partition => GetOwner(partition, workers) == options.WorkerId).ToHashSet(StringComparer.Ordinal)
                     : new HashSet<string>(StringComparer.Ordinal);
                 var revoked = active.Keys.Where(partition => !assigned.Contains(partition)).ToArray();
                 foreach (var partition in revoked)

@@ -10,7 +10,7 @@ public interface IConsumerEffects
     void Record(string component, Uuid aggregateId, int amount, Guid scopeId);
 }
 
-public interface IAccountProjection
+public interface IAccountRepository : IProjectionStore
 {
     void Add(Uuid aggregateId, int amount, Guid scopeId);
 }

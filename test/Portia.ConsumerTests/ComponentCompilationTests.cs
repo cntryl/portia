@@ -10,9 +10,9 @@ public sealed class ComponentCompilationTests
     public async Task GlobalNestedAndPartialComponentsCompileAndExecute(bool nested, bool partial, string containerKind)
     {
         var components = """
-            public partial class Watcher : Reactor, IReactorHandler<Ev>
+            public partial class Watcher : BaseReactor, IReactorHandler<Ev>
             {
-                public Watcher() : base("watcher", EventStreamPattern.ForPattern("test")) { }
+                public Watcher() : base(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test"), "watcher") { }
                 public int Count { get; private set; }
                 public ValueTask HandleAsync(IReactorContext<Ev> context, CancellationToken ct) { Count++; return ValueTask.CompletedTask; }
                 public ValueTask Process()
@@ -24,11 +24,11 @@ public sealed class ComponentCompilationTests
                     return ReactToEventAsync(record, new ReactionExecutionContext(record, RequestActor.System), default);
                 }
             }
-            public partial class View : Projector<object>, IProjectorHandler<Ev, object>
+            public partial class View : BaseProjector, IProjectorHandler<Ev>
             {
-                public View() : base("view", EventStreamPattern.ForPattern("test"), new Target()) { }
+                public View() : base(new Target(), EventStreamPattern.ForPattern("test"), "view") { }
                 public int Count { get; private set; }
-                public ValueTask HandleAsync(Ev ev, IProjectorContext<object> context, CancellationToken ct) { Count++; return ValueTask.CompletedTask; }
+                public ValueTask HandleAsync(Ev ev, IProjectorContext context, CancellationToken ct) { Count++; return ValueTask.CompletedTask; }
                 public ValueTask Process() => ProjectEventAsync(new DomainEventRecord(new EventStreamAddress("test", "area", "id"), new Ev(), 0, 0, 0), new Context(), default);
             }
             """;
@@ -43,15 +43,15 @@ public sealed class ComponentCompilationTests
             using System.Threading.Tasks;
             using Cntryl.Portia;
             public sealed record Ev : DomainEvent;
-            public sealed class Context : IProjectorContext<object>
+            public sealed class Context : IProjectorContext
             {
-                public object Projection { get; } = new();
+                public CheckpointIdentity Identity { get; } = new("test", EventStreamPattern.ForPattern("test"));
                 public bool IsRebuild => false;
             }
-            public sealed class Target : IProjectionTarget<object>
+            public sealed class Target : IProjectionStore
             {
                 public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity name, CancellationToken ct = default) => throw new NotSupportedException();
-                public ValueTask<IProjectionBatch<object>> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default) => throw new NotSupportedException();
+                public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default) => throw new NotSupportedException();
             }
             """ + components + $$"""
             public static class Scenario

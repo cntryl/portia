@@ -6,32 +6,27 @@ Portia targets .NET 10. Most applications reference `Portia.Abstractions`,
 `Portia.Jwt` when inbound work carries JWT actor identities. Packages use the
 cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
 
-## Define contracts and explicit modules
-
-Each feature assembly declares a named partial module. A separate contracts
-assembly can declare its own module, which features explicitly import:
+## Define contracts and register components
 
 ```csharp
-// Contracts assembly
-[PortiaModule]
-public partial class ContractsModule;
-
 [RequestRoute("consumer", "business", "*", "deposit")]
 public sealed record DepositAccount(Uuid Id, int Amount) : IRequest, ICallable, IQueuable;
 
 public sealed record Deposited(int Amount) : DomainEvent;
 public sealed record Declined(string Reason) : DomainEvent;
-
-// Feature assembly
-[PortiaModule(typeof(ContractsModule))]
-public partial class AccountsModule;
 ```
 
-Reference the generator as an analyzer in each assembly that declares modules or
-components, and in the host that maps HTTP endpoints. The generated module adds
-its handlers, authorizers, event catalog entries, transport descriptors, reactors,
-and projectors. Imports and repeated `AddPortiaModule<T>()` calls are idempotent.
-Conflicting handlers or authorizers fail explicitly during registration.
+Reference the generator in each assembly declaring handlers, authorizers, routed requests,
+reactors, or projectors, and in the host that maps HTTP endpoints. Select components
+explicitly with `AddHandler<T>()`, `AddAuthorizer<T>()`, `AddEvent<T>()`,
+`AddProjector<T>(...)`, and `AddReactor<T>(...)`. A handler includes its request's transport
+descriptor; use `AddRequest<T>()` for a contract used only by a sending application.
+Repeated identical registrations are idempotent; conflicting selected handlers or
+authorizers fail during registration. Unselected types are not added to the application.
+
+Generated descriptors retain typed dispatch and permission expressions. Setup locates
+the known generated descriptor factory in the selected type's assembly; it does not
+scan assemblies. Dispatch calls typed delegates directly.
 
 A scoped `IRequestBus` resolves the selected handler and authorizer from the current
 scope. A handler may inject that bus to dispatch a different request. Permission
@@ -64,9 +59,11 @@ Configure persistence once in the shared application setup:
 ```csharp
 services.AddPortia(portia =>
 {
-    portia.AddModule<AccountsModule>();
-    portia.AddFitz(configuration.GetSection("Fitz"), fitz => fitz.AddEventStore());
+    portia.AddHandler<DepositAccountHandler>();
+    portia.AddEvent<Deposited>();
+    portia.AddEvent<Declined>();
 });
+services.AddPortiaFitz(configuration.GetSection("Fitz"));
 ```
 
 Inject `IAggregateRepository` into a handler and construct the aggregate normally:
@@ -106,7 +103,7 @@ develop the generator still need their local compiler configuration.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddPortia(portia => portia.AddModule<AccountsModule>());
+builder.Services.AddPortia(portia => portia.AddHandler<DepositAccountHandler>());
 // Register persistence and application dependencies as above.
 var app = builder.Build();
 app.MapPortiaPost<DepositAccount>("/accounts/{id}");
@@ -155,7 +152,7 @@ these and the bus inside a fresh scope per invocation:
 ```csharp
 var server = new FitzRpcRequestServer(fitz.Rpc,
     provider.GetRequiredService<IServiceScopeFactory>());
-await using var workers = await server.RegisterModulesAsync(ct);
+await using var workers = await server.RegisterRequestsAsync(ct);
 // Keep workers alive until the host shuts down.
 ```
 
@@ -177,26 +174,32 @@ and remain unacknowledged; Fitz controls expiration, redelivery, and configured
 dead-letter policy. Hosted stream failures reconnect after backoff. This does not
 republish failed messages or add application retry counters.
 
-Register projector and reactor hosting by the **concrete component type** after
-its module, even when projectors share a projection-port type:
+Register workloads in shared application setup, then activate the worker deployment:
 
 ```csharp
-services.AddPortiaModule<AccountsModule>();
-services.AddPortiaModule<ReportingModule>();
-services.AddPortiaProjectorRunner<FirstProjector>();
-services.AddPortiaProjectorRunner<SecondProjector>();
-services.AddPortiaReactorRunner<FirstReactor>();
-services.AddPortiaReactorRunner<SecondReactor>();
+services.AddPortia(portia =>
+{
+    portia.AddProjector<AccountProjector>(o => o.PerTenant());
+    portia.AddProjector<PlatformSummaryProjector>(o => o.Global());
+    portia.AddReactor<AccountReactor>(o => o.PerTenant());
+}).AddWorker();
 ```
 
-Provide `IProjectionTarget<T>` for projectors and `IProjectionCheckpointStore` for
-reactors. Each pass uses a fresh scope. A projection batch must atomically commit
-its projection changes and checkpoint under the same `ProjectionBatchContext.Identity`.
-`LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct)` loads exactly that
-identity. Store all three identity fields: component name, canonical pattern, and nullable
-rebuild ID. Each pass reloads the durable checkpoint,
-including after an uncertain commit. Pattern readers and components can consume
-raised events and audits; aggregate rehydration reads only its stable source stream.
+Fitz coordinates these registrations across replicas. `PerTenant()` requires an
+`ITenantDirectory`; `Global()` retains the component's declared realm and filters.
+See [shared application setup](application-setup.md) for application identity and fencing.
+
+Inject ordinary application repositories into your processors. Projectors pass a repository
+implementing `IProjectionStore` into `BaseProjector` or `BaseBatchProjector`; reactors pass
+a dependency implementing `IProjectionCheckpointStore` into `BaseReactor` or `BaseBatchReactor`.
+The same repository can implement framework persistence and application operations.
+
+Each worker pass uses a fresh scope. Projection changes and progress commit atomically
+through `IProjectionBatch`. Single-event bases advance progress per event; batch bases
+advance it after each successful bounded batch. Reactor effects remain at-least-once.
+Persist the full checkpoint identity: component name, canonical pattern, and optional
+rebuild ID. Reload authoritative progress after an uncertain commit. See the
+[processor guide](projectors-and-reactors.md) for complete constructor examples.
 
 The event-sourced tenant directory and tenant restarts default to one second and
 accept `TimeProvider`. Each watcher owns independent progress. Failed active tenant
@@ -207,11 +210,14 @@ workloads restart in new scopes; removal and shutdown cancel execution and backo
 A rebuild uses an explicit generation ID:
 
 ```csharp
-services.AddPortiaProjectorRunner<FirstProjector>(
-    new ProjectionRunOptions { RebuildId = "accounts-2026-09", MaxBatchSize = 512 });
+portia.AddProjector<AccountProjector>(o =>
+{
+    o.PerTenant();
+    o.Processing = new ProjectionRunOptions { RebuildId = "accounts-2026-09", MaxBatchSize = 512 };
+});
 ```
 
-The target must use the complete checkpoint identity to select both data and progress.
+The repository must use the complete checkpoint identity to select both data and progress.
 A new ID has no checkpoint and starts at zero; reusing an ID resumes its committed batches.
 Live processing has a null ID. Handlers still read `context.IsRebuild`, derived from the ID.
 Keep live and rebuilt data separate; the application decides when and how to promote rebuilt

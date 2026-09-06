@@ -1,7 +1,7 @@
 namespace Cntryl.Portia.Consumer;
 
-public sealed partial class FirstReactor(IConsumerEffects effects, IConsumerScope scope)
-    : Reactor("first-reactor", EventStreamPattern.ForPattern("consumer", "accounts")), IReactorHandler<Deposited>, IReactorHandler<Declined>
+public sealed partial class FirstReactor(IConsumerEffects effects, IConsumerScope scope, IProjectionCheckpointStore checkpoints)
+    : BaseReactor(checkpoints, EventStreamPattern.ForPattern("consumer", "accounts"), "first-reactor"), IReactorHandler<Deposited>, IReactorHandler<Declined>
 {
     public ValueTask HandleAsync(IReactorContext<Declined> context, CancellationToken ct)
     {
@@ -16,19 +16,19 @@ public sealed partial class FirstReactor(IConsumerEffects effects, IConsumerScop
     }
 }
 
-public sealed partial class FirstProjector(IProjectionTarget<IAccountProjection> target, IConsumerScope scope)
-    : Projector<IAccountProjection>("first-projector", EventStreamPattern.ForPattern("consumer", "accounts"), target),
-        IProjectorHandler<Deposited, IAccountProjection>, IProjectorHandler<Declined, IAccountProjection>
+public sealed partial class FirstProjector(IAccountRepository target, IConsumerScope scope)
+    : BaseBatchProjector(target, EventStreamPattern.ForPattern("consumer", "accounts"), "first-projector"),
+        IProjectorHandler<Deposited>, IProjectorHandler<Declined>
 {
-    public ValueTask HandleAsync(Declined ev, IProjectorContext<IAccountProjection> context, CancellationToken ct)
+    public ValueTask HandleAsync(Declined ev, IProjectorContext context, CancellationToken ct)
     {
-        context.Projection.Add(ev.Metadata.AggregateId, 0, scope.Id);
+        target.Add(ev.Metadata.AggregateId, 0, scope.Id);
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask HandleAsync(Deposited ev, IProjectorContext<IAccountProjection> context, CancellationToken ct)
+    public ValueTask HandleAsync(Deposited ev, IProjectorContext context, CancellationToken ct)
     {
-        context.Projection.Add(ev.Metadata.AggregateId, ev.Amount, scope.Id);
+        target.Add(ev.Metadata.AggregateId, ev.Amount, scope.Id);
         return ValueTask.CompletedTask;
     }
 }

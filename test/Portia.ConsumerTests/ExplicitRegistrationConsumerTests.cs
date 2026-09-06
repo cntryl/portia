@@ -2,23 +2,63 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
 
-public sealed class ModuleConsumerTests
+public sealed class ExplicitRegistrationConsumerTests
 {
+    [Fact]
+    public void UnselectedConflictingHandlersAndAuthorizersAreNotRegistered()
+    {
+        var assembly = GeneratorCompilation.Compile("""
+            using System;
+            using System.Linq;
+            using System.Security.Claims;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Cntryl.Portia;
+            using Microsoft.Extensions.DependencyInjection;
+            public sealed record Request : IRequest;
+            public class Selected : IRequestHandler<Request>, IRequestAuthorizer<Request>
+            {
+                public ValueTask<Result> HandleAsync(IRequestContext<Request> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                public ValueTask<Result> AuthorizeAsync(IRequestContext<Request> c, ClaimsPrincipal actor, CancellationToken ct = default) => ValueTask.FromResult(Result.Success);
+            }
+            public class Unselected : IRequestHandler<Request>, IRequestAuthorizer<Request>
+            {
+                public ValueTask<Result> HandleAsync(IRequestContext<Request> c, CancellationToken ct) => throw new Exception();
+                public ValueTask<Result> AuthorizeAsync(IRequestContext<Request> c, ClaimsPrincipal actor, CancellationToken ct = default) => throw new Exception();
+            }
+            public static class Scenario
+            {
+                public static bool Run()
+                {
+                    var services = new ServiceCollection();
+                    var portia = services.AddPortia(p => p.AddHandler<Selected>());
+                    if (services.Any(s => s.ServiceType == typeof(RequestAuthorizerRegistration))) return false;
+                    portia.AddAuthorizer<Selected>();
+                    var count = services.Count;
+                    try { portia.AddHandler<Unselected>(); return false; }
+                    catch (InvalidOperationException) { }
+                    return services.Count == count && !services.Any(s => s.ServiceType == typeof(Unselected));
+                }
+            }
+            """, new RequestBusGenerator());
+        Assert.True(assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>()());
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task BothModulesContributeDispatchEventsAndContractTransports(bool reverse)
+    public async Task BothFeaturesContributeDispatchEventsAndContractTransports(bool reverse)
     {
         var services = ConsumerHost.CreateServices();
         if (reverse)
         {
-            _ = services.AddPortiaModule<ReportingModule>();
-            _ = services.AddPortiaModule<AccountsModule>();
+            _ = services.AddReporting();
+            _ = services.AddAccounts();
         }
         else
         {
-            _ = services.AddPortiaModule<AccountsModule>();
-            _ = services.AddPortiaModule<ReportingModule>();
+            _ = services.AddAccounts();
+            _ = services.AddReporting();
         }
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         await using var scope = provider.CreateAsyncScope();
@@ -42,7 +82,7 @@ public sealed class ModuleConsumerTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ConflictingModuleRegistrationsFailExplicitlyWithoutPartialRegistration(bool authorizer)
+    public void ConflictingComponentRegistrationsFailExplicitlyWithoutPartialRegistration(bool authorizer)
     {
         var component = authorizer
             ? "public class Conflict : IRequestAuthorizer<FeatureOneRequest> { public ValueTask<Result> AuthorizeAsync(IRequestContext<FeatureOneRequest> c, System.Security.Claims.ClaimsPrincipal actor, CancellationToken ct = default) => ValueTask.FromResult(Result.Success); }"
@@ -54,25 +94,24 @@ public sealed class ModuleConsumerTests
             using Cntryl.Portia;
             using Cntryl.Portia.Consumer;
             using Microsoft.Extensions.DependencyInjection;
-            [PortiaModule] public partial class ConflictingModule;
             public static class Scenario
             {
                 public static bool Run()
                 {
                     var services = new ServiceCollection();
-                    services.AddPortiaModule<AccountsModule>();
+                    services.AddAccounts();
                     var count = services.Count;
-                    try { services.AddPortiaModule<ConflictingModule>(); return false; }
+                    try { services.AddPortia(p => p.REGISTER<Conflict>()); return false; }
                     catch (InvalidOperationException exception) { return services.Count == count && exception.Message.Contains("conflicting"); }
                 }
             }
-            """ + component, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator(), new PortiaModuleGenerator());
+            """.Replace("REGISTER", authorizer ? "AddAuthorizer" : "AddHandler", StringComparison.Ordinal) + component, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator());
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>();
         Assert.True(run());
     }
 
     [Fact]
-    public void ExplicitModulesComposeIdempotentlyThroughPublicApi()
+    public void ExplicitFeaturesComposeIdempotentlyThroughPublicApi()
     {
         var assembly = GeneratorCompilation.Compile("""
             using Cntryl.Portia;
@@ -83,11 +122,11 @@ public sealed class ModuleConsumerTests
                 public static int Run()
                 {
                     var services = new ServiceCollection();
-                    services.AddPortiaModule<AccountsModule>();
-                    services.AddPortiaModule<ReportingModule>();
+                    services.AddAccounts();
+                    services.AddReporting();
                     var count = services.Count;
-                    services.AddPortiaModule<AccountsModule>();
-                    services.AddPortiaModule<ReportingModule>();
+                    services.AddAccounts();
+                    services.AddReporting();
                     return services.Count - count;
                 }
             }

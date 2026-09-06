@@ -1,26 +1,16 @@
 namespace Cntryl.Portia;
 
-/// <summary>
-/// Carries the batch-scoped projection application port and batch metadata into a projector's
-/// event handler.
-/// </summary>
-/// <typeparam name="TProjection">The projection-specific application port.</typeparam>
-public interface IProjectorContext<out TProjection>
+/// <summary>Projection execution metadata. Application dependencies are injected through constructors.</summary>
+public interface IProjectorContext
 {
-    /// <summary>
-    /// Gets the batch-scoped projection application port.
-    /// </summary>
-    TProjection Projection { get; }
-
-    /// <summary>
-    /// Gets whether the batch belongs to a rebuild generation.
-    /// </summary>
+    /// <summary>Gets the component, stream pattern, and optional rebuild generation.</summary>
+    CheckpointIdentity Identity { get; }
+    /// <summary>Gets whether this execution is building a separate projection generation.</summary>
     bool IsRebuild { get; }
 }
 
-sealed class ProjectorContext<TProjection>(TProjection projection, bool isRebuild) : IProjectorContext<TProjection>
+sealed class ProjectorContext(CheckpointIdentity identity) : IProjectorContext
 {
-    public TProjection Projection { get; } = projection;
-
-    public bool IsRebuild { get; } = isRebuild;
+    public CheckpointIdentity Identity { get; } = identity;
+    public bool IsRebuild => Identity.RebuildId is not null;
 }

@@ -48,7 +48,6 @@ public sealed class ExecutionContextContractTests
             using System.Threading.Tasks;
             using Cntryl.Portia;
             using Microsoft.Extensions.DependencyInjection;
-            [PortiaModule] public partial class Module;
             public sealed record Outer : IRequest;
             public sealed record Inner : IRequest;
             public sealed class Capture { public IRequestContext<Outer>? Parent; }
@@ -76,13 +75,13 @@ public sealed class ExecutionContextContractTests
                 {
                     var services = new ServiceCollection();
                     services.AddScoped<Capture>();
-                    services.AddPortia(p => p.AddModule<Module>());
+                    services.AddPortia(p => p.AddHandler<OuterHandler>().AddHandler<InnerHandler>());
                     await using var provider = services.BuildServiceProvider();
                     await using var scope = provider.CreateAsyncScope();
                     await scope.ServiceProvider.GetRequiredService<IRequestBus>().SendAsync(new Outer(), RequestActor.System);
                 }
             }
-            """, new PortiaModuleGenerator(), new PortiaServiceRegistrationGenerator(), new RequestBusGenerator());
+            """, new PortiaServiceRegistrationGenerator(), new RequestBusGenerator());
         await assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task>>()();
     }
 }

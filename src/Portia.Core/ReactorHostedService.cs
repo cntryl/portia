@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Hosts a <see cref="Reactor" /> as a continuous background loop: loads its durable checkpoint,
+/// Hosts a <see cref="BaseReactor" /> as a continuous background loop: loads its durable checkpoint,
 /// runs one <see cref="ReactorRunner" /> pass, persists whatever checkpoint that pass reaches,
 /// waits, and repeats — reloading progress after faults until the host shuts down. Register via
 /// <c>IServiceCollection.AddPortiaReactorRunner&lt;TReactor&gt;()</c>
@@ -15,51 +15,30 @@ public sealed class ReactorHostedService : BackgroundService
     const int DefaultMaxBatchSize = 512;
 
     readonly ReactorRunner _runner;
-    readonly Reactor _reactor;
+    readonly BaseReactor _reactor;
     readonly IProjectionCheckpointStore _checkpointStore;
     readonly int _maxBatchSize;
     readonly TimeSpan _pollInterval;
     readonly ILogger<ReactorHostedService>? _logger;
 
     /// <summary>
-    /// Creates a hosted reactor using the original whole-pass API shape and the default batch
-    /// size for internal durable checkpointing.
-    /// </summary>
-    /// <param name="runner">Runs one pass over currently readable events.</param>
-    /// <param name="reactor">The reactor to host.</param>
-    /// <param name="checkpointStore">Persists the checkpoint between passes and batches.</param>
-    /// <param name="pollInterval">How long to wait between passes once caught up.</param>
-    /// <param name="logger">Reports a faulted pass when supplied.</param>
-    public ReactorHostedService(
-        ReactorRunner runner,
-        Reactor reactor,
-        IProjectionCheckpointStore checkpointStore,
-        TimeSpan? pollInterval = null,
-        ILogger<ReactorHostedService>? logger = null)
-        : this(runner, reactor, checkpointStore, DefaultMaxBatchSize, pollInterval, logger)
-    {
-    }
-
-    /// <summary>
     /// Creates a hosted reactor with bounded durable checkpoint batches.
     /// </summary>
     /// <param name="runner">Runs one pass over currently readable events.</param>
     /// <param name="reactor">The reactor to host.</param>
-    /// <param name="checkpointStore">Persists the checkpoint between passes and batches.</param>
     /// <param name="maxBatchSize">How many events to process between checkpoint saves.</param>
     /// <param name="pollInterval">How long to wait between passes once caught up.</param>
     /// <param name="logger">Reports a faulted pass when supplied.</param>
     public ReactorHostedService(
         ReactorRunner runner,
-        Reactor reactor,
-        IProjectionCheckpointStore checkpointStore,
-        int maxBatchSize,
+        BaseReactor reactor,
+        int maxBatchSize = DefaultMaxBatchSize,
         TimeSpan? pollInterval = null,
         ILogger<ReactorHostedService>? logger = null)
     {
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
         _reactor = reactor ?? throw new ArgumentNullException(nameof(reactor));
-        _checkpointStore = checkpointStore ?? throw new ArgumentNullException(nameof(checkpointStore));
+        _checkpointStore = reactor.Checkpoints;
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBatchSize);
 
@@ -90,14 +69,10 @@ public sealed class ReactorHostedService : BackgroundService
                 // not only once this whole pass finishes — a mid-pass failure only loses the
                 // current batch, not everything back to this call's starting checkpoint.
                 var next = await _runner
-                    .RunAsync(_reactor, checkpoint.Value, _checkpointStore, _maxBatchSize, stoppingToken)
+                    .RunAsync(_reactor, checkpoint.Value, _maxBatchSize, stoppingToken)
                     .ConfigureAwait(false);
 
-                if (next != checkpoint.Value)
-                {
-                    await _checkpointStore.SaveAsync(new CheckpointIdentity(_reactor.Name, _reactor.Pattern), next, stoppingToken).ConfigureAwait(false);
-                    checkpoint = next;
-                }
+                checkpoint = next;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

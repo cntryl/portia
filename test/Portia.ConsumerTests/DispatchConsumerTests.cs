@@ -33,20 +33,19 @@ public sealed class DispatchConsumerTests
                 public UnrelatedAuthorizer() => throw new Exception("Unrelated authorizer constructed");
                 public ValueTask<Result> AuthorizeAsync(IRequestContext<Unrelated> c, System.Security.Claims.ClaimsPrincipal actor, CancellationToken ct = default) => ValueTask.FromResult(Result.Success);
             }
-            [PortiaModule] public partial class TestModule;
             public static class Scenario
             {
                 public static async Task<int> Run()
                 {
                     var services = new ServiceCollection();
-                    services.AddPortiaModule<TestModule>();
+                    services.AddPortia(p => p.AddHandler<OuterHandler>().AddHandler<InnerHandler>().AddHandler<UnrelatedHandler>().AddAuthorizer<UnrelatedAuthorizer>());
                     await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
                     await using var scope = provider.CreateAsyncScope();
                     var result = await scope.ServiceProvider.GetRequiredService<IRequestBus>().SendAsync(new Outer(), RequestActor.System);
                     return result.Value;
                 }
             }
-            """ + handler, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator(), new PortiaModuleGenerator());
+            """ + handler, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator());
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<int>>>();
         Assert.Equal(42, await run());
     }

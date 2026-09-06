@@ -1,21 +1,10 @@
 namespace Cntryl.Portia;
 
-/// <summary>
-/// Owns a datastore-specific projection unit of work.
-/// </summary>
-/// <typeparam name="TProjection">The projection-specific application port.</typeparam>
-public interface IProjectionBatch<out TProjection> : IAsyncDisposable
+/// <summary>Owns an atomic projection unit of work. Disposal releases resources and discards uncommitted
+/// work; it must never commit. Implementations enforce checkpoint concurrency and ownership fencing.</summary>
+public interface IProjectionBatch : IAsyncDisposable
 {
-    /// <summary>
-    /// Gets the batch-scoped projection application port.
-    /// </summary>
-    TProjection Projection { get; }
-
-    /// <summary>
-    /// Atomically commits staged projection changes and the next checkpoint.
-    /// </summary>
-    /// <param name="checkpoint">The next checkpoint after this batch.</param>
-    /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>A task representing the commit.</returns>
+    /// <summary>Atomically commits repository changes and the next checkpoint. A failed response can be
+    /// ambiguous: the next attempt must reload authoritative progress before applying events again.</summary>
     ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default);
 }

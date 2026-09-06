@@ -36,7 +36,7 @@ public sealed class CheckpointIdentityTests
             _ = services.AddSingleton(new Projection(target, pattern));
             _ = services.AddSingleton(new ProjectorRunner(events));
             await using var provider = services.BuildServiceProvider();
-            await ProjectorRegistration.Create<Projection, List<bool>>().RunPass(provider, new ProjectionRunOptions { RebuildId = rebuildId }, default);
+            await ProjectorRegistration.Create<Projection>().RunPass(provider, new ProjectionRunOptions { RebuildId = rebuildId }, default);
         }
         var live = new CheckpointIdentity("same", pattern);
         var first = new CheckpointIdentity("same", pattern, "first");
@@ -88,7 +88,7 @@ public sealed class CheckpointIdentityTests
             _ = services.AddSingleton(new Projection(target, pattern));
             _ = services.AddSingleton(new ProjectorRunner(events));
             await using var provider = services.BuildServiceProvider();
-            await ProjectorRegistration.Create<Projection, List<bool>>().RunPass(provider,
+            await ProjectorRegistration.Create<Projection>().RunPass(provider,
                 new ProjectionRunOptions { RebuildId = "interrupted", MaxBatchSize = 1 }, default);
         }
         target.FailCommitNumber = 2;
@@ -105,17 +105,19 @@ public sealed class CheckpointIdentityTests
         }
     }
 
-    sealed class Projection(Target target, EventStreamPattern pattern) : Projector<List<bool>>("same", pattern, target)
+    sealed class Projection(Target target, EventStreamPattern pattern) : BaseBatchProjector(target, pattern, "same")
     {
-        protected override ValueTask ProjectEventAsync(DomainEventRecord record, IProjectorContext<List<bool>> context, CancellationToken ct)
+        protected override ValueTask ProjectEventAsync(DomainEventRecord record, IProjectorContext context, CancellationToken ct)
         {
-            context.Projection.Add(context.IsRebuild);
+            target.Add(context.IsRebuild);
             return ValueTask.CompletedTask;
         }
     }
 
-    sealed class Target : IProjectionTarget<List<bool>>
+    sealed class Target : IProjectionStore
     {
+        List<bool> _pending = [];
+        public void Add(bool value) => _pending.Add(value);
         public int FailCommitNumber { get; set; }
         int _commits;
         public Dictionary<CheckpointIdentity, List<bool>> Data { get; } = [];
@@ -127,21 +129,22 @@ public sealed class CheckpointIdentityTests
             Loads.Add(identity);
             return ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity));
         }
-        public ValueTask<IProjectionBatch<List<bool>>> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
+        public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
         {
             Begins.Add(context.Identity);
-            return ValueTask.FromResult<IProjectionBatch<List<bool>>>(new Batch(this, context.Identity));
+            _pending = [];
+            return ValueTask.FromResult<IProjectionBatch>(new Batch(this, context.Identity));
         }
-        sealed class Batch(Target target, CheckpointIdentity identity) : IProjectionBatch<List<bool>>
+        sealed class Batch(Target target, CheckpointIdentity identity) : IProjectionBatch
         {
-            public List<bool> Projection { get; } = [];
+
             public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
             {
                 if (++target._commits == target.FailCommitNumber)
                     throw new IOException("Interrupted before atomic commit");
                 if (!target.Data.TryGetValue(identity, out var data))
                     target.Data[identity] = data = [];
-                data.AddRange(Projection);
+                data.AddRange(target._pending);
                 target._checkpoints[identity] = checkpoint;
                 return ValueTask.CompletedTask;
             }

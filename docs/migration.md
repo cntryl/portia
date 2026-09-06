@@ -11,7 +11,9 @@ or context-dropping adapter fallbacks.
 - Implement the full execution context contract in custom buses and transport adapters.
 - Send version 1 request envelopes containing validated logical request metadata.
 - Execute reactions as system principals, with their actual triggering event.
-- Keep projector data and checkpoints in one atomic target commit. Reactor checkpoints
+- Use `BaseProjector`, `BaseBatchProjector`, `BaseReactor`, or `BaseBatchReactor`,
+  passing the persistence contract through the constructor. Context carries metadata only.
+- Keep projector data and checkpoints in one atomic repository commit. Reactor checkpoints
   use the full `CheckpointIdentity`: component, canonical pattern, and rebuild identity
   where applicable. There are no name-only checkpoint migration adapters.
 

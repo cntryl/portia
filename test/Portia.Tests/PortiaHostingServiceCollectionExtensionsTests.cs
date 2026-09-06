@@ -121,7 +121,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
         var services = new ServiceCollection();
         _ = services.AddSingleton<IDomainEventReader>(store);
-        _ = services.AddPortiaModule<FrameworkTestModule>();
+        _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
         _ = services.AddPortiaProjectorRunner<TestProjector>(pollInterval: TimeSpan.FromMilliseconds(20));
         using var provider = services.BuildServiceProvider();
@@ -149,7 +149,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var target = new LateFaultProjectionTarget();
         var services = new ServiceCollection();
         _ = services.AddSingleton<IDomainEventReader>(store);
-        _ = services.AddPortiaModule<FrameworkTestModule>();
+        _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
         _ = services.AddPortiaProjectorRunner<TestProjector>(pollInterval: TimeSpan.FromMilliseconds(10));
         using var provider = services.BuildServiceProvider();
@@ -177,7 +177,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var store = new InMemoryEventStore();
         await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)]);
         var target = new TransientReloadFailureProjectionTarget();
-        var hostedService = new ProjectorHostedService<TestProjection>(
+        var hostedService = new ProjectorHostedService(
             new ProjectorRunner(store),
             new TestProjector(target),
             pollInterval: TimeSpan.FromMilliseconds(10));
@@ -374,7 +374,7 @@ sealed class HostingPartitionWorkload(HostingWorkloadState state) : IPartitionWo
     }
 }
 
-sealed class LateFaultProjectionTarget : IProjectionTarget<TestProjection>
+sealed class LateFaultProjectionTarget : ITestProjectionRepository
 {
     ProjectionCheckpoint _checkpoint;
     public TestProjection Projection { get; } = new();
@@ -385,12 +385,12 @@ sealed class LateFaultProjectionTarget : IProjectionTarget<TestProjection>
         CheckpointIdentity identity,
         CancellationToken ct = default) => ValueTask.FromResult(_checkpoint);
 
-    public ValueTask<IProjectionBatch<TestProjection>> BeginAsync(
+    public ValueTask<IProjectionBatch> BeginAsync(
         ProjectionBatchContext context,
         CancellationToken ct = default) =>
-        ValueTask.FromResult<IProjectionBatch<TestProjection>>(new LateFaultProjectionBatch(this));
+        ValueTask.FromResult<IProjectionBatch>(new LateFaultProjectionBatch(this));
 
-    sealed class LateFaultProjectionBatch(LateFaultProjectionTarget target) : IProjectionBatch<TestProjection>
+    sealed class LateFaultProjectionBatch(LateFaultProjectionTarget target) : IProjectionBatch
     {
         public TestProjection Projection => target.Projection;
 
@@ -408,7 +408,7 @@ sealed class LateFaultProjectionTarget : IProjectionTarget<TestProjection>
     }
 }
 
-sealed class TransientReloadFailureProjectionTarget : IProjectionTarget<TestProjection>
+sealed class TransientReloadFailureProjectionTarget : ITestProjectionRepository
 {
     readonly TaskCompletionSource _checkpointReloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
     ProjectionCheckpoint _checkpoint;
@@ -440,13 +440,13 @@ sealed class TransientReloadFailureProjectionTarget : IProjectionTarget<TestProj
         return ValueTask.FromResult(_checkpoint);
     }
 
-    public ValueTask<IProjectionBatch<TestProjection>> BeginAsync(
+    public ValueTask<IProjectionBatch> BeginAsync(
         ProjectionBatchContext context,
         CancellationToken ct = default) =>
-        ValueTask.FromResult<IProjectionBatch<TestProjection>>(new TransientReloadFailureProjectionBatch(this));
+        ValueTask.FromResult<IProjectionBatch>(new TransientReloadFailureProjectionBatch(this));
 
     sealed class TransientReloadFailureProjectionBatch(TransientReloadFailureProjectionTarget target)
-        : IProjectionBatch<TestProjection>
+        : IProjectionBatch
     {
         public TestProjection Projection => target.Projection;
 

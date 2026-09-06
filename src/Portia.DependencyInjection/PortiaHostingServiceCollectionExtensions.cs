@@ -75,7 +75,7 @@ public static class PortiaHostingServiceCollectionExtensions
     /// <summary>
     /// Hosts a generated concrete projector with a fresh scope and authoritative checkpoint per pass.
     /// </summary>
-    /// <typeparam name="TProjector">The concrete projector registered by its module.</typeparam>
+    /// <typeparam name="TProjector">The concrete projector registered explicitly with Portia.</typeparam>
     /// <param name="services">The services.</param>
     /// <param name="options">Batching and rebuild options.</param>
     /// <param name="pollInterval">Delay between passes; defaults to one second.</param>
@@ -95,7 +95,7 @@ public static class PortiaHostingServiceCollectionExtensions
         {
             var registration = sp.GetServices<ProjectorRegistration>()
                 .SingleOrDefault(r => r.ProjectorType == typeof(TProjector))
-                ?? throw new InvalidOperationException($"No generated projector registration for '{typeof(TProjector)}'. Register its Portia module first.");
+                ?? throw new InvalidOperationException($"No generated projector registration for '{typeof(TProjector)}'. Register it with portia.AddProjector first.");
             return new ComponentHostedService<TProjector>(
                 sp.GetRequiredService<IServiceScopeFactory>(),
                 (scope, ct) => registration.RunPass(scope, options, ct),
@@ -107,7 +107,7 @@ public static class PortiaHostingServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Hosts a <see cref="Reactor" /> as a continuous, checkpointed polling loop for the life of
+    /// Hosts a <see cref="BaseReactor" /> as a continuous, checkpointed polling loop for the life of
     /// the host. Requires <typeparamref name="TReactor" /> and an
     /// <see cref="IProjectionCheckpointStore" /> to already be registered.
     /// </summary>
@@ -119,11 +119,11 @@ public static class PortiaHostingServiceCollectionExtensions
     public static IServiceCollection AddPortiaReactorRunner<TReactor>(
         this IServiceCollection services,
         TimeSpan? pollInterval = null)
-        where TReactor : Reactor =>
+        where TReactor : BaseReactor =>
         AddPortiaReactorRunner<TReactor>(services, 512, pollInterval);
 
     /// <summary>
-    /// Hosts a <see cref="Reactor" /> with bounded durable checkpoint batches.
+    /// Hosts a <see cref="BaseReactor" /> with bounded durable checkpoint batches.
     /// </summary>
     /// <typeparam name="TReactor">The concrete reactor type.</typeparam>
     /// <param name="services">The service collection to add to.</param>
@@ -134,7 +134,7 @@ public static class PortiaHostingServiceCollectionExtensions
         this IServiceCollection services,
         int maxBatchSize,
         TimeSpan? pollInterval = null)
-        where TReactor : Reactor
+        where TReactor : BaseReactor
     {
         ArgumentNullException.ThrowIfNull(services);
 
@@ -148,10 +148,10 @@ public static class PortiaHostingServiceCollectionExtensions
             async (scope, ct) =>
             {
                 var reactor = scope.GetRequiredService<TReactor>();
-                var checkpoints = scope.GetRequiredService<IProjectionCheckpointStore>();
+                var checkpoints = reactor.Checkpoints;
                 var checkpoint = await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
                 _ = await scope.GetRequiredService<ReactorRunner>()
-                    .RunAsync(reactor, checkpoint, checkpoints, maxBatchSize, ct).ConfigureAwait(false);
+                    .RunAsync(reactor, checkpoint, maxBatchSize, ct).ConfigureAwait(false);
             },
             interval,
             sp.GetService<TimeProvider>() ?? TimeProvider.System,

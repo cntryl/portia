@@ -1,4 +1,3 @@
-using Cntryl.Fitz.Abstractions.Domains.Lease;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -24,30 +23,6 @@ sealed class FitzApplicationWorkers(IServiceProvider services, PortiaFitzBuilder
             if (configuration.Workers.Any(worker => worker.Kind == "rpc"))
                 Require(available, typeof(IRequestOutcomeSerializer));
         }
-        if (configuration.Components.Count > 0)
-        {
-            if (configuration.Fleet is null)
-                throw new InvalidOperationException("Fitz component workers require UseFleet with a dedicated membership selector.");
-            configuration.Fleet.Validate([.. configuration.Components.Select(component => component.LeaseRoute)]);
-            Require(available, typeof(IDomainEventReader));
-            var projectors = services.GetServices<ProjectorRegistration>().ToArray();
-            var reactors = services.GetServices<ReactorRegistration>().ToArray();
-            var existingHosts = services.GetServices<PortiaHostedComponentRegistration>().ToArray();
-            foreach (var component in configuration.Components)
-            {
-                if (existingHosts.Any(host => host.ComponentType == component.Type))
-                    throw new InvalidOperationException($"Component '{component.Type}' is already hosted through the low-level Portia hosting API.");
-                var exists = component.Projector ? projectors.Any(item => item.ProjectorType == component.Type)
-                    : reactors.Any(item => item.ReactorType == component.Type);
-                if (!exists)
-                    throw new InvalidOperationException($"Worker component '{component.Type}' is missing its generated module registration.");
-                Require(available, component.Type);
-                if (component.Projector)
-                    Require(available, projectors.Single(item => item.ProjectorType == component.Type).ProjectionTargetType);
-                if (!component.Projector)
-                    Require(available, typeof(IProjectionCheckpointStore));
-            }
-        }
         return Task.CompletedTask;
     }
 
@@ -62,7 +37,7 @@ sealed class FitzApplicationWorkers(IServiceProvider services, PortiaFitzBuilder
             if (configuration.Workers.Any(worker => worker.Kind == "rpc"))
             {
                 _rpc = await new FitzRpcRequestServer(connection.Client.Rpc, _scopes)
-                    .RegisterModulesAsync(cancellationToken).ConfigureAwait(false);
+                    .RegisterRequestsAsync(cancellationToken).ConfigureAwait(false);
             }
 
             await base.StartAsync(cancellationToken).ConfigureAwait(false);
@@ -99,42 +74,7 @@ sealed class FitzApplicationWorkers(IServiceProvider services, PortiaFitzBuilder
                 tasks.Add(RetryAsync(worker.Route, runner.RunAsync, TimeSpan.FromSeconds(1), stoppingToken));
             }
         }
-        if (configuration.Components.Count > 0)
-        {
-            var fleet = new FleetPartitionRunner(
-                new FitzPartitionLeaseCompetitor(client.Lease), new FitzFleetMembership(client.Lease),
-                services.GetService<ILogger<FleetPartitionRunner>>(), _clock);
-            tasks.Add(fleet.RunAsync([.. configuration.Components.Select(component => component.LeaseRoute)],
-                RunComponentAsync, configuration.Fleet!, stoppingToken));
-        }
         return Task.WhenAll(tasks);
-    }
-
-    Task RunComponentAsync(string route, LeaseAuthority authority, CancellationToken ct)
-    {
-        var component = configuration.Components.Single(item => item.LeaseRoute == route);
-        return RetryAsync(route, async token =>
-        {
-            await using var scope = _scopes.CreateAsyncScope();
-            var provider = scope.ServiceProvider;
-            var lease = provider.GetRequiredService<WorkerLeaseContext>();
-            lease.Route = route;
-            lease.Authority = authority;
-            if (component.Projector)
-            {
-                var registration = provider.GetServices<ProjectorRegistration>().Single(item => item.ProjectorType == component.Type);
-                await registration.RunPass(provider, component.Options, token).ConfigureAwait(false);
-            }
-            else
-            {
-                var registration = provider.GetServices<ReactorRegistration>().Single(item => item.ReactorType == component.Type);
-                var reactor = registration.Resolve(provider);
-                var checkpoints = provider.GetRequiredService<IProjectionCheckpointStore>();
-                var checkpoint = await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), token).ConfigureAwait(false);
-                _ = await provider.GetRequiredService<ReactorRunner>().RunAsync(reactor, checkpoint,
-                    checkpoints, component.Options.MaxBatchSize, token).ConfigureAwait(false);
-            }
-        }, component.Interval, ct);
     }
 
     async Task RetryAsync(string name, Func<CancellationToken, Task> run, TimeSpan interval, CancellationToken ct)

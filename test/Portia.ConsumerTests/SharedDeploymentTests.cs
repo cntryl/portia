@@ -64,7 +64,7 @@ public sealed class SharedDeploymentTests
         }).Build();
         _ = builder.Services.AddPortia(portia =>
         {
-            _ = portia.AddModule<ContractsModule>();
+            _ = portia.Services.AddContracts();
             _ = portia.AddFitz(configuration, fitz => fitz.AddEventStore());
         });
         using var host = builder.Build();
@@ -87,7 +87,7 @@ public sealed class SharedDeploymentTests
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia(portia =>
         {
-            _ = portia.AddModule<ContractsModule>();
+            _ = portia.Services.AddContracts();
             _ = portia.AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), fitz => fitz.AddQueueWorker("queue://setup/work/items"));
         }).AddWorker();
         using var host = builder.Build();
@@ -96,20 +96,20 @@ public sealed class SharedDeploymentTests
     }
 
     [Fact]
-    public async Task UncoordinatedComponentsFailBeforeAttemptingConnection()
+    public async Task MissingTenantDirectoryFailsBeforeAttemptingConnection()
     {
         var builder = Host.CreateApplicationBuilder();
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
         _ = builder.Services.AddPortia(portia =>
         {
-            _ = portia.AddModule<AccountsModule>();
-            _ = portia.AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), fitz =>
-                _ = fitz.AddProjector<FirstProjector>("lease://setup/components/first"));
+            _ = portia.Services.AddAccounts();
+            _ = portia.AddProjector<FirstProjector>(o => o.PerTenant());
+            _ = portia.AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), _ => { });
         }).AddWorker();
         using var host = builder.Build();
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
-        Assert.Contains("UseFleet", error.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(ITenantDirectory), error.Message, StringComparison.Ordinal);
     }
 
     static PortiaBuilder Shared(IServiceCollection services, Client client, ConsumerHost.Effects effects, Uuid first, Uuid second)
@@ -122,11 +122,12 @@ public sealed class SharedDeploymentTests
         _ = services.AddScoped<IRequestActorValidator, AcceptActor>();
         return services.AddPortia(portia =>
         {
-            _ = portia.AddModule<AccountsModule>();
+            _ = portia.Services.AddAccounts();
+            _ = portia.AddProjector<FirstProjector>(o => { _ = o.Global(); o.Name = "first-projector"; o.PollInterval = TimeSpan.FromMilliseconds(10); });
             _ = portia.UseFitzClient(client, fitz =>
             {
                 _ = fitz.UseFleet(new FleetRunOptions { MembershipSelector = $"lease://app-{first}/members/*" });
-                _ = fitz.AddProjector<FirstProjector>($"lease://app-{first}/components/projector", pollInterval: TimeSpan.FromMilliseconds(10));
+
                 _ = fitz.AddEventStore();
                 _ = fitz.AddRequestClients();
                 _ = fitz.AddRpcServer();

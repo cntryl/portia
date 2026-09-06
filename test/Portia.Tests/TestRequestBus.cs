@@ -50,7 +50,7 @@ sealed class TestRequestBus : IDisposable
         IRequestActorValidator? actorValidator = null)
     {
         var services = new ServiceCollection();
-        _ = services.AddPortiaModule<FrameworkTestModule>();
+        _ = services.AddFrameworkTests();
         _ = services.AddSingleton(actorValidator ?? new PassActorValidator());
         _ = services.AddSingleton<IRequestDeserializer, JsonRequestSerializer>();
         _ = services.AddSingleton<IRequestOutcomeSerializer, JsonRequestSerializer>();

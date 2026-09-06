@@ -11,14 +11,14 @@ public sealed class ProjectorTests
     [Fact]
     public async Task ShouldDispatchHandlersThroughSameProjection()
     {
-        var projector = new TestProjector(new UnusedProjectionTarget());
-        var projection = new TestProjection();
+        var projector = new TestProjector(new RecordingProjectionTarget());
+        var projection = ((ITestProjectionRepository)projector.Store).Projection;
         var stream = new EventStreamAddress("test", "projectors", "one");
         var first = Committed(new ValueChanged(40), 1);
         var second = Committed(new ValueIncremented(2), 2);
 
-        await projector.ProjectAsync(new DomainEventRecord(stream, first, 0, 0, 0), projection, false, default);
-        await projector.ProjectAsync(new DomainEventRecord(stream, second, 1, 1, 1), projection, false, default);
+        await projector.ProjectAsync([new DomainEventRecord(stream, first, 0, 0, 0)], new CheckpointIdentity(projector.Name, projector.Pattern), default);
+        await projector.ProjectAsync([new DomainEventRecord(stream, second, 1, 1, 1)], new CheckpointIdentity(projector.Name, projector.Pattern), default);
 
         Assert.Equal(42, projection.Value);
         Assert.Equal(2, projection.HandlerCount);
@@ -62,12 +62,12 @@ public sealed class ProjectorTests
     [Fact]
     public async Task ShouldSkipUnhandledEventType()
     {
-        var projector = new TestProjector(new UnusedProjectionTarget());
-        var projection = new TestProjection();
+        var projector = new TestProjector(new RecordingProjectionTarget());
+        var projection = ((ITestProjectionRepository)projector.Store).Projection;
         var stream = new EventStreamAddress("test", "projectors", "one");
         var ev = Committed(new ValueAudited("unhandled"), 1);
 
-        await projector.ProjectAsync(new DomainEventRecord(stream, ev, 0, 0, 0), projection, false, default);
+        await projector.ProjectAsync([new DomainEventRecord(stream, ev, 0, 0, 0)], new CheckpointIdentity(projector.Name, projector.Pattern), default);
 
         Assert.Equal(0, projection.Value);
         Assert.Equal(0, projection.HandlerCount);
@@ -89,26 +89,23 @@ public sealed class ProjectorTests
     }
 }
 
-sealed partial class TestProjector(IProjectionTarget<TestProjection> target)
-    : Projector<TestProjection>(
-        "test-projector",
-        EventStreamPattern.ForPattern("test", "projectors"),
-        target),
-      IProjectorHandler<ValueChanged, TestProjection>,
-      IProjectorHandler<ValueIncremented, TestProjection>
+sealed partial class TestProjector(ITestProjectionRepository target)
+    : BaseBatchProjector(target, EventStreamPattern.ForPattern("test", "projectors"), "test-projector"),
+      IProjectorHandler<ValueChanged>,
+      IProjectorHandler<ValueIncremented>
 {
-    public ValueTask HandleAsync(ValueChanged ev, IProjectorContext<TestProjection> context, CancellationToken ct)
+    public ValueTask HandleAsync(ValueChanged ev, IProjectorContext context, CancellationToken ct)
     {
-        context.Projection.Value = ev.Value;
-        context.Projection.HandlerCount++;
+        target.Projection.Value = ev.Value;
+        target.Projection.HandlerCount++;
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask HandleAsync(ValueIncremented ev, IProjectorContext<TestProjection> context, CancellationToken ct)
+    public async ValueTask HandleAsync(ValueIncremented ev, IProjectorContext context, CancellationToken ct)
     {
-        await context.Projection.LoadAsync(ct);
-        context.Projection.Value += ev.Amount;
-        context.Projection.HandlerCount++;
+        await target.Projection.LoadAsync(ct);
+        target.Projection.Value += ev.Amount;
+        target.Projection.HandlerCount++;
     }
 }
 
@@ -128,18 +125,19 @@ sealed class TestProjection
     }
 }
 
-sealed class UnusedProjectionTarget : IProjectionTarget<TestProjection>
+sealed class UnusedProjectionTarget : ITestProjectionRepository
 {
+    public TestProjection Projection { get; } = new();
     public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
         CheckpointIdentity identity,
         CancellationToken ct = default) => throw new NotSupportedException();
 
-    public ValueTask<IProjectionBatch<TestProjection>> BeginAsync(
+    public ValueTask<IProjectionBatch> BeginAsync(
         ProjectionBatchContext context,
         CancellationToken ct = default) => throw new NotSupportedException();
 }
 
-sealed class RecordingProjectionTarget : IProjectionTarget<TestProjection>
+sealed class RecordingProjectionTarget : ITestProjectionRepository
 {
     ProjectionCheckpoint _checkpoint;
 
@@ -157,13 +155,13 @@ sealed class RecordingProjectionTarget : IProjectionTarget<TestProjection>
         return ValueTask.FromResult(_checkpoint);
     }
 
-    public ValueTask<IProjectionBatch<TestProjection>> BeginAsync(
+    public ValueTask<IProjectionBatch> BeginAsync(
         ProjectionBatchContext context,
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
         Contexts.Add(context);
-        return ValueTask.FromResult<IProjectionBatch<TestProjection>>(
+        return ValueTask.FromResult<IProjectionBatch>(
             new RecordingProjectionBatch(Projection, CommittedOffsets, checkpoint => _checkpoint = checkpoint));
     }
 }
@@ -171,7 +169,7 @@ sealed class RecordingProjectionTarget : IProjectionTarget<TestProjection>
 sealed class RecordingProjectionBatch(
     TestProjection projection,
     List<ulong> committedOffsets,
-    Action<ProjectionCheckpoint> saveCheckpoint) : IProjectionBatch<TestProjection>
+    Action<ProjectionCheckpoint> saveCheckpoint) : IProjectionBatch
 {
     public TestProjection Projection { get; } = projection;
 
@@ -184,4 +182,9 @@ sealed class RecordingProjectionBatch(
     }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
+
+interface ITestProjectionRepository : IProjectionStore
+{
+    TestProjection Projection { get; }
 }

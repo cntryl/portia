@@ -3,36 +3,6 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ReviewRegressionTests
 {
     [Fact]
-    public void EscapedModuleNameCompilesAndRegisters()
-    {
-        var assembly = GeneratorCompilation.Compile("""
-            using Cntryl.Portia;
-            [PortiaModule] public partial class @class;
-            public static class Scenario
-            {
-                public static bool Run() => typeof(IPortiaModule).IsAssignableFrom(typeof(@class));
-            }
-            """, new PortiaModuleGenerator());
-        Assert.Equal(true, assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, null));
-    }
-
-    [Fact]
-    public void ModuleHintNamesUseFullSymbolIdentity()
-    {
-        var assembly = GeneratorCompilation.Compile("""
-            using Cntryl.Portia;
-            namespace Feature.One_Two { [PortiaModule] public partial class Module; }
-            namespace Feature_One.Two { [PortiaModule] public partial class Module; }
-            public static class Scenario
-            {
-                public static bool Run() => typeof(IPortiaModule).IsAssignableFrom(typeof(Feature.One_Two.Module))
-                    && typeof(IPortiaModule).IsAssignableFrom(typeof(Feature_One.Two.Module));
-            }
-            """, new PortiaModuleGenerator());
-        Assert.Equal(true, assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, null));
-    }
-
-    [Fact]
     public async Task QualifiedStaticHttpMappingPreservesGeneratedBinding()
     {
         var assembly = HttpConsumerScenario.Compile(

@@ -258,7 +258,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
         _ = builder.Services.AddSingleton<IPermissionEvaluator, DebugHeaderPermissionEvaluator>();
         configureServices?.Invoke(builder.Services);
-        _ = builder.Services.AddPortiaModule<FrameworkTestModule>();
+        _ = builder.Services.AddFrameworkTests();
 
         _app = builder.Build();
 

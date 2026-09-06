@@ -42,7 +42,7 @@ public sealed class QueueBrokerTests
         var id = Uuid.CreateVersion4();
         _ = await client.Queue.EnqueueAsync(route, serializer.Serialize(new ScopeRequest(id, 2), null));
         var services = ConsumerHost.CreateServices();
-        _ = services.AddPortiaModule<AccountsModule>();
+        _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
         _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(client.Queue, serializer, route, visibilityTimeoutSeconds: 1));
         _ = services.AddPortiaQueueRunner();

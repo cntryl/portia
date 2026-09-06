@@ -1,20 +1,17 @@
 namespace Cntryl.Portia;
 
-/// <summary>
-/// Handles one event type for a projector. A projector implements this once per event type it
-/// projects; the compiler enforces the handler's signature, so there is no naming convention to
-/// get wrong or silently miss.
-/// </summary>
-/// <typeparam name="TEvent">The concrete event type handled.</typeparam>
-/// <typeparam name="TProjection">The projection-specific application port.</typeparam>
-public interface IProjectorHandler<in TEvent, TProjection>
+/// <summary>Handles one selected event type using constructor-injected application dependencies.</summary>
+/// <typeparam name="TEvent">The event type.</typeparam>
+public interface IProjectorHandler<in TEvent>
 {
-    /// <summary>
-    /// Handles the event.
-    /// </summary>
-    /// <param name="ev">The event to handle.</param>
-    /// <param name="context">The projector context.</param>
-    /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>A task representing asynchronous event handling.</returns>
-    ValueTask HandleAsync(TEvent ev, IProjectorContext<TProjection> context, CancellationToken ct);
+    /// <summary>Applies an event inside the repository's current unit of work.</summary>
+    ValueTask HandleAsync(TEvent ev, IProjectorContext context, CancellationToken ct);
+}
+
+/// <summary>Handles an ordered contiguous group of events inside a bounded projection batch.</summary>
+/// <typeparam name="TEvent">The event type.</typeparam>
+public interface IBatchProjectorHandler<TEvent>
+{
+    /// <summary>Applies events in source order through constructor-injected dependencies.</summary>
+    ValueTask HandleAsync(IReadOnlyList<TEvent> events, IProjectorContext context, CancellationToken ct);
 }

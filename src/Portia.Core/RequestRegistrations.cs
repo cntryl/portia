@@ -73,7 +73,7 @@ public sealed class StreamRequestRegistration<TRequest, THandler, TOut>(Func<TRe
         => services.GetRequiredService<THandler>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), ct);
 }
 
-/// <summary>Describes an authorizer independently of the module contributing its handler.</summary>
+/// <summary>Describes an authorizer independently of its handler.</summary>
 /// <param name="requestType">The request.</param>
 /// <param name="authorizerType">The authorizer.</param>
 public abstract class RequestAuthorizerRegistration(Type requestType, Type authorizerType)

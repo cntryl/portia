@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
 
-public sealed class ModuleRpcCleanupTests
+public sealed class RequestRpcCleanupTests
 {
     [Theory]
     [InlineData(false)]
@@ -28,12 +28,12 @@ public sealed class ModuleRpcCleanupTests
         var server = new FitzRpcRequestServer(new InMemoryRpcClient(), provider.GetRequiredService<IServiceScopeFactory>());
         if (registrationFails)
         {
-            var error = await Assert.ThrowsAsync<InvalidOperationException>(async () => await server.RegisterModulesAsync());
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(async () => await server.RegisterRequestsAsync());
             Assert.Equal("Registration failed", error.Message);
         }
         else
         {
-            var workers = await server.RegisterModulesAsync();
+            var workers = await server.RegisterRequestsAsync();
             _ = await Assert.ThrowsAsync<AggregateException>(async () => await workers.DisposeAsync());
             await workers.DisposeAsync();
         }

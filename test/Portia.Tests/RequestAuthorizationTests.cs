@@ -4,7 +4,7 @@ namespace Cntryl.Portia;
 
 /// <summary>
 /// Verifies permission and authorizer ordering across all dispatch shapes using the public
-/// module registration and an owned dependency-injection scope.
+/// explicit registration and an owned dependency-injection scope.
 /// </summary>
 public sealed class RequestAuthorizationTests
 {

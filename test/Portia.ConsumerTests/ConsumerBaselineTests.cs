@@ -10,7 +10,7 @@ public sealed class ConsumerBaselineTests
         Assert.Equal(12, account.Balance);
         Assert.Equal(1UL, account.Version);
         Assert.NotEqual(typeof(Deposited).Assembly, typeof(Account).Assembly);
-        Assert.NotEqual(typeof(AccountsModule).Assembly, typeof(ReportingModule).Assembly);
+        Assert.NotEqual(typeof(AccountsRegistration).Assembly, typeof(ReportingRegistration).Assembly);
     }
 
     [Fact]

@@ -83,7 +83,7 @@ public abstract class Aggregate(
     /// <summary>
     /// Registers the handler invoked when an event of type <typeparamref name="TEvent" /> is
     /// applied — call this from the constructor for every event type the aggregate handles.
-    /// Unlike <c>Projector</c>/<c>Reactor</c>'s interface-driven dispatch, this needs no public
+    /// Unlike <c>Projector</c>/<c>BaseReactor</c>'s interface-driven dispatch, this needs no public
     /// handler method and no source generator: <paramref name="handler" /> can be a private
     /// method, and a mismatched signature is still a compile error, from the ordinary generic
     /// delegate conversion <c>On&lt;TEvent&gt;</c> requires.

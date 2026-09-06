@@ -4,13 +4,12 @@ using Microsoft.Extensions.Logging;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Hosts a <see cref="Projector{TProjection}" /> as a continuous background loop: loads its
+/// Hosts a <see cref="BaseProjector" /> as a continuous background loop: loads its
 /// checkpoint from its projection target, runs one <see cref="ProjectorRunner" /> pass, waits,
 /// and repeats — reloading authoritative progress after faults until the host shuts down. Application hosting uses
 /// <c>IServiceCollection.AddPortiaProjectorRunner&lt;TProjector&gt;()</c> for scoped concrete components.
 /// This direct wrapper uses caller-owned runner and projector dependencies.
 /// </summary>
-/// <typeparam name="TProjection">The projection-specific application port.</typeparam>
 /// <param name="runner">Runs one batched pass over currently readable events.</param>
 /// <param name="projector">The projector to host.</param>
 /// <param name="options">The batching and rebuild options for every pass.</param>
@@ -22,18 +21,18 @@ namespace Cntryl.Portia;
 /// Reports a faulted pass even when nothing is listening to
 /// <see cref="PortiaTelemetry.ActivitySource" />.
 /// </param>
-public sealed class ProjectorHostedService<TProjection>(
+public sealed class ProjectorHostedService(
     ProjectorRunner runner,
-    Projector<TProjection> projector,
+    BaseProjector projector,
     ProjectionRunOptions? options = null,
     TimeSpan? pollInterval = null,
-    ILogger<ProjectorHostedService<TProjection>>? logger = null) : BackgroundService
+    ILogger<ProjectorHostedService>? logger = null) : BackgroundService
 {
     readonly ProjectorRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
-    readonly Projector<TProjection> _projector = projector ?? throw new ArgumentNullException(nameof(projector));
+    readonly BaseProjector _projector = projector ?? throw new ArgumentNullException(nameof(projector));
     readonly ProjectionRunOptions _options = ValidateOptions(options);
     readonly TimeSpan _pollInterval = ValidateInterval(pollInterval);
-    readonly ILogger<ProjectorHostedService<TProjection>>? _logger = logger;
+    readonly ILogger<ProjectorHostedService>? _logger = logger;
 
     static ProjectionRunOptions ValidateOptions(ProjectionRunOptions? options)
     {
@@ -60,7 +59,7 @@ public sealed class ProjectorHostedService<TProjection>(
 
             try
             {
-                checkpoint ??= await _projector.Target
+                checkpoint ??= await _projector.Store
                     .LoadCheckpointAsync(new CheckpointIdentity(_projector.Name, _projector.Pattern, _options?.RebuildId), stoppingToken)
                     .ConfigureAwait(false);
 
@@ -76,7 +75,7 @@ public sealed class ProjectorHostedService<TProjection>(
             catch (Exception ex)
             {
                 PortiaTelemetry.RecordRunnerFault(
-                    nameof(ProjectorHostedService<>),
+                    nameof(ProjectorHostedService),
                     $"projector '{_projector.Name}' {operation} faulted",
                     ex,
                     _logger);

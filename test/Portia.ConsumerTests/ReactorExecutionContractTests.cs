@@ -15,7 +15,7 @@ public sealed class ReactorExecutionContractTests
             using Cntryl.Portia.Consumer;
             using Microsoft.Extensions.DependencyInjection;
             public sealed partial class Reaction(IAggregateRepository repository, Account account, Uuid sourceId)
-                : Reactor("reaction", EventStreamPattern.ForPattern("reaction", "inputs", sourceId.ToString())), IReactorHandler<Deposited>
+                : BaseReactor(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("reaction", "inputs", sourceId.ToString()), "reaction"), IReactorHandler<Deposited>
             {
                 public async ValueTask HandleAsync(IReactorContext<Deposited> context, CancellationToken ct)
                 {

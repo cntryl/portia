@@ -2,7 +2,7 @@ namespace Cntryl.Portia;
 
 /// <summary>
 /// Persists a reactor's checkpoint between passes. Projector checkpoints instead belong to their
-/// <see cref="IProjectionTarget{TProjection}" /> so projection changes and progress share one
+/// <see cref="IProjectionStore" /> so projection changes and progress share one
 /// atomic commit.
 /// </summary>
 public interface IProjectionCheckpointStore

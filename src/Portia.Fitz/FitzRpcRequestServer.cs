@@ -17,10 +17,10 @@ public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory sc
     readonly IRpcClient _rpc = rpc ?? throw new ArgumentNullException(nameof(rpc));
     readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
 
-    /// <summary>Registers callable descriptors contributed by the explicitly registered Portia modules.</summary>
+    /// <summary>Registers callable descriptors for explicitly registered Portia requests.</summary>
     /// <param name="ct">Cancels registration.</param>
     /// <returns>Owns all worker registrations; dispose during host shutdown.</returns>
-    public async ValueTask<IAsyncDisposable> RegisterModulesAsync(CancellationToken ct = default)
+    public async ValueTask<IAsyncDisposable> RegisterRequestsAsync(CancellationToken ct = default)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var workers = new Workers();

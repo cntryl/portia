@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Portia.Core" />
+    <InternalsVisibleTo Include="Portia.DependencyInjection" />
     <InternalsVisibleTo Include="Portia.Fitz" />
     <InternalsVisibleTo Include="Portia.Testing" />
     <InternalsVisibleTo Include="Portia.Tests" />

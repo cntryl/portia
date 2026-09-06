@@ -4,24 +4,24 @@ namespace Cntryl.Portia;
 
 /// <summary>
 /// Verifies that reactors and projectors declared in the compilation are registered into a
-/// service collection by generated code, without runtime assembly scanning or reflection.
+/// service collection through explicit component declarations and typed descriptors.
 /// </summary>
-public sealed class PortiaGeneratedServiceCollectionExtensionsTests
+public sealed class ComponentRegistrationTests
 {
     /// <summary>
-    /// Verifies that the request bus is resolvable after generated registration, so a consumer
+    /// Verifies that the request bus is resolvable after explicit registration, so a consumer
     /// never has to remember to register it manually.
     /// </summary>
     [Fact]
-    public void ShouldResolveRequestBusAfterGeneratedRegistration()
+    public void ShouldResolveRequestBusAfterExplicitRegistration()
     {
         var services = new ServiceCollection();
         // A permission-guarded request exists somewhere in this compilation (see
         // RequestAuthorizationTests), so the generated bus needs an IPermissionEvaluator too —
-        // not registered by AddPortiaGeneratedComponents itself, same as any other app-provided
+        // not registered by AddPortia itself, same as any other app-provided
         // dependency (IEventStore, IRequestSerializer, ...).
         _ = services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
-        _ = services.AddPortiaModule<FrameworkTestModule>();
+        _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
 
         var bus = provider.GetRequiredService<IRequestBus>();
@@ -30,14 +30,14 @@ public sealed class PortiaGeneratedServiceCollectionExtensionsTests
     }
 
     /// <summary>
-    /// Verifies that a concrete reactor is resolvable after generated registration.
+    /// Verifies that a concrete reactor is resolvable after explicit registration.
     /// </summary>
     [Fact]
-    public void ShouldResolveReactorAfterGeneratedRegistration()
+    public void ShouldResolveReactorAfterExplicitRegistration()
     {
         var services = new ServiceCollection();
         _ = services.AddSingleton<IAggregateRepository>(new RecordingAggregateRepository());
-        _ = services.AddPortiaModule<FrameworkTestModule>();
+        _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
 
         var reactor = provider.GetRequiredService<TestReactor>();
@@ -46,14 +46,14 @@ public sealed class PortiaGeneratedServiceCollectionExtensionsTests
     }
 
     /// <summary>
-    /// Verifies that a concrete projector is resolvable after generated registration.
+    /// Verifies that a concrete projector is resolvable after explicit registration.
     /// </summary>
     [Fact]
-    public void ShouldResolveProjectorAfterGeneratedRegistration()
+    public void ShouldResolveProjectorAfterExplicitRegistration()
     {
         var services = new ServiceCollection();
-        _ = services.AddSingleton<IProjectionTarget<TestProjection>>(new UnusedProjectionTarget());
-        _ = services.AddPortiaModule<FrameworkTestModule>();
+        _ = services.AddSingleton<ITestProjectionRepository>(new UnusedProjectionTarget());
+        _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
 
         var projector = provider.GetRequiredService<TestProjector>();
@@ -70,7 +70,7 @@ public sealed class PortiaGeneratedServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
         _ = services.AddSingleton<IAggregateRepository>(new RecordingAggregateRepository());
-        _ = services.AddPortiaModule<FrameworkTestModule>();
+        _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
 
         var registration = Assert.Single(provider.GetServices<ReactorRegistration>(), r => r.ReactorType == typeof(TestReactor));
@@ -94,8 +94,8 @@ public sealed class PortiaGeneratedServiceCollectionExtensionsTests
         await store.AppendAsync(stream, 0, [ev]);
         var target = new RecordingProjectionTarget();
         var services = new ServiceCollection();
-        _ = services.AddSingleton<IProjectionTarget<TestProjection>>(target);
-        _ = services.AddPortiaModule<FrameworkTestModule>();
+        _ = services.AddSingleton<ITestProjectionRepository>(target);
+        _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
         var runner = new ProjectorRunner(store);
 
@@ -114,8 +114,8 @@ public sealed class PortiaGeneratedServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
         _ = services.AddSingleton<IAggregateRepository>(new RecordingAggregateRepository());
-        _ = services.AddSingleton<IProjectionTarget<TestProjection>>(new UnusedProjectionTarget());
-        _ = services.AddPortiaModule<FrameworkTestModule>();
+        _ = services.AddSingleton<ITestProjectionRepository>(new UnusedProjectionTarget());
+        _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
         var registrations = provider.GetServices<RequestTransportRegistration>().ToList();
 

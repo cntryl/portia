@@ -13,7 +13,7 @@ public sealed class ExecutionLifecycleTests
         var handler = new Handler();
         var authorizer = new Authorizer();
         var clock = new Clock();
-        _ = services.AddPortiaModule<ContractsModule>();
+        _ = services.AddContracts();
         _ = services.AddSingleton(handler);
         _ = services.AddSingleton(authorizer);
         _ = services.AddSingleton<TimeProvider>(clock);

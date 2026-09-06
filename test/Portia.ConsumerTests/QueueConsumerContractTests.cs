@@ -64,7 +64,7 @@ public sealed class QueueConsumerContractTests
         var success = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null), 1);
         var queue = new QueueClient([failed, success]);
         var services = ConsumerHost.CreateServices();
-        _ = services.AddPortiaModule<AccountsModule>();
+        _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
         _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(queue, serializer, "queue://consumer/scopes/delivery",
             visibilityTimeoutSeconds: 4, timeProvider: clock));
@@ -144,7 +144,7 @@ public sealed class QueueConsumerContractTests
         var success = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null), 1);
         var queue = new QueueClient([malformed, failed, terminal, success]);
         var services = ConsumerHost.CreateServices();
-        _ = services.AddPortiaModule<AccountsModule>();
+        _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
         _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(queue, serializer, "queue://consumer/scopes/delivery"));
         _ = services.AddPortiaQueueRunner();

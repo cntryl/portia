@@ -104,12 +104,12 @@ public sealed class ReactorRunnerTests
             Committed(new ValueChanged(3), id, 3),
             Committed(new ValueChanged(4), id, 4),
         ]);
-        var reactor = new FlakyOnThirdEventReactor();
         var runner = new ReactorRunner(store);
         var checkpointStore = new InMemoryProjectionCheckpointStore();
+        var reactor = new FlakyOnThirdEventReactor(checkpointStore);
 
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            runner.RunAsync(reactor, ProjectionCheckpoint.Start, checkpointStore, maxBatchSize: 2).AsTask());
+            runner.RunAsync(reactor, ProjectionCheckpoint.Start, maxBatchSize: 2).AsTask());
 
         // The first batch (events 1-2) must already be durably saved — not just held in memory —
         // by the time the second batch's failure propagates.
@@ -120,24 +120,10 @@ public sealed class ReactorRunnerTests
         // Retrying from the saved checkpoint (not ProjectionCheckpoint.Start) only re-reacts to
         // events 3-4 — events 1-2 are never handled a second time.
         var resumeFrom = await checkpointStore.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern));
-        var finalCheckpoint = await runner.RunAsync(reactor, resumeFrom, checkpointStore, maxBatchSize: 2);
+        var finalCheckpoint = await runner.RunAsync(reactor, resumeFrom, maxBatchSize: 2);
 
         Assert.Equal([1, 2, 3, 4], reactor.HandledValues);
         Assert.Equal(4UL, finalCheckpoint.NextOffset);
-    }
-
-    /// <summary>
-    /// Preserves the original three-parameter CLR method so existing compiled callers and source
-    /// calls that pass a positional <see cref="CancellationToken" /> remain compatible.
-    /// </summary>
-    [Fact]
-    public void ShouldRetainOriginalRunAsyncOverload()
-    {
-        var overload = typeof(ReactorRunner).GetMethod(
-            nameof(ReactorRunner.RunAsync),
-            [typeof(Reactor), typeof(ProjectionCheckpoint), typeof(CancellationToken)]);
-
-        Assert.NotNull(overload);
     }
 
     static T Committed<T>(T ev, Uuid aggregateId, ulong aggregateVersion)
@@ -152,14 +138,11 @@ public sealed class ReactorRunnerTests
     }
 }
 
-sealed partial class FlakyOnSecondEventReactor : Reactor, IReactorHandler<ValueChanged>
+sealed partial class FlakyOnSecondEventReactor(IProjectionCheckpointStore? checkpoints = null)
+    : BaseBatchReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "flaky-on-second-event-reactor"), IReactorHandler<ValueChanged>
 {
     bool _hasFailedOnce;
 
-    public FlakyOnSecondEventReactor()
-        : base("flaky-on-second-event-reactor", EventStreamPattern.ForPattern("test", "reactors"))
-    {
-    }
 
     public List<int> HandledValues { get; } = [];
 
@@ -176,14 +159,11 @@ sealed partial class FlakyOnSecondEventReactor : Reactor, IReactorHandler<ValueC
     }
 }
 
-sealed partial class FlakyOnThirdEventReactor : Reactor, IReactorHandler<ValueChanged>
+sealed partial class FlakyOnThirdEventReactor(IProjectionCheckpointStore? checkpoints = null)
+    : BaseBatchReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "flaky-on-third-event-reactor"), IReactorHandler<ValueChanged>
 {
     bool _hasFailedOnce;
 
-    public FlakyOnThirdEventReactor()
-        : base("flaky-on-third-event-reactor", EventStreamPattern.ForPattern("test", "reactors"))
-    {
-    }
 
     public List<int> HandledValues { get; } = [];
 

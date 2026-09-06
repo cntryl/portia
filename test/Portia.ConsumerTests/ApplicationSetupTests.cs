@@ -9,7 +9,6 @@ public sealed class ApplicationSetupTests
             using System.Threading.Tasks;
             using Cntryl.Portia;
             using Microsoft.Extensions.DependencyInjection;
-            [PortiaModule] public partial class ApplicationModule;
             public sealed class Account(Uuid id) : Aggregate(id, new EventStreamAddress("setup", "accounts", id.ToString()));
             public static class Scenario
             {
@@ -17,7 +16,7 @@ public sealed class ApplicationSetupTests
                 {
                     var services = new ServiceCollection();
                     services.AddSingleton<IEventStore, InMemoryEventStore>();
-                    services.AddPortia(p => p.AddModule<ApplicationModule>());
+                    services.AddPortia(p => { });
                     await using var provider = services.BuildServiceProvider();
                     await using var scope = provider.CreateAsyncScope();
                     var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
@@ -25,7 +24,7 @@ public sealed class ApplicationSetupTests
                     if (!object.ReferenceEquals(account, await repository.HydrateAsync(account))) throw new System.Exception("Hydration replaced the caller instance");
                 }
             }
-            """, new PortiaModuleGenerator());
+            """);
         await assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task>>()();
     }
 
@@ -57,7 +56,7 @@ public sealed class ApplicationSetupTests
                     var worker = new ServiceCollection();
                     Shared(worker).AddWorker().AddWorker();
                     using var workerProvider = worker.BuildServiceProvider();
-                    if (System.Linq.Enumerable.Count(workerProvider.GetServices<IHostedService>()) != 1) throw new Exception("Worker not activated exactly once");
+                    if (System.Linq.Enumerable.Count(System.Linq.Enumerable.OfType<Worker>(workerProvider.GetServices<IHostedService>())) != 1) throw new Exception("Worker not activated exactly once");
                 }
             }
             """);

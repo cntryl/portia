@@ -10,6 +10,40 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class FleetPartitionRunnerTests
 {
+    /// <summary>Changing tenant partitions revoke only removed work and retain global ownership.</summary>
+    [Fact]
+    public async Task DynamicPartitionsPreserveRetainedOwnership()
+    {
+        var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
+        string[] snapshot = ["lease://portia/work/global", "lease://portia/work/alpha"];
+        var active = new ConcurrentDictionary<string, bool>();
+        var starts = new ConcurrentDictionary<string, int>();
+        using var lifetime = new CancellationTokenSource();
+        var run = runner.RunAsync(() => Volatile.Read(ref snapshot), async (route, authority, ct) =>
+        {
+            _ = starts.AddOrUpdate(route, 1, (_, count) => count + 1);
+            active[route] = true;
+            try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
+            finally { _ = active.TryRemove(route, out _); }
+        }, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with { ReconciliationInterval = TimeSpan.FromMilliseconds(10) }, lifetime.Token);
+        try
+        {
+            await Wait(() => active.Count == 2);
+            Volatile.Write(ref snapshot, ["lease://portia/work/global", "lease://portia/work/beta"]);
+            await Wait(() => active.ContainsKey("lease://portia/work/beta") && !active.ContainsKey("lease://portia/work/alpha"));
+            Assert.Equal(1, starts["lease://portia/work/global"]);
+        }
+        finally { await lifetime.CancelAsync(); await AwaitCancelled(run); }
+        Assert.Empty(active);
+
+        static async Task Wait(Func<bool> condition)
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            while (!condition())
+                await Task.Delay(10, timeout.Token);
+        }
+    }
+
     /// <summary>
     /// Regression test: a callback that returns quickly — by its own design, or because its
     /// lease was lost — must not spin the competition loop with no backoff at all. An earlier

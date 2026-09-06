@@ -11,14 +11,13 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
     /// <summary>
     /// Projects all currently readable events beginning at a checkpoint.
     /// </summary>
-    /// <typeparam name="TProjection">The projection-specific application port.</typeparam>
     /// <param name="projector">The projector to run.</param>
     /// <param name="checkpoint">The first scope offset to read.</param>
     /// <param name="options">The batching and rebuild options.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The next checkpoint after every committed batch.</returns>
-    public async ValueTask<ProjectionCheckpoint> RunAsync<TProjection>(
-        Projector<TProjection> projector,
+    public async ValueTask<ProjectionCheckpoint> RunAsync(
+        BaseProjector projector,
         ProjectionCheckpoint checkpoint,
         ProjectionRunOptions? options = null,
         CancellationToken ct = default)
@@ -27,7 +26,8 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         options ??= ProjectionRunOptions.Default;
         options.Validate();
 
-        var records = new List<DomainEventRecord>(options.MaxBatchSize);
+        var batchSize = projector.IsBatch ? options.MaxBatchSize : 1;
+        var records = new List<DomainEventRecord>(batchSize);
         await foreach (var record in _reader
             .ReadAsync(projector.Pattern, checkpoint.NextOffset, ct)
             .WithCancellation(ct)
@@ -35,7 +35,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         {
             records.Add(record);
 
-            if (records.Count == options.MaxBatchSize)
+            if (records.Count == batchSize)
             {
                 checkpoint = await CommitAsync(projector, records, checkpoint, options.RebuildId, ct)
                     .ConfigureAwait(false);
@@ -47,18 +47,18 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
             : await CommitAsync(projector, records, checkpoint, options.RebuildId, ct).ConfigureAwait(false);
     }
 
-    static async ValueTask<ProjectionCheckpoint> CommitAsync<TProjection>(
-        Projector<TProjection> projector,
+    static async ValueTask<ProjectionCheckpoint> CommitAsync(
+        BaseProjector projector,
         List<DomainEventRecord> records,
         ProjectionCheckpoint checkpoint,
         string? rebuildId,
         CancellationToken ct)
     {
         var context = new ProjectionBatchContext(new CheckpointIdentity(projector.Name, projector.Pattern, rebuildId), checkpoint);
-        await using var batch = await projector.Target.BeginAsync(context, ct).ConfigureAwait(false);
+        await using var batch = await projector.Store.BeginAsync(context, ct).ConfigureAwait(false);
 
-        foreach (var record in records)
-            await projector.ProjectAsync(record, batch.Projection, rebuildId is not null, ct).ConfigureAwait(false);
+        await projector.ProjectAsync(records, context.Identity, ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
 
         var lastRecord = records[^1];
         var nextOffset = EventStreamOffsets.GetNextOffset(projector.Pattern, lastRecord);

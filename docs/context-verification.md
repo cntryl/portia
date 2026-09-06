@@ -1,6 +1,7 @@
 # Execution-context verification
 
-Verified locally on 2026-09-06 against the current working tree. No packages were
+Verified locally on 2026-09-06 at the execution-context milestone, before the
+[explicit registration refactor](workload-registration-verification.md). No packages were
 published and no production environment was deployed.
 
 ## Red → green evidence

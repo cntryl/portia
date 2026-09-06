@@ -20,7 +20,7 @@ public sealed class ConsumerRecoveryTests
         var clock = new ManualClock();
         var consumer = new RecoveringConsumer(fault);
         var services = ConsumerHost.CreateServices();
-        _ = services.AddPortiaModule<AccountsModule>();
+        _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
         _ = services.AddSingleton<TimeProvider>(clock);
         if (notification)

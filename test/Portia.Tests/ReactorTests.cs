@@ -71,10 +71,8 @@ public sealed class ReactorTests
     }
 }
 
-sealed partial class TestReactor(IAggregateRepository repository)
-    : Reactor(
-        "test-reactor",
-        EventStreamPattern.ForPattern("test", "reactors")),
+sealed partial class TestReactor(IAggregateRepository repository, IProjectionCheckpointStore? checkpoints = null)
+    : BaseReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "test-reactor"),
       IReactorHandler<ValueChanged>,
       IReactorHandler<ValueIncremented>
 {

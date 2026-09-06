@@ -15,7 +15,7 @@ public sealed class DeliveryScopeTests
         var requests = new[] { new ScopeRequest(Uuid.CreateVersion4()), new ScopeRequest(Uuid.CreateVersion4(), 1),
             new ScopeRequest(Uuid.CreateVersion4()), new ScopeRequest(Uuid.CreateVersion4(), 2) };
         var services = ConsumerHost.CreateServices();
-        _ = services.AddPortiaModule<AccountsModule>();
+        _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, ScopeValidator>();
         if (notification)
         {
@@ -55,7 +55,7 @@ public sealed class DeliveryScopeTests
     public async Task RpcServerResolvesFreshApplicationScopeForEveryCall()
     {
         var services = ConsumerHost.CreateServices();
-        _ = services.AddPortiaModule<AccountsModule>();
+        _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, ScopeValidator>();
         _ = services.AddSingleton<Fitz.Abstractions.Domains.Rpc.IRpcClient, InMemoryRpcClient>();
         _ = services.AddSingleton<IRequestDeserializer, JsonRequestSerializer>();

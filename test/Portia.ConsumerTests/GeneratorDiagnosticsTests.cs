@@ -18,13 +18,4 @@ public sealed class GeneratorDiagnosticsTests
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA015");
     }
 
-    [Fact]
-    public void NonPartialModuleHasActionableDiagnostic()
-    {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
-            using Cntryl.Portia;
-            [PortiaModule] public class Module { }
-            """, new PortiaModuleGenerator());
-        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA014");
-    }
 }

@@ -7,8 +7,8 @@ These APIs are implemented in the current source checkout.
 ## Shared application project
 
 Reference `Portia.Fitz` and `Portia.Generators` (with `PrivateAssets="all"`). Fitz
-brings the core and dependency-injection packages. Each assembly declaring a module
-or generated component needs the generator reference. Applications without Fitz can
+brings the core and dependency-injection packages. Each assembly declaring a generated
+component or routed request needs the generator reference. Applications without Fitz can
 reference `Portia.DependencyInjection` directly.
 
 ```csharp
@@ -26,24 +26,32 @@ public static class ApplicationSetup
         // ActorValidator implements IRequestActorValidator using the application's identity policy.
         services.AddScoped<IRequestActorValidator, ActorValidator>();
 
-        return services.AddPortia(portia =>
+        services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<IPlatformSummaryRepository, PlatformSummaryRepository>();
+        services.AddSingleton<ITenantDirectory, AccountTenantDirectory>();
+
+        var portia = services.AddPortia(p =>
         {
-            portia.AddModule<AccountsModule>();
-            portia.AddFitz(configuration.GetSection("Fitz"), fitz =>
-            {
-                fitz.AddEventStore();
-                fitz.AddRequestClients();
-                fitz.AddRpcServer();
-                fitz.AddQueueWorker("queue://consumer/business/*");
-            });
+            p.AddHandler<DepositAccountHandler>();
+            p.AddEvent<Deposited>();
+            p.AddEvent<Declined>();
+            p.AddProjector<AccountProjector>(o => o.PerTenant());
+            p.AddProjector<PlatformSummaryProjector>(o => o.Global());
+            p.AddReactor<AccountReactor>(o => o.PerTenant());
         });
+        services.AddPortiaFitz(configuration.GetSection("Fitz"), fitz =>
+        {
+            fitz.AddRpcServer();
+            fitz.AddQueueWorker("queue://consumer/business/*");
+        });
+        return portia;
     }
 }
 ```
 
-`AddEventStore()` supplies event serialization and the same store instance through
-`IEventStore`, `IDomainEventReader`, and `IDomainEventWriter`. `AddRequestClients()`
-supplies outbound RPC, queue, notice, and scheduling adapters and their serializers.
+`AddPortiaFitz()` supplies one event store through `IEventStore`, `IDomainEventReader`,
+and `IDomainEventWriter`, plus outbound RPC, queue, notice, and scheduling clients.
+Portia's JSON event serializer is also available without Fitz.
 `AddRpcServer()` and `AddQueueWorker()` **declare** listeners; they do not start in
 the API host. Multiple distinct queue routes create independent consumers. Repeating
 an identical listener declaration has no additional effect.
@@ -54,6 +62,7 @@ Configuration can come from appsettings or normal .NET environment overrides:
 {
   "Fitz": {
     "Endpoint": "ws://localhost:4090/ws",
+    "ApplicationName": "accounts",
     "StartupTimeoutSeconds": 15
   }
 }
@@ -136,44 +145,60 @@ cannot be rolled back by the framework.
 
 ## Projectors and reactors across worker replicas
 
-Declare distributed components alongside the other shared Fitz capabilities:
+Workload registration belongs to Portia and requires an explicit scope:
 
 ```csharp
-fitz.UseFleet(new FleetRunOptions
-{
-    MembershipSelector = "lease://accounts/workers/*"
-});
-fitz.AddProjector<AccountProjector>("lease://accounts/components/account-projection");
-fitz.AddReactor<AccountReactor>("lease://accounts/components/account-reactor");
+portia.AddProjector<AccountProjector>(options => options.PerTenant());
+portia.AddProjector<PlatformSummaryProjector>(options => options.Global());
+portia.AddReactor<AccountReactor>(options => options.PerTenant());
 ```
 
-Register the concrete components through their module, the application's
-`IProjectionTarget<T>` implementations, and a durable `IProjectionCheckpointStore`
-for reactors in the shared setup. A worker fails startup if required component
-registrations, targets, checkpoints, or fleet configuration are missing. Modules and
-component declarations can be registered in either order.
+`PerTenant()` creates an independently owned workload for each active `ITenantDirectory`
+entry. Portia replaces the component pattern's realm with the tenant ID, retaining its
+area and resource filters. `Global()` creates one logical workload and retains the
+component's declared pattern. It does not grant cross-tenant access or scan every realm.
 
-Each explicit lease route is a unit of independently assignable work. Replicas use
-the existing fleet membership, assignment, and lease runner; membership changes
-cancel revoked work and transfer ownership. Each pass has a fresh scope and reloads
-its durable checkpoint. The framework cannot split one component's event pattern
-into more partitions automatically: declare independently checkpointed components
-or use the existing partition workload API when finer distribution is required.
+An omitted scope, both scopes, a conflicting registration, or duplicate workload name
+fails during configuration. Repeating an identical registration is idempotent. The
+component's full CLR type name is its default stable workload name; set `options.Name`
+when progress must survive a type rename. Projector options also accept `Processing`
+(`ProjectionRunOptions`, including a rebuild ID) and a positive `PollInterval`.
 
-Scoped projection targets and reactor dependencies can inject `WorkerLeaseContext`
-to access the current route and `Authority.FencingToken`. Durable writes must enforce
-that fence against expired holders; a lease and cancellation alone cannot prevent a
-stalled process from attempting a late write. Rebuild data promotion remains owned
-by the application.
+Fitz implements `IWorkloadCoordinator` and consumes these same declarations. There is
+no second component list or per-component lease route. `Fitz:ApplicationName` separates
+applications sharing a broker; it defaults to `portia`. Keep it identical across the
+application's replicas and distinct between independently deployed applications.
+Optional `fitz.UseFleet(...)` configures membership timing and an explicit membership
+selector. Workload lease resources are deterministic UUIDv5 values derived from the
+workload name and optional tenant identity, in a separate area from membership leases.
 
-Use the same membership selector, component lease routes, and component definitions
-across replicas. Keep membership and component leases in separate areas. Reactor
-and projector passes retain their existing delivery and checkpoint semantics; this
-API does not promise exactly-once external effects.
+Tenant additions become available for assignment. Removal cancels that tenant's work
+at the next coordinator reconciliation; retained global and other tenant workloads
+keep their ownership. Fleet membership changes transfer ownership between replicas.
+Each owned workload pass receives a fresh DI scope and reloads its checkpoint.
+
+Projectors derive from `BaseProjector` or `BaseBatchProjector` and pass their ordinary
+repository into the base constructor. That repository implements `IProjectionStore`:
+loading progress and opening an atomic unit of work. There is no separate target
+registration and no repository lookup through projector context.
+
+Reactors derive from `BaseReactor` or `BaseBatchReactor` and pass a constructor dependency
+implementing `IProjectionCheckpointStore`. This can be the same application repository
+they use for reactions; Portia does not require a separate global store registration.
+Register `ITenantDirectory` when any workload is per tenant. Registration and infrastructure
+setup can occur in either order, before building the host.
+
+Scoped repositories and dependencies inject infrastructure-neutral `WorkloadContext` for
+`Identity`, `Tenant`, and `FencingToken`. Durable writes must enforce the fencing token
+against expired holders. Workload cancellation alone cannot prevent a stalled process
+from attempting a late write. Checkpoints use workload name, canonical event pattern,
+and optional rebuild ID, keeping tenants and rebuild generations independent.
+Reactions retain their system principal and causal event context. External reaction
+effects remain at-least-once.
 
 ## Lifetimes and overrides
 
-`AddFitz(...)` owns one long-lived client per host. Host startup awaits connection
+`AddPortiaFitz(...)` owns one long-lived client per host. Host startup awaits connection
 with a bounded timeout before listeners start. Worker scopes and RPC registrations
 are released on shutdown; host disposal releases the owned connection.
 
@@ -185,7 +210,10 @@ Default serializers use `TryAdd`; normal DI registrations can supply overrides.
 Request envelope serializers used by transport consumers must support singleton
 use. Actor validation and request execution happen inside per-delivery scopes.
 
-The existing low-level hosting APIs remain supported. Do not also start the same
+Low-level hosting APIs are available for manually managed runners. Do not also start the same
 component or listener through them. Duplicate component hosting is rejected before
 connection. Arbitrary custom or low-level transport listeners remain explicitly
 application-owned and cannot be inferred or deduplicated by the shared builder.
+
+See [projectors and reactors](projectors-and-reactors.md) for the four bases,
+constructor contracts, and EF Core, ADO.NET, and DynamoDB implementation considerations.

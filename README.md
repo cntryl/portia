@@ -10,9 +10,6 @@ using Cntryl.Portia;
 [RequestRoute("public", "greetings", "messages", "create")]
 public sealed record CreateGreeting(string Name) : IRequest<string>, ICallable;
 
-[PortiaModule]
-public partial class GreetingsModule;
-
 sealed class CreateGreetingHandler : IRequestHandler<CreateGreeting, string>
 {
     public ValueTask<Result<string>> HandleAsync(
@@ -30,7 +27,7 @@ Wire the command to an HTTP route:
 using Cntryl.Portia;
 
 var builder = WebApplication.CreateBuilder(args);
-_ = builder.Services.AddPortia(portia => portia.AddModule<GreetingsModule>());
+_ = builder.Services.AddPortia(portia => portia.AddHandler<CreateGreetingHandler>());
 
 var app = builder.Build();
 app.MapPortiaPost<CreateGreeting, string>("/greetings");
@@ -51,23 +48,23 @@ available over HTTP.
 
 ## API and worker deployments
 
-Declare modules, persistence, and background work once in a shared application
+Declare components, persistence, and background work once in a shared application
 project. The API host calls `AddAccountsApplication(configuration)`; the worker host
 calls the same setup followed by `.AddWorker()`. HTTP traffic and background work
 can scale independently. See [shared application setup](docs/application-setup.md)
-for connection ownership, worker fleet configuration, and incremental aggregate hydration.
+for connection ownership, mixed global/per-tenant workloads, and incremental aggregate hydration.
+[Registration verification](docs/workload-registration-verification.md) records the red → green results.
 
 ## Why it works
 
 - `IRequest<string>` says that `CreateGreeting` returns text.
 - `ICallable` says that the application may expose it to callers, including over HTTP.
 - `IRequestHandler<CreateGreeting, string>` connects that command to its handler.
-- `AddModule<GreetingsModule>()` adds the command and handler to the application.
+- `AddHandler<CreateGreetingHandler>()` adds the command and handler to the application.
 - `MapPortiaPost` reads the HTTP request, calls the handler, and writes the HTTP response.
 
 Portia writes the repetitive connection code when the project builds. It is ordinary C# checked
-by the compiler—there is no runtime scanning, naming convention, controller, or registration list
-to keep in sync. If the command and handler disagree about their types, the build fails.
+by the compiler—the application explicitly selects its components without scanning assemblies. If the command and handler disagree about their types, the build fails.
 
 ## How we keep it simple
 
@@ -82,7 +79,7 @@ code.
 
 [Read the getting-started guide](docs/getting-started.md) for package setup, authorization,
 asynchronous work, persistence, and streaming. The [consumer fixture](test/Portia.ConsumerTests/CompleteWorkflowTests.cs)
-executes two feature modules through direct dispatch, HTTP, RPC, and queues.
+executes two feature assemblies through direct dispatch, HTTP, RPC, and queues.
 See the [breaking-change migration notes](docs/migration.md) before upgrading.
 
 ## Development
@@ -147,8 +144,7 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
 - **Schema evolution**: `DomainEventTypeCatalog` maps a logical event name + schema version to a
   CLR type. An exact match resolves directly (old and new versions can simply coexist forever);
   a missing version falls through a chain of JSON-adapter-specific
-  `IJsonDomainEventUpcaster`s. Each explicitly registered module contributes its compile-time-discovered event types
-  to the shared catalog, including imported contract modules.
+  `IJsonDomainEventUpcaster`s. `portia.AddEvent<TEvent>()` contributes each event type to the shared catalog.
 - **Multi-tenancy vs. fleet distribution — deliberately orthogonal**: `MultiTenantRunner`
   decides which tenants a component instance runs for, on whichever worker it's already on.
   `FleetPartitionRunner` decides which worker gets to run a given partition at all, using Fitz
@@ -171,7 +167,7 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   `Portia.DependencyInjection` (and `Portia.Fitz`, for fleet) provides `IHostedService` wrappers
   (`AddPortiaQueueRunner()`, `AddPortiaProjectorRunner<T>()`, etc.) that start when the host
   starts and stop cleanly on shutdown. A projector loads the authoritative checkpoint from its
-  `IProjectionTarget`; each `IProjectionBatch` commits that checkpoint atomically with projection
+  constructor-injected `IProjectionStore`; each `IProjectionBatch` commits that checkpoint atomically with projection
   changes. Reactors, whose effects cannot share that transaction, use an
   `IProjectionCheckpointStore` — `InMemoryProjectionCheckpointStore` (`Portia.Testing`) for tests
   or a single-instance deployment; anything durable needs its own implementation. Both ports use
@@ -190,10 +186,9 @@ qualification note is historical; this checkout now uses Fitz 0.1.2.
 - **No aggregate snapshotting.** A newly constructed aggregate replays its full raised-event history;
   an existing hydrated instance reads only newer events. There is no durable snapshot mechanism yet. Fine at low event counts, a real scaling concern
   for anything long-lived.
-- **`ReactorRunner`'s bounded, checkpointed batching is opt-in, not automatic.** Found during
-  adversarial review: a reactor's job is raising commands against other aggregates, not generally
-  safe to redo, but a failure partway through an unbounded pass used to return no checkpoint at
-  all. Fixed — pass an `IProjectionCheckpointStore` and a `maxBatchSize` to `RunAsync` (as
-  `AddPortiaReactorRunner<T>()` already does) and a failure only loses the current batch, not the
-  whole pass. Omit them and you keep the older, whole-pass-only behavior; that's a deliberate
-  choice this class leaves to the caller.
+- **Reaction effects are at-least-once.** `BaseReactor` checkpoints after each event;
+  `BaseBatchReactor` checkpoints after each successful bounded batch. A failed checkpoint
+  or interrupted batch can replay external effects. Make those effects idempotent.
+
+[Projectors and reactors](docs/projectors-and-reactors.md) shows constructor-injected
+repositories, batch handling, and storage contracts.
