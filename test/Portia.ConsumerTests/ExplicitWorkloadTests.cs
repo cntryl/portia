@@ -79,7 +79,11 @@ public sealed class ExplicitWorkloadTests
         var count = services.Count;
         _ = Assert.Throws<InvalidOperationException>(() => portia.AddProjector<FirstProjector>(_ => { }));
         Assert.Equal(count, services.Count);
-        _ = Assert.Throws<InvalidOperationException>(() => portia.AddProjector<FirstProjector>(o => o.PerTenant().Global()));
+        _ = Assert.Throws<InvalidOperationException>(() => portia.AddProjector<FirstProjector>(o =>
+        {
+            o.PerTenant();
+            o.Global();
+        }));
         Assert.Equal(count, services.Count);
         _ = portia.AddProjector<FirstProjector>(o => o.PerTenant());
         count = services.Count;

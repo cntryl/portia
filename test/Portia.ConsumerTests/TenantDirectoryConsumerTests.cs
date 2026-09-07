@@ -3,7 +3,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class TenantDirectoryConsumerTests
 {
     [Fact]
-    public async Task DefaultIdlePollingUsesInjectedClockAndOneSecondDelay()
+    public async Task StreamNotificationWakesIdleDirectoryWithoutPollingDelay()
     {
         var assembly = GeneratorCompilation.Compile("""
             using System;
@@ -25,31 +25,31 @@ public sealed class TenantDirectoryConsumerTests
                     yield break;
                 }
             }
-            public sealed class Clock : TimeProvider
+            public sealed class Changes : IDomainEventNotifier, IDomainEventSubscription
             {
-                public TaskCompletionSource<TimeSpan> Scheduled = new(TaskCreationOptions.RunContinuationsAsynchronously);
-                public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
-                { Scheduled.TrySetResult(dueTime); return new Timer(); }
-                private sealed class Timer : ITimer
-                {
-                    public bool Change(TimeSpan dueTime, TimeSpan period) => true;
-                    public void Dispose() { }
-                    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-                }
+                public TaskCompletionSource Subscribed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                public TaskCompletionSource Changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern, CancellationToken ct = default)
+                { Subscribed.TrySetResult(); return ValueTask.FromResult<IDomainEventSubscription>(this); }
+                public ValueTask WaitAsync(CancellationToken ct = default) => new(Changed.Task.WaitAsync(ct));
+                public ValueTask DisposeAsync() => ValueTask.CompletedTask;
             }
             public static class Scenario
             {
                 public static async Task<bool> Run()
                 {
-                    var clock = new Clock();
+                    var changes = new Changes();
                     var source = new Reader();
                     var directory = new EventSourcedTenantDirectory<Added, Removed>(source,
-                        EventStreamPattern.ForPattern("consumer", "tenants"), _ => new TenantId("acme"), timeProvider: clock);
+                        EventStreamPattern.ForPattern("consumer", "tenants"), _ => new TenantId("acme"), notifier: changes);
                     using var cancellation = new CancellationTokenSource();
                     await using var watch = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
                     var move = watch.MoveNextAsync().AsTask();
-                    var delay = await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(3));
-                    var passed = source.Reads == 1 && delay == TimeSpan.FromSeconds(1) && !move.IsCompleted;
+                    await changes.Subscribed.Task.WaitAsync(TimeSpan.FromSeconds(3));
+                    await Task.Delay(50);
+                    var passed = source.Reads == 1 && !move.IsCompleted;
+                    changes.Changed.TrySetResult();
+                    while (source.Reads < 2) await Task.Yield();
                     cancellation.Cancel();
                     try { _ = await move; } catch (OperationCanceledException) { }
                     return passed;

@@ -64,7 +64,7 @@
       "portia.fitz": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Fitz": "[0.1.2, )",
+          "Cntryl.Fitz": "[0.1.3, )",
           "Microsoft.Extensions.Configuration.Abstractions": "[10.0.11, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.11, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.11, )",
@@ -74,18 +74,18 @@
       },
       "Cntryl.Fitz": {
         "type": "CentralTransitive",
-        "requested": "[0.1.2, )",
-        "resolved": "0.1.2",
-        "contentHash": "52tvRTdeJ/RHA1CbwI/Rhwv79b5/AOYJOY2IShjDy6a8gLkBGow8seEcp7+ViMW3+5I2wyiyV7SvVvinTmQYWA==",
+        "requested": "[0.1.3, )",
+        "resolved": "0.1.3",
+        "contentHash": "eOFKYuFRFg0DdSK8yNWclFmtkar74/AndDiB1k4VHpi+LHoKvV7oAjgTunz0GrhuKGpNAcqyv5fj7TMboz+AsA==",
         "dependencies": {
-          "Cntryl.Fitz.Abstractions": "0.1.2"
+          "Cntryl.Fitz.Abstractions": "0.1.3"
         }
       },
       "Cntryl.Fitz.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.1.2, )",
-        "resolved": "0.1.2",
-        "contentHash": "CPZ8GLWz8ax3A3QNdyGiS/vu/4sljO3OwxYSYw7PBJNaPwYaMQXXaF558h3KIRCzDYk29O2GTKwRhivr4cr7+g=="
+        "requested": "[0.1.3, )",
+        "resolved": "0.1.3",
+        "contentHash": "0z0u1CUjVcd42W4dS03NxmuOlMjMjSgXoM+aBhvvJ4i8iqlCS/+DzkD5ZpRQ3JAMMr6rugRUxynYIHWo2eTe8g=="
       },
       "Microsoft.Extensions.Configuration.Abstractions": {
         "type": "CentralTransitive",

@@ -72,6 +72,9 @@ public sealed class SharedDeploymentTests
         try
         {
             await using var scope = host.Services.CreateAsyncScope();
+            Assert.Same(
+                scope.ServiceProvider.GetRequiredService<IEventStore>(),
+                scope.ServiceProvider.GetRequiredService<IDomainEventNotifier>());
             var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
             var account = new Account(Uuid.CreateVersion4());
             account.Deposit(10);
@@ -123,7 +126,7 @@ public sealed class SharedDeploymentTests
         return services.AddPortia(portia =>
         {
             _ = portia.Services.AddAccounts();
-            _ = portia.AddProjector<FirstProjector>(o => { _ = o.Global(); o.Name = "first-projector"; o.PollInterval = TimeSpan.FromMilliseconds(10); });
+            _ = portia.AddProjector<FirstProjector>(o => { o.Global(); o.Name = "first-projector"; o.PollInterval = TimeSpan.FromMilliseconds(10); });
             _ = portia.UseFitzClient(client, fitz =>
             {
                 _ = fitz.UseFleet(new FleetRunOptions { MembershipSelector = $"lease://app-{first}/members/*" });

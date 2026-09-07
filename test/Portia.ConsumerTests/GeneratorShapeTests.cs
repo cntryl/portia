@@ -32,7 +32,7 @@ public sealed class GeneratorShapeTests
                 public static async Task<int> Run()
                 {
                     var services = new ServiceCollection();
-                    services.AddPortia(p => p.AddHandler<Handler>().AddAuthorizer<Authorizer>());
+                    services.AddPortia(p => p.AddHandler().AddAuthorizer());
                     await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
                     await using var scope = provider.CreateAsyncScope();
                     var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();

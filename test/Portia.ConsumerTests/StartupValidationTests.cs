@@ -12,35 +12,42 @@ public sealed class StartupValidationTests
     public void InvalidProjectionOptionsDoNotMutateRegistrations(int batchSize, string? rebuildId)
     {
         var services = new ServiceCollection();
-        _ = Assert.ThrowsAny<ArgumentException>(() => services.AddPortiaProjectorRunner<FirstProjector>(
-            new ProjectionRunOptions { MaxBatchSize = batchSize, RebuildId = rebuildId }));
-        Assert.Empty(services);
+        _ = Assert.ThrowsAny<ArgumentException>(() => services.AddPortia(p => p.AddProjector<FirstProjector>(o =>
+        {
+            o.Global();
+            o.Processing = new ProjectionRunOptions { MaxBatchSize = batchSize, RebuildId = rebuildId };
+        })));
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void DirectHostsRejectInvalidPollingIntervals(int milliseconds)
+    public void WorkloadsRejectInvalidPollingIntervals(int milliseconds)
     {
-        var reader = new InMemoryEventStore();
-        _ = Assert.ThrowsAny<ArgumentException>(() => new ReactorHostedService(new ReactorRunner(reader),
-            new TestReactor(), pollInterval: TimeSpan.FromMilliseconds(milliseconds)));
-        _ = Assert.ThrowsAny<ArgumentException>(() => new ProjectorHostedService(new ProjectorRunner(reader),
-            new TestProjection(), pollInterval: TimeSpan.FromMilliseconds(milliseconds)));
+        var services = new ServiceCollection();
+        _ = Assert.ThrowsAny<ArgumentException>(() => services.AddPortia(p => p.AddReactor<FirstReactor>(o =>
+        {
+            o.Global();
+            o.PollInterval = TimeSpan.FromMilliseconds(milliseconds);
+        })));
+        _ = Assert.ThrowsAny<ArgumentException>(() => services.AddPortia(p => p.AddProjector<FirstProjector>(o =>
+        {
+            o.Global();
+            o.PollInterval = TimeSpan.FromMilliseconds(milliseconds);
+        })));
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 
     [Fact]
-    public void DirectProjectorHostRejectsInvalidBatchBeforeStarting()
+    public void ReactorsRejectRebuildGenerations()
     {
-        _ = Assert.ThrowsAny<ArgumentException>(() => new ProjectorHostedService(new ProjectorRunner(new InMemoryEventStore()),
-            new TestProjection(), new ProjectionRunOptions { MaxBatchSize = 0 }));
-    }
-
-    sealed class TestReactor() : BaseReactor(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test"), "test");
-    sealed class TestProjection() : BaseProjector(new Target(), EventStreamPattern.ForPattern("test"), "test");
-    sealed class Target : IProjectionStore
-    {
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default) => throw new NotSupportedException();
-        public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default) => throw new NotSupportedException();
+        var services = new ServiceCollection();
+        _ = Assert.ThrowsAny<ArgumentException>(() => services.AddPortia(p => p.AddReactor<FirstReactor>(o =>
+        {
+            o.Global();
+            o.Processing = new ProjectionRunOptions { RebuildId = "repair" };
+        })));
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 }

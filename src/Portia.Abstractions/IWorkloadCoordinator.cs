@@ -44,11 +44,14 @@ public sealed class WorkloadContext
     /// <summary>Gets the ownership fencing token; durable targets must enforce it.</summary>
     public ulong FencingToken { get; private set; }
 
-    internal void Initialize(WorkloadIdentity identity, ulong token)
+    internal string? ComponentName { get; private set; }
+
+    internal void Initialize(WorkloadIdentity identity, ulong token, string? componentName = null)
     {
         if (_identity is not null)
             throw new InvalidOperationException("A workload scope cannot be rebound.");
         _identity = identity;
         FencingToken = token;
+        ComponentName = componentName;
     }
 }

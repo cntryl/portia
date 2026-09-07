@@ -8,12 +8,11 @@ public static class ContractsRegistration
     {
         _ = services.AddPortia(p =>
         {
-            _ = p.AddEvent<Deposited>();
-            _ = p.AddEvent<Declined>();
-            _ = p.AddRequest<FeatureOneRequest>();
-            _ = p.AddRequest<FeatureTwoRequest>();
-            _ = p.AddRequest<DepositAccount>();
-            _ = p.AddRequest<ScopeRequest>();
+            _ = p.AddGeneratedEvents();
+            _ = p.AddFeatureOneRequest();
+            _ = p.AddFeatureTwoRequest();
+            _ = p.AddDepositAccount();
+            _ = p.AddScopeRequest();
         });
         return services;
     }

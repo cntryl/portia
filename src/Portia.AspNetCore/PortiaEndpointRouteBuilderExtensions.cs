@@ -24,6 +24,12 @@ namespace Cntryl.Portia;
 /// <see cref="IQueuable" /> at all, gets the ordinary dispatch-and-wait behavior. The request
 /// itself decides whether the pivot is available, the same way it opts into every other transport.
 ///
+/// A result-bearing request restates its result type at the call site
+/// (<c>MapPortiaPost&lt;CreateOrder, OrderId&gt;</c>) even though <c>IRequest&lt;OrderId&gt;</c>
+/// already carries it. That is a C# limitation, not a design choice: type arguments are inferred
+/// from method arguments, never from a generic constraint, so there is no way to write a
+/// one-type-argument overload that recovers <c>TOut</c> from <c>TRequest</c>.
+///
 /// Consumer compilations must reference Portia.Generators. Mapping patterns must be compile-time
 /// constants and request constructors must have supported binding shapes; unsupported mappings
 /// receive compiler diagnostics. Generated body binding honors configured ASP.NET HTTP JSON options.
@@ -135,7 +141,7 @@ public static class PortiaEndpointRouteBuilderExtensions
 
     /// <summary>
     /// Maps a request that produces a sequence of results to a GET endpoint, streamed to the
-    /// caller as one incrementally-flushed JSON array via <see cref="IRequestBus.StreamAsync{TOut}(IStreamRequest{TOut}, System.Security.Claims.ClaimsPrincipal, CancellationToken)" />
+    /// caller as one incrementally-flushed JSON array via <see cref="RequestBusExtensions.StreamAsync{TOut}(IRequestBus, IStreamRequest{TOut}, System.Security.Claims.ClaimsPrincipal, CancellationToken)" />
     /// — items are written as they're produced, never buffered into memory first.
     /// </summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
@@ -146,7 +152,7 @@ public static class PortiaEndpointRouteBuilderExtensions
 
     /// <summary>
     /// Maps a request that produces a sequence of results to a GET endpoint, streamed to the
-    /// caller as Server-Sent Events. Reuses the exact same <see cref="IRequestBus.StreamAsync{TOut}(IStreamRequest{TOut}, System.Security.Claims.ClaimsPrincipal, CancellationToken)" />
+    /// caller as Server-Sent Events. Reuses the exact same <see cref="RequestBusExtensions.StreamAsync{TOut}(IRequestBus, IStreamRequest{TOut}, System.Security.Claims.ClaimsPrincipal, CancellationToken)" />
     /// source as <see cref="MapPortiaGetStream{TRequest, TOut}" /> — pick this one instead when the
     /// caller wants a long-lived SSE connection (e.g. a browser <c>EventSource</c>) rather than a
     /// single streamed JSON array.

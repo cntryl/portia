@@ -98,7 +98,7 @@ and execution (except explicit diagnostic tests for unsupported inputs).
   unrelated-handler constructor exception; both now pass with shared scoped
   `RequestBus`, typed descriptors, and on-demand dependency resolution.
 - Multi-interface/partial discovery: observed missing second handler and false
-  `PORTIA008` duplicate handler; both now pass. Multi-interface authorizers are also
+  a duplicate-handler failure (reported at registration, not by an analyzer); both now pass. Multi-interface authorizers are also
   covered, and unselected authorizers are not constructed.
 - Explicit module API: consumer compilation initially failed for missing
   `AddPortiaModule`; named `[PortiaModule]` partial types now compose idempotently.
@@ -108,7 +108,7 @@ and execution (except explicit diagnostic tests for unsupported inputs).
 - Global/nested/partial component compilation: observed invalid namespace emission,
   missing overrides and repeated-source failures; all three cases now compile and
   execute projector and reactor dispatch. Source identities include a full-symbol
-  SHA-256 suffix. Unsupported shapes receive `PORTIA014`/`PORTIA015` diagnostics.
+  SHA-256 suffix. Unsupported shapes receive the `PORTIA015` diagnostic.
 - Additional checks pass for conflicting handler/authorizer modules with registration
   rollback, and two handlers sharing a simple name in different namespaces.
 - Existing test bus construction now uses an owned DI scope and public module

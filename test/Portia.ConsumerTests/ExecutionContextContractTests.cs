@@ -75,7 +75,7 @@ public sealed class ExecutionContextContractTests
                 {
                     var services = new ServiceCollection();
                     services.AddScoped<Capture>();
-                    services.AddPortia(p => p.AddHandler<OuterHandler>().AddHandler<InnerHandler>());
+                    services.AddPortia(p => p.AddOuterHandler().AddInnerHandler());
                     await using var provider = services.BuildServiceProvider();
                     await using var scope = provider.CreateAsyncScope();
                     await scope.ServiceProvider.GetRequiredService<IRequestBus>().SendAsync(new Outer(), RequestActor.System);

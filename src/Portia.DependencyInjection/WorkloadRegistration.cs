@@ -21,15 +21,14 @@ public sealed class WorkloadOptions
     public ProjectionRunOptions Processing { get; set; } = ProjectionRunOptions.Default;
 
     /// <summary>Selects one logical application workload.</summary>
-    public WorkloadOptions Global() => Select(WorkloadScope.Global);
+    public void Global() => Select(WorkloadScope.Global);
     /// <summary>Selects independently owned and checkpointed tenant workloads.</summary>
-    public WorkloadOptions PerTenant() => Select(WorkloadScope.PerTenant);
-    WorkloadOptions Select(WorkloadScope scope)
+    public void PerTenant() => Select(WorkloadScope.PerTenant);
+    void Select(WorkloadScope scope)
     {
         if (Scope is { } existing && existing != scope)
             throw new InvalidOperationException("A workload cannot be both global and per-tenant.");
         Scope = scope;
-        return this;
     }
 }
 
@@ -45,6 +44,7 @@ public sealed record WorkloadRegistration
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(options.PollInterval, TimeSpan.Zero);
         ArgumentNullException.ThrowIfNull(options.Processing);
         options.Processing.Validate();
+        ExplicitName = options.Name;
         Name = options.Name ?? componentType.FullName ?? componentType.Name;
         ArgumentException.ThrowIfNullOrWhiteSpace(Name);
         if (!projector && options.Processing.RebuildId is not null)
@@ -61,8 +61,11 @@ public sealed record WorkloadRegistration
     public bool IsProjector { get; }
     /// <summary>Gets the execution scope.</summary>
     public WorkloadScope Scope { get; }
-    /// <summary>Gets the stable logical name.</summary>
+    /// <summary>Gets the stable logical name used to coordinate ownership of this workload.</summary>
     public string Name { get; }
+    /// <summary>Gets the name the application chose, or null to keep the component's own name
+    /// — which is its checkpoint identity — exactly as its constructor set it.</summary>
+    internal string? ExplicitName { get; }
     /// <summary>Gets the delay between passes.</summary>
     public TimeSpan PollInterval { get; }
     /// <summary>Gets batch processing settings.</summary>

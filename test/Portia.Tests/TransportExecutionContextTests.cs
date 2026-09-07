@@ -56,8 +56,7 @@ public sealed class TransportExecutionContextTests
     sealed class RecordingBus : IRequestBus
     {
         public List<RequestDispatchContext> Contexts { get; } = [];
-        public ValueTask<Result> SendAsync(IRequest request, ClaimsPrincipal actor, CancellationToken ct = default)
-            => DispatchAsync(request, new RequestDispatchContext(actor), ct);
+        public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) => new(actor, metadata: metadata);
         public ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context, CancellationToken ct = default)
         {
             Contexts.Add(context);
@@ -65,8 +64,6 @@ public sealed class TransportExecutionContextTests
         }
         public ValueTask<Result<T>> DispatchAsync<T>(IRequest<T> request, RequestDispatchContext context, CancellationToken ct = default) => throw new NotSupportedException();
         public IAsyncEnumerable<T> DispatchStreamAsync<T>(IStreamRequest<T> request, RequestDispatchContext context, CancellationToken ct = default) => throw new NotSupportedException();
-        public ValueTask<Result<T>> SendAsync<T>(IRequest<T> request, ClaimsPrincipal actor, CancellationToken ct = default) => throw new NotSupportedException();
-        public IAsyncEnumerable<T> StreamAsync<T>(IStreamRequest<T> request, ClaimsPrincipal actor, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     sealed class Validator : IRequestActorValidator

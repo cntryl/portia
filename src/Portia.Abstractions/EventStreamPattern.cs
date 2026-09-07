@@ -1,7 +1,9 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Selects event streams inside one Fitz realm by optional area and resource segments.
+/// Selects event streams inside one realm by optional area and resource segments. A null segment
+/// matches every value at that level, so a pattern can name one stream, a whole area, or a whole
+/// realm. See <see cref="EventStreamAddress" /> for what the three segments mean.
 /// </summary>
 public sealed record EventStreamPattern
 {
@@ -14,17 +16,17 @@ public sealed record EventStreamPattern
     }
 
     /// <summary>
-    /// Gets the selected Fitz realm.
+    /// Gets the selected top-level scope.
     /// </summary>
     public string Realm { get; }
 
     /// <summary>
-    /// Gets the selected Fitz area, or <see langword="null" /> when every area is selected.
+    /// Gets the selected area, or <see langword="null" /> when every area is selected.
     /// </summary>
     public string? Area { get; }
 
     /// <summary>
-    /// Gets the selected Fitz resource, or <see langword="null" /> when every resource is selected.
+    /// Gets the selected resource, or <see langword="null" /> when every resource is selected.
     /// </summary>
     public string? Resource { get; }
 
@@ -43,7 +45,7 @@ public sealed record EventStreamPattern
         string? resource = null) => new(realm, area, resource);
 
     /// <summary>
-    /// Returns the canonical Fitz stream selector.
+    /// Returns the canonical stream selector.
     /// </summary>
     /// <returns>The canonical stream selector.</returns>
     public override string ToString() => $"stream://{Realm}/{Area ?? "*"}/{Resource ?? "*"}";

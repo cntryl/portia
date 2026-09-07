@@ -7,7 +7,7 @@ namespace Cntryl.Portia;
 /// <summary>
 /// Persists aggregate event histories in Fitz streams.
 /// </summary>
-public sealed class FitzEventStore : IEventStore
+public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
 {
     const ulong ReadPageSize = 1024;
 
@@ -193,6 +193,59 @@ public sealed class FitzEventStore : IEventStore
         catch
         {
             // Preserve the append or commit failure that caused the rollback.
+        }
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<IDomainEventSubscription> SubscribeAsync(
+        EventStreamPattern pattern,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(pattern);
+        var subscription = await _streams.SubscribeAsync(pattern.ToString(), ct).ConfigureAwait(false);
+        return new FitzDomainEventSubscription(subscription);
+    }
+
+    sealed class FitzDomainEventSubscription : IDomainEventSubscription
+    {
+        readonly StreamSubscription _subscription;
+        readonly CancellationTokenSource _stop = new();
+        readonly IAsyncEnumerator<StreamCommitEvent> _notifications;
+        Task<bool>? _pending;
+
+        public FitzDomainEventSubscription(StreamSubscription subscription)
+        {
+            _subscription = subscription;
+            _notifications = subscription.GetAsyncEnumerator(_stop.Token);
+        }
+
+        public async ValueTask WaitAsync(CancellationToken ct = default)
+        {
+            _pending ??= _notifications.MoveNextAsync().AsTask();
+            try
+            {
+                if (!await _pending.WaitAsync(ct).ConfigureAwait(false))
+                    throw new InvalidOperationException("The Fitz stream subscription ended without cancellation.");
+                _pending = null;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                await _stop.CancelAsync().ConfigureAwait(false);
+                throw;
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _stop.CancelAsync().ConfigureAwait(false);
+            if (_pending is not null)
+            {
+                try { _ = await _pending.ConfigureAwait(false); }
+                catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
+            }
+            await _notifications.DisposeAsync().ConfigureAwait(false);
+            await _subscription.DisposeAsync().ConfigureAwait(false);
+            _stop.Dispose();
         }
     }
 }

@@ -38,7 +38,7 @@ public sealed class DispatchConsumerTests
                 public static async Task<int> Run()
                 {
                     var services = new ServiceCollection();
-                    services.AddPortia(p => p.AddHandler<OuterHandler>().AddHandler<InnerHandler>().AddHandler<UnrelatedHandler>().AddAuthorizer<UnrelatedAuthorizer>());
+                    services.AddPortia(p => p.AddOuterHandler().AddInnerHandler().AddUnrelatedHandler().AddUnrelatedAuthorizer());
                     await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
                     await using var scope = provider.CreateAsyncScope();
                     var result = await scope.ServiceProvider.GetRequiredService<IRequestBus>().SendAsync(new Outer(), RequestActor.System);

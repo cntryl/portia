@@ -17,9 +17,16 @@ public abstract class BaseProjector
     public EventStreamPattern Pattern { get; private set; }
     internal IProjectionStore Store { get; }
     internal virtual bool IsBatch => false;
-    internal void BindWorkload(WorkloadIdentity identity)
+    /// <summary>
+    /// Applies the running workload's tenant and, when the application explicitly named the
+    /// workload, its name. <paramref name="componentName" /> is null unless the registration set
+    /// <c>WorkloadOptions.Name</c> — the component's own <see cref="Name" /> is its checkpoint
+    /// identity, so a registration that does not name the workload must not silently repoint it.
+    /// </summary>
+    internal void BindWorkload(WorkloadIdentity identity, string? componentName)
     {
-        Name = identity.Name;
+        if (componentName is not null)
+            Name = componentName;
         if (identity.Tenant is { } tenant)
             Pattern = EventStreamPattern.ForPattern(tenant.Value, Pattern.Area, Pattern.Resource);
     }

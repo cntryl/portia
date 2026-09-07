@@ -35,7 +35,7 @@ static class HttpConsumerScenario
                 {
                     var builder = WebApplication.CreateBuilder();
                     builder.WebHost.UseTestServer();
-                    builder.Services.AddPortia(p => p.AddHandler<Handler>());
+                    builder.Services.AddPortia(p => p.AddHandler());
                     builder.Services.ConfigureHttpJsonOptions(options =>
                     {
                         if (snake) options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;

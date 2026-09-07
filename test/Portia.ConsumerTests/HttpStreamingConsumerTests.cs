@@ -57,7 +57,7 @@ public sealed class HttpStreamingConsumerTests
                 var builder = WebApplication.CreateBuilder();
                 builder.WebHost.UseTestServer();
                 builder.Services.AddSingleton<Stats>();
-                builder.Services.AddPortia(p => p.AddHandler<Handler>().AddAuthorizer<Authorizer>());
+                builder.Services.AddPortia(p => p.AddHandler().AddAuthorizer());
                 await using var app = builder.Build();
                 app.MapPortiaGetStream<StreamRequest, string>("/json");
                 app.MapPortiaGetSse<StreamRequest, string>("/sse");

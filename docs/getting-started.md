@@ -17,16 +17,30 @@ public sealed record Declined(string Reason) : DomainEvent;
 ```
 
 Reference the generator in each assembly declaring handlers, authorizers, routed requests,
-reactors, or projectors, and in the host that maps HTTP endpoints. Select components
-explicitly with `AddHandler<T>()`, `AddAuthorizer<T>()`, `AddEvent<T>()`,
-`AddProjector<T>(...)`, and `AddReactor<T>(...)`. A handler includes its request's transport
-descriptor; use `AddRequest<T>()` for a contract used only by a sending application.
-Repeated identical registrations are idempotent; conflicting selected handlers or
-authorizers fail during registration. Unselected types are not added to the application.
+reactors, or projectors, and in the host that maps HTTP endpoints.
 
-Generated descriptors retain typed dispatch and permission expressions. Setup locates
-the known generated descriptor factory in the selected type's assembly; it does not
-scan assemblies. Dispatch calls typed delegates directly.
+For every handler, authorizer, and routed request it finds, the generator writes one
+`Add<Component>()` extension method on `PortiaBuilder` — `AddDepositAccountHandler()`,
+`AddDepositAccount()`, and so on. Selecting a component is a call to its own generated method,
+so a type that is not a handler simply has no method to call: the mistake is a compile error
+rather than a startup exception. Projectors and reactors are selected with
+`AddProjector<T>(...)` and `AddReactor<T>(...)`, which also choose their execution scope.
+
+Registering a handler also registers its request's transport descriptor. A contract used only
+by a sending application is registered through its own `Add<Request>()` method. Events are
+contributed per assembly with `AddGeneratedEvents()`, because an event missing from the catalog
+is always a replay-time failure rather than a deployment choice; `AddEvent<T>()` remains for an
+event declared in an assembly built without the generator.
+
+Repeated identical registrations are idempotent; conflicting selected handlers or authorizers
+fail during registration. Unselected types are not added to the application.
+
+Generated descriptors retain typed dispatch and permission expressions. There is no assembly
+scanning and no reflection at any point — each generated method calls a typed constructor
+directly, so the whole registration path is visible to the compiler and to trimming.
+
+The generated methods are internal to the assembly that declares the components, so each feature
+assembly exposes its own `AddMyFeature(this IServiceCollection services)` and calls them there.
 
 A scoped `IRequestBus` resolves the selected handler and authorizer from the current
 scope. A handler may inject that bus to dispatch a different request. Permission
@@ -50,6 +64,9 @@ public sealed class Account : Aggregate
 
     public int Balance { get; private set; }
     public void Deposit(int amount) => RaiseEvent(new Deposited(amount));
+
+    // Audits live in their own stream and cannot be committed in the same transaction as
+    // raised events, so save one before emitting the other.
     public void Decline(string reason) => AuditEvent(new Declined(reason));
 }
 ```
@@ -59,9 +76,8 @@ Configure persistence once in the shared application setup:
 ```csharp
 services.AddPortia(portia =>
 {
-    portia.AddHandler<DepositAccountHandler>();
-    portia.AddEvent<Deposited>();
-    portia.AddEvent<Declined>();
+    portia.AddDepositAccountHandler();
+    portia.AddGeneratedEvents();
 });
 services.AddPortiaFitz(configuration.GetSection("Fitz"));
 ```
@@ -103,7 +119,7 @@ develop the generator still need their local compiler configuration.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddPortia(portia => portia.AddHandler<DepositAccountHandler>());
+builder.Services.AddPortia(portia => portia.AddDepositAccountHandler());
 // Register persistence and application dependencies as above.
 var app = builder.Build();
 app.MapPortiaPost<DepositAccount>("/accounts/{id}");

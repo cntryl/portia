@@ -16,31 +16,6 @@ namespace Cntryl.Portia;
 public sealed class PortiaHostingServiceCollectionExtensionsTests
 {
     /// <summary>
-    /// Preserves the original two-parameter CLR extension method for existing compiled callers.
-    /// </summary>
-    [Fact]
-    public void ShouldRetainOriginalReactorRegistrationOverload()
-    {
-        var overload = typeof(PortiaHostingServiceCollectionExtensions)
-            .GetMethods()
-            .SingleOrDefault(candidate =>
-            {
-                if (candidate.Name != nameof(PortiaHostingServiceCollectionExtensions.AddPortiaReactorRunner)
-                    || !candidate.IsGenericMethodDefinition)
-                {
-                    return false;
-                }
-
-                var parameters = candidate.GetParameters();
-                return parameters.Length == 2
-                    && parameters[0].ParameterType == typeof(IServiceCollection)
-                    && parameters[1].ParameterType == typeof(TimeSpan?);
-            });
-
-        Assert.NotNull(overload);
-    }
-
-    /// <summary>
     /// Rejects an invalid reactor batch size during registration rather than deferring the error
     /// until the hosted service is resolved and enters its retry loop.
     /// </summary>
@@ -51,10 +26,14 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
 
-        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            services.AddPortiaReactorRunner<TestReactor>(maxBatchSize: maxBatchSize));
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => services.AddPortia(p => p.AddReactor<TestReactor>(o =>
+        {
+            o.Global();
+            o.Processing = new ProjectionRunOptions { MaxBatchSize = maxBatchSize };
+        })));
 
-        Assert.Equal(nameof(maxBatchSize), exception.ParamName);
+        Assert.Equal(nameof(ProjectionRunOptions.MaxBatchSize), exception.ParamName);
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 
     /// <summary>
@@ -123,7 +102,11 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton<IDomainEventReader>(store);
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
-        _ = services.AddPortiaProjectorRunner<TestProjector>(pollInterval: TimeSpan.FromMilliseconds(20));
+        _ = services.AddPortia(p => p.AddProjector<TestProjector>(o =>
+        {
+            o.Global();
+            o.PollInterval = TimeSpan.FromMilliseconds(20);
+        })).AddWorker();
         using var provider = services.BuildServiceProvider();
 
         var hostedService = Assert.Single(provider.GetServices<IHostedService>());
@@ -151,7 +134,11 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton<IDomainEventReader>(store);
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
-        _ = services.AddPortiaProjectorRunner<TestProjector>(pollInterval: TimeSpan.FromMilliseconds(10));
+        _ = services.AddPortia(p => p.AddProjector<TestProjector>(o =>
+        {
+            o.Global();
+            o.PollInterval = TimeSpan.FromMilliseconds(10);
+        })).AddWorker();
         using var provider = services.BuildServiceProvider();
         var hostedService = Assert.Single(provider.GetServices<IHostedService>());
 
@@ -177,11 +164,19 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var store = new InMemoryEventStore();
         await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)]);
         var target = new TransientReloadFailureProjectionTarget();
-        var hostedService = new ProjectorHostedService(
-            new ProjectorRunner(store),
-            new TestProjector(target),
-            pollInterval: TimeSpan.FromMilliseconds(10));
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IDomainEventReader>(store);
+        _ = services.AddFrameworkTests();
+        _ = services.AddSingleton(new TestProjector(target));
+        _ = services.AddPortia(p => p.AddProjector<TestProjector>(o =>
+        {
+            o.Global();
+            o.Name = "test-projector";
+            o.PollInterval = TimeSpan.FromMilliseconds(10);
+        })).AddWorker();
+        using var provider = services.BuildServiceProvider();
 
+        var hostedService = (BackgroundService)Assert.Single(provider.GetServices<IHostedService>());
         await hostedService.StartAsync(default);
         var executeTask = hostedService.ExecuteTask
             ?? throw new InvalidOperationException("The projector hosted service did not start.");

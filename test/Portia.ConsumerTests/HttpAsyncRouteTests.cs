@@ -43,7 +43,7 @@ public sealed class HttpAsyncRouteTests
                 {
                     var builder = WebApplication.CreateBuilder();
                     builder.WebHost.UseTestServer();
-                    builder.Services.AddPortia(p => p.AddHandler<Handler>());
+                    builder.Services.AddPortia(p => p.AddHandler());
                     builder.Services.AddSingleton<IRequestQueuePublisher, Publisher>();
                     await using var app = builder.Build();
                     app.MapPortiaPost<Queued>("/tenants/{tenant}/orders/{order}")

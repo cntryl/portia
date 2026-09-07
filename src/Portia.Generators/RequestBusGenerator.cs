@@ -57,9 +57,17 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
             .SelectMany(static (authorizers, _) => authorizers)
             .Collect();
 
+        var requests = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) => RequestTransportDiscovery.IsCandidate(node),
+                static (syntaxContext, _) => RequestTransportDiscovery.GetRequestTransportComponent(syntaxContext))
+            .Where(static request => request is not null)
+            .Select(static (request, _) => request!)
+            .Collect();
+
         context.RegisterSourceOutput(
-            handlers.Combine(authorizers),
-            static (sourceContext, pair) => Generate(sourceContext, pair.Left, pair.Right));
+            handlers.Combine(authorizers).Combine(requests),
+            static (sourceContext, pair) => Generate(sourceContext, pair.Left.Left, pair.Left.Right, pair.Right));
     }
 
     static IEnumerable<RequestHandlerModel> GetRequestHandler(GeneratorSyntaxContext context)
@@ -81,6 +89,7 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
                     iface.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     resultType: null,
                     HandlerKind.NoResult,
+                    RequestTransportDiscovery.GetRequestTransportComponent(iface.TypeArguments[0]),
                     GetRequiredPermission(iface.TypeArguments[0]),
                     GetRequestParameterNames(iface.TypeArguments[0]),
                     declaration.Identifier.GetLocation());
@@ -93,6 +102,7 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
                     iface.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     iface.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     HandlerKind.WithResult,
+                    RequestTransportDiscovery.GetRequestTransportComponent(iface.TypeArguments[0]),
                     GetRequiredPermission(iface.TypeArguments[0]),
                     GetRequestParameterNames(iface.TypeArguments[0]),
                     declaration.Identifier.GetLocation());
@@ -105,6 +115,7 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
                     iface.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     iface.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     HandlerKind.Stream,
+                    RequestTransportDiscovery.GetRequestTransportComponent(iface.TypeArguments[0]),
                     GetRequiredPermission(iface.TypeArguments[0]),
                     GetRequestParameterNames(iface.TypeArguments[0]),
                     declaration.Identifier.GetLocation());
@@ -162,7 +173,11 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
         yield break;
     }
 
-    static void Generate(SourceProductionContext context, ImmutableArray<RequestHandlerModel> handlers, ImmutableArray<AuthorizerModel> authorizers)
+    static void Generate(
+        SourceProductionContext context,
+        ImmutableArray<RequestHandlerModel> handlers,
+        ImmutableArray<AuthorizerModel> authorizers,
+        ImmutableArray<RequestTransportComponent> requests)
     {
         if (handlers.IsDefaultOrEmpty && authorizers.IsDefaultOrEmpty)
             return;
@@ -195,36 +210,85 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
         }
 
         authorizers = [.. authorizers.GroupBy(authorizer => (authorizer.RequestType, authorizer.AuthorizerType)).Select(group => group.First())];
+        // A type can implement both IRequestHandler<> and IRequestAuthorizer<> for the same
+        // request. Selecting it as a handler must not also register it as an authorizer, so when
+        // one type fills both roles each role gets its own method rather than sharing a name.
+        var handlerTypes = ordered.Select(handler => handler.HandlerType).ToArray();
+        var authorizerTypes = authorizers.Select(authorizer => authorizer.AuthorizerType).ToArray();
+        var bothRoles = new HashSet<string>(handlerTypes.Intersect(authorizerTypes, StringComparer.Ordinal), StringComparer.Ordinal);
+        var resolved = GeneratedRegistrationNames.Resolve(
+            handlerTypes.Concat(authorizerTypes).Concat(requests.Select(request => request.TypeName)));
+        var handlerNames = handlerTypes.Distinct(StringComparer.Ordinal).ToDictionary(
+            type => type, type => bothRoles.Contains(type) ? resolved[type] + "Handler" : resolved[type], StringComparer.Ordinal);
+        var authorizerNames = authorizerTypes.Distinct(StringComparer.Ordinal).ToDictionary(
+            type => type, type => bothRoles.Contains(type) ? resolved[type] + "Authorizer" : resolved[type], StringComparer.Ordinal);
         var source = new StringBuilder()
             .AppendLine("// <auto-generated />")
             .AppendLine("#nullable enable")
             .AppendLine("namespace Cntryl.Portia;")
-            .AppendLine("internal static class PortiaGeneratedRequestRegistrations")
-            .AppendLine("{")
-            .AppendLine("    public static void Register(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::System.Type component, bool authorizer)")
-            .AppendLine("    {")
-            .AppendLine("        global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<global::Cntryl.Portia.IRequestBus, global::Cntryl.Portia.RequestBus>(services);")
-            .AppendLine("        global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<global::Cntryl.Portia.RequestRegistry>(services);");
+            .AppendLine("/// <summary>Compile-time registration for this assembly's Portia components.</summary>")
+            .AppendLine("internal static partial class PortiaGeneratedRegistrations")
+            .AppendLine("{");
 
-        foreach (var handler in ordered)
+        // One method per component, not per implemented interface: a handler may implement
+        // IRequestHandler<> for several requests, and all of them are registered together.
+        foreach (var group in ordered.GroupBy(handler => handler.HandlerType, StringComparer.Ordinal))
         {
-            var descriptor = handler.Kind == HandlerKind.Stream ? "StreamRequestRegistration" : "RequestRegistration";
-            var typeArguments = handler.RequestType + ", " + handler.HandlerType
-                + (handler.ResultType is null ? "" : ", " + handler.ResultType);
-            var permission = handler.Permission is null ? "null" : "static typed => " + BuildPermissionExpression(handler);
-            _ = source.Append("        if (!authorizer && component == typeof(").Append(handler.HandlerType).AppendLine("))")
-                .Append("        _ = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::Cntryl.Portia.RequestHandlerRegistration>(services, new global::Cntryl.Portia.")
-                .Append(descriptor).Append('<').Append(typeArguments).Append(">(").Append(permission).AppendLine("));");
+            _ = source.Append("    /// <summary>Registers <see cref=\"").Append(XmlName(group.Key)).AppendLine("\" /> and the requests it handles.</summary>")
+                .Append("    public static global::Cntryl.Portia.PortiaBuilder ").Append(handlerNames[group.Key])
+                .AppendLine("(this global::Cntryl.Portia.PortiaBuilder builder)")
+                .AppendLine("    {")
+                .AppendLine("        global::System.ArgumentNullException.ThrowIfNull(builder);");
+            foreach (var handler in group)
+            {
+                var descriptor = handler.Kind == HandlerKind.Stream ? "StreamRequestRegistration" : "RequestRegistration";
+                var typeArguments = handler.RequestType + ", " + handler.HandlerType
+                    + (handler.ResultType is null ? "" : ", " + handler.ResultType);
+                var permission = handler.Permission is null ? "null" : "static typed => " + BuildPermissionExpression(handler);
+                _ = source.Append("        _ = builder.AddGeneratedHandler(new global::Cntryl.Portia.")
+                    .Append(descriptor).Append('<').Append(typeArguments).Append(">(").Append(permission).AppendLine("));");
+                AppendTransportRegistration(source, handler.Transport);
+            }
+            _ = source.AppendLine("        return builder;").AppendLine("    }");
         }
-        foreach (var authorizer in authorizers)
+
+        foreach (var group in authorizers.GroupBy(authorizer => authorizer.AuthorizerType, StringComparer.Ordinal))
         {
-            _ = source.Append("        if (authorizer && component == typeof(").Append(authorizer.AuthorizerType).AppendLine("))")
-                .Append("        _ = global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<global::Cntryl.Portia.RequestAuthorizerRegistration>(services, new global::Cntryl.Portia.RequestAuthorizerRegistration<")
-                .Append(authorizer.RequestType).Append(", ").Append(authorizer.AuthorizerType).AppendLine(">());");
+            _ = source.Append("    /// <summary>Registers <see cref=\"").Append(XmlName(group.Key)).AppendLine("\" />.</summary>")
+                .Append("    public static global::Cntryl.Portia.PortiaBuilder ").Append(authorizerNames[group.Key])
+                .AppendLine("(this global::Cntryl.Portia.PortiaBuilder builder)")
+                .AppendLine("    {")
+                .AppendLine("        global::System.ArgumentNullException.ThrowIfNull(builder);");
+            foreach (var authorizer in group)
+            {
+                _ = source.Append("        _ = builder.AddGeneratedAuthorizer(new global::Cntryl.Portia.RequestAuthorizerRegistration<")
+                    .Append(authorizer.RequestType).Append(", ").Append(authorizer.AuthorizerType).AppendLine(">());");
+            }
+            _ = source.AppendLine("        return builder;").AppendLine("    }");
         }
-        _ = source.AppendLine("    }").AppendLine("}");
+
+        _ = source.AppendLine("}");
         context.AddSource("PortiaGeneratedRequestRegistrations.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
     }
+
+    /// <summary>
+    /// A handler's registration also carries its request's transport metadata, so registering the
+    /// handler is enough for a request declared in the same assembly. A request declared in
+    /// another assembly is registered by that assembly's own generated method.
+    /// </summary>
+    static void AppendTransportRegistration(StringBuilder source, RequestTransportComponent? transport)
+    {
+        if (transport is null)
+            return;
+        _ = source.Append("        _ = builder.AddGeneratedRequest(");
+        RequestTransportRegistrationEmitter.AppendConstruction(source, transport);
+        _ = source.AppendLine(");");
+    }
+
+    static string XmlName(string fullyQualifiedTypeName) =>
+        fullyQualifiedTypeName.StartsWith("global::", StringComparison.Ordinal)
+            ? fullyQualifiedTypeName.Substring("global::".Length)
+            : fullyQualifiedTypeName;
 
     // Builds the C# source expression evaluated at dispatch time for a RequiresPermission
     // string: a plain literal when it has no {Token}s, or an interpolated string pulling each
@@ -274,6 +338,7 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
         string requestType,
         string? resultType,
         HandlerKind kind,
+        RequestTransportComponent? transport,
         string? permission,
         RequestParameterModel[] requestParameters,
         Location location)
@@ -285,6 +350,8 @@ public sealed class RequestBusGenerator : IIncrementalGenerator
         public string? ResultType { get; } = resultType;
 
         public HandlerKind Kind { get; } = kind;
+
+        public RequestTransportComponent? Transport { get; } = transport;
 
         public string? Permission { get; } = permission;
 

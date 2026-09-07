@@ -10,7 +10,7 @@ namespace Cntryl.Portia;
 /// <param name="route">The concrete queue route.</param>
 /// <param name="visibilityTimeoutSeconds">Reservation duration, renewed while owned.</param>
 /// <param name="maxItemsPerReserve">Batch size; defaults to one for sequential processing.</param>
-/// <param name="waitDuration">Long-poll duration, rounded up to seconds; defaults to five seconds.</param>
+/// <param name="waitDuration">Maximum idle wait before an immediate reconciliation reserve.</param>
 /// <param name="timeProvider">Schedules reservation renewal.</param>
 /// <param name="logger">Reports reservation failures.</param>
 public sealed class FitzRequestQueueConsumer(
@@ -27,31 +27,57 @@ public sealed class FitzRequestQueueConsumer(
     readonly IRequestDeserializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly TimeSpan _renewalInterval = GetRenewalInterval(visibilityTimeoutSeconds);
+    readonly TimeSpan _notificationBackstop = GetNotificationBackstop(waitDuration);
     readonly int _batchSize = maxItemsPerReserve > 0 ? maxItemsPerReserve : throw new ArgumentOutOfRangeException(nameof(maxItemsPerReserve));
-    readonly int _waitSeconds = GetWaitSeconds(waitDuration);
     readonly string _route = string.IsNullOrWhiteSpace(route)
         ? throw new ArgumentException("A queue route cannot be empty.", nameof(route)) : route;
 
     /// <inheritdoc />
     public async IAsyncEnumerable<IQueuedRequest> ReadAsync([EnumeratorCancellation] CancellationToken ct = default)
     {
-        while (true)
+        await using var subscription = await _queue.SubscribeAsync(_route, ct).ConfigureAwait(false);
+        using var notificationLifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        await using var notifications = subscription.GetAsyncEnumerator(notificationLifetime.Token);
+        Task<bool>? pendingNotification = null;
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            var items = await _queue.ReserveAsync(_route, visibilityTimeoutSeconds, _batchSize, _waitSeconds, ct).ConfigureAwait(false);
-            var reservations = new List<FitzQueuedRequest>(items.Length);
-            try
+            while (true)
             {
-                // Explicit larger batches also retain leases while awaiting sequential execution.
-                foreach (var item in items)
-                    reservations.Add(new FitzQueuedRequest(item, _serializer, visibilityTimeoutSeconds, _renewalInterval, _clock, logger, ct));
-                foreach (var reservation in reservations)
-                    yield return reservation;
+                ct.ThrowIfCancellationRequested();
+                var items = await _queue.ReserveAsync(_route, visibilityTimeoutSeconds, _batchSize, waitSeconds: 0, ct).ConfigureAwait(false);
+                var reservations = new List<FitzQueuedRequest>(items.Length);
+                try
+                {
+                    foreach (var item in items)
+                        reservations.Add(new FitzQueuedRequest(item, _serializer, visibilityTimeoutSeconds, _renewalInterval, _clock, logger, ct));
+                    foreach (var reservation in reservations)
+                        yield return reservation;
+                }
+                finally
+                {
+                    foreach (var reservation in reservations)
+                        await reservation.DisposeAsync().ConfigureAwait(false);
+                }
+                if (items.Length == 0)
+                {
+                    try
+                    {
+                        pendingNotification ??= notifications.MoveNextAsync().AsTask();
+                        if (!await pendingNotification.WaitAsync(_notificationBackstop, ct).ConfigureAwait(false))
+                            throw new InvalidOperationException("The Fitz queue subscription ended without cancellation.");
+                        pendingNotification = null;
+                    }
+                    catch (TimeoutException) { }
+                }
             }
-            finally
+        }
+        finally
+        {
+            await notificationLifetime.CancelAsync().ConfigureAwait(false);
+            if (pendingNotification is not null)
             {
-                foreach (var reservation in reservations)
-                    await reservation.DisposeAsync().ConfigureAwait(false);
+                try { _ = await pendingNotification.ConfigureAwait(false); }
+                catch (OperationCanceledException) when (notificationLifetime.IsCancellationRequested) { }
             }
         }
     }
@@ -62,12 +88,11 @@ public sealed class FitzRequestQueueConsumer(
         return TimeSpan.FromSeconds(Math.Min(leaseSeconds / 2d, TimeSpan.FromDays(1).TotalSeconds));
     }
 
-    static int GetWaitSeconds(TimeSpan? waitDuration)
+    static TimeSpan GetNotificationBackstop(TimeSpan? waitDuration)
     {
-        var duration = waitDuration ?? TimeSpan.FromSeconds(5);
-        ArgumentOutOfRangeException.ThrowIfLessThan(duration, TimeSpan.Zero, nameof(waitDuration));
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(duration.TotalSeconds, int.MaxValue, nameof(waitDuration));
-        return (int)Math.Ceiling(duration.TotalSeconds);
+        var interval = waitDuration ?? TimeSpan.FromSeconds(5);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(interval, TimeSpan.Zero, nameof(waitDuration));
+        return interval;
     }
 
     sealed class FitzQueuedRequest : IQueuedRequest, IAsyncDisposable
