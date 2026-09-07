@@ -4,7 +4,7 @@ namespace Cntryl.Portia;
 /// Thrown when a streamed request (<see cref="IStreamRequest{TOut}" />) fails its declared
 /// authorization (<see cref="RequiresPermissionAttribute" /> and/or
 /// <see cref="IRequestAuthorizer{TRequest}" />). A stream has no single outcome to wrap in a
-/// <see cref="Result" /> the way <see cref="IRequestBus.SendAsync(IRequest, System.Security.Claims.ClaimsPrincipal, CancellationToken)" />
+/// <see cref="Result" /> the way <see cref="RequestBusExtensions.SendAsync(IRequestBus, IRequest, System.Security.Claims.ClaimsPrincipal, CancellationToken)" />
 /// does, so a failed authorization simply ends the stream with this exception instead — same as
 /// any other failure in an <see cref="IAsyncEnumerable{T}" /> producer.
 /// </summary>

@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
-sealed class PortiaWorkloadService(IServiceProvider services) : BackgroundService, IHostedLifecycleService
+sealed partial class PortiaWorkloadService(IServiceProvider services) : BackgroundService, IHostedLifecycleService
 {
     readonly WorkloadRegistration[] _registrations = [.. services.GetServices<WorkloadRegistration>()];
     readonly TimeProvider _clock = services.GetService<TimeProvider>() ?? TimeProvider.System;
@@ -16,15 +16,9 @@ sealed class PortiaWorkloadService(IServiceProvider services) : BackgroundServic
         if (_registrations.Length == 0)
             return Task.CompletedTask;
         var available = services.GetRequiredService<IServiceProviderIsService>();
-        Require(typeof(IWorkloadCoordinator));
         Require(typeof(IDomainEventReader));
         if (_registrations.Any(item => item.Scope == WorkloadScope.PerTenant))
             Require(typeof(ITenantDirectory));
-        foreach (var registration in _registrations)
-        {
-            if (services.GetServices<PortiaHostedComponentRegistration>().Any(item => item.ComponentType == registration.ComponentType))
-                throw new InvalidOperationException($"Workload '{registration.Name}' also has a standalone hosted runner.");
-        }
         return Task.CompletedTask;
         void Require(Type type)
         {
@@ -65,7 +59,7 @@ sealed class PortiaWorkloadService(IServiceProvider services) : BackgroundServic
         var coordinator = CoordinateAsync();
         async Task CoordinateAsync()
         {
-            await services.GetRequiredService<IWorkloadCoordinator>().RunAsync(
+            await ResolveCoordinator().RunAsync(
                 () => [.. active.Keys],
                 (identity, fencingToken, ct) => active.TryGetValue(identity, out var registration)
                     ? RunAsync(registration, identity, fencingToken, ct) : Task.CompletedTask, lifetime.Token).ConfigureAwait(false);
@@ -81,6 +75,24 @@ sealed class PortiaWorkloadService(IServiceProvider services) : BackgroundServic
             throw new InvalidOperationException("The workload coordinator or tenant directory stopped unexpectedly.");
     }
 
+    /// <summary>
+    /// Uses the application's coordinator when infrastructure supplies one, and otherwise owns
+    /// every workload in this process. Resolving the fallback here rather than registering it in
+    /// <c>AddWorker()</c> keeps it immune to setup order: infrastructure registered after
+    /// <c>AddWorker()</c> is still the coordinator that runs.
+    /// </summary>
+    IWorkloadCoordinator ResolveCoordinator()
+    {
+        if (services.GetService<IWorkloadCoordinator>() is { } coordinator)
+            return coordinator;
+        if (_logger is not null)
+            LogSingleProcessCoordinator(_logger);
+        // Reconcile cadence is infrastructure timing, not application time, so it deliberately
+        // does not follow a registered TimeProvider — a test that controls the workload poll
+        // interval with a fake clock would otherwise also be driving ownership reconciliation.
+        return new SingleProcessWorkloadCoordinator();
+    }
+
     async Task RunAsync(WorkloadRegistration registration, WorkloadIdentity identity, ulong fencingToken, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -89,7 +101,7 @@ sealed class PortiaWorkloadService(IServiceProvider services) : BackgroundServic
             {
                 await using var scope = services.CreateAsyncScope();
                 var provider = scope.ServiceProvider;
-                provider.GetRequiredService<WorkloadContext>().Initialize(identity, fencingToken);
+                provider.GetRequiredService<WorkloadContext>().Initialize(identity, fencingToken, registration.ExplicitName);
                 if (registration.IsProjector)
                 {
                     var projector = provider.GetServices<ProjectorRegistration>().Single(item => item.ProjectorType == registration.ComponentType);
@@ -98,7 +110,7 @@ sealed class PortiaWorkloadService(IServiceProvider services) : BackgroundServic
                 else
                 {
                     var reactor = (BaseReactor)provider.GetRequiredService(registration.ComponentType);
-                    reactor.BindWorkload(identity);
+                    reactor.BindWorkload(identity, registration.ExplicitName);
                     var checkpoints = reactor.Checkpoints;
                     var checkpoint = await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
                     _ = await provider.GetRequiredService<ReactorRunner>().RunAsync(reactor, checkpoint,
@@ -111,6 +123,9 @@ sealed class PortiaWorkloadService(IServiceProvider services) : BackgroundServic
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No IWorkloadCoordinator is registered; owning every workload in this process. That is correct for a single worker replica only \u2014 register a distributed coordinator before scaling workers out.")]
+    static partial void LogSingleProcessCoordinator(ILogger logger);
 
     public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;

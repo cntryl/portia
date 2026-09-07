@@ -1,7 +1,7 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Describes a domain event read from a concrete stream with checkpointable Fitz offsets.
+/// Describes a domain event read from a concrete stream, with the offsets a projector or reactor checkpoints against.
 /// </summary>
 /// <param name="Stream">The concrete source stream.</param>
 /// <param name="Ev">The domain event.</param>

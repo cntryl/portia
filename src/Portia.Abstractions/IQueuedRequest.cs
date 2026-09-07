@@ -41,7 +41,7 @@ public interface IQueuedRequest
 
     /// <summary>
     /// Stops processing without acknowledging the request. The transport owns redelivery;
-    /// Fitz waits for reservation expiration according to broker configuration.
+    /// The queue technology waits for reservation expiration according to its own configuration.
     /// </summary>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the abandonment.</returns>

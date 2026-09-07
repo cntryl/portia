@@ -11,37 +11,8 @@ namespace Cntryl.Portia;
 public sealed class RequestBus(IServiceProvider services, RequestRegistry registry) : IRequestBus
 {
     /// <inheritdoc />
-    public ValueTask<Result> SendAsync(IRequest request, ClaimsPrincipal actor, CancellationToken ct = default)
-        => DispatchAsync(request, CreateContext(actor), ct);
-
-    /// <inheritdoc />
-    public ValueTask<Result<TOut>> SendAsync<TOut>(IRequest<TOut> request, ClaimsPrincipal actor, CancellationToken ct = default)
-        => DispatchAsync(request, CreateContext(actor), ct);
-
-    /// <inheritdoc />
-    public IAsyncEnumerable<TOut> StreamAsync<TOut>(IStreamRequest<TOut> request, ClaimsPrincipal actor, CancellationToken ct = default)
-        => DispatchStreamAsync(request, CreateContext(actor), ct);
-
-    /// <inheritdoc />
-    public ValueTask<Result> SendAsync(IRequest request, IExecutionContext parent, CancellationToken ct = default)
-        => DispatchAsync(request, CreateChild(parent), ct);
-
-    /// <inheritdoc />
-    public ValueTask<Result<TOut>> SendAsync<TOut>(IRequest<TOut> request, IExecutionContext parent, CancellationToken ct = default)
-        => DispatchAsync(request, CreateChild(parent), ct);
-
-    /// <inheritdoc />
-    public IAsyncEnumerable<TOut> StreamAsync<TOut>(IStreamRequest<TOut> request, IExecutionContext parent, CancellationToken ct = default)
-        => DispatchStreamAsync(request, CreateChild(parent), ct);
-
-    RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null)
+    public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null)
         => new(actor, metadata: metadata, timeProvider: services.GetService<TimeProvider>());
-
-    RequestDispatchContext CreateChild(IExecutionContext parent)
-    {
-        ArgumentNullException.ThrowIfNull(parent);
-        return CreateContext(parent.Actor, RequestMetadata.FromParent(parent));
-    }
 
     /// <inheritdoc />
     public async ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context, CancellationToken ct = default)

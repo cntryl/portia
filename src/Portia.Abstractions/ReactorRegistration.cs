@@ -1,8 +1,10 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Describes one reactor discovered at compile time, so a runner can enumerate every reactor
-/// without runtime assembly scanning or reflection.
+/// Describes how one registered reactor resolves, so a runner can enumerate every reactor
+/// without runtime assembly scanning or reflection. Constructing one has no container side
+/// effects — to register and run a reactor, call <c>PortiaBuilder.AddReactor</c>, which builds
+/// this descriptor and the workload declaration that drives it.
 /// </summary>
 /// <param name="reactorType">The concrete reactor type.</param>
 /// <param name="resolve">Resolves an instance of the reactor from a service provider.</param>

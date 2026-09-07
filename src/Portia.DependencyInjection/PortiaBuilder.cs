@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -7,6 +8,13 @@ namespace Cntryl.Portia;
 public sealed class PortiaBuilder
 {
     readonly Dictionary<string, Action<IServiceCollection>> _workers = new(StringComparer.Ordinal);
+    readonly Dictionary<Type, (WorkloadRegistration Registration, ServiceDescriptor Descriptor)> _workloads = [];
+    readonly Dictionary<string, Type> _workloadNames = new(StringComparer.Ordinal);
+    readonly HashSet<Type> _projectorDescriptors = [];
+    readonly HashSet<Type> _reactorDescriptors = [];
+    readonly HashSet<Type> _requests = [];
+    readonly Dictionary<Type, Type> _handlerRequests = [];
+    readonly Dictionary<Type, Type> _authorizerRequests = [];
     bool _worker;
 
     internal PortiaBuilder(IServiceCollection services)
@@ -17,12 +25,6 @@ public sealed class PortiaBuilder
     /// <summary>Gets the application's service collection.</summary>
     public IServiceCollection Services { get; }
 
-    /// <summary>Registers an explicitly selected handler using its generated typed descriptors.</summary>
-    public PortiaBuilder AddHandler<THandler>() where THandler : class => AddRequestComponent(typeof(THandler), false);
-
-    /// <summary>Registers an explicitly selected authorizer using its generated typed descriptors.</summary>
-    public PortiaBuilder AddAuthorizer<TAuthorizer>() where TAuthorizer : class => AddRequestComponent(typeof(TAuthorizer), true);
-
     /// <summary>Includes an event type in the application's serializer catalog.</summary>
     public PortiaBuilder AddEvent<TEvent>() where TEvent : DomainEvent
     {
@@ -30,55 +32,63 @@ public sealed class PortiaBuilder
         return this;
     }
 
-    /// <summary>Registers transport metadata for an explicit request contract, without a handler.</summary>
-    public PortiaBuilder AddRequest<TRequest>() where TRequest : IRequestBase
+    /// <summary>
+    /// Adds a handler descriptor built by Portia.Generators at compile time. Application code
+    /// calls the generated <c>Add&lt;Handler&gt;()</c> extension method instead of this — that
+    /// method only exists for a type the compiler has already checked really is a handler.
+    /// </summary>
+    /// <param name="registration">The generated descriptor.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public PortiaBuilder AddGeneratedHandler(RequestHandlerRegistration registration)
     {
-        AddRequest(typeof(TRequest));
+        ArgumentNullException.ThrowIfNull(registration);
+        if (_handlerRequests.TryGetValue(registration.RequestType, out var owner))
+        {
+            // One handler can serve several requests, so the same registration arriving twice is
+            // an idempotent repeat; a different handler for the same request is a conflict.
+            return owner == registration.HandlerType ? this
+                : throw new InvalidOperationException($"Request '{registration.RequestType}' has conflicting handlers.");
+        }
+        _handlerRequests[registration.RequestType] = registration.HandlerType;
+        _ = Services.AddSingleton(registration);
+        Services.TryAddScoped(registration.HandlerType);
         return this;
     }
 
-    void AddRequest(Type type)
+    /// <summary>
+    /// Adds an authorizer descriptor built by Portia.Generators at compile time. Application code
+    /// calls the generated <c>Add&lt;Authorizer&gt;()</c> extension method instead of this.
+    /// </summary>
+    /// <param name="registration">The generated descriptor.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public PortiaBuilder AddGeneratedAuthorizer(RequestAuthorizerRegistration registration)
     {
-        if (Services.Select(service => service.ImplementationInstance).OfType<RequestTransportRegistration>().Any(item => item.RequestType == type))
-            return;
-        var generated = type.Assembly.GetType("Cntryl.Portia.PortiaGeneratedServiceCollectionExtensions")?.GetMethod("RegisterRequest");
-        if (generated is null)
+        ArgumentNullException.ThrowIfNull(registration);
+        if (_authorizerRequests.TryGetValue(registration.RequestType, out var owner))
         {
-            if (type.IsDefined(typeof(RequestRouteAttribute), true))
-                throw new InvalidOperationException($"Request '{type}' requires Portia.Generators in its declaring project.");
-            return;
+            return owner == registration.AuthorizerType ? this
+                : throw new InvalidOperationException($"Request '{registration.RequestType}' has conflicting authorizers.");
         }
-        _ = generated.Invoke(null, [Services, type]);
+        _authorizerRequests[registration.RequestType] = registration.AuthorizerType;
+        _ = Services.AddSingleton(registration);
+        Services.TryAddScoped(registration.AuthorizerType);
+        return this;
     }
 
-    PortiaBuilder AddRequestComponent(Type type, bool authorizer)
+    /// <summary>
+    /// Adds a request's transport metadata, built by Portia.Generators at compile time.
+    /// Application code calls the generated <c>Add&lt;Request&gt;()</c> extension method instead
+    /// of this. Adding the same request twice is ignored, so a handler registration and an
+    /// explicit request registration can both name it.
+    /// </summary>
+    /// <param name="registration">The generated descriptor.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public PortiaBuilder AddGeneratedRequest(RequestTransportRegistration registration)
     {
-        var handlers = Services.Select(service => service.ImplementationInstance).OfType<RequestHandlerRegistration>().ToArray();
-        var authorizers = Services.Select(service => service.ImplementationInstance).OfType<RequestAuthorizerRegistration>().ToArray();
-        if (authorizer ? authorizers.Any(item => item.AuthorizerType == type) : handlers.Any(item => item.HandlerType == type))
-            return this;
-        var generated = type.Assembly.GetType("Cntryl.Portia.PortiaGeneratedRequestRegistrations")?.GetMethod("Register")
-            ?? throw new InvalidOperationException($"Component '{type}' requires Portia.Generators in its declaring project.");
-        var count = Services.Count;
-        try
-        {
-            _ = generated.Invoke(null, [Services, type, authorizer]);
-            var newHandlers = Services.Select(service => service.ImplementationInstance).OfType<RequestHandlerRegistration>().ToArray();
-            var newAuthorizers = Services.Select(service => service.ImplementationInstance).OfType<RequestAuthorizerRegistration>().ToArray();
-            if (!(authorizer ? newAuthorizers.Any(item => item.AuthorizerType == type) : newHandlers.Any(item => item.HandlerType == type)))
-                throw new InvalidOperationException($"'{type}' does not implement the selected request component contract.");
-            _ = new RequestRegistry(newHandlers, newAuthorizers);
-            Services.TryAddScoped(type);
-            foreach (var request in newHandlers.Where(item => item.HandlerType == type).Select(item => item.RequestType))
-                AddRequest(request);
-            return this;
-        }
-        catch
-        {
-            while (Services.Count > count)
-                Services.RemoveAt(Services.Count - 1);
-            throw;
-        }
+        ArgumentNullException.ThrowIfNull(registration);
+        if (_requests.Add(registration.RequestType))
+            _ = Services.AddSingleton(registration);
+        return this;
     }
 
     /// <summary>Registers one reactor with an explicitly selected execution scope.</summary>
@@ -93,25 +103,36 @@ public sealed class PortiaBuilder
     {
         if (registration.ComponentType.IsAbstract || registration.ComponentType.ContainsGenericParameters)
             throw new ArgumentException("Register a concrete, closed component type.", nameof(registration));
-        var existing = Services.Select(service => service.ImplementationInstance).OfType<WorkloadRegistration>()
-            .FirstOrDefault(item => item.ComponentType == registration.ComponentType || item.Name == registration.Name);
-        if (existing is not null)
-            return existing == registration ? this : throw new InvalidOperationException($"Conflicting workload registration '{registration.Name}'.");
+        if (_workloads.TryGetValue(registration.ComponentType, out var existing))
+        {
+            return existing.Registration == registration ? this
+                : throw new InvalidOperationException($"Conflicting workload registration '{registration.Name}'.");
+        }
+        if (_workloadNames.TryGetValue(registration.Name, out var owner) && owner != registration.ComponentType)
+            throw new InvalidOperationException($"Conflicting workload registration '{registration.Name}'.");
         Services.TryAddScoped(registration.ComponentType);
+        // The descriptor may already have been registered by hand, so a miss in the builder's own
+        // set still has to check the collection — once per component, not once per call.
         if (descriptor is not null)
         {
-            if (!Services.Select(service => service.ImplementationInstance).OfType<ProjectorRegistration>().Any(item => item.ProjectorType == registration.ComponentType))
-                _ = Services.AddSingleton(descriptor);
-        }
-        else
-        {
-            if (!Services.Select(service => service.ImplementationInstance).OfType<ReactorRegistration>().Any(item => item.ReactorType == registration.ComponentType))
+            if (_projectorDescriptors.Add(registration.ComponentType)
+                && !Services.Select(service => service.ImplementationInstance).OfType<ProjectorRegistration>()
+                    .Any(item => item.ProjectorType == registration.ComponentType))
             {
-                _ = Services.AddSingleton(new ReactorRegistration(registration.ComponentType,
-                    provider => (BaseReactor)provider.GetRequiredService(registration.ComponentType)));
+                _ = Services.AddSingleton(descriptor);
             }
         }
-        _ = Services.AddSingleton(registration);
+        else if (_reactorDescriptors.Add(registration.ComponentType)
+            && !Services.Select(service => service.ImplementationInstance).OfType<ReactorRegistration>()
+                .Any(item => item.ReactorType == registration.ComponentType))
+        {
+            _ = Services.AddSingleton(new ReactorRegistration(registration.ComponentType,
+                provider => (BaseReactor)provider.GetRequiredService(registration.ComponentType)));
+        }
+        var workloadDescriptor = ServiceDescriptor.Singleton(registration);
+        Services.Add(workloadDescriptor);
+        _workloads[registration.ComponentType] = (registration, workloadDescriptor);
+        _workloadNames[registration.Name] = registration.ComponentType;
         Services.TryAddScoped<ProjectorRunner>();
         Services.TryAddScoped<ReactorRunner>();
         return this;

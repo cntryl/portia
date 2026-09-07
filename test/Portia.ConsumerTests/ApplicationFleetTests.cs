@@ -47,7 +47,7 @@ public sealed class ApplicationFleetTests
         _ = builder.Services.AddSingleton(new ReactorRegistration(typeof(ProbeReactor), provider => provider.GetRequiredService<ProbeReactor>()));
         _ = builder.Services.AddPortia(portia =>
         {
-            _ = portia.AddReactor<ProbeReactor>(o => { _ = o.Global(); o.PollInterval = TimeSpan.FromMilliseconds(10); });
+            _ = portia.AddReactor<ProbeReactor>(o => { o.Global(); o.PollInterval = TimeSpan.FromMilliseconds(10); });
             _ = portia.UseFitzClient(client, fitz => _ = fitz.UseFleet(new FleetRunOptions
             {
                 MembershipSelector = $"lease://{realm}/members/*",

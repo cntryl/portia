@@ -43,11 +43,12 @@ public sealed class CompleteWorkflowTests
         _ = builder.Services.AddSingleton<IRequestDeserializer, JsonRequestSerializer>();
         _ = builder.Services.AddSingleton<IRequestOutcomeSerializer, JsonRequestSerializer>();
         _ = builder.Services.AddSingleton<IRequestQueuePublisher>(new FitzRequestQueuePublisher(client.Queue, new JsonRequestSerializer()));
-        // Register all four workers through their concrete typed descriptors.
-        _ = builder.Services.AddPortiaProjectorRunner<FirstProjector>();
-        _ = builder.Services.AddPortiaProjectorRunner<SecondProjector>();
-        _ = builder.Services.AddPortiaReactorRunner<FirstReactor>();
-        _ = builder.Services.AddPortiaReactorRunner<SecondReactor>();
+        // One worker service runs every declared projector and reactor.
+        _ = builder.Services.AddPortia(p => p
+            .AddProjector<FirstProjector>(o => o.Global())
+            .AddProjector<SecondProjector>(o => o.Global())
+            .AddReactor<FirstReactor>(o => o.Global())
+            .AddReactor<SecondReactor>(o => o.Global())).AddWorker();
         var id = Uuid.CreateVersion4();
         var route = new RequestRouteValues(Resource: id.ToString());
         _ = builder.Services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(client.Queue,

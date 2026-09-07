@@ -31,11 +31,11 @@ public sealed class ExplicitRegistrationConsumerTests
                 public static bool Run()
                 {
                     var services = new ServiceCollection();
-                    var portia = services.AddPortia(p => p.AddHandler<Selected>());
+                    var portia = services.AddPortia(p => p.AddSelectedHandler());
                     if (services.Any(s => s.ServiceType == typeof(RequestAuthorizerRegistration))) return false;
-                    portia.AddAuthorizer<Selected>();
+                    portia.AddSelectedHandler();
                     var count = services.Count;
-                    try { portia.AddHandler<Unselected>(); return false; }
+                    try { portia.AddUnselectedHandler(); return false; }
                     catch (InvalidOperationException) { }
                     return services.Count == count && !services.Any(s => s.ServiceType == typeof(Unselected));
                 }
@@ -101,11 +101,11 @@ public sealed class ExplicitRegistrationConsumerTests
                     var services = new ServiceCollection();
                     services.AddAccounts();
                     var count = services.Count;
-                    try { services.AddPortia(p => p.REGISTER<Conflict>()); return false; }
+                    try { services.AddPortia(p => p.AddConflict()); return false; }
                     catch (InvalidOperationException exception) { return services.Count == count && exception.Message.Contains("conflicting"); }
                 }
             }
-            """.Replace("REGISTER", authorizer ? "AddAuthorizer" : "AddHandler", StringComparison.Ordinal) + component, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator());
+            """ + component, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator());
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>();
         Assert.True(run());
     }

@@ -22,9 +22,9 @@ public sealed class MixedWorkloadTests
         _ = builder.Services.AddSingleton<ITenantDirectory>(tenants);
         _ = builder.Services.AddPortia(p =>
         {
-            _ = p.AddProjector<FirstProjector>(o => { _ = o.PerTenant(); o.Name = "accounts"; o.PollInterval = TimeSpan.FromMilliseconds(10); });
-            _ = p.AddProjector<SecondProjector>(o => { _ = o.Global(); o.Name = "summary"; o.PollInterval = TimeSpan.FromMilliseconds(10); });
-            _ = p.AddReactor<FirstReactor>(o => { _ = o.PerTenant(); o.Name = "reaction"; o.PollInterval = TimeSpan.FromMilliseconds(10); });
+            _ = p.AddProjector<FirstProjector>(o => { o.PerTenant(); o.Name = "accounts"; o.PollInterval = TimeSpan.FromMilliseconds(10); });
+            _ = p.AddProjector<SecondProjector>(o => { o.Global(); o.Name = "summary"; o.PollInterval = TimeSpan.FromMilliseconds(10); });
+            _ = p.AddReactor<FirstReactor>(o => { o.PerTenant(); o.Name = "reaction"; o.PollInterval = TimeSpan.FromMilliseconds(10); });
         }).AddWorker();
         using var host = builder.Build();
         var store = host.Services.GetRequiredService<IEventStore>();

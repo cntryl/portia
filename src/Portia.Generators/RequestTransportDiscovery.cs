@@ -24,8 +24,14 @@ static class RequestTransportDiscovery
     public static RequestTransportComponent? GetRequestTransportComponent(GeneratorSyntaxContext context)
     {
         var declaration = (TypeDeclarationSyntax)context.Node;
+        return context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol symbol
+            ? GetRequestTransportComponent(symbol)
+            : null;
+    }
 
-        if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol || symbol.IsAbstract)
+    public static RequestTransportComponent? GetRequestTransportComponent(ITypeSymbol? type)
+    {
+        if (type is not INamedTypeSymbol symbol || symbol.IsAbstract)
             return null;
 
         // A streamed request has no RPC, queue, notice, or schedule transport at all today —

@@ -3,6 +3,41 @@ namespace Cntryl.Portia.Consumer;
 public sealed class GeneratorNameCollisionTests
 {
     [Fact]
+    public void RequestAndHandlerWithSameSimpleNameCompileWithCoordinatedNames() =>
+        GeneratorCompilation.Compile("""
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Cntryl.Portia;
+            using Microsoft.Extensions.DependencyInjection;
+            namespace Requests
+            {
+                [RequestRoute("consumer", "collisions", "*", "run")]
+                public sealed record Component : IRequest<int>, ICallable;
+            }
+            namespace Handlers
+            {
+                public sealed class Component : IRequestHandler<Requests.Component, int>
+                {
+                    public ValueTask<Result<int>> HandleAsync(IRequestContext<Requests.Component> context, CancellationToken ct) =>
+                        ValueTask.FromResult(Result<int>.Success(42));
+                }
+            }
+            namespace Authorizers
+            {
+                public sealed class Component : IRequestAuthorizer<Requests.Component>
+                {
+                    public ValueTask<Result> AuthorizeAsync(IRequestContext<Requests.Component> context, System.Security.Claims.ClaimsPrincipal actor, CancellationToken ct = default) =>
+                        ValueTask.FromResult(Result.Success);
+                }
+            }
+            public static class Scenario
+            {
+                public static void Register(IServiceCollection services) =>
+                    services.AddPortia(p => p.AddRequestsComponent().AddHandlersComponent().AddAuthorizersComponent());
+            }
+            """, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator());
+
+    [Fact]
     public async Task SameSimpleHandlerNamesCompileAndDispatchByFullTypeIdentity()
     {
         var assembly = GeneratorCompilation.Compile("""
@@ -19,7 +54,7 @@ public sealed class GeneratorNameCollisionTests
                 public static async Task<int> Run()
                 {
                     var services = new ServiceCollection();
-                    services.AddPortia(p => p.AddHandler<A.Handler>().AddHandler<B.Handler>());
+                    services.AddPortia(p => p.AddAHandler().AddBHandler());
                     await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
                     await using var scope = provider.CreateAsyncScope();
                     var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();

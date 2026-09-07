@@ -27,7 +27,7 @@ Wire the command to an HTTP route:
 using Cntryl.Portia;
 
 var builder = WebApplication.CreateBuilder(args);
-_ = builder.Services.AddPortia(portia => portia.AddHandler<CreateGreetingHandler>());
+_ = builder.Services.AddPortia(portia => portia.AddCreateGreetingHandler());
 
 var app = builder.Build();
 app.MapPortiaPost<CreateGreeting, string>("/greetings");
@@ -60,11 +60,15 @@ for connection ownership, mixed global/per-tenant workloads, and incremental agg
 - `IRequest<string>` says that `CreateGreeting` returns text.
 - `ICallable` says that the application may expose it to callers, including over HTTP.
 - `IRequestHandler<CreateGreeting, string>` connects that command to its handler.
-- `AddHandler<CreateGreetingHandler>()` adds the command and handler to the application.
+- `AddCreateGreetingHandler()` adds the command and handler to the application. Portia.Generators
+  writes one such method per component it finds, so the method only exists for a type that really
+  is a handler — naming a type that isn't one is a compile error, not a startup failure.
 - `MapPortiaPost` reads the HTTP request, calls the handler, and writes the HTTP response.
 
 Portia writes the repetitive connection code when the project builds. It is ordinary C# checked
-by the compiler—the application explicitly selects its components without scanning assemblies. If the command and handler disagree about their types, the build fails.
+by the compiler—the application explicitly selects its components, with no assembly scanning and
+no reflection: `AddCreateGreetingHandler()` is a generated method that calls a typed constructor.
+If the command and handler disagree about their types, the build fails.
 
 ## How we keep it simple
 
@@ -108,7 +112,7 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
 | `Portia.AspNetCore` | `MapPortiaGet`/`Post`/`Put`/`Patch`/`Delete`/`GetStream`/`GetSse` — the minimal-API extension methods the HTTP binding generator intercepts. |
 | `Portia.Fitz` | Fitz-backed transports: RPC send/receive, queue publish/consume, notice/schedule notifications, `FitzEventStore`, and `FleetPartitionRunner` (fleet distribution via Fitz leases). |
 | `Portia.Jwt` | A JWT-backed `IRequestActorValidator` — re-validates a request's carried actor token, no ASP.NET Core dependency. |
-| `Portia.DependencyInjection` | Wires Portia's background runners into a host as `IHostedService`s — `AddPortiaQueueRunner()`, `AddPortiaRequestNotificationRunner()`, `AddPortiaMultiTenantRunner<TWorkload>()`, `AddPortiaProjectorRunner<T>()`, `AddPortiaReactorRunner<T>()`. Fleet's scoped `AddPortiaFleetPartitionRunner<TWorkload>()` lives in `Portia.Fitz` instead, since it depends on Fitz leases. |
+| `Portia.DependencyInjection` | Composes the application with `AddPortia(...)` and activates its workers with `AddWorker()`, which runs every declared projector and reactor under one hosted service. Also wires the transport runners into a host as `IHostedService`s — `AddPortiaQueueRunner()`, `AddPortiaRequestNotificationRunner()`, `AddPortiaMultiTenantRunner<TWorkload>()`. Fleet's scoped `AddPortiaFleetPartitionRunner<TWorkload>()` lives in `Portia.Fitz` instead, since it depends on Fitz leases. |
 | `Portia.Testing` | Testing utilities for downstream apps: `AggregateScenario<T>`, `DomainEventSeed`, `InMemoryEventStore`, `TestPermissionEvaluator`, `TestRequestActorValidator`. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
 
 ## Core concepts, briefly
@@ -144,7 +148,7 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
 - **Schema evolution**: `DomainEventTypeCatalog` maps a logical event name + schema version to a
   CLR type. An exact match resolves directly (old and new versions can simply coexist forever);
   a missing version falls through a chain of JSON-adapter-specific
-  `IJsonDomainEventUpcaster`s. `portia.AddEvent<TEvent>()` contributes each event type to the shared catalog.
+  `IJsonDomainEventUpcaster`s. `portia.AddGeneratedEvents()` contributes every event type declared in the assembly to the shared catalog in one call.
 - **Multi-tenancy vs. fleet distribution — deliberately orthogonal**: `MultiTenantRunner`
   decides which tenants a component instance runs for, on whichever worker it's already on.
   `FleetPartitionRunner` decides which worker gets to run a given partition at all, using Fitz
@@ -165,7 +169,7 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   signal is emitted.
 - **Hosting**: a runner's `RunAsync` is never called automatically just by constructing it —
   `Portia.DependencyInjection` (and `Portia.Fitz`, for fleet) provides `IHostedService` wrappers
-  (`AddPortiaQueueRunner()`, `AddPortiaProjectorRunner<T>()`, etc.) that start when the host
+  (`AddWorker()`, `AddPortiaQueueRunner()`, etc.) that start when the host
   starts and stop cleanly on shutdown. A projector loads the authoritative checkpoint from its
   constructor-injected `IProjectionStore`; each `IProjectionBatch` commits that checkpoint atomically with projection
   changes. Reactors, whose effects cannot share that transaction, use an

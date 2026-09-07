@@ -1,34 +1,16 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies <see cref="ReactorHostedService" /> actually recovers correctly after a faulted
+/// Verifies the hosted reactor loop actually recovers correctly after a faulted
 /// pass — not just that it doesn't crash the host, but that its retry starts from where the
 /// pass genuinely got to, not from a stale, pre-pass checkpoint held only in this loop's own
 /// local variable.
 /// </summary>
-public sealed class ReactorHostedServiceTests
+public sealed class HostedReactorRecoveryTests
 {
-    /// <summary>
-    /// Rejects an invalid batch size when the service is constructed, before its retry loop can
-    /// turn the configuration error into a permanent fault/backoff cycle.
-    /// </summary>
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    public void ShouldRejectNonPositiveBatchSizeWhenConstructed(int maxBatchSize)
-    {
-        var runner = new ReactorRunner(new InMemoryEventStore());
-        var reactor = new TestReactor(new RecordingAggregateRepository());
-
-        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => new ReactorHostedService(
-            runner,
-            reactor,
-            maxBatchSize,
-            TimeSpan.FromMilliseconds(20)));
-
-        Assert.Equal(nameof(maxBatchSize), exception.ParamName);
-    }
-
     /// <summary>
     /// Regression test: <c>ReactorRunner.RunAsync</c> can durably save one or more
     /// batches via its own <c>checkpointStore</c> parameter and then still fault partway through
@@ -49,15 +31,21 @@ public sealed class ReactorHostedServiceTests
             Committed(new ValueChanged(3), id, 3),
             Committed(new ValueChanged(4), id, 4),
         ]);
-        var runner = new ReactorRunner(eventStore);
         var checkpointStore = new TransientReloadFailureCheckpointStore();
         var reactor = new FlakyOnThirdAttemptReactor(checkpointStore);
-        var hostedService = new ReactorHostedService(
-            runner,
-            reactor,
-            maxBatchSize: 2,
-            pollInterval: TimeSpan.FromMilliseconds(20));
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IDomainEventReader>(eventStore);
+        _ = services.AddSingleton(reactor);
+        _ = services.AddPortia(p => p.AddReactor<FlakyOnThirdAttemptReactor>(o =>
+        {
+            o.Global();
+            o.Name = "flaky-on-third-attempt-reactor";
+            o.PollInterval = TimeSpan.FromMilliseconds(20);
+            o.Processing = new ProjectionRunOptions { MaxBatchSize = 2 };
+        })).AddWorker();
+        using var provider = services.BuildServiceProvider();
 
+        var hostedService = (BackgroundService)Assert.Single(provider.GetServices<IHostedService>());
         await hostedService.StartAsync(default);
         var executeTask = hostedService.ExecuteTask
             ?? throw new InvalidOperationException("The reactor hosted service did not start.");
@@ -67,9 +55,9 @@ public sealed class ReactorHostedServiceTests
         await WaitUntilAsync(() => reactor.HandledValues.Count >= 4);
         await hostedService.StopAsync(default);
 
-        // Batch 1 (events 1-2) was saved durably before the fault on event 3. If the hosted
-        // loop had retried from its own stale, un-reloaded local checkpoint instead of the
-        // store's, events 1-2 would appear a second time here.
+        // Batch 1 (events 1-2) was saved durably before the fault on event 3. If the workload
+        // loop had retried from a stale, un-reloaded local checkpoint instead of the store's,
+        // events 1-2 would appear a second time here.
         Assert.Equal([1, 2, 3, 4], reactor.HandledValues);
         Assert.False(executeTask.IsFaulted);
     }

@@ -32,9 +32,8 @@ public static class ApplicationSetup
 
         var portia = services.AddPortia(p =>
         {
-            p.AddHandler<DepositAccountHandler>();
-            p.AddEvent<Deposited>();
-            p.AddEvent<Declined>();
+            p.AddDepositAccountHandler();
+            p.AddGeneratedEvents();
             p.AddProjector<AccountProjector>(o => o.PerTenant());
             p.AddProjector<PlatformSummaryProjector>(o => o.Global());
             p.AddReactor<AccountReactor>(o => o.PerTenant());
@@ -160,9 +159,16 @@ component's declared pattern. It does not grant cross-tenant access or scan ever
 
 An omitted scope, both scopes, a conflicting registration, or duplicate workload name
 fails during configuration. Repeating an identical registration is idempotent. The
-component's full CLR type name is its default stable workload name; set `options.Name`
-when progress must survive a type rename. Projector options also accept `Processing`
+component's full CLR type name is its default workload name, used to coordinate ownership.
+That default does **not** rename the component: a projector's or reactor's own `Name` is its
+checkpoint identity, and setting `options.Name` is what deliberately overrides it — so
+declaring a workload never silently repoints existing checkpoints. Projector options also accept `Processing`
 (`ProjectionRunOptions`, including a rebuild ID) and a positive `PollInterval`.
+
+`AddWorker()` runs every declared workload under one hosted service. With no
+`IWorkloadCoordinator` registered it owns them all in this process, which is correct for a
+single worker replica and needs no infrastructure at all; it logs a warning saying so. Register
+a distributed coordinator before scaling workers past one replica.
 
 Fitz implements `IWorkloadCoordinator` and consumes these same declarations. There is
 no second component list or per-component lease route. `Fitz:ApplicationName` separates
