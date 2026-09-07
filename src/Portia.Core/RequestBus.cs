@@ -71,9 +71,13 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             if (!permission.IsSuccess)
                 return permission;
         }
-        var authorizer = registry.Authorizer(registration.RequestType);
-        return authorizer is null ? Result.Success
-            : await authorizer.AuthorizeAsync(services, request, context, ct).ConfigureAwait(false);
+        foreach (var authorizer in registry.Authorizers(registration.RequestType))
+        {
+            var result = await authorizer.AuthorizeAsync(services, request, context, ct).ConfigureAwait(false);
+            if (!result.IsSuccess)
+                return result;
+        }
+        return Result.Success;
     }
 
     static void Validate(IRequestBase request, ClaimsPrincipal actor, CancellationToken ct)

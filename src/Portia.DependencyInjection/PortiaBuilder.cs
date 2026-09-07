@@ -14,7 +14,7 @@ public sealed class PortiaBuilder
     readonly HashSet<Type> _reactorDescriptors = [];
     readonly HashSet<Type> _requests = [];
     readonly Dictionary<Type, Type> _handlerRequests = [];
-    readonly Dictionary<Type, Type> _authorizerRequests = [];
+    readonly Dictionary<(Type ScopeType, Type AuthorizerType), AuthorizationStage> _authorizers = [];
     bool _worker;
 
     internal PortiaBuilder(IServiceCollection services)
@@ -25,6 +25,34 @@ public sealed class PortiaBuilder
     /// <summary>Gets the application's service collection.</summary>
     public IServiceCollection Services { get; }
 
+    /// <summary>Registers a request handler through Portia.Generators' compile-time typed descriptor.</summary>
+    /// <remarks>This call requires Portia.Generators in the calling project.</remarks>
+    public PortiaBuilder AddRequestHandler<THandler>() where THandler : class
+    {
+        _ = Services;
+        throw MissingGeneratedRegistration(typeof(THandler), "request handler");
+    }
+
+    /// <summary>Registers a request authorizer through Portia.Generators' compile-time typed descriptor.</summary>
+    /// <remarks>This call requires Portia.Generators in the calling project.</remarks>
+    public PortiaBuilder AddRequestAuthorizer<TAuthorizer>(AuthorizationStage stage = AuthorizationStage.ResourceAccess)
+        where TAuthorizer : class
+    {
+        _ = Services;
+        throw MissingGeneratedRegistration(typeof(TAuthorizer), $"request authorizer at stage '{stage}'");
+    }
+
+    /// <summary>Explicitly registers a request whose concrete type is hidden from compile-time dispatch analysis.</summary>
+    /// <remarks>Normal strongly typed dispatch is inferred by Portia.Generators. Use this only at dynamic dispatch boundaries.</remarks>
+    public PortiaBuilder RegisterDynamicRequest<TRequest>() where TRequest : IRequestBase
+    {
+        _ = Services;
+        throw MissingGeneratedRegistration(typeof(TRequest), "request");
+    }
+
+    static InvalidOperationException MissingGeneratedRegistration(Type type, string role) => new(
+        $"Portia.Generators did not intercept registration of {role} '{type}'. Reference Portia.Generators in the calling project.");
+
     /// <summary>Includes an event type in the application's serializer catalog.</summary>
     public PortiaBuilder AddEvent<TEvent>() where TEvent : DomainEvent
     {
@@ -34,8 +62,7 @@ public sealed class PortiaBuilder
 
     /// <summary>
     /// Adds a handler descriptor built by Portia.Generators at compile time. Application code
-    /// calls the generated <c>Add&lt;Handler&gt;()</c> extension method instead of this — that
-    /// method only exists for a type the compiler has already checked really is a handler.
+    /// calls <see cref="AddRequestHandler{THandler}" /> instead of this method.
     /// </summary>
     /// <param name="registration">The generated descriptor.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
@@ -57,19 +84,23 @@ public sealed class PortiaBuilder
 
     /// <summary>
     /// Adds an authorizer descriptor built by Portia.Generators at compile time. Application code
-    /// calls the generated <c>Add&lt;Authorizer&gt;()</c> extension method instead of this.
+    /// calls <see cref="AddRequestAuthorizer{TAuthorizer}(AuthorizationStage)" /> instead.
     /// </summary>
     /// <param name="registration">The generated descriptor.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public PortiaBuilder AddGeneratedAuthorizer(RequestAuthorizerRegistration registration)
     {
         ArgumentNullException.ThrowIfNull(registration);
-        if (_authorizerRequests.TryGetValue(registration.RequestType, out var owner))
+        if (!Enum.IsDefined(registration.Stage))
+            throw new ArgumentOutOfRangeException(nameof(registration), registration.Stage, "Choose a defined authorization stage.");
+        var key = (registration.ScopeType, registration.AuthorizerType);
+        if (_authorizers.TryGetValue(key, out var stage))
         {
-            return owner == registration.AuthorizerType ? this
-                : throw new InvalidOperationException($"Request '{registration.RequestType}' has conflicting authorizers.");
+            return stage == registration.Stage ? this
+                : throw new InvalidOperationException($"Authorizer '{registration.AuthorizerType}' has conflicting stages.");
         }
-        _authorizerRequests[registration.RequestType] = registration.AuthorizerType;
+
+        _authorizers[key] = registration.Stage;
         _ = Services.AddSingleton(registration);
         Services.TryAddScoped(registration.AuthorizerType);
         return this;
@@ -77,9 +108,8 @@ public sealed class PortiaBuilder
 
     /// <summary>
     /// Adds a request's transport metadata, built by Portia.Generators at compile time.
-    /// Application code calls the generated <c>Add&lt;Request&gt;()</c> extension method instead
-    /// of this. Adding the same request twice is ignored, so a handler registration and an
-    /// explicit request registration can both name it.
+    /// Normal application code does not call this method: Portia.Generators emits it for typed
+    /// dispatches, handlers, and <see cref="RegisterDynamicRequest{TRequest}" /> escape hatches.
     /// </summary>
     /// <param name="registration">The generated descriptor.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
@@ -179,6 +209,9 @@ public sealed class PortiaBuilder
 /// <summary>Registers shared Portia application setup in the standard DI container.</summary>
 public static class PortiaApplicationServiceCollectionExtensions
 {
+    /// <summary>Registers a Portia application whose outbound requests are inferred from typed dispatch calls.</summary>
+    public static PortiaBuilder AddPortia(this IServiceCollection services) => AddPortia(services, static _ => { });
+
     /// <summary>Configures the application's components and capabilities without activating workers.</summary>
     public static PortiaBuilder AddPortia(this IServiceCollection services, Action<PortiaBuilder> configure)
     {

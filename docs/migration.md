@@ -6,16 +6,21 @@ or context-dropping adapter fallbacks.
 
 - Configure the application once with `AddPortia`; activate its declared workers
   only in the worker deployment with `AddWorker`.
-- Select handlers and authorizers through their generated `Add<Component>()` methods
-  (`portia.AddDepositAccountHandler()`), not `AddHandler<T>()`/`AddAuthorizer<T>()`. The
-  generated method exists only for a type that really implements the contract, so a wrong
-  type is a compile error instead of a startup exception, and registration uses no reflection.
-  A type that is both a handler and an authorizer gets one method per role
-  (`AddSelectedHandler()`, `AddSelectedAuthorizer()`); two components sharing a simple name
-  are disambiguated by their qualified name.
-- Contribute domain events with `portia.AddGeneratedEvents()` once per assembly rather than
-  `AddEvent<T>()` per type. `AddEvent<T>()` remains for events declared in an assembly built
-  without the generator.
+- Select handlers and authorizers independently with `AddRequestHandler<T>()` and
+  `AddRequestAuthorizer<T>(AuthorizationStage)`. Register a
+  sender-only contracts are inferred from strongly typed dispatch calls. Portia.Generators replaces the stable generic
+  calls with typed descriptors and reports an invalid role at compile time; no reflection or
+  generated component-name API is involved. Existing generated `Add<Component>()` methods remain
+  compatibility shims for this release.
+- Authorizers form an all-of pipeline. Their `IRequestAuthorizer<TScope>` scope may be a concrete
+  request, request-family interface, or `IRequestBase`; matching policies run by semantic stage
+  and then registration order before the handler is resolved.
+- Remove `AddGeneratedEvents()` calls. Generic component registration contributes the accessible
+  domain events known to the calling compilation. `AddEvent<T>()` remains a low-level escape hatch
+  for events unavailable at compilation.
+- Prefer `AddQueueWorker<TRequest>()`, `AddNoticeWorker<TRequest>()`, and
+  `AddScheduledWorker<TRequest>()` to repeated raw transport routes. The request must already be
+  selected through `AddRequestHandler<THandler>()`, inferred dispatch, or the `RegisterDynamicRequest<TRequest>()` escape hatch; raw routes remain supported.
 - Run projectors and reactors through `AddProjector<T>(...)`/`AddReactor<T>(...)` plus
   `AddWorker()`. `AddPortiaProjectorRunner<T>()`, `AddPortiaReactorRunner<T>()`,
   `ProjectorHostedService`, and `ReactorHostedService` are removed; a host with no

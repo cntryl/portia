@@ -5,7 +5,36 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ExplicitRegistrationConsumerTests
 {
     [Fact]
-    public void UnselectedConflictingHandlersAndAuthorizersAreNotRegistered()
+    public void StronglyTypedDispatchInfersSenderRequestWithoutExplicitRegistration()
+    {
+        var assembly = GeneratorCompilation.Compile("""
+            using System.Linq;
+            using System.Threading.Tasks;
+            using Cntryl.Portia;
+            using Microsoft.Extensions.DependencyInjection;
+            [RequestRoute("app", "accounts", "*", "deposit")]
+            public sealed record Deposit(int Amount) : IRequest, ICallable;
+            public static class Scenario
+            {
+                public static async ValueTask<Result> Dispatch(IRemoteRequestSender sender)
+                    => await sender.SendAsync(new Deposit(10), new RequestRouteValues(), null);
+
+                public static bool Run()
+                {
+                    var services = new ServiceCollection();
+                    services.AddPortia();
+                    return services.OfType<ServiceDescriptor>()
+                        .Any(descriptor => descriptor.ImplementationInstance is RequestTransportRegistration registration
+                            && registration.RequestType == typeof(Deposit));
+                }
+            }
+            """, new RegistrationCallInterceptorGenerator());
+
+        Assert.True(assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>()());
+    }
+
+    [Fact]
+    public void SelectedHandlersAndAuthorizersRemainIndependent()
     {
         var assembly = GeneratorCompilation.Compile("""
             using System;
@@ -31,16 +60,18 @@ public sealed class ExplicitRegistrationConsumerTests
                 public static bool Run()
                 {
                     var services = new ServiceCollection();
-                    var portia = services.AddPortia(p => p.AddSelectedHandler());
+                    var portia = services.AddPortia(p => p.AddRequestHandler<Selected>());
                     if (services.Any(s => s.ServiceType == typeof(RequestAuthorizerRegistration))) return false;
-                    portia.AddSelectedHandler();
+                    portia.AddRequestHandler<Selected>();
+                    portia.AddRequestAuthorizer<Selected>();
+                    if (!services.Any(s => s.ServiceType == typeof(RequestAuthorizerRegistration))) return false;
                     var count = services.Count;
-                    try { portia.AddUnselectedHandler(); return false; }
+                    try { portia.AddRequestHandler<Unselected>(); return false; }
                     catch (InvalidOperationException) { }
                     return services.Count == count && !services.Any(s => s.ServiceType == typeof(Unselected));
                 }
             }
-            """, new RequestBusGenerator());
+            """, new RequestBusGenerator(), new RegistrationCallInterceptorGenerator());
         Assert.True(assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>()());
     }
 
@@ -79,14 +110,9 @@ public sealed class ExplicitRegistrationConsumerTests
         }
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ConflictingComponentRegistrationsFailExplicitlyWithoutPartialRegistration(bool authorizer)
+    [Fact]
+    public void ConflictingHandlerRegistrationsFailExplicitlyWithoutPartialRegistration()
     {
-        var component = authorizer
-            ? "public class Conflict : IRequestAuthorizer<FeatureOneRequest> { public ValueTask<Result> AuthorizeAsync(IRequestContext<FeatureOneRequest> c, System.Security.Claims.ClaimsPrincipal actor, CancellationToken ct = default) => ValueTask.FromResult(Result.Success); }"
-            : "public class Conflict : IRequestHandler<FeatureOneRequest, int> { public ValueTask<Result<int>> HandleAsync(IRequestContext<FeatureOneRequest> c, CancellationToken ct) => ValueTask.FromResult(Result<int>.Success(0)); }";
         var assembly = GeneratorCompilation.Compile("""
             using System;
             using System.Threading;
@@ -105,7 +131,12 @@ public sealed class ExplicitRegistrationConsumerTests
                     catch (InvalidOperationException exception) { return services.Count == count && exception.Message.Contains("conflicting"); }
                 }
             }
-            """ + component, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator());
+            public class Conflict : IRequestHandler<FeatureOneRequest, int>
+            {
+                public ValueTask<Result<int>> HandleAsync(IRequestContext<FeatureOneRequest> c, CancellationToken ct)
+                    => ValueTask.FromResult(Result<int>.Success(0));
+            }
+            """, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator());
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>();
         Assert.True(run());
     }

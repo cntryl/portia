@@ -4,7 +4,7 @@ namespace Cntryl.Portia;
 public sealed class RequestRegistry
 {
     readonly Dictionary<Type, RequestHandlerRegistration> _handlers = [];
-    readonly Dictionary<Type, RequestAuthorizerRegistration> _authorizers = [];
+    readonly RequestAuthorizerRegistration[] _authorizers;
 
     /// <summary>Creates the registry and rejects conflicting registrations.</summary>
     /// <param name="handlers">Generated handler descriptors.</param>
@@ -17,16 +17,22 @@ public sealed class RequestRegistry
                 throw new InvalidOperationException($"Request '{registration.RequestType}' has conflicting handlers '{existing.HandlerType}' and '{registration.HandlerType}'.");
             _handlers[registration.RequestType] = registration;
         }
-        foreach (var registration in authorizers)
+        var policies = authorizers.ToArray();
+        if (policies.FirstOrDefault(registration => !Enum.IsDefined(registration.Stage)) is { } invalid)
+            throw new ArgumentOutOfRangeException(nameof(authorizers), invalid.Stage, "Choose a defined authorization stage.");
+        foreach (var group in policies.GroupBy(registration => (registration.ScopeType, registration.AuthorizerType)))
         {
-            if (_authorizers.TryGetValue(registration.RequestType, out var existing) && existing.AuthorizerType != registration.AuthorizerType)
-                throw new InvalidOperationException($"Request '{registration.RequestType}' has conflicting authorizers '{existing.AuthorizerType}' and '{registration.AuthorizerType}'.");
-            _authorizers[registration.RequestType] = registration;
+            if (group.Select(registration => registration.Stage).Distinct().Skip(1).Any())
+                throw new InvalidOperationException($"Authorizer '{group.Key.AuthorizerType}' has conflicting stages.");
         }
+        _authorizers = [.. policies
+            .DistinctBy(registration => (registration.ScopeType, registration.AuthorizerType))
+            .OrderBy(registration => registration.Stage)];
     }
 
     internal RequestHandlerRegistration Handler(Type requestType) => _handlers.TryGetValue(requestType, out var registration)
         ? registration : throw new InvalidOperationException($"No handler is registered for request type '{requestType}'.");
 
-    internal RequestAuthorizerRegistration? Authorizer(Type requestType) => _authorizers.GetValueOrDefault(requestType);
+    internal IEnumerable<RequestAuthorizerRegistration> Authorizers(Type requestType) =>
+        _authorizers.Where(registration => registration.ScopeType.IsAssignableFrom(requestType));
 }

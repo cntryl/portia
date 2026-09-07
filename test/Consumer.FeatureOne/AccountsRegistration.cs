@@ -9,12 +9,11 @@ public static class AccountsRegistration
         _ = services.AddContracts();
         _ = services.AddPortia(p =>
         {
-            _ = p.AddFeatureOneHandler();
-            _ = p.AddDepositAccountHandler();
-            _ = p.AddScopeHandler();
-            _ = p.AddNestedScopeHandler();
-            _ = p.AddFeatureOneAuthorizer();
-            _ = p.AddGeneratedEvents();
+            _ = p.AddRequestHandler<FeatureOneHandler>();
+            _ = p.AddRequestHandler<DepositAccountHandler>();
+            _ = p.AddRequestHandler<ScopeHandler>();
+            _ = p.AddRequestHandler<NestedScopeHandler>();
+            _ = p.AddRequestAuthorizer<FeatureOneAuthorizer>();
         });
         return services;
     }

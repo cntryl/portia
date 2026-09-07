@@ -32,7 +32,6 @@ public sealed partial class AccountProjector(IAccountRepository accounts)
 services.AddScoped<IAccountRepository, AccountRepository>();
 services.AddPortia(p =>
 {
-    p.AddGeneratedEvents();
     p.AddProjector<AccountProjector>(o => o.PerTenant());
 });
 ```

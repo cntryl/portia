@@ -27,7 +27,7 @@ Wire the command to an HTTP route:
 using Cntryl.Portia;
 
 var builder = WebApplication.CreateBuilder(args);
-_ = builder.Services.AddPortia(portia => portia.AddCreateGreetingHandler());
+_ = builder.Services.AddPortia(portia => portia.AddRequestHandler<CreateGreetingHandler>());
 
 var app = builder.Build();
 app.MapPortiaPost<CreateGreeting, string>("/greetings");
@@ -60,14 +60,14 @@ for connection ownership, mixed global/per-tenant workloads, and incremental agg
 - `IRequest<string>` says that `CreateGreeting` returns text.
 - `ICallable` says that the application may expose it to callers, including over HTTP.
 - `IRequestHandler<CreateGreeting, string>` connects that command to its handler.
-- `AddCreateGreetingHandler()` adds the command and handler to the application. Portia.Generators
-  writes one such method per component it finds, so the method only exists for a type that really
-  is a handler — naming a type that isn't one is a compile error, not a startup failure.
+- `AddRequestHandler<CreateGreetingHandler>()` adds the command and handler to the application.
+  Portia.Generators validates the role and emits its typed descriptor at the call site, so naming
+  a type that isn't a handler is a compile error, not a startup failure.
 - `MapPortiaPost` reads the HTTP request, calls the handler, and writes the HTTP response.
 
 Portia writes the repetitive connection code when the project builds. It is ordinary C# checked
 by the compiler—the application explicitly selects its components, with no assembly scanning and
-no reflection: `AddCreateGreetingHandler()` is a generated method that calls a typed constructor.
+no reflection: `AddRequestHandler<CreateGreetingHandler>()` is replaced at compile time with a typed descriptor.
 If the command and handler disagree about their types, the build fails.
 
 ## How we keep it simple
@@ -135,8 +135,9 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   time (`PORTIA011` catches an unknown token, `PORTIA013` catches a nullable one — a null value
   at dispatch time would otherwise silently collapse to an empty segment in the checked
   permission string instead of failing clearly). `IPermissionEvaluator` (coarse) and
-  `IRequestAuthorizer<T>` (row-level) are independent, pluggable hooks — permission is always
-  checked before the authorizer.
+  `IRequestAuthorizer<TScope>` policies are independent, pluggable hooks. A policy can target one
+  request, a request-family interface, or every request; all matching policies run by semantic
+  authorization stage after the coarse permission check and before the handler.
 - **Actor propagation**: never ambient. Every `IRequestBus` call takes an explicit
   `ClaimsPrincipal`; queued/scheduled transports carry a raw JWT instead and re-validate it
   (signature and expiry) at the moment the request actually runs, not when it was enqueued.
@@ -148,7 +149,8 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
 - **Schema evolution**: `DomainEventTypeCatalog` maps a logical event name + schema version to a
   CLR type. An exact match resolves directly (old and new versions can simply coexist forever);
   a missing version falls through a chain of JSON-adapter-specific
-  `IJsonDomainEventUpcaster`s. `portia.AddGeneratedEvents()` contributes every event type declared in the assembly to the shared catalog in one call.
+  `IJsonDomainEventUpcaster`s. The generator contributes referenced domain-event types to the
+  application catalog at compile time; typed request dispatch is inferred without reflection.
 - **Multi-tenancy vs. fleet distribution — deliberately orthogonal**: `MultiTenantRunner`
   decides which tenants a component instance runs for, on whichever worker it's already on.
   `FleetPartitionRunner` decides which worker gets to run a given partition at all, using Fitz

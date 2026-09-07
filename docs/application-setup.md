@@ -32,8 +32,7 @@ public static class ApplicationSetup
 
         var portia = services.AddPortia(p =>
         {
-            p.AddDepositAccountHandler();
-            p.AddGeneratedEvents();
+            p.AddRequestHandler<DepositAccountHandler>();
             p.AddProjector<AccountProjector>(o => o.PerTenant());
             p.AddProjector<PlatformSummaryProjector>(o => o.Global());
             p.AddReactor<AccountReactor>(o => o.PerTenant());
@@ -41,7 +40,7 @@ public static class ApplicationSetup
         services.AddPortiaFitz(configuration.GetSection("Fitz"), fitz =>
         {
             fitz.AddRpcServer();
-            fitz.AddQueueWorker("queue://consumer/business/*");
+            fitz.AddQueueWorker<DepositAccount>();
         });
         return portia;
     }

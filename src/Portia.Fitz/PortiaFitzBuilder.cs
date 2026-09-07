@@ -64,11 +64,23 @@ public sealed class PortiaFitzBuilder
     /// <summary>Declares a competing queue worker for an explicit queue route.</summary>
     public PortiaFitzBuilder AddQueueWorker(string route) => AddListener("queue", route);
 
+    /// <summary>Declares a competing queue worker using the selected request's generated route.</summary>
+    public PortiaFitzBuilder AddQueueWorker<TRequest>() where TRequest : IRequestBase, IQueuable
+        => AddRequestListener<TRequest>(RequestTransports.Queuable, "queue", includeOperation: false);
+
     /// <summary>Declares a notice fanout subscriber on each worker replica.</summary>
     public PortiaFitzBuilder AddNoticeWorker(string route) => AddListener("notice", route);
 
+    /// <summary>Declares a notice subscriber using the selected request's generated route.</summary>
+    public PortiaFitzBuilder AddNoticeWorker<TRequest>() where TRequest : IRequestBase, INotifiable
+        => AddRequestListener<TRequest>(RequestTransports.Notifiable, "notice", includeOperation: false);
+
     /// <summary>Declares a schedule subscriber; the schedule's delivery mode controls distribution.</summary>
     public PortiaFitzBuilder AddScheduledWorker(string route) => AddListener("schedule", route);
+
+    /// <summary>Declares a schedule subscriber using the selected request's generated route.</summary>
+    public PortiaFitzBuilder AddScheduledWorker<TRequest>() where TRequest : IRequestBase, ISchedulable
+        => AddRequestListener<TRequest>(RequestTransports.Schedulable, "schedule", includeOperation: true);
 
     /// <summary>Configures membership for the application's explicitly leased component workloads.</summary>
     public PortiaFitzBuilder UseFleet(FleetRunOptions options)
@@ -79,6 +91,24 @@ public sealed class PortiaFitzBuilder
             throw new InvalidOperationException("This application has conflicting Fitz fleet configurations.");
         Fleet = options;
         return this;
+    }
+
+    PortiaFitzBuilder AddRequestListener<TRequest>(RequestTransports transport, string scheme, bool includeOperation)
+        where TRequest : IRequestBase
+    {
+        var registration = _application.Services
+            .Select(service => service.ImplementationInstance)
+            .OfType<RequestTransportRegistration>()
+            .SingleOrDefault(candidate => candidate.RequestType == typeof(TRequest))
+            ?? throw new InvalidOperationException(
+                $"Register a handler, dispatch the request through a strongly typed Portia API, or use RegisterDynamicRequest<TRequest>() before declaring its {scheme} worker for '{typeof(TRequest)}'.");
+        if (!registration.Transports.HasFlag(transport))
+            throw new InvalidOperationException($"Request '{typeof(TRequest)}' does not declare the {transport} transport.");
+        var route = registration.Route;
+        var value = includeOperation
+            ? $"{scheme}://{route.Realm}/{route.Area}/{route.Resource}/{route.Operation}"
+            : $"{scheme}://{route.Realm}/{route.Area}/{route.Resource}";
+        return AddListener(scheme, value);
     }
 
     PortiaFitzBuilder AddListener(string kind, string route)

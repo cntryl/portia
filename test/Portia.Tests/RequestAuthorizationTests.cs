@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
 
@@ -211,6 +212,81 @@ public sealed class RequestAuthorizationTests
         Assert.Equal([1, 2, 3], items);
     }
 
+    /// <summary>Every matching request-family policy runs by semantic stage before the handler.</summary>
+    [Fact]
+    public async Task ShouldComposeTieredRequestFamilyAuthorizers()
+    {
+        var calls = new List<string>();
+        var services = new ServiceCollection();
+        _ = services.AddSingleton(calls);
+        _ = services.AddSingleton<TieredHandler>();
+        _ = services.AddSingleton<PrincipalAuthorizer>();
+        _ = services.AddSingleton<AccountRoleAuthorizer>();
+        _ = services.AddSingleton<MfaConfirmationAuthorizer>();
+        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<TieredRequest, TieredHandler>());
+        _ = services.AddSingleton<RequestAuthorizerRegistration>(
+            new RequestAuthorizerRegistration<IRequestBase, PrincipalAuthorizer>(AuthorizationStage.Principal));
+        _ = services.AddSingleton<RequestAuthorizerRegistration>(
+            new RequestAuthorizerRegistration<IAccountRequest, AccountRoleAuthorizer>(AuthorizationStage.ResourceAccess));
+        _ = services.AddSingleton<RequestAuthorizerRegistration>(
+            new RequestAuthorizerRegistration<IMfaConfirmedRequest, MfaConfirmationAuthorizer>(AuthorizationStage.StepUp));
+        _ = services.AddScoped<IRequestBus, RequestBus>();
+        _ = services.AddSingleton<RequestRegistry>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var result = await scope.ServiceProvider.GetRequiredService<IRequestBus>()
+            .SendAsync(new TieredRequest(Uuid.CreateVersion4()), RequestActor.System);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(["principal", "account-role", "mfa", "handler"], calls);
+    }
+
+}
+
+interface IAccountRequest : IRequestBase
+{
+    Uuid AccountId { get; }
+}
+
+interface IMfaConfirmedRequest : IRequestBase;
+
+sealed record TieredRequest(Uuid AccountId) : IRequest, IAccountRequest, IMfaConfirmedRequest;
+
+sealed class TieredHandler(List<string> calls) : IRequestHandler<TieredRequest>
+{
+    public ValueTask<Result> HandleAsync(IRequestContext<TieredRequest> context, CancellationToken ct)
+    {
+        calls.Add("handler");
+        return ValueTask.FromResult(Result.Success);
+    }
+}
+
+sealed class PrincipalAuthorizer(List<string> calls) : IRequestAuthorizer<IRequestBase>
+{
+    public ValueTask<Result> AuthorizeAsync(IRequestContext<IRequestBase> context, ClaimsPrincipal actor, CancellationToken ct = default)
+    {
+        calls.Add("principal");
+        return ValueTask.FromResult(Result.Success);
+    }
+}
+
+sealed class AccountRoleAuthorizer(List<string> calls) : IRequestAuthorizer<IAccountRequest>
+{
+    public ValueTask<Result> AuthorizeAsync(IRequestContext<IAccountRequest> context, ClaimsPrincipal actor, CancellationToken ct = default)
+    {
+        calls.Add("account-role");
+        return ValueTask.FromResult(Result.Success);
+    }
+}
+
+sealed class MfaConfirmationAuthorizer(List<string> calls) : IRequestAuthorizer<IMfaConfirmedRequest>
+{
+    public ValueTask<Result> AuthorizeAsync(IRequestContext<IMfaConfirmedRequest> context, ClaimsPrincipal actor, CancellationToken ct = default)
+    {
+        calls.Add("mfa");
+        return ValueTask.FromResult(Result.Success);
+    }
 }
 
 [RequiresPermission("guarded:action")]

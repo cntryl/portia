@@ -76,7 +76,9 @@ public sealed class StreamRequestRegistration<TRequest, THandler, TOut>(Func<TRe
 /// <summary>Describes an authorizer independently of its handler.</summary>
 /// <param name="requestType">The request.</param>
 /// <param name="authorizerType">The authorizer.</param>
-public abstract class RequestAuthorizerRegistration(Type requestType, Type authorizerType)
+/// <param name="stage">The semantic stage at which this policy runs.</param>
+public abstract class RequestAuthorizerRegistration(Type requestType, Type authorizerType,
+    AuthorizationStage stage = AuthorizationStage.ResourceAccess)
 {
     /// <summary>Gets the authorized request type.</summary>
     public Type RequestType { get; } = requestType;
@@ -84,14 +86,20 @@ public abstract class RequestAuthorizerRegistration(Type requestType, Type autho
     /// <summary>Gets the concrete authorizer.</summary>
     public Type AuthorizerType { get; } = authorizerType;
 
+    /// <summary>Gets the request family this policy applies to.</summary>
+    public Type ScopeType => RequestType;
+
+    /// <summary>Gets the semantic stage at which the policy runs.</summary>
+    public AuthorizationStage Stage { get; } = stage;
+
     internal abstract ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request, RequestDispatchContext context, CancellationToken ct);
 }
 
 /// <summary>Resolves and invokes the selected authorizer in the current scope.</summary>
 /// <typeparam name="TRequest">The request.</typeparam>
 /// <typeparam name="TAuthorizer">The authorizer.</typeparam>
-public sealed class RequestAuthorizerRegistration<TRequest, TAuthorizer>()
-    : RequestAuthorizerRegistration(typeof(TRequest), typeof(TAuthorizer))
+public sealed class RequestAuthorizerRegistration<TRequest, TAuthorizer>(AuthorizationStage stage = AuthorizationStage.ResourceAccess)
+    : RequestAuthorizerRegistration(typeof(TRequest), typeof(TAuthorizer), stage)
     where TRequest : IRequestBase
     where TAuthorizer : class, IRequestAuthorizer<TRequest>
 {

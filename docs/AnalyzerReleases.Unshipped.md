@@ -12,3 +12,4 @@ PORTIA013 | Portia | Error | RequiresPermission references a nullable request pr
 PORTIA015 | Portia | Error | Generated components must have supported accessible non-generic declarations
 PORTIA016 | Portia | Error | Unsupported HTTP binding requires a constant route and supported constructor and scalar types
 PORTIA017 | Portia | Error | Batch handlers require batch bases and unambiguous event dispatch
+PORTIA018 | Portia | Error | Generic component registration requires a matching Portia role

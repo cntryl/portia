@@ -19,33 +19,68 @@ public sealed record Declined(string Reason) : DomainEvent;
 Reference the generator in each assembly declaring handlers, authorizers, routed requests,
 reactors, or projectors, and in the host that maps HTTP endpoints.
 
-For every handler, authorizer, and routed request it finds, the generator writes one
-`Add<Component>()` extension method on `PortiaBuilder` — `AddDepositAccountHandler()`,
-`AddDepositAccount()`, and so on. Selecting a component is a call to its own generated method,
-so a type that is not a handler simply has no method to call: the mistake is a compile error
-rather than a startup exception. Projectors and reactors are selected with
+Select handlers and authorizers through the stable generic methods `AddRequestHandler<T>()`
+and `AddRequestAuthorizer<T>()`. The generator replaces each call
+with its typed descriptor and reports a compile error when the type does not implement that role.
+Projectors and reactors are selected with
 `AddProjector<T>(...)` and `AddReactor<T>(...)`, which also choose their execution scope.
 
 Registering a handler also registers its request's transport descriptor. A contract used only
-by a sending application is registered through its own `Add<Request>()` method. Events are
-contributed per assembly with `AddGeneratedEvents()`, because an event missing from the catalog
-is always a replay-time failure rather than a deployment choice; `AddEvent<T>()` remains for an
-event declared in an assembly built without the generator.
+by a sending application is inferred from strongly typed `SendAsync` and `StreamAsync` calls.
+Use `RegisterDynamicRequest<T>()` only when dynamic dispatch hides the concrete request type
+from the compiler. The generator contributes referenced domain
+events automatically because an event missing from the catalog is always a replay-time failure,
+not a deployment choice. `AddEvent<T>()` remains a low-level escape hatch for a type unavailable
+to the generator.
 
-Repeated identical registrations are idempotent; conflicting selected handlers or authorizers
-fail during registration. Unselected types are not added to the application.
+A dispatch-only application therefore needs no component lambda:
 
-Generated descriptors retain typed dispatch and permission expressions. There is no assembly
-scanning and no reflection at any point — each generated method calls a typed constructor
-directly, so the whole registration path is visible to the compiler and to trimming.
+```csharp
+services.AddPortia();
+```
 
-The generated methods are internal to the assembly that declares the components, so each feature
-assembly exposes its own `AddMyFeature(this IServiceCollection services)` and calls them there.
+Repeated identical registrations are idempotent; conflicting selected handlers or conflicting
+stages for the same authorizer fail during registration. Multiple applicable authorizers compose
+as an all-of pipeline. Unselected types are not added to the application.
+
+Generated descriptors retain typed dispatch and permission expressions. There is no runtime
+assembly scanning or reflection—the call-site generator emits concrete generic descriptors, so
+the whole registration path is visible to the compiler and to trimming.
+
+Applications may keep feature-specific `IServiceCollection` extensions as ordinary composition
+helpers, but Portia no longer requires assembly wrappers around generated method names.
 
 A scoped `IRequestBus` resolves the selected handler and authorizer from the current
 scope. A handler may inject that bus to dispatch a different request. Permission
 checks run before authorizers, which run before the handler. No application bus or
 runtime assembly scan is required.
+
+Authorization is independently composable. An `IRequestAuthorizer<TScope>` may target one
+concrete request, a request-family interface, or `IRequestBase`; every selected authorizer whose
+scope matches the concrete request runs before its handler. Register broad principal policy,
+resource access, and step-up checks once with `AddRequestAuthorizer<T>(AuthorizationStage)`.
+All applicable policies must succeed and the first failure short-circuits handling.
+
+```csharp
+public interface IAccountRequest : IRequestBase { Uuid AccountId { get; } }
+public interface IMfaConfirmedRequest : IRequestBase;
+
+public sealed record CloseAccount(Uuid AccountId)
+    : IRequest, IAccountRequest, IMfaConfirmedRequest;
+
+services.AddPortia(portia =>
+{
+    portia.AddRequestHandler<CloseAccountHandler>();
+    portia.AddRequestAuthorizer<ActiveUserAuthorizer>(AuthorizationStage.Principal);
+    portia.AddRequestAuthorizer<AccountRoleAuthorizer>(AuthorizationStage.ResourceAccess);
+    portia.AddRequestAuthorizer<MfaConfirmationAuthorizer>(AuthorizationStage.StepUp);
+});
+```
+
+Here `ActiveUserAuthorizer` implements `IRequestAuthorizer<IRequestBase>`, the account policy
+implements `IRequestAuthorizer<IAccountRequest>`, and the MFA policy implements
+`IRequestAuthorizer<IMfaConfirmedRequest>`. Registration order breaks ties within a stage;
+authorization policy should otherwise avoid order-dependent side effects.
 
 ## Persist an aggregate
 
@@ -76,8 +111,7 @@ Configure persistence once in the shared application setup:
 ```csharp
 services.AddPortia(portia =>
 {
-    portia.AddDepositAccountHandler();
-    portia.AddGeneratedEvents();
+    portia.AddRequestHandler<DepositAccountHandler>();
 });
 services.AddPortiaFitz(configuration.GetSection("Fitz"));
 ```
@@ -119,7 +153,7 @@ develop the generator still need their local compiler configuration.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddPortia(portia => portia.AddDepositAccountHandler());
+builder.Services.AddPortia(portia => portia.AddRequestHandler<DepositAccountHandler>());
 // Register persistence and application dependencies as above.
 var app = builder.Build();
 app.MapPortiaPost<DepositAccount>("/accounts/{id}");
