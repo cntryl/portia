@@ -10,12 +10,14 @@ namespace Cntryl.Portia;
 /// <param name="getTenantId">Extracts the explicit tenant identity.</param>
 /// <param name="pollInterval">Positive idle delay; defaults to one second.</param>
 /// <param name="timeProvider">Schedules polling delays.</param>
+/// <param name="notifier">Optional commit notifications used instead of idle polling.</param>
 public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
     IDomainEventReader reader,
     EventStreamPattern pattern,
     Func<DomainEvent, TenantId> getTenantId,
     TimeSpan? pollInterval = null,
-    TimeProvider? timeProvider = null) : ITenantDirectory
+    TimeProvider? timeProvider = null,
+    IDomainEventNotifier? notifier = null) : ITenantDirectory
     where TStartEvent : DomainEvent
     where TStopEvent : DomainEvent
 {
@@ -24,6 +26,7 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
     readonly Func<DomainEvent, TenantId> _getTenantId = getTenantId ?? throw new ArgumentNullException(nameof(getTenantId));
     readonly TimeSpan _pollInterval = GetInterval(pollInterval);
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
+    readonly IDomainEventNotifier? _notifier = notifier;
 
     /// <inheritdoc />
     public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync([EnumeratorCancellation] CancellationToken ct = default)
@@ -38,6 +41,9 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
     /// <inheritdoc />
     public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync([EnumeratorCancellation] CancellationToken ct = default)
     {
+        await using var subscription = _notifier is null
+            ? null
+            : await _notifier.SubscribeAsync(_pattern, ct).ConfigureAwait(false);
         var active = new HashSet<TenantId>();
         var initiallyRemoved = new HashSet<TenantId>();
         ulong offset = 0;
@@ -65,7 +71,9 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                 initiallyRemoved.Clear();
                 initial = false;
             }
-            if (!sawAny)
+            if (subscription is not null)
+                await subscription.WaitAsync(ct).ConfigureAwait(false);
+            else if (!sawAny)
                 await Task.Delay(_pollInterval, _clock, ct).ConfigureAwait(false);
         }
     }

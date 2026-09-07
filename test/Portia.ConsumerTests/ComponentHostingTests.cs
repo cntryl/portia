@@ -6,6 +6,41 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ComponentHostingTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StreamNotificationWakesCompletedWorkloadWithoutPollingDelay(bool projector)
+    {
+        var changes = new Changes();
+        var services = ConsumerHost.CreateServices();
+        _ = services.AddSingleton<IDomainEventNotifier>(changes);
+        _ = services.AddPortia(p => _ = projector
+            ? p.AddProjector<FirstProjector>(o => { o.Global(); o.PollInterval = TimeSpan.FromDays(1); })
+            : p.AddReactor<FirstReactor>(o => { o.Global(); o.PollInterval = TimeSpan.FromDays(1); })).AddWorker();
+        await using var provider = ConsumerHost.Build(services);
+        var effects = provider.GetRequiredService<ConsumerHost.Effects>();
+        var id = Uuid.CreateVersion4();
+        await ConsumerHost.SeedAsync(provider, id);
+        var worker = Assert.Single(provider.GetServices<IHostedService>());
+        try
+        {
+            await worker.StartAsync(default);
+            await changes.Subscribed.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            await effects.WaitForAsync(projector ? "first-projector" : "first-reactor");
+            await ConsumerHost.SeedAsync(provider, id, 1);
+            changes.Signal();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            while (effects.Items.Count < 2)
+                await Task.Delay(10, timeout.Token);
+        }
+        finally
+        {
+            await worker.StopAsync(default);
+            (worker as IDisposable)?.Dispose();
+        }
+        Assert.Equal(2, effects.Items.Count);
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("repair")]
     public async Task UncertainProjectionCommitAndFailedReloadPreserveDurableProgress(string? rebuildId)
@@ -86,6 +121,23 @@ public sealed class ComponentHostingTests
             try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
             finally { Disposed = true; }
             yield break;
+        }
+    }
+
+    sealed class Changes : IDomainEventNotifier
+    {
+        readonly System.Threading.Channels.Channel<bool> _signals = System.Threading.Channels.Channel.CreateUnbounded<bool>();
+        public TaskCompletionSource Subscribed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern, CancellationToken ct = default)
+        {
+            _ = Subscribed.TrySetResult();
+            return ValueTask.FromResult<IDomainEventSubscription>(new Subscription(_signals.Reader));
+        }
+        public void Signal() => _signals.Writer.TryWrite(true);
+        sealed class Subscription(System.Threading.Channels.ChannelReader<bool> signals) : IDomainEventSubscription
+        {
+            public async ValueTask WaitAsync(CancellationToken ct = default) => _ = await signals.ReadAsync(ct);
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
     }
 

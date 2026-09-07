@@ -72,6 +72,9 @@ public sealed class SharedDeploymentTests
         try
         {
             await using var scope = host.Services.CreateAsyncScope();
+            Assert.Same(
+                scope.ServiceProvider.GetRequiredService<IEventStore>(),
+                scope.ServiceProvider.GetRequiredService<IDomainEventNotifier>());
             var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
             var account = new Account(Uuid.CreateVersion4());
             account.Deposit(10);

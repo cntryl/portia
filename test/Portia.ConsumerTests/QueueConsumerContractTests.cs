@@ -119,7 +119,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task DefaultReserveUsesSecondsAndOneItemWithoutChangingAttempt()
+    public async Task SubscriptionIsEstablishedBeforeImmediateReserveWithoutChangingAttempt()
     {
         var serializer = new JsonRequestSerializer();
         var item = new Reserved(serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null), attempt: 9);
@@ -127,7 +127,8 @@ public sealed class QueueConsumerContractTests
         var consumer = new FitzRequestQueueConsumer(queue, serializer, "queue://consumer/scopes/delivery");
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
         Assert.True(await reader.MoveNextAsync());
-        Assert.Equal((5, 1), (queue.WaitSeconds, queue.BatchSize));
+        Assert.True(queue.SubscribedBeforeReserve);
+        Assert.Equal((0, 1), (queue.WaitSeconds, queue.BatchSize));
         Assert.Equal(9U, reader.Current.Attempt);
         await reader.Current.CompleteAsync();
         Assert.Equal(1, item.Completions);
@@ -178,6 +179,8 @@ public sealed class QueueConsumerContractTests
         public int? WaitSeconds { get; private set; }
         public int BatchSize { get; private set; }
         public int Enqueues { get; private set; }
+        public bool Subscribed { get; private set; }
+        public bool SubscribedBeforeReserve { get; private set; }
         public TaskCompletionSource Idle { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body, int? delayMs = null, CancellationToken ct = default)
@@ -188,16 +191,30 @@ public sealed class QueueConsumerContractTests
 
         public async Task<IQueueReservedItem[]> ReserveAsync(string route, ulong leaseSeconds, int batchSize = 1, int? waitSeconds = null, CancellationToken ct = default)
         {
+            SubscribedBeforeReserve = Subscribed;
             WaitSeconds = waitSeconds;
             BatchSize = batchSize;
             if (Interlocked.Increment(ref _reads) == 1)
                 return items;
             _ = Idle.TrySetResult();
+            if (waitSeconds == 0)
+                return [];
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             return [];
         }
 
-        public Task<QueueSubscription> SubscribeAsync(string pattern, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<QueueSubscription> SubscribeAsync(string pattern, CancellationToken ct = default)
+        {
+            Subscribed = true;
+            return Task.FromResult(new QueueSubscription(pattern, Wait(ct), _ => ValueTask.CompletedTask));
+        }
+
+        static async IAsyncEnumerable<QueueAvailabilityEvent> Wait(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            yield break;
+        }
     }
 
     internal sealed class Reserved(ReadOnlyMemory<byte> body, uint attempt) : IQueueReservedItem

@@ -34,6 +34,8 @@ public sealed class PortiaFitzBuilder
             provider.GetRequiredService<IDomainEventSerializer>()));
         services.TryAddSingleton<IDomainEventReader>(provider => provider.GetRequiredService<IEventStore>());
         services.TryAddSingleton<IDomainEventWriter>(provider => provider.GetRequiredService<IEventStore>());
+        services.TryAddSingleton(provider =>
+            (provider.GetRequiredService<IEventStore>() as IDomainEventNotifier)!);
         return this;
     }
 

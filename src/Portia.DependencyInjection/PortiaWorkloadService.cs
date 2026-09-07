@@ -97,6 +97,8 @@ sealed partial class PortiaWorkloadService(IServiceProvider services) : Backgrou
     {
         while (!ct.IsCancellationRequested)
         {
+            IDomainEventSubscription? subscription = null;
+            var failed = false;
             try
             {
                 await using var scope = services.CreateAsyncScope();
@@ -105,12 +107,15 @@ sealed partial class PortiaWorkloadService(IServiceProvider services) : Backgrou
                 if (registration.IsProjector)
                 {
                     var projector = provider.GetServices<ProjectorRegistration>().Single(item => item.ProjectorType == registration.ComponentType);
+                    var component = (BaseProjector)provider.GetRequiredService(registration.ComponentType);
+                    subscription = await SubscribeAsync(component.Pattern, ct).ConfigureAwait(false);
                     await projector.RunPass(provider, registration.Processing, ct).ConfigureAwait(false);
                 }
                 else
                 {
                     var reactor = (BaseReactor)provider.GetRequiredService(registration.ComponentType);
                     reactor.BindWorkload(identity, registration.ExplicitName);
+                    subscription = await SubscribeAsync(reactor.Pattern, ct).ConfigureAwait(false);
                     var checkpoints = reactor.Checkpoints;
                     var checkpoint = await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
                     _ = await provider.GetRequiredService<ReactorRunner>().RunAsync(reactor, checkpoint,
@@ -118,9 +123,56 @@ sealed partial class PortiaWorkloadService(IServiceProvider services) : Backgrou
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
-            catch (Exception ex) { PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), $"workload '{identity}' failed", ex, _logger); }
-            try { await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false); }
+            catch (Exception ex)
+            {
+                failed = true;
+                PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), $"workload '{identity}' failed", ex, _logger);
+            }
+            try
+            {
+                if (!failed && subscription is not null)
+                {
+                    using var backstop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    backstop.CancelAfter(registration.PollInterval);
+                    try { await subscription.WaitAsync(backstop.Token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested && backstop.IsCancellationRequested)
+                    {
+                        // A notification is only a wakeup. Periodically re-read durable state in
+                        // case a reconnect or bounded subscription buffer lost the signal.
+                    }
+                }
+                else
+                {
+                    await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
+                }
+            }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch (Exception ex)
+            {
+                PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), $"workload '{identity}' notification failed", ex, _logger);
+                try { await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            }
+            finally
+            {
+                if (subscription is not null)
+                    await subscription.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
+        ValueTask<IDomainEventSubscription?> SubscribeAsync(EventStreamPattern pattern, CancellationToken token)
+        {
+            return services.GetService<IDomainEventNotifier>() is { } notifier
+                ? SubscribeCoreAsync(notifier, pattern, token)
+                : ValueTask.FromResult<IDomainEventSubscription?>(null);
+        }
+
+        static async ValueTask<IDomainEventSubscription?> SubscribeCoreAsync(
+            IDomainEventNotifier notifier,
+            EventStreamPattern pattern,
+            CancellationToken token)
+        {
+            return await notifier.SubscribeAsync(pattern, token).ConfigureAwait(false);
         }
     }
 
