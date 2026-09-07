@@ -6,7 +6,7 @@
         "type": "Direct",
         "requested": "[0.1.3, )",
         "resolved": "0.1.3",
-        "contentHash": "42fx99qkd6PeeS/cqle4ywuJXeXLLDCTC3EXv4CyvyWXu0K7SrhsIYN4XQfxwg0h2CXH8hMs+INnFD6yuZRzqg==",
+        "contentHash": "eOFKYuFRFg0DdSK8yNWclFmtkar74/AndDiB1k4VHpi+LHoKvV7oAjgTunz0GrhuKGpNAcqyv5fj7TMboz+AsA==",
         "dependencies": {
           "Cntryl.Fitz.Abstractions": "0.1.3"
         }
@@ -96,7 +96,7 @@
         "type": "CentralTransitive",
         "requested": "[0.1.3, )",
         "resolved": "0.1.3",
-        "contentHash": "LtV1zs/TqYj+6MOy8V+SjIYGRkCwcIhcSKW553cEDjt5+HXYzIuCNTi34gfDVE4UDU6tYQ6binmzLA1vi0XiYA=="
+        "contentHash": "0z0u1CUjVcd42W4dS03NxmuOlMjMjSgXoM+aBhvvJ4i8iqlCS/+DzkD5ZpRQ3JAMMr6rugRUxynYIHWo2eTe8g=="
       },
       "Microsoft.Extensions.Logging.Abstractions": {
         "type": "CentralTransitive",
