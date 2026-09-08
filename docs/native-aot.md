@@ -34,8 +34,21 @@ services.AddPortia()
 ```
 
 Portia composes generated module contexts with its built-in context and freezes the options. Do
-not replace the generated resolver chain or depend on reflection fallback. The accepted proof
-level is analyzer-clean runtime packages plus CoreCLR tests with JSON reflection disabled; it does
-not claim that a native executable was published or executed.
+not replace the generated resolver chain or depend on reflection fallback. `PORTIA025` requires
+every request, unary result, streaming item, generated HTTP body-member, and domain-event root to
+appear explicitly in `[JsonSerializable]`; nested object-graph types remain System.Text.Json's
+responsibility. Its code fix adds the attribute to the only context, prefers a unique context in
+the root's namespace, or asks which context owns the root; when none exists it creates
+`PortiaJsonContext.cs` with Web defaults and `SnakeCaseLower`.
 
-See [known limitations](known-limitations.md).
+At host startup Portia freezes the configured options and resolves metadata for every generated
+registration before a Fitz hosted service can connect. All missing roots are reported together,
+sorted by full name. A non-hosted DI consumer receives the same check when it first resolves the
+JSON options. Portia does not emit metadata or take serialization ownership from the application.
+Portia's runtime
+packages set `IsAotCompatible=true`, are built with the resulting trim/AOT analyzers, and are
+exercised by CoreCLR tests with JSON reflection disabled. No native `PublishAot` binary is built
+or executed, so analyzer-clean and reflection-disabled evidence is not a claim that a native
+artifact was executed.
+
+See [scope](scope.md).

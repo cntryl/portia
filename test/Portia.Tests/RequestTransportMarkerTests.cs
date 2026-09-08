@@ -46,7 +46,7 @@ public sealed class RequestTransportMarkerTests
         var sendResult = await remoteSender.SendAsync(request, routeValues, actorToken: null);
         await queuePublisher.EnqueueAsync(request, routeValues, actorToken: null);
         await noticeSender.PublishAsync(request, routeValues, actorToken: null);
-        var scheduleId = await scheduler.ScheduleAsync(request, new RequestScheduleSpec("0 0 * * *"), routeValues, actorToken: null);
+        var scheduleId = await scheduler.ScheduleAsync(request, new RequestScheduleSpec("0 0 * * *"), routeValues, RequestActor.System);
 
         Assert.True(sendResult.IsSuccess);
         Assert.NotNull(scheduleId);
@@ -79,7 +79,7 @@ public sealed class RequestTransportMarkerTests
             TRequest request,
             RequestScheduleSpec spec,
             RequestRouteValues routeValues,
-            string? actorToken,
+            System.Security.Claims.ClaimsPrincipal actor,
             RequestMetadata metadata,
             CancellationToken ct = default)
             where TRequest : IRequest, ISchedulable => ValueTask.FromResult("schedule-id");

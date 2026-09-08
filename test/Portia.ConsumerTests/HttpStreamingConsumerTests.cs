@@ -8,6 +8,9 @@ public sealed class HttpStreamingConsumerTests
         using System;
         using System.Collections.Generic;
         using System.Net.Http;
+        using System.Text.Json;
+        using System.Text.Json.Serialization;
+        using System.Text.Json.Serialization.Metadata;
         using System.Security.Claims;
         using System.Runtime.CompilerServices;
         using System.Threading;
@@ -18,6 +21,14 @@ public sealed class HttpStreamingConsumerTests
         using Microsoft.AspNetCore.TestHost;
         using Microsoft.Extensions.DependencyInjection;
         public sealed record StreamRequest(int Mode) : IStreamRequest<string>, ICallable;
+        [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+        [JsonSerializable(typeof(StreamRequest))]
+        [JsonSerializable(typeof(string))]
+        internal sealed class ScenarioJsonContext(JsonSerializerOptions options) : JsonSerializerContext(options)
+        {
+            protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+            public override JsonTypeInfo? GetTypeInfo(Type type) => new DefaultJsonTypeInfoResolver().GetTypeInfo(type, Options);
+        }
         public sealed class Stats
         {
             public int Enumerations, EnumerationDisposals, HandlerDisposals;
@@ -58,6 +69,7 @@ public sealed class HttpStreamingConsumerTests
                 builder.WebHost.UseTestServer();
                 builder.Services.AddSingleton<Stats>();
                 builder.Services.AddPortia()
+                    .ConfigureJson(options => options.TypeInfoResolver = new DefaultJsonTypeInfoResolver())
                     .AddRequestHandler<Handler>()
                     .AddRequestAuthorizer<Authorizer>();
                 await using var app = builder.Build();

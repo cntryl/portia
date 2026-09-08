@@ -8,6 +8,7 @@ PORTIA002 | Portia | Error | Projector types must be partial for generated event
 PORTIA005 | Portia | Error | Reactor types must be partial for generated event dispatch
 PORTIA011 | Portia | Error | RequiresPermission references an unknown request property
 PORTIA012 | Portia | Warning | IJsonDomainEventUpcaster.EventName references an unknown event name
+PORTIA025 | Portia | Error | Portia serializer root is not explicitly registered on a PortiaJsonContext
 PORTIA013 | Portia | Error | RequiresPermission references a nullable request property
 PORTIA015 | Portia | Error | Generated components must have supported accessible non-generic declarations
 PORTIA016 | Portia | Error | Unsupported HTTP binding requires a constant route and supported constructor and scalar types

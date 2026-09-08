@@ -16,6 +16,7 @@ public sealed class PortiaBuilder
     readonly HashSet<Type> _projectorDescriptors = [];
     readonly HashSet<Type> _reactorDescriptors = [];
     readonly HashSet<Type> _requests = [];
+    readonly HashSet<Type> _jsonRoots = [];
     readonly Dictionary<Type, Type> _handlerRequests = [];
     readonly Dictionary<(Type ScopeType, Type AuthorizerType), AuthorizationStage> _authorizers = [];
     readonly List<Action<JsonSerializerOptions>> _jsonConfiguration = [];
@@ -58,6 +59,11 @@ public sealed class PortiaBuilder
         foreach (var factory in _jsonContexts)
             options.TypeInfoResolverChain.Add(factory(new JsonSerializerOptions(options)));
         options.MakeReadOnly();
+        var missing = _jsonRoots.Where(type => !options.TryGetTypeInfo(type, out _))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray();
+        _ = missing.Length == 0
+            ? true
+            : throw new InvalidOperationException($"Portia JSON metadata is missing for: {string.Join(", ", missing.Select(type => type.FullName ?? type.Name))}.");
         return options;
     }
 
@@ -101,6 +107,7 @@ public sealed class PortiaBuilder
     public PortiaBuilder AddGeneratedEvent<TEvent>(int version, string name) where TEvent : DomainEvent
     {
         Services.AddPortiaEvent<TEvent>(version, name);
+        _ = _jsonRoots.Add(typeof(TEvent));
         return this;
     }
 
@@ -121,6 +128,9 @@ public sealed class PortiaBuilder
                 : throw new InvalidOperationException($"Request '{registration.RequestType}' has conflicting handlers.");
         }
         _handlerRequests[registration.RequestType] = registration.HandlerType;
+        _ = _jsonRoots.Add(registration.RequestType);
+        if (registration.ResultType is not null)
+            _ = _jsonRoots.Add(registration.ResultType);
         _ = Services.AddSingleton(registration);
         registration.Register(Services);
         return this;
@@ -162,6 +172,9 @@ public sealed class PortiaBuilder
         ArgumentNullException.ThrowIfNull(registration);
         if (_requests.Add(registration.RequestType))
             _ = Services.AddSingleton(registration);
+        _ = _jsonRoots.Add(registration.RequestType);
+        if (registration.ResultType is not null)
+            _ = _jsonRoots.Add(registration.ResultType);
         return this;
     }
 
@@ -244,6 +257,7 @@ public sealed class PortiaBuilder
         var count = Services.Count;
         try
         {
+            Services.TryAddEnumerable(ServiceDescriptor.Singleton<Microsoft.Extensions.Hosting.IHostedService, PortiaStartupValidator>());
             foreach (var configure in _workers.Values)
                 configure(Services);
             _ = Services.AddSingleton<Microsoft.Extensions.Hosting.IHostedService, PortiaWorkloadService>();

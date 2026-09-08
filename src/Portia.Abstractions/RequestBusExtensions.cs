@@ -9,6 +9,28 @@ namespace Cntryl.Portia;
 /// </summary>
 public static class RequestBusExtensions
 {
+    /// <summary>
+    /// Dispatches a no-result command caused by a reaction and requires it to succeed before the
+    /// reaction may checkpoint. This is an optional convenience for reactions whose effect is
+    /// naturally expressed as application request handling; reactors may also invoke injected
+    /// integration services directly.
+    /// </summary>
+    /// <param name="bus">The bus to dispatch through.</param>
+    /// <param name="command">The command caused by the triggering event.</param>
+    /// <param name="reaction">The triggering reaction execution.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <exception cref="ReactionCommandFailedException">The command returned an expected failure.</exception>
+    public static async ValueTask SendReactionAsync(this IRequestBus bus, IRequest command,
+        IReactorContext reaction, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(bus);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(reaction);
+        var result = await bus.SendAsync(command, reaction, ct).ConfigureAwait(false);
+        if (!result.IsSuccess)
+            throw new ReactionCommandFailedException(result.Error!);
+    }
+
     /// <summary>Dispatches a request that produces no result to its handler.</summary>
     /// <param name="bus">The bus to dispatch through.</param>
     /// <param name="request">The request to dispatch.</param>

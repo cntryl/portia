@@ -1,4 +1,6 @@
 using System.Runtime.CompilerServices;
+using System.Security.Claims;
+using System.Text;
 using Cntryl.Fitz.Abstractions.Domains.Notice;
 using Cntryl.Fitz.Abstractions.Domains.Schedule;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,7 +22,11 @@ public sealed class NotificationExecutionTests
         if (scheduled)
         {
             _ = await new FitzRequestScheduler(wire, serializer).ScheduleAsync(new BrokerExecutionContextTests.Command(2),
-                new RequestScheduleSpec("0 0 * * *"), routeValues, "credential", parent);
+                new RequestScheduleSpec("0 0 * * *"), routeValues, RequestActor.CreateSystem("scheduler"), parent);
+            var stored = Encoding.UTF8.GetString(wire.Body.Span);
+            Assert.DoesNotContain("actor_token", stored, StringComparison.Ordinal);
+            Assert.DoesNotContain("credential", stored, StringComparison.Ordinal);
+            Assert.Contains("scheduler", stored, StringComparison.Ordinal);
             consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute");
         }
         else
@@ -28,8 +34,7 @@ public sealed class NotificationExecutionTests
             await new FitzNoticeRequestSender(wire, serializer).PublishAsync(new BrokerExecutionContextTests.Command(2), routeValues, "credential", parent);
             consumer = new FitzNoticeRequestConsumer(wire, serializer, "notice://context/work/*");
         }
-        var template = serializer.DeserializeEnvelope(wire.Body).Metadata;
-        Assert.Equal(parent.CauseId, template.CausationId);
+        var noticeTemplate = scheduled ? null : serializer.DeserializeEnvelope(wire.Body);
         var handler = new BrokerExecutionContextTests.Handler();
         await using var provider = BrokerExecutionContextTests.Services(handler).BuildServiceProvider();
         await new RequestNotificationRunner(consumer, provider.GetRequiredService<IServiceScopeFactory>()).RunAsync();
@@ -38,18 +43,50 @@ public sealed class NotificationExecutionTests
         Assert.All(handler.Contexts, context =>
         {
             Assert.Equal(parent.CorrelationId, context.CorrelationId);
-            Assert.Equal(scheduled ? template.RequestId : parent.CauseId, context.CausationId);
+            Assert.Equal(scheduled ? handler.Contexts[0].CausationId : parent.CauseId, context.CausationId);
             Assert.Equal(scheduled ? new ScheduleInvocation(wire.Route) : new NoticeInvocation(wire.Route), context.Invocation);
         });
         if (scheduled)
         {
-            Assert.NotEqual(template.RequestId, handler.Contexts[0].RequestId);
+            Assert.NotEqual(parent.CauseId, handler.Contexts[0].CausationId);
             Assert.NotEqual(handler.Contexts[0].RequestId, handler.Contexts[1].RequestId);
+            Assert.All(handler.Contexts, context => Assert.True(RequestActor.IsSystem(context.Actor)));
         }
         else
         {
-            Assert.All(handler.Contexts, context => Assert.Equal(template.RequestId, context.RequestId));
+            Assert.All(handler.Contexts, context => Assert.Equal(noticeTemplate!.Metadata.RequestId, context.RequestId));
         }
+    }
+
+    [Fact]
+    public async Task SchedulerRejectsUserIdentityBeforePersistingAnything()
+    {
+        var wire = new Wire();
+        var user = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(ClaimTypes.NameIdentifier, "alice", ClaimValueTypes.String, "accounts")], "jwt"));
+
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer())
+            .ScheduleAsync(new BrokerExecutionContextTests.Command(2), new RequestScheduleSpec("0 0 * * *"),
+                new RequestRouteValues(Resource: "actual"), user).AsTask());
+
+        Assert.True(wire.Body.IsEmpty);
+    }
+
+    [Fact]
+    public async Task LegacyBearerTokenScheduleRequiresDrainAndRecreation()
+    {
+        var serializer = ConsumerJson.CreateSerializer();
+        var wire = new Wire();
+        await wire.PublishAsync("schedule://context/work/actual/execute",
+            serializer.Serialize(new BrokerExecutionContextTests.Command(2), "legacy-bearer-token",
+                RequestMetadata.Create(), null));
+        var consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute");
+        await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+
+        var exception = await Assert.ThrowsAsync<LegacyScheduledRequestException>(() => enumerator.MoveNextAsync().AsTask());
+
+        Assert.Contains("Cancel and recreate", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(wire.Route, exception.Message, StringComparison.Ordinal);
     }
 
     sealed class Wire : INoticeClient, IScheduleClient

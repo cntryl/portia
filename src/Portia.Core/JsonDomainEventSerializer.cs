@@ -29,15 +29,48 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
         _catalog = catalog;
 
         var upcastersByKey = new Dictionary<(string Name, int FromVersion), IJsonDomainEventUpcaster>();
+        var errors = new List<(string Name, int Version, string Message)>();
 
         foreach (var upcaster in upcasters ?? [])
         {
-            var key = (upcaster.EventName, upcaster.FromVersion);
-            if (!upcastersByKey.TryAdd(key, upcaster))
+            if (upcaster.EventName is not { } eventName || string.IsNullOrWhiteSpace(eventName))
             {
-                throw new InvalidOperationException(
-                    $"An upcaster from event '{upcaster.EventName}' schema version {upcaster.FromVersion} is already registered.");
+                errors.Add((upcaster.EventName ?? string.Empty, upcaster.FromVersion, "An upcaster has an empty event name."));
+                continue;
             }
+            var key = (eventName, upcaster.FromVersion);
+            if (upcaster.FromVersion is <= 0 or int.MaxValue)
+            {
+                errors.Add((upcaster.EventName, upcaster.FromVersion,
+                    $"Event '{upcaster.EventName}' has invalid upcaster source version {upcaster.FromVersion}."));
+            }
+            else if (!upcastersByKey.TryAdd(key, upcaster))
+            {
+                errors.Add((upcaster.EventName, upcaster.FromVersion,
+                    $"Event '{upcaster.EventName}' has duplicate upcasters from schema version {upcaster.FromVersion}."));
+            }
+        }
+
+        foreach (var ((name, fromVersion), _) in upcastersByKey)
+        {
+            var version = fromVersion + 1;
+            var visited = new HashSet<int>();
+            while (!catalog.TryResolve(name, version, out _))
+            {
+                if (!visited.Add(version) || !upcastersByKey.ContainsKey((name, version)))
+                {
+                    errors.Add((name, version, $"Event '{name}' is missing an upcaster from schema version {version}."));
+                    break;
+                }
+                version++;
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new InvalidOperationException("Invalid JSON domain-event upcaster registrations:" + Environment.NewLine
+                + string.Join(Environment.NewLine, errors.Distinct().OrderBy(error => error.Name, StringComparer.Ordinal)
+                    .ThenBy(error => error.Version).Select(error => $"- {error.Message}")));
         }
 
         _resolver = new DomainEventSchemaResolver(catalog, upcastersByKey);

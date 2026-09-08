@@ -33,7 +33,7 @@ public sealed class ExplicitRegistrationConsumerTests
                 public static ValueTask Notice(INoticeRequestSender sender)
                     => sender.PublishAsync(new NoticeAccount(10), new RequestRouteValues(), null);
                 public static ValueTask<string> Schedule(IRequestScheduler sender, RequestScheduleSpec spec)
-                    => sender.ScheduleAsync(new ScheduleAccount(10), spec, new RequestRouteValues(), null);
+                    => sender.ScheduleAsync(new ScheduleAccount(10), spec, new RequestRouteValues(), RequestActor.System);
 
                 public static bool Run()
                 {

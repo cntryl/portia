@@ -159,4 +159,5 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
 [JsonSerializable(typeof(RequestMetadata))]
 [JsonSerializable(typeof(RequestError))]
 [JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(FitzScheduledRequestEnvelope))]
 sealed partial class FitzJsonContext : JsonSerializerContext;

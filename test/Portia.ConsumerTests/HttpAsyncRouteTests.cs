@@ -9,6 +9,7 @@ public sealed class HttpAsyncRouteTests
             using System;
             using System.Net.Http;
             using System.Text;
+            using System.Text.Json.Serialization.Metadata;
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
@@ -43,7 +44,9 @@ public sealed class HttpAsyncRouteTests
                 {
                     var builder = WebApplication.CreateBuilder();
                     builder.WebHost.UseTestServer();
-                    builder.Services.AddPortia().AddRequestHandler<Handler>();
+                    builder.Services.AddPortia()
+                        .ConfigureJson(options => options.TypeInfoResolver = new DefaultJsonTypeInfoResolver())
+                        .AddRequestHandler<Handler>();
                     builder.Services.AddSingleton<IRequestQueuePublisher, Publisher>();
                     await using var app = builder.Build();
                     app.MapPortiaPost<Queued>("/tenants/{tenant}/orders/{order}")

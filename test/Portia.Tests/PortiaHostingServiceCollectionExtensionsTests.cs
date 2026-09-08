@@ -15,6 +15,51 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class PortiaHostingServiceCollectionExtensionsTests
 {
+    /// <summary>A replacement serializer remains outside Portia's JSON-upcaster policy.</summary>
+    [Fact]
+    public async Task StartupValidatorSkipsJsonUpcasterPolicyForCustomSerializer()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddPortia().AddWorkers();
+        _ = services.AddSingleton<IJsonDomainEventUpcaster>(new RecordingUpcaster(string.Empty, 0));
+        _ = services.AddSingleton<IDomainEventSerializer>(new PassthroughDomainEventSerializer());
+        using var provider = services.BuildServiceProvider();
+
+        var validator = Assert.Single(provider.GetServices<IHostedService>(), service => service is not BackgroundService);
+        await validator.StartAsync(default);
+
+        _ = Assert.IsType<PassthroughDomainEventSerializer>(provider.GetRequiredService<IDomainEventSerializer>());
+    }
+
+    /// <summary>A terminal partition timeout requests host shutdown even when callbacks stay stuck.</summary>
+    [Fact]
+    public async Task ShouldStopHostGivenHostedPartitionIgnoresCancellation()
+    {
+        var workload = new StuckPartitionWorkload();
+        var services = new ServiceCollection();
+        _ = services.AddSingleton(workload);
+        using var provider = services.BuildServiceProvider();
+        var lifetime = new RecordingApplicationLifetime();
+        var options = SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
+        {
+            PartitionStopTimeout = TimeSpan.FromMilliseconds(50),
+        };
+        var hosted = new FleetPartitionRunnerHostedService<StuckPartitionWorkload>(
+            new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership()),
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            ["lease://portia/fleet/stuck-hosted"],
+            options,
+            lifetime);
+        await hosted.StartAsync(default);
+        await workload.Started.WaitAsync(TimeSpan.FromSeconds(2));
+        using var stopTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        await hosted.StopAsync(stopTimeout.Token);
+        await lifetime.StopRequested.WaitAsync(TimeSpan.FromSeconds(1));
+
+        workload.Release();
+    }
+
     /// <summary>
     /// Rejects an invalid reactor batch size during registration rather than deferring the error
     /// until the hosted service is resolved and enters its retry loop.
@@ -48,7 +93,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddPortiaQueueRunner();
         using var provider = services.BuildServiceProvider();
 
-        var hostedService = Assert.Single(provider.GetServices<IHostedService>());
+        var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await hostedService.StartAsync(default);
         await WaitUntilAsync(() => handler.LastValue == 42);
         await hostedService.StopAsync(default);
@@ -71,7 +116,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddPortiaMultiTenantRunner<HostingTenantWorkload>();
         using var provider = services.BuildServiceProvider(validateScopes: true);
 
-        var hostedService = Assert.Single(provider.GetServices<IHostedService>());
+        var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await hostedService.StartAsync(default);
         await WaitUntilAsync(() => state.StartedTenants.Count == 1);
         await hostedService.StopAsync(default);
@@ -101,7 +146,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddPortia().AddProjector<TestProjector>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(20)).AddWorkers();
         using var provider = services.BuildServiceProvider();
 
-        var hostedService = Assert.Single(provider.GetServices<IHostedService>());
+        var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await hostedService.StartAsync(default);
         await WaitUntilAsync(() => target.Projection.Value == 42);
         await hostedService.StopAsync(default);
@@ -128,7 +173,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton(new TestProjector(target));
         _ = services.AddPortia().AddProjector<TestProjector>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(10)).AddWorkers();
         using var provider = services.BuildServiceProvider();
-        var hostedService = Assert.Single(provider.GetServices<IHostedService>());
+        var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
 
         await hostedService.StartAsync(default);
         await WaitUntilAsync(() => target.CommitAttempts == 1);
@@ -163,7 +208,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         }).AddWorkers();
         using var provider = services.BuildServiceProvider();
 
-        var hostedService = (BackgroundService)Assert.Single(provider.GetServices<IHostedService>());
+        var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await hostedService.StartAsync(default);
         var executeTask = hostedService.ExecuteTask
             ?? throw new InvalidOperationException("The projector hosted service did not start.");
@@ -196,7 +241,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
             options: SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)));
         using var provider = services.BuildServiceProvider(validateScopes: true);
 
-        var hostedService = Assert.Single(provider.GetServices<IHostedService>());
+        var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await hostedService.StartAsync(default);
         await WaitUntilAsync(() => state.StartedPartitions.Count == 1);
         await hostedService.StopAsync(default);
@@ -281,6 +326,40 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
             yield break;
         }
     }
+}
+
+sealed class PassthroughDomainEventSerializer : IDomainEventSerializer
+{
+    public ReadOnlyMemory<byte> Serialize(DomainEvent ev) => ReadOnlyMemory<byte>.Empty;
+    public DomainEvent Deserialize(ReadOnlyMemory<byte> data) => throw new NotSupportedException();
+}
+
+sealed class StuckPartitionWorkload : IPartitionWorkload
+{
+    readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public Task Started => _started.Task;
+
+    public Task RunAsync(string partition, LeaseAuthority authority, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(partition) || authority.FencingToken == 0 || !ct.CanBeCanceled)
+            throw new InvalidOperationException("The hosted workload did not receive lease-scoped state.");
+        _started.SetResult();
+        return _release.Task;
+    }
+
+    public void Release() => _release.SetResult();
+}
+
+sealed class RecordingApplicationLifetime : IHostApplicationLifetime
+{
+    readonly TaskCompletionSource _stopRequested = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public Task StopRequested => _stopRequested.Task;
+    public CancellationToken ApplicationStarted => CancellationToken.None;
+    public CancellationToken ApplicationStopping => CancellationToken.None;
+    public CancellationToken ApplicationStopped => CancellationToken.None;
+    public void StopApplication() => _stopRequested.SetResult();
 }
 
 sealed class HostingWorkloadState

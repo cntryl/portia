@@ -1,9 +1,12 @@
+using System.Security.Claims;
+
 namespace Cntryl.Portia;
 
 /// <summary>
 /// Schedules a no-result request for future or recurring dispatch, independent of which
 /// scheduling technology (Fitz, or anything else) carries it. A scheduled request's handler is
-/// the same handler that runs when it originates any other way.
+/// the same handler that runs when it originates any other way. Schedules are durable system
+/// work: they never capture or persist a user bearer credential.
 /// </summary>
 public interface IRequestScheduler
 {
@@ -15,27 +18,25 @@ public interface IRequestScheduler
     /// <param name="spec">When and how the request fires.</param>
     /// <param name="routeValues">Values for any route segment the request's
     /// <see cref="RequestRouteAttribute" /> left as <see cref="RequestRouteAttribute.Wildcard" />.</param>
-    /// <param name="actorToken">The scheduling actor's raw bearer token, or <see langword="null" />
-    /// for an unauthenticated actor. Re-validated — expiry included — at the moment the schedule
-    /// actually fires, which may be long, or repeatedly, after it was scheduled. A recurring
-    /// schedule whose token has since expired will start failing its authorization on every fire.</param>
+    /// <param name="actor">The explicit system identity under which every firing executes. User
+    /// and anonymous identities are rejected and no bearer credential is persisted.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>An identity that can later cancel the schedule.</returns>
     ValueTask<string> ScheduleAsync<TRequest>(
         TRequest request,
         RequestScheduleSpec spec,
         RequestRouteValues routeValues,
-        string? actorToken,
+        ClaimsPrincipal actor,
         CancellationToken ct = default)
         where TRequest : IRequest, ISchedulable
-        => ScheduleAsync(request, spec, routeValues, actorToken, RequestMetadata.Create(), ct);
+        => ScheduleAsync(request, spec, routeValues, actor, RequestMetadata.Create(), ct);
 
     /// <summary>Schedules a template with explicit causal identity.</summary>
     ValueTask<string> ScheduleAsync<TRequest>(
         TRequest request,
         RequestScheduleSpec spec,
         RequestRouteValues routeValues,
-        string? actorToken,
+        ClaimsPrincipal actor,
         RequestMetadata metadata,
         CancellationToken ct = default)
         where TRequest : IRequest, ISchedulable;

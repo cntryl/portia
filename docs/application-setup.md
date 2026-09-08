@@ -192,7 +192,9 @@ setup can occur in either order, before building the host.
 Scoped repositories and dependencies inject infrastructure-neutral `WorkloadContext` for
 `Identity`, `Tenant`, and `FencingToken`. Durable writes must enforce the fencing token
 against expired holders. Workload cancellation alone cannot prevent a stalled process
-from attempting a late write. Checkpoints use workload name, canonical event pattern,
+from attempting a late write. `FleetRunOptions.PartitionStopTimeout` defaults to 30 seconds;
+if revoked work ignores cancellation beyond it, Portia faults the runner and stops a hosted
+application instead of starting replacement work beside stale work. Checkpoints use workload name, canonical event pattern,
 and optional rebuild ID, keeping tenants and rebuild generations independent.
 Reactions retain their system principal and causal event context. External reaction
 effects remain at-least-once.

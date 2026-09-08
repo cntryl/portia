@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>Testing utilities for Portia: an in-memory event store, and fake permission/actor-validator implementations.</Description>
+    <Description>Testing utilities for Portia: in-memory stores, request doubles, and backend-neutral persistence conformance suites.</Description>
   </PropertyGroup>
 
   <ItemGroup>

@@ -136,7 +136,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
         }).AddWorkers();
         using var provider = services.BuildServiceProvider();
 
-        var worker = Assert.Single(provider.GetServices<IHostedService>());
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await worker.StartAsync(default);
         await WaitUntilAsync(() => target.Projection.Value == 7);
         await worker.StopAsync(default);

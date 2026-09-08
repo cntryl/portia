@@ -11,7 +11,7 @@ namespace Cntryl.Portia;
 /// <param name="membership">Owns this worker's renewable membership and inventory.</param>
 /// <param name="logger">Reports membership and partition failures and assignment changes.</param>
 /// <param name="timeProvider">Schedules reconciliation and cancellable retry backoff.</param>
-public sealed class FleetPartitionRunner(IPartitionLeaseCompetitor leases, IFleetMembership membership,
+public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor leases, IFleetMembership membership,
     ILogger<FleetPartitionRunner>? logger = null, TimeProvider? timeProvider = null)
 {
     readonly IPartitionLeaseCompetitor _leases = leases ?? throw new ArgumentNullException(nameof(leases));
@@ -62,6 +62,7 @@ public sealed class FleetPartitionRunner(IPartitionLeaseCompetitor leases, IFlee
                     Fault("membership ended without cancellation");
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch (FleetPartitionTerminationTimeoutException) { throw; }
             catch (Exception ex) { Fault("membership failed", ex); }
             if (!await BackoffAsync(ct).ConfigureAwait(false))
                 break;
@@ -94,9 +95,10 @@ public sealed class FleetPartitionRunner(IPartitionLeaseCompetitor leases, IFlee
                 var revoked = active.Keys.Where(partition => !assigned.Contains(partition)).ToArray();
                 foreach (var partition in revoked)
                     Cancel(partition, active[partition].Cancellation);
+                await ObserveAsync([.. revoked.Select(partition => (partition, active[partition]))],
+                    options.PartitionStopTimeout).ConfigureAwait(false);
                 foreach (var partition in revoked)
                 {
-                    await ObserveAsync(partition, active[partition]).ConfigureAwait(false);
                     _ = active.Remove(partition);
                     PortiaTelemetry.RecordFleetAssignment(options.WorkerId!, partition, false, _logger);
                 }
@@ -119,8 +121,8 @@ public sealed class FleetPartitionRunner(IPartitionLeaseCompetitor leases, IFlee
         {
             foreach (var (partition, run) in active)
                 Cancel(partition, run.Cancellation);
-            foreach (var (partition, run) in active)
-                await ObserveAsync(partition, run).ConfigureAwait(false);
+            await ObserveAsync([.. active.Select(pair => (pair.Key, pair.Value))],
+                options.PartitionStopTimeout).ConfigureAwait(false);
         }
     }
 
@@ -186,7 +188,52 @@ public sealed class FleetPartitionRunner(IPartitionLeaseCompetitor leases, IFlee
         catch (Exception ex) { Fault($"partition '{partition}' cancellation failed", ex); }
     }
 
-    async Task ObserveAsync(string partition, PartitionRun run)
+    async Task ObserveAsync((string Partition, PartitionRun Run)[] runs, TimeSpan timeout)
+    {
+        runs = [.. runs.Where(item => !item.Run.ObservationClaimed)];
+        if (runs.Length == 0)
+            return;
+
+        try
+        {
+            await Task.WhenAll(runs.Select(item => item.Run.Task)).WaitAsync(timeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            (string Partition, PartitionRun Run)[] timedOut = [.. runs.Where(item => !item.Run.Task.IsCompleted)];
+            foreach (var (partition, run) in runs)
+            {
+                if (!run.TryClaimObservation())
+                    continue;
+                if (run.Task.IsCompleted)
+                    await ObserveCompletedAsync(partition, run).ConfigureAwait(false);
+                else
+                    _ = ObserveLateAsync(partition, run);
+            }
+            var exception = new FleetPartitionTerminationTimeoutException(
+                [.. timedOut.Select(item => item.Partition)], timeout);
+            PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), "partition termination timed out", exception);
+            if (_logger is not null)
+                LogPartitionTerminationTimeout(_logger, string.Join(",", exception.Partitions), exception);
+            throw exception;
+        }
+        catch (Exception)
+        {
+            // The complete set has stopped. Observe each task below so callback failures and
+            // cleanup remain isolated and reported through the existing runner-fault contract.
+        }
+
+        foreach (var (partition, run) in runs)
+        {
+            if (run.TryClaimObservation())
+                await ObserveCompletedAsync(partition, run).ConfigureAwait(false);
+        }
+    }
+
+    async Task ObserveLateAsync(string partition, PartitionRun run) =>
+        await ObserveCompletedAsync(partition, run).ConfigureAwait(false);
+
+    async Task ObserveCompletedAsync(string partition, PartitionRun run)
     {
         try { await run.Task.ConfigureAwait(false); }
         catch (OperationCanceledException) when (run.Cancellation.IsCancellationRequested) { }
@@ -197,5 +244,17 @@ public sealed class FleetPartitionRunner(IPartitionLeaseCompetitor leases, IFlee
     void Fault(string reason, Exception? exception = null) =>
         PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), reason, exception, _logger);
 
-    sealed record PartitionRun(CancellationTokenSource Cancellation, Task Task, CancellationTokenRegistration Registration);
+    [LoggerMessage(EventId = 1002, Level = LogLevel.Error,
+        Message = "Portia FleetPartitionRunner fault at cleanup (FleetPartitionTerminationTimeoutException); partitions: {Partitions}")]
+    static partial void LogPartitionTerminationTimeout(ILogger logger, string partitions, Exception exception);
+
+    sealed class PartitionRun(CancellationTokenSource cancellation, Task task, CancellationTokenRegistration registration)
+    {
+        int _observationClaimed;
+        public CancellationTokenSource Cancellation { get; } = cancellation;
+        public Task Task { get; } = task;
+        public CancellationTokenRegistration Registration { get; } = registration;
+        public bool ObservationClaimed => Volatile.Read(ref _observationClaimed) != 0;
+        public bool TryClaimObservation() => Interlocked.Exchange(ref _observationClaimed, 1) == 0;
+    }
 }

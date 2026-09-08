@@ -46,9 +46,11 @@ public enum RequestTransports
 /// <see cref="RequestRouteAttribute.Wildcard" />).</param>
 /// <param name="discriminator">The stable versioned wire discriminator, independent of routing.</param>
 /// <param name="registerRpc">Generated typed RPC registration, when callable.</param>
+/// <param name="resultType">The unary result or streaming item type, when present.</param>
 public sealed class RequestTransportRegistration(Type requestType, RequestTransports transports, RequestRouteAttribute route,
     DiscriminatorAttribute discriminator,
-    Func<IRequestRpcRegistrar, CancellationToken, ValueTask<IAsyncDisposable>>? registerRpc = null)
+    Func<IRequestRpcRegistrar, CancellationToken, ValueTask<IAsyncDisposable>>? registerRpc = null,
+    Type? resultType = null)
 {
     /// <summary>
     /// Gets the concrete request type.
@@ -70,4 +72,7 @@ public sealed class RequestTransportRegistration(Type requestType, RequestTransp
 
     /// <summary>Gets the generated typed RPC registration, when callable.</summary>
     public Func<IRequestRpcRegistrar, CancellationToken, ValueTask<IAsyncDisposable>>? RegisterRpc { get; } = registerRpc;
+
+    /// <summary>Gets the unary result or streaming item type, when the request produces one.</summary>
+    public Type? ResultType { get; } = resultType;
 }

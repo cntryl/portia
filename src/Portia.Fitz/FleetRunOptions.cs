@@ -11,6 +11,11 @@ public sealed record FleetRunOptions
     public TimeSpan LeaseTtl { get; init; } = TimeSpan.FromSeconds(30);
     /// <summary>Gets the authoritative snapshot reconciliation interval; defaults to one second.</summary>
     public TimeSpan ReconciliationInterval { get; init; } = TimeSpan.FromSeconds(1);
+    /// <summary>
+    /// Gets the maximum time revoked partition callbacks have to stop after cancellation;
+    /// defaults to 30 seconds. Exceeding the bound is a terminal runner failure.
+    /// </summary>
+    public TimeSpan PartitionStopTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
     internal ulong TtlSeconds => checked((ulong)Math.Ceiling(LeaseTtl.TotalSeconds));
 
@@ -19,6 +24,7 @@ public sealed record FleetRunOptions
         ArgumentNullException.ThrowIfNull(partitions);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(LeaseTtl, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(ReconciliationInterval, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(PartitionStopTimeout, TimeSpan.Zero);
         var segments = MembershipSelector?.StartsWith("lease://", StringComparison.Ordinal) == true
             ? MembershipSelector[8..].Split('/') : [];
         if (segments.Length != 3 || !IsSegment(segments[0]) || !IsSegment(segments[1]) || segments[2] != "*")

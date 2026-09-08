@@ -71,7 +71,6 @@ project. The API host calls `AddAccountsApplication(configuration)`; the worker 
 calls the same setup followed by `.AddWorkers()`. HTTP traffic and background work
 can scale independently. See [shared application setup](docs/application-setup.md)
 for connection ownership, mixed global/per-tenant workloads, and incremental aggregate hydration.
-[Registration verification](docs/workload-registration-verification.md) records the red → green results.
 
 ## Why it works
 
@@ -107,7 +106,6 @@ code.
 [Read the getting-started guide](docs/getting-started.md) for package setup, authorization,
 asynchronous work, persistence, and streaming. The [consumer fixture](test/Portia.ConsumerTests/CompleteWorkflowTests.cs)
 executes two feature assemblies through direct dispatch, HTTP, RPC, and queues.
-See the [breaking-change migration notes](docs/migration.md) before upgrading.
 
 ## Development
 
@@ -136,7 +134,7 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
 | `Portia.Fitz` | Fitz-backed transports: RPC send/receive, queue publish/consume, notice/schedule notifications, `FitzEventStore`, and `FleetPartitionRunner` (fleet distribution via Fitz leases). |
 | `Portia.Jwt` | A JWT-backed `IRequestActorValidator` — re-validates a request's carried actor token, no ASP.NET Core dependency. |
 | `Portia.DependencyInjection` | Composes the application with fluent `AddPortia()` and activates its workers with `AddWorkers()`, which runs every declared projector and reactor under one hosted service. |
-| `Portia.Testing` | Testing utilities for downstream apps: `AggregateScenario<T>`, `DomainEventSeed`, `InMemoryEventStore`, `TestPermissionEvaluator`, `TestRequestActorValidator`. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
+| `Portia.Testing` | Testing utilities for downstream apps: aggregate scenarios, in-memory stores, actor/permission doubles, and backend-neutral projection, fencing, and reaction-deduplication conformance suites. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
 
 ## Core concepts, briefly
 
@@ -162,18 +160,32 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   request, a request-family interface, or every request; all matching policies run by semantic
   authorization stage after the coarse permission check and before the handler.
 - **Actor propagation**: never ambient. Every `IRequestBus` call takes an explicit
-  `ClaimsPrincipal`; queued/scheduled transports carry a raw JWT instead and re-validate it
-  (signature and expiry) at the moment the request actually runs, not when it was enqueued.
+  `ClaimsPrincipal`; queued and notice transports carry a raw JWT instead and re-validate it
+  (signature and expiry) at the moment the request actually runs, not when it was submitted.
   `JwtRequestActorValidator` forces `TokenValidationParameters.ClockSkew` to zero on its own
   clone of whatever's passed in, regardless of the caller's own setting — left to
   `Microsoft.IdentityModel`'s five-minute default (which most JWT setup guides never mention
   overriding), a token that expired minutes ago would otherwise still validate successfully,
   found during adversarial review.
+  Durable schedules are deliberately different: they accept only an explicit Portia system
+  identity, persist its subject and issuer rather than a bearer token, and reconstruct that
+  identity on every firing. User and anonymous principals are rejected before the schedule is
+  written, so recurring work cannot expire with or retain the creator's JWT.
+  This changes the durable schedule envelope. Before upgrading schedule workers, cancel or drain
+  every schedule created by an older Portia version and recreate it with `RequestActor.System`
+  (or a named `RequestActor.CreateSystem(...)` identity). A legacy firing fails with
+  `LegacyScheduledRequestException`; Portia will not revive and execute its persisted bearer token.
 - **Schema evolution**: `DomainEventTypeCatalog` maps a logical event name + schema version to a
   CLR type. An exact match resolves directly (old and new versions can simply coexist forever);
   a missing version falls through a chain of JSON-adapter-specific
   `IJsonDomainEventUpcaster`s. The generator contributes referenced domain-event types to the
   application catalog at compile time; typed request dispatch is inferred without reflection.
+  Startup validates the actual JSON upcasters resolved from DI, including identities, duplicates,
+  and every declared prospective transition. An upcaster is checked beginning at its next version
+  even when its source CLR type remains registered, while exact historical catalog versions still
+  deserialize directly. Replacing `IDomainEventSerializer` opts out of this JSON-specific policy.
+  This validates compiled declarations only: Portia cannot prove that storage contains no older,
+  undeclared schema version and does not audit the event store.
 - **Multi-tenancy vs. fleet distribution — deliberately orthogonal**: `MultiTenantRunner`
   decides which tenants a component instance runs for, on whichever worker it's already on.
   `FleetPartitionRunner` decides which worker gets to run a given partition at all, using Fitz
@@ -203,20 +215,15 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   `CheckpointIdentity(componentName, pattern, rebuildId)`; persist its canonical `Pattern` and
   nullable `RebuildId` alongside the component name. `ProjectionRunOptions.RebuildId` selects
   separate data and progress: reuse it to resume, choose a new ID to start at zero. Applications
-  own rebuilt-data promotion and explicit migration of verified legacy checkpoints. See the
-  [migration notes](docs/migration.md#scoped-checkpoints-and-rebuilds).
-
-The architecture changes and their observed red → green results are recorded in
-[architecture evidence](docs/architecture-remediation-evidence.md). Its Fitz 0.1.1
-qualification note is historical; this checkout now uses Fitz 0.1.3.
+  own rebuilt-data promotion once a rebuild is verified.
 
 For trimming and NativeAOT setup, see the [NativeAOT guide](docs/native-aot.md).
-The authoritative current caveats are in [known limitations](docs/known-limitations.md).
 
-## Known gaps, stated plainly
+## Scope
 
-See the authoritative [known limitations](docs/known-limitations.md). That page owns the wording so
-upgrade requirements and qualification gaps do not drift between guides.
+See the authoritative [scope](docs/scope.md) for what Portia does and does not support.
+The [design decisions](docs/design-decisions.md) explain the failure modes and invariants behind
+the framework's less-obvious boundaries.
 
 [Projectors and reactors](docs/projectors-and-reactors.md) shows constructor-injected
 repositories, batch handling, and storage contracts.

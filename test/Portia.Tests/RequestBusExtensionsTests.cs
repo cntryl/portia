@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
@@ -8,6 +9,35 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class RequestBusExtensionsTests
 {
+    /// <summary>A reaction command inherits the triggering event's execution identity.</summary>
+    [Fact]
+    public async Task ShouldPreserveReactionCausalityWhenReactionCommandSucceeds()
+    {
+        var source = CreateReactionContext();
+        var bus = new RecordingRequestBus(Result.Success);
+
+        await bus.SendReactionAsync(new ClockProbe(), source);
+
+        Assert.NotNull(bus.Context);
+        Assert.Equal(source.CorrelationId, bus.Context.CorrelationId);
+        Assert.Equal(source.CauseId, bus.Context.CausationId);
+        Assert.True(RequestActor.IsSystem(bus.Context.Actor));
+    }
+
+    /// <summary>A failed command faults the reaction instead of allowing its checkpoint to advance.</summary>
+    [Fact]
+    public async Task ShouldThrowReactionCommandFailureGivenFailedCommandResult()
+    {
+        var error = new RequestError(RequestErrorKind.Conflict, "account is closed");
+        var bus = new RecordingRequestBus(Result.Failure(error));
+
+        var exception = await Assert.ThrowsAsync<ReactionCommandFailedException>(() =>
+            bus.SendReactionAsync(new ClockProbe(), CreateReactionContext()).AsTask());
+
+        Assert.Same(error, exception.Error);
+        Assert.DoesNotContain(error.Message, exception.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Regression test for the narrowing of <see cref="IRequestBus" />: the six convenience
     /// overloads used to exist twice — as interface default implementations that built a context
@@ -44,6 +74,37 @@ public sealed class RequestBusExtensionsTests
     sealed class FixedClock(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    static ReactionExecutionContext CreateReactionContext()
+    {
+        var aggregateId = Uuid.CreateVersion4();
+        var ev = new ValueChanged(1);
+        ev.AttachMetadata(new DomainEventMetadata(
+            Uuid.CreateVersion4(), aggregateId, 1, DateTimeOffset.UtcNow, Uuid.CreateVersion4()));
+        return new ReactionExecutionContext(
+            new DomainEventRecord(new EventStreamAddress("test", "reactions", aggregateId.ToString()), ev, 0, 0, 0),
+            RequestActor.System);
+    }
+
+    sealed class RecordingRequestBus(Result outcome) : IRequestBus
+    {
+        public RequestDispatchContext? Context { get; private set; }
+
+        public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
+            new(actor, metadata: metadata);
+
+        public ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context, CancellationToken ct = default)
+        {
+            Context = context;
+            return ValueTask.FromResult(outcome);
+        }
+
+        public ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request, RequestDispatchContext context, CancellationToken ct = default) =>
+            throw new NotSupportedException();
     }
 }
 

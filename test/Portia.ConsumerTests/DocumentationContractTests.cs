@@ -10,12 +10,12 @@ public sealed partial class DocumentationContractTests
         "README.md",
         "docs/getting-started.md",
         "docs/application-setup.md",
-        "docs/migration.md",
         "docs/projectors-and-reactors.md",
         "docs/request-context.md",
         "docs/observability.md",
         "docs/native-aot.md",
-        "docs/known-limitations.md",
+        "docs/scope.md",
+        "docs/design-decisions.md",
     ];
 
     [Fact]
@@ -55,13 +55,38 @@ public sealed partial class DocumentationContractTests
         Assert.DoesNotContain("EventSchema.For", text, StringComparison.Ordinal);
         Assert.DoesNotContain("DeserializeRequest", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Fitz 0.1.2", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("AOT/trim analyzers are not enabled", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("reactors must dispatch", text, StringComparison.OrdinalIgnoreCase);
         foreach (var project in Directory.EnumerateDirectories(Path.Combine(Root, "src"), "Portia.*")
-            .Where(path => !path.EndsWith("Portia.Generators", StringComparison.Ordinal)))
+            .Where(path => !path.EndsWith("Portia.Generators", StringComparison.Ordinal)
+                && !path.EndsWith("Portia.CodeFixes", StringComparison.Ordinal)))
         {
             var name = Path.GetFileName(project);
             Assert.True(File.Exists(Path.Combine(project, "bin/Release/net10.0", name + ".xml")),
                 $"Generated XML documentation is missing for {name}.");
         }
+    }
+
+    [Fact]
+    public void GeneratedXmlContainsNewPublicSafetyContracts()
+    {
+        AssertXmlMembers("Portia.Abstractions",
+            "T:Cntryl.Portia.ReactionCommandFailedException");
+        AssertXmlMembers("Portia.Fitz",
+            "T:Cntryl.Portia.FleetPartitionTerminationTimeoutException",
+            "P:Cntryl.Portia.FleetRunOptions.PartitionStopTimeout");
+        AssertXmlMembers("Portia.Testing",
+            "T:Cntryl.Portia.FencingTokenConformance",
+            "T:Cntryl.Portia.ProjectionStoreConformance",
+            "T:Cntryl.Portia.ReactionDeduplicationConformance",
+            "T:Cntryl.Portia.ConformanceViolationException");
+    }
+
+    static void AssertXmlMembers(string project, params string[] expected)
+    {
+        var xml = File.ReadAllText(Path.Combine(Root, "src", project, "bin/Release/net10.0", project + ".xml"));
+        foreach (var member in expected)
+            Assert.Contains($"name=\"{member}\"", xml, StringComparison.Ordinal);
     }
 
     static string FindRoot()
