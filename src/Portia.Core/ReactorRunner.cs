@@ -29,12 +29,22 @@ public sealed class ReactorRunner(IDomainEventReader reader, IReactorPrincipalPr
 
         async ValueTask<ProjectionCheckpoint> CommitAsync()
         {
-            await reactor.ReactAsync(contexts, ct).ConfigureAwait(false);
-            ct.ThrowIfCancellationRequested();
-            var next = new ProjectionCheckpoint(EventStreamOffsets.GetNextOffset(reactor.Pattern, contexts[^1].Source));
-            await reactor.Checkpoints.SaveAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), next, ct).ConfigureAwait(false);
-            contexts.Clear();
-            return next;
+            var started = PortiaTelemetry.StartTimestamp();
+            var count = contexts.Count;
+            var lastOccurrence = contexts[^1].Source.Ev.Metadata.OccurredOn;
+            var outcome = "success";
+            try
+            {
+                await reactor.ReactAsync(contexts, ct).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+                var next = new ProjectionCheckpoint(EventStreamOffsets.GetNextOffset(reactor.Pattern, contexts[^1].Source));
+                await reactor.Checkpoints.SaveAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), next, ct).ConfigureAwait(false);
+                contexts.Clear();
+                return next;
+            }
+            catch (OperationCanceledException) { outcome = "canceled"; throw; }
+            catch { outcome = "fault"; throw; }
+            finally { PortiaTelemetry.ProcessorBatchFinished(started, reactor.Name, "reactor", outcome, count, lastOccurrence); }
         }
     }
 }

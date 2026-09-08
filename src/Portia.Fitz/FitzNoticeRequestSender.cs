@@ -24,8 +24,17 @@ public sealed class FitzNoticeRequestSender(INoticeClient notice, IRequestSerial
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(routeValues);
 
-        var route = FitzRouting.ResolveNoticeRoute(request, routeValues);
-        var body = _serializer.Serialize(request, actorToken, metadata);
-        await _notice.PublishAsync(route, body, ct).ConfigureAwait(false);
+        using var activity = PortiaTelemetry.StartSend(typeof(TRequest).Name, "fitz.notice");
+        var started = PortiaTelemetry.StartTimestamp();
+        var outcome = "success";
+        try
+        {
+            var route = FitzRouting.ResolveNoticeRoute(request, routeValues);
+            var body = _serializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
+            await _notice.PublishAsync(route, body, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { outcome = "canceled"; throw; }
+        catch { outcome = "fault"; throw; }
+        finally { PortiaTelemetry.TransportFinished(started, "fitz.notice", "publish", outcome); }
     }
 }

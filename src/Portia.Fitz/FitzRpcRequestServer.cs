@@ -106,7 +106,7 @@ public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory sc
                 }
 
                 var dispatch = await RequestDispatch.SendAsync(
-                    actorValidator, bus, typed, envelope.ActorToken, new RpcInvocation(request.Route), envelope.Metadata, scope.ServiceProvider.GetService<TimeProvider>(), handlerCt).ConfigureAwait(false);
+                    actorValidator, bus, typed, envelope.ActorToken, new RpcInvocation(request.Route), envelope.Metadata, scope.ServiceProvider.GetService<TimeProvider>(), envelope.TraceContext, handlerCt).ConfigureAwait(false);
                 await writer.SendAsync(outcomeSerializer.SerializeOutcome(dispatch.Outcome), true, handlerCt).ConfigureAwait(false);
             },
             ct: ct));
@@ -148,7 +148,7 @@ public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory sc
                 }
 
                 var dispatch = await RequestDispatch.SendAsync(
-                    actorValidator, bus, typed, envelope.ActorToken, new RpcInvocation(request.Route), envelope.Metadata, scope.ServiceProvider.GetService<TimeProvider>(), handlerCt).ConfigureAwait(false);
+                    actorValidator, bus, typed, envelope.ActorToken, new RpcInvocation(request.Route), envelope.Metadata, scope.ServiceProvider.GetService<TimeProvider>(), envelope.TraceContext, handlerCt).ConfigureAwait(false);
                 await writer.SendAsync(outcomeSerializer.SerializeResult(dispatch.Outcome), true, handlerCt).ConfigureAwait(false);
             },
             ct: ct));

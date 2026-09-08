@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Cntryl.Fitz.Abstractions.Domains.Lease;
 
 namespace Cntryl.Portia;
@@ -8,6 +8,7 @@ namespace Cntryl.Portia;
 /// Lease exclusion, cancellation, and backoff regressions using independent singleton inventories.
 /// Fleet membership redistribution is covered by the public consumer and broker fleet tests.
 /// </summary>
+[Collection(TelemetryTestGroup.Name)]
 public sealed class FleetPartitionRunnerTests
 {
     /// <summary>Changing tenant partitions revoke only removed work and retain global ownership.</summary>
@@ -171,7 +172,15 @@ public sealed class FleetPartitionRunnerTests
     {
         var leases = new InMemoryLeaseClient();
         var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
-        using var listener = Listen(out var activities);
+        var failures = new ConcurrentBag<KeyValuePair<string, object?>[]>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Meter.Name == PortiaTelemetry.SourceName && instrument.Name == "portia.worker.failure")
+                meterListener.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) => failures.Add(tags.ToArray()));
+        listener.Start();
         using var cts = new CancellationTokenSource();
 
         leases.FailNextAcquisition("lease://portia/fleet/never-acquired");
@@ -184,42 +193,16 @@ public sealed class FleetPartitionRunnerTests
             SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
             cts.Token);
 
-        static bool IsFor(Activity a, string partition)
-        {
-            return (a.GetTagItem("portia.runner") as string) == nameof(FleetPartitionRunner)
-                && (a.GetTagItem("portia.fault_reason") as string)?.Contains(partition, StringComparison.Ordinal) == true;
-        }
-
-        await WaitUntil(() => activities.Any(a => IsFor(a, "lease://portia/fleet/never-acquired")) && activities.Any(a => IsFor(a, "lease://portia/fleet/acquired-then-fails")));
+        await WaitUntil(() => failures.Count >= 2);
 
         cts.Cancel();
         await AwaitCancelled(run);
 
-        var neverAcquiredReason = activities.First(a => IsFor(a, "lease://portia/fleet/never-acquired")).GetTagItem("portia.fault_reason") as string;
-        var acquiredThenFailedReason = activities.First(a => IsFor(a, "lease://portia/fleet/acquired-then-fails")).GetTagItem("portia.fault_reason") as string;
-
-        // Strip the partition name itself out of each reason before comparing, so this asserts
-        // the *category* of failure differs, not just that the (always-distinct) partition name
-        // happens to appear in both strings.
-        Assert.NotEqual(
-            neverAcquiredReason!.Replace("lease://portia/fleet/never-acquired", string.Empty, StringComparison.Ordinal),
-            acquiredThenFailedReason!.Replace("lease://portia/fleet/acquired-then-fails", string.Empty, StringComparison.Ordinal));
-    }
-
-    static ActivityListener Listen(out ConcurrentBag<Activity> activities)
-    {
-        var captured = new ConcurrentBag<Activity>();
-        activities = captured;
-
-        var listener = new ActivityListener
+        Assert.All(failures, tags =>
         {
-            ShouldListenTo = source => source.Name == PortiaTelemetry.SourceName,
-            Sample = static (ref options) => ActivitySamplingResult.AllData,
-            ActivityStopped = captured.Add,
-        };
-
-        ActivitySource.AddActivityListener(listener);
-        return listener;
+            Assert.Equal(["runner", "error.type"], tags.Select(tag => tag.Key));
+            Assert.DoesNotContain(tags, tag => (tag.Value as string)?.Contains("lease://", StringComparison.Ordinal) == true);
+        });
     }
 
     /// <summary>

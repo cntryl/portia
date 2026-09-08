@@ -36,13 +36,19 @@ public sealed class FitzRequestScheduler(IScheduleClient schedule, IRequestSeria
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(routeValues);
 
-        var route = FitzRouting.ResolveScheduleRoute(request, routeValues);
-        var body = _serializer.Serialize(request, actorToken, metadata);
-        var scheduleId = await _schedule
-            .CreateAsync(route, spec.Cron, ToFitzDeliveryMode(spec.DeliveryMode), body.ToArray(), ct)
-            .ConfigureAwait(false);
-
-        return scheduleId ?? throw new InvalidOperationException($"Scheduling request over route '{route}' did not return an identity.");
+        using var activity = PortiaTelemetry.StartSend(typeof(TRequest).Name, "fitz.schedule");
+        var started = PortiaTelemetry.StartTimestamp();
+        var outcome = "success";
+        try
+        {
+            var route = FitzRouting.ResolveScheduleRoute(request, routeValues);
+            var body = _serializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
+            var scheduleId = await _schedule.CreateAsync(route, spec.Cron, ToFitzDeliveryMode(spec.DeliveryMode), body.ToArray(), ct).ConfigureAwait(false);
+            return scheduleId ?? throw new InvalidOperationException($"Scheduling request over route '{route}' did not return an identity.");
+        }
+        catch (OperationCanceledException) { outcome = "canceled"; throw; }
+        catch { outcome = "fault"; throw; }
+        finally { PortiaTelemetry.TransportFinished(started, "fitz.schedule", "schedule", outcome); }
     }
 
     /// <inheritdoc />

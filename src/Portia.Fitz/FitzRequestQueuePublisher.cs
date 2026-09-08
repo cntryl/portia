@@ -24,8 +24,17 @@ public sealed class FitzRequestQueuePublisher(IQueueClient queue, IRequestSerial
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(routeValues);
 
-        var route = FitzRouting.ResolveQueueRoute(request, routeValues);
-        var body = _serializer.Serialize(request, actorToken, metadata);
-        _ = await _queue.EnqueueAsync(route, body, null, ct).ConfigureAwait(false);
+        using var activity = PortiaTelemetry.StartSend(typeof(TRequest).Name, "fitz.queue");
+        var started = PortiaTelemetry.StartTimestamp();
+        var outcome = "success";
+        try
+        {
+            var route = FitzRouting.ResolveQueueRoute(request, routeValues);
+            var body = _serializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
+            _ = await _queue.EnqueueAsync(route, body, null, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { outcome = "canceled"; throw; }
+        catch { outcome = "fault"; throw; }
+        finally { PortiaTelemetry.TransportFinished(started, "fitz.queue", "enqueue", outcome); }
     }
 }

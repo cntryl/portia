@@ -25,6 +25,23 @@ public sealed class RequestEnvelopeContextTests
         Assert.DoesNotContain("claims", json.ToJsonString());
     }
 
+    /// <summary>Verifies W3C context is optional, round-trips, and excludes baggage.</summary>
+    [Fact]
+    public void ShouldRoundTripOnlyW3CFieldsGivenTraceContextWhenSerializingEnvelope()
+    {
+        var serializer = new JsonRequestSerializer();
+        var trace = new RequestTraceContext("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", "vendor=value");
+
+        var bytes = serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), trace);
+        var envelope = serializer.DeserializeEnvelope(bytes);
+        var json = JsonNode.Parse(bytes.Span)!.AsObject();
+
+        Assert.Equal(trace, envelope.TraceContext);
+        Assert.Equal(trace.TraceParent, json["trace_parent"]!.GetValue<string>());
+        Assert.Equal(trace.TraceState, json["trace_state"]!.GetValue<string>());
+        Assert.DoesNotContain("baggage", json.ToJsonString(), StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Verifies the public transport context contract.</summary>
     [Fact]
     public void UnversionedEnvelopeIsRejected()

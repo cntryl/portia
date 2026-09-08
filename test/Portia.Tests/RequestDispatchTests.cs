@@ -7,6 +7,25 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class RequestDispatchTests
 {
+    /// <summary>Preserves the original positional cancellation-token source contract.</summary>
+    [Fact]
+    public async Task ShouldAcceptPositionalCancellationTokenGivenExistingConsumerCall()
+    {
+        using var busHost = TestRequestBus.Create();
+        using var cancellation = new CancellationTokenSource();
+        var invocation = new QueueInvocation("queue://test/work/item", 1);
+
+        var command = await RequestDispatch.SendAsync(
+            new TestRequestActorValidator(), busHost.Bus, new ChangeValue(1), "valid-token",
+            invocation, RequestMetadata.Create(), null, cancellation.Token);
+        var query = await RequestDispatch.SendAsync(
+            new TestRequestActorValidator(), busHost.Bus, new GetValue(), "valid-token",
+            invocation, RequestMetadata.Create(), null, cancellation.Token);
+
+        Assert.True(command.WasDispatched);
+        Assert.True(query.WasDispatched);
+    }
+
     /// <summary>
     /// Verifies that a request whose actor token fails re-validation is never dispatched to the
     /// bus at all and returns the validator's failure unchanged.

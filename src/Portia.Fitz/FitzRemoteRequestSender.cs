@@ -38,11 +38,20 @@ public sealed class FitzRemoteRequestSender(
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(routeValues);
 
-        var route = FitzRouting.ResolveRpcRoute(request, routeValues);
-        var body = _requestSerializer.Serialize(request, actorToken, metadata);
-        var receivedFrame = await CallAsync(route, body, ct).ConfigureAwait(false);
-
-        return _outcomeDeserializer.DeserializeOutcome(receivedFrame.Body);
+        using var activity = PortiaTelemetry.StartSend(typeof(TRequest).Name, "fitz.rpc");
+        var started = PortiaTelemetry.StartTimestamp();
+        var outcome = "success";
+        try
+        {
+            var route = FitzRouting.ResolveRpcRoute(request, routeValues);
+            var body = _requestSerializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
+            var result = _outcomeDeserializer.DeserializeOutcome((await CallAsync(route, body, ct).ConfigureAwait(false)).Body);
+            outcome = PortiaTelemetry.Outcome(result.IsSuccess, result.Error);
+            return result;
+        }
+        catch (OperationCanceledException) { outcome = "canceled"; throw; }
+        catch { outcome = "fault"; throw; }
+        finally { PortiaTelemetry.TransportFinished(started, "fitz.rpc", "send", outcome); }
     }
 
     /// <inheritdoc />
@@ -57,11 +66,20 @@ public sealed class FitzRemoteRequestSender(
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(routeValues);
 
-        var route = FitzRouting.ResolveRpcRoute(request, routeValues);
-        var body = _requestSerializer.Serialize(request, actorToken, metadata);
-        var receivedFrame = await CallAsync(route, body, ct).ConfigureAwait(false);
-
-        return _outcomeDeserializer.DeserializeResult<TOut>(receivedFrame.Body);
+        using var activity = PortiaTelemetry.StartSend(typeof(TRequest).Name, "fitz.rpc");
+        var started = PortiaTelemetry.StartTimestamp();
+        var outcome = "success";
+        try
+        {
+            var route = FitzRouting.ResolveRpcRoute(request, routeValues);
+            var body = _requestSerializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
+            var result = _outcomeDeserializer.DeserializeResult<TOut>((await CallAsync(route, body, ct).ConfigureAwait(false)).Body);
+            outcome = PortiaTelemetry.Outcome(result.IsSuccess, result.Error);
+            return result;
+        }
+        catch (OperationCanceledException) { outcome = "canceled"; throw; }
+        catch { outcome = "fault"; throw; }
+        finally { PortiaTelemetry.TransportFinished(started, "fitz.rpc", "send", outcome); }
     }
 
     async ValueTask<RpcResponseFrame> CallAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct)

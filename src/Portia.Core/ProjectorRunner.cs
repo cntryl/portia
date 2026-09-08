@@ -54,17 +54,27 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         string? rebuildId,
         CancellationToken ct)
     {
-        var context = new ProjectionBatchContext(new CheckpointIdentity(projector.Name, projector.Pattern, rebuildId), checkpoint);
-        await using var batch = await projector.Store.BeginAsync(context, ct).ConfigureAwait(false);
+        var started = PortiaTelemetry.StartTimestamp();
+        var count = records.Count;
+        var lastOccurrence = records[^1].Ev.Metadata.OccurredOn;
+        var outcome = "success";
+        try
+        {
+            var context = new ProjectionBatchContext(new CheckpointIdentity(projector.Name, projector.Pattern, rebuildId), checkpoint);
+            await using var batch = await projector.Store.BeginAsync(context, ct).ConfigureAwait(false);
 
-        await projector.ProjectAsync(records, context.Identity, ct).ConfigureAwait(false);
-        ct.ThrowIfCancellationRequested();
+            await projector.ProjectAsync(records, context.Identity, ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
 
-        var lastRecord = records[^1];
-        var nextOffset = EventStreamOffsets.GetNextOffset(projector.Pattern, lastRecord);
-        var nextCheckpoint = new ProjectionCheckpoint(nextOffset);
-        await batch.CommitAsync(nextCheckpoint, ct).ConfigureAwait(false);
-        records.Clear();
-        return nextCheckpoint;
+            var lastRecord = records[^1];
+            var nextOffset = EventStreamOffsets.GetNextOffset(projector.Pattern, lastRecord);
+            var nextCheckpoint = new ProjectionCheckpoint(nextOffset);
+            await batch.CommitAsync(nextCheckpoint, ct).ConfigureAwait(false);
+            records.Clear();
+            return nextCheckpoint;
+        }
+        catch (OperationCanceledException) { outcome = "canceled"; throw; }
+        catch { outcome = "fault"; throw; }
+        finally { PortiaTelemetry.ProcessorBatchFinished(started, projector.Name, "projector", outcome, count, lastOccurrence); }
     }
 }

@@ -16,8 +16,23 @@ public interface IRequestSerializer
     /// <returns>The wire representation.</returns>
     ReadOnlyMemory<byte> Serialize(IRequestBase request, string? actorToken);
 
-    /// <summary>Serializes explicitly supplied logical identity without serializing execution authority.</summary>
+    /// <summary>Serializes explicitly supplied logical identity without execution authority.</summary>
+    /// <param name="request">The concrete request payload.</param>
+    /// <param name="actorToken">The opaque actor token to revalidate at the receiving boundary.</param>
+    /// <param name="metadata">The validated logical request identity to propagate.</param>
+    /// <returns>The transport wire representation.</returns>
     ReadOnlyMemory<byte> Serialize(IRequestBase request, string? actorToken, RequestMetadata metadata);
+
+    /// <summary>Serializes logical identity and optional W3C trace context.</summary>
+    /// <param name="request">The concrete request payload.</param>
+    /// <param name="actorToken">The opaque actor token to revalidate at the receiving boundary.</param>
+    /// <param name="metadata">The validated logical request identity to propagate.</param>
+    /// <param name="traceContext">The optional W3C trace fields to propagate.</param>
+    /// <returns>The transport wire representation.</returns>
+    /// <remarks>The default implementation preserves compatibility with serializers that do not
+    /// yet support trace propagation by delegating to the metadata overload.</remarks>
+    ReadOnlyMemory<byte> Serialize(IRequestBase request, string? actorToken, RequestMetadata metadata, RequestTraceContext? traceContext)
+        => Serialize(request, actorToken, metadata);
 }
 
 /// <summary>
@@ -32,7 +47,9 @@ public interface IRequestDeserializer
     /// <returns>The deserialized request and actor token.</returns>
     (IRequestBase Request, string? ActorToken) DeserializeRequest(ReadOnlyMemory<byte> data);
 
-    /// <summary>Reads and validates the propagated logical metadata.</summary>
+    /// <summary>Reads the request, opaque actor token, logical metadata, and optional trace context.</summary>
+    /// <param name="data">The transport wire representation.</param>
+    /// <returns>The fully deserialized request envelope.</returns>
     DeserializedRequest DeserializeEnvelope(ReadOnlyMemory<byte> data);
 }
 
@@ -78,5 +95,9 @@ public interface IRequestOutcomeDeserializer
     Result<TOut> DeserializeResult<TOut>(ReadOnlyMemory<byte> data);
 }
 
-/// <summary>A deserialized request with opaque credentials and validated propagated logical identity.</summary>
-public sealed record DeserializedRequest(IRequestBase Request, string? ActorToken, RequestMetadata Metadata);
+/// <summary>Represents a deserialized transport request envelope.</summary>
+/// <param name="Request">The concrete request payload.</param>
+/// <param name="ActorToken">The opaque actor token to revalidate before dispatch.</param>
+/// <param name="Metadata">The validated propagated logical request identity.</param>
+/// <param name="TraceContext">The optional propagated W3C trace fields.</param>
+public sealed record DeserializedRequest(IRequestBase Request, string? ActorToken, RequestMetadata Metadata, RequestTraceContext? TraceContext = null);

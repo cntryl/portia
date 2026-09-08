@@ -9,4 +9,7 @@ namespace Cntryl.Portia;
 /// rather than trusting it as-is.</param>
 /// <param name="Metadata">The logical identity of this notification.</param>
 /// <param name="Invocation">The concrete ingress facts.</param>
-public readonly record struct RequestNotification(IRequest Request, string? ActorToken, RequestMetadata Metadata, RequestInvocation Invocation);
+/// <param name="TraceContext">The optional propagated W3C trace fields. Scheduled notifications
+/// use these fields as an activity link; other notifications use them as their parent.</param>
+public readonly record struct RequestNotification(IRequest Request, string? ActorToken, RequestMetadata Metadata, RequestInvocation Invocation,
+    RequestTraceContext? TraceContext = null);

@@ -67,7 +67,7 @@ public sealed class RequestNotificationRunner
                 // The result's failure category can't change anything at this transport's level
                 // (no ack/redelivery). An unrecognized exception is still caught below.
                 var dispatch = await RequestDispatch.SendAsync(
-                    actorValidator, bus, delivered.Request, delivered.ActorToken, delivered.Invocation, delivered.Metadata, scope?.ServiceProvider.GetService<TimeProvider>(), ct).ConfigureAwait(false);
+                    actorValidator, bus, delivered.Request, delivered.ActorToken, delivered.Invocation, delivered.Metadata, scope?.ServiceProvider.GetService<TimeProvider>(), delivered.TraceContext, ct).ConfigureAwait(false);
 
                 if (!dispatch.WasDispatched)
                     PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), "actor validation failed", logger: _logger);

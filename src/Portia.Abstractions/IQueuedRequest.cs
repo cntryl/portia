@@ -13,6 +13,10 @@ public interface IQueuedRequest
     /// <summary>Gets the logical identity preserved across deliveries.</summary>
     RequestMetadata Metadata { get; }
 
+    /// <summary>Gets the optional propagated W3C trace context for this delivery.</summary>
+    /// <remarks>The default preserves compatibility with queue adapters that do not propagate tracing.</remarks>
+    RequestTraceContext? TraceContext => null;
+
     /// <summary>Gets the concrete ingress facts supplied by this transport.</summary>
     RequestInvocation Invocation { get; }
 

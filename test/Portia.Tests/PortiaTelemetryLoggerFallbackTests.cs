@@ -29,7 +29,8 @@ public sealed class PortiaTelemetryLoggerFallbackTests
         Assert.Equal(LogLevel.Error, entry.Level);
         Assert.Same(exception, entry.Exception);
         Assert.Contains("TestRunner", entry.Message, StringComparison.Ordinal);
-        Assert.Contains("test reason", entry.Message, StringComparison.Ordinal);
+        Assert.Contains("execution", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("test reason", entry.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

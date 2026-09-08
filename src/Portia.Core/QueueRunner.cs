@@ -70,7 +70,7 @@ public sealed class QueueRunner
                 var bus = scope?.ServiceProvider.GetRequiredService<IRequestBus>() ?? _bus!;
                 var actorValidator = scope?.ServiceProvider.GetRequiredService<IRequestActorValidator>() ?? _actorValidator!;
                 var dispatch = await RequestDispatch.SendAsync(
-                    actorValidator, bus, queued.Request, queued.ActorToken, queued.Invocation, queued.Metadata, scope?.ServiceProvider.GetService<TimeProvider>(), delivery.Token).ConfigureAwait(false);
+                    actorValidator, bus, queued.Request, queued.ActorToken, queued.Invocation, queued.Metadata, scope?.ServiceProvider.GetService<TimeProvider>(), queued.TraceContext, delivery.Token).ConfigureAwait(false);
 
                 if (!dispatch.WasDispatched)
                 {

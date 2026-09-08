@@ -116,6 +116,7 @@ public sealed class FitzRequestQueueConsumer(
 
         public IRequest Request => _payload.Value.Request as IRequest ?? throw new InvalidOperationException("Only no-result requests can be queued.");
         public RequestMetadata Metadata => _payload.Value.Metadata;
+        public RequestTraceContext? TraceContext => _payload.Value.TraceContext;
         public RequestInvocation Invocation => new QueueInvocation(_item.Route, _item.Attempt);
         public string? ActorToken => _payload.Value.ActorToken;
         public uint Attempt => _item.Attempt;

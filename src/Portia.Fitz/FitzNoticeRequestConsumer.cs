@@ -33,7 +33,7 @@ public sealed class FitzNoticeRequestConsumer(
             var request = envelope.Request as IRequest
                 ?? throw new InvalidOperationException(
                     "A Fitz notice message deserialized to a result-bearing request; only no-result requests can be published over notice.");
-            yield return new RequestNotification(request, envelope.ActorToken, envelope.Metadata, new NoticeInvocation(message.Route));
+            yield return new RequestNotification(request, envelope.ActorToken, envelope.Metadata, new NoticeInvocation(message.Route), envelope.TraceContext);
         }
     }
 }

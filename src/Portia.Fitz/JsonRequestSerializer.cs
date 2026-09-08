@@ -27,6 +27,10 @@ public sealed class JsonRequestSerializer :
 
     /// <inheritdoc />
     public ReadOnlyMemory<byte> Serialize(IRequestBase request, string? actorToken, RequestMetadata metadata)
+        => Serialize(request, actorToken, metadata, null);
+
+    /// <inheritdoc />
+    public ReadOnlyMemory<byte> Serialize(IRequestBase request, string? actorToken, RequestMetadata metadata, RequestTraceContext? traceContext)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(metadata);
@@ -35,7 +39,7 @@ public sealed class JsonRequestSerializer :
         var envelope = new RequestEnvelope(
             request.GetType().AssemblyQualifiedName ?? throw new InvalidOperationException($"Type '{request.GetType()}' has no assembly-qualified name."),
             JsonSerializer.SerializeToElement(request, request.GetType(), Options),
-            actorToken, 1, metadata);
+            actorToken, 1, metadata, traceContext?.TraceParent, traceContext?.TraceState);
 
         return JsonSerializer.SerializeToUtf8Bytes(envelope, Options);
     }
@@ -62,7 +66,8 @@ public sealed class JsonRequestSerializer :
         var request = (IRequestBase?)envelope.Payload.Deserialize(type, Options)
             ?? throw new InvalidOperationException($"The '{type}' payload deserialized to null.");
 
-        return new DeserializedRequest(request, envelope.ActorToken, envelope.Metadata);
+        var traceContext = envelope.TraceParent is null ? null : new RequestTraceContext(envelope.TraceParent, envelope.TraceState);
+        return new DeserializedRequest(request, envelope.ActorToken, envelope.Metadata, traceContext);
     }
 
     /// <inheritdoc />
@@ -100,7 +105,8 @@ public sealed class JsonRequestSerializer :
             : Result<TOut>.Failure(envelope.Error!);
     }
 
-    sealed record RequestEnvelope(string Type, JsonElement Payload, string? ActorToken, int? Version = null, RequestMetadata? Metadata = null);
+    sealed record RequestEnvelope(string Type, JsonElement Payload, string? ActorToken, int? Version = null, RequestMetadata? Metadata = null,
+        string? TraceParent = null, string? TraceState = null);
 
     sealed record OutcomeEnvelope(bool IsSuccess, JsonElement? ValueElement, RequestError? Error);
 }
