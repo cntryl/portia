@@ -13,9 +13,10 @@ public sealed class ComponentHostingTests
         var changes = new Changes();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<IDomainEventNotifier>(changes);
-        _ = services.AddPortia(p => _ = projector
-            ? p.AddProjector<FirstProjector>(o => { o.Global(); o.PollInterval = TimeSpan.FromDays(1); })
-            : p.AddReactor<FirstReactor>(o => { o.Global(); o.PollInterval = TimeSpan.FromDays(1); })).AddWorker();
+        var portia = services.AddPortia();
+        _ = (projector
+            ? portia.AddProjector<FirstProjector>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromDays(1))
+            : portia.AddReactor<FirstReactor>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromDays(1))).AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         var id = Uuid.CreateVersion4();
@@ -48,11 +49,7 @@ public sealed class ComponentHostingTests
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
-        _ = services.AddPortia(p => p.AddProjector<FirstProjector>(o =>
-        {
-            o.Global();
-            o.Processing = new ProjectionRunOptions { RebuildId = rebuildId };
-        })).AddWorker();
+        _ = services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global, o => o.Processing = new ProjectionRunOptions { RebuildId = rebuildId }).AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         var storage = provider.GetRequiredService<ConsumerHost.ProjectionStorage>();
         storage.FailAfterCommit = true;
@@ -88,9 +85,10 @@ public sealed class ComponentHostingTests
         var services = ConsumerHost.CreateServices();
         var reader = new BlockingReader();
         _ = services.AddSingleton<IDomainEventReader>(reader);
-        _ = services.AddPortia(p => _ = projector
-            ? p.AddProjector<FirstProjector>(o => o.Global())
-            : p.AddReactor<FirstReactor>(o => o.Global())).AddWorker();
+        var portia = services.AddPortia();
+        _ = (projector
+            ? portia.AddProjector<FirstProjector>(WorkloadScope.Global)
+            : portia.AddReactor<FirstReactor>(WorkloadScope.Global)).AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         var worker = Assert.Single(provider.GetServices<IHostedService>());
         try
@@ -149,9 +147,10 @@ public sealed class ComponentHostingTests
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
-        _ = services.AddPortia(p => _ = projector
-            ? p.AddProjector<FirstProjector>(o => o.Global())
-            : p.AddReactor<FirstReactor>(o => o.Global())).AddWorker();
+        var portia = services.AddPortia();
+        _ = (projector
+            ? portia.AddProjector<FirstProjector>(WorkloadScope.Global)
+            : portia.AddReactor<FirstReactor>(WorkloadScope.Global)).AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         var worker = Assert.Single(provider.GetServices<IHostedService>());
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
@@ -189,9 +188,10 @@ public sealed class ComponentHostingTests
         var services = ConsumerHost.CreateServices(scoped);
         _ = services.AddAccounts();
         _ = services.AddReporting();
-        _ = services.AddPortia(p => p
-            .AddReactor<FirstReactor>(o => o.Global())
-            .AddReactor<SecondReactor>(o => o.Global())).AddWorker();
+        _ = services.AddPortia()
+            .AddReactor<FirstReactor>(WorkloadScope.Global)
+            .AddReactor<SecondReactor>(WorkloadScope.Global)
+            .AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
         var workers = provider.GetServices<IHostedService>().ToArray();
@@ -224,9 +224,10 @@ public sealed class ComponentHostingTests
         var services = ConsumerHost.CreateServices(scoped);
         _ = services.AddAccounts();
         _ = services.AddReporting();
-        _ = services.AddPortia(p => p
-            .AddProjector<FirstProjector>(o => o.Global())
-            .AddProjector<SecondProjector>(o => o.Global())).AddWorker();
+        _ = services.AddPortia()
+            .AddProjector<FirstProjector>(WorkloadScope.Global)
+            .AddProjector<SecondProjector>(WorkloadScope.Global)
+            .AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
         var workers = provider.GetServices<IHostedService>().ToArray();

@@ -36,7 +36,7 @@ public sealed class ReactorExecutionContractTests
                     await store.AppendAsync(new EventStreamAddress("reaction", "inputs", id.ToString()), 0, new DomainEvent[] {ev});
                     var services = new ServiceCollection();
                     services.AddSingleton<IEventStore>(store);
-                    services.AddPortia(_ => {});
+                    services.AddPortia();
                     await using var provider = services.BuildServiceProvider();
                     await using var scope = provider.CreateAsyncScope();
                     var account = new Account(Uuid.CreateVersion4());

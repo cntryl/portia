@@ -26,9 +26,12 @@ public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory sc
         var workers = new Workers();
         try
         {
+            var handled = scope.ServiceProvider.GetServices<RequestHandlerRegistration>()
+                .Select(registration => registration.RequestType)
+                .ToHashSet();
             foreach (var descriptor in scope.ServiceProvider.GetServices<RequestTransportRegistration>())
             {
-                if (!descriptor.Transports.HasFlag(RequestTransports.Callable))
+                if (!handled.Contains(descriptor.RequestType) || !descriptor.Transports.HasFlag(RequestTransports.Callable))
                     continue;
                 var register = descriptor.RegisterRpc ?? throw new InvalidOperationException(
                     $"Callable request '{descriptor.RequestType}' has no generated RPC registration.");

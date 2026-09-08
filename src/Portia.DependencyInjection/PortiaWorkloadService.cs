@@ -78,8 +78,8 @@ sealed partial class PortiaWorkloadService(IServiceProvider services) : Backgrou
     /// <summary>
     /// Uses the application's coordinator when infrastructure supplies one, and otherwise owns
     /// every workload in this process. Resolving the fallback here rather than registering it in
-    /// <c>AddWorker()</c> keeps it immune to setup order: infrastructure registered after
-    /// <c>AddWorker()</c> is still the coordinator that runs.
+    /// <c>AddWorkers()</c> keeps it immune to setup order: infrastructure registered after
+    /// <c>AddWorkers()</c> is still the coordinator that runs.
     /// </summary>
     IWorkloadCoordinator ResolveCoordinator()
     {

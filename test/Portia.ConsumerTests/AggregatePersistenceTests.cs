@@ -111,7 +111,7 @@ public sealed class AggregatePersistenceTests
                 {
                     var services = new ServiceCollection();
                     services.AddSingleton<IEventStore, InMemoryEventStore>();
-                    services.AddPortia(_ => { });
+                    services.AddPortia();
                     await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
                     {
                         ValidateScopes = true, ValidateOnBuild = true,

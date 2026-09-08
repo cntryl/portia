@@ -26,11 +26,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
 
-        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => services.AddPortia(p => p.AddReactor<TestReactor>(o =>
-        {
-            o.Global();
-            o.Processing = new ProjectionRunOptions { MaxBatchSize = maxBatchSize };
-        })));
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => services.AddPortia().AddReactor<TestReactor>(WorkloadScope.Global, o => o.Processing = new ProjectionRunOptions { MaxBatchSize = maxBatchSize }));
 
         Assert.Equal(nameof(ProjectionRunOptions.MaxBatchSize), exception.ParamName);
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
@@ -102,11 +98,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton<IDomainEventReader>(store);
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
-        _ = services.AddPortia(p => p.AddProjector<TestProjector>(o =>
-        {
-            o.Global();
-            o.PollInterval = TimeSpan.FromMilliseconds(20);
-        })).AddWorker();
+        _ = services.AddPortia().AddProjector<TestProjector>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(20)).AddWorkers();
         using var provider = services.BuildServiceProvider();
 
         var hostedService = Assert.Single(provider.GetServices<IHostedService>());
@@ -134,11 +126,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton<IDomainEventReader>(store);
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
-        _ = services.AddPortia(p => p.AddProjector<TestProjector>(o =>
-        {
-            o.Global();
-            o.PollInterval = TimeSpan.FromMilliseconds(10);
-        })).AddWorker();
+        _ = services.AddPortia().AddProjector<TestProjector>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(10)).AddWorkers();
         using var provider = services.BuildServiceProvider();
         var hostedService = Assert.Single(provider.GetServices<IHostedService>());
 
@@ -168,12 +156,11 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton<IDomainEventReader>(store);
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
-        _ = services.AddPortia(p => p.AddProjector<TestProjector>(o =>
+        _ = services.AddPortia().AddProjector<TestProjector>(WorkloadScope.Global, o =>
         {
-            o.Global();
             o.Name = "test-projector";
             o.PollInterval = TimeSpan.FromMilliseconds(10);
-        })).AddWorker();
+        }).AddWorkers();
         using var provider = services.BuildServiceProvider();
 
         var hostedService = (BackgroundService)Assert.Single(provider.GetServices<IHostedService>());

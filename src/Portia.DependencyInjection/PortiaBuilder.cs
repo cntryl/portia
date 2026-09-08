@@ -26,7 +26,7 @@ public sealed class PortiaBuilder
     public IServiceCollection Services { get; }
 
     /// <summary>Registers a request handler through Portia.Generators' compile-time typed descriptor.</summary>
-    /// <remarks>This call requires Portia.Generators in the calling project.</remarks>
+    /// <remarks>The generator is supplied by Portia.DependencyInjection.</remarks>
     public PortiaBuilder AddRequestHandler<THandler>() where THandler : class
     {
         _ = Services;
@@ -34,7 +34,7 @@ public sealed class PortiaBuilder
     }
 
     /// <summary>Registers a request authorizer through Portia.Generators' compile-time typed descriptor.</summary>
-    /// <remarks>This call requires Portia.Generators in the calling project.</remarks>
+    /// <remarks>The generator is supplied by Portia.DependencyInjection.</remarks>
     public PortiaBuilder AddRequestAuthorizer<TAuthorizer>(AuthorizationStage stage = AuthorizationStage.ResourceAccess)
         where TAuthorizer : class
     {
@@ -51,7 +51,7 @@ public sealed class PortiaBuilder
     }
 
     static InvalidOperationException MissingGeneratedRegistration(Type type, string role) => new(
-        $"Portia.Generators did not intercept registration of {role} '{type}'. Reference Portia.Generators in the calling project.");
+        $"Portia.Generators did not intercept registration of {role} '{type}'. Ensure Portia.DependencyInjection's analyzer assets are enabled.");
 
     /// <summary>Includes an event type in the application's serializer catalog.</summary>
     public PortiaBuilder AddEvent<TEvent>() where TEvent : DomainEvent
@@ -122,12 +122,14 @@ public sealed class PortiaBuilder
     }
 
     /// <summary>Registers one reactor with an explicitly selected execution scope.</summary>
-    public PortiaBuilder AddReactor<TReactor>(Action<WorkloadOptions> configure) where TReactor : BaseReactor
-        => AddWorkload(new WorkloadRegistration(typeof(TReactor), false, configure));
+    public PortiaBuilder AddReactor<TReactor>(WorkloadScope scope, Action<WorkloadOptions>? configure = null)
+        where TReactor : BaseReactor
+        => AddWorkload(new WorkloadRegistration(typeof(TReactor), false, scope, configure));
 
     /// <summary>Registers one projector with an explicitly selected execution scope.</summary>
-    public PortiaBuilder AddProjector<TProjector>(Action<WorkloadOptions> configure) where TProjector : BaseProjector
-        => AddWorkload(new WorkloadRegistration(typeof(TProjector), true, configure), ProjectorRegistration.Create<TProjector>());
+    public PortiaBuilder AddProjector<TProjector>(WorkloadScope scope, Action<WorkloadOptions>? configure = null)
+        where TProjector : BaseProjector
+        => AddWorkload(new WorkloadRegistration(typeof(TProjector), true, scope, configure), ProjectorRegistration.Create<TProjector>());
 
     PortiaBuilder AddWorkload(WorkloadRegistration registration, ProjectorRegistration? descriptor = null)
     {
@@ -184,7 +186,7 @@ public sealed class PortiaBuilder
     }
 
     /// <summary>Activates the shared application's worker registrations once in this host.</summary>
-    public PortiaBuilder AddWorker()
+    public PortiaBuilder AddWorkers()
     {
         if (_worker)
             return this;
@@ -209,14 +211,10 @@ public sealed class PortiaBuilder
 /// <summary>Registers shared Portia application setup in the standard DI container.</summary>
 public static class PortiaApplicationServiceCollectionExtensions
 {
-    /// <summary>Registers a Portia application whose outbound requests are inferred from typed dispatch calls.</summary>
-    public static PortiaBuilder AddPortia(this IServiceCollection services) => AddPortia(services, static _ => { });
-
-    /// <summary>Configures the application's components and capabilities without activating workers.</summary>
-    public static PortiaBuilder AddPortia(this IServiceCollection services, Action<PortiaBuilder> configure)
+    /// <summary>Creates or resumes the application's fluent Portia composition root.</summary>
+    public static PortiaBuilder AddPortia(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        ArgumentNullException.ThrowIfNull(configure);
         var builder = services.Select(service => service.ImplementationInstance).OfType<PortiaBuilder>().SingleOrDefault();
         if (builder is null)
         {
@@ -230,7 +228,6 @@ public static class PortiaApplicationServiceCollectionExtensions
         services.TryAddSingleton(PortiaEventServiceCollectionExtensions.BuildCatalog);
         services.TryAddSingleton<IDomainEventSerializer, JsonDomainEventSerializer>();
         services.TryAddSingleton<IReactorPrincipalProvider, SystemReactorPrincipalProvider>();
-        configure(builder);
         return builder;
     }
 }

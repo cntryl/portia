@@ -7,37 +7,35 @@ static class FrameworkTestRegistration
 {
     public static IServiceCollection AddFrameworkTests(this IServiceCollection services)
     {
-        _ = services.AddPortia(p =>
-        {
-            _ = p.AddRequestHandler<RpcGetValueHandler>();
-            _ = p.AddRequestHandler<RpcChangeValueHandler>();
-            _ = p.AddRequestHandler<TelemetrySuccessActionHandler>();
-            _ = p.AddRequestHandler<TelemetryFailureActionHandler>();
-            _ = p.AddRequestHandler<TelemetryGuardedActionHandler>();
-            _ = p.AddRequestHandler<TelemetrySequenceHandler>();
-            _ = p.AddRequestHandler<NoWorkerRegisteredPingHandler>();
-            _ = p.AddRequestHandler<GuardedActionHandler>();
-            _ = p.AddRequestHandler<GuardedQueryHandler>();
-            _ = p.AddRequestHandler<GetOrderHandler>();
-            _ = p.AddRequestHandler<AuthorizedActionHandler>();
-            _ = p.AddRequestHandler<GuardedSequenceHandler>();
-            _ = p.AddRequestHandler<GuardedAndAuthorizedActionHandler>();
-            _ = p.AddRequestHandler<ChangeValueHandler>();
-            _ = p.AddRequestHandler<GetValueHandler>();
-            _ = p.AddRequestHandler<HttpGetWidgetHandler>();
-            _ = p.AddRequestHandler<HttpCreatePaymentHandler>();
-            _ = p.AddRequestHandler<HttpCreateOrderHandler>();
-            _ = p.AddRequestHandler<HttpSendPingHandler>();
-            _ = p.AddRequestHandler<HttpGuardedActionHandler>();
-            _ = p.AddRequestHandler<HttpListWidgetsHandler>();
-            _ = p.AddRequestHandler<UniversalActionHandler>();
-            _ = p.AddRequestHandler<RunnerFaultVisibilityTests.RunnerFaultActionHandler>();
-            _ = p.AddRequestHandler<QueueRunnerTests.InvalidChangeValueHandler>();
-            _ = p.AddRequestAuthorizer<AuthorizedActionAuthorizer>();
-            _ = p.AddRequestAuthorizer<RecordingGuardedAndAuthorizedActionAuthorizer>();
-        });
+        var portia = services.AddPortia();
+        _ = portia.AddRequestHandler<RpcGetValueHandler>();
+        _ = portia.AddRequestHandler<RpcChangeValueHandler>();
+        _ = portia.AddRequestHandler<TelemetrySuccessActionHandler>();
+        _ = portia.AddRequestHandler<TelemetryFailureActionHandler>();
+        _ = portia.AddRequestHandler<TelemetryGuardedActionHandler>();
+        _ = portia.AddRequestHandler<TelemetrySequenceHandler>();
+        _ = portia.AddRequestHandler<NoWorkerRegisteredPingHandler>();
+        _ = portia.AddRequestHandler<GuardedActionHandler>();
+        _ = portia.AddRequestHandler<GuardedQueryHandler>();
+        _ = portia.AddRequestHandler<GetOrderHandler>();
+        _ = portia.AddRequestHandler<AuthorizedActionHandler>();
+        _ = portia.AddRequestHandler<GuardedSequenceHandler>();
+        _ = portia.AddRequestHandler<GuardedAndAuthorizedActionHandler>();
+        _ = portia.AddRequestHandler<ChangeValueHandler>();
+        _ = portia.AddRequestHandler<GetValueHandler>();
+        _ = portia.AddRequestHandler<HttpGetWidgetHandler>();
+        _ = portia.AddRequestHandler<HttpCreatePaymentHandler>();
+        _ = portia.AddRequestHandler<HttpCreateOrderHandler>();
+        _ = portia.AddRequestHandler<HttpSendPingHandler>();
+        _ = portia.AddRequestHandler<HttpGuardedActionHandler>();
+        _ = portia.AddRequestHandler<HttpListWidgetsHandler>();
+        _ = portia.AddRequestHandler<UniversalActionHandler>();
+        _ = portia.AddRequestHandler<RunnerFaultVisibilityTests.RunnerFaultActionHandler>();
+        _ = portia.AddRequestHandler<QueueRunnerTests.InvalidChangeValueHandler>();
+        _ = portia.AddRequestAuthorizer<AuthorizedActionAuthorizer>();
+        _ = portia.AddRequestAuthorizer<RecordingGuardedAndAuthorizedActionAuthorizer>();
         services.TryAddScoped<TestReactor>();
-        _ = services.AddSingleton(new ReactorRegistration(typeof(TestReactor), p => p.GetRequiredService<TestReactor>()));
+        _ = services.AddSingleton(new ReactorRegistration(typeof(TestReactor), provider => provider.GetRequiredService<TestReactor>()));
         services.TryAddScoped<TestProjector>();
         _ = services.AddSingleton(ProjectorRegistration.Create<TestProjector>());
         return services;

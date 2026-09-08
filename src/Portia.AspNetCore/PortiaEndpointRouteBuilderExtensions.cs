@@ -30,7 +30,7 @@ namespace Cntryl.Portia;
 /// from method arguments, never from a generic constraint, so there is no way to write a
 /// one-type-argument overload that recovers <c>TOut</c> from <c>TRequest</c>.
 ///
-/// Consumer compilations must reference Portia.Generators. Mapping patterns must be compile-time
+/// Portia.DependencyInjection supplies the generator to consumer compilations. Mapping patterns must be compile-time
 /// constants and request constructors must have supported binding shapes; unsupported mappings
 /// receive compiler diagnostics. Generated body binding honors configured ASP.NET HTTP JSON options.
 /// </summary>

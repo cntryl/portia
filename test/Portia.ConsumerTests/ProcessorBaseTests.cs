@@ -42,7 +42,7 @@ public sealed class ProcessorBaseTests
         var services = new ServiceCollection();
         _ = services.AddScoped<Repository>();
         _ = services.AddSingleton<IDomainEventReader, InMemoryEventStore>();
-        _ = services.AddPortia(p => p.AddProjector<BatchAccounts>(o => o.PerTenant()));
+        _ = services.AddPortia().AddProjector<BatchAccounts>(WorkloadScope.PerTenant);
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<BatchAccounts>());

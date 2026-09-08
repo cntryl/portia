@@ -8,7 +8,7 @@ older milestone evidence. See [application setup](application-setup.md) for the 
 
 - The initial consumer tests failed to compile because `PortiaBuilder` had no
   `AddProjector`, `AddReactor`, `WorkloadRegistration`, or `WorkloadScope` API.
-  Explicit Portia registrations now require `Global()` or `PerTenant()` and reject
+  Explicit Portia registrations now require `WorkloadScope.Global` or `WorkloadScope.PerTenant` and reject
   missing/conflicting scope without partially registering a component.
 - A lifecycle regression expected `InvalidOperationException` when a coordinator
   stopped unexpectedly, but observed `TaskCanceledException`. Worker shutdown now
@@ -21,7 +21,7 @@ older milestone evidence. See [application setup](application-setup.md) for the 
 
 - Workloads register without Fitz and without starting background workers.
 - Infrastructure and workload setup compose in either order, including declarations
-  after `AddWorker()` and before the host is built.
+  after `AddWorkers()` and before the host is built.
 - Mixed global/per-tenant projectors and reactors keep checkpoint progress separate.
   Tenant removal stops its workloads; re-addition resumes committed progress without
   replaying already committed effects. Unaffected global ownership remains intact.
@@ -46,7 +46,7 @@ in an isolated project on port 14090.
 Local packages `1.0.0-explicit-20260906.2` were consumed outside the repository by
 separate API and worker executables sharing one application project. They had no
 Portia source project references or repository build settings. The application uses
-explicit registrations and `AddPortiaFitz(configuration.GetSection("Fitz"))`.
+explicit registrations and `services.AddPortia().AddFitz(configuration.GetSection("Fitz"))`.
 
 Direct HTTP and HTTP 202 queue publishing both completed this path:
 

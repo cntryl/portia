@@ -18,7 +18,7 @@ public sealed class ConsumerBaselineTests
     {
         var assembly = GeneratorCompilation.Compile("""
             public static class Example { public static int Run() => 42; }
-            """, new RequestBusGenerator());
+            """);
         var run = assembly.GetType("Example")!.GetMethod("Run")!.CreateDelegate<Func<int>>();
         Assert.Equal(42, run());
     }

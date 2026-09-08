@@ -1,9 +1,9 @@
 namespace Cntryl.Portia.Consumer;
 
-public sealed class GeneratorNameCollisionTests
+public sealed class StableRegistrationIdentityTests
 {
     [Fact]
-    public void RequestAndHandlerWithSameSimpleNameCompileWithCoordinatedNames() =>
+    public void ShouldCompileGivenSameSimpleComponentNamesWhenStableGenericRegistrationsAreUsed() =>
         GeneratorCompilation.Compile("""
             using System.Threading;
             using System.Threading.Tasks;
@@ -32,13 +32,14 @@ public sealed class GeneratorNameCollisionTests
             }
             public static class Scenario
             {
-                public static void Register(IServiceCollection services) =>
-                    services.AddPortia(p => p.AddRequestsComponent().AddHandlersComponent().AddAuthorizersComponent());
+                public static void Register(IServiceCollection services) => services.AddPortia()
+                    .AddRequestHandler<Handlers.Component>()
+                    .AddRequestAuthorizer<Authorizers.Component>();
             }
-            """, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator());
+            """, new RegistrationCallInterceptorGenerator());
 
     [Fact]
-    public async Task SameSimpleHandlerNamesCompileAndDispatchByFullTypeIdentity()
+    public async Task ShouldDispatchByFullTypeIdentityGivenSameSimpleHandlerNamesWhenRegistered()
     {
         var assembly = GeneratorCompilation.Compile("""
             using System.Threading;
@@ -54,14 +55,16 @@ public sealed class GeneratorNameCollisionTests
                 public static async Task<int> Run()
                 {
                     var services = new ServiceCollection();
-                    services.AddPortia(p => p.AddAHandler().AddBHandler());
+                    services.AddPortia()
+                        .AddRequestHandler<A.Handler>()
+                        .AddRequestHandler<B.Handler>();
                     await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
                     await using var scope = provider.CreateAsyncScope();
                     var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
                     return (await bus.SendAsync(new One(), RequestActor.System)).Value + (await bus.SendAsync(new Two(), RequestActor.System)).Value;
                 }
             }
-            """, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator());
+            """, new RegistrationCallInterceptorGenerator());
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<int>>>();
         Assert.Equal(3, await run());
     }

@@ -43,7 +43,7 @@ public sealed class HttpAsyncRouteTests
                 {
                     var builder = WebApplication.CreateBuilder();
                     builder.WebHost.UseTestServer();
-                    builder.Services.AddPortia(p => p.AddHandler());
+                    builder.Services.AddPortia().AddRequestHandler<Handler>();
                     builder.Services.AddSingleton<IRequestQueuePublisher, Publisher>();
                     await using var app = builder.Build();
                     app.MapPortiaPost<Queued>("/tenants/{tenant}/orders/{order}")
@@ -61,7 +61,7 @@ public sealed class HttpAsyncRouteTests
                     return ((int)response.StatusCode, publisher.Values?.Realm, publisher.Values?.Resource, publisher.Token, publisher.Amount);
                 }
             }
-            """, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator(), new RequestHttpBindingGenerator());
+            """, new RegistrationCallInterceptorGenerator(), new RequestHttpBindingGenerator());
         var result = await (Task<(int, string?, string?, string?, int)>)assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, null)!;
         Assert.Equal((202, "acme", "order17", "carried-token", 17), result);
     }

@@ -7,7 +7,7 @@ namespace Cntryl.Portia;
 /// <summary>
 /// Verifies the coordinator that lets projectors and reactors run with no coordination
 /// infrastructure at all. Before it existed, <c>AddProjector</c>/<c>AddReactor</c> plus
-/// <c>AddWorker()</c> could not start a single workload unless Fitz supplied an
+/// <c>AddWorkers()</c> could not start a single workload unless Fitz supplied an
 /// <see cref="IWorkloadCoordinator" />, which is why the low-level hosting extensions existed.
 /// </summary>
 public sealed class SingleProcessWorkloadCoordinatorTests
@@ -129,12 +129,11 @@ public sealed class SingleProcessWorkloadCoordinatorTests
         _ = services.AddSingleton<IDomainEventReader>(store);
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new NamedProjector(target));
-        _ = services.AddPortia(p => p.AddProjector<NamedProjector>(o =>
+        _ = services.AddPortia().AddProjector<NamedProjector>(WorkloadScope.Global, o =>
         {
-            o.Global();
             o.Name = workloadName;
             o.PollInterval = TimeSpan.FromMilliseconds(10);
-        })).AddWorker();
+        }).AddWorkers();
         using var provider = services.BuildServiceProvider();
 
         var worker = Assert.Single(provider.GetServices<IHostedService>());

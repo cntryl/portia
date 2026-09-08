@@ -7,9 +7,10 @@ public sealed class RequestRpcCleanupTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task RegistrationCleanupAttemptsEveryWorkerAndPreservesPrimaryFailure(bool registrationFails)
+    public async Task ShouldCleanupEveryWorkerGivenRegistrationOrDisposalFailureWhenRegistering(bool registrationFails)
     {
         var services = new ServiceCollection();
+        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<FeatureOneRequest, FeatureOneHandler, int>());
         var handles = new[] { new Handle(), new Handle { Fail = true }, new Handle() };
         foreach (var handle in handles)
         {
@@ -19,6 +20,7 @@ public sealed class RequestRpcCleanupTests
 
         if (registrationFails)
         {
+            _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<FeatureTwoRequest, FeatureTwoHandler, int>());
             _ = services.AddSingleton(new RequestTransportRegistration(typeof(FeatureTwoRequest), RequestTransports.Callable,
                 new RequestRouteAttribute("consumer", "rpc", "cleanup", "fail"),
                 (_, _) => ValueTask.FromException<IAsyncDisposable>(new InvalidOperationException("Registration failed"))));

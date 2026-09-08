@@ -13,7 +13,7 @@ public sealed class CallerOwnedHydrationTests
         await using var fixture = await StoreFixture.CreateAsync(fitz);
         var services = new ServiceCollection();
         _ = services.AddSingleton(fixture.Store);
-        _ = services.AddPortia(_ => { });
+        _ = services.AddPortia();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await using var scope = provider.CreateAsyncScope();
         var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();

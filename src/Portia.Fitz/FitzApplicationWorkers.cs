@@ -10,17 +10,18 @@ sealed class FitzApplicationWorkers(IServiceProvider services, PortiaFitzBuilder
     readonly IServiceScopeFactory _scopes = services.GetRequiredService<IServiceScopeFactory>();
     readonly TimeProvider _clock = services.GetService<TimeProvider>() ?? TimeProvider.System;
     readonly ILogger<FitzApplicationWorkers>? _logger = services.GetService<ILogger<FitzApplicationWorkers>>();
+    readonly IReadOnlyList<FitzWorkerDefinition> _workers = configuration.Workers;
     IAsyncDisposable? _rpc;
 
     public Task StartingAsync(CancellationToken cancellationToken)
     {
         var available = services.GetRequiredService<IServiceProviderIsService>();
-        if (configuration.Workers.Count > 0)
+        if (_workers.Count > 0)
         {
             Require(available, typeof(IRequestBus));
             Require(available, typeof(IRequestActorValidator));
             Require(available, typeof(IRequestDeserializer));
-            if (configuration.Workers.Any(worker => worker.Kind == "rpc"))
+            if (_workers.Any(worker => worker.Kind == "rpc"))
                 Require(available, typeof(IRequestOutcomeSerializer));
         }
         return Task.CompletedTask;
@@ -34,7 +35,7 @@ sealed class FitzApplicationWorkers(IServiceProvider services, PortiaFitzBuilder
         await connection.StartAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (configuration.Workers.Any(worker => worker.Kind == "rpc"))
+            if (_workers.Any(worker => worker.Kind == "rpc"))
             {
                 _rpc = await new FitzRpcRequestServer(connection.Client.Rpc, _scopes)
                     .RegisterRequestsAsync(cancellationToken).ConfigureAwait(false);
@@ -53,7 +54,7 @@ sealed class FitzApplicationWorkers(IServiceProvider services, PortiaFitzBuilder
     {
         var client = services.GetRequiredService<FitzApplicationConnection>().Client;
         var tasks = new List<Task>();
-        foreach (var worker in configuration.Workers)
+        foreach (var worker in _workers)
         {
             if (worker.Kind == "rpc")
                 continue;

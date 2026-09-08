@@ -1,15 +1,14 @@
 # Shared application setup
 
 The application is configured once in a shared project. The HTTP deployment and
-worker deployment call that same setup; only the worker calls `AddWorker()`.
+worker deployment call that same setup; only the worker calls `AddWorkers()`.
 These APIs are implemented in the current source checkout.
 
 ## Shared application project
 
-Reference `Portia.Fitz` and `Portia.Generators` (with `PrivateAssets="all"`). Fitz
-brings the core and dependency-injection packages. Each assembly declaring a generated
-component or routed request needs the generator reference. Applications without Fitz can
-reference `Portia.DependencyInjection` directly.
+Reference `Portia.Fitz`; it brings the core and dependency-injection packages. The
+dependency-injection package includes Portia's generator and compiler configuration.
+Applications without Fitz can reference `Portia.DependencyInjection` directly.
 
 ```csharp
 using Cntryl.Portia;
@@ -30,29 +29,26 @@ public static class ApplicationSetup
         services.AddScoped<IPlatformSummaryRepository, PlatformSummaryRepository>();
         services.AddSingleton<ITenantDirectory, AccountTenantDirectory>();
 
-        var portia = services.AddPortia(p =>
-        {
-            p.AddRequestHandler<DepositAccountHandler>();
-            p.AddProjector<AccountProjector>(o => o.PerTenant());
-            p.AddProjector<PlatformSummaryProjector>(o => o.Global());
-            p.AddReactor<AccountReactor>(o => o.PerTenant());
-        });
-        services.AddPortiaFitz(configuration.GetSection("Fitz"), fitz =>
-        {
-            fitz.AddRpcServer();
-            fitz.AddQueueWorker<DepositAccount>();
-        });
-        return portia;
+        return services.AddPortia()
+            .AddRequestHandler<DepositAccountHandler>()
+            .AddProjector<AccountProjector>(WorkloadScope.PerTenant)
+            .AddProjector<PlatformSummaryProjector>(WorkloadScope.Global)
+            .AddReactor<AccountReactor>(WorkloadScope.PerTenant)
+            .AddFitz(configuration.GetSection("Fitz"));
     }
 }
 ```
 
-`AddPortiaFitz()` supplies one event store through `IEventStore`, `IDomainEventReader`,
+`AddFitz()` supplies one event store through `IEventStore`, `IDomainEventReader`,
 and `IDomainEventWriter`, plus outbound RPC, queue, notice, and scheduling clients.
 Portia's JSON event serializer is also available without Fitz.
-`AddRpcServer()` and `AddQueueWorker()` **declare** listeners; they do not start in
-the API host. Multiple distinct queue routes create independent consumers. Repeating
-an identical listener declaration has no additional effect.
+By default, `AddFitz()` declares listeners for every transport exposed by selected handlers;
+it does not start them in the API host. Multiple distinct queue routes create independent consumers.
+Repeating an identical listener declaration has no additional effect. A callback that only configures
+fleet membership retains the default listeners. The first transport-specific worker method narrows
+the default and later methods add to that selection. Call `DisableRequestWorkers()` for a deployment
+that hosts component workloads but no request listeners. Startup rejects any explicit transport
+selector that matches no selected handler, before attempting to connect to Fitz.
 
 Configuration can come from appsettings or normal .NET environment overrides:
 
@@ -74,9 +70,9 @@ and its `TokenProvider`. No permissive actor validator is registered automatical
 
 ## API deployment
 
-Reference the shared project, `Portia.AspNetCore`, and `Portia.Generators` with
-`PrivateAssets="all"`. The installed generator package supplies the interceptor
-namespace; the host does not need a manual project property.
+Reference the shared project and `Portia.AspNetCore`. `Portia.DependencyInjection` supplies
+the generator transitively; the host does not need a separate analyzer reference or manual
+compiler property.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -100,12 +96,12 @@ Use the standard .NET worker host, referencing the shared project:
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services
     .AddAccountsApplication(builder.Configuration)
-    .AddWorker();
+    .AddWorkers();
 
 await builder.Build().RunAsync();
 ```
 
-`AddWorker()` activates the declarations once. Declarations added after activation
+`AddWorkers()` activates the declarations once. Declarations added after activation
 are also included, provided all setup happens before the host is built. Applications
 can declare other hosted services in shared setup with
 `portia.ConfigureWorker("name", services => services.AddHostedService<MyWorker>())`.
@@ -146,14 +142,14 @@ cannot be rolled back by the framework.
 Workload registration belongs to Portia and requires an explicit scope:
 
 ```csharp
-portia.AddProjector<AccountProjector>(options => options.PerTenant());
-portia.AddProjector<PlatformSummaryProjector>(options => options.Global());
-portia.AddReactor<AccountReactor>(options => options.PerTenant());
+portia.AddProjector<AccountProjector>(WorkloadScope.PerTenant);
+portia.AddProjector<PlatformSummaryProjector>(WorkloadScope.Global);
+portia.AddReactor<AccountReactor>(WorkloadScope.PerTenant);
 ```
 
-`PerTenant()` creates an independently owned workload for each active `ITenantDirectory`
+`WorkloadScope.PerTenant` creates an independently owned workload for each active `ITenantDirectory`
 entry. Portia replaces the component pattern's realm with the tenant ID, retaining its
-area and resource filters. `Global()` creates one logical workload and retains the
+area and resource filters. `WorkloadScope.Global` creates one logical workload and retains the
 component's declared pattern. It does not grant cross-tenant access or scan every realm.
 
 An omitted scope, both scopes, a conflicting registration, or duplicate workload name
@@ -164,7 +160,7 @@ checkpoint identity, and setting `options.Name` is what deliberately overrides i
 declaring a workload never silently repoints existing checkpoints. Projector options also accept `Processing`
 (`ProjectionRunOptions`, including a rebuild ID) and a positive `PollInterval`.
 
-`AddWorker()` runs every declared workload under one hosted service. With no
+`AddWorkers()` runs every declared workload under one hosted service. With no
 `IWorkloadCoordinator` registered it owns them all in this process, which is correct for a
 single worker replica and needs no infrastructure at all; it logs a warning saying so. Register
 a distributed coordinator before scaling workers past one replica.
@@ -203,7 +199,7 @@ effects remain at-least-once.
 
 ## Lifetimes and overrides
 
-`AddPortiaFitz(...)` owns one long-lived client per host. Host startup awaits connection
+`AddFitz(...)` owns one long-lived client per host. Host startup awaits connection
 with a bounded timeout before listeners start. Worker scopes and RPC registrations
 are released on shutdown; host disposal releases the owned connection.
 

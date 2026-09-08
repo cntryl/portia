@@ -35,7 +35,7 @@ static class HttpConsumerScenario
                 {
                     var builder = WebApplication.CreateBuilder();
                     builder.WebHost.UseTestServer();
-                    builder.Services.AddPortia(p => p.AddHandler());
+                    builder.Services.AddPortia().AddRequestHandler<Handler>();
                     builder.Services.ConfigureHttpJsonOptions(options =>
                     {
                         if (snake) options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
@@ -60,7 +60,7 @@ static class HttpConsumerScenario
                         : reader.GetInt32();
                 public override void Write(Utf8JsonWriter writer, int value, JsonSerializerOptions options) => writer.WriteNumberValue(value);
             }
-            """, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator(), new RequestHttpBindingGenerator());
+            """, new RegistrationCallInterceptorGenerator(), new RequestHttpBindingGenerator());
 
     public static Task<(int Status, string Body)> RunAsync(Assembly assembly, string path, string? json = null, bool snake = false, bool converter = false)
         => (Task<(int, string)>)assembly.GetType("HttpScenario")!.GetMethod("Run")!.Invoke(null, [path, json, snake, converter])!;

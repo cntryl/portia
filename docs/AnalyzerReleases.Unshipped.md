@@ -13,3 +13,4 @@ PORTIA015 | Portia | Error | Generated components must have supported accessible
 PORTIA016 | Portia | Error | Unsupported HTTP binding requires a constant route and supported constructor and scalar types
 PORTIA017 | Portia | Error | Batch handlers require batch bases and unambiguous event dispatch
 PORTIA018 | Portia | Error | Generic component registration requires a matching Portia role
+PORTIA019 | Portia | Error | Registration calls must appear at a call site supported by generated interceptors

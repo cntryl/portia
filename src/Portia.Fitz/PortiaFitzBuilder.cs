@@ -9,21 +9,27 @@ namespace Cntryl.Portia;
 /// <summary>Declares shared Fitz capabilities and worker-only listeners.</summary>
 public sealed class PortiaFitzBuilder
 {
+    const RequestTransports AllRequestTransports = RequestTransports.Callable | RequestTransports.Queuable
+        | RequestTransports.Notifiable | RequestTransports.Schedulable;
     readonly PortiaBuilder _application;
     readonly HashSet<string> _capabilities = new(StringComparer.Ordinal);
-    readonly List<FitzWorkerDefinition> _workers = [];
+    readonly Lazy<IReadOnlyList<FitzWorkerDefinition>> _workers;
+    RequestTransports _workerTransports = AllRequestTransports;
+    RequestTransports _requiredWorkerTransports;
+    bool _workerSelectionExplicit;
 
     internal PortiaFitzBuilder(PortiaBuilder application)
     {
         _application = application;
+        _workers = new(() => [.. BuildWorkers()], LazyThreadSafetyMode.ExecutionAndPublication);
         _ = application.ConfigureWorker("Portia.Fitz", services => _ = services.AddSingleton<IHostedService>(provider => new FitzApplicationWorkers(provider, this)));
     }
 
-    internal IReadOnlyList<FitzWorkerDefinition> Workers => _workers;
+    internal IReadOnlyList<FitzWorkerDefinition> Workers => _workers.Value;
     internal FleetRunOptions? Fleet { get; private set; }
 
     /// <summary>Registers event persistence, its reader/writer aliases, and JSON event serialization.</summary>
-    public PortiaFitzBuilder AddEventStore()
+    internal PortiaFitzBuilder AddEventStore()
     {
         if (!_capabilities.Add("events"))
             return this;
@@ -40,7 +46,7 @@ public sealed class PortiaFitzBuilder
     }
 
     /// <summary>Registers outbound RPC, queue, notice, and scheduling clients without starting listeners.</summary>
-    public PortiaFitzBuilder AddRequestClients()
+    internal PortiaFitzBuilder AddRequestClients()
     {
         if (!_capabilities.Add("clients"))
             return this;
@@ -58,29 +64,29 @@ public sealed class PortiaFitzBuilder
         return this;
     }
 
-    /// <summary>Declares RPC serving for explicitly registered callable requests.</summary>
-    public PortiaFitzBuilder AddRpcServer() => AddListener("rpc", "");
+    /// <summary>Activates every transport declared by requests with selected handlers.</summary>
+    public PortiaFitzBuilder AddRequestWorkers() => EnableWorkers(AllRequestTransports, requireMatch: false);
 
-    /// <summary>Declares a competing queue worker for an explicit queue route.</summary>
-    public PortiaFitzBuilder AddQueueWorker(string route) => AddListener("queue", route);
+    /// <summary>Activates RPC serving when at least one selected handler accepts a callable request.</summary>
+    public PortiaFitzBuilder AddRpcWorkers() => EnableWorkers(RequestTransports.Callable, requireMatch: true);
 
-    /// <summary>Declares a competing queue worker using the selected request's generated route.</summary>
-    public PortiaFitzBuilder AddQueueWorker<TRequest>() where TRequest : IRequestBase, IQueuable
-        => AddRequestListener<TRequest>(RequestTransports.Queuable, "queue", includeOperation: false);
+    /// <summary>Activates queue listeners for all selected handlers accepting queuable requests.</summary>
+    public PortiaFitzBuilder AddQueueWorkers() => EnableWorkers(RequestTransports.Queuable, requireMatch: true);
 
-    /// <summary>Declares a notice fanout subscriber on each worker replica.</summary>
-    public PortiaFitzBuilder AddNoticeWorker(string route) => AddListener("notice", route);
+    /// <summary>Activates notice listeners for all selected handlers accepting notifiable requests.</summary>
+    public PortiaFitzBuilder AddNoticeWorkers() => EnableWorkers(RequestTransports.Notifiable, requireMatch: true);
 
-    /// <summary>Declares a notice subscriber using the selected request's generated route.</summary>
-    public PortiaFitzBuilder AddNoticeWorker<TRequest>() where TRequest : IRequestBase, INotifiable
-        => AddRequestListener<TRequest>(RequestTransports.Notifiable, "notice", includeOperation: false);
+    /// <summary>Activates schedule listeners for all selected handlers accepting schedulable requests.</summary>
+    public PortiaFitzBuilder AddScheduledWorkers() => EnableWorkers(RequestTransports.Schedulable, requireMatch: true);
 
-    /// <summary>Declares a schedule subscriber; the schedule's delivery mode controls distribution.</summary>
-    public PortiaFitzBuilder AddScheduledWorker(string route) => AddListener("schedule", route);
-
-    /// <summary>Declares a schedule subscriber using the selected request's generated route.</summary>
-    public PortiaFitzBuilder AddScheduledWorker<TRequest>() where TRequest : IRequestBase, ISchedulable
-        => AddRequestListener<TRequest>(RequestTransports.Schedulable, "schedule", includeOperation: true);
+    /// <summary>Disables inbound request listeners while retaining Fitz persistence and outbound clients.</summary>
+    public PortiaFitzBuilder DisableRequestWorkers()
+    {
+        _workerTransports = 0;
+        _requiredWorkerTransports = 0;
+        _workerSelectionExplicit = true;
+        return this;
+    }
 
     /// <summary>Configures membership for the application's explicitly leased component workloads.</summary>
     public PortiaFitzBuilder UseFleet(FleetRunOptions options)
@@ -93,39 +99,93 @@ public sealed class PortiaFitzBuilder
         return this;
     }
 
-    PortiaFitzBuilder AddRequestListener<TRequest>(RequestTransports transport, string scheme, bool includeOperation)
-        where TRequest : IRequestBase
+    PortiaFitzBuilder EnableWorkers(RequestTransports transports, bool requireMatch)
     {
-        var registration = _application.Services
-            .Select(service => service.ImplementationInstance)
-            .OfType<RequestTransportRegistration>()
-            .SingleOrDefault(candidate => candidate.RequestType == typeof(TRequest))
-            ?? throw new InvalidOperationException(
-                $"Register a handler, dispatch the request through a strongly typed Portia API, or use RegisterDynamicRequest<TRequest>() before declaring its {scheme} worker for '{typeof(TRequest)}'.");
-        if (!registration.Transports.HasFlag(transport))
-            throw new InvalidOperationException($"Request '{typeof(TRequest)}' does not declare the {transport} transport.");
-        var route = registration.Route;
-        var value = includeOperation
-            ? $"{scheme}://{route.Realm}/{route.Area}/{route.Resource}/{route.Operation}"
-            : $"{scheme}://{route.Realm}/{route.Area}/{route.Resource}";
-        return AddListener(scheme, value);
+        if (_workerSelectionExplicit)
+        {
+            _workerTransports |= transports;
+        }
+        else
+        {
+            _workerTransports = transports;
+            _workerSelectionExplicit = true;
+        }
+        if (requireMatch)
+            _requiredWorkerTransports |= transports;
+        AddSerializers(_application.Services);
+        return this;
     }
 
-    PortiaFitzBuilder AddListener(string kind, string route)
+    IEnumerable<RequestTransportRegistration> SelectedRequests(RequestTransports transport)
     {
-        if (kind != "rpc")
+        var handled = _application.Services
+            .Select(service => service.ImplementationInstance)
+            .OfType<RequestHandlerRegistration>()
+            .Select(registration => registration.RequestType)
+            .ToHashSet();
+        return _application.Services
+            .Select(service => service.ImplementationInstance)
+            .OfType<RequestTransportRegistration>()
+            .Where(registration => handled.Contains(registration.RequestType) && registration.Transports.HasFlag(transport));
+    }
+
+    List<FitzWorkerDefinition> BuildWorkers()
+    {
+        ValidateRequiredWorkers();
+        var workers = new List<FitzWorkerDefinition>();
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        if (_workerTransports.HasFlag(RequestTransports.Callable) && SelectedRequests(RequestTransports.Callable).Any())
+            AddWorker("rpc", "");
+        AddTransport(RequestTransports.Queuable, "queue", includeOperation: false);
+        AddTransport(RequestTransports.Notifiable, "notice", includeOperation: false);
+        AddTransport(RequestTransports.Schedulable, "schedule", includeOperation: true);
+        return workers;
+
+        void AddTransport(RequestTransports transport, string kind, bool includeOperation)
         {
+            if (!_workerTransports.HasFlag(transport))
+                return;
+            foreach (var registration in SelectedRequests(transport))
+            {
+                var route = registration.Route;
+                AddWorker(kind, includeOperation
+                    ? $"{kind}://{route.Realm}/{route.Area}/{route.Resource}/{route.Operation}"
+                    : $"{kind}://{route.Realm}/{route.Area}/{route.Resource}");
+            }
+        }
+
+        void AddWorker(string kind, string route)
+        {
+            if (kind == "rpc")
+            {
+                if (keys.Add("rpc:"))
+                    workers.Add(new FitzWorkerDefinition(kind, route));
+                return;
+            }
             ArgumentException.ThrowIfNullOrWhiteSpace(route);
             var segments = route.StartsWith(kind + "://", StringComparison.Ordinal) ? route[(kind.Length + 3)..].Split('/') : [];
             if (segments.Length != (kind == "schedule" ? 4 : 3) || segments.Any(string.IsNullOrWhiteSpace))
                 throw new ArgumentException($"Invalid {kind} route '{route}'.", nameof(route));
+            if (keys.Add(kind + ":" + route))
+                workers.Add(new FitzWorkerDefinition(kind, route));
         }
-        if (_capabilities.Add(kind + ":" + route))
+    }
+
+    void ValidateRequiredWorkers()
+    {
+        Require(RequestTransports.Callable, "AddRpcWorkers()", "callable");
+        Require(RequestTransports.Queuable, "AddQueueWorkers()", "queuable");
+        Require(RequestTransports.Notifiable, "AddNoticeWorkers()", "notifiable");
+        Require(RequestTransports.Schedulable, "AddScheduledWorkers()", "schedulable");
+
+        void Require(RequestTransports transport, string selector, string capability)
         {
-            AddSerializers(_application.Services);
-            _workers.Add(new FitzWorkerDefinition(kind, route));
+            if (_requiredWorkerTransports.HasFlag(transport) && !SelectedRequests(transport).Any())
+            {
+                throw new InvalidOperationException(
+                    $"{selector} selected no {capability} request handlers. Select a matching handler or remove the worker selector.");
+            }
         }
-        return this;
     }
 
     static void AddSerializers(IServiceCollection services)
@@ -141,23 +201,9 @@ public sealed class PortiaFitzBuilder
 /// <summary>Connects shared Portia application setup to Fitz.</summary>
 public static class PortiaFitzApplicationExtensions
 {
-    /// <summary>Adds Fitz persistence, request clients, and workload coordination to Portia registrations.</summary>
-    public static IServiceCollection AddPortiaFitz(this IServiceCollection services, IConfiguration configuration,
-        Action<PortiaFitzBuilder>? configure = null)
-    {
-        var portia = services.AddPortia(_ => { });
-        _ = portia.AddFitz(configuration, fitz =>
-        {
-            if (configuration["ApplicationName"] is { } name)
-            {
-                if (!FleetRunOptions.IsSegment(name))
-                    throw new ArgumentException("Fitz:ApplicationName must be an exact route segment.", nameof(configuration));
-                _ = fitz.UseFleet(new FleetRunOptions { MembershipSelector = $"lease://{name}/portia-members/*" });
-            }
-            configure?.Invoke(fitz);
-        });
-        return services;
-    }
+    /// <summary>Adds Fitz persistence, clients, coordination, and workers for every selected request transport.</summary>
+    public static PortiaBuilder AddFitz(this PortiaBuilder application, IConfiguration configuration) =>
+        AddFitz(application, configuration, static _ => { });
 
     /// <summary>Configures an owned client from Endpoint and optional Token and StartupTimeoutSeconds settings.</summary>
     public static PortiaBuilder AddFitz(this PortiaBuilder application, IConfiguration configuration, Action<PortiaFitzBuilder> configure)
@@ -179,10 +225,26 @@ public static class PortiaFitzApplicationExtensions
             timeout = TimeSpan.FromSeconds(seconds);
         }
         var settings = new ClientConfig(uri, TokenProvider: token is null ? null : _ => ValueTask.FromResult(token));
-        return Register(application, configure, _ => new FitzApplicationConnection(new Client(settings), true, timeout), (uri, token, timeout));
+        return Register(application, builder =>
+        {
+            if (configuration["ApplicationName"] is { } name)
+            {
+                if (!FleetRunOptions.IsSegment(name))
+                    throw new ArgumentException("Fitz:ApplicationName must be an exact route segment.", nameof(configuration));
+                _ = builder.UseFleet(new FleetRunOptions { MembershipSelector = $"lease://{name}/portia-members/*" });
+            }
+            configure(builder);
+        }, _ => new FitzApplicationConnection(new Client(settings), true, timeout), (uri, token, timeout));
     }
 
     /// <summary>Configures an owned client, including an optional rotating backend token provider.</summary>
+    public static PortiaBuilder AddFitz(
+        this PortiaBuilder application,
+        ClientConfig configuration,
+        TimeSpan? startupTimeout = null) =>
+        AddFitz(application, configuration, static _ => { }, startupTimeout);
+
+    /// <summary>Configures an owned client with optional worker selection or fleet membership.</summary>
     public static PortiaBuilder AddFitz(this PortiaBuilder application, ClientConfig configuration,
         Action<PortiaFitzBuilder> configure, TimeSpan? startupTimeout = null)
     {
@@ -192,7 +254,11 @@ public static class PortiaFitzApplicationExtensions
         return Register(application, configure, provider => new FitzApplicationConnection(new Client(configuration), true, timeout), (configuration, timeout));
     }
 
-    /// <summary>Uses an already connected client; its connection and disposal remain application-owned.</summary>
+    /// <summary>Uses an already connected client and hosts every selected request transport.</summary>
+    public static PortiaBuilder UseFitzClient(this PortiaBuilder application, Client client) =>
+        UseFitzClient(application, client, static _ => { });
+
+    /// <summary>Uses an already connected client with optional worker selection or fleet membership.</summary>
     public static PortiaBuilder UseFitzClient(this PortiaBuilder application, Client client, Action<PortiaFitzBuilder> configure)
     {
         ArgumentNullException.ThrowIfNull(client);

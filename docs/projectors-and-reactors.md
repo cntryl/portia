@@ -30,16 +30,14 @@ public sealed partial class AccountProjector(IAccountRepository accounts)
 
 ```csharp
 services.AddScoped<IAccountRepository, AccountRepository>();
-services.AddPortia(p =>
-{
-    p.AddProjector<AccountProjector>(o => o.PerTenant());
-});
+services.AddPortia()
+    .AddProjector<AccountProjector>(WorkloadScope.PerTenant);
 ```
 
-Reference `Portia.Generators` in the component's project for typed dispatch.
+`Portia.DependencyInjection` supplies the generator for typed dispatch.
 `IProjectorContext` contains checkpoint identity and rebuild metadata, never application
-services. `PerTenant()` replaces the declared pattern's realm with the active tenant ID;
-`Global()` keeps the declared realm. Names default to the concrete type's full name;
+services. `WorkloadScope.PerTenant` replaces the declared pattern's realm with the active tenant ID;
+`WorkloadScope.Global` keeps the declared realm. Names default to the concrete type's full name;
 use a constructor name for a manually run component or registration `options.Name`
 for an explicitly named hosted workload.
 
@@ -110,7 +108,7 @@ public sealed partial class AccountReactor(IAccountReactions accounts)
 ```
 
 Register `IAccountReactions` through ordinary scoped DI and the reactor through
-`portia.AddReactor<AccountReactor>(o => o.PerTenant())`. No separate framework checkpoint
+`portia.AddReactor<AccountReactor>(WorkloadScope.PerTenant)`. No separate framework checkpoint
 registration is required when that application dependency implements the contract.
 
 Every event retains its own system execution identity and causation. Do not use the

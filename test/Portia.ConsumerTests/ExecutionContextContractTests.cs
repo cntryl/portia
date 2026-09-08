@@ -17,7 +17,7 @@ public sealed class ExecutionContextContractTests
                 {
                     var services = new ServiceCollection();
                     services.AddSingleton<IEventStore, InMemoryEventStore>();
-                    services.AddPortia(_ => {});
+                    services.AddPortia();
                     await using var provider = services.BuildServiceProvider();
                     await using var scope = provider.CreateAsyncScope();
                     var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
@@ -75,13 +75,15 @@ public sealed class ExecutionContextContractTests
                 {
                     var services = new ServiceCollection();
                     services.AddScoped<Capture>();
-                    services.AddPortia(p => p.AddOuterHandler().AddInnerHandler());
+                    services.AddPortia()
+                        .AddRequestHandler<OuterHandler>()
+                        .AddRequestHandler<InnerHandler>();
                     await using var provider = services.BuildServiceProvider();
                     await using var scope = provider.CreateAsyncScope();
                     await scope.ServiceProvider.GetRequiredService<IRequestBus>().SendAsync(new Outer(), RequestActor.System);
                 }
             }
-            """, new PortiaServiceRegistrationGenerator(), new RequestBusGenerator());
+            """, new RegistrationCallInterceptorGenerator());
         await assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task>>()();
     }
 }

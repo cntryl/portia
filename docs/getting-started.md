@@ -1,7 +1,7 @@
 # Getting started
 
-Portia targets .NET 10. Most applications reference `Portia.Abstractions`,
-`Portia.DependencyInjection`, and the `Portia.Generators` analyzer. Add
+Portia targets .NET 10. Most applications reference `Portia.Abstractions` and
+`Portia.DependencyInjection`, which includes the compile-time generator. Add
 `Portia.AspNetCore` for HTTP, `Portia.Fitz` for Fitz storage/transports, and
 `Portia.Jwt` when inbound work carries JWT actor identities. Packages use the
 cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
@@ -16,8 +16,8 @@ public sealed record Deposited(int Amount) : DomainEvent;
 public sealed record Declined(string Reason) : DomainEvent;
 ```
 
-Reference the generator in each assembly declaring handlers, authorizers, routed requests,
-reactors, or projectors, and in the host that maps HTTP endpoints.
+Reference `Portia.DependencyInjection` in each assembly that registers handlers, authorizers,
+or routed requests. The generator and interceptor configuration arrive with that package.
 
 Select handlers and authorizers through the stable generic methods `AddRequestHandler<T>()`
 and `AddRequestAuthorizer<T>()`. The generator replaces each call
@@ -29,10 +29,10 @@ Registering a handler also registers its request's transport descriptor. A contr
 by a sending application is inferred from strongly typed `SendAsync`, `StreamAsync`,
 `EnqueueAsync`, `PublishAsync`, and `ScheduleAsync` calls.
 Use `RegisterDynamicRequest<T>()` only when dynamic dispatch hides the concrete request type
-from the compiler. The generator contributes referenced domain
-events automatically because an event missing from the catalog is always a replay-time failure,
-not a deployment choice. `AddEvent<T>()` remains a low-level escape hatch for a type unavailable
-to the generator.
+from the compiler. The generator contributes domain events declared by the registering assembly
+and external event types that assembly actually uses. Merely referencing a package does not add
+all of its events to the application catalog. `AddEvent<T>()` remains a low-level escape hatch for
+a type hidden from compile-time analysis.
 
 A dispatch-only application therefore needs no component lambda:
 
@@ -69,13 +69,11 @@ public interface IMfaConfirmedRequest : IRequestBase;
 public sealed record CloseAccount(Uuid AccountId)
     : IRequest, IAccountRequest, IMfaConfirmedRequest;
 
-services.AddPortia(portia =>
-{
-    portia.AddRequestHandler<CloseAccountHandler>();
-    portia.AddRequestAuthorizer<ActiveUserAuthorizer>(AuthorizationStage.Principal);
-    portia.AddRequestAuthorizer<AccountRoleAuthorizer>(AuthorizationStage.ResourceAccess);
-    portia.AddRequestAuthorizer<MfaConfirmationAuthorizer>(AuthorizationStage.StepUp);
-});
+services.AddPortia()
+    .AddRequestHandler<CloseAccountHandler>()
+    .AddRequestAuthorizer<ActiveUserAuthorizer>(AuthorizationStage.Principal)
+    .AddRequestAuthorizer<AccountRoleAuthorizer>(AuthorizationStage.ResourceAccess)
+    .AddRequestAuthorizer<MfaConfirmationAuthorizer>(AuthorizationStage.StepUp);
 ```
 
 Here `ActiveUserAuthorizer` implements `IRequestAuthorizer<IRequestBase>`, the account policy
@@ -110,11 +108,9 @@ public sealed class Account : Aggregate
 Configure persistence once in the shared application setup:
 
 ```csharp
-services.AddPortia(portia =>
-{
-    portia.AddRequestHandler<DepositAccountHandler>();
-});
-services.AddPortiaFitz(configuration.GetSection("Fitz"));
+services.AddPortia()
+    .AddRequestHandler<DepositAccountHandler>()
+    .AddFitz(configuration.GetSection("Fitz"));
 ```
 
 Inject `IAggregateRepository` into a handler and construct the aggregate normally:
@@ -147,14 +143,13 @@ Do not emit or save concurrently on one aggregate instance. An OCC conflict thro
 
 ## Map HTTP endpoints
 
-The installed `Portia.Generators` package supplies the interceptor namespace.
-Reference it directly in the HTTP host with `PrivateAssets="all"`; no manual
-`InterceptorsNamespaces` property is needed. Repository project references used to
-develop the generator still need their local compiler configuration.
+`Portia.DependencyInjection` supplies the generator and interceptor namespace to the HTTP host;
+no separate analyzer package or `InterceptorsNamespaces` property is needed. Repository project
+references receive the analyzer directly from the dependency-injection project.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddPortia(portia => portia.AddRequestHandler<DepositAccountHandler>());
+builder.Services.AddPortia().AddRequestHandler<DepositAccountHandler>();
 // Register persistence and application dependencies as above.
 var app = builder.Build();
 app.MapPortiaPost<DepositAccount>("/accounts/{id}");
@@ -196,19 +191,34 @@ again when the work executes.
 
 ## Run transports and components
 
-Keep Fitz connections long-lived. Register `IRequestDeserializer`,
-`IRequestOutcomeSerializer`, and `IRequestActorValidator`. The RPC server resolves
-these and the bus inside a fresh scope per invocation:
+Configure Fitz once and declare request workers from the selected handlers. Only a deployment
+that calls `AddWorkers()` starts those workers:
 
 ```csharp
-var server = new FitzRpcRequestServer(fitz.Rpc,
-    provider.GetRequiredService<IServiceScopeFactory>());
-await using var workers = await server.RegisterRequestsAsync(ct);
-// Keep workers alive until the host shuts down.
+services.AddPortia()
+    .AddRequestHandler<DepositAccountHandler>()
+    .AddProjector<AccountProjector>(WorkloadScope.PerTenant)
+    .AddReactor<AccountReactor>(WorkloadScope.PerTenant)
+    .AddFitz(configuration.GetSection("Fitz"))
+    .AddWorkers();
 ```
 
-The composed descriptors retain each request's result type. Contracts need no Fitz
-reference. The returned handle owns every worker and unregisters them on disposal.
+The default `AddFitz()` declaration includes each RPC, queue, notice, and schedule transport exposed
+by a selected handler, including when its callback only configures fleet membership. The first
+`AddRpcWorkers()`, `AddQueueWorkers()`, `AddNoticeWorkers()`, or `AddScheduledWorkers()` call narrows
+that default; later calls add transport kinds to the selection. Use `DisableRequestWorkers()` for a
+workload-only deployment. An explicitly selected transport must match at least one selected handler
+or worker startup fails before Fitz connects. Outbound-only inferred requests never become listeners.
+
+Keep Fitz connections long-lived and register an `IRequestActorValidator` for inbound work.
+Fitz supplies the request serializers and creates a fresh dependency-injection scope for each
+invocation or delivery.
+
+### Advanced transport hosting
+
+Applications that deliberately own individual consumers can construct `FitzRpcRequestServer`,
+`FitzRequestQueueConsumer`, and the low-level runners directly. Do not combine manual hosting
+with `AddRequestWorkers()` for the same routes.
 
 Queue and notification hosting create a scope for each delivery, including nested
 dispatch, and dispose it on completion, failure, or cancellation:
@@ -228,16 +238,15 @@ republish failed messages or add application retry counters.
 Register workloads in shared application setup, then activate the worker deployment:
 
 ```csharp
-services.AddPortia(portia =>
-{
-    portia.AddProjector<AccountProjector>(o => o.PerTenant());
-    portia.AddProjector<PlatformSummaryProjector>(o => o.Global());
-    portia.AddReactor<AccountReactor>(o => o.PerTenant());
-}).AddWorker();
+services.AddPortia()
+    .AddProjector<AccountProjector>(WorkloadScope.PerTenant)
+    .AddProjector<PlatformSummaryProjector>(WorkloadScope.Global)
+    .AddReactor<AccountReactor>(WorkloadScope.PerTenant)
+    .AddWorkers();
 ```
 
-Fitz coordinates these registrations across replicas. `PerTenant()` requires an
-`ITenantDirectory`; `Global()` retains the component's declared realm and filters.
+Fitz coordinates these registrations across replicas. `WorkloadScope.PerTenant` requires an
+`ITenantDirectory`; `WorkloadScope.Global` retains the component's declared realm and filters.
 See [shared application setup](application-setup.md) for application identity and fencing.
 
 Inject ordinary application repositories into your processors. Projectors pass a repository
@@ -261,9 +270,8 @@ workloads restart in new scopes; removal and shutdown cancel execution and backo
 A rebuild uses an explicit generation ID:
 
 ```csharp
-portia.AddProjector<AccountProjector>(o =>
+portia.AddProjector<AccountProjector>(WorkloadScope.PerTenant, o =>
 {
-    o.PerTenant();
     o.Processing = new ProjectionRunOptions { RebuildId = "accounts-2026-09", MaxBatchSize = 512 };
 });
 ```

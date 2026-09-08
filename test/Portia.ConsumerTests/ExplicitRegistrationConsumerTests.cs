@@ -79,7 +79,7 @@ public sealed class ExplicitRegistrationConsumerTests
                 public static bool Run()
                 {
                     var services = new ServiceCollection();
-                    var portia = services.AddPortia(p => p.AddRequestHandler<Selected>());
+                    var portia = services.AddPortia().AddRequestHandler<Selected>();
                     if (services.Any(s => s.ServiceType == typeof(RequestAuthorizerRegistration))) return false;
                     portia.AddRequestHandler<Selected>();
                     portia.AddRequestAuthorizer<Selected>();
@@ -90,7 +90,7 @@ public sealed class ExplicitRegistrationConsumerTests
                     return services.Count == count && !services.Any(s => s.ServiceType == typeof(Unselected));
                 }
             }
-            """, new RequestBusGenerator(), new RegistrationCallInterceptorGenerator());
+            """, new RegistrationCallInterceptorGenerator());
         Assert.True(assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>()());
     }
 
@@ -130,7 +130,7 @@ public sealed class ExplicitRegistrationConsumerTests
     }
 
     [Fact]
-    public void ConflictingHandlerRegistrationsFailExplicitlyWithoutPartialRegistration()
+    public void ShouldFailWithoutPartialRegistrationGivenConflictingHandlersWhenRegistering()
     {
         var assembly = GeneratorCompilation.Compile("""
             using System;
@@ -146,7 +146,7 @@ public sealed class ExplicitRegistrationConsumerTests
                     var services = new ServiceCollection();
                     services.AddAccounts();
                     var count = services.Count;
-                    try { services.AddPortia(p => p.AddConflict()); return false; }
+                    try { services.AddPortia().AddRequestHandler<Conflict>(); return false; }
                     catch (InvalidOperationException exception) { return services.Count == count && exception.Message.Contains("conflicting"); }
                 }
             }
@@ -155,7 +155,7 @@ public sealed class ExplicitRegistrationConsumerTests
                 public ValueTask<Result<int>> HandleAsync(IRequestContext<FeatureOneRequest> c, CancellationToken ct)
                     => ValueTask.FromResult(Result<int>.Success(0));
             }
-            """, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator());
+            """, new RegistrationCallInterceptorGenerator(), new PortiaServiceRegistrationGenerator());
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>();
         Assert.True(run());
     }

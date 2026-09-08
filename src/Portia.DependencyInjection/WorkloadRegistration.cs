@@ -12,7 +12,6 @@ public enum WorkloadScope
 /// <summary>Configures one explicit component registration.</summary>
 public sealed class WorkloadOptions
 {
-    internal WorkloadScope? Scope { get; private set; }
     /// <summary>Gets or sets a stable application name; defaults to the component's full type name.</summary>
     public string? Name { get; set; }
     /// <summary>Gets or sets the delay between completed passes.</summary>
@@ -20,27 +19,22 @@ public sealed class WorkloadOptions
     /// <summary>Gets or sets projection/reaction batch limits and rebuild settings.</summary>
     public ProjectionRunOptions Processing { get; set; } = ProjectionRunOptions.Default;
 
-    /// <summary>Selects one logical application workload.</summary>
-    public void Global() => Select(WorkloadScope.Global);
-    /// <summary>Selects independently owned and checkpointed tenant workloads.</summary>
-    public void PerTenant() => Select(WorkloadScope.PerTenant);
-    void Select(WorkloadScope scope)
-    {
-        if (Scope is { } existing && existing != scope)
-            throw new InvalidOperationException("A workload cannot be both global and per-tenant.");
-        Scope = scope;
-    }
 }
 
 /// <summary>An immutable application workload declaration, independent of infrastructure.</summary>
 public sealed record WorkloadRegistration
 {
-    internal WorkloadRegistration(Type componentType, bool projector, Action<WorkloadOptions> configure)
+    internal WorkloadRegistration(
+        Type componentType,
+        bool projector,
+        WorkloadScope scope,
+        Action<WorkloadOptions>? configure)
     {
-        ArgumentNullException.ThrowIfNull(configure);
+        if (!Enum.IsDefined(scope))
+            throw new ArgumentOutOfRangeException(nameof(scope), scope, "Choose a defined workload scope.");
         var options = new WorkloadOptions();
-        configure(options);
-        Scope = options.Scope ?? throw new InvalidOperationException("Choose Global() or PerTenant() for every workload.");
+        configure?.Invoke(options);
+        Scope = scope;
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(options.PollInterval, TimeSpan.Zero);
         ArgumentNullException.ThrowIfNull(options.Processing);
         options.Processing.Validate();

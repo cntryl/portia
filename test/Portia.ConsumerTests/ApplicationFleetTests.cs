@@ -45,17 +45,16 @@ public sealed class ApplicationFleetTests
         _ = builder.Services.AddSingleton<IProjectionCheckpointStore, InMemoryProjectionCheckpointStore>();
         _ = builder.Services.AddScoped(provider => new ProbeReactor(worker, provider.GetRequiredService<WorkloadContext>(), probe));
         _ = builder.Services.AddSingleton(new ReactorRegistration(typeof(ProbeReactor), provider => provider.GetRequiredService<ProbeReactor>()));
-        _ = builder.Services.AddPortia(portia =>
-        {
-            _ = portia.AddReactor<ProbeReactor>(o => { o.Global(); o.PollInterval = TimeSpan.FromMilliseconds(10); });
-            _ = portia.UseFitzClient(client, fitz => _ = fitz.UseFleet(new FleetRunOptions
+        _ = builder.Services.AddPortia()
+            .AddReactor<ProbeReactor>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(10))
+            .UseFitzClient(client, fitz => _ = fitz.UseFleet(new FleetRunOptions
             {
                 MembershipSelector = $"lease://{realm}/members/*",
                 WorkerId = worker,
                 LeaseTtl = TimeSpan.FromSeconds(2),
                 ReconciliationInterval = TimeSpan.FromMilliseconds(50),
-            }));
-        }).AddWorker();
+            }))
+            .AddWorkers();
         return builder.Build();
     }
 

@@ -103,7 +103,7 @@ public sealed class AggregateSaveConcurrencyTests
     {
         var services = new ServiceCollection();
         _ = services.AddSingleton(store);
-        _ = services.AddPortia(_ => { });
+        _ = services.AddPortia();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }
 

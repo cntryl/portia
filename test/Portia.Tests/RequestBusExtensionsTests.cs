@@ -24,7 +24,7 @@ public sealed class RequestBusExtensionsTests
         var services = new ServiceCollection();
         _ = services.AddSingleton<TimeProvider>(clock);
         _ = services.AddSingleton(handler);
-        _ = services.AddPortia(p => p.AddClockProbeHandler());
+        _ = services.AddPortia().AddRequestHandler<ClockProbeHandler>();
         await using var provider = services.BuildServiceProvider(
             new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         await using var scope = provider.CreateAsyncScope();

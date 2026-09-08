@@ -18,7 +18,7 @@ public sealed class SharedDeploymentTests
         var secondId = Uuid.CreateVersion4();
         var effects = new ConsumerHost.Effects();
         var apiBuilder = Host.CreateApplicationBuilder();
-        _ = Shared(apiBuilder.Services, client, effects, id, secondId);
+        _ = Shared(apiBuilder.Services, client, effects, id);
         using var api = apiBuilder.Build();
         await api.StartAsync();
         try
@@ -27,7 +27,7 @@ public sealed class SharedDeploymentTests
             await publisher.EnqueueAsync(new DepositAccount(id, 3), new RequestRouteValues(Resource: id.ToString()), null);
             Assert.Empty(effects.Items);
             var workerBuilder = Host.CreateApplicationBuilder();
-            _ = Shared(workerBuilder.Services, client, effects, id, secondId).AddWorker().AddWorker();
+            _ = Shared(workerBuilder.Services, client, effects, id).AddWorkers().AddWorkers();
             using var worker = workerBuilder.Build();
             await worker.StartAsync();
             try
@@ -62,11 +62,8 @@ public sealed class SharedDeploymentTests
         {
             ["Endpoint"] = Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT") ?? "ws://127.0.0.1:4090/ws",
         }).Build();
-        _ = builder.Services.AddPortia(portia =>
-        {
-            _ = portia.Services.AddContracts();
-            _ = portia.AddFitz(configuration, fitz => fitz.AddEventStore());
-        });
+        _ = builder.Services.AddContracts();
+        _ = builder.Services.AddPortia().AddFitz(configuration);
         using var host = builder.Build();
         await host.StartAsync();
         try
@@ -85,14 +82,13 @@ public sealed class SharedDeploymentTests
     }
 
     [Fact]
-    public async Task MissingActorValidatorFailsBeforeAttemptingConnection()
+    public async Task ShouldFailBeforeConnectingGivenMissingActorValidatorWhenStartingDefaultFitzWorkers()
     {
         var builder = Host.CreateApplicationBuilder();
-        _ = builder.Services.AddPortia(portia =>
-        {
-            _ = portia.Services.AddContracts();
-            _ = portia.AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), fitz => fitz.AddQueueWorker("queue://setup/work/items"));
-        }).AddWorker();
+        _ = builder.Services.AddAccounts();
+        _ = builder.Services.AddPortia()
+            .AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")))
+            .AddWorkers();
         using var host = builder.Build();
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
         Assert.Contains(nameof(IRequestActorValidator), error.Message, StringComparison.Ordinal);
@@ -104,18 +100,17 @@ public sealed class SharedDeploymentTests
         var builder = Host.CreateApplicationBuilder();
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
-        _ = builder.Services.AddPortia(portia =>
-        {
-            _ = portia.Services.AddAccounts();
-            _ = portia.AddProjector<FirstProjector>(o => o.PerTenant());
-            _ = portia.AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), _ => { });
-        }).AddWorker();
+        _ = builder.Services.AddAccounts();
+        _ = builder.Services.AddPortia()
+            .AddProjector<FirstProjector>(WorkloadScope.PerTenant)
+            .AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), _ => { })
+            .AddWorkers();
         using var host = builder.Build();
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
         Assert.Contains(nameof(ITenantDirectory), error.Message, StringComparison.Ordinal);
     }
 
-    static PortiaBuilder Shared(IServiceCollection services, Client client, ConsumerHost.Effects effects, Uuid first, Uuid second)
+    static PortiaBuilder Shared(IServiceCollection services, Client client, ConsumerHost.Effects effects, Uuid first)
     {
         foreach (var descriptor in ConsumerHost.CreateServices())
             services.Add(descriptor);
@@ -123,22 +118,15 @@ public sealed class SharedDeploymentTests
         _ = services.RemoveAll<ConsumerHost.Effects>();
         _ = services.AddSingleton(effects);
         _ = services.AddScoped<IRequestActorValidator, AcceptActor>();
-        return services.AddPortia(portia =>
-        {
-            _ = portia.Services.AddAccounts();
-            _ = portia.AddProjector<FirstProjector>(o => { o.Global(); o.Name = "first-projector"; o.PollInterval = TimeSpan.FromMilliseconds(10); });
-            _ = portia.UseFitzClient(client, fitz =>
+        _ = services.AddAccounts();
+        return services.AddPortia()
+            .AddProjector<FirstProjector>(WorkloadScope.Global, o => { o.Name = "first-projector"; o.PollInterval = TimeSpan.FromMilliseconds(10); })
+            .UseFitzClient(client, fitz =>
             {
                 _ = fitz.UseFleet(new FleetRunOptions { MembershipSelector = $"lease://app-{first}/members/*" });
 
-                _ = fitz.AddEventStore();
-                _ = fitz.AddRequestClients();
-                _ = fitz.AddRpcServer();
-                _ = fitz.AddQueueWorker($"queue://consumer/business/{first}");
-                _ = fitz.AddQueueWorker($"queue://consumer/business/{second}");
-                _ = fitz.AddQueueWorker($"queue://consumer/business/{first}");
+                _ = fitz.AddRequestWorkers();
             });
-        });
     }
 
     sealed class AcceptActor : IRequestActorValidator

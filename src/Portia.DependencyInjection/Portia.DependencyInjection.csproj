@@ -11,5 +11,19 @@
   <ItemGroup>
     <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj" />
     <ProjectReference Include="../Portia.Core/Portia.Core.csproj" />
+    <ProjectReference Include="../Portia.Generators/Portia.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../Portia.Generators/bin/$(Configuration)/netstandard2.0/Portia.Generators.dll"
+          Pack="true"
+          PackagePath="analyzers/dotnet/cs"
+          Visible="false" />
+    <None Include="../Portia.Generators/buildTransitive/Portia.Generators.props"
+          Pack="true"
+          PackagePath="buildTransitive/Portia.DependencyInjection.props" />
   </ItemGroup>
 </Project>

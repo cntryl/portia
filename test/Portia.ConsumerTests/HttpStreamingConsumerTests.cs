@@ -57,7 +57,9 @@ public sealed class HttpStreamingConsumerTests
                 var builder = WebApplication.CreateBuilder();
                 builder.WebHost.UseTestServer();
                 builder.Services.AddSingleton<Stats>();
-                builder.Services.AddPortia(p => p.AddHandler().AddAuthorizer());
+                builder.Services.AddPortia()
+                    .AddRequestHandler<Handler>()
+                    .AddRequestAuthorizer<Authorizer>();
                 await using var app = builder.Build();
                 app.MapPortiaGetStream<StreamRequest, string>("/json");
                 app.MapPortiaGetSse<StreamRequest, string>("/sse");
@@ -85,7 +87,7 @@ public sealed class HttpStreamingConsumerTests
                 return (status, body, stats.Enumerations, stats.EnumerationDisposals, stats.HandlerDisposals, failed);
             }
         }
-        """, new RequestBusGenerator(), new PortiaServiceRegistrationGenerator(), new RequestHttpBindingGenerator()));
+        """, new RegistrationCallInterceptorGenerator(), new RequestHttpBindingGenerator()));
 
     [Theory]
     [InlineData(false, 401)]

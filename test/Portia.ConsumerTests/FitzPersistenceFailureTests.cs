@@ -19,7 +19,7 @@ public sealed class FitzPersistenceFailureTests
         var store = new FitzEventStore(streams, new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<Declined>()));
         var services = new ServiceCollection();
         _ = services.AddSingleton<IEventStore>(store);
-        _ = services.AddPortia(_ => { });
+        _ = services.AddPortia();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         await using var scope = provider.CreateAsyncScope();
         var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();

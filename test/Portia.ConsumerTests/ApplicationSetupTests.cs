@@ -16,7 +16,7 @@ public sealed class ApplicationSetupTests
                 {
                     var services = new ServiceCollection();
                     services.AddSingleton<IEventStore, InMemoryEventStore>();
-                    services.AddPortia(p => { });
+                    services.AddPortia();
                     await using var provider = services.BuildServiceProvider();
                     await using var scope = provider.CreateAsyncScope();
                     var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
@@ -45,8 +45,8 @@ public sealed class ApplicationSetupTests
             }
             public static class Scenario
             {
-                static PortiaBuilder Shared(IServiceCollection services) => services.AddPortia(p =>
-                    p.ConfigureWorker("test", s => s.AddHostedService<Worker>()));
+                static PortiaBuilder Shared(IServiceCollection services) => services.AddPortia()
+                    .ConfigureWorker("test", s => s.AddHostedService<Worker>());
                 public static void Run()
                 {
                     var api = new ServiceCollection();
@@ -54,7 +54,7 @@ public sealed class ApplicationSetupTests
                     using var apiProvider = api.BuildServiceProvider();
                     if (System.Linq.Enumerable.Any(apiProvider.GetServices<IHostedService>())) throw new Exception("API started worker");
                     var worker = new ServiceCollection();
-                    Shared(worker).AddWorker().AddWorker();
+                    Shared(worker).AddWorkers().AddWorkers();
                     using var workerProvider = worker.BuildServiceProvider();
                     if (System.Linq.Enumerable.Count(System.Linq.Enumerable.OfType<Worker>(workerProvider.GetServices<IHostedService>())) != 1) throw new Exception("Worker not activated exactly once");
                 }

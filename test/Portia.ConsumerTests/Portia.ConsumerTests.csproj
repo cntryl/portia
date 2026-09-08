@@ -17,6 +17,7 @@
     <ProjectReference Include="../Consumer.FeatureTwo/Consumer.FeatureTwo.csproj" />
     <ProjectReference Include="../../src/Portia.Testing/Portia.Testing.csproj" />
     <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj" />
+    <ProjectReference Include="../../src/Portia.Fitz/Portia.Fitz.csproj" />
     <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj" />
   </ItemGroup>
 </Project>

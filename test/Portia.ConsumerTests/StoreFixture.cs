@@ -14,7 +14,7 @@ sealed class StoreFixture : IAsyncDisposable
         _client = client;
         var services = new ServiceCollection();
         _ = services.AddSingleton(store);
-        _ = services.AddPortia(_ => { });
+        _ = services.AddPortia();
         _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         _scope = _provider.CreateAsyncScope();
         Repository = _scope.ServiceProvider.GetRequiredService<IAggregateRepository>();

@@ -8,7 +8,7 @@ namespace Cntryl.Portia;
 ///
 /// It is safe only while exactly one replica is running. A deployment that scales workers beyond
 /// one replica must register a distributed <see cref="IWorkloadCoordinator" /> — Fitz supplies one
-/// through <c>AddPortiaFitz</c> — because this implementation cannot detect, and will not fence
+/// through <c>AddFitz</c> — because this implementation cannot detect, and will not fence
 /// against, a second owner of the same workload.
 /// </summary>
 public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
