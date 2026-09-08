@@ -64,6 +64,13 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
 
     async ValueTask<Result> AuthorizeAsync(RequestHandlerRegistration registration, IRequestBase request, RequestDispatchContext context, CancellationToken ct)
     {
+        var authorizers = registry.Authorizers(registration.RequestType).ToArray();
+        foreach (var authorizer in authorizers.Where(candidate => candidate.Stage < AuthorizationStage.ResourceAccess))
+        {
+            var result = await authorizer.AuthorizeAsync(services, request, context, ct).ConfigureAwait(false);
+            if (!result.IsSuccess)
+                return result;
+        }
         if (registration.Permission is not null)
         {
             var permission = await services.GetRequiredService<IPermissionEvaluator>()
@@ -71,7 +78,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             if (!permission.IsSuccess)
                 return permission;
         }
-        foreach (var authorizer in registry.Authorizers(registration.RequestType))
+        foreach (var authorizer in authorizers.Where(candidate => candidate.Stage >= AuthorizationStage.ResourceAccess))
         {
             var result = await authorizer.AuthorizeAsync(services, request, context, ct).ConfigureAwait(false);
             if (!result.IsSuccess)

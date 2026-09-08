@@ -26,7 +26,8 @@ Projectors and reactors are selected with
 `AddProjector<T>(...)` and `AddReactor<T>(...)`, which also choose their execution scope.
 
 Registering a handler also registers its request's transport descriptor. A contract used only
-by a sending application is inferred from strongly typed `SendAsync` and `StreamAsync` calls.
+by a sending application is inferred from strongly typed `SendAsync`, `StreamAsync`,
+`EnqueueAsync`, `PublishAsync`, and `ScheduleAsync` calls.
 Use `RegisterDynamicRequest<T>()` only when dynamic dispatch hides the concrete request type
 from the compiler. The generator contributes referenced domain
 events automatically because an event missing from the catalog is always a replay-time failure,
@@ -51,9 +52,9 @@ Applications may keep feature-specific `IServiceCollection` extensions as ordina
 helpers, but Portia no longer requires assembly wrappers around generated method names.
 
 A scoped `IRequestBus` resolves the selected handler and authorizer from the current
-scope. A handler may inject that bus to dispatch a different request. Permission
-checks run before authorizers, which run before the handler. No application bus or
-runtime assembly scan is required.
+scope. A handler may inject that bus to dispatch a different request. Principal policies run
+first; declarative permission checks begin resource access, followed by resource and step-up
+authorizers, then the handler. No application bus or runtime assembly scan is required.
 
 Authorization is independently composable. An `IRequestAuthorizer<TScope>` may target one
 concrete request, a request-family interface, or `IRequestBase`; every selected authorizer whose

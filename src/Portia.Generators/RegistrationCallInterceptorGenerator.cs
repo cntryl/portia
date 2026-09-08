@@ -37,7 +37,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 {
                     Expression: MemberAccessExpressionSyntax
                     {
-                        Name.Identifier.ValueText: "SendAsync" or "StreamAsync" or "DispatchAsync" or "DispatchStreamAsync",
+                        Name.Identifier.ValueText: "SendAsync" or "StreamAsync" or "DispatchAsync" or "DispatchStreamAsync"
+                            or "EnqueueAsync" or "PublishAsync" or "ScheduleAsync",
                     },
                 },
                 static (ctx, _) => DispatchedRequest(ctx))
@@ -127,7 +128,13 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
         var owner = method.ReducedFrom?.ContainingType ?? method.ContainingType;
         var ownerName = owner.ToDisplayString();
-        if (ownerName is not ("Cntryl.Portia.RequestBusExtensions" or "Cntryl.Portia.IRequestBus" or "Cntryl.Portia.IRemoteRequestSender" or "Cntryl.Portia.RequestSenderContextExtensions"))
+        if (ownerName is not ("Cntryl.Portia.RequestBusExtensions"
+            or "Cntryl.Portia.IRequestBus"
+            or "Cntryl.Portia.IRemoteRequestSender"
+            or "Cntryl.Portia.IRequestQueuePublisher"
+            or "Cntryl.Portia.INoticeRequestSender"
+            or "Cntryl.Portia.IRequestScheduler"
+            or "Cntryl.Portia.RequestSenderContextExtensions"))
         {
             return null;
         }

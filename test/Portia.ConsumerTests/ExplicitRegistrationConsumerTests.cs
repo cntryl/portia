@@ -5,7 +5,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ExplicitRegistrationConsumerTests
 {
     [Fact]
-    public void StronglyTypedDispatchInfersSenderRequestWithoutExplicitRegistration()
+    public void StronglyTypedOutboundCallsInferEveryRequestTransportWithoutExplicitRegistration()
     {
         var assembly = GeneratorCompilation.Compile("""
             using System.Linq;
@@ -13,19 +13,38 @@ public sealed class ExplicitRegistrationConsumerTests
             using Cntryl.Portia;
             using Microsoft.Extensions.DependencyInjection;
             [RequestRoute("app", "accounts", "*", "deposit")]
-            public sealed record Deposit(int Amount) : IRequest, ICallable;
+            public sealed record CallAccount(int Amount) : IRequest, ICallable;
+            [RequestRoute("app", "accounts", "*", "queue")]
+            public sealed record QueueAccount(int Amount) : IRequest, IQueuable;
+            [RequestRoute("app", "accounts", "*", "notice")]
+            public sealed record NoticeAccount(int Amount) : IRequest, INotifiable;
+            [RequestRoute("app", "accounts", "*", "schedule")]
+            public sealed record ScheduleAccount(int Amount) : IRequest, ISchedulable;
             public static class Scenario
             {
-                public static async ValueTask<Result> Dispatch(IRemoteRequestSender sender)
-                    => await sender.SendAsync(new Deposit(10), new RequestRouteValues(), null);
+                public static ValueTask<Result> Call(IRemoteRequestSender sender)
+                    => sender.SendAsync(new CallAccount(10), new RequestRouteValues(), null);
+                public static ValueTask Queue(IRequestQueuePublisher sender)
+                    => sender.EnqueueAsync(new QueueAccount(10), new RequestRouteValues(), null);
+                public static ValueTask Notice(INoticeRequestSender sender)
+                    => sender.PublishAsync(new NoticeAccount(10), new RequestRouteValues(), null);
+                public static ValueTask<string> Schedule(IRequestScheduler sender, RequestScheduleSpec spec)
+                    => sender.ScheduleAsync(new ScheduleAccount(10), spec, new RequestRouteValues(), null);
 
                 public static bool Run()
                 {
                     var services = new ServiceCollection();
                     services.AddPortia();
-                    return services.OfType<ServiceDescriptor>()
-                        .Any(descriptor => descriptor.ImplementationInstance is RequestTransportRegistration registration
-                            && registration.RequestType == typeof(Deposit));
+                    var requests = services.OfType<ServiceDescriptor>()
+                        .Select(descriptor => descriptor.ImplementationInstance)
+                        .OfType<RequestTransportRegistration>()
+                        .Select(registration => registration.RequestType)
+                        .ToArray();
+                    return requests.Length == 4
+                        && requests.Contains(typeof(CallAccount))
+                        && requests.Contains(typeof(QueueAccount))
+                        && requests.Contains(typeof(NoticeAccount))
+                        && requests.Contains(typeof(ScheduleAccount));
                 }
             }
             """, new RegistrationCallInterceptorGenerator());

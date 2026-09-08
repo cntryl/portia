@@ -223,7 +223,9 @@ public sealed class RequestAuthorizationTests
         _ = services.AddSingleton<PrincipalAuthorizer>();
         _ = services.AddSingleton<AccountRoleAuthorizer>();
         _ = services.AddSingleton<MfaConfirmationAuthorizer>();
-        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<TieredRequest, TieredHandler>());
+        _ = services.AddSingleton<IPermissionEvaluator>(new RecordingPermissionEvaluator(calls));
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<TieredRequest, TieredHandler>(static _ => "accounts:close"));
         _ = services.AddSingleton<RequestAuthorizerRegistration>(
             new RequestAuthorizerRegistration<IRequestBase, PrincipalAuthorizer>(AuthorizationStage.Principal));
         _ = services.AddSingleton<RequestAuthorizerRegistration>(
@@ -239,7 +241,7 @@ public sealed class RequestAuthorizationTests
             .SendAsync(new TieredRequest(Uuid.CreateVersion4()), RequestActor.System);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(["principal", "account-role", "mfa", "handler"], calls);
+        Assert.Equal(["principal", "permission", "account-role", "mfa", "handler"], calls);
     }
 
 }
@@ -285,6 +287,15 @@ sealed class MfaConfirmationAuthorizer(List<string> calls) : IRequestAuthorizer<
     public ValueTask<Result> AuthorizeAsync(IRequestContext<IMfaConfirmedRequest> context, ClaimsPrincipal actor, CancellationToken ct = default)
     {
         calls.Add("mfa");
+        return ValueTask.FromResult(Result.Success);
+    }
+}
+
+sealed class RecordingPermissionEvaluator(List<string> calls) : IPermissionEvaluator
+{
+    public ValueTask<Result> EvaluateAsync(ClaimsPrincipal actor, string permission, CancellationToken ct = default)
+    {
+        calls.Add("permission");
         return ValueTask.FromResult(Result.Success);
     }
 }
