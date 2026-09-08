@@ -70,7 +70,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     };
 
     static bool IsRegistrationName(SimpleNameSyntax name) => name.Identifier.ValueText is
-        "AddPortia" or "AddRequestHandler" or "AddRequestAuthorizer" or "RegisterDynamicRequest";
+        "AddPortia" or "AddRequestHandler" or "AddRequestAuthorizer" or "RegisterDynamicRequest" or "AddEvent";
 
     static Call? Analyze(GeneratorSyntaxContext context)
     {
@@ -103,6 +103,18 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         }
         if (method.TypeArguments[0] is not INamedTypeSymbol type)
             return new Call(location, role, null, "use a concrete named type", invocation.GetLocation());
+
+        if (role == "domain event")
+        {
+            var attribute = type.GetAttributes().FirstOrDefault(candidate =>
+                candidate.AttributeClass?.ToDisplayString() == "Cntryl.Portia.DiscriminatorAttribute");
+            return attribute is not null && attribute.ConstructorArguments.Length == 2
+                && attribute.ConstructorArguments[0].Value is string name
+                && attribute.ConstructorArguments[1].Value is int version
+                ? new Call(location, role, $"_ = builder.AddGeneratedEvent<{Type(type)}>({version}, {RequestTransportDiscovery.FormatStringLiteral(name)});",
+                    null, invocation.GetLocation())
+                : new Call(location, role, null, "the event needs a valid Discriminator attribute", invocation.GetLocation());
+        }
 
         var interfaces = type.AllInterfaces.Where(i => i.OriginalDefinition.ContainingNamespace.ToDisplayString() == "Cntryl.Portia").ToArray();
         var selected = interfaces.Where(i => role switch
@@ -167,6 +179,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 "AddRequestHandler" => "handler",
                 "AddRequestAuthorizer" => "authorizer",
                 "RegisterDynamicRequest" => "dynamic request",
+                "AddEvent" => "domain event",
                 _ => null,
             }
             : null;

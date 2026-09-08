@@ -8,7 +8,12 @@ Only three static names are emitted: `portia.request.send` (`Producer`), `portia
 
 Portia follows W3C sampling flags and the application's listener. Envelopes propagate only `traceparent` and optional `tracestate`; baggage, credentials, claims, payloads, and business identifiers are excluded. Events, authorizers, polling, empty reads, batches, checkpoints, acknowledgements, retries, renewals, tenant scans, reconciliation, assignments, and host lifecycle never create spans. Background faults add an exception event only when an activity already exists.
 
-This replaces former dynamic request, runner, and fleet activities. Migrate dashboards to the three stable names and group by `request.type`.
+Fleet partition callbacks receive cancellation when ownership is revoked. If a callback has not
+stopped within `FleetRunOptions.PartitionStopTimeout` (30 seconds by default), the runner records
+one `portia.worker.failure`, throws `FleetPartitionTerminationTimeoutException`, and its hosted
+service stops the host. It does not start replacement work beside a callback known to be stuck.
+
+Dashboards should key on these three stable span names and group by `request.type`.
 
 ## Instruments
 

@@ -15,11 +15,13 @@ namespace Cntryl.Portia;
 /// <param name="scopeFactory">Creates one scope per held partition lease.</param>
 /// <param name="partitions">The fixed, deployment-time-known set of partition routes.</param>
 /// <param name="options">How long a held lease survives without renewal.</param>
+/// <param name="applicationLifetime">Stops the host after a terminal partition-shutdown failure.</param>
 sealed class FleetPartitionRunnerHostedService<TWorkload>(
     FleetPartitionRunner runner,
     IServiceScopeFactory scopeFactory,
     IReadOnlyCollection<string> partitions,
-    FleetRunOptions options) : BackgroundService
+    FleetRunOptions options,
+    IHostApplicationLifetime? applicationLifetime = null) : BackgroundService
     where TWorkload : class, IPartitionWorkload
 {
     readonly FleetPartitionRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
@@ -27,8 +29,18 @@ sealed class FleetPartitionRunnerHostedService<TWorkload>(
     readonly IReadOnlyCollection<string> _partitions = partitions ?? throw new ArgumentNullException(nameof(partitions));
     readonly FleetRunOptions _options = options;
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
-        _runner.RunAsync(_partitions, RunPartitionAsync, _options, stoppingToken);
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await _runner.RunAsync(_partitions, RunPartitionAsync, _options, stoppingToken).ConfigureAwait(false);
+        }
+        catch (FleetPartitionTerminationTimeoutException)
+        {
+            applicationLifetime?.StopApplication();
+            throw;
+        }
+    }
 
     async Task RunPartitionAsync(string partition, LeaseAuthority authority, CancellationToken ct)
     {

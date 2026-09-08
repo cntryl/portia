@@ -5,8 +5,8 @@ Portia targets .NET 10. Most applications reference `Portia.Abstractions` and
 `Portia.AspNetCore` for HTTP, `Portia.Fitz` for Fitz storage/transports, and
 `Portia.Jwt` when inbound work carries JWT actor identities. Packages use the
 cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
-Review the [known limitations](known-limitations.md), especially the envelope-v2 drain requirement,
-before upgrading an existing deployment.
+Review the [scope](scope.md) page for what Portia supports and the
+[design decisions](design-decisions.md) behind its operational boundaries.
 
 ## Define contracts and register components
 
@@ -345,5 +345,4 @@ and derived results separately, against both event stores.
 Use `AggregateScenario<T>` to inspect pending/committed changes and seed raised
 history in business tests. Use `DomainEventSeed.Attach` to seed store events.
 Neither requires reflection nor `InternalsVisibleTo`. Run the solution against
-Docker Compose using the commands in the [README](../README.md). Review the
-[migration notes](migration.md) before upgrading existing applications.
+Docker Compose using the commands in the [README](../README.md).

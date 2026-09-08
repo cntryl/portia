@@ -7,8 +7,13 @@
     <RepositoryUrl>https://github.com/cntryl/portia</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageOutputPath>$(MSBuildThisFileDirectory)../artifacts/packages</PackageOutputPath>
-    <IsAotCompatible Condition="'$(MSBuildProjectName)' != 'Portia.Generators'">true</IsAotCompatible>
+    <IsAotCompatible Condition="'$(MSBuildProjectName)' != 'Portia.Generators' and '$(MSBuildProjectName)' != 'Portia.CodeFixes'">true</IsAotCompatible>
     <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
 </Project>

@@ -15,7 +15,9 @@ public sealed class ExplicitWorkloadTests
             .AddReactor<FirstReactor>(WorkloadScope.Global)
             .AddWorkers();
 
-        _ = Assert.Single(services, service => service.ServiceType == typeof(IHostedService));
+        Assert.Equal(2, services.Count(service => service.ServiceType == typeof(IHostedService)));
+        _ = Assert.Single(services, service => service.ServiceType == typeof(IHostedService)
+            && service.ImplementationType?.Name == "PortiaWorkloadService");
     }
 
     [Fact]
@@ -25,8 +27,7 @@ public sealed class ExplicitWorkloadTests
         _ = services.AddSingleton<IWorkloadCoordinator, CompletedCoordinator>();
         _ = services.AddPortia().AddReactor<FirstReactor>(WorkloadScope.Global).AddWorkers();
         await using var provider = services.BuildServiceProvider();
-        var worker = Assert.IsAssignableFrom<BackgroundService>(
-            Assert.Single(provider.GetServices<IHostedService>()));
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await worker.StartAsync(default);
         try
         {

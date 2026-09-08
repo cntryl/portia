@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Json;
 using Cntryl.Fitz.Abstractions.Domains.Schedule;
 
 namespace Cntryl.Portia;
@@ -20,17 +22,17 @@ public sealed class FitzRequestScheduler(IScheduleClient schedule, IRequestSeria
         TRequest request,
         RequestScheduleSpec spec,
         RequestRouteValues routeValues,
-        string? actorToken,
+        ClaimsPrincipal actor,
         CancellationToken ct = default)
         where TRequest : IRequest, ISchedulable
-        => ScheduleAsync(request, spec, routeValues, actorToken, RequestMetadata.Create(), ct);
+        => ScheduleAsync(request, spec, routeValues, actor, RequestMetadata.Create(), ct);
 
     /// <inheritdoc />
     public async ValueTask<string> ScheduleAsync<TRequest>(
         TRequest request,
         RequestScheduleSpec spec,
         RequestRouteValues routeValues,
-        string? actorToken,
+        ClaimsPrincipal actor,
         RequestMetadata metadata,
         CancellationToken ct = default)
         where TRequest : IRequest, ISchedulable
@@ -38,6 +40,11 @@ public sealed class FitzRequestScheduler(IScheduleClient schedule, IRequestSeria
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(routeValues);
+        ArgumentNullException.ThrowIfNull(actor);
+        if (!RequestActor.IsSystem(actor))
+            throw new ArgumentException("Scheduled requests must execute as an explicit Portia system identity.", nameof(actor));
+        var subject = actor.FindFirst(ClaimTypes.NameIdentifier)
+            ?? throw new ArgumentException("A scheduled system identity requires a subject.", nameof(actor));
 
         using var activity = PortiaTelemetry.StartSend(typeof(TRequest).Name, "fitz.schedule");
         var started = PortiaTelemetry.StartTimestamp();
@@ -45,7 +52,10 @@ public sealed class FitzRequestScheduler(IScheduleClient schedule, IRequestSeria
         try
         {
             var route = FitzRouting.ResolveScheduleRoute(_catalog, request, routeValues);
-            var body = _serializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
+            var requestEnvelope = _serializer.Serialize(request, null, metadata, PortiaTelemetry.CaptureTraceContext());
+            var body = JsonSerializer.SerializeToUtf8Bytes(
+                new FitzScheduledRequestEnvelope(1, subject.Value, subject.Issuer, requestEnvelope.ToArray()),
+                FitzJsonContext.Default.FitzScheduledRequestEnvelope);
             var scheduleId = await _schedule.CreateAsync(route, spec.Cron, ToFitzDeliveryMode(spec.DeliveryMode), body.ToArray(), ct).ConfigureAwait(false);
             return scheduleId ?? throw new InvalidOperationException($"Scheduling request over route '{route}' did not return an identity.");
         }
@@ -68,3 +78,5 @@ public sealed class FitzRequestScheduler(IScheduleClient schedule, IRequestSeria
         _ => throw new ArgumentOutOfRangeException(nameof(mode)),
     };
 }
+
+sealed record FitzScheduledRequestEnvelope(int Version, string SystemSubject, string SystemIssuer, byte[] RequestEnvelope);

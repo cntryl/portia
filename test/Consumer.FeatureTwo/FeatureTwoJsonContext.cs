@@ -8,4 +8,5 @@ namespace Cntryl.Portia.Consumer;
 [JsonSerializable(typeof(FeatureTwoRequest))]
 [JsonSerializable(typeof(FeatureTwoObserved))]
 [JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(int))]
 sealed partial class FeatureTwoJsonContext : JsonSerializerContext;

@@ -12,6 +12,7 @@ static class HttpConsumerScenario
             using System.Text;
             using System.Text.Json;
             using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
@@ -21,6 +22,14 @@ static class HttpConsumerScenario
             using Microsoft.AspNetCore.TestHost;
             using Microsoft.Extensions.DependencyInjection;
             {{declaration}}
+            [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+            [JsonSerializable(typeof(Binding))]
+            [JsonSerializable(typeof(string))]
+            internal sealed class ScenarioJsonContext(JsonSerializerOptions options) : JsonSerializerContext(options)
+            {
+                protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                public override JsonTypeInfo? GetTypeInfo(Type type) => new DefaultJsonTypeInfoResolver().GetTypeInfo(type, Options);
+            }
             public sealed class Handler : IRequestHandler<Binding, string>
             {
                 public ValueTask<Result<string>> HandleAsync(IRequestContext<Binding> context, CancellationToken ct)
@@ -38,6 +47,7 @@ static class HttpConsumerScenario
                     builder.Services.AddPortia().AddRequestHandler<Handler>();
                     builder.Services.AddPortia().ConfigureJson(options =>
                     {
+                        options.TypeInfoResolver = new DefaultJsonTypeInfoResolver();
                         options.PropertyNamingPolicy = snake
                             ? JsonNamingPolicy.SnakeCaseLower
                             : JsonNamingPolicy.CamelCase;

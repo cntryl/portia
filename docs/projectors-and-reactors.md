@@ -88,6 +88,35 @@ Manual implementations can override `ProjectEventAsync` / `ProjectBatchAsync`, o
 
 ## Reactions
 
+A reactor performs an application effect after observing an event. There are two ordinary
+patterns; choose the one that describes the behavior rather than wrapping every effect in a
+command mechanically.
+
+Dispatch a command when the behavior is a reusable application operation, needs the request
+authorization and handler pipeline, or can also originate outside the reactor:
+
+```csharp
+public sealed partial class AccountReactor(
+    IProjectionCheckpointStore checkpoints,
+    IRequestBus bus)
+    : BaseReactor(checkpoints, EventStreamPattern.ForPattern("accounts", "balances")),
+      IReactorHandler<MoneyDeposited>
+{
+    public ValueTask HandleAsync(IReactorContext<MoneyDeposited> context, CancellationToken ct) =>
+        bus.SendReactionAsync(
+            new SendDepositReceipt(context.Ev.Metadata.AggregateId), context, ct);
+}
+```
+
+`SendReactionAsync` creates a child request from that event's reaction context, preserving its
+system actor, correlation, and causation. A failed command result throws
+`ReactionCommandFailedException`, so the reactor does not silently checkpoint a failed effect.
+Result-bearing requests use `SendAsync<T>` directly because the reactor must decide what the
+returned value and expected failures mean.
+
+Call an injected integration service directly when the action is inherently caused by the event
+and adding a request contract would add no useful application boundary:
+
 ```csharp
 public interface IAccountReactions : IProjectionCheckpointStore
 {
@@ -114,8 +143,9 @@ registration is required when that application dependency implements the contrac
 Every event retains its own system execution identity and causation. Do not use the
 first event's context for the whole batch. Checkpoints advance only after processing
 succeeds, but external effects can already have occurred when a later effect or checkpoint
-write fails. Both reactor bases require idempotent effects; batching is not an external
-transaction or an exactly-once guarantee.
+write fails. Both command handlers reached from reactors and direct effects must tolerate replay;
+batching is not an external transaction or an exactly-once guarantee. Use the triggering
+`DomainEventMetadata.EventId` as the deduplication key when the target supports one.
 
 ## Storage implementations
 
@@ -140,5 +170,24 @@ batch sizes and their repositories must enforce backend limits without partially
 an oversized projection batch. Test atomicity, conditional conflicts, fencing, cancellation,
 and ambiguous commit responses against the chosen backend.
 
-[Verification evidence](processor-base-verification.md) records the red → green checks
-and installed API/worker package proof.
+`Portia.Testing` turns the storage requirements into executable suites:
+
+- `ProjectionStoreConformance` verifies atomic data/checkpoint commits, rollback, optimistic
+  conflicts, authoritative reloads, and rebuild isolation.
+- `FencingTokenConformance` verifies monotonic token enforcement, stale-write rejection,
+  durability across reopen, and concurrent ownership changes.
+- `ReactionDeduplicationConformance` verifies an optional application deduplication primitive.
+  It cannot prove crash atomicity between an external effect and its bookkeeping; use an
+  idempotent sink or an integration-specific transactional inbox/outbox when that guarantee is
+  required.
+
+The suites accept small probe implementations and throw `ConformanceViolationException`, so an
+application can invoke them from its normal test framework. Future official persistence adapters
+must pass the applicable suites, but no database adapter is bundled today.
+
+`Portia.Testing` supplies backend-neutral `FencingTokenConformance`,
+`ProjectionStoreConformance`, and optional `ReactionDeduplicationConformance` suites. Implement
+their small probe interfaces in the application's storage test project and run `VerifyAsync` from
+the test framework already in use. The deduplication suite proves duplicate suppression but cannot
+prove crash atomicity between an external effect and bookkeeping; use an idempotent target or a
+transactional inbox/outbox when that failure window matters.

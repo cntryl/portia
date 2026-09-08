@@ -34,7 +34,7 @@ public sealed class ConsumerRecoveryTests
             _ = services.AddPortiaQueueRunner();
         }
         await using var provider = ConsumerHost.Build(services);
-        var worker = Assert.IsAssignableFrom<BackgroundService>(Assert.Single(provider.GetServices<IHostedService>()));
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         using var cancellation = new CancellationTokenSource();
         try
         {

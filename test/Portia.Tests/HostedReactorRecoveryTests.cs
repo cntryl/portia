@@ -44,7 +44,7 @@ public sealed class HostedReactorRecoveryTests
         }).AddWorkers();
         using var provider = services.BuildServiceProvider();
 
-        var hostedService = (BackgroundService)Assert.Single(provider.GetServices<IHostedService>());
+        var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await hostedService.StartAsync(default);
         var executeTask = hostedService.ExecuteTask
             ?? throw new InvalidOperationException("The reactor hosted service did not start.");

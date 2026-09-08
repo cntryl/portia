@@ -43,7 +43,8 @@ public static class PortiaFitzHostingServiceCollectionExtensions
             sp.GetRequiredService<FleetPartitionRunner>(),
             sp.GetRequiredService<IServiceScopeFactory>(),
             partitions,
-            options));
+            options,
+            sp.GetService<Microsoft.Extensions.Hosting.IHostApplicationLifetime>()));
         return services;
     }
 }

@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Cntryl.Fitz.Abstractions.Domains.Schedule;
 
 namespace Cntryl.Portia;
@@ -29,11 +30,30 @@ public sealed class FitzScheduledRequestConsumer(
 
         await foreach (var notification in subscription.WithCancellation(ct).ConfigureAwait(false))
         {
-            var envelope = _serializer.DeserializeEnvelope(notification.Payload);
+            using var document = JsonDocument.Parse(notification.Payload);
+            if (document.RootElement.TryGetProperty("contract", out _))
+            {
+                throw new LegacyScheduledRequestException(notification.Route);
+            }
+            var scheduled = JsonSerializer.Deserialize(notification.Payload.Span, FitzJsonContext.Default.FitzScheduledRequestEnvelope)
+                ?? throw new InvalidOperationException("A fired schedule envelope deserialized to null.");
+            if (scheduled.Version != 1 || string.IsNullOrWhiteSpace(scheduled.SystemSubject)
+                || string.IsNullOrWhiteSpace(scheduled.SystemIssuer))
+            {
+                throw new InvalidOperationException("A fired schedule has an invalid system identity envelope.");
+            }
+            var envelope = _serializer.DeserializeEnvelope(scheduled.RequestEnvelope);
+            if (envelope.ActorToken is not null)
+            {
+                throw new InvalidOperationException("A durable schedule request envelope cannot contain an actor token.");
+            }
             var request = envelope.Request as IRequest
                 ?? throw new InvalidOperationException(
                     "A fired Fitz schedule entry deserialized to a result-bearing request; only no-result requests can be scheduled.");
-            yield return new RequestNotification(request, envelope.ActorToken, new RequestMetadata(Uuid.CreateVersion4(), envelope.Metadata.CorrelationId, envelope.Metadata.RequestId), new ScheduleInvocation(notification.Route), envelope.TraceContext);
+            yield return new RequestNotification(request, null,
+                new RequestMetadata(Uuid.CreateVersion4(), envelope.Metadata.CorrelationId, envelope.Metadata.RequestId),
+                new ScheduleInvocation(notification.Route), envelope.TraceContext,
+                RequestActor.CreateSystem(scheduled.SystemSubject, scheduled.SystemIssuer));
         }
     }
 }

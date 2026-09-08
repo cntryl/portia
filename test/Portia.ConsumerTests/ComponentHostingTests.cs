@@ -21,7 +21,7 @@ public sealed class ComponentHostingTests
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         var id = Uuid.CreateVersion4();
         await ConsumerHost.SeedAsync(provider, id);
-        var worker = Assert.Single(provider.GetServices<IHostedService>());
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
             await worker.StartAsync(default);
@@ -55,7 +55,7 @@ public sealed class ComponentHostingTests
         storage.FailAfterCommit = true;
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
-        var worker = Assert.Single(provider.GetServices<IHostedService>());
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
             await worker.StartAsync(default);
@@ -90,7 +90,7 @@ public sealed class ComponentHostingTests
             ? portia.AddProjector<FirstProjector>(WorkloadScope.Global)
             : portia.AddReactor<FirstReactor>(WorkloadScope.Global)).AddWorkers();
         await using var provider = ConsumerHost.Build(services);
-        var worker = Assert.Single(provider.GetServices<IHostedService>());
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
             await worker.StartAsync(default);
@@ -152,7 +152,7 @@ public sealed class ComponentHostingTests
             ? portia.AddProjector<FirstProjector>(WorkloadScope.Global)
             : portia.AddReactor<FirstReactor>(WorkloadScope.Global)).AddWorkers();
         await using var provider = ConsumerHost.Build(services);
-        var worker = Assert.Single(provider.GetServices<IHostedService>());
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         var id = Uuid.CreateVersion4();
         await ConsumerHost.SeedAsync(provider, id);
@@ -194,7 +194,7 @@ public sealed class ComponentHostingTests
             .AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
-        var workers = provider.GetServices<IHostedService>().ToArray();
+        var workers = provider.GetServices<IHostedService>().OfType<BackgroundService>().ToArray();
         _ = Assert.Single(workers);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         try
@@ -230,7 +230,7 @@ public sealed class ComponentHostingTests
             .AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
-        var workers = provider.GetServices<IHostedService>().ToArray();
+        var workers = provider.GetServices<IHostedService>().OfType<BackgroundService>().ToArray();
         _ = Assert.Single(workers);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         try

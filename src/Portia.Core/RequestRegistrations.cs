@@ -7,14 +7,18 @@ namespace Cntryl.Portia;
 /// <summary>Describes a compile-time-discovered handler without constructing application dependencies.</summary>
 /// <param name="requestType">The concrete request.</param>
 /// <param name="handlerType">The concrete handler.</param>
+/// <param name="resultType">The unary result or streaming item type, when present.</param>
 /// <param name="permission">The generated permission expression, if declared.</param>
-public abstract class RequestHandlerRegistration(Type requestType, Type handlerType, Func<IRequestBase, string>? permission)
+public abstract class RequestHandlerRegistration(Type requestType, Type handlerType, Type? resultType, Func<IRequestBase, string>? permission)
 {
     /// <summary>Gets the concrete request type.</summary>
     public Type RequestType { get; } = requestType;
 
     /// <summary>Gets the concrete handler type.</summary>
     public Type HandlerType { get; } = handlerType;
+
+    /// <summary>Gets the unary result or streaming item type, when the request produces one.</summary>
+    public Type? ResultType { get; } = resultType;
 
     internal Func<IRequestBase, string>? Permission { get; } = permission;
 
@@ -41,7 +45,7 @@ interface IStreamRequestInvocation<TOut>
 /// <typeparam name="THandler">The handler.</typeparam>
 /// <param name="permission">The generated permission expression.</param>
 public sealed class RequestRegistration<TRequest, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler>(Func<TRequest, string>? permission = null)
-    : RequestHandlerRegistration(typeof(TRequest), typeof(THandler), permission is null ? null : request => permission((TRequest)request)), IRequestInvocation
+    : RequestHandlerRegistration(typeof(TRequest), typeof(THandler), null, permission is null ? null : request => permission((TRequest)request)), IRequestInvocation
     where TRequest : IRequest
     where THandler : class, IRequestHandler<TRequest>
 {
@@ -57,7 +61,7 @@ public sealed class RequestRegistration<TRequest, [DynamicallyAccessedMembers(Dy
 /// <typeparam name="TOut">The result.</typeparam>
 /// <param name="permission">The generated permission expression.</param>
 public sealed class RequestRegistration<TRequest, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler, TOut>(Func<TRequest, string>? permission = null)
-    : RequestHandlerRegistration(typeof(TRequest), typeof(THandler), permission is null ? null : request => permission((TRequest)request)), IRequestInvocation<TOut>
+    : RequestHandlerRegistration(typeof(TRequest), typeof(THandler), typeof(TOut), permission is null ? null : request => permission((TRequest)request)), IRequestInvocation<TOut>
     where TRequest : IRequest<TOut>
     where THandler : class, IRequestHandler<TRequest, TOut>
 {
@@ -73,7 +77,7 @@ public sealed class RequestRegistration<TRequest, [DynamicallyAccessedMembers(Dy
 /// <typeparam name="TOut">The streamed item.</typeparam>
 /// <param name="permission">The generated permission expression.</param>
 public sealed class StreamRequestRegistration<TRequest, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler, TOut>(Func<TRequest, string>? permission = null)
-    : RequestHandlerRegistration(typeof(TRequest), typeof(THandler), permission is null ? null : request => permission((TRequest)request)), IStreamRequestInvocation<TOut>
+    : RequestHandlerRegistration(typeof(TRequest), typeof(THandler), typeof(TOut), permission is null ? null : request => permission((TRequest)request)), IStreamRequestInvocation<TOut>
     where TRequest : IStreamRequest<TOut>
     where THandler : class, IStreamRequestHandler<TRequest, TOut>
 {

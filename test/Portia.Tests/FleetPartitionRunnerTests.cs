@@ -11,6 +11,63 @@ namespace Cntryl.Portia;
 [Collection(TelemetryTestGroup.Name)]
 public sealed class FleetPartitionRunnerTests
 {
+    /// <summary>A callback that ignores revocation faults the runner within the configured bound.</summary>
+    [Fact]
+    public async Task ShouldFaultRunnerGivenPartitionCallbackIgnoresCancellation()
+    {
+        const string partition = "lease://portia/fleet/stuck";
+        var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failures = 0;
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Meter.Name == PortiaTelemetry.SourceName && instrument.Name == "portia.worker.failure")
+                meterListener.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            Assert.Equal(["runner", "error.type"], tags.ToArray().Select(tag => tag.Key));
+            _ = Interlocked.Increment(ref failures);
+        });
+        listener.Start();
+        using var lifetime = new CancellationTokenSource();
+        var options = SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
+        {
+            PartitionStopTimeout = TimeSpan.FromMilliseconds(50),
+        };
+        var run = runner.RunAsync([partition], (_, _, _) =>
+        {
+            started.SetResult();
+            return release.Task;
+        }, options, lifetime.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        lifetime.Cancel();
+        var exception = await Assert.ThrowsAsync<FleetPartitionTerminationTimeoutException>(() =>
+            run.WaitAsync(TimeSpan.FromSeconds(2)));
+
+        Assert.Equal([partition], exception.Partitions);
+        Assert.Equal(options.PartitionStopTimeout, exception.Timeout);
+        Assert.Equal(1, Volatile.Read(ref failures));
+        release.SetResult();
+    }
+
+    /// <summary>A non-positive callback termination timeout is rejected before the runner starts.</summary>
+    [Fact]
+    public async Task ShouldRejectNonPositivePartitionStopTimeout()
+    {
+        var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
+        var options = SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
+        {
+            PartitionStopTimeout = TimeSpan.Zero,
+        };
+
+        _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            runner.RunAsync(["lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, options));
+    }
+
     /// <summary>Changing tenant partitions revoke only removed work and retain global ownership.</summary>
     [Fact]
     public async Task DynamicPartitionsPreserveRetainedOwnership()

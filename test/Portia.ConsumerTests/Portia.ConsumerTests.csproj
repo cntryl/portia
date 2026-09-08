@@ -19,5 +19,6 @@
     <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj" />
     <ProjectReference Include="../../src/Portia.Fitz/Portia.Fitz.csproj" />
     <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj" />
+    <ProjectReference Include="../../src/Portia.CodeFixes/Portia.CodeFixes.csproj" />
   </ItemGroup>
 </Project>

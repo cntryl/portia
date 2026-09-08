@@ -54,6 +54,28 @@ public sealed class ReflectionDisabledConsumerTests
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, invalid.StatusCode);
         Assert.Contains("A name is required.", await invalid.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task HostStartupReportsEveryMissingRegisteredRoot()
+    {
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
+        var builder = WebApplication.CreateBuilder();
+        var portia = builder.Services.AddPortia();
+        _ = portia.AddGeneratedRequest(Registration<MissingFirst>());
+        _ = portia.AddGeneratedRequest(Registration<MissingSecond>());
+        _ = portia.AddWorkers();
+        await using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => app.StartAsync());
+
+        Assert.Contains(typeof(MissingFirst).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(MissingSecond).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.True(exception.Message.IndexOf(typeof(MissingFirst).FullName!, StringComparison.Ordinal)
+            < exception.Message.IndexOf(typeof(MissingSecond).FullName!, StringComparison.Ordinal));
+    }
+
+    static RequestTransportRegistration Registration<T>() where T : IRequest => new(typeof(T), RequestTransports.Callable,
+        new RequestRouteAttribute("test", "missing", "roots", typeof(T).Name), new DiscriminatorAttribute(typeof(T).Name));
 }
 
 [RequestRoute("public", "greetings", "messages", "create")]
@@ -62,6 +84,9 @@ public sealed record CreateGreeting(string Name) : IRequest<string>, ICallable;
 
 [Discriminator("greetings.created")]
 public sealed record GreetingCreated(string Name) : DomainEvent;
+
+sealed record MissingFirst : IRequest;
+sealed record MissingSecond : IRequest;
 
 public sealed class CreateGreetingHandler : IRequestHandler<CreateGreeting, string>
 {

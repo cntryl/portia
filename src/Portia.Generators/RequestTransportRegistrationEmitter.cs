@@ -38,6 +38,13 @@ static class RequestTransportRegistrationEmitter
                 .Append(">(ct)");
         }
 
+        if (request.ResultType is not null)
+        {
+            if (!request.Transports.HasFlag(RequestTransports.Callable))
+                _ = source.Append(", null");
+            _ = source.Append(", typeof(").Append(request.ResultType).Append(')');
+        }
+
         _ = source.Append(')');
     }
 }

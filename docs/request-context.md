@@ -99,6 +99,12 @@ provides the typed business event. The runner inherits correlation from that eve
 uses its event ID as the cause, and creates an independent system execution.
 The original event's actor is attribution only; it never authorizes the reaction.
 
+When a reaction naturally maps to a no-result application command, use
+`await bus.SendReactionAsync(command, context, ct)`. It preserves the reaction identity and
+throws if the command returns a failed `Result`, preventing an accidental checkpoint. Reactors
+may also invoke an injected integration service directly; command dispatch is a good fit for
+reusable application behavior, not a requirement for every effect.
+
 The default principal is `RequestActor.System`. To distinguish system workloads,
 register an `IReactorPrincipalProvider` through ordinary DI:
 
@@ -114,6 +120,10 @@ services.AddSingleton<IReactorPrincipalProvider, ReactorPrincipals>();
 
 The runner rejects end-user principals. A reactor saves using its supplied context
 exactly as a request handler does: `await repository.SaveAsync(account, context, ct)`.
+When a reaction naturally maps to a command, `await bus.SendReactionAsync(command, context, ct)`
+preserves the same system actor and causal chain and faults the reaction on a failed command result.
+Direct integration effects are equally supported; do not introduce a command solely to satisfy
+the framework.
 
 ## Saving and retrying
 

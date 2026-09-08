@@ -19,8 +19,8 @@ public sealed class RequestNotificationRunner
     /// <summary>Creates a runner with explicitly owned application dependencies.</summary>
     /// <param name="consumer">The request-notification consumer.</param>
     /// <param name="bus">The request bus.</param>
-    /// <param name="actorValidator">Re-validates each request's carried actor token — signature and
-    /// expiry included — at the moment it's actually delivered.</param>
+    /// <param name="actorValidator">Re-validates each notice's carried actor token — signature and
+    /// expiry included — at delivery. Scheduled requests carry an explicit system identity.</param>
     /// <param name="logger">
     /// Reports a lost delivery even when nothing is listening to
     /// <see cref="PortiaTelemetry.ActivitySource" />. Supply it explicitly, or configure
@@ -50,8 +50,8 @@ public sealed class RequestNotificationRunner
     /// <summary>
     /// Reads and dispatches requests as they are delivered, until cancellation is requested.
     /// A failed dispatch does not stop the run; the request is simply lost, matching this
-    /// transport's no-redelivery guarantee. That includes a request whose carried actor token
-    /// fails re-validation (e.g. it has expired since it was scheduled or published).
+    /// transport's no-redelivery guarantee. Carried tokens are revalidated; scheduled requests
+    /// instead arrive with an explicitly persisted system identity.
     /// </summary>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the run.</returns>
@@ -63,14 +63,27 @@ public sealed class RequestNotificationRunner
             {
                 await using var scope = _scopeFactory?.CreateAsyncScope();
                 var bus = scope?.ServiceProvider.GetRequiredService<IRequestBus>() ?? _bus!;
-                var actorValidator = scope?.ServiceProvider.GetRequiredService<IRequestActorValidator>() ?? _actorValidator!;
                 // The result's failure category can't change anything at this transport's level
                 // (no ack/redelivery). An unrecognized exception is still caught below.
-                var dispatch = await RequestDispatch.SendAsync(
-                    actorValidator, bus, delivered.Request, delivered.ActorToken, delivered.Invocation, delivered.Metadata, scope?.ServiceProvider.GetService<TimeProvider>(), delivered.TraceContext, ct).ConfigureAwait(false);
-
-                if (!dispatch.WasDispatched)
-                    PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), "actor validation failed", logger: _logger);
+                if (delivered.Actor is { } actor)
+                {
+                    if (delivered.Invocation is not ScheduleInvocation || !RequestActor.IsSystem(actor))
+                        throw new InvalidOperationException("Only fired schedules may supply a trusted system actor.");
+                    using var process = PortiaTelemetry.StartProcess(delivered.Request.GetType().Name, "fitz.schedule",
+                        delivered.TraceContext, linked: true);
+                    _ = await bus.DispatchAsync(delivered.Request,
+                        new RequestDispatchContext(actor, delivered.Invocation, delivered.Metadata,
+                            scope?.ServiceProvider.GetService<TimeProvider>()), ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    var actorValidator = scope?.ServiceProvider.GetRequiredService<IRequestActorValidator>() ?? _actorValidator!;
+                    var dispatch = await RequestDispatch.SendAsync(
+                        actorValidator, bus, delivered.Request, delivered.ActorToken, delivered.Invocation, delivered.Metadata,
+                        scope?.ServiceProvider.GetService<TimeProvider>(), delivered.TraceContext, ct).ConfigureAwait(false);
+                    if (!dispatch.WasDispatched)
+                        PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), "actor validation failed", logger: _logger);
+                }
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {

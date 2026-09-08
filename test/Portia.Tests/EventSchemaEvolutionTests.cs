@@ -97,6 +97,51 @@ public sealed class EventSchemaEvolutionTests
             new DomainEventTypeCatalog().Register<WidgetRenamed>(2, "WidgetNamed"),
             [new WidgetNamedToRenamedUpcaster(), new WidgetNamedToRenamedUpcaster()]));
 
+    /// <summary>Validates every declared chain without invoking application transformations.</summary>
+    [Fact]
+    public void ShouldValidateCompleteMultiHopChainWithoutExecutingUpcasters()
+    {
+        var first = new RecordingUpcaster("WidgetNamed", 1);
+        var second = new RecordingUpcaster("WidgetNamed", 2);
+
+        _ = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetRenamed>(3, "WidgetNamed"), [first, second]);
+
+        Assert.False(first.Executed);
+        Assert.False(second.Executed);
+    }
+
+    /// <summary>Reports every missing prospective transition in deterministic order.</summary>
+    [Fact]
+    public void ShouldReportAllMissingUpcasterTransitions()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() => TestJson.DomainSerializer(
+            new DomainEventTypeCatalog(), [new RecordingUpcaster("Zulu", 3), new RecordingUpcaster("Alpha", 1)]));
+
+        Assert.Contains("Alpha' is missing an upcaster from schema version 2", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Zulu' is missing an upcaster from schema version 4", exception.Message, StringComparison.Ordinal);
+        Assert.True(exception.Message.IndexOf("Alpha", StringComparison.Ordinal) < exception.Message.IndexOf("Zulu", StringComparison.Ordinal));
+    }
+
+    /// <summary>A staged chain is validated even while its source CLR version remains readable.</summary>
+    [Fact]
+    public void ShouldValidateStagedUpcasterWhoseSourceTypeRemainsRegistered() =>
+        _ = TestJson.DomainSerializer(
+            new DomainEventTypeCatalog().Register<OrderPlacedV1>(1, "OrderPlaced").Register<OrderPlacedV2>(2, "OrderPlaced"),
+            [new RecordingUpcaster("OrderPlaced", 1)]);
+
+    /// <summary>Rejects identities that cannot represent a valid next transition.</summary>
+    [Theory]
+    [InlineData("", 1)]
+    [InlineData("WidgetNamed", 0)]
+    [InlineData("WidgetNamed", -1)]
+    [InlineData("WidgetNamed", int.MaxValue)]
+    public void ShouldRejectInvalidUpcasterIdentity(string name, int version)
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() => TestJson.DomainSerializer(
+            new DomainEventTypeCatalog(), [new RecordingUpcaster(name, version)]));
+        Assert.Contains("Invalid JSON domain-event upcaster registrations", exception.Message, StringComparison.Ordinal);
+    }
+
     static T Committed<T>(T ev)
         where T : DomainEvent
     {
@@ -106,6 +151,18 @@ public sealed class EventSchemaEvolutionTests
             1,
             DateTimeOffset.UtcNow));
         return ev;
+    }
+}
+
+sealed class RecordingUpcaster(string name, int fromVersion) : IJsonDomainEventUpcaster
+{
+    public string EventName => name;
+    public int FromVersion => fromVersion;
+    public bool Executed { get; private set; }
+    public JsonObject Upcast(JsonObject payload)
+    {
+        Executed = true;
+        return payload;
     }
 }
 
