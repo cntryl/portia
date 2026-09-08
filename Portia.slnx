@@ -18,5 +18,6 @@
     <Project Path="test/Consumer.FeatureOne/Consumer.FeatureOne.csproj" />
     <Project Path="test/Consumer.FeatureTwo/Consumer.FeatureTwo.csproj" />
     <Project Path="test/Portia.ConsumerTests/Portia.ConsumerTests.csproj" />
+    <Project Path="test/Portia.ReflectionDisabledTests/Portia.ReflectionDisabledTests.csproj" />
   </Folder>
 </Solution>

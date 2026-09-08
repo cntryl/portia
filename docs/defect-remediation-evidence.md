@@ -1,7 +1,8 @@
 # Framework defect remediation evidence
 
-> Historical evidence: the module API described below has been removed.
-> Current applications use explicit component registration; see [application setup](application-setup.md).
+> Dated snapshot (2026-09-06). Later work removed the module API and resolved several blockers
+> recorded here. For current contracts and unresolved gaps, see [application setup](application-setup.md)
+> and [known limitations](known-limitations.md).
 
 This file records the earlier 320-test baseline. The subsequent architecture changes and
 current qualification limits are in [architecture evidence](architecture-remediation-evidence.md).

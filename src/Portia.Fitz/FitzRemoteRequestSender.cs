@@ -17,14 +17,18 @@ namespace Cntryl.Portia;
 /// <param name="rpc">The Fitz RPC client.</param>
 /// <param name="requestSerializer">Serializes outbound requests.</param>
 /// <param name="outcomeDeserializer">Deserializes inbound outcomes.</param>
+/// <param name="catalog">Provides generated request routes.</param>
 public sealed class FitzRemoteRequestSender(
     IRpcClient rpc,
     IRequestSerializer requestSerializer,
-    IRequestOutcomeDeserializer outcomeDeserializer) : IRemoteRequestSender
+    IRequestOutcomeDeserializer outcomeDeserializer,
+    RequestTransportCatalog? catalog = null) : IRemoteRequestSender
 {
     readonly IRpcClient _rpc = rpc ?? throw new ArgumentNullException(nameof(rpc));
     readonly IRequestSerializer _requestSerializer = requestSerializer ?? throw new ArgumentNullException(nameof(requestSerializer));
     readonly IRequestOutcomeDeserializer _outcomeDeserializer = outcomeDeserializer ?? throw new ArgumentNullException(nameof(outcomeDeserializer));
+    readonly RequestTransportCatalog _catalog = catalog ?? (requestSerializer as JsonRequestSerializer)?.Catalog
+        ?? throw new ArgumentNullException(nameof(catalog));
 
     /// <inheritdoc />
     public ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
@@ -43,7 +47,7 @@ public sealed class FitzRemoteRequestSender(
         var outcome = "success";
         try
         {
-            var route = FitzRouting.ResolveRpcRoute(request, routeValues);
+            var route = FitzRouting.ResolveRpcRoute(_catalog, request, routeValues);
             var body = _requestSerializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
             var result = _outcomeDeserializer.DeserializeOutcome((await CallAsync(route, body, ct).ConfigureAwait(false)).Body);
             outcome = PortiaTelemetry.Outcome(result.IsSuccess, result.Error);
@@ -71,7 +75,7 @@ public sealed class FitzRemoteRequestSender(
         var outcome = "success";
         try
         {
-            var route = FitzRouting.ResolveRpcRoute(request, routeValues);
+            var route = FitzRouting.ResolveRpcRoute(_catalog, request, routeValues);
             var body = _requestSerializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
             var result = _outcomeDeserializer.DeserializeResult<TOut>((await CallAsync(route, body, ct).ConfigureAwait(false)).Body);
             outcome = PortiaTelemetry.Outcome(result.IsSuccess, result.Error);

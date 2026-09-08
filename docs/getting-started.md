@@ -5,16 +5,33 @@ Portia targets .NET 10. Most applications reference `Portia.Abstractions` and
 `Portia.AspNetCore` for HTTP, `Portia.Fitz` for Fitz storage/transports, and
 `Portia.Jwt` when inbound work carries JWT actor identities. Packages use the
 cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
+Review the [known limitations](known-limitations.md), especially the envelope-v2 drain requirement,
+before upgrading an existing deployment.
 
 ## Define contracts and register components
 
 ```csharp
+[Discriminator("consumer.business.deposit-account")]
 [RequestRoute("consumer", "business", "*", "deposit")]
 public sealed record DepositAccount(Uuid Id, int Amount) : IRequest, ICallable, IQueuable;
 
+[Discriminator("Deposited")]
 public sealed record Deposited(int Amount) : DomainEvent;
+[Discriminator("Declined")]
 public sealed record Declined(string Reason) : DomainEvent;
+
+[PortiaJsonContext]
+[JsonSourceGenerationOptions(JsonSerializerDefaults.Web,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+[JsonSerializable(typeof(DepositAccount))]
+[JsonSerializable(typeof(Deposited))]
+[JsonSerializable(typeof(Declined))]
+internal sealed partial class BusinessJsonContext : JsonSerializerContext;
 ```
+
+Portia uses snake_case for application JSON by default, including HTTP. Keep the source-generation
+option aligned with that default. Use `ConfigureJson` only when the whole application deliberately
+chooses a different convention or adds converters.
 
 Reference `Portia.DependencyInjection` in each assembly that registers handlers, authorizers,
 or routed requests. The generator and interceptor configuration arrive with that package.
@@ -162,12 +179,12 @@ POST/PUT/PATCH. Missing nullable parameters become null, omitted optional parame
 use their declared default, and missing required values return 400. Explicit JSON
 null requires a nullable parameter. Invalid root/value kinds return 400.
 
-JSON binding uses ASP.NET HTTP JSON options, including application converters,
-property metadata, and naming. The default is camel case. To retain snake case:
+JSON binding uses Portia's frozen source-generated JSON options, including application converters,
+property metadata, and naming. Configure them before building the provider:
 
 ```csharp
-builder.Services.ConfigureHttpJsonOptions(options =>
-    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
+builder.Services.AddPortia().ConfigureJson(options =>
+    options.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
 ```
 
 Route/query scalars use invariant parsing. Mapping routes must be compile-time

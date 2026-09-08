@@ -16,8 +16,8 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     public async Task ShouldRoundTripDomainEventThroughRealFitzBroker()
     {
         await using var client = await _broker.CreateClientAsync();
-        var serializer = new JsonDomainEventSerializer(
-            new DomainEventTypeCatalog().Register<ValueChanged>());
+        var serializer = TestJson.DomainSerializer(
+            new DomainEventTypeCatalog().Register<ValueChanged>(1, "test.value.changed"));
         var store = new FitzEventStore(client.Stream, serializer);
         var aggregateId = Uuid.CreateVersion4();
         var stream = new EventStreamAddress(
@@ -55,15 +55,15 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var aggregateId = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("portia-integration", "event-store-evolution", aggregateId.ToString());
 
-        var writerStore = new FitzEventStore(client.Stream, new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>()));
+        var writerStore = new FitzEventStore(client.Stream, TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed")));
         var original = new WidgetNamed("Sprocket");
         original.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, 1, DateTimeOffset.UtcNow));
         await writerStore.AppendAsync(stream, 0, [original]);
 
         var readerStore = new FitzEventStore(
             client.Stream,
-            new JsonDomainEventSerializer(
-                new DomainEventTypeCatalog().Register<WidgetRenamed>(),
+            TestJson.DomainSerializer(
+                new DomainEventTypeCatalog().Register<WidgetRenamed>(2, "WidgetNamed"),
                 [new WidgetNamedToRenamedUpcaster()]));
 
         var events = new List<DomainEvent>();
@@ -87,7 +87,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     public async Task ShouldThrowConcurrencyExceptionWhenAppendingWithStaleExpectedVersion()
     {
         await using var client = await _broker.CreateClientAsync();
-        var serializer = new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<ValueChanged>());
+        var serializer = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<ValueChanged>(1, "test.value.changed"));
         var store = new FitzEventStore(client.Stream, serializer);
         var aggregateId = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("portia-integration", "event-store-conflict", aggregateId.ToString());
@@ -110,7 +110,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     {
         await using var workerClient = await _broker.CreateClientAsync();
         await using var callerClient = await _broker.CreateClientAsync();
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer(typeof(RpcGetValue));
         using var busHost = TestRequestBus.Create();
         var server = new FitzRpcRequestServer(
             workerClient.Rpc,
@@ -138,7 +138,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     public async Task ShouldFailFastWhenNoWorkerIsRegisteredForRoute()
     {
         await using var client = await _broker.CreateClientAsync();
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer(typeof(NoWorkerRegisteredPing));
         var sender = new FitzRemoteRequestSender(client.Rpc, serializer, serializer);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
@@ -162,6 +162,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
 // Deliberately never registered by any test — the whole point is a route no worker answers.
 [RequestRoute(realm: "portia-integration", area: "rpc", resource: "no-worker-registered", operation: "ping")]
+[Discriminator("test.rpc.no-worker-registered")]
 sealed record NoWorkerRegisteredPing : IRequest, ICallable;
 
 sealed class NoWorkerRegisteredPingHandler : IRequestHandler<NoWorkerRegisteredPing>

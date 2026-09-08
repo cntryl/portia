@@ -1,5 +1,8 @@
 # Execution-context verification
 
+> Dated snapshot (2026-09-06). This records milestone evidence, not the current compatibility
+> contract. See [migration](migration.md) and [known limitations](known-limitations.md).
+
 Verified locally on 2026-09-06 at the execution-context milestone, before the
 [explicit registration refactor](workload-registration-verification.md). No packages were
 published and no production environment was deployed.

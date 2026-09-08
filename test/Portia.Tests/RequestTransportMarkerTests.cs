@@ -96,6 +96,7 @@ public sealed class RequestTransportMarkerTests
 /// <param name="Email">The user's email address.</param>
 /// <param name="DisplayName">The user's display name.</param>
 [RequestRoute(realm: "*", area: "identity", resource: "users", operation: "create")]
+[Discriminator("test.identity.create-user")]
 public sealed record CreateUser(string Email, string DisplayName) : IRequest<Uuid>, ICallable;
 
 /// <summary>
@@ -104,4 +105,5 @@ public sealed record CreateUser(string Email, string DisplayName) : IRequest<Uui
 /// </summary>
 /// <param name="UserId">The identity of the user to welcome.</param>
 [RequestRoute(realm: "*", area: "identity", resource: "users", operation: "welcome")]
+[Discriminator("test.identity.send-welcome")]
 public sealed record SendWelcomeEmail(Uuid UserId) : IRequest, ICallable, IQueuable, INotifiable, ISchedulable;

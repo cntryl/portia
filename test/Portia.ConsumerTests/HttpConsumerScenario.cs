@@ -36,10 +36,12 @@ static class HttpConsumerScenario
                     var builder = WebApplication.CreateBuilder();
                     builder.WebHost.UseTestServer();
                     builder.Services.AddPortia().AddRequestHandler<Handler>();
-                    builder.Services.ConfigureHttpJsonOptions(options =>
+                    builder.Services.AddPortia().ConfigureJson(options =>
                     {
-                        if (snake) options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
-                        if (converter) options.SerializerOptions.Converters.Add(new HexConverter());
+                        options.PropertyNamingPolicy = snake
+                            ? JsonNamingPolicy.SnakeCaseLower
+                            : JsonNamingPolicy.CamelCase;
+                        if (converter) options.Converters.Add(new HexConverter());
                     });
                     {{configuration}}
                     await using var app = builder.Build();

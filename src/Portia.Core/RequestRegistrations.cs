@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Cntryl.Portia;
 
@@ -15,6 +17,8 @@ public abstract class RequestHandlerRegistration(Type requestType, Type handlerT
     public Type HandlerType { get; } = handlerType;
 
     internal Func<IRequestBase, string>? Permission { get; } = permission;
+
+    internal abstract void Register(IServiceCollection services);
 }
 
 interface IRequestInvocation
@@ -36,11 +40,13 @@ interface IStreamRequestInvocation<TOut>
 /// <typeparam name="TRequest">The request.</typeparam>
 /// <typeparam name="THandler">The handler.</typeparam>
 /// <param name="permission">The generated permission expression.</param>
-public sealed class RequestRegistration<TRequest, THandler>(Func<TRequest, string>? permission = null)
+public sealed class RequestRegistration<TRequest, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler>(Func<TRequest, string>? permission = null)
     : RequestHandlerRegistration(typeof(TRequest), typeof(THandler), permission is null ? null : request => permission((TRequest)request)), IRequestInvocation
     where TRequest : IRequest
     where THandler : class, IRequestHandler<TRequest>
 {
+    internal override void Register(IServiceCollection services) => services.TryAddScoped<THandler>();
+
     ValueTask<Result> IRequestInvocation.InvokeAsync(IServiceProvider services, IRequest request, RequestDispatchContext context, CancellationToken ct)
         => services.GetRequiredService<THandler>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), ct);
 }
@@ -50,11 +56,13 @@ public sealed class RequestRegistration<TRequest, THandler>(Func<TRequest, strin
 /// <typeparam name="THandler">The handler.</typeparam>
 /// <typeparam name="TOut">The result.</typeparam>
 /// <param name="permission">The generated permission expression.</param>
-public sealed class RequestRegistration<TRequest, THandler, TOut>(Func<TRequest, string>? permission = null)
+public sealed class RequestRegistration<TRequest, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler, TOut>(Func<TRequest, string>? permission = null)
     : RequestHandlerRegistration(typeof(TRequest), typeof(THandler), permission is null ? null : request => permission((TRequest)request)), IRequestInvocation<TOut>
     where TRequest : IRequest<TOut>
     where THandler : class, IRequestHandler<TRequest, TOut>
 {
+    internal override void Register(IServiceCollection services) => services.TryAddScoped<THandler>();
+
     ValueTask<Result<TOut>> IRequestInvocation<TOut>.InvokeAsync(IServiceProvider services, IRequest<TOut> request, RequestDispatchContext context, CancellationToken ct)
         => services.GetRequiredService<THandler>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), ct);
 }
@@ -64,11 +72,13 @@ public sealed class RequestRegistration<TRequest, THandler, TOut>(Func<TRequest,
 /// <typeparam name="THandler">The handler.</typeparam>
 /// <typeparam name="TOut">The streamed item.</typeparam>
 /// <param name="permission">The generated permission expression.</param>
-public sealed class StreamRequestRegistration<TRequest, THandler, TOut>(Func<TRequest, string>? permission = null)
+public sealed class StreamRequestRegistration<TRequest, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler, TOut>(Func<TRequest, string>? permission = null)
     : RequestHandlerRegistration(typeof(TRequest), typeof(THandler), permission is null ? null : request => permission((TRequest)request)), IStreamRequestInvocation<TOut>
     where TRequest : IStreamRequest<TOut>
     where THandler : class, IStreamRequestHandler<TRequest, TOut>
 {
+    internal override void Register(IServiceCollection services) => services.TryAddScoped<THandler>();
+
     IAsyncEnumerable<TOut> IStreamRequestInvocation<TOut>.Invoke(IServiceProvider services, IStreamRequest<TOut> request, RequestDispatchContext context, CancellationToken ct)
         => services.GetRequiredService<THandler>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), ct);
 }
@@ -93,16 +103,20 @@ public abstract class RequestAuthorizerRegistration(Type requestType, Type autho
     public AuthorizationStage Stage { get; } = stage;
 
     internal abstract ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request, RequestDispatchContext context, CancellationToken ct);
+
+    internal abstract void Register(IServiceCollection services);
 }
 
 /// <summary>Resolves and invokes the selected authorizer in the current scope.</summary>
 /// <typeparam name="TRequest">The request.</typeparam>
 /// <typeparam name="TAuthorizer">The authorizer.</typeparam>
-public sealed class RequestAuthorizerRegistration<TRequest, TAuthorizer>(AuthorizationStage stage = AuthorizationStage.ResourceAccess)
+public sealed class RequestAuthorizerRegistration<TRequest, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TAuthorizer>(AuthorizationStage stage = AuthorizationStage.ResourceAccess)
     : RequestAuthorizerRegistration(typeof(TRequest), typeof(TAuthorizer), stage)
     where TRequest : IRequestBase
     where TAuthorizer : class, IRequestAuthorizer<TRequest>
 {
+    internal override void Register(IServiceCollection services) => services.TryAddScoped<TAuthorizer>();
+
     internal override ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request, RequestDispatchContext context, CancellationToken ct)
         => services.GetRequiredService<TAuthorizer>().AuthorizeAsync(new RequestContext<TRequest>((TRequest)request, context), context.Actor, ct);
 }

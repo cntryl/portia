@@ -33,12 +33,12 @@ public sealed class RequestRpcConsumerTests
         }
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
-        _ = services.AddSingleton<IRequestDeserializer, JsonRequestSerializer>();
-        _ = services.AddSingleton<IRequestOutcomeSerializer, JsonRequestSerializer>();
+        var serializer = ConsumerJson.CreateSerializer();
+        _ = services.AddSingleton<IRequestDeserializer>(serializer);
+        _ = services.AddSingleton<IRequestOutcomeSerializer>(serializer);
         await using var provider = ConsumerHost.Build(services);
         var rpc = new InMemoryRpcClient();
         var server = new FitzRpcRequestServer(rpc, provider.GetRequiredService<IServiceScopeFactory>());
-        var serializer = new JsonRequestSerializer();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
         await using (await register(server))
         {

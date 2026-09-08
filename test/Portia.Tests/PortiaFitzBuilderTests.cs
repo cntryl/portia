@@ -196,9 +196,9 @@ public sealed class PortiaFitzBuilderTests
         _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
         _ = services.AddSingleton<FitzHostedHandler>();
         _ = services.AddSingleton(new RequestTransportRegistration(typeof(FitzHostedRequest), RequestTransports.Callable,
-            new RequestRouteAttribute("app", "accounts", "*", "hosted"), Register));
+            new RequestRouteAttribute("app", "accounts", "*", "hosted"), new DiscriminatorAttribute("test.fitz.hosted"), Register));
         _ = services.AddSingleton(new RequestTransportRegistration(typeof(FitzOutboundCallableRequest), RequestTransports.Callable,
-            new RequestRouteAttribute("app", "accounts", "*", "outbound"), Register));
+            new RequestRouteAttribute("app", "accounts", "*", "outbound"), new DiscriminatorAttribute("test.fitz.outbound-callable"), Register));
         using var provider = services.BuildServiceProvider();
         var server = new FitzRpcRequestServer(new InMemoryRpcClient(), provider.GetRequiredService<IServiceScopeFactory>());
 
@@ -215,7 +215,8 @@ public sealed class PortiaFitzBuilderTests
     }
 
     static RequestTransportRegistration Transport<TRequest>(RequestTransports transports) where TRequest : IRequestBase =>
-        new(typeof(TRequest), transports, new RequestRouteAttribute("app", "accounts", "*", "run"));
+        new(typeof(TRequest), transports, new RequestRouteAttribute("app", "accounts", "*", "run"),
+            new DiscriminatorAttribute("test.fitz." + typeof(TRequest).Name));
 
 }
 

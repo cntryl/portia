@@ -24,6 +24,10 @@ static class RequestTransportRegistrationEmitter
             .Append(RequestTransportDiscovery.FormatStringLiteral(request.Resource))
             .Append(", ")
             .Append(RequestTransportDiscovery.FormatStringLiteral(request.Operation))
+            .Append("), new global::Cntryl.Portia.DiscriminatorAttribute(")
+            .Append(RequestTransportDiscovery.FormatStringLiteral(request.DiscriminatorName))
+            .Append(", ")
+            .Append(request.DiscriminatorVersion)
             .Append(')');
 
         if (request.Transports.HasFlag(RequestTransports.Callable))

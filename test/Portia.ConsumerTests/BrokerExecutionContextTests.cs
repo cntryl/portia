@@ -12,9 +12,9 @@ public sealed class BrokerExecutionContextTests
         var handler = new Handler();
         var services = Services(handler);
         await using var provider = services.BuildServiceProvider();
-        var server = new FitzRpcRequestServer(client.Rpc, provider.GetRequiredService<IServiceScopeFactory>());
+        var server = new FitzRpcRequestServer(client.Rpc, provider.GetRequiredService<IServiceScopeFactory>(), ConsumerJson.Catalog());
         await using var registration = await server.RegisterAsync<Command>();
-        var serializer = new JsonRequestSerializer();
+        var serializer = ConsumerJson.CreateSerializer();
         var sender = new FitzRemoteRequestSender(client.Rpc, serializer, serializer);
         var parent = new RequestContext<Command>(new Command(1), RequestActor.CreateSystem("sender"));
         var resource = Uuid.CreateVersion4().ToString();
@@ -32,7 +32,7 @@ public sealed class BrokerExecutionContextTests
     public async Task QueueBrokerRedeliveryPreservesEnvelopeAndReportsTransportAttempt()
     {
         await using var client = await ConsumerBroker.ConnectAsync();
-        var serializer = new JsonRequestSerializer();
+        var serializer = ConsumerJson.CreateSerializer();
         var parent = new RequestContext<Command>(new Command(1), RequestActor.System);
         var metadata = RequestMetadata.FromParent(parent);
         var resource = Uuid.CreateVersion4().ToString();
@@ -64,13 +64,15 @@ public sealed class BrokerExecutionContextTests
         _ = services.AddContracts();
         _ = services.AddSingleton(handler);
         _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<Command, Handler>());
-        _ = services.AddSingleton<IRequestDeserializer, JsonRequestSerializer>();
-        _ = services.AddSingleton<IRequestOutcomeSerializer, JsonRequestSerializer>();
+        var serializer = ConsumerJson.CreateSerializer();
+        _ = services.AddSingleton<IRequestDeserializer>(serializer);
+        _ = services.AddSingleton<IRequestOutcomeSerializer>(serializer);
         _ = services.AddSingleton<IRequestActorValidator, Validator>();
         return services;
     }
 
     [RequestRoute("context", "work", "*", "execute")]
+    [Discriminator("consumer.context.command")]
     public sealed record Command(int Amount) : IRequest, ICallable, IQueuable, INotifiable, ISchedulable;
 
     public sealed class Handler : IRequestHandler<Command>

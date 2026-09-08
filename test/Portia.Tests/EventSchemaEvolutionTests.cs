@@ -11,13 +11,13 @@ namespace Cntryl.Portia;
 public sealed class EventSchemaEvolutionTests
 {
     /// <summary>
-    /// Verifies a plain round trip: an event with no <see cref="EventSchemaAttribute" /> defaults
+    /// Verifies a plain round trip using an explicit <see cref="DiscriminatorAttribute" />
     /// to its CLR type name and schema version 1, and serializes/deserializes with no upcasting.
     /// </summary>
     [Fact]
     public void ShouldRoundTripEventWithDefaultSchemaIdentity()
     {
-        var serializer = new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>());
+        var serializer = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed"));
         var original = Committed(new WidgetNamed("Sprocket"));
 
         var deserialized = serializer.Deserialize(serializer.Serialize(original));
@@ -35,11 +35,11 @@ public sealed class EventSchemaEvolutionTests
     [Fact]
     public void ShouldUpcastEventWhenOnlyLaterSchemaVersionIsRegistered()
     {
-        var writer = new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>());
+        var writer = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed"));
         var stored = writer.Serialize(Committed(new WidgetNamed("Sprocket")));
 
-        var reader = new JsonDomainEventSerializer(
-            new DomainEventTypeCatalog().Register<WidgetRenamed>(),
+        var reader = TestJson.DomainSerializer(
+            new DomainEventTypeCatalog().Register<WidgetRenamed>(2, "WidgetNamed"),
             [new WidgetNamedToRenamedUpcaster()]);
 
         var deserialized = reader.Deserialize(stored);
@@ -56,13 +56,13 @@ public sealed class EventSchemaEvolutionTests
     [Fact]
     public void ShouldResolveDirectlyWhenExactSchemaVersionIsStillRegistered()
     {
-        var v1Writer = new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<OrderPlacedV1>());
-        var v2Writer = new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<OrderPlacedV2>());
+        var v1Writer = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<OrderPlacedV1>(1, "OrderPlaced"));
+        var v2Writer = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<OrderPlacedV2>(2, "OrderPlaced"));
         var storedV1 = v1Writer.Serialize(Committed(new OrderPlacedV1(100)));
         var storedV2 = v2Writer.Serialize(Committed(new OrderPlacedV2(100, "USD")));
 
-        var reader = new JsonDomainEventSerializer(
-            new DomainEventTypeCatalog().Register<OrderPlacedV1>().Register<OrderPlacedV2>());
+        var reader = TestJson.DomainSerializer(
+            new DomainEventTypeCatalog().Register<OrderPlacedV1>(1, "OrderPlaced").Register<OrderPlacedV2>(2, "OrderPlaced"));
 
         var deserializedV1 = Assert.IsType<OrderPlacedV1>(reader.Deserialize(storedV1));
         var deserializedV2 = Assert.IsType<OrderPlacedV2>(reader.Deserialize(storedV2));
@@ -78,10 +78,10 @@ public sealed class EventSchemaEvolutionTests
     [Fact]
     public void ShouldThrowWhenNoRegistrationOrUpcasterCanResolveStoredVersion()
     {
-        var writer = new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>());
+        var writer = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed"));
         var stored = writer.Serialize(Committed(new WidgetNamed("Sprocket")));
 
-        var reader = new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<WidgetRenamed>());
+        var reader = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetRenamed>(2, "WidgetNamed"));
 
         var exception = Assert.Throws<InvalidOperationException>(() => reader.Deserialize(stored));
         Assert.Contains("WidgetNamed", exception.Message, StringComparison.Ordinal);
@@ -93,8 +93,8 @@ public sealed class EventSchemaEvolutionTests
     /// </summary>
     [Fact]
     public void ShouldThrowWhenRegisteringDuplicateUpcasterForSameNameAndVersion() =>
-        Assert.Throws<InvalidOperationException>(() => new JsonDomainEventSerializer(
-            new DomainEventTypeCatalog().Register<WidgetRenamed>(),
+        Assert.Throws<InvalidOperationException>(() => TestJson.DomainSerializer(
+            new DomainEventTypeCatalog().Register<WidgetRenamed>(2, "WidgetNamed"),
             [new WidgetNamedToRenamedUpcaster(), new WidgetNamedToRenamedUpcaster()]));
 
     static T Committed<T>(T ev)
@@ -109,9 +109,10 @@ public sealed class EventSchemaEvolutionTests
     }
 }
 
+[Discriminator("WidgetNamed")]
 sealed record WidgetNamed(string Name) : DomainEvent;
 
-[EventSchema("WidgetNamed", 2)]
+[Discriminator("WidgetNamed", 2)]
 sealed record WidgetRenamed(string DisplayName) : DomainEvent;
 
 sealed class WidgetNamedToRenamedUpcaster : IJsonDomainEventUpcaster
@@ -126,8 +127,8 @@ sealed class WidgetNamedToRenamedUpcaster : IJsonDomainEventUpcaster
     };
 }
 
-[EventSchema("OrderPlaced", 1)]
+[Discriminator("OrderPlaced")]
 sealed record OrderPlacedV1(int AmountCents) : DomainEvent;
 
-[EventSchema("OrderPlaced", 2)]
+[Discriminator("OrderPlaced", 2)]
 sealed record OrderPlacedV2(int AmountCents, string Currency) : DomainEvent;

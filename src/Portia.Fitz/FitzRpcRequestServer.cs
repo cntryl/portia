@@ -12,10 +12,20 @@ namespace Cntryl.Portia;
 /// </summary>
 /// <param name="rpc">The Fitz RPC client.</param>
 /// <param name="scopeFactory">Owns application dependencies for each RPC invocation.</param>
-public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory scopeFactory) : IRequestRpcRegistrar
+/// <param name="catalog">Provides generated request routes.</param>
+public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory scopeFactory, RequestTransportCatalog? catalog = null) : IRequestRpcRegistrar
 {
     readonly IRpcClient _rpc = rpc ?? throw new ArgumentNullException(nameof(rpc));
     readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+    RequestTransportCatalog? _catalog = catalog;
+
+    RequestTransportCatalog Catalog()
+    {
+        if (_catalog is not null)
+            return _catalog;
+        using var scope = _scopeFactory.CreateScope();
+        return _catalog = new RequestTransportCatalog(scope.ServiceProvider.GetServices<RequestTransportRegistration>());
+    }
 
     /// <summary>Registers callable descriptors for explicitly registered Portia requests.</summary>
     /// <param name="ct">Cancels registration.</param>
@@ -81,7 +91,7 @@ public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory sc
     public ValueTask<RpcWorkerRegistration> RegisterAsync<TRequest>(CancellationToken ct = default)
         where TRequest : IRequest, ICallable
     {
-        var pattern = FitzRouting.ResolveRpcWorkerPattern<TRequest>();
+        var pattern = FitzRouting.ResolveRpcWorkerPattern<TRequest>(Catalog());
 
         return new ValueTask<RpcWorkerRegistration>(_rpc.RegisterWorkerAsync(
             pattern,
@@ -123,7 +133,7 @@ public sealed class FitzRpcRequestServer(IRpcClient rpc, IServiceScopeFactory sc
     public ValueTask<RpcWorkerRegistration> RegisterAsync<TRequest, TOut>(CancellationToken ct = default)
         where TRequest : IRequest<TOut>, ICallable
     {
-        var pattern = FitzRouting.ResolveRpcWorkerPattern<TRequest>();
+        var pattern = FitzRouting.ResolveRpcWorkerPattern<TRequest>(Catalog());
 
         return new ValueTask<RpcWorkerRegistration>(_rpc.RegisterWorkerAsync(
             pattern,

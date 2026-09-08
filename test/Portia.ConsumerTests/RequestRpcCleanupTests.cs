@@ -15,7 +15,8 @@ public sealed class RequestRpcCleanupTests
         foreach (var handle in handles)
         {
             _ = services.AddSingleton(new RequestTransportRegistration(typeof(FeatureOneRequest), RequestTransports.Callable,
-                new RequestRouteAttribute("consumer", "rpc", "cleanup", "get"), (_, _) => ValueTask.FromResult<IAsyncDisposable>(handle)));
+                new RequestRouteAttribute("consumer", "rpc", "cleanup", "get"),
+                new DiscriminatorAttribute("consumer.modules.feature-one"), (_, _) => ValueTask.FromResult<IAsyncDisposable>(handle)));
         }
 
         if (registrationFails)
@@ -23,6 +24,7 @@ public sealed class RequestRpcCleanupTests
             _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<FeatureTwoRequest, FeatureTwoHandler, int>());
             _ = services.AddSingleton(new RequestTransportRegistration(typeof(FeatureTwoRequest), RequestTransports.Callable,
                 new RequestRouteAttribute("consumer", "rpc", "cleanup", "fail"),
+                new DiscriminatorAttribute("consumer.modules.feature-two"),
                 (_, _) => ValueTask.FromException<IAsyncDisposable>(new InvalidOperationException("Registration failed"))));
         }
 

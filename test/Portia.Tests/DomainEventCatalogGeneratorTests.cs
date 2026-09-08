@@ -14,7 +14,7 @@ public sealed class DomainEventCatalogGeneratorTests
 {
     /// <summary>
     /// Verifies that a plain, default-schema event type is registered under its CLR type name at
-    /// version 1, and that a type carrying an explicit <see cref="EventSchemaAttribute" /> is
+    /// version 1, and that a type carrying an explicit <see cref="DiscriminatorAttribute" /> is
     /// registered under its declared name and version.
     /// </summary>
     [Fact]
@@ -89,7 +89,7 @@ public sealed class DomainEventCatalogGeneratorTests
     }
 }
 
-[EventSchema("Gadget", 2)]
+[Discriminator("Gadget", 2)]
 sealed record GadgetRenamed(string DisplayName) : DomainEvent;
 
 sealed class GadgetV1ToV2Upcaster : IJsonDomainEventUpcaster

@@ -8,6 +8,7 @@ Write a command and its handler:
 using Cntryl.Portia;
 
 [RequestRoute("public", "greetings", "messages", "create")]
+[Discriminator("greetings.create")]
 public sealed record CreateGreeting(string Name) : IRequest<string>, ICallable;
 
 sealed class CreateGreetingHandler : IRequestHandler<CreateGreeting, string>
@@ -19,6 +20,22 @@ sealed class CreateGreetingHandler : IRequestHandler<CreateGreeting, string>
 }
 ```
 
+Declare the JSON roots the application owns:
+
+`ApplicationJsonContext.cs`:
+
+```csharp
+using System.Text.Json.Serialization;
+using Cntryl.Portia;
+
+[PortiaJsonContext]
+[JsonSourceGenerationOptions(JsonSerializerDefaults.Web,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+[JsonSerializable(typeof(CreateGreeting))]
+[JsonSerializable(typeof(string))]
+internal sealed partial class ApplicationJsonContext : JsonSerializerContext;
+```
+
 Wire the command to an HTTP route:
 
 `Program.cs`:
@@ -27,7 +44,8 @@ Wire the command to an HTTP route:
 using Cntryl.Portia;
 
 var builder = WebApplication.CreateBuilder(args);
-_ = builder.Services.AddPortia(portia => portia.AddRequestHandler<CreateGreetingHandler>());
+_ = builder.Services.AddPortia()
+    .AddRequestHandler<CreateGreetingHandler>();
 
 var app = builder.Build();
 app.MapPortiaPost<CreateGreeting, string>("/greetings");
@@ -50,7 +68,7 @@ available over HTTP.
 
 Declare components, persistence, and background work once in a shared application
 project. The API host calls `AddAccountsApplication(configuration)`; the worker host
-calls the same setup followed by `.AddWorker()`. HTTP traffic and background work
+calls the same setup followed by `.AddWorkers()`. HTTP traffic and background work
 can scale independently. See [shared application setup](docs/application-setup.md)
 for connection ownership, mixed global/per-tenant workloads, and incremental aggregate hydration.
 [Registration verification](docs/workload-registration-verification.md) records the red → green results.
@@ -59,6 +77,11 @@ for connection ownership, mixed global/per-tenant workloads, and incremental agg
 
 - `IRequest<string>` says that `CreateGreeting` returns text.
 - `ICallable` says that the application may expose it to callers, including over HTTP.
+- `[Discriminator("greetings.create")]` is the stable wire identity used by non-HTTP
+  transports. It is independent of the route and never derived from a CLR type name.
+- `[PortiaJsonContext]` composes the application's normal System.Text.Json source-generated
+  metadata with Portia's built-in metadata. Add each transported request, event, and result root
+  to one of the application's partial contexts.
 - `IRequestHandler<CreateGreeting, string>` connects that command to its handler.
 - `AddRequestHandler<CreateGreetingHandler>()` adds the command and handler to the application.
   Portia.Generators validates the role and emits its typed descriptor at the call site, so naming
@@ -112,7 +135,7 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
 | `Portia.AspNetCore` | `MapPortiaGet`/`Post`/`Put`/`Patch`/`Delete`/`GetStream`/`GetSse` — the minimal-API extension methods the HTTP binding generator intercepts. |
 | `Portia.Fitz` | Fitz-backed transports: RPC send/receive, queue publish/consume, notice/schedule notifications, `FitzEventStore`, and `FleetPartitionRunner` (fleet distribution via Fitz leases). |
 | `Portia.Jwt` | A JWT-backed `IRequestActorValidator` — re-validates a request's carried actor token, no ASP.NET Core dependency. |
-| `Portia.DependencyInjection` | Composes the application with `AddPortia(...)` and activates its workers with `AddWorker()`, which runs every declared projector and reactor under one hosted service. Also wires the transport runners into a host as `IHostedService`s — `AddPortiaQueueRunner()`, `AddPortiaRequestNotificationRunner()`, `AddPortiaMultiTenantRunner<TWorkload>()`. Fleet's scoped `AddPortiaFleetPartitionRunner<TWorkload>()` lives in `Portia.Fitz` instead, since it depends on Fitz leases. |
+| `Portia.DependencyInjection` | Composes the application with fluent `AddPortia()` and activates its workers with `AddWorkers()`, which runs every declared projector and reactor under one hosted service. |
 | `Portia.Testing` | Testing utilities for downstream apps: `AggregateScenario<T>`, `DomainEventSeed`, `InMemoryEventStore`, `TestPermissionEvaluator`, `TestRequestActorValidator`. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
 
 ## Core concepts, briefly
@@ -171,7 +194,7 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   signal is emitted.
 - **Hosting**: a runner's `RunAsync` is never called automatically just by constructing it —
   `Portia.DependencyInjection` (and `Portia.Fitz`, for fleet) provides `IHostedService` wrappers
-  (`AddWorker()`, `AddPortiaQueueRunner()`, etc.) that start when the host
+  (`AddWorkers()`, `AddPortiaQueueRunner()`, etc.) that start when the host
   starts and stop cleanly on shutdown. A projector loads the authoritative checkpoint from its
   constructor-injected `IProjectionStore`; each `IProjectionBatch` commits that checkpoint atomically with projection
   changes. Reactors, whose effects cannot share that transaction, use an
@@ -185,16 +208,15 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
 
 The architecture changes and their observed red → green results are recorded in
 [architecture evidence](docs/architecture-remediation-evidence.md). Its Fitz 0.1.1
-qualification note is historical; this checkout now uses Fitz 0.1.2.
+qualification note is historical; this checkout now uses Fitz 0.1.3.
+
+For trimming and NativeAOT setup, see the [NativeAOT guide](docs/native-aot.md).
+The authoritative current caveats are in [known limitations](docs/known-limitations.md).
 
 ## Known gaps, stated plainly
 
-- **No aggregate snapshotting.** A newly constructed aggregate replays its full raised-event history;
-  an existing hydrated instance reads only newer events. There is no durable snapshot mechanism yet. Fine at low event counts, a real scaling concern
-  for anything long-lived.
-- **Reaction effects are at-least-once.** `BaseReactor` checkpoints after each event;
-  `BaseBatchReactor` checkpoints after each successful bounded batch. A failed checkpoint
-  or interrupted batch can replay external effects. Make those effects idempotent.
+See the authoritative [known limitations](docs/known-limitations.md). That page owns the wording so
+upgrade requirements and qualification gaps do not drift between guides.
 
 [Projectors and reactors](docs/projectors-and-reactors.md) shows constructor-injected
 repositories, batch handling, and storage contracts.

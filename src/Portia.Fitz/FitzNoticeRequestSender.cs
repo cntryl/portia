@@ -7,10 +7,13 @@ namespace Cntryl.Portia;
 /// </summary>
 /// <param name="notice">The Fitz notice client.</param>
 /// <param name="serializer">The request serializer.</param>
-public sealed class FitzNoticeRequestSender(INoticeClient notice, IRequestSerializer serializer) : INoticeRequestSender
+/// <param name="catalog">Provides generated request routes.</param>
+public sealed class FitzNoticeRequestSender(INoticeClient notice, IRequestSerializer serializer, RequestTransportCatalog? catalog = null) : INoticeRequestSender
 {
     readonly INoticeClient _notice = notice ?? throw new ArgumentNullException(nameof(notice));
     readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+    readonly RequestTransportCatalog _catalog = catalog ?? (serializer as JsonRequestSerializer)?.Catalog
+        ?? throw new ArgumentNullException(nameof(catalog));
 
     /// <inheritdoc />
     public ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
@@ -29,7 +32,7 @@ public sealed class FitzNoticeRequestSender(INoticeClient notice, IRequestSerial
         var outcome = "success";
         try
         {
-            var route = FitzRouting.ResolveNoticeRoute(request, routeValues);
+            var route = FitzRouting.ResolveNoticeRoute(_catalog, request, routeValues);
             var body = _serializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
             await _notice.PublishAsync(route, body, ct).ConfigureAwait(false);
         }

@@ -6,4 +6,5 @@ public sealed class FeatureTwoHandler : IRequestHandler<FeatureTwoRequest, int>
         => ValueTask.FromResult(Result<int>.Success(context.Request.Value + 2));
 }
 
+[Discriminator("FeatureTwoObserved")]
 public sealed record FeatureTwoObserved(int Value) : DomainEvent;

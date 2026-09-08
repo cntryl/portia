@@ -1,4 +1,7 @@
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -15,15 +18,48 @@ public sealed class PortiaBuilder
     readonly HashSet<Type> _requests = [];
     readonly Dictionary<Type, Type> _handlerRequests = [];
     readonly Dictionary<(Type ScopeType, Type AuthorizerType), AuthorizationStage> _authorizers = [];
+    readonly List<Action<JsonSerializerOptions>> _jsonConfiguration = [];
+    readonly List<Func<JsonSerializerOptions, JsonSerializerContext>> _jsonContexts = [];
     bool _worker;
 
     internal PortiaBuilder(IServiceCollection services)
     {
         Services = services;
+        _jsonContexts.Add(static options => new PortiaCoreJsonContext(options));
     }
 
     /// <summary>Gets the application's service collection.</summary>
     public IServiceCollection Services { get; }
+
+    /// <summary>Configures Portia-owned JSON options before generated contexts are created.</summary>
+    public PortiaBuilder ConfigureJson(Action<JsonSerializerOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        _jsonConfiguration.Add(configure);
+        return this;
+    }
+
+    /// <summary>Adds a generated JSON context factory to the application resolver chain.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public PortiaBuilder AddGeneratedJsonContext(Func<JsonSerializerOptions, JsonSerializerContext> factory)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        _jsonContexts.Add(factory);
+        return this;
+    }
+
+    internal JsonSerializerOptions BuildJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        };
+        foreach (var configure in _jsonConfiguration) configure(options);
+        foreach (var factory in _jsonContexts)
+            options.TypeInfoResolverChain.Add(factory(new JsonSerializerOptions(options)));
+        options.MakeReadOnly();
+        return options;
+    }
 
     /// <summary>Registers a request handler through Portia.Generators' compile-time typed descriptor.</summary>
     /// <remarks>The generator is supplied by Portia.DependencyInjection.</remarks>
@@ -56,7 +92,15 @@ public sealed class PortiaBuilder
     /// <summary>Includes an event type in the application's serializer catalog.</summary>
     public PortiaBuilder AddEvent<TEvent>() where TEvent : DomainEvent
     {
-        Services.AddPortiaEvent<TEvent>();
+        _ = Services;
+        throw MissingGeneratedRegistration(typeof(TEvent), "domain event");
+    }
+
+    /// <summary>Adds a generated versioned domain-event descriptor.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public PortiaBuilder AddGeneratedEvent<TEvent>(int version, string name) where TEvent : DomainEvent
+    {
+        Services.AddPortiaEvent<TEvent>(version, name);
         return this;
     }
 
@@ -78,7 +122,7 @@ public sealed class PortiaBuilder
         }
         _handlerRequests[registration.RequestType] = registration.HandlerType;
         _ = Services.AddSingleton(registration);
-        Services.TryAddScoped(registration.HandlerType);
+        registration.Register(Services);
         return this;
     }
 
@@ -102,7 +146,7 @@ public sealed class PortiaBuilder
 
         _authorizers[key] = registration.Stage;
         _ = Services.AddSingleton(registration);
-        Services.TryAddScoped(registration.AuthorizerType);
+        registration.Register(Services);
         return this;
     }
 
@@ -122,16 +166,25 @@ public sealed class PortiaBuilder
     }
 
     /// <summary>Registers one reactor with an explicitly selected execution scope.</summary>
-    public PortiaBuilder AddReactor<TReactor>(WorkloadScope scope, Action<WorkloadOptions>? configure = null)
+    public PortiaBuilder AddReactor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TReactor>(WorkloadScope scope, Action<WorkloadOptions>? configure = null)
         where TReactor : BaseReactor
-        => AddWorkload(new WorkloadRegistration(typeof(TReactor), false, scope, configure));
+    {
+        var registration = new WorkloadRegistration(typeof(TReactor), false, scope, configure);
+        Services.TryAddScoped<TReactor>();
+        return AddWorkload(registration,
+            reactor: new ReactorRegistration(typeof(TReactor), static provider => provider.GetRequiredService<TReactor>()));
+    }
 
     /// <summary>Registers one projector with an explicitly selected execution scope.</summary>
-    public PortiaBuilder AddProjector<TProjector>(WorkloadScope scope, Action<WorkloadOptions>? configure = null)
+    public PortiaBuilder AddProjector<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProjector>(WorkloadScope scope, Action<WorkloadOptions>? configure = null)
         where TProjector : BaseProjector
-        => AddWorkload(new WorkloadRegistration(typeof(TProjector), true, scope, configure), ProjectorRegistration.Create<TProjector>());
+    {
+        var registration = new WorkloadRegistration(typeof(TProjector), true, scope, configure);
+        Services.TryAddScoped<TProjector>();
+        return AddWorkload(registration, ProjectorRegistration.Create<TProjector>());
+    }
 
-    PortiaBuilder AddWorkload(WorkloadRegistration registration, ProjectorRegistration? descriptor = null)
+    PortiaBuilder AddWorkload(WorkloadRegistration registration, ProjectorRegistration? descriptor = null, ReactorRegistration? reactor = null)
     {
         if (registration.ComponentType.IsAbstract || registration.ComponentType.ContainsGenericParameters)
             throw new ArgumentException("Register a concrete, closed component type.", nameof(registration));
@@ -142,7 +195,6 @@ public sealed class PortiaBuilder
         }
         if (_workloadNames.TryGetValue(registration.Name, out var owner) && owner != registration.ComponentType)
             throw new InvalidOperationException($"Conflicting workload registration '{registration.Name}'.");
-        Services.TryAddScoped(registration.ComponentType);
         // The descriptor may already have been registered by hand, so a miss in the builder's own
         // set still has to check the collection — once per component, not once per call.
         if (descriptor is not null)
@@ -158,8 +210,7 @@ public sealed class PortiaBuilder
             && !Services.Select(service => service.ImplementationInstance).OfType<ReactorRegistration>()
                 .Any(item => item.ReactorType == registration.ComponentType))
         {
-            _ = Services.AddSingleton(new ReactorRegistration(registration.ComponentType,
-                provider => (BaseReactor)provider.GetRequiredService(registration.ComponentType)));
+            _ = Services.AddSingleton(reactor ?? throw new InvalidOperationException("A generated reactor resolver is required."));
         }
         var workloadDescriptor = ServiceDescriptor.Singleton(registration);
         Services.Add(workloadDescriptor);
@@ -225,8 +276,11 @@ public static class PortiaApplicationServiceCollectionExtensions
         services.TryAddScoped<WorkloadContext>();
         services.TryAddScoped<IRequestBus, RequestBus>();
         services.TryAddSingleton<RequestRegistry>();
+        services.TryAddSingleton(provider => provider.GetRequiredService<PortiaBuilder>().BuildJsonOptions());
         services.TryAddSingleton(PortiaEventServiceCollectionExtensions.BuildCatalog);
-        services.TryAddSingleton<IDomainEventSerializer, JsonDomainEventSerializer>();
+        services.TryAddSingleton<IDomainEventSerializer>(provider => new JsonDomainEventSerializer(
+            provider.GetRequiredService<DomainEventTypeCatalog>(), provider.GetServices<IJsonDomainEventUpcaster>(),
+            provider.GetRequiredService<JsonSerializerOptions>()));
         services.TryAddSingleton<IReactorPrincipalProvider, SystemReactorPrincipalProvider>();
         return builder;
     }

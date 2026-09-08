@@ -13,14 +13,14 @@ public sealed class JsonRequestSerializerTests
     [Fact]
     public void ShouldRoundTripRequestWithActorToken()
     {
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer(typeof(SerializerTestRequest));
         var request = new SerializerTestRequest("hello", 42);
 
-        var bytes = serializer.Serialize(request, "some-token");
-        var (deserialized, actorToken) = serializer.DeserializeRequest(bytes);
+        var bytes = serializer.Serialize(request, "some-token", RequestMetadata.Create(), null);
+        var envelope = serializer.DeserializeEnvelope(bytes);
 
-        Assert.Equal(request, deserialized);
-        Assert.Equal("some-token", actorToken);
+        Assert.Equal(request, envelope.Request);
+        Assert.Equal("some-token", envelope.ActorToken);
     }
 
     /// <summary>
@@ -30,13 +30,13 @@ public sealed class JsonRequestSerializerTests
     [Fact]
     public void ShouldRoundTripRequestWithNullActorToken()
     {
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer(typeof(SerializerTestRequest));
         var request = new SerializerTestRequest("hello", 42);
 
-        var bytes = serializer.Serialize(request, actorToken: null);
-        var (_, actorToken) = serializer.DeserializeRequest(bytes);
+        var bytes = serializer.Serialize(request, null, RequestMetadata.Create(), null);
+        var envelope = serializer.DeserializeEnvelope(bytes);
 
-        Assert.Null(actorToken);
+        Assert.Null(envelope.ActorToken);
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ public sealed class JsonRequestSerializerTests
     [Fact]
     public void ShouldRoundTripSuccessfulOutcome()
     {
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer();
 
         var bytes = serializer.SerializeOutcome(Result.Success);
         var outcome = serializer.DeserializeOutcome(bytes);
@@ -60,7 +60,7 @@ public sealed class JsonRequestSerializerTests
     [Fact]
     public void ShouldRoundTripFailedOutcomeWithErrorDetails()
     {
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer();
         var error = new RequestError(RequestErrorKind.Conflict, "Already exists.", isTransient: true);
 
         var bytes = serializer.SerializeOutcome(Result.Failure(error));
@@ -78,7 +78,7 @@ public sealed class JsonRequestSerializerTests
     [Fact]
     public void ShouldRoundTripSuccessfulResultWithValue()
     {
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer();
 
         var bytes = serializer.SerializeResult(Result<string>.Success("the-value"));
         var result = serializer.DeserializeResult<string>(bytes);
@@ -93,7 +93,7 @@ public sealed class JsonRequestSerializerTests
     [Fact]
     public void ShouldRoundTripFailedResult()
     {
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer();
         var error = new RequestError(RequestErrorKind.NotFound, "Missing.");
 
         var bytes = serializer.SerializeResult(Result<string>.Failure(error));
@@ -105,20 +105,20 @@ public sealed class JsonRequestSerializerTests
 
     /// <summary>
     /// Verifies that a request field of type <see cref="Uuid" /> round-trips correctly through
-    /// the serializer's reflection-based envelope — proving <see cref="UuidJsonConverter" />
+    /// the serializer's source-generated envelope — proving <see cref="UuidJsonConverter" />
     /// still applies at this JSON boundary, not just at the HTTP one.
     /// </summary>
     [Fact]
     public void ShouldRoundTripUuidFieldOnRequest()
     {
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer(typeof(SerializerTestUuidRequest));
         var id = Uuid.CreateVersion4();
         var request = new SerializerTestUuidRequest(id);
 
-        var bytes = serializer.Serialize(request, actorToken: null);
-        var (deserialized, _) = serializer.DeserializeRequest(bytes);
+        var bytes = serializer.Serialize(request, null, RequestMetadata.Create(), null);
+        var envelope = serializer.DeserializeEnvelope(bytes);
 
-        Assert.Equal(id, Assert.IsType<SerializerTestUuidRequest>(deserialized).Id);
+        Assert.Equal(id, Assert.IsType<SerializerTestUuidRequest>(envelope.Request).Id);
     }
 }
 

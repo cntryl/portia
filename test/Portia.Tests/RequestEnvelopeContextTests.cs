@@ -9,10 +9,10 @@ public sealed class RequestEnvelopeContextTests
     [Fact]
     public void EnvelopePreservesLogicalIdentityWithoutReceiverState()
     {
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
         var parent = new RequestContext<EnvelopeCommand>(new EnvelopeCommand(1), RequestActor.System);
         var metadata = RequestMetadata.FromParent(parent);
-        var bytes = serializer.Serialize(new EnvelopeCommand(2), "opaque-token", metadata);
+        var bytes = serializer.Serialize(new EnvelopeCommand(2), "opaque-token", metadata, null);
         var first = serializer.DeserializeEnvelope(bytes);
         var second = serializer.DeserializeEnvelope(bytes);
         Assert.Equal(metadata, first.Metadata);
@@ -20,7 +20,9 @@ public sealed class RequestEnvelopeContextTests
         Assert.Equal("opaque-token", first.ActorToken);
         Assert.Equal(new EnvelopeCommand(2), first.Request);
         var json = JsonNode.Parse(bytes.Span)!.AsObject();
-        Assert.Equal(1, json["version"]!.GetValue<int>());
+        Assert.Equal(2, json["version"]!.GetValue<int>());
+        Assert.Equal("test.EnvelopeCommand", json["contract"]!.GetValue<string>());
+        Assert.Equal(1, json["contract_version"]!.GetValue<int>());
         Assert.DoesNotContain("execution_id", json.ToJsonString());
         Assert.DoesNotContain("claims", json.ToJsonString());
     }
@@ -29,7 +31,7 @@ public sealed class RequestEnvelopeContextTests
     [Fact]
     public void ShouldRoundTripOnlyW3CFieldsGivenTraceContextWhenSerializingEnvelope()
     {
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
         var trace = new RequestTraceContext("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", "vendor=value");
 
         var bytes = serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), trace);
@@ -37,8 +39,8 @@ public sealed class RequestEnvelopeContextTests
         var json = JsonNode.Parse(bytes.Span)!.AsObject();
 
         Assert.Equal(trace, envelope.TraceContext);
-        Assert.Equal(trace.TraceParent, json["trace_parent"]!.GetValue<string>());
-        Assert.Equal(trace.TraceState, json["trace_state"]!.GetValue<string>());
+        Assert.Equal(trace.TraceParent, json["traceparent"]!.GetValue<string>());
+        Assert.Equal(trace.TraceState, json["tracestate"]!.GetValue<string>());
         Assert.DoesNotContain("baggage", json.ToJsonString(), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -46,8 +48,8 @@ public sealed class RequestEnvelopeContextTests
     [Fact]
     public void UnversionedEnvelopeIsRejected()
     {
-        var serializer = new JsonRequestSerializer();
-        var json = JsonNode.Parse(serializer.Serialize(new EnvelopeCommand(1), null).Span)!.AsObject();
+        var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
+        var json = JsonNode.Parse(serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), null).Span)!.AsObject();
         _ = json.Remove("metadata");
         _ = json.Remove("version");
         _ = Assert.Throws<InvalidOperationException>(() => serializer.DeserializeEnvelope(System.Text.Encoding.UTF8.GetBytes(json.ToJsonString())));
@@ -59,8 +61,8 @@ public sealed class RequestEnvelopeContextTests
     [InlineData(true)]
     public void InvalidIdentityOrEnvelopeVersionIsRejected(bool unsupportedVersion)
     {
-        var serializer = new JsonRequestSerializer();
-        var json = JsonNode.Parse(serializer.Serialize(new EnvelopeCommand(1), null).Span)!.AsObject();
+        var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
+        var json = JsonNode.Parse(serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), null).Span)!.AsObject();
         if (unsupportedVersion)
             json["version"] = 99;
         else

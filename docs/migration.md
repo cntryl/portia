@@ -40,7 +40,7 @@ or context-dropping adapter fallbacks.
 - Construct an aggregate normally and call `HydrateAsync(aggregate, ct)`.
 - Save raised events or audits with `SaveAsync(aggregate, context, ct)`.
 - Implement the full execution context contract in custom buses and transport adapters.
-- Send version 1 request envelopes containing validated logical request metadata.
+- Drain or discard every version-1 queued, noticed, or scheduled request before deployment, then send only version-2 envelopes containing an explicit contract discriminator and validated logical request metadata.
 - Execute reactions as system principals, with their actual triggering event.
 - Use `BaseProjector`, `BaseBatchProjector`, `BaseReactor`, or `BaseBatchReactor`,
   passing the persistence contract through the constructor. Context carries metadata only.

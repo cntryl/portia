@@ -52,8 +52,9 @@ sealed class TestRequestBus : IDisposable
         var services = new ServiceCollection();
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(actorValidator ?? new PassActorValidator());
-        _ = services.AddSingleton<IRequestDeserializer, JsonRequestSerializer>();
-        _ = services.AddSingleton<IRequestOutcomeSerializer, JsonRequestSerializer>();
+        var serializer = TestJson.Serializer(typeof(RpcGetValue), typeof(RpcChangeValue), typeof(UniversalAction), typeof(NoWorkerRegisteredPing));
+        _ = services.AddSingleton<IRequestDeserializer>(serializer);
+        _ = services.AddSingleton<IRequestOutcomeSerializer>(serializer);
         _ = services.AddSingleton(permissionEvaluator ?? TestPermissionEvaluator.AllowAll());
         if (changeValueHandler is not null)
             _ = services.AddSingleton(changeValueHandler);

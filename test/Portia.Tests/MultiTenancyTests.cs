@@ -379,8 +379,10 @@ public sealed class MultiTenancyTests
     }
 }
 
+[Discriminator("test.tenant.registered")]
 sealed record TenantRegistered(string TenantId) : DomainEvent;
 
+[Discriminator("test.tenant.deregistered")]
 sealed record TenantDeregistered(string TenantId) : DomainEvent;
 
 /// <summary>

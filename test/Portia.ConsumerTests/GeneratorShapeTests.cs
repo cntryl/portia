@@ -159,6 +159,7 @@ public sealed class GeneratorShapeTests
     {
         var generated = GeneratorCompilation.GeneratedSource("""
             using Cntryl.Portia;
+            [Discriminator("AccountOpened")]
             public sealed record AccountOpened : DomainEvent;
             """, new DomainEventCatalogGenerator());
 
@@ -173,7 +174,9 @@ public sealed class GeneratorShapeTests
         var contracts = GeneratorCompilation.Reference("""
             using Cntryl.Portia;
             namespace Contracts;
+            [Discriminator("UsedEvent")]
             public sealed record UsedEvent(string Value) : DomainEvent;
+            [Discriminator("UnrelatedEvent")]
             public sealed record UnrelatedEvent(string Value) : DomainEvent;
             """);
         var generated = GeneratorCompilation.GeneratedSource("""
@@ -193,7 +196,7 @@ public sealed class GeneratorShapeTests
             }
             """, [contracts], new RegistrationCallInterceptorGenerator());
 
-        Assert.Contains("AddEvent<global::Contracts.UsedEvent>", generated, StringComparison.Ordinal);
+        Assert.Contains("AddGeneratedEvent<global::Contracts.UsedEvent>(1, \"UsedEvent\")", generated, StringComparison.Ordinal);
         Assert.DoesNotContain("UnrelatedEvent", generated, StringComparison.Ordinal);
     }
 

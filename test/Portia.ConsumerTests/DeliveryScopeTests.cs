@@ -58,13 +58,13 @@ public sealed class DeliveryScopeTests
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, ScopeValidator>();
         _ = services.AddSingleton<Fitz.Abstractions.Domains.Rpc.IRpcClient, InMemoryRpcClient>();
-        _ = services.AddSingleton<IRequestDeserializer, JsonRequestSerializer>();
-        _ = services.AddSingleton<IRequestOutcomeSerializer, JsonRequestSerializer>();
+        var serializer = ConsumerJson.CreateSerializer();
+        _ = services.AddSingleton<IRequestDeserializer>(serializer);
+        _ = services.AddSingleton<IRequestOutcomeSerializer>(serializer);
         _ = services.AddSingleton<FitzRpcRequestServer>();
         await using var provider = ConsumerHost.Build(services);
         var server = provider.GetRequiredService<FitzRpcRequestServer>();
         await using var registration = await server.RegisterAsync<ScopeRequest>();
-        var serializer = new JsonRequestSerializer();
         var sender = new FitzRemoteRequestSender(provider.GetRequiredService<Fitz.Abstractions.Domains.Rpc.IRpcClient>(), serializer, serializer);
         for (var i = 0; i < 2; i++)
             Assert.True((await sender.SendAsync(new ScopeRequest(Uuid.CreateVersion4()), new RequestRouteValues(), actorToken: null)).IsSuccess);

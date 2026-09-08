@@ -50,7 +50,7 @@ service providers, or acknowledgement handles. A wildcard subscription selector 
 not substituted for the actual route received. Custom transports can define another
 `RequestInvocation` record and must supply execution context through `DispatchAsync`.
 
-Fitz 0.1.2 does not expose broker message, call, reservation, or schedule occurrence
+Fitz 0.1.3 does not expose broker message, call, reservation, or schedule occurrence
 IDs through these delivery objects. Portia does not invent them. The isolated broker
 returned attempt `1` on a queue redelivery; treat `Attempt` as transport-reported
 information, not an application idempotency key or a guaranteed monotonic counter.
@@ -81,7 +81,7 @@ once and reuse it with the metadata overload. The ordinary root sender overloads
 create a new logical request on each call. HTTP `Prefer: respond-async` preserves
 the accepted request's logical metadata when publishing it to the queue.
 
-The JSON envelope is version 1 and requires valid request metadata. Missing metadata,
+The JSON envelope is version 2 and requires an explicit discriminator name/version plus valid request metadata. Missing metadata,
 empty identities, and unsupported versions are rejected. Receiver execution IDs,
 start times, and invocation facts are never accepted from the envelope.
 

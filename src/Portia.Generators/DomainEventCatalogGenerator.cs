@@ -8,7 +8,7 @@ namespace Cntryl.Portia;
 /// <summary>
 /// Discovers every concrete <c>DomainEvent</c> type in the compilation and emits
 /// <c>DomainEventTypeCatalog.AddPortiaGeneratedDomainEvents()</c>, registering each one under its
-/// logical name and schema version (see <c>EventSchemaAttribute</c>) — no per-type
+/// logical name and schema version (see <c>DiscriminatorAttribute</c>) — no per-type
 /// <c>.Register&lt;T&gt;()</c> call to remember, matching the zero-boilerplate discovery already
 /// used for reactors, projectors, and request transports.
 /// </summary>
@@ -16,7 +16,7 @@ namespace Cntryl.Portia;
 public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
 {
     const string DomainEventMetadataName = "Cntryl.Portia.DomainEvent";
-    const string EventSchemaAttributeMetadataName = "Cntryl.Portia.EventSchemaAttribute";
+    const string DiscriminatorAttributeMetadataName = "Cntryl.Portia.DiscriminatorAttribute";
     const string JsonDomainEventUpcasterMetadataName = "Cntryl.Portia.IJsonDomainEventUpcaster";
 
     static readonly DiagnosticDescriptor UnknownUpcasterEventName = new(
@@ -26,6 +26,11 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         "Portia",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+    static readonly DiagnosticDescriptor DuplicateDiscriminator = new("PORTIA023", "Duplicate domain-event discriminator",
+        "Domain-event discriminator '{0}' version {1} is declared by multiple CLR types", "Portia", DiagnosticSeverity.Error, true);
+    static readonly DiagnosticDescriptor InvalidDiscriminator = new("PORTIA021", "Missing or invalid domain-event discriminator",
+        "Domain event '{0}' must declare [Discriminator(\"name\", version)] with a non-empty name and positive version",
+        "Portia", DiagnosticSeverity.Error, true);
 
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -37,6 +42,18 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             .Where(static model => model is not null)
             .Select(static (model, _) => model!)
             .Collect();
+        var invalidDiscriminators = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
+                static (syntaxContext, _) => GetInvalidEventDiscriminator(syntaxContext))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!)
+            .Collect();
+        context.RegisterSourceOutput(invalidDiscriminators, static (sourceContext, invalid) =>
+        {
+            foreach (var model in invalid)
+                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidDiscriminator, model.Location, model.TypeName));
+        });
 
         var upcasters = context.SyntaxProvider
             .CreateSyntaxProvider(
@@ -68,6 +85,9 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             }
         }
 
+        foreach (var group in events.GroupBy(ev => (ev.Name, ev.Version)).Where(group => group.Select(ev => ev.TypeName).Distinct().Count() > 1))
+            context.ReportDiagnostic(Diagnostic.Create(DuplicateDiscriminator, Location.None, group.Key.Name, group.Key.Version));
+
         if (events.IsDefaultOrEmpty)
             return;
 
@@ -82,7 +102,10 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         _ = builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(catalog);");
 
         foreach (var ev in events.Distinct())
-            _ = builder.AppendLine($"        _ = catalog.Register<global::{ev.TypeName}>();");
+        {
+            _ = builder.Append("        _ = catalog.Register<global::").Append(ev.TypeName).Append(">(")
+                .Append(ev.Version).Append(", ").Append(RequestTransportDiscovery.FormatStringLiteral(ev.Name)).AppendLine(");");
+        }
 
         _ = builder.AppendLine("        return catalog;");
         _ = builder.AppendLine("    }");
@@ -103,8 +126,25 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             return null;
         }
 
-        var (name, _) = GetSchemaIdentity(symbol);
-        return new EventModel(symbol.ToDisplayString(), name);
+        var (name, version) = GetSchemaIdentity(symbol);
+        return name is null ? null : new EventModel(symbol.ToDisplayString(), name, version);
+    }
+
+    static InvalidEventDiscriminator? GetInvalidEventDiscriminator(GeneratorSyntaxContext context)
+    {
+        var declaration = (TypeDeclarationSyntax)context.Node;
+        if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol
+            || symbol.IsAbstract
+            || !IsAccessibleFromGeneratedCode(symbol)
+            || !InheritsFrom(symbol, DomainEventMetadataName))
+        {
+            return null;
+        }
+
+        var (name, version) = GetSchemaIdentity(symbol);
+        return !string.IsNullOrWhiteSpace(name) && version > 0
+            ? null
+            : new InvalidEventDiscriminator(symbol.ToDisplayString(), declaration.Identifier.GetLocation());
     }
 
     static UpcasterModel? GetUpcasterEventName(GeneratorSyntaxContext context)
@@ -127,16 +167,16 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             : new UpcasterModel(symbol.ToDisplayString(), eventName, declaration.Identifier.GetLocation());
     }
 
-    static (string Name, int Version) GetSchemaIdentity(INamedTypeSymbol symbol)
+    static (string? Name, int Version) GetSchemaIdentity(INamedTypeSymbol symbol)
     {
         var attribute = symbol.GetAttributes()
-            .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == EventSchemaAttributeMetadataName);
+            .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == DiscriminatorAttributeMetadataName);
 
         if (attribute is null || attribute.ConstructorArguments.Length != 2)
-            return (symbol.Name, 1);
+            return (null, 0);
 
-        var name = attribute.ConstructorArguments[0].Value as string ?? symbol.Name;
-        var version = attribute.ConstructorArguments[1].Value as int? ?? 1;
+        var name = attribute.ConstructorArguments[0].Value as string;
+        var version = attribute.ConstructorArguments[1].Value as int? ?? 0;
         return (name, version);
     }
 
@@ -169,18 +209,20 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         return true;
     }
 
-    sealed class EventModel(string typeName, string name) : IEquatable<EventModel>
+    sealed class EventModel(string typeName, string name, int version) : IEquatable<EventModel>
     {
         public string TypeName { get; } = typeName;
 
         public string Name { get; } = name;
 
+        public int Version { get; } = version;
+
         public bool Equals(EventModel? other) =>
-            other is not null && TypeName == other.TypeName && Name == other.Name;
+            other is not null && TypeName == other.TypeName && Name == other.Name && Version == other.Version;
 
         public override bool Equals(object? obj) => Equals(obj as EventModel);
 
-        public override int GetHashCode() => (TypeName, Name).GetHashCode();
+        public override int GetHashCode() => (TypeName, Name, Version).GetHashCode();
     }
 
     sealed class UpcasterModel(string typeName, string eventName, Location location)
@@ -188,6 +230,13 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         public string TypeName { get; } = typeName;
 
         public string EventName { get; } = eventName;
+
+        public Location Location { get; } = location;
+    }
+
+    sealed class InvalidEventDiscriminator(string typeName, Location location)
+    {
+        public string TypeName { get; } = typeName;
 
         public Location Location { get; } = location;
     }

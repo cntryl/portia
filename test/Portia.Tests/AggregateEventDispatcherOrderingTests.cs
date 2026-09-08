@@ -30,6 +30,7 @@ public abstract record HierarchyBaseEvent : DomainEvent;
 /// <summary>
 /// Event type derived from <see cref="HierarchyBaseEvent"/>.
 /// </summary>
+[Discriminator("test.hierarchy.child")]
 public sealed record HierarchyChildEvent(int Amount) : HierarchyBaseEvent;
 
 sealed class HierarchyAggregate : Aggregate

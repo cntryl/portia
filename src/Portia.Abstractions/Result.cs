@@ -8,26 +8,39 @@ namespace Cntryl.Portia;
 /// </summary>
 public readonly struct Result
 {
-    Result(bool isSuccess, RequestError? error)
+    readonly byte _state;
+    RequestError? StoredError { get; }
+
+    Result(byte state, RequestError? error)
     {
-        IsSuccess = isSuccess;
-        Error = error;
+        _state = state;
+        StoredError = error;
     }
 
     /// <summary>
     /// Gets a successful result.
     /// </summary>
-    public static Result Success { get; } = new(true, null);
+    public static Result Success { get; } = new(1, null);
 
     /// <summary>
     /// Gets whether the request succeeded.
     /// </summary>
-    public bool IsSuccess { get; }
+    public bool IsSuccess => _state switch
+    {
+        1 => true,
+        2 => false,
+        _ => throw new InvalidOperationException("The result is uninitialized."),
+    };
 
     /// <summary>
     /// Gets the error, when <see cref="IsSuccess" /> is <see langword="false" />.
     /// </summary>
-    public RequestError? Error { get; }
+    public RequestError? Error => _state switch
+    {
+        1 => null,
+        2 => StoredError,
+        _ => throw new InvalidOperationException("The result is uninitialized."),
+    };
 
     /// <summary>
     /// Creates a failed result.
@@ -36,7 +49,7 @@ public readonly struct Result
     public static Result Failure(RequestError error)
     {
         ArgumentNullException.ThrowIfNull(error);
-        return new Result(false, error);
+        return new Result(2, error);
     }
 }
 
@@ -49,27 +62,46 @@ public readonly struct Result
 /// <typeparam name="T">The type of the value produced on success.</typeparam>
 public readonly struct Result<T>
 {
-    Result(bool isSuccess, T? value, RequestError? error)
+    readonly byte _state;
+    T? StoredValue { get; }
+    RequestError? StoredError { get; }
+
+    Result(byte state, T? value, RequestError? error)
     {
-        IsSuccess = isSuccess;
-        Value = value;
-        Error = error;
+        _state = state;
+        StoredValue = value;
+        StoredError = error;
     }
 
     /// <summary>
     /// Gets whether the request succeeded.
     /// </summary>
-    public bool IsSuccess { get; }
+    public bool IsSuccess => _state switch
+    {
+        1 => true,
+        2 => false,
+        _ => throw new InvalidOperationException("The result is uninitialized."),
+    };
 
     /// <summary>
     /// Gets the value, when <see cref="IsSuccess" /> is <see langword="true" />.
     /// </summary>
-    public T? Value { get; }
+    public T? Value => _state switch
+    {
+        1 => StoredValue,
+        2 => throw new InvalidOperationException("A failed result has no value."),
+        _ => throw new InvalidOperationException("The result is uninitialized."),
+    };
 
     /// <summary>
     /// Gets the error, when <see cref="IsSuccess" /> is <see langword="false" />.
     /// </summary>
-    public RequestError? Error { get; }
+    public RequestError? Error => _state switch
+    {
+        1 => null,
+        2 => StoredError,
+        _ => throw new InvalidOperationException("The result is uninitialized."),
+    };
 
     // CA1000 (no static members on generic types) is the wrong call for a Result<T> factory —
     // Result<T>.Success(value)/.Failure(error) at the call site is exactly the point of the
@@ -79,7 +111,7 @@ public readonly struct Result<T>
     /// Creates a successful result.
     /// </summary>
     /// <param name="value">The value produced.</param>
-    public static Result<T> Success(T value) => new(true, value, null);
+    public static Result<T> Success(T value) => new(1, value, null);
 
     /// <summary>
     /// Creates a failed result.
@@ -88,7 +120,7 @@ public readonly struct Result<T>
     public static Result<T> Failure(RequestError error)
     {
         ArgumentNullException.ThrowIfNull(error);
-        return new Result<T>(false, default, error);
+        return new Result<T>(2, default, error);
     }
 #pragma warning restore CA1000
 }

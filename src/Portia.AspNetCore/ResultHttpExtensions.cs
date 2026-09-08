@@ -1,3 +1,6 @@
+using System.Buffers;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Http;
 
 namespace Cntryl.Portia;
@@ -22,16 +25,39 @@ public static class ResultHttpExtensions
     /// </summary>
     /// <typeparam name="T">The type of the value produced on success.</typeparam>
     /// <param name="result">The outcome to map.</param>
-    public static IResult ToHttpResult<T>(this Result<T> result) =>
-        result.IsSuccess ? Results.Ok(result.Value) : ToProblem(result.Error!);
-
-    static IResult ToProblem(RequestError error) => error.Kind switch
+    /// <param name="typeInfo">The application-owned source-generated metadata for the result value.</param>
+    public static IResult ToHttpResult<T>(this Result<T> result, JsonTypeInfo<T> typeInfo)
     {
-        RequestErrorKind.Validation => Results.BadRequest(new { error.Message }),
-        RequestErrorKind.Unauthorized => Results.Unauthorized(),
-        RequestErrorKind.Forbidden => Results.Problem(error.Message, statusCode: StatusCodes.Status403Forbidden),
-        RequestErrorKind.NotFound => Results.NotFound(new { error.Message }),
-        RequestErrorKind.Conflict => Results.Conflict(new { error.Message }),
-        _ => Results.Problem(error.Message, statusCode: StatusCodes.Status500InternalServerError),
-    };
+        ArgumentNullException.ThrowIfNull(typeInfo);
+        return result.IsSuccess ? Results.Json(result.Value, typeInfo) : ToProblem(result.Error!);
+    }
+
+    static RequestErrorResult ToProblem(RequestError error) => new(error);
+
+    sealed class RequestErrorResult(RequestError error) : IResult
+    {
+        public async Task ExecuteAsync(HttpContext httpContext)
+        {
+            ArgumentNullException.ThrowIfNull(httpContext);
+            httpContext.Response.StatusCode = error.Kind switch
+            {
+                RequestErrorKind.Validation => StatusCodes.Status400BadRequest,
+                RequestErrorKind.Unauthorized => StatusCodes.Status401Unauthorized,
+                RequestErrorKind.Forbidden => StatusCodes.Status403Forbidden,
+                RequestErrorKind.NotFound => StatusCodes.Status404NotFound,
+                RequestErrorKind.Conflict => StatusCodes.Status409Conflict,
+                _ => StatusCodes.Status500InternalServerError,
+            };
+            if (error.Kind == RequestErrorKind.Unauthorized)
+                return;
+            httpContext.Response.ContentType = "application/problem+json";
+            var buffer = new ArrayBufferWriter<byte>();
+            using var writer = new Utf8JsonWriter(buffer);
+            writer.WriteStartObject();
+            writer.WriteString("message", error.Message);
+            writer.WriteEndObject();
+            writer.Flush();
+            await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted).ConfigureAwait(false);
+        }
+    }
 }

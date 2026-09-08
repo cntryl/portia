@@ -7,7 +7,7 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class RequestDispatchTests
 {
-    /// <summary>Preserves the original positional cancellation-token source contract.</summary>
+    /// <summary>Accepts explicit nullable trace context with cancellation last.</summary>
     [Fact]
     public async Task ShouldAcceptPositionalCancellationTokenGivenExistingConsumerCall()
     {
@@ -17,10 +17,10 @@ public sealed class RequestDispatchTests
 
         var command = await RequestDispatch.SendAsync(
             new TestRequestActorValidator(), busHost.Bus, new ChangeValue(1), "valid-token",
-            invocation, RequestMetadata.Create(), null, cancellation.Token);
+            invocation, RequestMetadata.Create(), null, null, cancellation.Token);
         var query = await RequestDispatch.SendAsync(
             new TestRequestActorValidator(), busHost.Bus, new GetValue(), "valid-token",
-            invocation, RequestMetadata.Create(), null, cancellation.Token);
+            invocation, RequestMetadata.Create(), null, null, cancellation.Token);
 
         Assert.True(command.WasDispatched);
         Assert.True(query.WasDispatched);
@@ -39,7 +39,7 @@ public sealed class RequestDispatchTests
         var validator = new TestRequestActorValidator(rejectToken: "expired-token");
 
         var dispatch = await RequestDispatch.SendAsync(
-            validator, bus, new ChangeValue(1), "expired-token", new QueueInvocation("queue://test/work/item", 1), RequestMetadata.Create());
+            validator, bus, new ChangeValue(1), "expired-token", new QueueInvocation("queue://test/work/item", 1), RequestMetadata.Create(), null, null);
 
         Assert.False(dispatch.WasDispatched);
         Assert.False(dispatch.Outcome.IsSuccess);
@@ -60,7 +60,7 @@ public sealed class RequestDispatchTests
         var validator = new TestRequestActorValidator();
 
         var dispatch = await RequestDispatch.SendAsync(
-            validator, bus, new ChangeValue(42), "valid-token", new QueueInvocation("queue://test/work/item", 1), RequestMetadata.Create());
+            validator, bus, new ChangeValue(42), "valid-token", new QueueInvocation("queue://test/work/item", 1), RequestMetadata.Create(), null, null);
 
         Assert.True(dispatch.WasDispatched);
         Assert.True(dispatch.Outcome.IsSuccess);

@@ -40,9 +40,10 @@ public sealed class CompleteWorkflowTests
         if (fitzStore)
             _ = builder.Services.AddSingleton<IEventStore>(provider => new FitzEventStore(client.Stream, provider.GetRequiredService<IDomainEventSerializer>()));
         _ = builder.Services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
-        _ = builder.Services.AddSingleton<IRequestDeserializer, JsonRequestSerializer>();
-        _ = builder.Services.AddSingleton<IRequestOutcomeSerializer, JsonRequestSerializer>();
-        _ = builder.Services.AddSingleton<IRequestQueuePublisher>(new FitzRequestQueuePublisher(client.Queue, new JsonRequestSerializer()));
+        var requestSerializer = ConsumerJson.CreateSerializer();
+        _ = builder.Services.AddSingleton<IRequestDeserializer>(requestSerializer);
+        _ = builder.Services.AddSingleton<IRequestOutcomeSerializer>(requestSerializer);
+        _ = builder.Services.AddSingleton<IRequestQueuePublisher>(new FitzRequestQueuePublisher(client.Queue, requestSerializer));
         // One worker service runs every declared projector and reactor.
         _ = builder.Services.AddPortia()
             .AddProjector<FirstProjector>(WorkloadScope.Global)
@@ -53,7 +54,7 @@ public sealed class CompleteWorkflowTests
         var id = Uuid.CreateVersion4();
         var route = new RequestRouteValues(Resource: id.ToString());
         _ = builder.Services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(client.Queue,
-            new JsonRequestSerializer(), "queue://consumer/business/" + id));
+            requestSerializer, "queue://consumer/business/" + id));
         _ = builder.Services.AddPortiaQueueRunner();
         await using var app = builder.Build();
         map(app);
@@ -66,7 +67,7 @@ public sealed class CompleteWorkflowTests
             using var http = app.GetTestClient();
             using var response = await http.PostAsJsonAsync("/accounts/" + id, new { amount = 7 });
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-            var serializer = new JsonRequestSerializer();
+            var serializer = requestSerializer;
             var server = new FitzRpcRequestServer(client.Rpc, app.Services.GetRequiredService<IServiceScopeFactory>());
             await using var registrations = await server.RegisterRequestsAsync();
             var sender = new FitzRemoteRequestSender(client.Rpc, serializer, serializer);

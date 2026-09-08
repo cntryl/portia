@@ -19,7 +19,7 @@ sealed class FitzWorkloadCoordinator(FitzApplicationConnection connection, Porti
         IReadOnlyCollection<string> Snapshot()
         {
             var snapshot = workloads().ToDictionary(identity => prefix + Uuid.CreateVersion5(NamespaceId,
-                JsonSerializer.Serialize(new[] { identity.Name, identity.Tenant?.Value })), identity => identity);
+                JsonSerializer.Serialize([identity.Name, identity.Tenant?.Value], FitzJsonContext.Default.StringArray)), identity => identity);
             Volatile.Write(ref current, snapshot);
             return [.. snapshot.Keys];
         }

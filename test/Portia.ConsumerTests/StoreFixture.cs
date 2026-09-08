@@ -35,7 +35,7 @@ sealed class StoreFixture : IAsyncDisposable
         {
             await client.ConnectWhenReadyAsync(new Fitz.ConnectWhenReadyOptions(Timeout: TimeSpan.FromSeconds(15)));
             return new StoreFixture(new FitzEventStore(client.Stream,
-                new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<Deposited>().Register<Declined>())), client);
+                ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Deposited>(1, "Deposited").Register<Declined>(1, "Declined"))), client);
         }
         catch
         {

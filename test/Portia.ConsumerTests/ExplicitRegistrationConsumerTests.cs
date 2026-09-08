@@ -13,12 +13,16 @@ public sealed class ExplicitRegistrationConsumerTests
             using Cntryl.Portia;
             using Microsoft.Extensions.DependencyInjection;
             [RequestRoute("app", "accounts", "*", "deposit")]
+            [Discriminator("app.accounts.call")]
             public sealed record CallAccount(int Amount) : IRequest, ICallable;
             [RequestRoute("app", "accounts", "*", "queue")]
+            [Discriminator("app.accounts.queue")]
             public sealed record QueueAccount(int Amount) : IRequest, IQueuable;
             [RequestRoute("app", "accounts", "*", "notice")]
+            [Discriminator("app.accounts.notice")]
             public sealed record NoticeAccount(int Amount) : IRequest, INotifiable;
             [RequestRoute("app", "accounts", "*", "schedule")]
+            [Discriminator("app.accounts.schedule")]
             public sealed record ScheduleAccount(int Amount) : IRequest, ISchedulable;
             public static class Scenario
             {

@@ -370,10 +370,14 @@ sealed class DuplicateHandlerAggregate : Aggregate
     public int Value { get; private set; }
 }
 
+[Discriminator("test.value.changed")]
 sealed record ValueChanged(int Value) : DomainEvent;
 
+[Discriminator("test.value.incremented")]
 sealed record ValueIncremented(int Amount) : DomainEvent;
 
+[Discriminator("test.value.audited")]
 sealed record ValueAudited(string Reason) : DomainEvent;
 
+[Discriminator("test.event.unhandled")]
 sealed record UnhandledEvent : DomainEvent;

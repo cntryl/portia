@@ -21,30 +21,6 @@ public readonly record struct RequestDispatchOutcome<TOut>(Result<TOut> Outcome,
 /// </summary>
 public static class RequestDispatch
 {
-    /// <summary>
-    /// Re-validates an actor token and dispatches a no-result request when validation succeeds.
-    /// </summary>
-    /// <param name="actorValidator">The transport-boundary actor-token validator.</param>
-    /// <param name="bus">The request bus that executes validated requests.</param>
-    /// <param name="request">The deserialized request.</param>
-    /// <param name="actorToken">The opaque actor token received by the transport.</param>
-    /// <param name="invocation">The concrete inbound transport facts.</param>
-    /// <param name="metadata">The validated logical request identity.</param>
-    /// <param name="timeProvider">The optional clock used by the request context.</param>
-    /// <param name="ct">Cancels actor validation and dispatch.</param>
-    /// <returns>The validation or dispatch outcome and whether the bus was invoked.</returns>
-    /// <remarks>This compatibility overload does not supply propagated trace context.</remarks>
-    public static ValueTask<RequestDispatchOutcome> SendAsync(
-        IRequestActorValidator actorValidator,
-        IRequestBus bus,
-        IRequest request,
-        string? actorToken,
-        RequestInvocation invocation,
-        RequestMetadata metadata,
-        TimeProvider? timeProvider = null,
-        CancellationToken ct = default) =>
-        SendAsync(actorValidator, bus, request, actorToken, invocation, metadata, timeProvider, traceContext: null, ct);
-
     /// <summary>Re-validates and dispatches a request with propagated W3C trace context.</summary>
     /// <param name="actorValidator">The transport-boundary actor-token validator.</param>
     /// <param name="bus">The request bus that executes validated requests.</param>
@@ -83,31 +59,6 @@ public static class RequestDispatch
                 await bus.DispatchAsync(request, new RequestDispatchContext(actor, invocation, metadata, timeProvider), ct).ConfigureAwait(false),
                 WasDispatched: true);
     }
-
-    /// <summary>
-    /// Re-validates an actor token and dispatches a result-bearing request when validation succeeds.
-    /// </summary>
-    /// <typeparam name="TOut">The successful result value type.</typeparam>
-    /// <param name="actorValidator">The transport-boundary actor-token validator.</param>
-    /// <param name="bus">The request bus that executes validated requests.</param>
-    /// <param name="request">The deserialized result-bearing request.</param>
-    /// <param name="actorToken">The opaque actor token received by the transport.</param>
-    /// <param name="invocation">The concrete inbound transport facts.</param>
-    /// <param name="metadata">The validated logical request identity.</param>
-    /// <param name="timeProvider">The optional clock used by the request context.</param>
-    /// <param name="ct">Cancels actor validation and dispatch.</param>
-    /// <returns>The validation or dispatch outcome and whether the bus was invoked.</returns>
-    /// <remarks>This compatibility overload does not supply propagated trace context.</remarks>
-    public static ValueTask<RequestDispatchOutcome<TOut>> SendAsync<TOut>(
-        IRequestActorValidator actorValidator,
-        IRequestBus bus,
-        IRequest<TOut> request,
-        string? actorToken,
-        RequestInvocation invocation,
-        RequestMetadata metadata,
-        TimeProvider? timeProvider = null,
-        CancellationToken ct = default) =>
-        SendAsync(actorValidator, bus, request, actorToken, invocation, metadata, timeProvider, traceContext: null, ct);
 
     /// <summary>Re-validates and dispatches a result-bearing request with propagated W3C trace context.</summary>
     /// <typeparam name="TOut">The successful result value type.</typeparam>

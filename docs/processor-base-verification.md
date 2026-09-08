@@ -1,5 +1,9 @@
 # Processor base verification
 
+> Dated snapshot (2026-09-06). This records milestone evidence. See
+> [projectors and reactors](projectors-and-reactors.md) for the current API and
+> [known limitations](known-limitations.md) for unresolved gaps.
+
 Verified locally on 2026-09-06. See [projectors and reactors](projectors-and-reactors.md)
 for the application API and backend implementation requirements.
 

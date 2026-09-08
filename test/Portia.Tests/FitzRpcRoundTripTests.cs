@@ -17,7 +17,7 @@ public sealed class FitzRpcRoundTripTests
     public async Task ShouldRoundTripResultBearingRequestOverRpc()
     {
         var rpc = new InMemoryRpcClient();
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer(typeof(RpcGetValue));
         using var busHost = TestRequestBus.Create();
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
         _ = await server.RegisterAsync<RpcGetValue, int>();
@@ -36,7 +36,7 @@ public sealed class FitzRpcRoundTripTests
     public async Task ShouldRoundTripNoResultRequestOverRpc()
     {
         var rpc = new InMemoryRpcClient();
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer(typeof(RpcChangeValue));
         var handler = new RpcChangeValueHandler();
         using var busHost = TestRequestBus.Create(rpcChangeValueHandler: handler);
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
@@ -58,7 +58,7 @@ public sealed class FitzRpcRoundTripTests
     public async Task ShouldRejectRequestWhenActorTokenFailsRevalidationOnReceipt()
     {
         var rpc = new InMemoryRpcClient();
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer(typeof(RpcChangeValue));
         var handler = new RpcChangeValueHandler();
         using var busHost = TestRequestBus.Create(rpcChangeValueHandler: handler, actorValidator: new RejectingActorValidator());
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
@@ -84,7 +84,7 @@ public sealed class FitzRpcRoundTripTests
     public async Task ShouldDispatchRequestRegisteredEntirelyByGeneratedRpcWorkerRegistration()
     {
         var rpc = new InMemoryRpcClient();
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer(typeof(RpcGetValue));
         using var busHost = TestRequestBus.Create();
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
 
@@ -113,6 +113,7 @@ public sealed class FitzRpcRoundTripTests
 }
 
 [RequestRoute(realm: "test", area: "rpc", resource: "value", operation: "get")]
+[Discriminator("test.rpc.get-value")]
 sealed record RpcGetValue : IRequest<int>, ICallable;
 
 sealed class RpcGetValueHandler : IRequestHandler<RpcGetValue, int>
@@ -122,6 +123,7 @@ sealed class RpcGetValueHandler : IRequestHandler<RpcGetValue, int>
 }
 
 [RequestRoute(realm: "test", area: "rpc", resource: "value", operation: "change")]
+[Discriminator("test.rpc.change-value")]
 sealed record RpcChangeValue(int Value) : IRequest, ICallable;
 
 sealed class RpcChangeValueHandler : IRequestHandler<RpcChangeValue>

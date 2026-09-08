@@ -98,7 +98,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
         if (role == "application")
         {
-            return new Call(location, "application", EventRegistrations(context.SemanticModel.Compilation), null, invocation.GetLocation());
+            return new Call(location, "application", JsonContextRegistrations(context.SemanticModel.Compilation)
+                + EventRegistrations(context.SemanticModel.Compilation), null, invocation.GetLocation());
         }
         if (method.TypeArguments[0] is not INamedTypeSymbol type)
             return new Call(location, role, null, "use a concrete named type", invocation.GetLocation());
@@ -220,7 +221,27 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             .OrderBy(type => type.ToDisplayString(), StringComparer.Ordinal);
         foreach (var type in events)
         {
-            _ = source.Append("_ = builder.AddEvent<").Append(Type(type)).AppendLine(">();");
+            var attribute = type.GetAttributes().FirstOrDefault(candidate =>
+                candidate.AttributeClass?.ToDisplayString() == "Cntryl.Portia.DiscriminatorAttribute");
+            if (attribute is null || attribute.ConstructorArguments.Length != 2)
+                continue;
+            var name = attribute.ConstructorArguments[0].Value as string ?? string.Empty;
+            var version = attribute.ConstructorArguments[1].Value as int? ?? 0;
+            _ = source.Append("_ = builder.AddGeneratedEvent<").Append(Type(type)).Append(">(")
+                .Append(version).Append(", ").Append(RequestTransportDiscovery.FormatStringLiteral(name)).AppendLine(");");
+        }
+        return source.ToString();
+    }
+
+    static string JsonContextRegistrations(Compilation compilation)
+    {
+        var source = new StringBuilder();
+        foreach (var type in Types(compilation.Assembly.GlobalNamespace)
+            .Where(type => type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonContextAttribute"))
+            .OrderBy(type => type.ToDisplayString(), StringComparer.Ordinal))
+        {
+            _ = source.Append("_ = builder.AddGeneratedJsonContext(static options => new ")
+                .Append(Type(type)).AppendLine("(options));");
         }
         return source.ToString();
     }

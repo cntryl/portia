@@ -16,7 +16,7 @@ public sealed class FitzPersistenceFailureTests
     {
         var session = new Session(failureAt, cleanupFails);
         var streams = new Streams(session);
-        var store = new FitzEventStore(streams, new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<Declined>()));
+        var store = new FitzEventStore(streams, ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Declined>(1, "Declined")));
         var services = new ServiceCollection();
         _ = services.AddSingleton<IEventStore>(store);
         _ = services.AddPortia();
@@ -55,7 +55,7 @@ public sealed class FitzPersistenceFailureTests
     {
         var original = new StreamException(message, "APPEND_FAILED", domainCode: code);
         var session = new Session(failureAt, true) { Failure = original };
-        var store = new FitzEventStore(new Streams(session), new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<Declined>()));
+        var store = new FitzEventStore(new Streams(session), ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Declined>(1, "Declined")));
         await using var provider = new ServiceCollection().BuildServiceProvider();
         var repository = new AggregateRepository(store);
         var account = new Account(Uuid.CreateVersion4());

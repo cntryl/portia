@@ -7,10 +7,13 @@ namespace Cntryl.Portia;
 /// </summary>
 /// <param name="schedule">The Fitz schedule client.</param>
 /// <param name="serializer">The request serializer.</param>
-public sealed class FitzRequestScheduler(IScheduleClient schedule, IRequestSerializer serializer) : IRequestScheduler
+/// <param name="catalog">Provides generated request routes.</param>
+public sealed class FitzRequestScheduler(IScheduleClient schedule, IRequestSerializer serializer, RequestTransportCatalog? catalog = null) : IRequestScheduler
 {
     readonly IScheduleClient _schedule = schedule ?? throw new ArgumentNullException(nameof(schedule));
     readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+    readonly RequestTransportCatalog _catalog = catalog ?? (serializer as JsonRequestSerializer)?.Catalog
+        ?? throw new ArgumentNullException(nameof(catalog));
 
     /// <inheritdoc />
     public ValueTask<string> ScheduleAsync<TRequest>(
@@ -41,7 +44,7 @@ public sealed class FitzRequestScheduler(IScheduleClient schedule, IRequestSeria
         var outcome = "success";
         try
         {
-            var route = FitzRouting.ResolveScheduleRoute(request, routeValues);
+            var route = FitzRouting.ResolveScheduleRoute(_catalog, request, routeValues);
             var body = _serializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
             var scheduleId = await _schedule.CreateAsync(route, spec.Cron, ToFitzDeliveryMode(spec.DeliveryMode), body.ToArray(), ct).ConfigureAwait(false);
             return scheduleId ?? throw new InvalidOperationException($"Scheduling request over route '{route}' did not return an identity.");

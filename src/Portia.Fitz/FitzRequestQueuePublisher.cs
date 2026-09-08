@@ -7,10 +7,13 @@ namespace Cntryl.Portia;
 /// </summary>
 /// <param name="queue">The Fitz queue client.</param>
 /// <param name="serializer">The request serializer.</param>
-public sealed class FitzRequestQueuePublisher(IQueueClient queue, IRequestSerializer serializer) : IRequestQueuePublisher
+/// <param name="catalog">Provides generated request routes.</param>
+public sealed class FitzRequestQueuePublisher(IQueueClient queue, IRequestSerializer serializer, RequestTransportCatalog? catalog = null) : IRequestQueuePublisher
 {
     readonly IQueueClient _queue = queue ?? throw new ArgumentNullException(nameof(queue));
     readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+    readonly RequestTransportCatalog _catalog = catalog ?? (serializer as JsonRequestSerializer)?.Catalog
+        ?? throw new ArgumentNullException(nameof(catalog));
 
     /// <inheritdoc />
     public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
@@ -29,7 +32,7 @@ public sealed class FitzRequestQueuePublisher(IQueueClient queue, IRequestSerial
         var outcome = "success";
         try
         {
-            var route = FitzRouting.ResolveQueueRoute(request, routeValues);
+            var route = FitzRouting.ResolveQueueRoute(_catalog, request, routeValues);
             var body = _serializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
             _ = await _queue.EnqueueAsync(route, body, null, ct).ConfigureAwait(false);
         }

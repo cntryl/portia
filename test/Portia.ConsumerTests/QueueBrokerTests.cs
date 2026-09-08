@@ -9,16 +9,16 @@ public sealed class QueueBrokerTests
     {
         await using var client = await ConsumerBroker.ConnectAsync();
         var route = "queue://portia-consumer-tests/queue/" + Guid.NewGuid().ToString("N");
-        var serializer = new JsonRequestSerializer();
+        var serializer = ConsumerJson.CreateSerializer();
         _ = await client.Queue.EnqueueAsync(route, "{"u8.ToArray());
         var id = Uuid.CreateVersion4();
-        _ = await client.Queue.EnqueueAsync(route, serializer.Serialize(new ScopeRequest(id), null));
+        _ = await client.Queue.EnqueueAsync(route, serializer.Serialize(new ScopeRequest(id), null, RequestMetadata.Create(), null));
         var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, visibilityTimeoutSeconds: 1);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
         Assert.True(await reader.MoveNextAsync());
         var malformed = reader.Current;
         var attempt = malformed.Attempt;
-        _ = Assert.Throws<System.Text.Json.JsonException>(() => malformed.Request);
+        _ = Assert.ThrowsAny<System.Text.Json.JsonException>(() => malformed.Request);
         await malformed.AbandonAsync();
         Assert.True(await reader.MoveNextAsync());
         Assert.Equal(id, Assert.IsType<ScopeRequest>(reader.Current.Request).Id);
@@ -38,9 +38,9 @@ public sealed class QueueBrokerTests
         await using var client = await ConsumerBroker.ConnectAsync();
         await using var competitor = await ConsumerBroker.ConnectAsync();
         var route = "queue://portia-consumer-tests/queue/" + Guid.NewGuid().ToString("N");
-        var serializer = new JsonRequestSerializer();
+        var serializer = ConsumerJson.CreateSerializer();
         var id = Uuid.CreateVersion4();
-        _ = await client.Queue.EnqueueAsync(route, serializer.Serialize(new ScopeRequest(id, 2), null));
+        _ = await client.Queue.EnqueueAsync(route, serializer.Serialize(new ScopeRequest(id, 2), null, RequestMetadata.Create(), null));
         var services = ConsumerHost.CreateServices();
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
@@ -61,7 +61,7 @@ public sealed class QueueBrokerTests
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         }
         var redelivered = Assert.Single(await competitor.Queue.ReserveAsync(route, leaseSeconds: 1, waitSeconds: 3));
-        var (request, _) = serializer.DeserializeRequest(redelivered.Body);
+        var request = serializer.DeserializeEnvelope(redelivered.Body).Request;
         Assert.Equal(id, Assert.IsType<ScopeRequest>(request).Id);
         // The pinned SDK does not expose the broker's durable delivery counter.
         Assert.Equal(1U, redelivered.Attempt);

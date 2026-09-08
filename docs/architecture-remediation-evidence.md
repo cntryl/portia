@@ -1,5 +1,9 @@
 # Architecture remediation evidence — 2026-09-06
 
+> Dated snapshot (2026-09-06). The Fitz structured-error blocker recorded here was later resolved
+> by Fitz 0.1.3. For current contracts and unresolved gaps, see [migration](migration.md) and
+> [known limitations](known-limitations.md).
+
 Changes were prepared on baseline `7feeab16b7087677105b7d23770c1b837f804f69`.
 The six Portia changes are implemented, but acceptance is **blocked** by missing structured
 APPEND error codes in the centrally pinned Fitz 0.1.1 client. No Fitz repository change,

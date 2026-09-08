@@ -12,6 +12,7 @@ namespace Cntryl.Portia;
 static class RequestTransportDiscovery
 {
     const string RequestRouteAttributeMetadataName = "Cntryl.Portia.RequestRouteAttribute";
+    const string DiscriminatorAttributeMetadataName = "Cntryl.Portia.DiscriminatorAttribute";
     const string CallableMetadataName = "Cntryl.Portia.ICallable";
     const string QueuableMetadataName = "Cntryl.Portia.IQueuable";
     const string NotifiableMetadataName = "Cntryl.Portia.INotifiable";
@@ -29,6 +30,50 @@ static class RequestTransportDiscovery
             : null;
     }
 
+    public static InvalidDiscriminator? GetInvalidRequestDiscriminator(GeneratorSyntaxContext context)
+    {
+        var declaration = (TypeDeclarationSyntax)context.Node;
+        if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol
+            || symbol.IsAbstract
+            || IsStream(symbol)
+            || !HasTransportMarker(symbol)
+            || !symbol.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == RequestRouteAttributeMetadataName))
+        {
+            return null;
+        }
+
+        var attribute = symbol.GetAttributes()
+            .FirstOrDefault(candidate => candidate.AttributeClass?.ToDisplayString() == DiscriminatorAttributeMetadataName);
+        var name = attribute?.ConstructorArguments.ElementAtOrDefault(0).Value as string;
+        var version = attribute?.ConstructorArguments.ElementAtOrDefault(1).Value as int? ?? 0;
+        return attribute is not null && !string.IsNullOrWhiteSpace(name) && version > 0
+            ? null
+            : new InvalidDiscriminator(symbol.ToDisplayString(), declaration.Identifier.GetLocation());
+    }
+
+    public static InvalidRoute? GetInvalidRoute(GeneratorSyntaxContext context)
+    {
+        var declaration = (TypeDeclarationSyntax)context.Node;
+        if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol
+            || symbol.IsAbstract
+            || IsStream(symbol)
+            || !HasTransportMarker(symbol))
+        {
+            return null;
+        }
+        var attribute = symbol.GetAttributes()
+            .FirstOrDefault(candidate => candidate.AttributeClass?.ToDisplayString() == RequestRouteAttributeMetadataName);
+        if (attribute is null || attribute.ConstructorArguments.Length != 4)
+            return null;
+        foreach (var argument in attribute.ConstructorArguments)
+        {
+            var segment = argument.Value as string;
+            if (!IsValidRouteSegment(segment))
+                return new InvalidRoute(symbol.ToDisplayString(), segment ?? string.Empty, declaration.Identifier.GetLocation());
+        }
+        return null;
+    }
+
     public static RequestTransportComponent? GetRequestTransportComponent(ITypeSymbol? type)
     {
         if (type is not INamedTypeSymbol symbol || symbol.IsAbstract)
@@ -39,18 +84,21 @@ static class RequestTransportDiscovery
         // binding generator without going through this transport table. ICallable on a stream
         // request means "callable over HTTP", not "callable over Fitz RPC" the way it does for
         // IRequest/IRequest<T> — so it's excluded here rather than mis-registered as RPC-eligible.
-        if (symbol.AllInterfaces.Any(iface =>
-            iface.OriginalDefinition.ContainingNamespace.ToDisplayString() == "Cntryl.Portia"
-            && iface.OriginalDefinition.MetadataName == StreamRequestMetadataName))
+        if (IsStream(symbol))
         {
             return null;
         }
 
         var routeAttribute = symbol.GetAttributes()
             .FirstOrDefault(attribute => attribute.AttributeClass?.ToDisplayString() == RequestRouteAttributeMetadataName);
+        var discriminatorAttribute = symbol.GetAttributes()
+            .FirstOrDefault(attribute => attribute.AttributeClass?.ToDisplayString() == DiscriminatorAttributeMetadataName);
 
-        if (routeAttribute is null || routeAttribute.ConstructorArguments.Length != 4)
+        if (routeAttribute is null || routeAttribute.ConstructorArguments.Length != 4
+            || discriminatorAttribute is null || discriminatorAttribute.ConstructorArguments.Length != 2)
+        {
             return null;
+        }
 
         var transports = RequestTransports.None;
 
@@ -82,6 +130,8 @@ static class RequestTransportDiscovery
             (string?)routeAttribute.ConstructorArguments[1].Value ?? wildcard,
             (string?)routeAttribute.ConstructorArguments[2].Value ?? wildcard,
             (string?)routeAttribute.ConstructorArguments[3].Value ?? wildcard,
+            (int?)discriminatorAttribute.ConstructorArguments[1].Value ?? 0,
+            (string?)discriminatorAttribute.ConstructorArguments[0].Value ?? string.Empty,
             resultTypeInterface?.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
     }
 
@@ -109,6 +159,35 @@ static class RequestTransportDiscovery
 
     static bool ImplementsInterface(INamedTypeSymbol symbol, string metadataName) =>
         symbol.AllInterfaces.Any(iface => iface.ToDisplayString() == metadataName);
+
+    static bool IsStream(INamedTypeSymbol symbol) => symbol.AllInterfaces.Any(iface =>
+        iface.OriginalDefinition.ContainingNamespace.ToDisplayString() == "Cntryl.Portia"
+        && iface.OriginalDefinition.MetadataName == StreamRequestMetadataName);
+
+    static bool HasTransportMarker(INamedTypeSymbol symbol) =>
+        ImplementsInterface(symbol, CallableMetadataName)
+        || ImplementsInterface(symbol, QueuableMetadataName)
+        || ImplementsInterface(symbol, NotifiableMetadataName)
+        || ImplementsInterface(symbol, SchedulableMetadataName);
+
+    static bool IsValidRouteSegment(string? segment) => !string.IsNullOrWhiteSpace(segment)
+        && (segment == "*" || segment.All(character => char.IsLetterOrDigit(character) || character is '.' or '_' or '-' or '~'));
+}
+
+sealed class InvalidDiscriminator(string typeName, Location location)
+{
+    public string TypeName { get; } = typeName;
+
+    public Location Location { get; } = location;
+}
+
+sealed class InvalidRoute(string typeName, string segment, Location location)
+{
+    public string TypeName { get; } = typeName;
+
+    public string Segment { get; } = segment;
+
+    public Location Location { get; } = location;
 }
 
 // Mirrors Cntryl.Portia.RequestTransports in Portia.Abstractions for this generator's own
@@ -132,6 +211,8 @@ sealed class RequestTransportComponent(
     string area,
     string resource,
     string operation,
+    int discriminatorVersion,
+    string discriminatorName,
     string? resultType)
 {
     public string TypeName { get; } = typeName;
@@ -145,6 +226,10 @@ sealed class RequestTransportComponent(
     public string Resource { get; } = resource;
 
     public string Operation { get; } = operation;
+
+    public int DiscriminatorVersion { get; } = discriminatorVersion;
+
+    public string DiscriminatorName { get; } = discriminatorName;
 
     public string? ResultType { get; } = resultType;
 }

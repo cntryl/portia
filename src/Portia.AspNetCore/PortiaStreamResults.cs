@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -43,6 +44,7 @@ public static class PortiaStreamResults
         {
             var ct = context.RequestAborted;
             var options = PortiaHttpBinding.GetJsonOptions(context);
+            var typeInfo = (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
             await using var iterator = source.GetAsyncEnumerator(ct);
             var hasItem = await iterator.MoveNextAsync().ConfigureAwait(false);
             var response = context.Response;
@@ -56,7 +58,7 @@ public static class PortiaStreamResults
             {
                 if (sse)
                 {
-                    var data = iterator.Current is string text ? text : JsonSerializer.Serialize(iterator.Current, options);
+                    var data = iterator.Current is string text ? text : JsonSerializer.Serialize(iterator.Current, typeInfo);
                     foreach (var line in data.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Split('\n'))
                         await response.WriteAsync("data: " + line + "\n", ct).ConfigureAwait(false);
                     await response.WriteAsync("\n", ct).ConfigureAwait(false);
@@ -65,7 +67,7 @@ public static class PortiaStreamResults
                 {
                     if (!first)
                         await response.WriteAsync(",", ct).ConfigureAwait(false);
-                    await JsonSerializer.SerializeAsync(response.Body, iterator.Current, options, ct).ConfigureAwait(false);
+                    await JsonSerializer.SerializeAsync(response.Body, iterator.Current, typeInfo, ct).ConfigureAwait(false);
                 }
                 first = false;
                 await response.Body.FlushAsync(ct).ConfigureAwait(false);

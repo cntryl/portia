@@ -17,7 +17,7 @@ public sealed class DomainEventSchemaResolverTests
     public void ShouldResolveDirectlyWhenExactVersionIsRegistered()
     {
         var resolver = new DomainEventSchemaResolver(
-            new DomainEventTypeCatalog().Register<WidgetNamed>(),
+            new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed"),
             new Dictionary<(string, int), IJsonDomainEventUpcaster>());
         var payload = new JsonObject { ["name"] = "Sprocket" };
 
@@ -36,7 +36,7 @@ public sealed class DomainEventSchemaResolverTests
     {
         var upcaster = new WidgetNamedToRenamedUpcaster();
         var resolver = new DomainEventSchemaResolver(
-            new DomainEventTypeCatalog().Register<WidgetRenamed>(),
+            new DomainEventTypeCatalog().Register<WidgetRenamed>(2, "WidgetNamed"),
             new Dictionary<(string, int), IJsonDomainEventUpcaster> { [(upcaster.EventName, upcaster.FromVersion)] = upcaster });
         var payload = new JsonObject { ["name"] = "Sprocket" };
 
@@ -53,7 +53,7 @@ public sealed class DomainEventSchemaResolverTests
     public void ShouldThrowWhenNoRegistrationOrUpcasterCanResolveVersion()
     {
         var resolver = new DomainEventSchemaResolver(
-            new DomainEventTypeCatalog().Register<WidgetRenamed>(),
+            new DomainEventTypeCatalog().Register<WidgetRenamed>(2, "WidgetNamed"),
             new Dictionary<(string, int), IJsonDomainEventUpcaster>());
 
         _ = Assert.Throws<InvalidOperationException>(() => resolver.Resolve("WidgetNamed", 1, []));

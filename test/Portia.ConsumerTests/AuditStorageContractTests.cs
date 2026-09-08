@@ -46,7 +46,7 @@ public sealed class AuditStorageContractTests
     [Fact]
     public void StoredEventsWithoutAuditFlagRemainNonAudits()
     {
-        var serializer = new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<Deposited>());
+        var serializer = ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Deposited>(1, "Deposited"));
         var ev = DomainEventSeed.Attach(new Deposited(3), Uuid.CreateVersion4(), 1);
         var envelope = JsonNode.Parse(serializer.Serialize(ev).Span)!.AsObject();
         Assert.True(envelope["metadata"]!.AsObject().Remove("is_audit"));
@@ -68,7 +68,7 @@ public sealed class AuditStorageContractTests
         else
             account.Raise(ev);
         Assert.Equal(audit, ev.Metadata.IsAudit);
-        var serializer = new JsonDomainEventSerializer(new DomainEventTypeCatalog().Register<Deposited>());
+        var serializer = ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Deposited>(1, "Deposited"));
         Assert.Equal(ev.Metadata, serializer.Deserialize(serializer.Serialize(ev)).Metadata);
     }
 

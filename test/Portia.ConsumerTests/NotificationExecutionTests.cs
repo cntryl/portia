@@ -12,7 +12,7 @@ public sealed class NotificationExecutionTests
     [InlineData(true)]
     public async Task NotificationDispatchUsesConcreteRouteAndScheduleFiringsHaveIndependentIdentities(bool scheduled)
     {
-        var serializer = new JsonRequestSerializer();
+        var serializer = ConsumerJson.CreateSerializer();
         var parent = new RequestContext<BrokerExecutionContextTests.Command>(new(1), RequestActor.System);
         var routeValues = new RequestRouteValues(Resource: "actual");
         var wire = new Wire();

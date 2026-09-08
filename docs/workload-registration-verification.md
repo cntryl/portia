@@ -1,5 +1,9 @@
 # Explicit workload registration verification
 
+> Dated snapshot (2026-09-06). This records milestone evidence. See
+> [application setup](application-setup.md) for the current contract and
+> [known limitations](known-limitations.md) for unresolved gaps.
+
 Verified locally on 2026-09-06 at the registration milestone, before the
 [processor base refactor](processor-base-verification.md). This supersedes the module-based setup described in
 older milestone evidence. See [application setup](application-setup.md) for the current API.

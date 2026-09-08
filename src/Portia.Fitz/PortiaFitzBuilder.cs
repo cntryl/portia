@@ -34,7 +34,9 @@ public sealed class PortiaFitzBuilder
         if (!_capabilities.Add("events"))
             return this;
         var services = _application.Services;
-        services.TryAddSingleton<IDomainEventSerializer, JsonDomainEventSerializer>();
+        services.TryAddSingleton<IDomainEventSerializer>(provider => new JsonDomainEventSerializer(
+            provider.GetRequiredService<DomainEventTypeCatalog>(), provider.GetServices<IJsonDomainEventUpcaster>(),
+            provider.GetRequiredService<System.Text.Json.JsonSerializerOptions>()));
         services.TryAddSingleton<IEventStore>(provider => new FitzEventStore(
             provider.GetRequiredService<FitzApplicationConnection>().Client.Stream,
             provider.GetRequiredService<IDomainEventSerializer>()));
@@ -54,13 +56,17 @@ public sealed class PortiaFitzBuilder
         AddSerializers(services);
         services.TryAddSingleton<IRemoteRequestSender>(provider => new FitzRemoteRequestSender(
             provider.GetRequiredService<FitzApplicationConnection>().Client.Rpc,
-            provider.GetRequiredService<IRequestSerializer>(), provider.GetRequiredService<IRequestOutcomeDeserializer>()));
+            provider.GetRequiredService<IRequestSerializer>(), provider.GetRequiredService<IRequestOutcomeDeserializer>(),
+            provider.GetRequiredService<RequestTransportCatalog>()));
         services.TryAddSingleton<IRequestQueuePublisher>(provider => new FitzRequestQueuePublisher(
-            provider.GetRequiredService<FitzApplicationConnection>().Client.Queue, provider.GetRequiredService<IRequestSerializer>()));
+            provider.GetRequiredService<FitzApplicationConnection>().Client.Queue, provider.GetRequiredService<IRequestSerializer>(),
+            provider.GetRequiredService<RequestTransportCatalog>()));
         services.TryAddSingleton<INoticeRequestSender>(provider => new FitzNoticeRequestSender(
-            provider.GetRequiredService<FitzApplicationConnection>().Client.Notice, provider.GetRequiredService<IRequestSerializer>()));
+            provider.GetRequiredService<FitzApplicationConnection>().Client.Notice, provider.GetRequiredService<IRequestSerializer>(),
+            provider.GetRequiredService<RequestTransportCatalog>()));
         services.TryAddSingleton<IRequestScheduler>(provider => new FitzRequestScheduler(
-            provider.GetRequiredService<FitzApplicationConnection>().Client.Schedule, provider.GetRequiredService<IRequestSerializer>()));
+            provider.GetRequiredService<FitzApplicationConnection>().Client.Schedule, provider.GetRequiredService<IRequestSerializer>(),
+            provider.GetRequiredService<RequestTransportCatalog>()));
         return this;
     }
 
@@ -190,7 +196,10 @@ public sealed class PortiaFitzBuilder
 
     static void AddSerializers(IServiceCollection services)
     {
-        services.TryAddSingleton<JsonRequestSerializer>();
+        services.TryAddSingleton(provider => new RequestTransportCatalog(provider.GetServices<RequestTransportRegistration>()));
+        services.TryAddSingleton(provider => new JsonRequestSerializer(
+            provider.GetServices<RequestTransportRegistration>(),
+            provider.GetRequiredService<System.Text.Json.JsonSerializerOptions>()));
         services.TryAddSingleton<IRequestSerializer>(provider => provider.GetRequiredService<JsonRequestSerializer>());
         services.TryAddSingleton<IRequestDeserializer>(provider => provider.GetRequiredService<JsonRequestSerializer>());
         services.TryAddSingleton<IRequestOutcomeSerializer>(provider => provider.GetRequiredService<JsonRequestSerializer>());

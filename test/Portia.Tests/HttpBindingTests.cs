@@ -308,6 +308,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 }
 
 [RequestRoute(realm: "*", area: "http-binding-tests", resource: "widgets", operation: "get")]
+[Discriminator("test.http.widgets.get")]
 sealed record HttpGetWidget(Uuid WidgetId, bool IncludeArchived) : IRequest<string>, ICallable;
 
 sealed class HttpGetWidgetHandler : IRequestHandler<HttpGetWidget, string>
@@ -322,6 +323,7 @@ sealed record HttpOrderLine(string Sku, int Quantity);
 readonly record struct HttpMoney(string Currency, int Cents);
 
 [RequestRoute(realm: "*", area: "http-binding-tests", resource: "payments", operation: "create")]
+[Discriminator("test.http.payments.create")]
 sealed record HttpCreatePayment(HttpMoney Amount) : IRequest<Uuid>, ICallable;
 
 sealed class HttpCreatePaymentHandler : IRequestHandler<HttpCreatePayment, Uuid>
@@ -331,6 +333,7 @@ sealed class HttpCreatePaymentHandler : IRequestHandler<HttpCreatePayment, Uuid>
 }
 
 [RequestRoute(realm: "*", area: "http-binding-tests", resource: "orders", operation: "create")]
+[Discriminator("test.http.orders.create")]
 sealed record HttpCreateOrder(List<HttpOrderLine> Lines) : IRequest<Uuid>, ICallable;
 
 sealed class HttpCreateOrderHandler : IRequestHandler<HttpCreateOrder, Uuid>
@@ -340,6 +343,7 @@ sealed class HttpCreateOrderHandler : IRequestHandler<HttpCreateOrder, Uuid>
 }
 
 [RequestRoute(realm: "*", area: "http-binding-tests", resource: "ping", operation: "ping")]
+[Discriminator("test.http.ping")]
 sealed record HttpSendPing : IRequest, ICallable, IQueuable;
 
 sealed class HttpSendPingHandler : IRequestHandler<HttpSendPing>
@@ -349,6 +353,7 @@ sealed class HttpSendPingHandler : IRequestHandler<HttpSendPing>
 }
 
 [RequestRoute(realm: "*", area: "http-binding-tests", resource: "guarded", operation: "run")]
+[Discriminator("test.http.guarded.run")]
 [RequiresPermission("http:guarded")]
 sealed record HttpGuardedAction : IRequest, ICallable;
 

@@ -34,7 +34,7 @@ public sealed class AllTransportsSharedHandlerTests
         // RPC — a real send through FitzRemoteRequestSender, over FitzRpcRequestServer, into the
         // same bus, and back.
         var rpc = new InMemoryRpcClient();
-        var serializer = new JsonRequestSerializer();
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
         _ = await server.RegisterAsync<UniversalAction>();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
@@ -106,6 +106,7 @@ public sealed class AllTransportsSharedHandlerTests
 // Opts into every transport marker at once — the one thing that's actually different per
 // transport is which marker interfaces a request declares, never the handler.
 [RequestRoute(realm: "test", area: "shared", resource: "action", operation: "run")]
+[Discriminator("test.shared.universal-action")]
 sealed record UniversalAction(int Value) : IRequest, ICallable, IQueuable, INotifiable, ISchedulable;
 
 sealed class UniversalActionHandler : IRequestHandler<UniversalAction>

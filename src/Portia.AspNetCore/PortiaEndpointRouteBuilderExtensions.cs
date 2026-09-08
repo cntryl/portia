@@ -32,112 +32,94 @@ namespace Cntryl.Portia;
 ///
 /// Portia.DependencyInjection supplies the generator to consumer compilations. Mapping patterns must be compile-time
 /// constants and request constructors must have supported binding shapes; unsupported mappings
-/// receive compiler diagnostics. Generated body binding honors configured ASP.NET HTTP JSON options.
+/// receive compiler diagnostics. Generated binding and result writing use Portia's frozen,
+/// application-owned JSON options and source-generated metadata.
 /// </summary>
 public static class PortiaEndpointRouteBuilderExtensions
 {
     /// <summary>Supplies explicit contextual route values for asynchronous HTTP dispatch.</summary>
-    public static RouteHandlerBuilder WithPortiaRouteValues(this RouteHandlerBuilder builder, Func<HttpContext, RequestRouteValues> resolver)
+    public static IEndpointConventionBuilder WithPortiaRouteValues(this IEndpointConventionBuilder builder, Func<HttpContext, RequestRouteValues> resolver)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(resolver);
-        return builder.WithMetadata(new PortiaHttpRouteValues(resolver));
+        builder.Add(endpoint => endpoint.Metadata.Add(new PortiaHttpRouteValues(resolver)));
+        return builder;
     }
 
     /// <summary>
     /// Maps a no-result request to a GET endpoint dispatched through <see cref="IRequestBus" />.
     /// </summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
-    public static RouteHandlerBuilder MapPortiaGet<TRequest>(this IEndpointRouteBuilder app, string pattern)
-        where TRequest : IRequest, ICallable =>
-        app.MapGet(pattern, async (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) =>
-            (await bus.DispatchAsync(request, PortiaHttpBinding.CreateDispatchContext(httpContext), ct)).ToHttpResult());
+    public static IEndpointConventionBuilder MapPortiaGet<TRequest>(this IEndpointRouteBuilder app, string pattern)
+        where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
     /// Maps a request with a result to a GET endpoint dispatched through <see cref="IRequestBus" />.
     /// </summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
     /// <typeparam name="TOut">The type of the value produced on success.</typeparam>
-    public static RouteHandlerBuilder MapPortiaGet<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
-        where TRequest : IRequest<TOut>, ICallable =>
-        app.MapGet(pattern, async (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) =>
-            (await bus.DispatchAsync(request, PortiaHttpBinding.CreateDispatchContext(httpContext), ct)).ToHttpResult());
+    public static IEndpointConventionBuilder MapPortiaGet<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
+        where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
     /// Maps a no-result request to a POST endpoint dispatched through <see cref="IRequestBus" />.
     /// </summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
-    public static RouteHandlerBuilder MapPortiaPost<TRequest>(this IEndpointRouteBuilder app, string pattern)
-        where TRequest : IRequest, ICallable =>
-        app.MapPost(pattern, async (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) =>
-            (await bus.DispatchAsync(request, PortiaHttpBinding.CreateDispatchContext(httpContext), ct)).ToHttpResult());
+    public static IEndpointConventionBuilder MapPortiaPost<TRequest>(this IEndpointRouteBuilder app, string pattern)
+        where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
     /// Maps a request with a result to a POST endpoint dispatched through <see cref="IRequestBus" />.
     /// </summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
     /// <typeparam name="TOut">The type of the value produced on success.</typeparam>
-    public static RouteHandlerBuilder MapPortiaPost<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
-        where TRequest : IRequest<TOut>, ICallable =>
-        app.MapPost(pattern, async (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) =>
-            (await bus.DispatchAsync(request, PortiaHttpBinding.CreateDispatchContext(httpContext), ct)).ToHttpResult());
+    public static IEndpointConventionBuilder MapPortiaPost<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
+        where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
     /// Maps a no-result request to a PUT endpoint dispatched through <see cref="IRequestBus" />.
     /// </summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
-    public static RouteHandlerBuilder MapPortiaPut<TRequest>(this IEndpointRouteBuilder app, string pattern)
-        where TRequest : IRequest, ICallable =>
-        app.MapPut(pattern, async (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) =>
-            (await bus.DispatchAsync(request, PortiaHttpBinding.CreateDispatchContext(httpContext), ct)).ToHttpResult());
+    public static IEndpointConventionBuilder MapPortiaPut<TRequest>(this IEndpointRouteBuilder app, string pattern)
+        where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
     /// Maps a request with a result to a PUT endpoint dispatched through <see cref="IRequestBus" />.
     /// </summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
     /// <typeparam name="TOut">The type of the value produced on success.</typeparam>
-    public static RouteHandlerBuilder MapPortiaPut<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
-        where TRequest : IRequest<TOut>, ICallable =>
-        app.MapPut(pattern, async (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) =>
-            (await bus.DispatchAsync(request, PortiaHttpBinding.CreateDispatchContext(httpContext), ct)).ToHttpResult());
+    public static IEndpointConventionBuilder MapPortiaPut<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
+        where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
     /// Maps a no-result request to a PATCH endpoint dispatched through <see cref="IRequestBus" />.
     /// </summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
-    public static RouteHandlerBuilder MapPortiaPatch<TRequest>(this IEndpointRouteBuilder app, string pattern)
-        where TRequest : IRequest, ICallable =>
-        app.MapPatch(pattern, async (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) =>
-            (await bus.DispatchAsync(request, PortiaHttpBinding.CreateDispatchContext(httpContext), ct)).ToHttpResult());
+    public static IEndpointConventionBuilder MapPortiaPatch<TRequest>(this IEndpointRouteBuilder app, string pattern)
+        where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
     /// Maps a request with a result to a PATCH endpoint dispatched through <see cref="IRequestBus" />.
     /// </summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
     /// <typeparam name="TOut">The type of the value produced on success.</typeparam>
-    public static RouteHandlerBuilder MapPortiaPatch<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
-        where TRequest : IRequest<TOut>, ICallable =>
-        app.MapPatch(pattern, async (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) =>
-            (await bus.DispatchAsync(request, PortiaHttpBinding.CreateDispatchContext(httpContext), ct)).ToHttpResult());
+    public static IEndpointConventionBuilder MapPortiaPatch<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
+        where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
     /// Maps a no-result request to a DELETE endpoint dispatched through <see cref="IRequestBus" />.
     /// </summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
-    public static RouteHandlerBuilder MapPortiaDelete<TRequest>(this IEndpointRouteBuilder app, string pattern)
-        where TRequest : IRequest, ICallable =>
-        app.MapDelete(pattern, async (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) =>
-            (await bus.DispatchAsync(request, PortiaHttpBinding.CreateDispatchContext(httpContext), ct)).ToHttpResult());
+    public static IEndpointConventionBuilder MapPortiaDelete<TRequest>(this IEndpointRouteBuilder app, string pattern)
+        where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
     /// Maps a request with a result to a DELETE endpoint dispatched through <see cref="IRequestBus" />.
     /// </summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
     /// <typeparam name="TOut">The type of the value produced on success.</typeparam>
-    public static RouteHandlerBuilder MapPortiaDelete<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
-        where TRequest : IRequest<TOut>, ICallable =>
-        app.MapDelete(pattern, async (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) =>
-            (await bus.DispatchAsync(request, PortiaHttpBinding.CreateDispatchContext(httpContext), ct)).ToHttpResult());
+    public static IEndpointConventionBuilder MapPortiaDelete<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
+        where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
     /// Maps a request that produces a sequence of results to a GET endpoint, streamed to the
@@ -146,9 +128,8 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// </summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
     /// <typeparam name="TOut">The type of each item produced.</typeparam>
-    public static RouteHandlerBuilder MapPortiaGetStream<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
-        where TRequest : IStreamRequest<TOut>, ICallable =>
-        app.MapGet(pattern, (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) => PortiaStreamResults.Json(bus.DispatchStreamAsync(request, PortiaHttpBinding.CreateDispatchContext(httpContext), ct)));
+    public static IEndpointConventionBuilder MapPortiaGetStream<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
+        where TRequest : IStreamRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
     /// Maps a request that produces a sequence of results to a GET endpoint, streamed to the
@@ -159,10 +140,15 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// </summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
     /// <typeparam name="TOut">The type of each item produced.</typeparam>
-    public static RouteHandlerBuilder MapPortiaGetSse<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
-        where TRequest : IStreamRequest<TOut>, ICallable =>
-        app.MapGet(pattern, (TRequest request, HttpContext httpContext, IRequestBus bus, CancellationToken ct) =>
-            PortiaStreamResults.Sse(bus.DispatchStreamAsync(request, PortiaHttpBinding.CreateDispatchContext(httpContext), ct)));
+    public static IEndpointConventionBuilder MapPortiaGetSse<TRequest, TOut>(this IEndpointRouteBuilder app, string pattern)
+        where TRequest : IStreamRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
+
+    static IEndpointConventionBuilder MissingGeneratedEndpoint(IEndpointRouteBuilder app, string pattern)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentException.ThrowIfNullOrWhiteSpace(pattern);
+        throw new InvalidOperationException("Portia.Generators did not intercept this endpoint mapping. Ensure Portia.DependencyInjection's analyzer assets are enabled.");
+    }
 
 }
 

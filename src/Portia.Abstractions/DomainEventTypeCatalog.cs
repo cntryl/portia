@@ -1,7 +1,7 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Maps a logical event name and schema version (see <see cref="EventSchemaAttribute" />) to the
+/// Maps a logical event name and schema version (see <see cref="DiscriminatorAttribute" />) to the
 /// concrete CLR type that currently represents it. Register every <see cref="DomainEvent" />
 /// type a serializer needs to construct — including old, superseded versions you still want to
 /// deserialize directly (rather than upcast through), if you've kept their CLR types around.
@@ -9,21 +9,25 @@ namespace Cntryl.Portia;
 public sealed class DomainEventTypeCatalog
 {
     readonly Dictionary<(string Name, int Version), Type> _types = [];
+    readonly Dictionary<Type, (string Name, int Version)> _discriminators = [];
 
     /// <summary>
     /// Registers <typeparamref name="TEvent" /> under its own logical name and schema version.
     /// </summary>
     /// <typeparam name="TEvent">The event type to register.</typeparam>
     /// <returns>This catalog, for chaining.</returns>
-    public DomainEventTypeCatalog Register<TEvent>()
+    public DomainEventTypeCatalog Register<TEvent>(int version, string name)
         where TEvent : DomainEvent
     {
-        var (name, version) = EventSchema.For(typeof(TEvent));
-
-        return _types.TryAdd((name, version), typeof(TEvent))
-            ? this
-            : throw new InvalidOperationException(
-                $"Event '{name}' schema version {version} is already registered to type '{_types[(name, version)]}'.");
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentOutOfRangeException.ThrowIfLessThan(version, 1);
+        _ = _types.TryAdd((name, version), typeof(TEvent))
+            ? true
+            : throw new InvalidOperationException($"Event '{name}' schema version {version} is already registered to type '{_types[(name, version)]}'.");
+        _ = _discriminators.TryAdd(typeof(TEvent), (name, version))
+            ? true
+            : throw new InvalidOperationException($"Event type '{typeof(TEvent)}' is already registered.");
+        return this;
     }
 
     /// <summary>
@@ -35,4 +39,10 @@ public sealed class DomainEventTypeCatalog
     /// <returns><see langword="true" /> if a type is registered for that exact name and version.</returns>
     public bool TryResolve(string name, int version, out Type? type) =>
         _types.TryGetValue((name, version), out type);
+
+    /// <summary>Gets the generated discriminator for a concrete event type.</summary>
+    public (string Name, int Version) Describe(Type eventType) =>
+        _discriminators.TryGetValue(eventType, out var discriminator)
+            ? discriminator
+            : throw new InvalidOperationException($"Event type '{eventType}' is not present in the generated contract catalog.");
 }

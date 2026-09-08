@@ -6,6 +6,7 @@ public sealed class FeatureOneHandler : IRequestHandler<FeatureOneRequest, int>
         => ValueTask.FromResult(Result<int>.Success(context.Request.Value + 1));
 }
 
+[Discriminator("FeatureOneObserved")]
 public sealed record FeatureOneObserved(int Value) : DomainEvent;
 
 public sealed class FeatureOneAuthorizer : IRequestAuthorizer<FeatureOneRequest>

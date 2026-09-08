@@ -259,11 +259,11 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .Append(", \"")
             .Append(call.Location.Data)
             .AppendLine("\")]")
-            .Append("    public static global::Microsoft.AspNetCore.Builder.RouteHandlerBuilder Call")
+            .Append("    public static global::Microsoft.AspNetCore.Builder.IEndpointConventionBuilder Call")
             .Append(index)
             .AppendLine("(this global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder app, string pattern)")
             .AppendLine("    {")
-            .Append("        return app.Map").Append(call.Verb).AppendLine("(pattern, Handle);")
+            .Append("        return app.MapMethods(pattern, new[] { \"").Append(call.Verb.ToUpperInvariant()).AppendLine("\" }, (global::Microsoft.AspNetCore.Http.RequestDelegate)Dispatch);")
             .AppendLine();
 
         var extraParameters = call.Kind is CallKind.Queue
@@ -283,6 +283,22 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         var bindingFailure = call.Kind is CallKind.Stream or CallKind.Sse
             ? "throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Malformed request.\");"
             : "return global::Microsoft.AspNetCore.Http.Results.BadRequest();";
+
+        _ = source
+            .AppendLine("        async global::System.Threading.Tasks.Task Dispatch(global::Microsoft.AspNetCore.Http.HttpContext httpContext)")
+            .AppendLine("        {")
+            .AppendLine("            var bus = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestBus>(httpContext.RequestServices);");
+        if (call.Kind is CallKind.Queue)
+            _ = source.AppendLine("            var queue = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestQueuePublisher>(httpContext.RequestServices);");
+        _ = source.Append("            var result = ");
+        if (call.Kind is CallKind.Send or CallKind.Queue)
+            _ = source.Append("await ");
+        _ = source.Append("Handle(httpContext, bus")
+            .Append(call.Kind is CallKind.Queue ? ", queue" : string.Empty)
+            .AppendLine(", httpContext.RequestAborted);")
+            .AppendLine("            await result.ExecuteAsync(httpContext).ConfigureAwait(false);")
+            .AppendLine("        }")
+            .AppendLine();
 
         _ = source
             .Append("        ").Append(handlePrefix).Append(returnType).Append(" Handle(")
@@ -305,7 +321,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             {
                 _ = source.Append("                value").Append(i).Append(" = global::Cntryl.Portia.PortiaHttpBinding.ReadBody<")
                     .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
-                    .Append(">(body.RootElement, jsonOptions, ").Append(Literal(parameter.Name)).Append(", ").Append(name)
+                    .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ").Append(Literal(parameter.Name)).Append(", ").Append(name)
                     .Append(parameter.Nullable ? ", true" : ", false")
                     .Append(parameter.Default is not null ? ", true, " : ", false, ")
                     .Append(parameter.Default ?? "default!").AppendLine(");");
@@ -372,7 +388,11 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             CallKind.Send or CallKind.Queue => source
                 .Append("            return (await bus.DispatchAsync")
                 .Append(call.ResultType is null ? string.Empty : $"<{call.ResultType}>")
-                .AppendLine("(request, context, ct)).ToHttpResult();"),
+                .Append("(request, context, ct)).ToHttpResult(")
+                .Append(call.ResultType is null
+                    ? string.Empty
+                    : $"(global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<{call.ResultType}>)jsonOptions.GetTypeInfo(typeof({call.ResultType}))")
+                .AppendLine(");"),
             _ => throw new ArgumentOutOfRangeException(nameof(call)),
         };
 

@@ -44,8 +44,10 @@ public enum RequestTransports
 /// <param name="transports">The transports the request declared itself reachable through.</param>
 /// <param name="route">The request's declared route (segments may be
 /// <see cref="RequestRouteAttribute.Wildcard" />).</param>
+/// <param name="discriminator">The stable versioned wire discriminator, independent of routing.</param>
 /// <param name="registerRpc">Generated typed RPC registration, when callable.</param>
 public sealed class RequestTransportRegistration(Type requestType, RequestTransports transports, RequestRouteAttribute route,
+    DiscriminatorAttribute discriminator,
     Func<IRequestRpcRegistrar, CancellationToken, ValueTask<IAsyncDisposable>>? registerRpc = null)
 {
     /// <summary>
@@ -62,6 +64,9 @@ public sealed class RequestTransportRegistration(Type requestType, RequestTransp
     /// Gets the request's declared route (segments may be <see cref="RequestRouteAttribute.Wildcard" />).
     /// </summary>
     public RequestRouteAttribute Route { get; } = route ?? throw new ArgumentNullException(nameof(route));
+
+    /// <summary>Gets the stable versioned wire discriminator, independent of routing.</summary>
+    public DiscriminatorAttribute Discriminator { get; } = discriminator ?? throw new ArgumentNullException(nameof(discriminator));
 
     /// <summary>Gets the generated typed RPC registration, when callable.</summary>
     public Func<IRequestRpcRegistrar, CancellationToken, ValueTask<IAsyncDisposable>>? RegisterRpc { get; } = registerRpc;

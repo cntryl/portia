@@ -9,6 +9,15 @@ namespace Cntryl.Portia;
 [Generator(LanguageNames.CSharp)]
 public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
 {
+    static readonly DiagnosticDescriptor InvalidDiscriminator = new("PORTIA020", "Missing or invalid request discriminator",
+        "Transported request '{0}' must declare [Discriminator(\"name\", version)] with a non-empty name and positive version",
+        "Portia", DiagnosticSeverity.Error, true);
+    static readonly DiagnosticDescriptor DuplicateDiscriminator = new("PORTIA022", "Duplicate request discriminator",
+        "Request discriminator '{0}' version {1} is also declared by '{2}'", "Portia", DiagnosticSeverity.Error, true);
+    static readonly DiagnosticDescriptor InvalidRoute = new("PORTIA024", "Invalid request route segment",
+        "Transported request '{0}' declares invalid route segment '{1}'; use '*' or letters, digits, '.', '_', '-', and '~'",
+        "Portia", DiagnosticSeverity.Error, true);
+
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -19,6 +28,30 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
             .Where(static request => request is not null)
             .Select(static (request, _) => request!)
             .Collect();
+        var invalidDiscriminators = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) => RequestTransportDiscovery.IsCandidate(node),
+                static (syntaxContext, _) => RequestTransportDiscovery.GetInvalidRequestDiscriminator(syntaxContext))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!)
+            .Collect();
+        context.RegisterSourceOutput(invalidDiscriminators, static (sourceContext, invalid) =>
+        {
+            foreach (var model in invalid)
+                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidDiscriminator, model.Location, model.TypeName));
+        });
+        var invalidRoutes = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) => RequestTransportDiscovery.IsCandidate(node),
+                static (syntaxContext, _) => RequestTransportDiscovery.GetInvalidRoute(syntaxContext))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!)
+            .Collect();
+        context.RegisterSourceOutput(invalidRoutes, static (sourceContext, invalid) =>
+        {
+            foreach (var model in invalid)
+                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidRoute, model.Location, model.TypeName, model.Segment));
+        });
         var components = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => node is Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax,
@@ -44,6 +77,15 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
             .Select(group => group.First())
             .OrderBy(request => request.TypeName, StringComparer.Ordinal)
             .ToArray();
+        foreach (var group in ordered.GroupBy(request => (request.DiscriminatorName, request.DiscriminatorVersion)))
+        {
+            var duplicate = group.Skip(1).FirstOrDefault();
+            if (duplicate is not null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(DuplicateDiscriminator, Location.None,
+                    group.Key.DiscriminatorName, group.Key.DiscriminatorVersion, group.First().TypeName));
+            }
+        }
         var names = GeneratedRegistrationNames.Resolve(ordered.Select(request => request.TypeName).Concat(components));
 
         var source = new StringBuilder()

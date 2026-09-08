@@ -16,15 +16,25 @@ sealed class FitzApplicationWorkers(IServiceProvider services, PortiaFitzBuilder
     public Task StartingAsync(CancellationToken cancellationToken)
     {
         var available = services.GetRequiredService<IServiceProviderIsService>();
+        var required = new HashSet<Type>();
         if (_workers.Count > 0)
         {
-            Require(available, typeof(IRequestBus));
-            Require(available, typeof(IRequestActorValidator));
-            Require(available, typeof(IRequestDeserializer));
+            _ = required.Add(typeof(IRequestBus));
+            _ = required.Add(typeof(IRequestActorValidator));
+            _ = required.Add(typeof(IRequestDeserializer));
             if (_workers.Any(worker => worker.Kind == "rpc"))
-                Require(available, typeof(IRequestOutcomeSerializer));
+                _ = required.Add(typeof(IRequestOutcomeSerializer));
         }
-        return Task.CompletedTask;
+        foreach (var registration in services.GetServices<WorkloadRegistration>())
+        {
+            _ = required.Add(typeof(IEventStore));
+            if (registration.Scope == WorkloadScope.PerTenant)
+                _ = required.Add(typeof(ITenantDirectory));
+        }
+        var missing = required.Where(type => !available.IsService(type)).OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray();
+        return missing.Length == 0
+            ? Task.CompletedTask
+            : throw new InvalidOperationException($"Portia worker setup requires: {string.Join(", ", missing.Select(type => type.FullName))}. Register them in the shared application setup.");
     }
 
     public override async Task StartAsync(CancellationToken cancellationToken)
@@ -37,7 +47,8 @@ sealed class FitzApplicationWorkers(IServiceProvider services, PortiaFitzBuilder
         {
             if (_workers.Any(worker => worker.Kind == "rpc"))
             {
-                _rpc = await new FitzRpcRequestServer(connection.Client.Rpc, _scopes)
+                _rpc = await new FitzRpcRequestServer(connection.Client.Rpc, _scopes,
+                    services.GetRequiredService<RequestTransportCatalog>())
                     .RegisterRequestsAsync(cancellationToken).ConfigureAwait(false);
             }
 
@@ -114,9 +125,4 @@ sealed class FitzApplicationWorkers(IServiceProvider services, PortiaFitzBuilder
         GC.SuppressFinalize(this);
     }
 
-    static void Require(IServiceProviderIsService services, Type type)
-    {
-        if (!services.IsService(type))
-            throw new InvalidOperationException($"Portia worker setup requires '{type}'. Register it in the shared application setup.");
-    }
 }

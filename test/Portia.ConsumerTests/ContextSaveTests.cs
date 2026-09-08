@@ -110,7 +110,7 @@ public sealed class ContextSaveTests
     sealed class FailingStore : IEventStore
     {
         readonly InMemoryEventStore _inner = new();
-        public JsonDomainEventSerializer Serializer { get; } = new(new DomainEventTypeCatalog().Register<Deposited>().Register<Declined>());
+        public JsonDomainEventSerializer Serializer { get; } = ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Deposited>(1, "Deposited").Register<Declined>(1, "Declined"));
         public List<byte[]> Writes { get; } = [];
         public ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition, IReadOnlyList<DomainEvent> events, CancellationToken ct = default)
         {

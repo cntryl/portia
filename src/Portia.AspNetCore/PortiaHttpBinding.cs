@@ -1,9 +1,7 @@
-using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace Cntryl.Portia;
 
@@ -17,9 +15,9 @@ public static class PortiaHttpBinding
             (context.GetEndpoint() as Microsoft.AspNetCore.Routing.RouteEndpoint)?.RoutePattern.RawText,
             context.TraceIdentifier), timeProvider: context.RequestServices.GetService<TimeProvider>());
 
-    /// <summary>Gets the application's configured ASP.NET HTTP JSON options.</summary>
+    /// <summary>Gets the application's frozen Portia JSON options.</summary>
     public static JsonSerializerOptions GetJsonOptions(HttpContext context)
-        => context.RequestServices.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions;
+        => context.RequestServices.GetRequiredService<JsonSerializerOptions>();
 
     /// <summary>Resolves contextual queue route values configured on the selected endpoint.</summary>
     public static RequestRouteValues ResolveRouteValues(HttpContext context)
@@ -38,13 +36,22 @@ public static class PortiaHttpBinding
     }
 
     /// <summary>Reads a constructor-bound property using the application's request JSON metadata.</summary>
-    public static TValue ReadBody<TRequest, TValue>(JsonElement body, JsonSerializerOptions options, string memberName,
+    public static TValue ReadBody<TRequest, TValue>(JsonElement body, JsonSerializerOptions options, int memberIndex, string memberName,
         string fallbackName, bool nullable, bool hasDefault, TValue defaultValue)
     {
-        var info = options.GetTypeInfo(typeof(TRequest));
-        var property = info.Properties.FirstOrDefault(property =>
-            property.AttributeProvider is MemberInfo member && string.Equals(member.Name, memberName, StringComparison.OrdinalIgnoreCase))
-            ?? info.Properties.FirstOrDefault(property => property.Name == fallbackName);
+        _ = memberName;
+        JsonPropertyInfo? property = null;
+        try
+        {
+            var properties = options.GetTypeInfo(typeof(TRequest)).Properties;
+            property = properties.FirstOrDefault(candidate => candidate.Name == fallbackName)
+                ?? properties.ElementAtOrDefault(memberIndex);
+        }
+        catch (NotSupportedException)
+        {
+            // Compile-time generated bindings can read scalar members without constructing the
+            // request through JSON. A request-level contract is still required by transported roots.
+        }
         if (property?.CustomConverter is not null || property?.NumberHandling is not null)
         {
             options = new JsonSerializerOptions(options);
@@ -80,7 +87,8 @@ public static class PortiaHttpBinding
         }
         if (value.ValueKind == JsonValueKind.Null && !nullable)
             throw new BadHttpRequestException($"Property '{name}' cannot be null.");
-        var result = JsonSerializer.Deserialize<T>(value, options);
+        var typeInfo = (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
+        var result = JsonSerializer.Deserialize(value, typeInfo);
         return result is null && !nullable
             ? throw new BadHttpRequestException($"Property '{name}' cannot be null.")
             : result!;
