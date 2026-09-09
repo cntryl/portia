@@ -22,18 +22,66 @@ public sealed class HttpBindingShapeTests
         Assert.Contains(reason, diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase);
     }
 
-    [Theory]
-    [InlineData("/binding", "null")]
-    [InlineData("/binding/7", "7")]
-    public async Task OptionalRouteTokenPreservesNullableValue(string path, string expected)
+    [Fact]
+    public void ShouldReportDiagnosticGivenOptionalRouteTokenWhenMappingIsGenerated()
     {
-        var assembly = HttpConsumerScenario.Compile(
-            "public sealed record Binding(int? Id) : IRequest<string>, ICallable;",
-            "request.Id?.ToString(CultureInfo.InvariantCulture) ?? \"null\"",
-            "app.MapPortiaGet<Binding, string>(\"/binding/{id?}\");");
-        var (status, body) = await HttpConsumerScenario.RunAsync(assembly, path);
-        Assert.Equal(200, status);
-        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(expected), body);
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+            using Cntryl.Portia;
+            using Microsoft.AspNetCore.Routing;
+            public sealed record Binding(int? Id) : IRequest<string>, ICallable;
+            public static class Scenario
+            {
+                public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Binding, string>("/binding/{id?}");
+            }
+            """, new RequestHttpBindingGenerator());
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA026");
+        Assert.Contains("query parameter or separate endpoint", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldReportDiagnosticGivenCollidingRequestTypeNamesWhenMappingsAreGenerated()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+            using Cntryl.Portia;
+            using Microsoft.AspNetCore.Routing;
+            namespace One { public sealed record CreateOrder : IRequest, ICallable; }
+            namespace Two { public sealed record CreateOrder : IRequest, ICallable; }
+            public static class Scenario
+            {
+                public static void Map(IEndpointRouteBuilder app)
+                {
+                    app.MapPortiaPost<One.CreateOrder>("/one");
+                    app.MapPortiaPost<Two.CreateOrder>("/two");
+                }
+            }
+            """, new RequestHttpBindingGenerator());
+        var diagnosticsForCollision = diagnostics.Where(item => item.Id == "PORTIA027").ToArray();
+        Assert.Equal(2, diagnosticsForCollision.Length);
+        Assert.All(diagnosticsForCollision, diagnostic => Assert.Contains("createOrder",
+            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ShouldReportDiagnosticGivenRepeatedRequestTypeWhenMappingsShareOneScope()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+            using Cntryl.Portia;
+            using Microsoft.AspNetCore.Routing;
+            public sealed record RefreshOrder : IRequest, ICallable;
+            public static class Scenario
+            {
+                public static void Map(IEndpointRouteBuilder app)
+                {
+                    app.MapPortiaGet<RefreshOrder>("/orders/refresh");
+                    app.MapPortiaPost<RefreshOrder>("/orders/refresh");
+                }
+            }
+            """, new RequestHttpBindingGenerator());
+
+        var collisions = diagnostics.Where(item => item.Id == "PORTIA027").ToArray();
+        Assert.Equal(2, collisions.Length);
+        Assert.All(collisions, diagnostic => Assert.Contains("refreshOrder",
+            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal));
     }
 
     [Fact]

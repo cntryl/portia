@@ -88,6 +88,13 @@ can execute a command directly or publish work. Merely sharing the application
 setup starts no queue, RPC, projector, or reactor worker. Configure HTTP authentication
 and authorization using the application's normal ASP.NET setup.
 
+Generated interception of `WebApplicationBuilder.Build()` (and `WebApplication.Create()`)
+registers Microsoft's `v1` OpenAPI 3.1 document before the provider is built and maps
+`/openapi/v1.json` and `/openapi/v1.yml` afterward. Registration and mapping are idempotent across
+route groups and multiple Portia endpoints, add no hosted service, and leave `AddPortia()`
+host-neutral. Security schemes are application-owned and are not inferred from authorization
+metadata.
+
 ## Worker deployment
 
 Use the standard .NET worker host, referencing the shared project:

@@ -20,3 +20,5 @@ PORTIA021 | Portia | Error | Domain events require a valid explicit discriminato
 PORTIA022 | Portia | Error | Request discriminator name and version pairs must be unique
 PORTIA023 | Portia | Error | Domain-event discriminator name and version pairs must be unique
 PORTIA024 | Portia | Error | Declared request route segments must be safe single segments
+PORTIA026 | Portia | Error | Optional HTTP route tokens must use query parameters or separate endpoints
+PORTIA027 | Portia | Error | Visible Portia HTTP mappings must have unique camel-cased operation IDs

@@ -41,6 +41,11 @@ responsibility. Its code fix adds the attribute to the only context, prefers a u
 the root's namespace, or asks which context owns the root; when none exists it creates
 `PortiaJsonContext.cs` with Web defaults and `SnakeCaseLower`.
 
+The Microsoft OpenAPI schema generator receives the same frozen options, resolver chain,
+converters, property metadata, and naming policy. Document generation does not add a
+Portia-owned resolver or require reflection fallback; the reflection-disabled consumer exercises
+automatic application interception without manual OpenAPI calls.
+
 At host startup Portia freezes the configured options and resolves metadata for every generated
 registration before a Fitz hosted service can connect. All missing roots are reported together,
 sorted by full name. A non-hosted DI consumer receives the same check when it first resolves the
