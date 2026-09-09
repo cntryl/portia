@@ -103,6 +103,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         {
             var started = PortiaTelemetry.StartTimestamp();
             var result = await authorizer.AuthorizeAsync(services, request, context, ct).ConfigureAwait(false);
+            ValidateAuthorizerResult(result, authorizer.GetType());
             PortiaTelemetry.AuthorizationFinished(started, authorizer.GetType().Name, authorizer.Stage.ToString().ToLowerInvariant(), PortiaTelemetry.Outcome(result.IsSuccess, result.Error));
             if (!result.IsSuccess)
                 return result;
@@ -120,11 +121,24 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         {
             var started = PortiaTelemetry.StartTimestamp();
             var result = await authorizer.AuthorizeAsync(services, request, context, ct).ConfigureAwait(false);
+            ValidateAuthorizerResult(result, authorizer.GetType());
             PortiaTelemetry.AuthorizationFinished(started, authorizer.GetType().Name, authorizer.Stage.ToString().ToLowerInvariant(), PortiaTelemetry.Outcome(result.IsSuccess, result.Error));
             if (!result.IsSuccess)
                 return result;
         }
         return Result.Success;
+    }
+
+    static void ValidateAuthorizerResult(Result result, Type authorizerType)
+    {
+        try
+        {
+            _ = result.IsSuccess;
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new InvalidOperationException($"Request authorizer '{authorizerType.FullName}' returned an uninitialized Result.", ex);
+        }
     }
 
     static void Validate(IRequestBase request, ClaimsPrincipal actor, CancellationToken ct)

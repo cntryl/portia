@@ -144,8 +144,70 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var response = await client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal("respond-async", response.Headers.GetValues("Preference-Applied").Single());
+        using var receipt = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.NotEqual(Uuid.Empty, Uuid.Parse(receipt.RootElement.GetProperty("request_id").GetString()!));
         _ = Assert.Single(publisher.Enqueued);
         _ = Assert.IsType<HttpSendPing>(publisher.Enqueued[0]);
+    }
+
+    /// <summary>Preference names are matched as tokens rather than substrings.</summary>
+    [Fact]
+    public async Task ShouldDispatchSynchronouslyGivenSubstringWhenPreferenceIsNotExact()
+    {
+        var publisher = new RecordingRequestQueuePublisher();
+        var client = await StartAsync(app => app.MapPortiaPost<HttpSendPing>("/ping"),
+            services => services.AddSingleton<IRequestQueuePublisher>(publisher));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/ping") { Content = JsonContent.Create(new { }) };
+        _ = request.Headers.TryAddWithoutValidation("Prefer", "x-respond-async");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Empty(publisher.Enqueued);
+    }
+
+    /// <summary>Only a single nonempty Bearer credential can cross the queue boundary.</summary>
+    [Fact]
+    public async Task ShouldReturnProblemGivenMalformedAuthorizationWhenQueueing()
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpSendPing>("/ping"),
+            services => services.AddSingleton<IRequestQueuePublisher>(new RecordingRequestQueuePublisher()));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/ping") { Content = JsonContent.Create(new { }) };
+        _ = request.Headers.TryAddWithoutValidation("Prefer", "respond-async");
+        _ = request.Headers.TryAddWithoutValidation("Authorization", "Basic secret");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.True((await response.Content.ReadFromJsonAsync<JsonElement>()).TryGetProperty("message", out _));
+    }
+
+    /// <summary>An absent optional body binds as an empty object.</summary>
+    [Fact]
+    public async Task ShouldBindDefaultsGivenAbsentOptionalBodyWhenPosting()
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/optional"));
+
+        var response = await client.PostAsync("/optional", new ByteArrayContent([]));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("fallback", await response.Content.ReadFromJsonAsync<string>());
+    }
+
+    /// <summary>JSON bodies are rejected before exceeding the configured bound.</summary>
+    [Fact]
+    public async Task ShouldReturnPayloadTooLargeGivenBodyExceedsConfiguredMaximumWhenPosting()
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/optional"),
+            services => services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 8));
+
+        var response = await client.PostAsync("/optional", new StringContent(
+            /*lang=json,strict*/ """{"value":"too-long"}""", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
 
     /// <summary>
@@ -350,6 +412,16 @@ sealed class HttpSendPingHandler : IRequestHandler<HttpSendPing>
 {
     public ValueTask<Result> HandleAsync(IRequestContext<HttpSendPing> context, CancellationToken ct) =>
         ValueTask.FromResult(Result.Success);
+}
+
+[RequestRoute(realm: "*", area: "http-binding-tests", resource: "optional", operation: "post")]
+[Discriminator("test.http.optional")]
+sealed record HttpOptionalBody(string Value = "fallback") : IRequest<string>, ICallable;
+
+sealed class HttpOptionalBodyHandler : IRequestHandler<HttpOptionalBody, string>
+{
+    public ValueTask<Result<string>> HandleAsync(IRequestContext<HttpOptionalBody> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result<string>.Success(context.Request.Value));
 }
 
 [RequestRoute(realm: "*", area: "http-binding-tests", resource: "guarded", operation: "run")]

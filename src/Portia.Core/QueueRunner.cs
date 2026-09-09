@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Cntryl.Portia;
 
@@ -14,6 +15,8 @@ public sealed class QueueRunner
     readonly IRequestActorValidator? _actorValidator;
     readonly IServiceScopeFactory? _scopeFactory;
     readonly ILogger<QueueRunner>? _logger;
+    readonly QueueRunnerOptions? _options;
+    readonly IQueuedRequestTerminalHandler? _terminalHandler;
 
     /// <summary>Creates a runner with explicitly owned application dependencies.</summary>
     /// <param name="consumer">The queue consumer.</param>
@@ -34,6 +37,7 @@ public sealed class QueueRunner
         _bus = bus ?? throw new ArgumentNullException(nameof(bus));
         _actorValidator = actorValidator ?? throw new ArgumentNullException(nameof(actorValidator));
         _logger = logger;
+        _options = new QueueRunnerOptions();
     }
 
     /// <summary>Creates a runner that owns a fresh application scope for each delivery.</summary>
@@ -45,6 +49,15 @@ public sealed class QueueRunner
         _consumer = consumer ?? throw new ArgumentNullException(nameof(consumer));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger;
+    }
+
+    /// <summary>Creates a runner with explicit terminal-failure policy.</summary>
+    public QueueRunner(IRequestQueueConsumer consumer, IRequestBus bus, IRequestActorValidator actorValidator,
+        QueueRunnerOptions options, IQueuedRequestTerminalHandler? terminalHandler, ILogger<QueueRunner>? logger = null)
+        : this(consumer, bus, actorValidator, logger)
+    {
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _terminalHandler = terminalHandler;
     }
 
     /// <summary>
@@ -85,7 +98,8 @@ public sealed class QueueRunner
                 }
                 else
                 {
-                    await queued.AbandonAsync(ct).ConfigureAwait(false);
+                    if (!await CompleteTerminalAsync(queued, dispatch.Outcome.Error, null, ct).ConfigureAwait(false))
+                        await queued.AbandonAsync(ct).ConfigureAwait(false);
                 }
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
@@ -93,8 +107,29 @@ public sealed class QueueRunner
                 // An unrecognized exception's retriability is unknown; abandoning (rather than
                 // silently dropping the request) is the safer default.
                 PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "unrecognized exception", ex, _logger);
-                await queued.AbandonAsync(ct).ConfigureAwait(false);
+                if (!await CompleteTerminalAsync(queued, null, ex, ct).ConfigureAwait(false))
+                    await queued.AbandonAsync(ct).ConfigureAwait(false);
             }
         }
+    }
+
+    async ValueTask<bool> CompleteTerminalAsync(IQueuedRequest queued, RequestError? error, Exception? exception, CancellationToken ct)
+    {
+        await using var scope = _scopeFactory?.CreateAsyncScope();
+        var options = scope?.ServiceProvider.GetService<IOptions<QueueRunnerOptions>>()?.Value ?? _options ?? new QueueRunnerOptions();
+        var handler = scope?.ServiceProvider.GetService<IQueuedRequestTerminalHandler>() ?? _terminalHandler;
+        if (options.TerminalAttempt is not { } terminal || queued.Attempt < terminal || handler is null)
+            return false;
+        try
+        {
+            await handler.HandleAsync(new QueuedRequestFailureContext(
+                queued.Request, queued.Metadata, queued.Invocation, queued.Attempt, error, exception), ct).ConfigureAwait(false);
+            await queued.CompleteAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception callbackException) when (!ct.IsCancellationRequested)
+        {
+            PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "terminal callback or acknowledgment failed", callbackException, _logger);
+        }
+        return true;
     }
 }

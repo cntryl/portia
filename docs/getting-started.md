@@ -188,6 +188,12 @@ POST/PUT/PATCH. Missing nullable parameters become null, omitted optional parame
 use their declared default, and missing required values return 400. Explicit JSON
 null requires a nullable parameter. Invalid root/value kinds return 400.
 
+An absent body is treated as `{}` only when every body member is optional. JSON bodies
+are bounded to 10 MiB by default; configure `PortiaHttpOptions.MaxJsonBodyBytes` through
+standard options registration. Exceeding the bound returns `413 application/problem+json`.
+Query names are case-insensitive through ASP.NET Core's query collection, while repeated
+scalar values are rejected as ambiguous.
+
 JSON binding uses Portia's frozen source-generated JSON options, including application converters,
 property metadata, and naming. Configure them before building the provider:
 
@@ -200,8 +206,10 @@ Route/query scalars use invariant parsing. Mapping routes must be compile-time
 constants; unsupported binding shapes produce `PORTIA016` diagnostics. Requests
 remain independent of ASP.NET attributes.
 
-For a no-result `IQueuable` request, `Prefer: respond-async` selects queue publishing
-and returns 202. Register `IRequestQueuePublisher`; supply wildcard route values
+For a no-result `IQueuable` request, the exact `Prefer: respond-async` token selects queue
+publishing and returns 202 with `Preference-Applied: respond-async` and a JSON request-ID
+receipt. The ID is correlation identity, not completion tracking. Portia has no status
+resource and therefore emits no `Location` header. Register `IRequestQueuePublisher`; supply wildcard route values
 explicitly on the endpoint:
 
 ```csharp
@@ -212,8 +220,13 @@ app.MapPortiaPost<DepositAccount>("/accounts/{id}")
 
 The request's configured concrete route segments remain authoritative. For a
 wildcard realm, derive `Realm` from the application's authenticated tenant context
-in this resolver. The original bearer token is carried to the queue and validated
-again when the work executes.
+in this resolver. One well-formed, nonempty Bearer credential may be carried to the queue
+and is validated again when the work executes. Authentication schemes and token validation
+remain application-owned.
+
+Generated endpoints return the advertised `{ "message": ... }` problem body for binding
+and unexpected failures before a response starts. Once streaming output has started, HTTP
+cannot replace it with a problem response; Portia logs the failure and aborts the connection.
 
 ## Run transports and components
 

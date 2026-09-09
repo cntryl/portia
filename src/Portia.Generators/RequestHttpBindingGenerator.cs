@@ -358,21 +358,40 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         var handlePrefix = call.Kind is CallKind.Stream or CallKind.Sse ? string.Empty : "async ";
         var bindingFailure = call.Kind is CallKind.Stream or CallKind.Sse
             ? "throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Malformed request.\");"
-            : "return global::Microsoft.AspNetCore.Http.Results.BadRequest();";
+            : "return global::Cntryl.Portia.PortiaHttpBinding.Problem(400, \"Malformed request.\");";
 
         _ = source
             .AppendLine("        async global::System.Threading.Tasks.Task Dispatch(global::Microsoft.AspNetCore.Http.HttpContext httpContext)")
             .AppendLine("        {")
-            .AppendLine("            var bus = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestBus>(httpContext.RequestServices);");
+            .AppendLine("            try")
+            .AppendLine("            {")
+            .AppendLine("                var bus = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestBus>(httpContext.RequestServices);");
         if (call.Kind is CallKind.Queue)
-            _ = source.AppendLine("            var queue = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestQueuePublisher>(httpContext.RequestServices);");
-        _ = source.Append("            var result = ");
+            _ = source.AppendLine("                var queue = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestQueuePublisher>(httpContext.RequestServices);");
+        _ = source.Append("                var result = ");
         if (call.Kind is CallKind.Send or CallKind.Queue)
             _ = source.Append("await ");
         _ = source.Append("Handle(httpContext, bus")
             .Append(call.Kind is CallKind.Queue ? ", queue" : string.Empty)
             .AppendLine(", httpContext.RequestAborted);")
-            .AppendLine("            await result.ExecuteAsync(httpContext).ConfigureAwait(false);")
+            .AppendLine("                await result.ExecuteAsync(httpContext).ConfigureAwait(false);")
+            .AppendLine("            }")
+            .AppendLine("            catch (global::Cntryl.Portia.PortiaHttpPayloadTooLargeException ex) when (!httpContext.Response.HasStarted)")
+            .AppendLine("            {")
+            .AppendLine("                await global::Cntryl.Portia.PortiaHttpBinding.Problem(413, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
+            .AppendLine("            }")
+            .AppendLine("            catch (global::Microsoft.AspNetCore.Http.BadHttpRequestException ex) when (!httpContext.Response.HasStarted)")
+            .AppendLine("            {")
+            .AppendLine("                await global::Cntryl.Portia.PortiaHttpBinding.Problem(400, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
+            .AppendLine("            }")
+            .AppendLine("            catch (global::System.Exception ex) when (!httpContext.Response.HasStarted)")
+            .AppendLine("            {")
+            .AppendLine("                await global::Cntryl.Portia.PortiaHttpBinding.Unexpected(httpContext, ex).ExecuteAsync(httpContext).ConfigureAwait(false);")
+            .AppendLine("            }")
+            .AppendLine("            catch (global::System.Exception)")
+            .AppendLine("            {")
+            .AppendLine("                httpContext.Abort();")
+            .AppendLine("            }")
             .AppendLine("        }")
             .AppendLine();
 
@@ -388,7 +407,11 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             _ = source.Append("            ").Append(parameter.Type).Append(" value").Append(i).AppendLine(";");
         _ = source.AppendLine("            try").AppendLine("            {");
         if (hasBody)
-            _ = source.AppendLine("                using var body = await global::System.Text.Json.JsonDocument.ParseAsync(httpContext.Request.Body, cancellationToken: ct).ConfigureAwait(false);");
+        {
+            _ = source.Append("                using var body = await global::Cntryl.Portia.PortiaHttpBinding.ReadJsonBodyAsync(httpContext, ")
+                .Append(bodyParameters.Any(parameter => !parameter.Nullable && parameter.Default is null) ? "true" : "false")
+                .AppendLine(", ct).ConfigureAwait(false);");
+        }
         foreach (var (parameter, i) in call.Parameters.Select((p, i) => (p, i)))
         {
             var name = parameter.JsonName is not null ? Literal(parameter.JsonName)
@@ -430,7 +453,11 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             }
             _ = source.AppendLine("                }");
         }
-        _ = source.AppendLine("            }").AppendLine("            catch (global::System.Text.Json.JsonException)")
+        _ = source.AppendLine("            }").AppendLine("            catch (global::Cntryl.Portia.PortiaHttpPayloadTooLargeException)")
+            .AppendLine("            {")
+            .AppendLine("                throw;")
+            .AppendLine("            }")
+            .AppendLine("            catch (global::System.Text.Json.JsonException)")
             .AppendLine("            {").Append("                ").AppendLine(bindingFailure).AppendLine("            }")
             .AppendLine("            catch (global::Microsoft.AspNetCore.Http.BadHttpRequestException)")
             .AppendLine("            {").Append("                ").AppendLine(bindingFailure).AppendLine("            }")
@@ -445,14 +472,11 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         if (call.Kind is CallKind.Queue)
         {
             _ = source
-                .AppendLine("            if (httpContext.Request.Headers.TryGetValue(\"Prefer\", out var prefer)")
-                .AppendLine("                && global::System.Linq.Enumerable.Any(prefer, value => value != null && value.Contains(\"respond-async\", global::System.StringComparison.OrdinalIgnoreCase)))")
+                .AppendLine("            if (global::Cntryl.Portia.PortiaHttpBinding.PrefersRespondAsync(httpContext))")
                 .AppendLine("            {")
-                .AppendLine("                var actorToken = httpContext.Request.Headers.Authorization.ToString() is { Length: > 0 } authHeader")
-                .AppendLine("                    ? authHeader.StartsWith(\"Bearer \", global::System.StringComparison.OrdinalIgnoreCase) ? authHeader.Substring(7) : authHeader")
-                .AppendLine("                    : null;")
+                .AppendLine("                var actorToken = global::Cntryl.Portia.PortiaHttpBinding.ReadBearerCredential(httpContext);")
                 .AppendLine("                await queue.EnqueueAsync(request, global::Cntryl.Portia.PortiaHttpBinding.ResolveRouteValues(httpContext), actorToken, context.Metadata, ct).ConfigureAwait(false);")
-                .AppendLine("                return global::Microsoft.AspNetCore.Http.Results.Accepted();")
+                .AppendLine("                return global::Cntryl.Portia.PortiaHttpBinding.Accepted(httpContext, context.Metadata.RequestId);")
                 .AppendLine("            }")
                 .AppendLine();
         }

@@ -23,6 +23,7 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(HttpGuardedAction))]
 [JsonSerializable(typeof(HttpListWidgets))]
 [JsonSerializable(typeof(HttpSendPing))]
+[JsonSerializable(typeof(HttpOptionalBody))]
 [JsonSerializable(typeof(SerializerTestRequest))]
 [JsonSerializable(typeof(SerializerTestUuidRequest))]
 [JsonSerializable(typeof(RequestEnvelopeContextTests.EnvelopeCommand))]

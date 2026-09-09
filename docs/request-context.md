@@ -80,6 +80,8 @@ For an intentional resend of the same logical request, create `RequestMetadata`
 once and reuse it with the metadata overload. The ordinary root sender overloads
 create a new logical request on each call. HTTP `Prefer: respond-async` preserves
 the accepted request's logical metadata when publishing it to the queue.
+The 202 receipt exposes that request ID as correlation identity only. It is not a
+completion handle, and no `Location` is returned because Portia defines no status resource.
 
 The JSON envelope is version 2 and requires an explicit discriminator name/version plus valid request metadata. Missing metadata,
 empty identities, and unsupported versions are rejected. Receiver execution IDs,
