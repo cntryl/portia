@@ -124,3 +124,63 @@ public sealed class RequestAuthorizerRegistration<TRequest, [DynamicallyAccessed
     internal override ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request, RequestDispatchContext context, CancellationToken ct)
         => services.GetRequiredService<TAuthorizer>().AuthorizeAsync(new RequestContext<TRequest>((TRequest)request, context), context.Actor, ct);
 }
+
+/// <summary>Describes an ordered request pipeline behavior independently of a handler.</summary>
+public abstract class RequestPipelineBehaviorRegistration(Type scopeType, Type behaviorType, int order)
+{
+    /// <summary>Gets the request type or request-family interface matched by this behavior.</summary>
+    public Type ScopeType { get; } = scopeType;
+    /// <summary>Gets the concrete behavior type.</summary>
+    public Type BehaviorType { get; } = behaviorType;
+    /// <summary>Gets the behavior order. Lower values execute outermost.</summary>
+    public int Order { get; } = order;
+    internal abstract void Register(IServiceCollection services);
+}
+
+interface IRequestBehaviorInvocation
+{
+    ValueTask<Result> InvokeAsync(IServiceProvider services, IRequest request, RequestDispatchContext context, RequestHandler nextHandler, CancellationToken ct);
+}
+
+interface IRequestBehaviorInvocation<TOut>
+{
+    ValueTask<Result<TOut>> InvokeAsync(IServiceProvider services, IRequest<TOut> request, RequestDispatchContext context, RequestHandler<TOut> nextHandler, CancellationToken ct);
+}
+
+interface IStreamRequestBehaviorInvocation<TOut>
+{
+    IAsyncEnumerable<TOut> Invoke(IServiceProvider services, IStreamRequest<TOut> request, RequestDispatchContext context, StreamRequestHandler<TOut> nextHandler, CancellationToken ct);
+}
+
+/// <summary>Invokes one generated no-result pipeline behavior registration.</summary>
+public sealed class RequestPipelineBehaviorRegistration<TRequest, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior>(int order)
+    : RequestPipelineBehaviorRegistration(typeof(TRequest), typeof(TBehavior), order), IRequestBehaviorInvocation
+    where TRequest : IRequest
+    where TBehavior : class, IRequestPipelineBehavior<TRequest>
+{
+    internal override void Register(IServiceCollection services) => services.TryAddScoped<TBehavior>();
+    ValueTask<Result> IRequestBehaviorInvocation.InvokeAsync(IServiceProvider services, IRequest request, RequestDispatchContext context, RequestHandler nextHandler, CancellationToken ct)
+        => services.GetRequiredService<TBehavior>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), nextHandler, ct);
+}
+
+/// <summary>Invokes one generated result-bearing pipeline behavior registration.</summary>
+public sealed class RequestPipelineBehaviorRegistration<TRequest, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior, TOut>(int order)
+    : RequestPipelineBehaviorRegistration(typeof(TRequest), typeof(TBehavior), order), IRequestBehaviorInvocation<TOut>
+    where TRequest : IRequest<TOut>
+    where TBehavior : class, IRequestPipelineBehavior<TRequest, TOut>
+{
+    internal override void Register(IServiceCollection services) => services.TryAddScoped<TBehavior>();
+    ValueTask<Result<TOut>> IRequestBehaviorInvocation<TOut>.InvokeAsync(IServiceProvider services, IRequest<TOut> request, RequestDispatchContext context, RequestHandler<TOut> nextHandler, CancellationToken ct)
+        => services.GetRequiredService<TBehavior>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), nextHandler, ct);
+}
+
+/// <summary>Invokes one generated streaming pipeline behavior registration.</summary>
+public sealed class StreamRequestPipelineBehaviorRegistration<TRequest, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior, TOut>(int order)
+    : RequestPipelineBehaviorRegistration(typeof(TRequest), typeof(TBehavior), order), IStreamRequestBehaviorInvocation<TOut>
+    where TRequest : IStreamRequest<TOut>
+    where TBehavior : class, IStreamRequestPipelineBehavior<TRequest, TOut>
+{
+    internal override void Register(IServiceCollection services) => services.TryAddScoped<TBehavior>();
+    IAsyncEnumerable<TOut> IStreamRequestBehaviorInvocation<TOut>.Invoke(IServiceProvider services, IStreamRequest<TOut> request, RequestDispatchContext context, StreamRequestHandler<TOut> nextHandler, CancellationToken ct)
+        => services.GetRequiredService<TBehavior>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), nextHandler, ct);
+}

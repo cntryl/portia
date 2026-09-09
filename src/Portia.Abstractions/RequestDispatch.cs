@@ -100,13 +100,5 @@ public static class RequestDispatch
                 WasDispatched: true);
     }
 
-    static string Transport(RequestInvocation invocation) => invocation switch
-    {
-        RpcInvocation => "fitz.rpc",
-        QueueInvocation => "fitz.queue",
-        NoticeInvocation => "fitz.notice",
-        ScheduleInvocation => "fitz.schedule",
-        HttpInvocation => "http",
-        _ => "local",
-    };
+    static string Transport(RequestInvocation invocation) => invocation.TransportName;
 }

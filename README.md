@@ -164,6 +164,9 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   `IRequestAuthorizer<TScope>` policies are independent, pluggable hooks. A policy can target one
   request, a request-family interface, or every request; all matching policies run by semantic
   authorization stage after the coarse permission check and before the handler.
+- **Pipeline behaviors**: typed command, query, and streaming behaviors run only after
+  authorization succeeds. Register them directly with
+  `AddRequestPipelineBehavior<TBehavior>(order)`; lower orders wrap higher orders.
 - **Actor propagation**: never ambient. Every `IRequestBus` call takes an explicit
   `ClaimsPrincipal`; queued and notice transports carry a raw JWT instead and re-validate it
   (signature and expiry) at the moment the request actually runs, not when it was submitted.

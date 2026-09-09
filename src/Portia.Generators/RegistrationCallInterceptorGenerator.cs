@@ -70,7 +70,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     };
 
     static bool IsRegistrationName(SimpleNameSyntax name) => name.Identifier.ValueText is
-        "AddPortia" or "AddRequestHandler" or "AddRequestAuthorizer" or "RegisterDynamicRequest" or "AddEvent";
+        "AddPortia" or "AddRequestHandler" or "AddRequestAuthorizer" or "AddRequestPipelineBehavior" or "RegisterDynamicRequest" or "AddEvent";
 
     static Call? Analyze(GeneratorSyntaxContext context)
     {
@@ -121,6 +121,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         {
             "handler" => i.OriginalDefinition.MetadataName is "IRequestHandler`1" or "IRequestHandler`2" or "IStreamRequestHandler`2",
             "authorizer" => i.OriginalDefinition.MetadataName == "IRequestAuthorizer`1",
+            "behavior" => i.OriginalDefinition.MetadataName is "IRequestPipelineBehavior`1" or "IRequestPipelineBehavior`2" or "IStreamRequestPipelineBehavior`2",
             "request" => false,
             _ => false,
         }).ToArray();
@@ -153,6 +154,17 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                     .Append(Type(iface.TypeArguments[0])).Append(", ").Append(Type(type)).AppendLine(">(stage));");
                 continue;
             }
+            if (role == "behavior")
+            {
+                var behaviorDescriptor = iface.OriginalDefinition.MetadataName == "IStreamRequestPipelineBehavior`2"
+                    ? "StreamRequestPipelineBehaviorRegistration" : "RequestPipelineBehaviorRegistration";
+                _ = body.Append("_ = builder.AddGeneratedBehavior(new global::Cntryl.Portia.").Append(behaviorDescriptor).Append('<')
+                    .Append(Type(iface.TypeArguments[0])).Append(", ").Append(Type(type));
+                if (iface.TypeArguments.Length == 2)
+                    _ = body.Append(", ").Append(Type(iface.TypeArguments[1]));
+                _ = body.AppendLine(">(order));");
+                continue;
+            }
             var request = iface.TypeArguments[0];
             var diagnostic = PermissionDiagnostic(request, invocation.GetLocation());
             var descriptor = iface.OriginalDefinition.MetadataName == "IStreamRequestHandler`2" ? "StreamRequestRegistration" : "RequestRegistration";
@@ -178,6 +190,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             {
                 "AddRequestHandler" => "handler",
                 "AddRequestAuthorizer" => "authorizer",
+                "AddRequestPipelineBehavior" => "behavior",
                 "RegisterDynamicRequest" => "dynamic request",
                 "AddEvent" => "domain event",
                 _ => null,
@@ -427,9 +440,12 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                     .AppendLine("var builder = global::Cntryl.Portia.PortiaApplicationServiceCollectionExtensions.AddPortia(services);")
                     .Append(call.Body).Append(inferred).AppendLine("return builder;").AppendLine("}")
                 : source.Append("public static global::Cntryl.Portia.PortiaBuilder Register").Append(i)
-                    .Append(call.Role == "authorizer"
-                        ? "(this global::Cntryl.Portia.PortiaBuilder builder, global::Cntryl.Portia.AuthorizationStage stage) {\n"
-                        : "(this global::Cntryl.Portia.PortiaBuilder builder) {\n")
+                    .Append(call.Role switch
+                    {
+                        "authorizer" => "(this global::Cntryl.Portia.PortiaBuilder builder, global::Cntryl.Portia.AuthorizationStage stage) {\n",
+                        "behavior" => "(this global::Cntryl.Portia.PortiaBuilder builder, int order) {\n",
+                        _ => "(this global::Cntryl.Portia.PortiaBuilder builder) {\n",
+                    })
                     .AppendLine("global::System.ArgumentNullException.ThrowIfNull(builder);").Append(call.Body)
                     .AppendLine("return builder;").AppendLine("}");
         }

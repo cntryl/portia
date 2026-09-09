@@ -35,6 +35,7 @@ static class FrameworkTestRegistration
         _ = portia.AddRequestHandler<QueueRunnerTests.InvalidChangeValueHandler>();
         _ = portia.AddRequestAuthorizer<AuthorizedActionAuthorizer>();
         _ = portia.AddRequestAuthorizer<RecordingGuardedAndAuthorizedActionAuthorizer>();
+        _ = portia.AddRequestPipelineBehavior<ChangeValuePipelineBehavior>(order: 10);
         services.TryAddScoped<TestReactor>();
         _ = services.AddSingleton(new ReactorRegistration(typeof(TestReactor), provider => provider.GetRequiredService<TestReactor>()));
         services.TryAddScoped<TestProjector>();
