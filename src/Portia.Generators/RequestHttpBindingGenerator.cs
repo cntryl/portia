@@ -27,6 +27,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 {
     static readonly DiagnosticDescriptor UnsupportedBinding = new("PORTIA016", "Unsupported HTTP binding",
         "Cannot generate Portia HTTP binding: {0}", "Portia", DiagnosticSeverity.Error, isEnabledByDefault: true);
+    static readonly DiagnosticDescriptor OptionalRoute = new("PORTIA026", "Optional route tokens are unsupported",
+        "Portia route '{0}' contains optional token '{1}'; use a query parameter or separate endpoint", "Portia", DiagnosticSeverity.Error, isEnabledByDefault: true);
+    static readonly DiagnosticDescriptor DuplicateOperationId = new("PORTIA027", "Duplicate OpenAPI operation ID",
+        "Portia mappings produce duplicate operationId '{0}'", "Portia", DiagnosticSeverity.Error, isEnabledByDefault: true);
 
     static readonly Regex RouteTokenPattern = new(@"\{\*{0,2}([A-Za-z_][A-Za-z0-9_]*)(?:[:=?][^}]*)?\}", RegexOptions.Compiled);
 
@@ -53,6 +57,17 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             {
                 if (call.Diagnostic is { } diagnostic)
                     sourceContext.ReportDiagnostic(diagnostic);
+            }
+
+            foreach (var duplicate in calls.Where(call => call.Model is not null).Select(call => call.Model!)
+                         .Where(call => !call.ExcludedFromDescription)
+                         .GroupBy(call => call.OperationId, StringComparer.Ordinal)
+                         .Where(group => group.Select(call => call.RequestTypeFullName).Distinct(StringComparer.Ordinal).Count() > 1
+                             || group.GroupBy(call => (call.RequestTypeFullName, call.ContainingSymbol), StringTupleComparer.Instance)
+                                 .Any(sameRequestInScope => sameRequestInScope.Count() > 1)))
+            {
+                foreach (var call in duplicate)
+                    sourceContext.ReportDiagnostic(Diagnostic.Create(DuplicateOperationId, call.DiagnosticLocation, duplicate.Key));
             }
 
             Generate(sourceContext, [.. calls.Where(call => call.Model is not null).Select(call => call.Model!)]);
@@ -87,6 +102,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         var constant = operation?.Arguments.FirstOrDefault(a => a.Parameter?.Name == "pattern")?.Value.ConstantValue;
         if (constant is not { HasValue: true, Value: string pattern })
             return Invalid(invocation, "the route must be a compile-time string constant");
+
+        var optionalToken = RouteTokenPattern.Matches(pattern).Cast<Match>().FirstOrDefault(match => match.Value.IndexOf('?') >= 0);
+        if (optionalToken is not null)
+            return new CallAnalysis(null, Diagnostic.Create(OptionalRoute, invocation.GetLocation(), pattern, optionalToken.Groups[1].Value));
 
         var verb = method.Name switch
         {
@@ -189,7 +208,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 kind,
                 verb,
                 parameters,
-                location), null);
+                location,
+                invocation.GetLocation(),
+                ContainingScope(invocation),
+                IsExcludedFromDescription(invocation)), null);
     }
 
     static CallAnalysis Invalid(InvocationExpressionSyntax invocation, string reason)
@@ -207,6 +229,39 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         ? "default!" : $"({typeName})({SymbolDisplay.FormatPrimitive(parameter.ExplicitDefaultValue, quoteStrings: true, useHexadecimalNumbers: false)})";
 
     static string Literal(string value) => SymbolDisplay.FormatLiteral(value, quote: true);
+
+    static bool IsExcludedFromDescription(InvocationExpressionSyntax invocation) => invocation.Parent is MemberAccessExpressionSyntax
+    {
+        Parent: InvocationExpressionSyntax
+        {
+            Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "ExcludeFromDescription" },
+        },
+    };
+
+    static string ContainingScope(InvocationExpressionSyntax invocation)
+    {
+        var declaration = invocation.Ancestors().FirstOrDefault(node => node is LocalFunctionStatementSyntax or BaseMethodDeclarationSyntax);
+        return declaration is null
+            ? invocation.SyntaxTree.FilePath + ":top-level"
+            : invocation.SyntaxTree.FilePath + ":" + declaration.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    static string CamelCase(string value)
+    {
+        if (value.Length == 0 || !char.IsUpper(value[0]))
+            return value;
+        var chars = value.ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+        {
+            if (i == 1 && !char.IsUpper(chars[i]))
+                break;
+            var hasNext = i + 1 < chars.Length;
+            if (i > 0 && hasNext && !char.IsUpper(chars[i + 1]))
+                break;
+            chars[i] = char.ToLowerInvariant(chars[i]);
+        }
+        return new string(chars);
+    }
 
     static void Generate(SourceProductionContext context, ImmutableArray<CallModel> calls)
     {
@@ -263,7 +318,28 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .Append(index)
             .AppendLine("(this global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder app, string pattern)")
             .AppendLine("    {")
-            .Append("        return app.MapMethods(pattern, new[] { \"").Append(call.Verb.ToUpperInvariant()).AppendLine("\" }, (global::Microsoft.AspNetCore.Http.RequestDelegate)Dispatch);")
+            .Append("        return app.MapMethods(pattern, new[] { \"").Append(call.Verb.ToUpperInvariant())
+            .Append("\" }, (global::System.Func<global::Microsoft.AspNetCore.Http.HttpContext, global::System.Threading.Tasks.Task>)Dispatch)")
+            .AppendLine()
+            .Append("            .WithMetadata(new global::Cntryl.Portia.PortiaOpenApiOperation(")
+            .Append(Literal(call.OperationId)).Append(", ")
+            .Append(call.ResultType is null ? "null" : $"typeof({call.ResultType.TrimEnd('?')})").Append(", ")
+            .Append(call.ResultType is null && call.Kind is CallKind.Send or CallKind.Queue ? "true" : "false").Append(", ")
+            .Append(call.Kind == CallKind.Stream ? "true" : "false").Append(", ")
+            .Append(call.Kind == CallKind.Sse ? "true" : "false").Append(", ")
+            .Append(call.Kind == CallKind.Queue ? "true" : "false").AppendLine(", new global::Cntryl.Portia.PortiaOpenApiParameter[]")
+            .AppendLine("            {");
+        foreach (var parameter in call.Parameters)
+        {
+            var wireNameExpression = parameter.Source == ParameterSource.Route ? Literal(parameter.RouteToken!)
+                : parameter.JsonName is not null ? Literal(parameter.JsonName) : "default(string)";
+            _ = source.Append("                new(").Append(Literal(parameter.Name)).Append(", typeof(")
+                .Append(parameter.Type.TrimEnd('?')).Append("), ").Append(Literal(parameter.Source.ToString().ToLowerInvariant())).Append(", ")
+                .Append(!parameter.Nullable && parameter.Default is null ? "true" : "false").Append(", ")
+                .Append(parameter.Default is not null ? "true" : "false").Append(", ")
+                .Append(parameter.Default ?? "null").Append(", ").Append(wireNameExpression).AppendLine("),");
+        }
+        _ = source.AppendLine("            }));")
             .AppendLine();
 
         var extraParameters = call.Kind is CallKind.Queue
@@ -442,13 +518,18 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         CallKind kind,
         string verb,
         ParameterModel[] parameters,
-        InterceptableLocation location)
+        InterceptableLocation location,
+        Location diagnosticLocation,
+        string containingSymbol,
+        bool excludedFromDescription)
     {
         public string RequestTypeFullName { get; } = requestTypeFullName;
 
         public string RequestTypeName { get; } = requestTypeName;
 
         public string? ResultType { get; } = resultType;
+
+        public string OperationId { get; } = CamelCase(requestTypeName);
 
         public CallKind Kind { get; } = kind;
 
@@ -457,5 +538,29 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         public ParameterModel[] Parameters { get; } = parameters;
 
         public InterceptableLocation Location { get; } = location;
+
+        public Location DiagnosticLocation { get; } = diagnosticLocation;
+
+        public string ContainingSymbol { get; } = containingSymbol;
+
+        public bool ExcludedFromDescription { get; } = excludedFromDescription;
+    }
+
+    sealed class StringTupleComparer : IEqualityComparer<(string RequestTypeFullName, string ContainingSymbol)>
+    {
+        public static StringTupleComparer Instance { get; } = new();
+
+        public bool Equals((string RequestTypeFullName, string ContainingSymbol) x, (string RequestTypeFullName, string ContainingSymbol) y) =>
+            StringComparer.Ordinal.Equals(x.RequestTypeFullName, y.RequestTypeFullName)
+            && StringComparer.Ordinal.Equals(x.ContainingSymbol, y.ContainingSymbol);
+
+        public int GetHashCode((string RequestTypeFullName, string ContainingSymbol) obj)
+        {
+            unchecked
+            {
+                return (StringComparer.Ordinal.GetHashCode(obj.RequestTypeFullName) * 397)
+                    ^ StringComparer.Ordinal.GetHashCode(obj.ContainingSymbol);
+            }
+        }
     }
 }

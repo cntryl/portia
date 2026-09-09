@@ -309,7 +309,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
 [RequestRoute(realm: "*", area: "http-binding-tests", resource: "widgets", operation: "get")]
 [Discriminator("test.http.widgets.get")]
-sealed record HttpGetWidget(Uuid WidgetId, bool IncludeArchived) : IRequest<string>, ICallable;
+sealed record HttpGetWidget(Uuid WidgetId, bool IncludeArchived = false) : IRequest<string>, ICallable;
 
 sealed class HttpGetWidgetHandler : IRequestHandler<HttpGetWidget, string>
 {

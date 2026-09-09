@@ -160,6 +160,15 @@ Do not emit or save concurrently on one aggregate instance. An OCC conflict thro
 
 ## Map HTTP endpoints
 
+The HTTP application automatically exposes OpenAPI 3.1 at `/openapi/v1.json` and
+`/openapi/v1.yml`; no `AddOpenApi()`, `MapOpenApi()`, or endpoint annotations are required.
+Portia describes generated bindings while ordinary minimal-API endpoints remain governed by
+Microsoft's standard generator. The routes are served in every environment. To download YAML:
+
+```sh
+curl http://localhost:5000/openapi/v1.yml --output openapi.yml
+```
+
 `Portia.DependencyInjection` supplies the generator and interceptor namespace to the HTTP host;
 no separate analyzer package or `InterceptorsNamespaces` property is needed. Repository project
 references receive the analyzer directly from the dependency-injection project.

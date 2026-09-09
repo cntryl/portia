@@ -21,8 +21,10 @@ public sealed class HttpStreamingConsumerTests
         using Microsoft.AspNetCore.TestHost;
         using Microsoft.Extensions.DependencyInjection;
         public sealed record StreamRequest(int Mode) : IStreamRequest<string>, ICallable;
+        public sealed record SseStreamRequest(int Mode) : IStreamRequest<string>, ICallable;
         [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
         [JsonSerializable(typeof(StreamRequest))]
+        [JsonSerializable(typeof(SseStreamRequest))]
         [JsonSerializable(typeof(string))]
         internal sealed class ScenarioJsonContext(JsonSerializerOptions options) : JsonSerializerContext(options)
         {
@@ -35,25 +37,33 @@ public sealed class HttpStreamingConsumerTests
             public TaskCompletionSource First = new(TaskCreationOptions.RunContinuationsAsynchronously);
             public TaskCompletionSource ScopeFinished = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
-        public sealed class Authorizer(Stats stats) : IRequestAuthorizer<StreamRequest>, IAsyncDisposable
+        public sealed class Authorizer(Stats stats) : IRequestAuthorizer<StreamRequest>, IRequestAuthorizer<SseStreamRequest>, IAsyncDisposable
         {
             public ValueTask<Result> AuthorizeAsync(IRequestContext<StreamRequest> context, ClaimsPrincipal actor, CancellationToken ct = default)
-                => ValueTask.FromResult(context.Request.Mode is 401 or 403
-                    ? Result.Failure(new RequestError(context.Request.Mode == 401 ? RequestErrorKind.Unauthorized : RequestErrorKind.Forbidden, "Denied"))
+                => Authorize(context.Request.Mode);
+            public ValueTask<Result> AuthorizeAsync(IRequestContext<SseStreamRequest> context, ClaimsPrincipal actor, CancellationToken ct = default)
+                => Authorize(context.Request.Mode);
+            static ValueTask<Result> Authorize(int mode)
+                => ValueTask.FromResult(mode is 401 or 403
+                    ? Result.Failure(new RequestError(mode == 401 ? RequestErrorKind.Unauthorized : RequestErrorKind.Forbidden, "Denied"))
                     : Result.Success);
             public ValueTask DisposeAsync() { stats.ScopeFinished.TrySetResult(); return ValueTask.CompletedTask; }
         }
-        public sealed class Handler(Stats stats) : IStreamRequestHandler<StreamRequest, string>, IAsyncDisposable
+        public sealed class Handler(Stats stats) : IStreamRequestHandler<StreamRequest, string>, IStreamRequestHandler<SseStreamRequest, string>, IAsyncDisposable
         {
-            public async IAsyncEnumerable<string> HandleAsync(IRequestContext<StreamRequest> context, [EnumeratorCancellation] CancellationToken ct)
+            public IAsyncEnumerable<string> HandleAsync(IRequestContext<StreamRequest> context, CancellationToken ct)
+                => HandleAsync(context.Request.Mode, ct);
+            public IAsyncEnumerable<string> HandleAsync(IRequestContext<SseStreamRequest> context, CancellationToken ct)
+                => HandleAsync(context.Request.Mode, ct);
+            async IAsyncEnumerable<string> HandleAsync(int mode, [EnumeratorCancellation] CancellationToken ct)
             {
                 stats.Enumerations++;
                 try
                 {
                     stats.First.TrySetResult();
                     yield return "a";
-                    if (context.Request.Mode == 2) await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-                    if (context.Request.Mode == 3) throw new InvalidOperationException("Stream failed after first item");
+                    if (mode == 2) await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                    if (mode == 3) throw new InvalidOperationException("Stream failed after first item");
                     await Task.Yield();
                     yield return "b";
                 }
@@ -74,7 +84,7 @@ public sealed class HttpStreamingConsumerTests
                     .AddRequestAuthorizer<Authorizer>();
                 await using var app = builder.Build();
                 app.MapPortiaGetStream<StreamRequest, string>("/json");
-                app.MapPortiaGetSse<StreamRequest, string>("/sse");
+                app.MapPortiaGetSse<SseStreamRequest, string>("/sse");
                 await app.StartAsync();
                 using var client = app.GetTestClient();
                 using var cancellation = new CancellationTokenSource();

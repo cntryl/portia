@@ -33,6 +33,22 @@
           "Microsoft.TestPlatform.TestHost": "18.9.0"
         }
       },
+      "Microsoft.OpenApi": {
+        "type": "Direct",
+        "requested": "[2.12.0, )",
+        "resolved": "2.12.0",
+        "contentHash": "0xB/be+f6qYOhvQPUrVsLrau+fkowYv6gt9RIkajMhwT7sZnqtcA797yW3bS5kgSje+AQW4xZgyLnW641YFioQ=="
+      },
+      "Microsoft.OpenApi.YamlReader": {
+        "type": "Direct",
+        "requested": "[2.12.0, )",
+        "resolved": "2.12.0",
+        "contentHash": "PMpQU9qh4Ni9F+vCuYVJ4w+GMPflmPuY16iS4ZoNq2biSNJmmY6V2nHRMN9KXJSdpD+heMnKEsczU+fTNXmi4A==",
+        "dependencies": {
+          "Microsoft.OpenApi": "2.12.0",
+          "SharpYaml": "2.1.4"
+        }
+      },
       "xunit": {
         "type": "Direct",
         "requested": "[2.9.3, )",
@@ -95,6 +111,11 @@
           "Microsoft.TestPlatform.ObjectModel": "18.9.0"
         }
       },
+      "SharpYaml": {
+        "type": "Transitive",
+        "resolved": "2.1.4",
+        "contentHash": "/iwULhVBpTjD4wPZhLU+eUWBanDvri/2AGx5YbaAj5kp9kXzhqUfJEy56H5Yi+c+OXsdm/oKD1aTKB24BFp8cw=="
+      },
       "xunit.abstractions": {
         "type": "Transitive",
         "resolved": "2.0.3",
@@ -141,6 +162,8 @@
       "portia.aspnetcore": {
         "type": "Project",
         "dependencies": {
+          "Microsoft.AspNetCore.OpenApi": "[10.0.11, )",
+          "Microsoft.OpenApi": "[2.12.0, )",
           "Portia.Abstractions": "[1.0.0, )"
         }
       },
@@ -183,6 +206,15 @@
         "requested": "[0.1.3, )",
         "resolved": "0.1.3",
         "contentHash": "0z0u1CUjVcd42W4dS03NxmuOlMjMjSgXoM+aBhvvJ4i8iqlCS/+DzkD5ZpRQ3JAMMr6rugRUxynYIHWo2eTe8g=="
+      },
+      "Microsoft.AspNetCore.OpenApi": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.11, )",
+        "resolved": "10.0.11",
+        "contentHash": "R/1EATnPLU+gRfB6lwVkMcymmyAY5ppBBdRN/5lhNEiT3xP1sWccuSFkU/f1lQvN/WgRq5Vn8AhCdE3fqgsL/w==",
+        "dependencies": {
+          "Microsoft.OpenApi": "[2.7.5, 3.0.0)"
+        }
       },
       "Microsoft.IdentityModel.JsonWebTokens": {
         "type": "CentralTransitive",

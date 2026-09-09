@@ -53,6 +53,12 @@ public sealed class ReflectionDisabledConsumerTests
         using var invalid = await app.GetTestClient().PostAsync("/greetings", invalidContent);
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, invalid.StatusCode);
         Assert.Contains("A name is required.", await invalid.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        using var openApi = await app.GetTestClient().GetAsync("/openapi/v1.json");
+        Assert.Equal(System.Net.HttpStatusCode.OK, openApi.StatusCode);
+        var document = await openApi.Content.ReadAsStringAsync();
+        Assert.Contains("\"openapi\": \"3.1.1\"", document, StringComparison.Ordinal);
+        Assert.Contains("\"operationId\": \"createGreeting\"", document, StringComparison.Ordinal);
     }
 
     [Fact]

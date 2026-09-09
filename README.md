@@ -52,6 +52,11 @@ app.MapPortiaPost<CreateGreeting, string>("/greetings");
 app.Run();
 ```
 
+Portia automatically registers Microsoft's OpenAPI generator before `Build()` and serves OpenAPI
+3.1 at `/openapi/v1.json` and `/openapi/v1.yml`. Do not call `AddOpenApi()` or `MapOpenApi()`.
+Download the runtime YAML when an external artifact is needed:
+`curl http://localhost:5000/openapi/v1.yml --output openapi.yml`.
+
 Call it:
 
 ```console
@@ -130,7 +135,7 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
 | `Portia.Abstractions` | The public contracts everything else implements — `Aggregate`, `DomainEvent`, `IRequest`/`IRequestHandler`/`IRequestBus`, `Result`, the transport marker interfaces (`ICallable`/`IQueuable`/`INotifiable`/`ISchedulable`), permission/authorization interfaces, `PortiaTelemetry`. |
 | `Portia.Core` | The runtime pieces built on those contracts: `AggregateRepository`, `RequestBus`, `QueueRunner`, `RequestNotificationRunner`, `ProjectorRunner`/`ReactorRunner`, `MultiTenantRunner`, `EventSourcedTenantDirectory`. |
 | `Portia.Generators` | The Roslyn source generators — DI registration, RPC worker registration, HTTP binding interceptors, the domain-event catalog, and the analyzers backing them (`PORTIA0xx` diagnostics). |
-| `Portia.AspNetCore` | `MapPortiaGet`/`Post`/`Put`/`Patch`/`Delete`/`GetStream`/`GetSse` — the minimal-API extension methods the HTTP binding generator intercepts. |
+| `Portia.AspNetCore` | Generated HTTP binding plus automatic Microsoft OpenAPI 3.1 JSON and YAML documents. |
 | `Portia.Fitz` | Fitz-backed transports: RPC send/receive, queue publish/consume, notice/schedule notifications, `FitzEventStore`, and `FleetPartitionRunner` (fleet distribution via Fitz leases). |
 | `Portia.Jwt` | A JWT-backed `IRequestActorValidator` — re-validates a request's carried actor token, no ASP.NET Core dependency. |
 | `Portia.DependencyInjection` | Composes the application with fluent `AddPortia()` and activates its workers with `AddWorkers()`, which runs every declared projector and reactor under one hosted service. |
