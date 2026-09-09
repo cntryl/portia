@@ -64,3 +64,9 @@ sealed class GetValueHandler : IRequestHandler<GetValue, int>
     public ValueTask<Result<int>> HandleAsync(IRequestContext<GetValue> context, CancellationToken ct) =>
         ValueTask.FromResult(Result<int>.Success(7));
 }
+
+sealed class ChangeValuePipelineBehavior : IRequestPipelineBehavior<ChangeValue>
+{
+    public ValueTask<Result> HandleAsync(IRequestContext<ChangeValue> context, RequestHandler nextHandler, CancellationToken ct)
+        => nextHandler(ct);
+}

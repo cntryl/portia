@@ -33,11 +33,12 @@ Portia uses snake_case for application JSON by default, including HTTP. Keep the
 option aligned with that default. Use `ConfigureJson` only when the whole application deliberately
 chooses a different convention or adds converters.
 
-Reference `Portia.DependencyInjection` in each assembly that registers handlers, authorizers,
+Reference `Portia.DependencyInjection` in each assembly that registers handlers, authorizers, pipeline behaviors,
 or routed requests. The generator and interceptor configuration arrive with that package.
 
-Select handlers and authorizers through the stable generic methods `AddRequestHandler<T>()`
-and `AddRequestAuthorizer<T>()`. The generator replaces each call
+Select handlers, authorizers, and pipeline behaviors through the stable generic methods
+`AddRequestHandler<T>()`, `AddRequestAuthorizer<T>()`, and `AddRequestPipelineBehavior<T>(order)`.
+The generator replaces each call
 with its typed descriptor and reports a compile error when the type does not implement that role.
 Projectors and reactors are selected with
 `AddProjector<T>(...)` and `AddReactor<T>(...)`, which also choose their execution scope.
@@ -97,6 +98,21 @@ Here `ActiveUserAuthorizer` implements `IRequestAuthorizer<IRequestBase>`, the a
 implements `IRequestAuthorizer<IAccountRequest>`, and the MFA policy implements
 `IRequestAuthorizer<IMfaConfirmedRequest>`. Registration order breaks ties within a stage;
 authorization policy should otherwise avoid order-dependent side effects.
+
+Pipeline behaviors wrap handler execution after every applicable authorization policy succeeds.
+Implement `IRequestPipelineBehavior<TRequest>` for commands,
+`IRequestPipelineBehavior<TRequest,TOut>` for queries, or
+`IStreamRequestPipelineBehavior<TRequest,TOut>` for streams. A behavior can target a concrete
+request or request-family interface. Lower orders are outermost; registration order breaks ties.
+An authorization failure never enters the behavior chain. Every behavior must either return a
+fully initialized `Result` or call its typed `nextHandler`; Portia names the responsible behavior
+or handler when an uninitialized result crosses the framework boundary.
+
+```csharp
+services.AddPortia()
+    .AddRequestHandler<CloseAccountHandler>()
+    .AddRequestPipelineBehavior<AccountAuditBehavior>(order: 100);
+```
 
 ## Persist an aggregate
 

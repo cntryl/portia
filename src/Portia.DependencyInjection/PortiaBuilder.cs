@@ -19,6 +19,7 @@ public sealed class PortiaBuilder
     readonly HashSet<Type> _jsonRoots = [];
     readonly Dictionary<Type, Type> _handlerRequests = [];
     readonly Dictionary<(Type ScopeType, Type AuthorizerType), AuthorizationStage> _authorizers = [];
+    readonly Dictionary<(Type ScopeType, Type BehaviorType), int> _behaviors = [];
     readonly List<Action<JsonSerializerOptions>> _jsonConfiguration = [];
     readonly List<Func<JsonSerializerOptions, JsonSerializerContext>> _jsonContexts = [];
     bool _worker;
@@ -82,6 +83,14 @@ public sealed class PortiaBuilder
     {
         _ = Services;
         throw MissingGeneratedRegistration(typeof(TAuthorizer), $"request authorizer at stage '{stage}'");
+    }
+
+    /// <summary>Registers a typed request pipeline behavior at the given order.</summary>
+    /// <remarks>The generator is supplied by Portia.DependencyInjection. Lower orders execute outermost.</remarks>
+    public PortiaBuilder AddRequestPipelineBehavior<TBehavior>(int order = 0) where TBehavior : class
+    {
+        _ = Services;
+        throw MissingGeneratedRegistration(typeof(TBehavior), $"request pipeline behavior at order '{order}'");
     }
 
     /// <summary>Explicitly registers a request whose concrete type is hidden from compile-time dispatch analysis.</summary>
@@ -155,6 +164,23 @@ public sealed class PortiaBuilder
         }
 
         _authorizers[key] = registration.Stage;
+        _ = Services.AddSingleton(registration);
+        registration.Register(Services);
+        return this;
+    }
+
+    /// <summary>Adds a behavior descriptor built by Portia.Generators at compile time.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public PortiaBuilder AddGeneratedBehavior(RequestPipelineBehaviorRegistration registration)
+    {
+        ArgumentNullException.ThrowIfNull(registration);
+        var key = (registration.ScopeType, registration.BehaviorType);
+        if (_behaviors.TryGetValue(key, out var order))
+        {
+            return order == registration.Order ? this
+                : throw new InvalidOperationException($"Pipeline behavior '{registration.BehaviorType}' has conflicting orders.");
+        }
+        _behaviors.Add(key, registration.Order);
         _ = Services.AddSingleton(registration);
         registration.Register(Services);
         return this;
