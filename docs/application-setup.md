@@ -94,9 +94,10 @@ registers Microsoft's `v1` OpenAPI 3.1 document before the provider is built and
 route groups and multiple Portia endpoints, add no hosted service, and leave `AddPortia()`
 host-neutral. Security schemes are application-owned and are not inferred from authorization
 metadata.
-ASP.NET startup materializes the complete document after endpoint composition and before the
-server accepts traffic. This catches operation-ID collisions across route groups, feature
-assemblies, ordinary endpoints, and document transformers; excluded endpoints do not participate.
+Each asynchronous document request materializes the complete endpoint composition. This catches
+operation-ID collisions across route groups, feature assemblies, ordinary endpoints, and document
+transformers without making an unavailable specification fatal to application boot; excluded
+endpoints do not participate.
 
 ## Worker deployment
 
@@ -104,8 +105,10 @@ Queue redelivery remains broker-owned unless `QueueRunnerOptions.TerminalAttempt
 and an `IQueuedRequestTerminalHandler` is registered. The attempt number is reported by the
 transport, not synthesized by Portia. Only retryable or unexpected failures at the threshold
 invoke the callback; Portia acknowledges after a successful callback. Callback, cancellation,
-or acknowledgment failure leaves the delivery unacknowledged. The callback and acknowledgment
-are not atomic, so terminal handlers must tolerate replay. Expected business rejection continues
+or acknowledgment failure leaves the delivery unacknowledged. A callback failure also faults the
+runner so an application bug is visible; an acknowledgment failure is logged while transport
+ownership expires. The callback and acknowledgment are not atomic, so terminal handlers must
+tolerate replay. Expected business rejection continues
 to use `Result.Validation` (and the other `RequestError` kinds); validation policy belongs to the
 application rather than a separate framework validation pipeline.
 
