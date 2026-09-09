@@ -184,6 +184,23 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.True((await response.Content.ReadFromJsonAsync<JsonElement>()).TryGetProperty("message", out _));
     }
 
+    /// <summary>Optional HTTP whitespace is removed before validating the Bearer credential.</summary>
+    [Fact]
+    public async Task ShouldAcceptTrimmedCredentialGivenTrailingWhitespaceWhenQueueing()
+    {
+        var publisher = new RecordingRequestQueuePublisher();
+        var client = await StartAsync(app => app.MapPortiaPost<HttpSendPing>("/ping"),
+            services => services.AddSingleton<IRequestQueuePublisher>(publisher));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/ping") { Content = JsonContent.Create(new { }) };
+        _ = request.Headers.TryAddWithoutValidation("Prefer", "respond-async");
+        _ = request.Headers.TryAddWithoutValidation("Authorization", "Bearer abc ");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal("abc", Assert.Single(publisher.ActorTokens));
+    }
+
     /// <summary>An absent optional body binds as an empty object.</summary>
     [Fact]
     public async Task ShouldBindDefaultsGivenAbsentOptionalBodyWhenPosting()
@@ -359,11 +376,13 @@ public sealed class HttpBindingTests : IAsyncDisposable
     sealed class RecordingRequestQueuePublisher : IRequestQueuePublisher
     {
         public List<object> Enqueued { get; } = [];
+        public List<string?> ActorTokens { get; } = [];
 
         public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
             where TRequest : IRequest, IQueuable
         {
             Enqueued.Add(request);
+            ActorTokens.Add(actorToken);
             return ValueTask.CompletedTask;
         }
     }

@@ -76,10 +76,12 @@ public static class PortiaHttpBinding
         if (values.Count != 1)
             throw new BadHttpRequestException("Authorization must contain one Bearer credential.");
         var value = values[0];
-        return value is null || !value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-            || value.AsSpan(7).Trim().IsEmpty || value.AsSpan(7).Contains(' ')
+        if (value is null || !value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            throw new BadHttpRequestException("Authorization must contain one Bearer credential.");
+        var credential = value.AsSpan(7).Trim();
+        return credential.IsEmpty || credential.Contains(' ')
             ? throw new BadHttpRequestException("Authorization must contain one Bearer credential.")
-            : value[7..].Trim();
+            : credential.ToString();
     }
 
     /// <summary>Creates the asynchronous acceptance receipt.</summary>

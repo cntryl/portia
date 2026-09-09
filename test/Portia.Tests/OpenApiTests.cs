@@ -79,7 +79,7 @@ public sealed class OpenApiTests : IAsyncDisposable
 
     /// <summary>Cross-generator operation ID collisions fail document generation deterministically.</summary>
     [Fact]
-    public async Task ShouldRefuseStartupGivenCrossGeneratorOperationIdCollisionWhenApplicationStarts()
+    public async Task ShouldKeepApplicationRunningGivenCollisionWhenOpenApiDocumentFails()
     {
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
@@ -87,7 +87,10 @@ public sealed class OpenApiTests : IAsyncDisposable
         _app = builder.Build();
         _ = _app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");
         _ = _app.MapGet("/ordinary", () => Results.Ok()).WithName("httpGetWidget");
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => _app.StartAsync());
+        await _app.StartAsync();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _app.GetTestClient().GetAsync("/openapi/v1.json"));
         Assert.Contains("operationId 'httpGetWidget' is duplicated", exception.Message, StringComparison.Ordinal);
     }
 

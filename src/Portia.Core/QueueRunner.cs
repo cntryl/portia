@@ -102,7 +102,7 @@ public sealed class QueueRunner
                         await queued.AbandonAsync(ct).ConfigureAwait(false);
                 }
             }
-            catch (Exception ex) when (!ct.IsCancellationRequested)
+            catch (Exception ex) when (!ct.IsCancellationRequested && ex is not TerminalHandlerFailureException)
             {
                 // An unrecognized exception's retriability is unknown; abandoning (rather than
                 // silently dropping the request) is the safer default.
@@ -124,12 +124,22 @@ public sealed class QueueRunner
         {
             await handler.HandleAsync(new QueuedRequestFailureContext(
                 queued.Request, queued.Metadata, queued.Invocation, queued.Attempt, error, exception), ct).ConfigureAwait(false);
+        }
+        catch (Exception handlerException) when (!ct.IsCancellationRequested)
+        {
+            throw new TerminalHandlerFailureException(handlerException);
+        }
+        try
+        {
             await queued.CompleteAsync(ct).ConfigureAwait(false);
         }
-        catch (Exception callbackException) when (!ct.IsCancellationRequested)
+        catch (Exception acknowledgmentException) when (!ct.IsCancellationRequested)
         {
-            PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "terminal callback or acknowledgment failed", callbackException, _logger);
+            PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "terminal acknowledgment failed", acknowledgmentException, _logger);
         }
         return true;
     }
+
+    sealed class TerminalHandlerFailureException(Exception innerException)
+        : Exception("The queued request terminal handler failed.", innerException);
 }

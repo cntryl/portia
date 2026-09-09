@@ -146,8 +146,9 @@ public sealed class QueueRunnerTests
         var runner = new QueueRunner(new FakeQueueConsumer([queued]), busHost.Bus, new TestRequestActorValidator(),
             new QueueRunnerOptions { TerminalAttempt = 3 }, new RecordingTerminalHandler(throws: true));
 
-        await runner.RunAsync();
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => runner.RunAsync());
 
+        Assert.Equal("terminal failed", failure.InnerException?.Message);
         Assert.False(queued.Completed);
         Assert.False(queued.Abandoned);
     }

@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.OpenApi;
@@ -41,7 +40,6 @@ public static class PortiaOpenApi
         _ = services.AddSingleton<PortiaOpenApiMarker>();
         _ = services.AddOptions<PortiaHttpOptions>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<JsonOptions>, PortiaOpenApiJsonOptions>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupFilter, PortiaOpenApiStartupFilter>());
         _ = services.AddOpenApi(DocumentName, options =>
         {
             options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1;
@@ -108,16 +106,6 @@ sealed class PortiaOpenApiJsonOptions(JsonSerializerOptions portia) : IConfigure
     }
 }
 
-sealed class PortiaOpenApiStartupFilter(IServiceProvider services) : IStartupFilter
-{
-    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
-    {
-        next(app);
-        _ = services.GetRequiredKeyedService<IOpenApiDocumentProvider>("v1")
-            .GetOpenApiDocumentAsync(CancellationToken.None).GetAwaiter().GetResult();
-    };
-}
-
 /// <summary>Compile-time endpoint shape consumed by Portia's Microsoft OpenAPI transformer.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed record PortiaOpenApiOperation(
@@ -148,6 +136,11 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             .ToHashSet(StringComparer.Ordinal) ?? [];
         foreach (var status in operation.Responses.Keys.Where(status => !explicitStatuses.Contains(status)).ToArray())
             _ = operation.Responses.Remove(status);
+        void SetDefaultResponse(string status, IOpenApiResponse response)
+        {
+            if (!explicitStatuses.Contains(status))
+                operation.Responses[status] = response;
+        }
 
         operation.OperationId = metadata.OperationId;
         operation.Parameters = [];
@@ -191,16 +184,16 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         {
             var item = await context.GetOrCreateSchemaAsync(metadata.ResultType!, null, cancellationToken).ConfigureAwait(false);
             IOpenApiSchema schema = metadata.JsonStream ? new OpenApiSchema { Type = JsonSchemaType.Array, Items = item } : item;
-            _ = operation.Responses.TryAdd("200", Response("OK", metadata.ServerSentEvents ? "text/event-stream" : "application/json", schema));
+            SetDefaultResponse("200", Response("OK", metadata.ServerSentEvents ? "text/event-stream" : "application/json", schema));
         }
         else if (metadata.NoContent)
         {
-            _ = operation.Responses.TryAdd("204", new OpenApiResponse { Description = "No Content" });
+            SetDefaultResponse("204", new OpenApiResponse { Description = "No Content" });
         }
         else
         {
             var schema = await context.GetOrCreateSchemaAsync(metadata.ResultType!, null, cancellationToken).ConfigureAwait(false);
-            _ = operation.Responses.TryAdd("200", Response("OK", "application/json", schema));
+            SetDefaultResponse("200", Response("OK", "application/json", schema));
         }
         if (metadata.QueueCapable)
         {
@@ -211,7 +204,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 Required = false,
                 Schema = new OpenApiSchema { Type = JsonSchemaType.String }
             });
-            _ = operation.Responses.TryAdd("202", Response("Accepted", "application/json", new OpenApiSchema
+            SetDefaultResponse("202", Response("Accepted", "application/json", new OpenApiSchema
             {
                 Type = JsonSchemaType.Object,
                 Properties = new Dictionary<string, IOpenApiSchema> { [jsonOptions.PropertyNamingPolicy?.ConvertName("RequestId") ?? "RequestId"] = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uuid" } },
@@ -220,7 +213,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         }
         foreach (var status in new[] { "400", "401", "403", "404", "409", "413", "500" })
         {
-            _ = operation.Responses.TryAdd(status, status == "401" ? new OpenApiResponse { Description = "Unauthorized" }
+            SetDefaultResponse(status, status == "401" ? new OpenApiResponse { Description = "Unauthorized" }
                 : Response("Error", "application/problem+json", new OpenApiSchema
                 {
                     Type = JsonSchemaType.Object,
