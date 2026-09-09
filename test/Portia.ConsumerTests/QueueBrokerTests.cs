@@ -44,7 +44,10 @@ public sealed class QueueBrokerTests
         var services = ConsumerHost.CreateServices();
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
-        _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(client.Queue, serializer, route, visibilityTimeoutSeconds: 1));
+        // Leave enough headroom for the first renewal on slower shared CI runners. The competing
+        // reserve waits beyond the original lease, so this still proves renewal rather than merely
+        // observing the initial reservation window.
+        _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(client.Queue, serializer, route, visibilityTimeoutSeconds: 3));
         _ = services.AddPortiaQueueRunner();
         await using var provider = ConsumerHost.Build(services);
         using var cancellation = new CancellationTokenSource();
@@ -52,7 +55,7 @@ public sealed class QueueBrokerTests
         try
         {
             await provider.GetRequiredService<ConsumerHost.Effects>().WaitForAsync("nested");
-            Assert.Empty(await competitor.Queue.ReserveAsync(route, leaseSeconds: 1, waitSeconds: 3));
+            Assert.Empty(await competitor.Queue.ReserveAsync(route, leaseSeconds: 1, waitSeconds: 4));
         }
         finally
         {
