@@ -33,13 +33,12 @@ carried credential when work executes. Both then dispatch through `IRequestBus`,
 permission and authorizer pipeline runs. Adapters may authenticate differently but cannot define
 an alternative authorization path.
 
-## Fencing is enforced where writes become durable
+## Fitz owns distributed workload leases
 
-Fleet leases supply monotonic fencing tokens and Portia carries the active token in
-`WorkloadContext`. Only the application repository knows how its durable target performs a
-conditional write, so it owns the comparison. `FencingTokenConformance` turns that responsibility
-into executable proof. If revoked partition work ignores cancellation, Portia fails the runner and
-host after a bounded interval instead of knowingly allowing replacement work beside it.
+Portia uses Fitz lease inventory to assign work across the fleet and holds a Fitz lease around each
+projector or reactor run. It does not reinterpret Fitz's broker-local lease token as a durable
+application fencing protocol. If revoked partition work ignores cancellation, Portia fails the
+runner and host after a bounded interval instead of knowingly allowing replacement work beside it.
 
 ## Tenant scope and fleet placement are independent
 

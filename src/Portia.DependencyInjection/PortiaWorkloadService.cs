@@ -61,8 +61,8 @@ sealed partial class PortiaWorkloadService(IServiceProvider services) : Backgrou
         {
             await ResolveCoordinator().RunAsync(
                 () => [.. active.Keys],
-                (identity, fencingToken, ct) => active.TryGetValue(identity, out var registration)
-                    ? RunAsync(registration, identity, fencingToken, ct) : Task.CompletedTask, lifetime.Token).ConfigureAwait(false);
+                (identity, ct) => active.TryGetValue(identity, out var registration)
+                    ? RunAsync(registration, identity, ct) : Task.CompletedTask, lifetime.Token).ConfigureAwait(false);
         }
         try
         {
@@ -93,7 +93,7 @@ sealed partial class PortiaWorkloadService(IServiceProvider services) : Backgrou
         return new SingleProcessWorkloadCoordinator();
     }
 
-    async Task RunAsync(WorkloadRegistration registration, WorkloadIdentity identity, ulong fencingToken, CancellationToken ct)
+    async Task RunAsync(WorkloadRegistration registration, WorkloadIdentity identity, CancellationToken ct)
     {
         var telemetryScope = identity.Tenant is null ? "global" : "tenant";
         PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, true, _logger);
@@ -107,7 +107,7 @@ sealed partial class PortiaWorkloadService(IServiceProvider services) : Backgrou
                 {
                     await using var scope = services.CreateAsyncScope();
                     var provider = scope.ServiceProvider;
-                    provider.GetRequiredService<WorkloadContext>().Initialize(identity, fencingToken, registration.ExplicitName);
+                    provider.GetRequiredService<WorkloadContext>().Initialize(identity, registration.ExplicitName);
                     if (registration.IsProjector)
                     {
                         var projector = provider.GetServices<ProjectorRegistration>().Single(item => item.ProjectorType == registration.ComponentType);

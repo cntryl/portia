@@ -51,7 +51,7 @@ Commit must atomically persist both changes and progress. Disposal releases reso
 and discards uncommitted changes; it never commits. `ProjectionBatchContext.Checkpoint`
 provides the expected starting progress for conditional writes. Use the complete
 `CheckpointIdentity` to separate tenants, components, and rebuild generations. Scoped
-repositories may inject `WorkloadContext` to enforce the current ownership fence.
+repositories may inject `WorkloadContext` to inspect the current workload identity.
 
 ## Bulk handling
 
@@ -167,15 +167,13 @@ The contract supports either a live transaction or buffered writes:
 These are implementation requirements, not bundled database adapters. The framework
 cannot predict how many backend writes an event causes. Applications must select suitable
 batch sizes and their repositories must enforce backend limits without partially committing
-an oversized projection batch. Test atomicity, conditional conflicts, fencing, cancellation,
+an oversized projection batch. Test atomicity, conditional conflicts, cancellation,
 and ambiguous commit responses against the chosen backend.
 
 `Portia.Testing` turns the storage requirements into executable suites:
 
 - `ProjectionStoreConformance` verifies atomic data/checkpoint commits, rollback, optimistic
   conflicts, authoritative reloads, and rebuild isolation.
-- `FencingTokenConformance` verifies monotonic token enforcement, stale-write rejection,
-  durability across reopen, and concurrent ownership changes.
 - `ReactionDeduplicationConformance` verifies an optional application deduplication primitive.
   It cannot prove crash atomicity between an external effect and its bookkeeping; use an
   idempotent sink or an integration-specific transactional inbox/outbox when that guarantee is
@@ -185,8 +183,8 @@ The suites accept small probe implementations and throw `ConformanceViolationExc
 application can invoke them from its normal test framework. Future official persistence adapters
 must pass the applicable suites, but no database adapter is bundled today.
 
-`Portia.Testing` supplies backend-neutral `FencingTokenConformance`,
-`ProjectionStoreConformance`, and optional `ReactionDeduplicationConformance` suites. Implement
+`Portia.Testing` supplies backend-neutral `ProjectionStoreConformance` and optional
+`ReactionDeduplicationConformance` suites. Implement
 their small probe interfaces in the application's storage test project and run `VerifyAsync` from
 the test framework already in use. The deduplication suite proves duplicate suppression but cannot
 prove crash atomicity between an external effect and bookkeeping; use an idempotent target or a

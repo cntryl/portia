@@ -8,14 +8,13 @@ namespace Cntryl.Portia;
 ///
 /// It is safe only while exactly one replica is running. A deployment that scales workers beyond
 /// one replica must register a distributed <see cref="IWorkloadCoordinator" /> — Fitz supplies one
-/// through <c>AddFitz</c> — because this implementation cannot detect, and will not fence
-/// against, a second owner of the same workload.
+/// through <c>AddFitz</c> — because this implementation cannot detect a second owner of the
+/// same workload.
 /// </summary>
 public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
 {
     readonly TimeSpan _reconcileInterval;
     readonly TimeProvider _clock;
-    ulong _fencingToken;
 
     /// <summary>Creates a coordinator that reconciles the declared workloads on an interval.</summary>
     /// <param name="reconcileInterval">How long to wait between snapshots of the declared
@@ -33,7 +32,7 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
     /// <inheritdoc />
     public async Task RunAsync(
         Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-        Func<WorkloadIdentity, ulong, CancellationToken, Task> run,
+        Func<WorkloadIdentity, CancellationToken, Task> run,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(workloads);
@@ -56,7 +55,7 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
                     await ReleaseAsync(owned, identity).ConfigureAwait(false);
 
                 // A callback that ended on its own either failed unrecoverably, which ends
-                // coordination, or completed and is restarted below under a fresh fencing token.
+                // coordination, or completed and is restarted below.
                 foreach (var identity in owned.Keys.ToArray())
                 {
                     var workload = owned[identity];
@@ -70,8 +69,7 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
                     if (owned.ContainsKey(identity))
                         continue;
                     var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    var fencingToken = Interlocked.Increment(ref _fencingToken);
-                    owned[identity] = new OwnedWorkload(cancellation, run(identity, fencingToken, cancellation.Token));
+                    owned[identity] = new OwnedWorkload(cancellation, run(identity, cancellation.Token));
                 }
 
                 await Task.Delay(_reconcileInterval, _clock, ct).ConfigureAwait(false);

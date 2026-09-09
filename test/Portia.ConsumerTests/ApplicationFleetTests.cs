@@ -29,7 +29,6 @@ public sealed class ApplicationFleetTests
                 await first.StopAsync();
                 await Until(() => probe.Owner == "b");
                 Assert.Equal(1, probe.MaximumActive);
-                Assert.True(probe.LastFence > 0);
             }
             finally { await second.StopAsync(); }
         }
@@ -43,7 +42,7 @@ public sealed class ApplicationFleetTests
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddSingleton<IDomainEventReader>(store);
         _ = builder.Services.AddSingleton<IProjectionCheckpointStore, InMemoryProjectionCheckpointStore>();
-        _ = builder.Services.AddScoped(provider => new ProbeReactor(worker, provider.GetRequiredService<WorkloadContext>(), probe));
+        _ = builder.Services.AddScoped(provider => new ProbeReactor(worker, probe));
         _ = builder.Services.AddSingleton(new ReactorRegistration(typeof(ProbeReactor), provider => provider.GetRequiredService<ProbeReactor>()));
         _ = builder.Services.AddPortia()
             .AddReactor<ProbeReactor>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(10))
@@ -72,20 +71,17 @@ public sealed class ApplicationFleetTests
         public int MaximumActive;
         public int Created;
         public int Disposed;
-        public ulong LastFence;
     }
 
     sealed class ProbeReactor : BaseReactor, IDisposable
     {
         readonly string _worker;
-        readonly WorkloadContext _lease;
         readonly Probe _probe;
 
-        public ProbeReactor(string worker, WorkloadContext lease, Probe probe)
+        public ProbeReactor(string worker, Probe probe)
             : base(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("application-fleet", "events"), "probe")
         {
             _worker = worker;
-            _lease = lease;
             _probe = probe;
             _ = Interlocked.Increment(ref probe.Created);
         }
@@ -96,7 +92,6 @@ public sealed class ApplicationFleetTests
             {
                 _probe.Active++;
                 _probe.MaximumActive = Math.Max(_probe.MaximumActive, _probe.Active);
-                _probe.LastFence = _lease.FencingToken;
                 _probe.Owner = _worker;
             }
             try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }

@@ -24,15 +24,15 @@ public interface IWorkloadCoordinator
 {
     /// <summary>Reconciles changing workloads and runs callbacks only while ownership is held.</summary>
     /// <param name="workloads">Returns a complete current snapshot, including retained identities.</param>
-    /// <param name="run">Runs one identity with a fencing token and an ownership cancellation token.
+    /// <param name="run">Runs one identity with an ownership cancellation token.
     /// The provider cancels and awaits revoked callbacks before releasing ownership.</param>
     /// <param name="ct">Cancels coordination and every owned callback.</param>
     /// <returns>The complete lifetime, ending only after cancellation or an unrecoverable failure.</returns>
     Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-        Func<WorkloadIdentity, ulong, CancellationToken, Task> run, CancellationToken ct = default);
+        Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default);
 }
 
-/// <summary>Provides the identity and fencing token of the current workload pass to scoped dependencies.</summary>
+/// <summary>Provides the identity of the current workload pass to scoped dependencies.</summary>
 public sealed class WorkloadContext
 {
     WorkloadIdentity? _identity;
@@ -41,17 +41,13 @@ public sealed class WorkloadContext
     public WorkloadIdentity Identity => _identity ?? throw new InvalidOperationException("No workload is executing in this scope.");
     /// <summary>Gets the workload's tenant, or null for a global workload.</summary>
     public TenantId? Tenant => Identity.Tenant;
-    /// <summary>Gets the ownership fencing token; durable targets must enforce it.</summary>
-    public ulong FencingToken { get; private set; }
-
     internal string? ComponentName { get; private set; }
 
-    internal void Initialize(WorkloadIdentity identity, ulong token, string? componentName = null)
+    internal void Initialize(WorkloadIdentity identity, string? componentName = null)
     {
         if (_identity is not null)
             throw new InvalidOperationException("A workload scope cannot be rebound.");
         _identity = identity;
-        FencingToken = token;
         ComponentName = componentName;
     }
 }

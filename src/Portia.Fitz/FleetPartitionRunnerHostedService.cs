@@ -1,4 +1,3 @@
-using Cntryl.Fitz.Abstractions.Domains.Lease;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -42,10 +41,10 @@ sealed class FleetPartitionRunnerHostedService<TWorkload>(
         }
     }
 
-    async Task RunPartitionAsync(string partition, LeaseAuthority authority, CancellationToken ct)
+    async Task RunPartitionAsync(string partition, CancellationToken ct)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var workload = scope.ServiceProvider.GetRequiredService<TWorkload>();
-        await workload.RunAsync(partition, authority, ct).ConfigureAwait(false);
+        await workload.RunAsync(partition, ct).ConfigureAwait(false);
     }
 }

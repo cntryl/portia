@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
-using Cntryl.Fitz.Abstractions.Domains.Lease;
 
 namespace Cntryl.Portia;
 
@@ -37,7 +36,7 @@ public sealed class FleetPartitionRunnerTests
         {
             PartitionStopTimeout = TimeSpan.FromMilliseconds(50),
         };
-        var run = runner.RunAsync([partition], (_, _, _) =>
+        var run = runner.RunAsync([partition], (_, _) =>
         {
             started.SetResult();
             return release.Task;
@@ -65,7 +64,7 @@ public sealed class FleetPartitionRunnerTests
         };
 
         _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            runner.RunAsync(["lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, options));
+            runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask, options));
     }
 
     /// <summary>Changing tenant partitions revoke only removed work and retain global ownership.</summary>
@@ -77,7 +76,7 @@ public sealed class FleetPartitionRunnerTests
         var active = new ConcurrentDictionary<string, bool>();
         var starts = new ConcurrentDictionary<string, int>();
         using var lifetime = new CancellationTokenSource();
-        var run = runner.RunAsync(() => Volatile.Read(ref snapshot), async (route, authority, ct) =>
+        var run = runner.RunAsync(() => Volatile.Read(ref snapshot), async (route, ct) =>
         {
             _ = starts.AddOrUpdate(route, 1, (_, count) => count + 1);
             active[route] = true;
@@ -116,7 +115,7 @@ public sealed class FleetPartitionRunnerTests
         var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
         using var cts = new CancellationTokenSource();
 
-        var run = runner.RunAsync(["lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), cts.Token);
+        var run = runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), cts.Token);
 
         await Task.Delay(300);
         cts.Cancel();
@@ -136,7 +135,7 @@ public sealed class FleetPartitionRunnerTests
         var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
 
         _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            runner.RunAsync(["lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.Zero)));
+            runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.Zero)));
     }
 
     /// <summary>
@@ -174,7 +173,7 @@ public sealed class FleetPartitionRunnerTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            runner.RunAsync([route], (_, _, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), cts.Token));
+            runner.RunAsync([route], (_, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), cts.Token));
         Assert.Contains("lease://{realm}/{area}/{resource}", exception.Message, StringComparison.Ordinal);
         _ = reason;
     }
@@ -193,7 +192,7 @@ public sealed class FleetPartitionRunnerTests
 
         var run = runner.RunAsync(
             ["lease://portia/fleet/well-formed"],
-            (_, _, ct) => RunUntilCancelled("lease://portia/fleet/well-formed", new ConcurrentDictionary<string, bool>(), ct),
+            (_, ct) => RunUntilCancelled("lease://portia/fleet/well-formed", new ConcurrentDictionary<string, bool>(), ct),
             SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
             cts.Token);
 
@@ -214,7 +213,7 @@ public sealed class FleetPartitionRunnerTests
         var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
 
         _ = await Assert.ThrowsAsync<ArgumentException>(() =>
-            runner.RunAsync(["lease://portia/fleet/p", "lease://portia/fleet/p"], (_, _, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30))));
+            runner.RunAsync(["lease://portia/fleet/p", "lease://portia/fleet/p"], (_, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30))));
     }
 
     /// <summary>
@@ -244,7 +243,7 @@ public sealed class FleetPartitionRunnerTests
 
         var run = runner.RunAsync(
             ["lease://portia/fleet/never-acquired", "lease://portia/fleet/acquired-then-fails"],
-            (partition, _, _) => partition == "lease://portia/fleet/acquired-then-fails"
+            (partition, _) => partition == "lease://portia/fleet/acquired-then-fails"
                 ? throw new InvalidOperationException("callback failure")
                 : Task.CompletedTask,
             SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
@@ -276,7 +275,7 @@ public sealed class FleetPartitionRunnerTests
 
         var run = runner.RunAsync(
             ["lease://portia/fleet/partition-a", "lease://portia/fleet/partition-b"],
-            (partition, _, ct) => RunUntilCancelled(partition, held, ct),
+            (partition, ct) => RunUntilCancelled(partition, held, ct),
             SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
             cts.Token);
 
@@ -304,7 +303,7 @@ public sealed class FleetPartitionRunnerTests
         using var ctsA = new CancellationTokenSource();
         using var ctsB = new CancellationTokenSource();
 
-        async Task OnAcquired(string partition, LeaseAuthority authority, CancellationToken ct)
+        async Task OnAcquired(string partition, CancellationToken ct)
         {
             var concurrent = Interlocked.Increment(ref concurrentHolders);
             InterlockedMax(ref maxObservedConcurrentHolders, concurrent);
@@ -360,7 +359,7 @@ public sealed class FleetPartitionRunnerTests
         // of anything that happens to "lease://portia/fleet/moving-partition".
         var runA = runnerA.RunAsync(
             ["lease://portia/fleet/stable-partition", "lease://portia/fleet/moving-partition"],
-            (partition, _, ct) => partition switch
+            (partition, ct) => partition switch
             {
                 "lease://portia/fleet/stable-partition" => CountRestartsUntilCancelled(stablePartitionRestarts, ct),
                 _ => RunUntilCancelledRecordingAcquisition(partition, movedPartitionAcquisitions, ct),
@@ -374,7 +373,7 @@ public sealed class FleetPartitionRunnerTests
         // "lease://portia/fleet/stable-partition".
         var runB = runnerB.RunAsync(
             ["lease://portia/fleet/moving-partition"],
-            (partition, _, ct) => RunUntilCancelledRecordingAcquisition(partition, movedPartitionAcquisitions, ct),
+            (partition, ct) => RunUntilCancelledRecordingAcquisition(partition, movedPartitionAcquisitions, ct),
             SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
             ctsB.Token);
 

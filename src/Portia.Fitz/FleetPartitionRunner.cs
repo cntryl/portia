@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace Cntryl.Portia;
 
 /// <summary>Assigns fixed partitions by rendezvous hashing over renewable fleet membership, then acquires each assigned lease.</summary>
-/// <param name="leases">Acquires partition fencing authority.</param>
+/// <param name="leases">Acquires partition leases.</param>
 /// <param name="membership">Owns this worker's renewable membership and inventory.</param>
 /// <param name="logger">Reports membership and partition failures and assignment changes.</param>
 /// <param name="timeProvider">Schedules reconciliation and cancellable retry backoff.</param>
@@ -21,12 +21,12 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
 
     /// <summary>Runs assigned partitions until cancellation. Every fleet worker must use the same selector, partitions, and algorithm.</summary>
     /// <param name="partitions">The fixed set of exact lease routes outside the membership area.</param>
-    /// <param name="onPartitionAcquired">Runs under a lease's fencing authority and cancellation token.</param>
+    /// <param name="onPartitionAcquired">Runs while the partition lease is held.</param>
     /// <param name="options">Membership, timing, and optional stable worker identity.</param>
     /// <param name="ct">Cancels the run.</param>
     /// <returns>The complete lifetime, including observation of all revoked work.</returns>
     public Task RunAsync(IReadOnlyCollection<string> partitions,
-        Func<string, LeaseAuthority, CancellationToken, Task> onPartitionAcquired,
+        Func<string, CancellationToken, Task> onPartitionAcquired,
         FleetRunOptions options, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -38,7 +38,7 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
 
     /// <summary>Reconciles a changing partition snapshot without restarting retained assignments.</summary>
     public Task RunAsync(Func<IReadOnlyCollection<string>> partitions,
-        Func<string, LeaseAuthority, CancellationToken, Task> onPartitionAcquired,
+        Func<string, CancellationToken, Task> onPartitionAcquired,
         FleetRunOptions options, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(partitions);
@@ -49,7 +49,7 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
             options with { WorkerId = options.WorkerId ?? Guid.NewGuid().ToString("D") }, ct);
     }
 
-    async Task RunMembershipAsync(Func<IReadOnlyCollection<string>> partitions, Func<string, LeaseAuthority, CancellationToken, Task> callback,
+    async Task RunMembershipAsync(Func<IReadOnlyCollection<string>> partitions, Func<string, CancellationToken, Task> callback,
         FleetRunOptions options, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -69,7 +69,7 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
         }
     }
 
-    async Task ReconcileAsync(Func<IReadOnlyCollection<string>> partitions, Func<string, LeaseAuthority, CancellationToken, Task> callback,
+    async Task ReconcileAsync(Func<IReadOnlyCollection<string>> partitions, Func<string, CancellationToken, Task> callback,
         FleetRunOptions options, ILeaseInventoryObserver observer, CancellationToken ct)
     {
         var active = new Dictionary<string, PartitionRun>(StringComparer.Ordinal);
@@ -152,7 +152,7 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
         return winner;
     }
 
-    async Task CompeteAsync(string partition, Func<string, LeaseAuthority, CancellationToken, Task> callback,
+    async Task CompeteAsync(string partition, Func<string, CancellationToken, Task> callback,
         ulong ttl, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -160,10 +160,10 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
             var acquired = false;
             try
             {
-                await _leases.WithLeaseAsync(partition, ttl, (authority, leaseCt) =>
+                await _leases.WithLeaseAsync(partition, ttl, leaseCt =>
                 {
                     acquired = true;
-                    return new ValueTask(callback(partition, authority, leaseCt));
+                    return new ValueTask(callback(partition, leaseCt));
                 }, new LeaseExecutionOptions { WaitForAvailability = true }, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }

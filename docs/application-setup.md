@@ -189,10 +189,10 @@ they use for reactions; Portia does not require a separate global store registra
 Register `ITenantDirectory` when any workload is per tenant. Registration and infrastructure
 setup can occur in either order, before building the host.
 
-Scoped repositories and dependencies inject infrastructure-neutral `WorkloadContext` for
-`Identity`, `Tenant`, and `FencingToken`. Durable writes must enforce the fencing token
-against expired holders. Workload cancellation alone cannot prevent a stalled process
-from attempting a late write. `FleetRunOptions.PartitionStopTimeout` defaults to 30 seconds;
+Scoped repositories and dependencies can inject infrastructure-neutral `WorkloadContext` for
+the current `Identity` and `Tenant`. Fitz holds and renews the workload lease around the complete
+projector or reactor run and cancels that run if the lease is lost.
+`FleetRunOptions.PartitionStopTimeout` defaults to 30 seconds;
 if revoked work ignores cancellation beyond it, Portia faults the runner and stops a hosted
 application instead of starting replacement work beside stale work. Checkpoints use workload name, canonical event pattern,
 and optional rebuild ID, keeping tenants and rebuild generations independent.

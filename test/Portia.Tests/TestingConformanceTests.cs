@@ -5,21 +5,6 @@ namespace Cntryl.Portia;
 /// <summary>Verifies the public backend-neutral conformance suites.</summary>
 public sealed class TestingConformanceTests
 {
-    /// <summary>A correctly fenced target passes every reusable fencing scenario.</summary>
-    [Fact]
-    public async Task ShouldAcceptProbeGivenDurableFencingSemantics() =>
-        await FencingTokenConformance.VerifyAsync(new CorrectFencingProbe());
-
-    /// <summary>A target that accepts stale writes is rejected with an actionable failure.</summary>
-    [Fact]
-    public async Task ShouldRejectProbeGivenStaleFencingWriteIsAccepted()
-    {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            FencingTokenConformance.VerifyAsync(new UnfencedProbe()).AsTask());
-
-        Assert.Contains("stale", exception.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
     /// <summary>A durable deduplication primitive executes one effect per event identity.</summary>
     [Fact]
     public async Task ShouldAcceptProbeGivenDurableConcurrentReactionDeduplication() =>
@@ -48,55 +33,6 @@ public sealed class TestingConformanceTests
             ProjectionStoreConformance.VerifyAsync(new ProjectionProbe(leakOnDispose: true)).AsTask());
 
         Assert.Contains("uncommitted", exception.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    sealed class CorrectFencingProbe : IFencingTokenConformanceProbe
-    {
-        readonly Lock _gate = new();
-        ulong _token;
-        string? _value;
-
-        public ValueTask ResetAsync(CancellationToken ct = default)
-        {
-            lock (_gate) { _token = 0; _value = null; }
-            return ValueTask.CompletedTask;
-        }
-
-        public ValueTask<FencedWriteOutcome> WriteAsync(ulong fencingToken, string value, CancellationToken ct = default)
-        {
-            lock (_gate)
-            {
-                if (fencingToken == 0 || fencingToken < _token)
-                    return ValueTask.FromResult(FencedWriteOutcome.Rejected);
-                _token = fencingToken;
-                _value = value;
-                return ValueTask.FromResult(FencedWriteOutcome.Applied);
-            }
-        }
-
-        public ValueTask<string?> ReadAsync(CancellationToken ct = default)
-        {
-            lock (_gate) return ValueTask.FromResult(_value);
-        }
-
-        public ValueTask ReopenAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
-    }
-
-    sealed class UnfencedProbe : IFencingTokenConformanceProbe
-    {
-        string? _value;
-        public ValueTask ResetAsync(CancellationToken ct = default) { _value = null; return ValueTask.CompletedTask; }
-        public ValueTask<FencedWriteOutcome> WriteAsync(ulong fencingToken, string value, CancellationToken ct = default)
-        {
-            if (fencingToken == 0)
-            {
-                return ValueTask.FromResult(FencedWriteOutcome.Rejected);
-            }
-            _value = value;
-            return ValueTask.FromResult(FencedWriteOutcome.Applied);
-        }
-        public ValueTask<string?> ReadAsync(CancellationToken ct = default) => ValueTask.FromResult(_value);
-        public ValueTask ReopenAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
     }
 
     sealed class CorrectDeduplicationProbe : IReactionDeduplicationProbe

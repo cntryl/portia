@@ -1,7 +1,7 @@
 namespace Cntryl.Portia;
 
 /// <summary>Owns an atomic projection unit of work. Disposal releases resources and discards uncommitted
-/// work; it must never commit. Implementations enforce checkpoint concurrency and ownership fencing.</summary>
+/// work; it must never commit. Implementations enforce checkpoint concurrency.</summary>
 public interface IProjectionBatch : IAsyncDisposable
 {
     /// <summary>Atomically commits repository changes and the next checkpoint. A failed response can be

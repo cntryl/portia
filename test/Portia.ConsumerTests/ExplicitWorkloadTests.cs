@@ -40,7 +40,7 @@ public sealed class ExplicitWorkloadTests
     sealed class CompletedCoordinator : IWorkloadCoordinator
     {
         public Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-            Func<WorkloadIdentity, ulong, CancellationToken, Task> run, CancellationToken ct = default) => Task.CompletedTask;
+            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     [Fact]

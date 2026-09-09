@@ -22,8 +22,9 @@ public sealed class SingleProcessWorkloadCoordinatorTests
 
         var run = coordinator.RunAsync(
             () => [new WorkloadIdentity("only")],
-            async (_, _, ct) =>
+            async (identity, ct) =>
             {
+                _ = identity;
                 _ = started.TrySetResult();
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             },
@@ -49,7 +50,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
 
         var run = coordinator.RunAsync(
             () => [.. declared.Keys],
-            async (identity, _fencingToken, ct) =>
+            async (identity, ct) =>
             {
                 running[identity.Name] = true;
                 try
@@ -81,31 +82,6 @@ public sealed class SingleProcessWorkloadCoordinatorTests
         await lifetime.CancelAsync();
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
         await WaitUntilAsync(() => !running["first"]);
-    }
-
-    /// <summary>Gives every owned workload its own non-zero fencing token.</summary>
-    [Fact]
-    public async Task ShouldIssueDistinctFencingTokensPerOwnedWorkload()
-    {
-        var coordinator = new SingleProcessWorkloadCoordinator(TimeSpan.FromMilliseconds(10));
-        var tokens = new ConcurrentDictionary<string, ulong>();
-        using var lifetime = new CancellationTokenSource();
-
-        var run = coordinator.RunAsync(
-            () => [new WorkloadIdentity("first"), new WorkloadIdentity("second")],
-            async (identity, fencingToken, ct) =>
-            {
-                tokens[identity.Name] = fencingToken;
-                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-            },
-            lifetime.Token);
-
-        await WaitUntilAsync(() => tokens.Count == 2);
-        await lifetime.CancelAsync();
-        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
-
-        Assert.All(tokens.Values, token => Assert.NotEqual(0UL, token));
-        Assert.Equal(2, tokens.Values.Distinct().Count());
     }
 
     /// <summary>

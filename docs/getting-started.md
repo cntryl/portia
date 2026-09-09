@@ -264,7 +264,7 @@ services.AddPortia()
 
 Fitz coordinates these registrations across replicas. `WorkloadScope.PerTenant` requires an
 `ITenantDirectory`; `WorkloadScope.Global` retains the component's declared realm and filters.
-See [shared application setup](application-setup.md) for application identity and fencing.
+See [shared application setup](application-setup.md) for application identity and fleet coordination.
 
 Inject ordinary application repositories into your processors. Projectors pass a repository
 implementing `IProjectionStore` into `BaseProjector` or `BaseBatchProjector`; reactors pass
@@ -309,7 +309,7 @@ services.AddPortiaFleetPartitionRunner<AccountPartitionWorkload>(
 ```
 
 `AccountPartitionWorkload` implements `IPartitionWorkload`. Each acquired lease gets its own
-scope and `LeaseAuthority`; downstream writes must enforce its fencing token. The membership
+scope and runs until Fitz reports lease loss or shutdown through cancellation. The membership
 area must not contain partition leases or unrelated leases. All workers in the fleet must use
 identical selectors and partition sets. An omitted worker ID becomes one UUIDv4 per run,
 retained across reconnects; explicit IDs must be unique among live workers.
