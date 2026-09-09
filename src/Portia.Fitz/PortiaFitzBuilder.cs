@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
@@ -134,32 +135,19 @@ public sealed class PortiaFitzBuilder
         var keys = new HashSet<string>(StringComparer.Ordinal);
         if (_workerTransports.HasFlag(RequestTransports.Callable) && SelectedRequests(RequestTransports.Callable).Any())
             AddWorker(new FitzRpcWorkerDefinition());
-        AddTransport(RequestTransports.Queuable, "queue", includeOperation: false);
-        AddTransport(RequestTransports.Notifiable, "notice", includeOperation: false);
-        AddTransport(RequestTransports.Schedulable, "schedule", includeOperation: true);
+        // Each transport supplies the definition it wants built, so a new worker kind is a new
+        // record and a line here rather than another arm in a switch over stringly-typed kinds.
+        AddTransport(RequestTransports.Queuable, FitzQueueWorkerDefinition.For);
+        AddTransport(RequestTransports.Notifiable, FitzNoticeWorkerDefinition.For);
+        AddTransport(RequestTransports.Schedulable, FitzScheduleWorkerDefinition.For);
         return workers;
 
-        void AddTransport(RequestTransports transport, string kind, bool includeOperation)
+        void AddTransport(RequestTransports transport, Func<RequestRouteAttribute, FitzWorkerDefinition> create)
         {
             if (!_workerTransports.HasFlag(transport))
                 return;
             foreach (var registration in SelectedRequests(transport))
-            {
-                var route = registration.Route;
-                AddWorker(kind switch
-                {
-                    "queue" => new FitzQueueWorkerDefinition(includeOperation
-                        ? $"{kind}://{route.Realm}/{route.Area}/{route.Resource}/{route.Operation}"
-                        : $"{kind}://{route.Realm}/{route.Area}/{route.Resource}"),
-                    "notice" => new FitzNoticeWorkerDefinition(includeOperation
-                        ? $"{kind}://{route.Realm}/{route.Area}/{route.Resource}/{route.Operation}"
-                        : $"{kind}://{route.Realm}/{route.Area}/{route.Resource}"),
-                    "schedule" => new FitzScheduleWorkerDefinition(includeOperation
-                        ? $"{kind}://{route.Realm}/{route.Area}/{route.Resource}/{route.Operation}"
-                        : $"{kind}://{route.Realm}/{route.Area}/{route.Resource}"),
-                    _ => throw new InvalidOperationException($"Unknown Fitz worker kind '{kind}'."),
-                });
-            }
+                AddWorker(create(registration.Route));
         }
 
         void AddWorker(FitzWorkerDefinition worker)
@@ -287,7 +275,7 @@ public static class PortiaFitzApplicationExtensions
             Setups.Add(application, new FitzSetup(identity, builder));
             services.TryAddSingleton<IWorkloadCoordinator>(provider => new FitzWorkloadCoordinator(
                 provider.GetRequiredService<FitzApplicationConnection>(), builder,
-                provider.GetService<Microsoft.Extensions.Logging.ILogger<FleetPartitionRunner>>(),
+                provider.GetService<ILogger<FleetPartitionRunner>>(),
                 provider.GetService<TimeProvider>()));
             _ = builder.AddEventStore().AddRequestClients();
             configure(builder);
@@ -298,10 +286,28 @@ public static class PortiaFitzApplicationExtensions
     sealed record FitzSetup(object Identity, PortiaFitzBuilder Builder);
 }
 
+/// <summary>The ambient dependencies a Fitz worker needs to build its runner.</summary>
+sealed record FitzWorkerHost(
+    Client Client,
+    IServiceScopeFactory Scopes,
+    IRequestDeserializer Serializer,
+    TimeProvider Clock,
+    ILogger<FitzRequestQueueConsumer>? QueueLogger,
+    ILogger<QueueRunner>? QueueRunnerLogger,
+    ILogger<RequestNotificationRunner>? NotificationLogger);
+
+/// <summary>
+/// One activated Fitz listener. Each kind owns its route shape, the services it requires at
+/// startup, and how it builds its own runner, so hosting enumerates definitions without asking
+/// what kind any of them is.
+/// </summary>
 abstract record FitzWorkerDefinition(string Route)
 {
     internal abstract string Key { get; }
     internal abstract IReadOnlyCollection<Type> Requirements { get; }
+
+    /// <summary>The background pass to run, or null when this kind is started elsewhere.</summary>
+    internal virtual Func<CancellationToken, Task>? CreateRunner(FitzWorkerHost host) => null;
 }
 
 sealed record FitzRpcWorkerDefinition() : FitzWorkerDefinition(string.Empty)
@@ -310,6 +316,7 @@ sealed record FitzRpcWorkerDefinition() : FitzWorkerDefinition(string.Empty)
         [typeof(IRequestBus), typeof(IRequestActorValidator), typeof(IRequestDeserializer), typeof(IRequestOutcomeSerializer)];
     internal override string Key => "rpc:";
     internal override IReadOnlyCollection<Type> Requirements => RequiredServices;
+    // RPC registration is owned by StartAsync, which must hold its handle for the host lifetime.
 }
 
 abstract record FitzRoutedWorkerDefinition(string Route, string Scheme, int SegmentCount) : FitzWorkerDefinition(Validate(Route, Scheme, SegmentCount))
@@ -318,6 +325,11 @@ abstract record FitzRoutedWorkerDefinition(string Route, string Scheme, int Segm
         [typeof(IRequestBus), typeof(IRequestActorValidator), typeof(IRequestDeserializer)];
     internal override string Key => $"{Scheme}:{Route}";
     internal override IReadOnlyCollection<Type> Requirements => RequiredServices;
+
+    /// <summary>Formats this kind's route from a request's declared segments.</summary>
+    internal static string Format(string scheme, RequestRouteAttribute route, bool includeOperation) => includeOperation
+        ? $"{scheme}://{route.Realm}/{route.Area}/{route.Resource}/{route.Operation}"
+        : $"{scheme}://{route.Realm}/{route.Area}/{route.Resource}";
 
     static string Validate(string route, string scheme, int segmentCount)
     {
@@ -328,6 +340,35 @@ abstract record FitzRoutedWorkerDefinition(string Route, string Scheme, int Segm
     }
 }
 
-sealed record FitzQueueWorkerDefinition(string Route) : FitzRoutedWorkerDefinition(Route, "queue", 3);
-sealed record FitzNoticeWorkerDefinition(string Route) : FitzRoutedWorkerDefinition(Route, "notice", 3);
-sealed record FitzScheduleWorkerDefinition(string Route) : FitzRoutedWorkerDefinition(Route, "schedule", 4);
+sealed record FitzQueueWorkerDefinition(string Route) : FitzRoutedWorkerDefinition(Route, QueueScheme, 3)
+{
+    internal const string QueueScheme = "queue";
+    internal static FitzQueueWorkerDefinition For(RequestRouteAttribute route) => new(Format(QueueScheme, route, includeOperation: false));
+
+    internal override Func<CancellationToken, Task>? CreateRunner(FitzWorkerHost host) =>
+        new QueueRunner(
+            new FitzRequestQueueConsumer(host.Client.Queue, host.Serializer, Route, timeProvider: host.Clock, logger: host.QueueLogger),
+            new DependencyInjectionQueueDeliveryScopeFactory(host.Scopes), host.QueueRunnerLogger).RunAsync;
+}
+
+sealed record FitzNoticeWorkerDefinition(string Route) : FitzRoutedWorkerDefinition(Route, NoticeScheme, 3)
+{
+    internal const string NoticeScheme = "notice";
+    internal static FitzNoticeWorkerDefinition For(RequestRouteAttribute route) => new(Format(NoticeScheme, route, includeOperation: false));
+
+    internal override Func<CancellationToken, Task>? CreateRunner(FitzWorkerHost host) =>
+        new RequestNotificationRunner(
+            new FitzNoticeRequestConsumer(host.Client.Notice, host.Serializer, Route),
+            new DependencyInjectionRequestDeliveryScopeFactory(host.Scopes), host.NotificationLogger).RunAsync;
+}
+
+sealed record FitzScheduleWorkerDefinition(string Route) : FitzRoutedWorkerDefinition(Route, ScheduleScheme, 4)
+{
+    internal const string ScheduleScheme = "schedule";
+    internal static FitzScheduleWorkerDefinition For(RequestRouteAttribute route) => new(Format(ScheduleScheme, route, includeOperation: true));
+
+    internal override Func<CancellationToken, Task>? CreateRunner(FitzWorkerHost host) =>
+        new RequestNotificationRunner(
+            new FitzScheduledRequestConsumer(host.Client.Schedule, host.Serializer, Route),
+            new DependencyInjectionRequestDeliveryScopeFactory(host.Scopes), host.NotificationLogger).RunAsync;
+}

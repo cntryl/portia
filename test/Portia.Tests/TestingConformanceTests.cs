@@ -35,6 +35,48 @@ public sealed class TestingConformanceTests
         Assert.Contains("uncommitted", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>The in-memory event store honors ordering, offsets, and stream concurrency.</summary>
+    [Fact]
+    public async Task ShouldAcceptProbeGivenConformantEventStore() =>
+        await EventStoreConformance.VerifyAsync(new EventStoreProbe(enforceExpectedPosition: true));
+
+    /// <summary>A store that accepts a stale append is rejected.</summary>
+    [Fact]
+    public async Task ShouldRejectProbeGivenEventStoreIgnoresExpectedStreamPosition()
+    {
+        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
+            EventStoreConformance.VerifyAsync(new EventStoreProbe(enforceExpectedPosition: false)).AsTask());
+
+        Assert.Contains("stale append", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    sealed class EventStoreProbe(bool enforceExpectedPosition) : IEventStoreConformanceProbe
+    {
+        InMemoryEventStore _store = new();
+        public string Realm => "portia-conformance";
+        public string Area => "event-store";
+        public ValueTask ResetAsync(CancellationToken ct = default) { _store = new InMemoryEventStore(); return ValueTask.CompletedTask; }
+        public ValueTask<IEventStore> OpenAsync(CancellationToken ct = default) => ValueTask.FromResult<IEventStore>(
+            enforceExpectedPosition ? _store : new PermissiveEventStore(_store));
+    }
+
+    // Drops the optimistic-concurrency check the suite exists to prove, so the negative test
+    // shows the suite fails a store that would silently lose a concurrent writer's events.
+    sealed class PermissiveEventStore(InMemoryEventStore inner) : IEventStore
+    {
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0, CancellationToken ct = default)
+            => inner.ReadAsync(stream, fromOffset, ct);
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0, CancellationToken ct = default)
+            => inner.ReadAsync(pattern, fromOffset, ct);
+        public async ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
+            IReadOnlyList<DomainEvent> events, CancellationToken ct = default)
+        {
+            var actual = 0UL;
+            await foreach (var _ in inner.ReadAsync(stream, 0, ct)) actual++;
+            await inner.AppendAsync(stream, actual, events, ct);
+        }
+    }
+
     sealed class CorrectDeduplicationProbe : IReactionDeduplicationProbe
     {
         readonly ConcurrentDictionary<Uuid, byte> _seen = new();

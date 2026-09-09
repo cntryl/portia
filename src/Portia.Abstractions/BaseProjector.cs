@@ -1,6 +1,19 @@
 namespace Cntryl.Portia;
 
-/// <summary>Projects individual events, atomically committing each event's changes and checkpoint.</summary>
+/// <summary>
+/// Projects individual events, atomically committing each event's changes and checkpoint.
+///
+/// <para>A projector is a pure function of events into its own <see cref="IProjectionStore" />:
+/// its writes and its checkpoint share one transaction, so any effect it causes outside that
+/// transaction is repeated on every failed commit and every rebuild. Dispatching a request,
+/// calling a remote service, publishing, or enqueuing belongs in <see cref="BaseReactor" />,
+/// which is checkpointed separately for exactly that reason. <c>PORTIA100</c> warns when a
+/// projector takes a dependency capable of causing an effect.</para>
+///
+/// <para>Driving a projector is Portia's job: the members a runner needs are internal, so
+/// <c>ProjectorRunner</c> is the only implementation of that role. Subclass this to write a
+/// projector; do not expect to write an alternative runner.</para>
+/// </summary>
 public abstract class BaseProjector
 {
     WorkloadIdentity? _boundIdentity;

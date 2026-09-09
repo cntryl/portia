@@ -94,6 +94,56 @@ public sealed class RequestNotificationRunnerTests
         Assert.Equal(2, handler.LastValue);
     }
 
+    /// <summary>
+    /// Verifies that both delivery paths report the same transport. The trusted-system-actor
+    /// branch (a fired durable schedule) and the token-carrying branch label the same hop, so a
+    /// hardcoded name in one of them would make the reported transport depend on which
+    /// authentication path a delivery happened to take.
+    /// </summary>
+    [Fact]
+    public async Task ShouldReportInvocationTransportOnBothDeliveryPaths()
+    {
+        // The listener is process-wide and other tests dispatch concurrently, so capture is
+        // thread-safe and narrowed to the schedule transport, which only this test produces.
+        var transports = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var listener = new System.Diagnostics.ActivityListener
+        {
+            ShouldListenTo = source => source.Name == PortiaTelemetry.SourceName,
+            Sample = SampleAllData,
+            ActivityStopped = activity =>
+            {
+                if (activity.OperationName == PortiaTelemetry.ProcessActivityName
+                    && activity.GetTagItem("messaging.system") is string transport
+                    && transport == "schedule")
+                {
+                    transports.Enqueue(transport);
+                }
+            },
+        };
+        System.Diagnostics.ActivitySource.AddActivityListener(listener);
+
+        var handler = new ChangeValueHandler();
+        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        var schedule = new ScheduleInvocation("schedule://test/work/item/run");
+        var consumer = new FakeRequestNotificationConsumer([
+            new RequestNotification(new ChangeValue(1), ActorToken: null, Metadata: RequestMetadata.Create(),
+                Invocation: schedule, Actor: RequestActor.System),
+            new RequestNotification(new ChangeValue(2), ActorToken: "valid-token", Metadata: RequestMetadata.Create(),
+                Invocation: schedule),
+        ]);
+        var runner = new RequestNotificationRunner(consumer,
+            RequestDeliveryScopes.Fixed(busHost.Bus, new TestRequestActorValidator()));
+
+        await runner.RunAsync();
+
+        Assert.Equal(2, handler.LastValue);
+        Assert.Equal([schedule.TransportName, schedule.TransportName], [.. transports]);
+    }
+
+    static System.Diagnostics.ActivitySamplingResult SampleAllData(
+        ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> options)
+        => System.Diagnostics.ActivitySamplingResult.AllData;
+
     sealed class FakeRequestNotificationConsumer(IReadOnlyList<RequestNotification> items) : IRequestNotificationConsumer
     {
         public async IAsyncEnumerable<RequestNotification> ReadAsync(

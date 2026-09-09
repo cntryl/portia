@@ -36,6 +36,13 @@ chooses a different convention or adds converters.
 Reference `Portia.DependencyInjection` in each assembly that registers handlers, authorizers, pipeline behaviors,
 or routed requests. The generator and interceptor configuration arrive with that package.
 
+Registration calls are rewritten at the call site, so each one must appear literally where you
+compose the application. They cannot be wrapped in a helper that takes the component as a type
+parameter, passed as a delegate, or invoked through reflection — the generator has no call site
+to intercept in those forms, and the call throws at startup (`PORTIA019` catches the shapes it
+can see at compile time). Grouping registrations in an ordinary extension method is fine; it is
+only forwarding the *generic argument* that does not work.
+
 Select handlers, authorizers, and pipeline behaviors through the stable generic methods
 `AddRequestHandler<T>()`, `AddRequestAuthorizer<T>()`, and `AddRequestPipelineBehavior<T>(order)`.
 The generator replaces each call
@@ -107,6 +114,15 @@ request or request-family interface. Lower orders are outermost; registration or
 An authorization failure never enters the behavior chain. Every behavior must either return a
 fully initialized `Result` or call its typed `nextHandler`; Portia names the responsible behavior
 or handler when an uninitialized result crosses the framework boundary.
+
+Behaviors are where cross-cutting concerns belong: a transaction or unit of work around the
+handler, an idempotency check, retry, caching, flushing an outbox, or logging that needs the
+outcome as well as the input. Anything that must run *after* the handler has no other home —
+`IRequestAuthorizer` runs before it and can only permit or deny. A behavior matched to a
+request-family interface applies to every request in that family, so the concern is written once
+rather than repeated per handler. A behavior selected by scope but unable to serve the dispatched
+shape — a no-result behavior reached through a result-bearing dispatch — is skipped, not an
+error.
 
 ```csharp
 services.AddPortia()

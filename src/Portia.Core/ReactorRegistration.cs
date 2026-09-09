@@ -29,6 +29,7 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
         {
             options.Validate();
             var reactor = services.GetRequiredService<TReactor>();
+            WorkloadBinding.Apply(services, reactor.BindWorkload);
             var checkpoint = await reactor.Checkpoints.LoadAsync(
                 new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
             _ = await services.GetRequiredService<ReactorRunner>().RunAsync(
@@ -36,6 +37,10 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
         });
 
     Type IWorkloadDescriptor.ComponentType => ReactorType;
+    // Reaction effects are not transactional with progress, so a reactor has no separate
+    // generation to build into; a rebuild would re-fire every effect.
+    bool IWorkloadDescriptor.SupportsRebuild => false;
+    void IWorkloadDescriptor.Register(IServiceCollection services) => _ = services.AddSingleton(this);
     void IWorkloadDescriptor.Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName)
         => _resolve(services).BindWorkload(identity, componentName);
     EventStreamPattern IWorkloadDescriptor.Pattern(IServiceProvider services) => _resolve(services).Pattern;

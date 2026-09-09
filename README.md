@@ -139,7 +139,7 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
 | `Portia.Fitz` | Fitz-backed transports: RPC send/receive, queue publish/consume, notice/schedule notifications, `FitzEventStore`, and `FleetPartitionRunner` (fleet distribution via Fitz leases). |
 | `Portia.Jwt` | A JWT-backed `IRequestActorValidator` — re-validates a request's carried actor token, no ASP.NET Core dependency. |
 | `Portia.DependencyInjection` | Composes the application with fluent `AddPortia()` and activates its workers with `AddWorkers()`, which runs every declared projector and reactor under one hosted service. |
-| `Portia.Testing` | Testing utilities for downstream apps: aggregate scenarios, in-memory stores, actor/permission doubles, and backend-neutral projection and reaction-deduplication conformance suites. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
+| `Portia.Testing` | Testing utilities for downstream apps: aggregate scenarios, in-memory stores, actor/permission doubles, and backend-neutral event-store, projection, and reaction-deduplication conformance suites. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
 
 ## Core concepts, briefly
 
@@ -205,8 +205,11 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   partition lease for the complete projector or reactor run and cancels it when ownership is lost.
   Hosted workloads implement `ITenantWorkload` or `IPartitionWorkload`; each active tenant or
   held lease receives its own dependency-injection scope, which is disposed when that run stops.
-- **Observability**: `PortiaTelemetry.ActivitySource` (`"Cntryl.Portia"`) traces every dispatch,
-  wired once at the bus. Every background runner (`QueueRunner`, `RequestNotificationRunner`,
+- **Observability**: `PortiaTelemetry.ActivitySource` (`"Cntryl.Portia"`) traces every dispatch.
+  An inbound activity names the delivery's shape (`http`, `rpc`, `queue`, `notice`, `schedule`,
+  `local`), supplied by `RequestInvocation.TransportName`; outbound send activities inside an
+  adapter name the adapter. These consumer-side names changed — see the [changelog](CHANGELOG.md).
+  Tracing is wired once at the bus. Every background runner (`QueueRunner`, `RequestNotificationRunner`,
   `MultiTenantRunner`, `FleetPartitionRunner`) also accepts an optional `ILogger<TSelf>` —
   supply one directly, or configure `Microsoft.Extensions.Logging` with at least one provider
   before DI constructs the runner. A bare `ServiceCollection` registration does not provide a

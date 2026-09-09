@@ -40,7 +40,9 @@ public sealed record WorkloadRegistration
         ExplicitName = options.Name;
         Name = options.Name ?? descriptor.ComponentType.FullName ?? descriptor.ComponentType.Name;
         ArgumentException.ThrowIfNullOrWhiteSpace(Name);
-        if (descriptor is ReactorRegistration && options.Processing.RebuildId is not null)
+        // Asked of the descriptor rather than tested against a known descriptor type, so a
+        // component kind added later answers for itself instead of silently gaining rebuilds.
+        if (!descriptor.SupportsRebuild && options.Processing.RebuildId is not null)
             throw new ArgumentException("Reactors do not support projection rebuild generations.", nameof(configure));
         Descriptor = descriptor;
         ComponentType = descriptor.ComponentType;

@@ -185,23 +185,21 @@ public sealed class PortiaBuilder
     public PortiaBuilder AddReactor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TReactor>(WorkloadScope scope, Action<WorkloadOptions>? configure = null)
         where TReactor : BaseReactor
     {
-        var descriptor = ReactorRegistration.Create<TReactor>();
-        var registration = new WorkloadRegistration(descriptor, scope, configure);
+        var registration = new WorkloadRegistration(ReactorRegistration.Create<TReactor>(), scope, configure);
         Services.TryAddScoped<TReactor>();
-        return AddWorkload(registration, reactor: descriptor);
+        return AddWorkload(registration);
     }
 
     /// <summary>Registers one projector with an explicitly selected execution scope.</summary>
     public PortiaBuilder AddProjector<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProjector>(WorkloadScope scope, Action<WorkloadOptions>? configure = null)
         where TProjector : BaseProjector
     {
-        var descriptor = ProjectorRegistration.Create<TProjector>();
-        var registration = new WorkloadRegistration(descriptor, scope, configure);
+        var registration = new WorkloadRegistration(ProjectorRegistration.Create<TProjector>(), scope, configure);
         Services.TryAddScoped<TProjector>();
-        return AddWorkload(registration, descriptor);
+        return AddWorkload(registration);
     }
 
-    PortiaBuilder AddWorkload(WorkloadRegistration registration, ProjectorRegistration? descriptor = null, ReactorRegistration? reactor = null)
+    PortiaBuilder AddWorkload(WorkloadRegistration registration)
     {
         if (registration.ComponentType.IsAbstract || registration.ComponentType.ContainsGenericParameters)
             throw new ArgumentException("Register a concrete, closed component type.", nameof(registration));
@@ -212,19 +210,10 @@ public sealed class PortiaBuilder
         }
         if (_catalog.WorkloadNames.TryGetValue(registration.Name, out var owner) && owner != registration.ComponentType)
             throw new InvalidOperationException($"Conflicting workload registration '{registration.Name}'.");
-        // The descriptor may already have been registered by hand, so a miss in the builder's own
-        // set still has to check the collection — once per component, not once per call.
-        if (descriptor is not null)
-        {
-            if (_catalog.ProjectorDescriptors.Add(registration.ComponentType))
-            {
-                _ = Services.AddSingleton(descriptor);
-            }
-        }
-        else if (_catalog.ReactorDescriptors.Add(registration.ComponentType))
-        {
-            _ = Services.AddSingleton(reactor ?? throw new InvalidOperationException("A generated reactor resolver is required."));
-        }
+        // The descriptor registers itself under its own concrete type, so the builder never has
+        // to know which kinds of component exist.
+        if (_catalog.ComponentDescriptors.Add(registration.ComponentType))
+            registration.Descriptor.Register(Services);
         var workloadDescriptor = ServiceDescriptor.Singleton(registration);
         Services.Add(workloadDescriptor);
         _catalog.Workloads[registration.ComponentType] = registration;
@@ -277,13 +266,16 @@ public sealed class PortiaBuilder
 public static class PortiaApplicationServiceCollectionExtensions
 {
     static readonly ConditionalWeakTable<IServiceCollection, PortiaBuilder> Builders = [];
+    // A private gate, not the caller's IServiceCollection: locking a public object another
+    // library may also lock is how unrelated registration code ends up contending.
+    static readonly Lock Gate = new();
 
     /// <summary>Creates or resumes the application's fluent Portia composition root.</summary>
     public static PortiaBuilder AddPortia(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
         PortiaBuilder builder;
-        lock (services)
+        lock (Gate)
         {
             if (!Builders.TryGetValue(services, out builder!))
             {

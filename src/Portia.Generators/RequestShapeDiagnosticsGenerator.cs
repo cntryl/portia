@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Cntryl.Portia;
 
-/// <summary>Reports unsupported handler and authorizer declarations before registration generation.</summary>
+/// <summary>Reports unsupported component declarations before registration generation.</summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class RequestShapeDiagnosticsGenerator : IIncrementalGenerator
 {
@@ -17,11 +17,11 @@ public sealed class RequestShapeDiagnosticsGenerator : IIncrementalGenerator
         {
             if (symbol is null || symbol.IsAbstract || GeneratedTypeShape.IsSupported(symbol))
                 return;
-            if (symbol.AllInterfaces.Any(iface => iface.ContainingNamespace.ToDisplayString() == "Cntryl.Portia"
-                && (iface.Name == "IRequestHandler" || iface.Name == "IStreamRequestHandler" || iface.Name == "IRequestAuthorizer")))
-            {
+            // Every role, from the shared list — a role added to the pipeline but not to this
+            // check would silently lose its PORTIA015 diagnostic, which is what happened to
+            // pipeline behaviors when they were introduced.
+            if (PortiaComponentRoles.IsComponent(symbol))
                 output.ReportDiagnostic(Diagnostic.Create(GeneratedTypeShape.Unsupported, symbol.Locations.FirstOrDefault(), symbol.ToDisplayString()));
-            }
         });
     }
 }

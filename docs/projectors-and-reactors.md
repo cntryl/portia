@@ -10,16 +10,38 @@ application operations and the contract Portia needs to manage progress.
 | `BaseReactor` | One event | Checkpoint after the reaction succeeds |
 | `BaseBatchReactor` | Bounded batch | Checkpoint after all reactions in the batch succeed |
 
+## Projectors are pure
+
+A projector's writes and its checkpoint commit in one transaction, so anything it does outside
+that transaction happens again on every failed commit and every rebuild. A projector reads events
+and writes its own projection; nothing else. Sending a command, calling an HTTP API, publishing a
+notice, or enqueuing work belongs in a reactor, which exists precisely because those effects
+cannot share the projection's transaction. `PORTIA100` warns when a projector takes a dependency
+that can cause one.
+
+That is also why `IProjectorContext` carries checkpoint identity and rebuild metadata and nothing
+else, and why application dependencies arrive through the constructor.
+
 ## Constructor-injected repository
 
+The projector receives its repository. Keep the framework contract off the application interface
+and put both on the class, so a caller that only wants `GetBalanceAsync` does not also depend on
+`LoadCheckpointAsync` and `BeginAsync`:
+
 ```csharp
-public interface IAccountRepository : IProjectionStore
+public interface IAccountRepository
 {
     ValueTask IncrementBalanceAsync(Uuid accountId, int amount, CancellationToken ct);
+    ValueTask<int> GetBalanceAsync(Uuid accountId, CancellationToken ct);
 }
 
-public sealed partial class AccountProjector(IAccountRepository accounts)
-    : BaseBatchProjector(accounts, EventStreamPattern.ForPattern("accounts", "balances")),
+public sealed class AccountRepository : IAccountRepository, IProjectionStore
+{
+    // One class, one connection, one unit of work; two interfaces, two audiences.
+}
+
+public sealed partial class AccountProjector(IAccountRepository accounts, IProjectionStore store)
+    : BaseBatchProjector(store, EventStreamPattern.ForPattern("accounts", "balances")),
       IProjectorHandler<MoneyDeposited>
 {
     public ValueTask HandleAsync(
@@ -29,10 +51,21 @@ public sealed partial class AccountProjector(IAccountRepository accounts)
 ```
 
 ```csharp
-services.AddScoped<IAccountRepository, AccountRepository>();
+services.AddScoped<AccountRepository>();
+services.AddScoped<IAccountRepository>(sp => sp.GetRequiredService<AccountRepository>());
+services.AddScoped<IProjectionStore>(sp => sp.GetRequiredService<AccountRepository>());
 services.AddPortia()
     .AddProjector<AccountProjector>(WorkloadScope.PerTenant);
 ```
+
+Both interfaces must resolve to the *same scoped instance*, which is what makes the projector's
+writes and its checkpoint share one unit of work — hence the two forwarding registrations rather
+than two independent ones.
+
+For a small projection with no other reader, `interface IAccountRepository : IProjectionStore`
+and a single registration is a reasonable shortcut. It stops being one as soon as anything else
+consumes the repository: every such caller then depends on the checkpoint API, and every test
+double for it has to implement `BeginAsync`.
 
 `Portia.DependencyInjection` supplies the generator for typed dispatch.
 `IProjectorContext` contains checkpoint identity and rebuild metadata, never application
@@ -127,13 +160,13 @@ Call an injected integration service directly when the action is inherently caus
 and adding a request contract would add no useful application boundary:
 
 ```csharp
-public interface IAccountReactions : IProjectionCheckpointStore
+public interface IAccountReactions
 {
     ValueTask SendReceiptAsync(MoneyDeposited ev, IExecutionContext context, CancellationToken ct);
 }
 
-public sealed partial class AccountReactor(IAccountReactions accounts)
-    : BaseBatchReactor(accounts, EventStreamPattern.ForPattern("accounts", "balances")),
+public sealed partial class AccountReactor(IAccountReactions accounts, IProjectionCheckpointStore checkpoints)
+    : BaseBatchReactor(checkpoints, EventStreamPattern.ForPattern("accounts", "balances")),
       IBatchReactorHandler<MoneyDeposited>
 {
     public async ValueTask HandleAsync(
@@ -145,9 +178,9 @@ public sealed partial class AccountReactor(IAccountReactions accounts)
 }
 ```
 
-Register `IAccountReactions` through ordinary scoped DI and the reactor through
-`portia.AddReactor<AccountReactor>(WorkloadScope.PerTenant)`. No separate framework checkpoint
-registration is required when that application dependency implements the contract.
+Register `IAccountReactions` and `IProjectionCheckpointStore` through ordinary scoped DI and the
+reactor through `portia.AddReactor<AccountReactor>(WorkloadScope.PerTenant)`. One class may
+implement both; forward the two registrations to the same scoped instance as above when it does.
 
 Every event retains its own system execution identity and causation. Do not use the
 first event's context for the whole batch. Checkpoints advance only after processing
@@ -183,6 +216,8 @@ and ambiguous commit responses against the chosen backend.
 
 - `ProjectionStoreConformance` verifies atomic data/checkpoint commits, rollback, optimistic
   conflicts, authoritative reloads, and rebuild isolation.
+- `EventStoreConformance` verifies append ordering, offset resumption, and that a stale append
+  fails with `EventStreamConcurrencyException` and writes nothing.
 - `ReactionDeduplicationConformance` verifies an optional application deduplication primitive.
   It cannot prove crash atomicity between an external effect and its bookkeeping; use an
   idempotent sink or an integration-specific transactional inbox/outbox when that guarantee is

@@ -5,6 +5,13 @@ namespace Cntryl.Portia;
 /// unrecognized (unexpected, infrastructure-level) failure is a plain exception, not a
 /// <see cref="Result" /> — this type exists for failures a handler anticipates as part of its
 /// normal contract.
+///
+/// <para><c>default(Result)</c> is deliberately not a valid value: it is neither success nor a
+/// described failure, and every member throws rather than guess which. Silently treating a
+/// forgotten <c>return</c> as success would be unsafe, and treating it as an undescribed failure
+/// would hide the bug — so the framework fails loudly instead, and names the handler, pipeline
+/// behavior, or authorizer responsible when an uninitialized result crosses its boundary.
+/// Always produce one through <see cref="Success" /> or <see cref="Failure" />.</para>
 /// </summary>
 public readonly struct Result
 {
@@ -58,6 +65,10 @@ public readonly struct Result
 /// expected failure. An unrecognized (unexpected, infrastructure-level) failure is a plain
 /// exception, not a <see cref="Result{T}" /> — this type exists for failures a handler
 /// anticipates as part of its normal contract.
+///
+/// <para><c>default(Result{T})</c> is deliberately not a valid value, for the reasons given on
+/// <see cref="Result" />. Always produce one through <see cref="Success" /> or
+/// <see cref="Failure" />.</para>
 /// </summary>
 /// <typeparam name="T">The type of the value produced on success.</typeparam>
 public readonly struct Result<T>

@@ -38,8 +38,11 @@ public sealed class RequestNotificationRunner(IRequestNotificationConsumer consu
                 {
                     if (delivered.Invocation is not ScheduleInvocation || !RequestActor.IsSystem(actor))
                         throw new InvalidOperationException("Only fired schedules may supply a trusted system actor.");
-                    using var process = PortiaTelemetry.StartProcess(delivered.Request.GetType().Name, "fitz.schedule",
-                        delivered.TraceContext, linked: true);
+                    // Same transport label as the token-carrying branch below, which reads it from
+                    // the invocation through RequestDispatch — a fired schedule must not report a
+                    // different transport depending on which authentication path delivered it.
+                    using var process = PortiaTelemetry.StartProcess(delivered.Request.GetType().Name,
+                        delivered.Invocation.TransportName, delivered.TraceContext, linked: true);
                     _ = await scope.Bus.DispatchAsync(delivered.Request,
                         new RequestDispatchContext(actor, delivered.Invocation, delivered.Metadata,
                             scope.TimeProvider), ct).ConfigureAwait(false);

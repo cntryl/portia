@@ -54,4 +54,95 @@ public sealed class GeneratorDiagnosticsTests
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA024");
     }
 
+    [Fact]
+    public void HandlerCatchAllReturningFailedResultHasActionableDiagnostic()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+            using Cntryl.Portia;
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+            public sealed record Request : IRequest;
+            public sealed class Handler : IRequestHandler<Request>
+            {
+                public async ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct)
+                {
+                    try { await Task.Yield(); return Result.Success; }
+                    catch (Exception) { return Result.Failure(new(RequestErrorKind.Internal, "failed")); }
+                }
+            }
+            """, new ComponentPracticeGenerator());
+
+        _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
+    }
+
+    [Fact]
+    public void Portia104IgnoresCatchesOutsideImplementedHandlerMethods()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+            using Cntryl.Portia;
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+            public sealed record Request : IRequest;
+            public sealed class Handler : IRequestHandler<Request>
+            {
+                public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct) =>
+                    ValueTask.FromResult(Result.Success);
+
+                public Result Helper()
+                {
+                    try { throw new InvalidOperationException(); }
+                    catch (Exception) { return Result.Failure(new(RequestErrorKind.Internal, "failed")); }
+                }
+
+                private sealed class Nested
+                {
+                    public Result Helper()
+                    {
+                        try { throw new InvalidOperationException(); }
+                        catch (Exception) { return Result.Failure(new(RequestErrorKind.Internal, "failed")); }
+                    }
+                }
+            }
+            """, new ComponentPracticeGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
+    }
+
+    [Fact]
+    public void Portia104UsesSemanticExceptionAndResultTypes()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+            using Cntryl.Portia;
+            using System.Threading;
+            using System.Threading.Tasks;
+            public sealed record Request : IRequest;
+            public sealed class Exception : System.Exception;
+            public static class ResultFactory
+            {
+                public static Result Failure(RequestError error) => Result.Failure(error);
+            }
+            public sealed class Handler : IRequestHandler<Request>
+            {
+                public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct)
+                {
+                    try { throw new Exception(); }
+                    catch (Exception) { return ValueTask.FromResult(Result.Failure(new(RequestErrorKind.Internal, "expected"))); }
+                }
+            }
+            public sealed record OtherRequest : IRequest;
+            public sealed class OtherHandler : IRequestHandler<OtherRequest>
+            {
+                public ValueTask<Result> HandleAsync(IRequestContext<OtherRequest> context, CancellationToken ct)
+                {
+                    try { throw new System.Exception(); }
+                    catch (System.Exception) { return ValueTask.FromResult(ResultFactory.Failure(new(RequestErrorKind.Internal, "failed"))); }
+                }
+            }
+            """, new ComponentPracticeGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
+    }
+
 }

@@ -10,6 +10,32 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     readonly FitzBrokerFixture _broker = broker;
 
     /// <summary>
+    /// Runs the public event-store conformance suite against the real broker, so FitzEventStore
+    /// is held to the same contract a third-party adapter would be — in particular that a stale
+    /// append surfaces as EventStreamConcurrencyException and writes nothing.
+    /// </summary>
+    [Fact]
+    public async Task ShouldSatisfyEventStoreConformanceAgainstRealFitzBroker()
+    {
+        await using var client = await _broker.CreateClientAsync();
+        await EventStoreConformance.VerifyAsync(new FitzEventStoreProbe(client));
+    }
+
+    sealed class FitzEventStoreProbe(Fitz.Client client) : IEventStoreConformanceProbe
+    {
+        public string Realm => "portia-integration";
+
+        /// <summary>A fresh area per run, so isolation needs no destructive broker operation.</summary>
+        public string Area { get; } = "conformance-" + Uuid.CreateVersion4();
+
+        public ValueTask ResetAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
+
+        public ValueTask<IEventStore> OpenAsync(CancellationToken ct = default) => ValueTask.FromResult<IEventStore>(
+            new FitzEventStore(client.Stream, TestJson.DomainSerializer(
+                new DomainEventTypeCatalog().Register<ConformanceEvent>(1, "portia.conformance.event"))));
+    }
+
+    /// <summary>
     /// Verifies that a Portia domain event survives an append/read round trip through Fitz.
     /// </summary>
     [Fact]

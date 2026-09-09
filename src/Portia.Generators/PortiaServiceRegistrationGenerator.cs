@@ -55,7 +55,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         var components = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => node is Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax,
-                static (syntaxContext, _) => RegistrationComponentDiscovery.GetHandlerOrAuthorizerTypeName(syntaxContext))
+                static (syntaxContext, _) => RegistrationComponentDiscovery.GetComponentTypeName(syntaxContext))
             .Where(static component => component is not null)
             .Select(static (component, _) => component!)
             .Collect();

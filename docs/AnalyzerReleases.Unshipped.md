@@ -22,3 +22,8 @@ PORTIA023 | Portia | Error | Domain-event discriminator name and version pairs m
 PORTIA024 | Portia | Error | Declared request route segments must be safe single segments
 PORTIA026 | Portia | Error | Optional HTTP route tokens must use query parameters or separate endpoints
 PORTIA027 | Portia | Error | Visible Portia HTTP mappings must have unique camel-cased operation IDs
+PORTIA100 | Portia | Warning | Projectors must not take a dispatch or effect dependency
+PORTIA101 | Portia | Warning | Portia components must not resolve services from the container
+PORTIA102 | Portia | Warning | Aggregates must not depend on services
+PORTIA103 | Portia | Warning | A type should handle only one request
+PORTIA104 | Portia | Warning | Unexpected failures must stay exceptions, not become a failed Result

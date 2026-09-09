@@ -49,8 +49,7 @@ public static class RequestDispatch
         ArgumentNullException.ThrowIfNull(bus);
         ArgumentNullException.ThrowIfNull(request);
 
-        var transport = Transport(invocation);
-        using var process = PortiaTelemetry.StartProcess(request.GetType().Name, transport, traceContext, invocation is ScheduleInvocation);
+        using var process = PortiaTelemetry.StartProcess(request.GetType().Name, invocation.TransportName, traceContext, invocation is ScheduleInvocation);
         var actorResult = await actorValidator.ValidateAsync(actorToken, ct).ConfigureAwait(false);
 
         return actorResult is not { IsSuccess: true, Value: { } actor }
@@ -89,8 +88,7 @@ public static class RequestDispatch
         ArgumentNullException.ThrowIfNull(bus);
         ArgumentNullException.ThrowIfNull(request);
 
-        var transport = Transport(invocation);
-        using var process = PortiaTelemetry.StartProcess(request.GetType().Name, transport, traceContext, invocation is ScheduleInvocation);
+        using var process = PortiaTelemetry.StartProcess(request.GetType().Name, invocation.TransportName, traceContext, invocation is ScheduleInvocation);
         var actorResult = await actorValidator.ValidateAsync(actorToken, ct).ConfigureAwait(false);
 
         return actorResult is not { IsSuccess: true, Value: { } actor }
@@ -99,6 +97,4 @@ public static class RequestDispatch
                 await bus.DispatchAsync(request, new RequestDispatchContext(actor, invocation, metadata, timeProvider), ct).ConfigureAwait(false),
                 WasDispatched: true);
     }
-
-    static string Transport(RequestInvocation invocation) => invocation.TransportName;
 }

@@ -6,18 +6,12 @@ namespace Cntryl.Portia;
 /// <summary>Discovers component type names that contribute generated registration methods.</summary>
 static class RegistrationComponentDiscovery
 {
-    public static string? GetHandlerOrAuthorizerTypeName(GeneratorSyntaxContext context)
+    /// <summary>Gets the fully qualified name of a handler, authorizer, or pipeline behavior.</summary>
+    public static string? GetComponentTypeName(GeneratorSyntaxContext context)
         => context.Node is ClassDeclarationSyntax declaration
         && context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol { IsAbstract: false } symbol
         && GeneratedTypeShape.IsSupported(symbol)
-        && symbol.AllInterfaces.Any(IsHandlerOrAuthorizer)
+        && PortiaComponentRoles.IsComponent(symbol)
             ? symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
             : null;
-
-    static bool IsHandlerOrAuthorizer(INamedTypeSymbol iface) =>
-        iface.OriginalDefinition.ContainingNamespace.ToDisplayString() == "Cntryl.Portia"
-        && iface.OriginalDefinition.MetadataName is "IRequestHandler`1"
-            or "IRequestHandler`2"
-            or "IStreamRequestHandler`2"
-            or "IRequestAuthorizer`1";
 }

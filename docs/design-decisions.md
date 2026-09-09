@@ -10,6 +10,15 @@ batch bases select a configured bound. This avoids separate correctness paths wh
 explicit commit boundary. Generated dispatch and processor tests enforce ordering and checkpoint
 behavior. Applications choose a batch size based on how many backend operations each event causes.
 
+## Projectors are pure; reactors cause effects
+
+A projector's writes and its checkpoint commit atomically, so an effect it causes outside that
+transaction is repeated on every failed commit and every rebuild generation. A projector
+therefore reads events and writes its own projection and nothing else: no command dispatch, no
+HTTP call, no publish, no enqueue. Reactors exist for exactly the effects that cannot join the
+projection transaction, and are checkpointed separately because of it. `PORTIA100` warns when a
+projector takes a dependency capable of causing an effect.
+
 ## Reactors model effects, not only commands
 
 A reaction may dispatch a command or invoke an integration gateway directly. Commands are the
@@ -58,5 +67,5 @@ aggregate snapshots.
 
 The normal test suite covers in-process contracts, public consumers, reflection-disabled JSON,
 and Fitz integration through Docker Compose. `Portia.Testing` provides reusable conformance suites
-for application persistence. A backend or platform scenario that did not run is unverified, never
+for application persistence and for `IEventStore` itself. A backend or platform scenario that did not run is unverified, never
 reported as passing. See [scope](scope.md) for the current support boundary.

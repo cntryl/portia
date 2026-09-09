@@ -74,6 +74,30 @@ public sealed partial class RequestPipelineBehaviorTests
         Assert.Contains(typeof(InvalidPipelineHandler).FullName!, error.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A behavior selected by scope but unable to serve the dispatched request's shape is
+    /// skipped. Scope matching is assignability only, so a request implementing both a no-result
+    /// family interface and <see cref="IRequest{TOut}" /> reaches a no-result behavior through a
+    /// result-bearing dispatch it cannot handle.
+    /// </summary>
+    [Fact]
+    public async Task ShouldSkipBehaviorsThatCannotServeTheDispatchedShape()
+    {
+        var calls = new List<string>();
+        var services = Services(calls);
+        _ = services.AddSingleton<MixedShapeHandler>();
+        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<MixedShape, MixedShapeHandler, int>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(new RequestPipelineBehaviorRegistration<IBehaviorRequest, OuterBehavior>(0));
+        using var provider = services.BuildServiceProvider();
+
+        var bus = provider.GetRequiredService<IRequestBus>();
+        var result = await bus.DispatchAsync<int>(new MixedShape(), bus.CreateContext(RequestActor.System));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(7, result.Value);
+        Assert.Empty(calls);
+    }
+
     /// <summary>Built-in and custom invocations expose bounded transport names.</summary>
     [Fact]
     public void ShouldExposeStableBuiltInAndCustomTransportNames()
@@ -119,6 +143,7 @@ public sealed partial class RequestPipelineBehaviorTests
     internal sealed record PipelineQuery : IRequest<int>;
     internal sealed record PipelineStream : IStreamRequest<int>;
     internal sealed record InvalidPipelineAction : IRequest;
+    internal sealed record MixedShape : IRequest<int>, IBehaviorRequest;
     internal sealed record CustomInvocation : RequestInvocation { public override string TransportName => "custom"; }
 
     internal sealed class PipelineActionHandler(List<string> calls) : IRequestHandler<PipelineAction>
@@ -137,6 +162,12 @@ public sealed partial class RequestPipelineBehaviorTests
     {
         public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context, [EnumeratorCancellation] CancellationToken ct)
         { yield return 1; await Task.Yield(); yield return 2; }
+    }
+
+    internal sealed class MixedShapeHandler : IRequestHandler<MixedShape, int>
+    {
+        public ValueTask<Result<int>> HandleAsync(IRequestContext<MixedShape> context, CancellationToken ct)
+            => ValueTask.FromResult(Result<int>.Success(7));
     }
 
     internal sealed class InvalidPipelineHandler : IRequestHandler<InvalidPipelineAction>

@@ -6,12 +6,16 @@ namespace Cntryl.Portia;
 /// <c>PortiaBuilder.AddProjector</c>; applications do not construct it.</summary>
 public sealed class ProjectorRegistration : IWorkloadDescriptor
 {
+    readonly Func<IServiceProvider, BaseProjector> _resolve;
+
     ProjectorRegistration(
         Type projectorType,
+        Func<IServiceProvider, BaseProjector> resolve,
         Func<ProjectorRunner, IServiceProvider, ProjectionCheckpoint, ProjectionRunOptions?, CancellationToken, ValueTask<ProjectionCheckpoint>> run,
         Func<IServiceProvider, ProjectionRunOptions?, CancellationToken, ValueTask> runPass)
     {
         ProjectorType = projectorType;
+        _resolve = resolve;
         Run = run;
         RunPass = runPass;
     }
@@ -19,22 +23,14 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
     /// <summary>Gets the concrete projector type.</summary>
     public Type ProjectorType { get; }
 
+    /// <summary>Resolves the projector in the supplied application scope.</summary>
+    public BaseProjector Resolve(IServiceProvider services) => _resolve(services);
+
     /// <summary>Resolves and runs the projector from an explicit checkpoint.</summary>
     public Func<ProjectorRunner, IServiceProvider, ProjectionCheckpoint, ProjectionRunOptions?, CancellationToken, ValueTask<ProjectionCheckpoint>> Run { get; }
 
     /// <summary>Loads authoritative progress and runs one pass in the supplied scope.</summary>
     public Func<IServiceProvider, ProjectionRunOptions?, CancellationToken, ValueTask> RunPass { get; }
-
-    Type IWorkloadDescriptor.ComponentType => ProjectorType;
-
-    void IWorkloadDescriptor.Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName)
-        => services.GetRequiredService(ProjectorType).AsProjector().BindWorkload(identity, componentName);
-
-    EventStreamPattern IWorkloadDescriptor.Pattern(IServiceProvider services)
-        => services.GetRequiredService(ProjectorType).AsProjector().Pattern;
-
-    ValueTask IWorkloadDescriptor.RunPass(IServiceProvider services, ProjectionRunOptions options, CancellationToken ct)
-        => RunPass(services, options, ct);
 
     /// <summary>
     /// Creates a typed descriptor. This is a pure factory with no container side effects — to
@@ -47,21 +43,45 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
     public static ProjectorRegistration Create<TProjector>()
         where TProjector : BaseProjector => new(
             typeof(TProjector),
+            static services => services.GetRequiredService<TProjector>(),
             static (runner, services, checkpoint, options, ct) =>
                 runner.RunAsync(services.GetRequiredService<TProjector>(), checkpoint, options, ct),
             static async (services, options, ct) =>
             {
                 (options ?? ProjectionRunOptions.Default).Validate();
                 var projector = services.GetRequiredService<TProjector>();
-                if (services.GetService<WorkloadContext>() is { IsInitialized: true } workload)
-                    projector.BindWorkload(workload.Identity, workload.ComponentName);
+                WorkloadBinding.Apply(services, projector.BindWorkload);
                 var checkpoint = await projector.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern, options?.RebuildId), ct).ConfigureAwait(false);
                 _ = await services.GetRequiredService<ProjectorRunner>()
                     .RunAsync(projector, checkpoint, options, ct).ConfigureAwait(false);
             });
+
+    Type IWorkloadDescriptor.ComponentType => ProjectorType;
+
+    bool IWorkloadDescriptor.SupportsRebuild => true;
+
+    void IWorkloadDescriptor.Register(IServiceCollection services) => _ = services.AddSingleton(this);
+
+    void IWorkloadDescriptor.Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName)
+        => _resolve(services).BindWorkload(identity, componentName);
+
+    EventStreamPattern IWorkloadDescriptor.Pattern(IServiceProvider services) => _resolve(services).Pattern;
+
+    ValueTask IWorkloadDescriptor.RunPass(IServiceProvider services, ProjectionRunOptions options, CancellationToken ct)
+        => RunPass(services, options, ct);
 }
 
-static class ProjectorDescriptorExtensions
+/// <summary>
+/// Binds a component to the workload its scope belongs to. Hosting binds explicitly through
+/// <c>IWorkloadDescriptor.Bind</c> before reading a pattern; this covers the public
+/// <c>RunPass</c> entry points an application can drive itself, so both descriptor kinds behave
+/// the same way when called directly. Re-binding the same identity is a no-op.
+/// </summary>
+static class WorkloadBinding
 {
-    internal static BaseProjector AsProjector(this object value) => (BaseProjector)value;
+    public static void Apply(IServiceProvider services, Action<WorkloadIdentity, string?> bind)
+    {
+        if (services.GetService<WorkloadContext>() is { IsInitialized: true } workload)
+            bind(workload.Identity, workload.ComponentName);
+    }
 }

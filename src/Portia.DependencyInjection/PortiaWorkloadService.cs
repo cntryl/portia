@@ -13,7 +13,8 @@ sealed partial class PortiaWorkloadService(
     IWorkloadCoordinator? workloadCoordinator = null,
     IDomainEventNotifier? notifier = null,
     TimeProvider? timeProvider = null,
-    ILogger<PortiaWorkloadService>? logger = null) : BackgroundService, IHostedLifecycleService
+    ILogger<PortiaWorkloadService>? logger = null,
+    ILogger<MultiTenantRunner>? tenantLogger = null) : BackgroundService, IHostedLifecycleService
 {
     readonly WorkloadRegistration[] _registrations = [.. registrations];
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
@@ -50,7 +51,7 @@ sealed partial class PortiaWorkloadService(
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         var perTenant = _registrations.Where(item => item.Scope == WorkloadScope.PerTenant).ToArray();
         var tenants = perTenant.Length == 0 ? Task.Delay(Timeout.InfiniteTimeSpan, lifetime.Token)
-            : new MultiTenantRunner(tenantDirectory!, timeProvider: _clock).RunAsync(
+            : new MultiTenantRunner(tenantDirectory!, tenantLogger, timeProvider: _clock).RunAsync(
                 async (tenant, ct) =>
                 {
                     var identities = perTenant.Select(item => new WorkloadIdentity(item.Name, tenant)).ToArray();

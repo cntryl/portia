@@ -64,27 +64,14 @@ sealed class FitzApplicationWorkers(
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var client = connection.Client;
+        // Each definition builds its own runner, so a worker kind added later is hosted here
+        // without an arm to add — and cannot silently fall into another kind's branch.
+        var host = new FitzWorkerHost(connection.Client, scopes, serializer, _clock, queueLogger, runnerLogger, notificationLogger);
         var tasks = new List<Task>();
         foreach (var worker in _workers)
         {
-            if (worker is FitzRpcWorkerDefinition) continue;
-            if (worker is FitzQueueWorkerDefinition)
-            {
-                var runner = new QueueRunner(new FitzRequestQueueConsumer(client.Queue, serializer, worker.Route,
-                    timeProvider: _clock, logger: queueLogger),
-                    new DependencyInjectionQueueDeliveryScopeFactory(scopes), runnerLogger);
-                tasks.Add(RetryAsync(worker.Route, runner.RunAsync, TimeSpan.FromSeconds(1), stoppingToken));
-            }
-            else
-            {
-                IRequestNotificationConsumer consumer = worker is FitzNoticeWorkerDefinition
-                    ? new FitzNoticeRequestConsumer(client.Notice, serializer, worker.Route)
-                    : new FitzScheduledRequestConsumer(client.Schedule, serializer, worker.Route);
-                var runner = new RequestNotificationRunner(consumer,
-                    new DependencyInjectionRequestDeliveryScopeFactory(scopes), notificationLogger);
-                tasks.Add(RetryAsync(worker.Route, runner.RunAsync, TimeSpan.FromSeconds(1), stoppingToken));
-            }
+            if (worker.CreateRunner(host) is { } run)
+                tasks.Add(RetryAsync(worker.Route, run, TimeSpan.FromSeconds(1), stoppingToken));
         }
         return Task.WhenAll(tasks);
     }

@@ -116,13 +116,12 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 : new Call(location, role, null, "the event needs a valid Discriminator attribute", invocation.GetLocation());
         }
 
-        var interfaces = type.AllInterfaces.Where(i => i.OriginalDefinition.ContainingNamespace.ToDisplayString() == "Cntryl.Portia").ToArray();
+        var interfaces = type.AllInterfaces.Where(i => i.OriginalDefinition.ContainingNamespace.ToDisplayString() == PortiaComponentRoles.Namespace).ToArray();
         var selected = interfaces.Where(i => role switch
         {
-            "handler" => i.OriginalDefinition.MetadataName is "IRequestHandler`1" or "IRequestHandler`2" or "IStreamRequestHandler`2",
-            "authorizer" => i.OriginalDefinition.MetadataName == "IRequestAuthorizer`1",
-            "behavior" => i.OriginalDefinition.MetadataName is "IRequestPipelineBehavior`1" or "IRequestPipelineBehavior`2" or "IStreamRequestPipelineBehavior`2",
-            "request" => false,
+            "handler" => PortiaComponentRoles.Is(i, PortiaComponentRoles.Handler),
+            "authorizer" => PortiaComponentRoles.Is(i, PortiaComponentRoles.Authorizer),
+            "behavior" => PortiaComponentRoles.Is(i, PortiaComponentRoles.Behavior),
             _ => false,
         }).ToArray();
 

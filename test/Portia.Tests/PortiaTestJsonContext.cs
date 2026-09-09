@@ -27,6 +27,8 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(SerializerTestRequest))]
 [JsonSerializable(typeof(SerializerTestUuidRequest))]
 [JsonSerializable(typeof(RequestEnvelopeContextTests.EnvelopeCommand))]
+[JsonSerializable(typeof(RequestPipelineBehaviorTests.MixedShape))]
+[JsonSerializable(typeof(ConformanceEvent))]
 [JsonSerializable(typeof(TenantDeregistered))]
 [JsonSerializable(typeof(TenantRegistered))]
 [JsonSerializable(typeof(FitzHostedRequest))]

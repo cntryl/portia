@@ -54,3 +54,17 @@ Event 1001 records fleet assignment lifecycle at Information, 1002 records swall
 - Active work: `portia_request_active`, `portia_workload_active`, and `portia_fleet_assignment_active`
 
 Exporter-specific name normalization varies; verify final names in the selected backend.
+
+## Transport names
+
+An inbound activity or metric names the *shape* of the delivery — `http`, `rpc`, `queue`,
+`notice`, `schedule`, or `local` for an in-process call — supplied by the invocation itself
+through `RequestInvocation.TransportName`. A custom transport supplies its own by deriving from
+`RequestInvocation`; keep the value low-cardinality, since it is a metric tag.
+
+Outbound `portia.request.send` activities are raised inside the adapter doing the sending and name
+that adapter (`fitz.queue`, `fitz.rpc`, and so on). The asymmetry is deliberate: a producer knows
+which technology it is using, while a consumer is describing the shape of what arrived and must
+report the same value regardless of which adapter delivered it.
+
+These names changed in the current unreleased version; see the [changelog](../CHANGELOG.md).

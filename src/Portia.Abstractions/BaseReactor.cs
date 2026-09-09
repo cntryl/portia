@@ -1,7 +1,14 @@
 namespace Cntryl.Portia;
 
-/// <summary>Reacts to individual events and saves progress after each successful reaction.
-/// Effects and progress are not atomic; reactions must tolerate replay.</summary>
+/// <summary>
+/// Reacts to individual events and saves progress after each successful reaction. Effects and
+/// progress are not atomic; reactions must tolerate replay.
+///
+/// <para>This is where effects belong — a command dispatch, an integration call, a publish —
+/// because they cannot join a projection's transaction. Driving a reactor is Portia's job: the
+/// members a runner needs are internal, so <c>ReactorRunner</c> is the only implementation of
+/// that role.</para>
+/// </summary>
 public abstract class BaseReactor
 {
     WorkloadIdentity? _boundIdentity;

@@ -1,4 +1,14 @@
+using System.Collections.Concurrent;
+
 namespace Cntryl.Portia;
+
+/// <summary>The authorizers and behaviors that apply to one concrete request type.</summary>
+/// <param name="Authorizers">Applicable authorizers, ascending by stage.</param>
+/// <param name="BehaviorsInnermostFirst">Applicable behaviors, descending by order, so wrapping
+/// them in sequence leaves the lowest order outermost.</param>
+sealed record RequestPolicies(
+    RequestAuthorizerRegistration[] Authorizers,
+    RequestPipelineBehaviorRegistration[] BehaviorsInnermostFirst);
 
 /// <summary>Composes generated descriptors without resolving any application components.</summary>
 public sealed class RequestRegistry
@@ -6,6 +16,9 @@ public sealed class RequestRegistry
     readonly Dictionary<Type, RequestHandlerRegistration> _handlers = [];
     readonly RequestAuthorizerRegistration[] _authorizers;
     readonly RequestPipelineBehaviorRegistration[] _behaviors;
+    // Registrations are fixed for the life of the process, so the applicable set for a request
+    // type is computed once instead of re-filtered and re-allocated on every dispatch.
+    readonly ConcurrentDictionary<Type, RequestPolicies> _policies = new();
 
     /// <summary>Creates the registry and rejects conflicting registrations.</summary>
     /// <param name="handlers">Generated handler descriptors.</param>
@@ -28,6 +41,8 @@ public sealed class RequestRegistry
             if (group.Select(registration => registration.Stage).Distinct().Skip(1).Any())
                 throw new InvalidOperationException($"Authorizer '{group.Key.AuthorizerType}' has conflicting stages.");
         }
+        // RequestBus relies on this ordering to split principal-stage policies from the rest
+        // around the declarative permission check; do not remove the sort without changing it.
         _authorizers = [.. policies
             .DistinctBy(registration => (registration.ScopeType, registration.AuthorizerType))
             .OrderBy(registration => registration.Stage)];
@@ -44,9 +59,7 @@ public sealed class RequestRegistry
     internal RequestHandlerRegistration Handler(Type requestType) => _handlers.TryGetValue(requestType, out var registration)
         ? registration : throw new InvalidOperationException($"No handler is registered for request type '{requestType}'.");
 
-    internal IEnumerable<RequestAuthorizerRegistration> Authorizers(Type requestType) =>
-        _authorizers.Where(registration => registration.ScopeType.IsAssignableFrom(requestType));
-
-    internal RequestPipelineBehaviorRegistration[] Behaviors(Type requestType) =>
-        [.. _behaviors.Where(registration => registration.ScopeType.IsAssignableFrom(requestType))];
+    internal RequestPolicies Policies(Type requestType) => _policies.GetOrAdd(requestType, static (type, registry) => new RequestPolicies(
+        [.. registry._authorizers.Where(registration => registration.ScopeType.IsAssignableFrom(type))],
+        [.. registry._behaviors.Where(registration => registration.ScopeType.IsAssignableFrom(type)).Reverse()]), this);
 }
