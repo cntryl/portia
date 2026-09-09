@@ -17,7 +17,7 @@ current, deliberate boundary.
 - Reactor effects are at-least-once by design. Applications must make their reaction effects
   idempotent.
 - Portia does not currently ship Postgres, SQL Server, Redis, or other durable persistence
-  adapters. `Portia.Testing` supplies backend-neutral projection, fencing, and optional reaction
+  adapters. `Portia.Testing` supplies backend-neutral projection and optional reaction
   deduplication conformance suites so application implementations can prove the required
   invariants until official adapters arrive.
 

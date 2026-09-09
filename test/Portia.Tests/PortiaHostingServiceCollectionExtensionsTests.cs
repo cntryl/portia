@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Cntryl.Fitz.Abstractions.Domains.Lease;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -341,9 +340,9 @@ sealed class StuckPartitionWorkload : IPartitionWorkload
 
     public Task Started => _started.Task;
 
-    public Task RunAsync(string partition, LeaseAuthority authority, CancellationToken ct)
+    public Task RunAsync(string partition, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(partition) || authority.FencingToken == 0 || !ct.CanBeCanceled)
+        if (string.IsNullOrWhiteSpace(partition) || !ct.CanBeCanceled)
             throw new InvalidOperationException("The hosted workload did not receive lease-scoped state.");
         _started.SetResult();
         return _release.Task;
@@ -410,7 +409,7 @@ sealed class HostingPartitionWorkload(HostingWorkloadState state) : IPartitionWo
     readonly Guid _instanceId = Guid.NewGuid();
     string? _partition;
 
-    public async Task RunAsync(string partition, LeaseAuthority authority, CancellationToken ct)
+    public async Task RunAsync(string partition, CancellationToken ct)
     {
         _partition = partition;
         state.StartedPartitions.Enqueue(partition);

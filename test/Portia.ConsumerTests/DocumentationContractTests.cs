@@ -19,6 +19,17 @@ public sealed partial class DocumentationContractTests
     ];
 
     [Fact]
+    public void WorkloadContractsExposeLeaseLifetimeWithoutPortiaFencingProtocol()
+    {
+        Assert.Null(typeof(WorkloadContext).GetProperty("FencingToken"));
+        Assert.DoesNotContain(typeof(WorkloadContext).Assembly.GetExportedTypes(),
+            type => type.Name.Contains("Fencing", StringComparison.Ordinal));
+        Assert.Equal([typeof(string), typeof(CancellationToken)],
+            typeof(IPartitionWorkload).GetMethod(nameof(IPartitionWorkload.RunAsync))!
+                .GetParameters().Select(parameter => parameter.ParameterType));
+    }
+
+    [Fact]
     public void MaintainedMarkdownHasValidLocalLinks()
     {
         foreach (var relative in Maintained)
@@ -76,7 +87,6 @@ public sealed partial class DocumentationContractTests
             "T:Cntryl.Portia.FleetPartitionTerminationTimeoutException",
             "P:Cntryl.Portia.FleetRunOptions.PartitionStopTimeout");
         AssertXmlMembers("Portia.Testing",
-            "T:Cntryl.Portia.FencingTokenConformance",
             "T:Cntryl.Portia.ProjectionStoreConformance",
             "T:Cntryl.Portia.ReactionDeduplicationConformance",
             "T:Cntryl.Portia.ConformanceViolationException");

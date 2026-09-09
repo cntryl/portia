@@ -68,7 +68,6 @@ public sealed class MixedWorkloadTests
         Assert.Contains(scopes.Items, item => item.Identity.Name == "summary" && item.Identity.Tenant is null);
         Assert.Contains(scopes.Items, item => item.Identity.Name == "accounts" && item.Identity.Tenant == new TenantId("alpha"));
         Assert.Contains(scopes.Items, item => item.Identity.Name == "reaction" && item.Identity.Tenant == new TenantId("beta"));
-        Assert.All(scopes.Items, item => Assert.Equal(42UL, item.FencingToken));
         Assert.Empty(coordinator.Active);
         Assert.All(host.Services.GetRequiredService<ConsumerHost.Effects>().Scopes.Values, Assert.True);
     }
@@ -117,7 +116,7 @@ public sealed class MixedWorkloadTests
         public ConcurrentDictionary<WorkloadIdentity, bool> Active { get; } = new();
         public ConcurrentDictionary<WorkloadIdentity, int> Starts { get; } = new();
         public async Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-            Func<WorkloadIdentity, ulong, CancellationToken, Task> run, CancellationToken ct = default)
+            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
         {
             var runs = new Dictionary<WorkloadIdentity, (CancellationTokenSource Cancellation, Task Task)>();
             async Task Stop(WorkloadIdentity id)
@@ -142,7 +141,7 @@ public sealed class MixedWorkloadTests
                         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
                         _ = Starts.AddOrUpdate(id, 1, (_, n) => n + 1);
                         Active[id] = true;
-                        runs.Add(id, (cancellation, run(id, 42, cancellation.Token)));
+                        runs.Add(id, (cancellation, run(id, cancellation.Token)));
                     }
                     await Task.Delay(10, ct);
                 }

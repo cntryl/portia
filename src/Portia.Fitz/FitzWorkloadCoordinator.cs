@@ -9,7 +9,7 @@ sealed class FitzWorkloadCoordinator(FitzApplicationConnection connection, Porti
     static readonly Uuid NamespaceId = Uuid.Parse("c41f6c39-9c25-4f7f-b8b0-fce08b5ccfc4");
 
     public async Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-        Func<WorkloadIdentity, ulong, CancellationToken, Task> run, CancellationToken ct = default)
+        Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
     {
         await connection.StartAsync(ct).ConfigureAwait(false);
         var options = configuration.Fleet ?? new FleetRunOptions { MembershipSelector = "lease://portia/portia-members/*" };
@@ -25,8 +25,8 @@ sealed class FitzWorkloadCoordinator(FitzApplicationConnection connection, Porti
         }
         var fleet = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(connection.Client.Lease),
             new FitzFleetMembership(connection.Client.Lease), logger, clock);
-        await fleet.RunAsync(Snapshot, (route, authority, token) =>
+        await fleet.RunAsync(Snapshot, (route, token) =>
             Volatile.Read(ref current).TryGetValue(route, out var identity)
-                ? run(identity, authority.FencingToken, token) : Task.CompletedTask, options, ct).ConfigureAwait(false);
+                ? run(identity, token) : Task.CompletedTask, options, ct).ConfigureAwait(false);
     }
 }

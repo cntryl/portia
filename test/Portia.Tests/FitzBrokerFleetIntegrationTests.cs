@@ -26,7 +26,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
 
         var run = runner.RunAsync(
             [partition],
-            async (_, _, ct) =>
+            async (_, ct) =>
             {
                 // TTL is 2s; this callback runs for 6s — more than 2 renewal cycles. If Fitz
                 // were not actually renewing the lease behind the scenes, WithLeaseAsync would
@@ -80,8 +80,9 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
         using var holderCts = new CancellationTokenSource();
         var holderRun = holderRunner.RunAsync(
             [partition],
-            (_, _, ct) =>
+            (route, ct) =>
             {
+                _ = route;
                 _ = holderAcquired.TrySetResult();
                 return Task.Delay(Timeout.InfiniteTimeSpan, ct);
             },
@@ -94,8 +95,9 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
         using var waiterCts = new CancellationTokenSource();
         var waiterRun = waiterRunner.RunAsync(
             [partition],
-            (_, _, ct) =>
+            (route, ct) =>
             {
+                _ = route;
                 _ = waiterAcquired.TrySetResult();
                 return Task.Delay(Timeout.InfiniteTimeSpan, ct);
             },

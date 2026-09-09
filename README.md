@@ -134,7 +134,7 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
 | `Portia.Fitz` | Fitz-backed transports: RPC send/receive, queue publish/consume, notice/schedule notifications, `FitzEventStore`, and `FleetPartitionRunner` (fleet distribution via Fitz leases). |
 | `Portia.Jwt` | A JWT-backed `IRequestActorValidator` — re-validates a request's carried actor token, no ASP.NET Core dependency. |
 | `Portia.DependencyInjection` | Composes the application with fluent `AddPortia()` and activates its workers with `AddWorkers()`, which runs every declared projector and reactor under one hosted service. |
-| `Portia.Testing` | Testing utilities for downstream apps: aggregate scenarios, in-memory stores, actor/permission doubles, and backend-neutral projection, fencing, and reaction-deduplication conformance suites. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
+| `Portia.Testing` | Testing utilities for downstream apps: aggregate scenarios, in-memory stores, actor/permission doubles, and backend-neutral projection and reaction-deduplication conformance suites. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
 
 ## Core concepts, briefly
 
@@ -193,8 +193,8 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   reconcile an authoritative inventory, relinquish revoked assignments, and compete only for
   assigned partition leases. Membership uses a dedicated `lease://realm/area/*` selector.
   All workers must share the selector, partition set, and assignment algorithm. Hashing minimizes
-  movement but does not guarantee equal partition counts. Downstream writes must enforce fencing
-  against expired holders.
+  movement but does not guarantee equal partition counts. Fitz holds and renews each assigned
+  partition lease for the complete projector or reactor run and cancels it when ownership is lost.
   Hosted workloads implement `ITenantWorkload` or `IPartitionWorkload`; each active tenant or
   held lease receives its own dependency-injection scope, which is disposed when that run stops.
 - **Observability**: `PortiaTelemetry.ActivitySource` (`"Cntryl.Portia"`) traces every dispatch,

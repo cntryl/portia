@@ -20,7 +20,6 @@ public sealed class InMemoryLeaseClient : IPartitionLeaseCompetitor
 {
     readonly Dictionary<string, SemaphoreSlim> _locks = [];
     readonly HashSet<string> _acquisitionFailures = [];
-    ulong _nextFencingToken;
 
     /// <summary>
     /// Gets, in order, every route that successfully acquired its lease.
@@ -43,7 +42,7 @@ public sealed class InMemoryLeaseClient : IPartitionLeaseCompetitor
     public async Task WithLeaseAsync(
         string route,
         ulong ttlSecs,
-        Func<LeaseAuthority, CancellationToken, ValueTask> callback,
+        Func<CancellationToken, ValueTask> callback,
         LeaseExecutionOptions? options = null,
         CancellationToken ct = default)
     {
@@ -52,17 +51,15 @@ public sealed class InMemoryLeaseClient : IPartitionLeaseCompetitor
 
         try
         {
-            LeaseAuthority authority;
             lock (_locks)
             {
                 if (_acquisitionFailures.Remove(route))
                     throw new InvalidOperationException($"Simulated: '{route}' is still held by another owner.");
-                authority = new LeaseAuthority(++_nextFencingToken);
             }
             lock (Acquisitions)
                 Acquisitions.Add(route);
 
-            await callback(authority, ct).ConfigureAwait(false);
+            await callback(ct).ConfigureAwait(false);
         }
         finally
         {

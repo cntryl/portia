@@ -23,7 +23,7 @@ public interface IPartitionLeaseCompetitor
     Task WithLeaseAsync(
         string route,
         ulong ttlSecs,
-        Func<LeaseAuthority, CancellationToken, ValueTask> callback,
+        Func<CancellationToken, ValueTask> callback,
         LeaseExecutionOptions? options = null,
         CancellationToken ct = default);
 }

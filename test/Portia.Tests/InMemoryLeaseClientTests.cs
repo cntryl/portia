@@ -21,10 +21,9 @@ public sealed class InMemoryLeaseClientTests
         var leases = new InMemoryLeaseClient();
         var ran = false;
 
-        await leases.WithLeaseAsync("lease://portia/fleet/p", ttlSecs: 30, (authority, _) =>
+        await leases.WithLeaseAsync("lease://portia/fleet/p", ttlSecs: 30, _ =>
         {
             ran = true;
-            Assert.True(authority.FencingToken > 0);
             return ValueTask.CompletedTask;
         });
 

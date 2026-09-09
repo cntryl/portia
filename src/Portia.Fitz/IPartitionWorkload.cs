@@ -1,5 +1,3 @@
-using Cntryl.Fitz.Abstractions.Domains.Lease;
-
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -13,8 +11,7 @@ public interface IPartitionWorkload
     /// Runs the component while this process owns <paramref name="partition" />.
     /// </summary>
     /// <param name="partition">The acquired partition route.</param>
-    /// <param name="authority">The lease authority and fencing token.</param>
     /// <param name="ct">Cancelled when the lease is lost or the host shuts down.</param>
     /// <returns>A task representing the lease-scoped run.</returns>
-    Task RunAsync(string partition, LeaseAuthority authority, CancellationToken ct);
+    Task RunAsync(string partition, CancellationToken ct);
 }

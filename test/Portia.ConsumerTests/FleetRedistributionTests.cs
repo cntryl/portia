@@ -44,7 +44,6 @@ public sealed class FleetRedistributionTests
             membership.Observer.Set("a");
             await Until(() => state.Active.Count == 8);
             Assert.Equal(13, state.Starts);
-            Assert.All(state.Authorities, authority => Assert.True(authority.FencingToken > 0));
         }
         finally
         {
@@ -62,8 +61,9 @@ public sealed class FleetRedistributionTests
         membership.Observer.Set("a");
         var active = 0;
         using var cancellation = new CancellationTokenSource();
-        var run = new FleetPartitionRunner(new InMemoryLeaseClient(), membership).RunAsync(Partitions, async (_, _, ct) =>
+        var run = new FleetPartitionRunner(new InMemoryLeaseClient(), membership).RunAsync(Partitions, async (partition, ct) =>
         {
+            _ = partition;
             _ = Interlocked.Increment(ref active);
             try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
             finally { _ = Interlocked.Decrement(ref active); }
@@ -108,7 +108,7 @@ public sealed class FleetRedistributionTests
         var leases = new CapturingLeases();
         using var cancellation = new CancellationTokenSource();
         var run = new FleetPartitionRunner(leases, membership, timeProvider: clock).RunAsync([Partitions[0]],
-            (_, _, ct) => Task.Delay(Timeout.InfiniteTimeSpan, ct), Options with { WorkerId = null, LeaseTtl = TimeSpan.FromMilliseconds(milliseconds) }, cancellation.Token);
+            (_, ct) => Task.Delay(Timeout.InfiniteTimeSpan, ct), Options with { WorkerId = null, LeaseTtl = TimeSpan.FromMilliseconds(milliseconds) }, cancellation.Token);
         try
         {
             Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
@@ -134,8 +134,9 @@ public sealed class FleetRedistributionTests
         var active = 0;
         using var cancellation = new CancellationTokenSource();
         var run = new FleetPartitionRunner(new InMemoryLeaseClient(), membership, timeProvider: clock).RunAsync(Partitions,
-            async (_, _, ct) =>
+            async (partition, ct) =>
             {
+                _ = partition;
                 _ = Interlocked.Increment(ref active);
                 try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
                 finally { _ = Interlocked.Decrement(ref active); }
@@ -162,11 +163,11 @@ public sealed class FleetRedistributionTests
     sealed class CapturingLeases : IPartitionLeaseCompetitor
     {
         public ulong Ttl { get; private set; }
-        public async Task WithLeaseAsync(string route, ulong ttlSecs, Func<LeaseAuthority, CancellationToken, ValueTask> callback,
+        public async Task WithLeaseAsync(string route, ulong ttlSecs, Func<CancellationToken, ValueTask> callback,
             LeaseExecutionOptions? options = null, CancellationToken ct = default)
         {
             Ttl = ttlSecs;
-            await callback(new LeaseAuthority(123), ct);
+            await callback(ct);
         }
     }
 
@@ -181,7 +182,6 @@ public sealed class FleetRedistributionTests
     {
         public ConcurrentDictionary<string, Guid> Active { get; } = new();
         public ConcurrentBag<Guid> Disposed { get; } = [];
-        public ConcurrentBag<LeaseAuthority> Authorities { get; } = [];
         int _starts;
         public int Starts => Volatile.Read(ref _starts);
         public void Started() => Interlocked.Increment(ref _starts);
@@ -189,10 +189,9 @@ public sealed class FleetRedistributionTests
     public sealed class Workload(State state) : IPartitionWorkload, IDisposable
     {
         readonly Guid _id = Guid.NewGuid();
-        public async Task RunAsync(string partition, LeaseAuthority authority, CancellationToken ct)
+        public async Task RunAsync(string partition, CancellationToken ct)
         {
             state.Started();
-            state.Authorities.Add(authority);
             Assert.True(state.Active.TryAdd(partition, _id));
             try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
             finally { _ = state.Active.TryRemove(partition, out _); }
