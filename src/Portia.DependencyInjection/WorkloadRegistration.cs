@@ -25,8 +25,7 @@ public sealed class WorkloadOptions
 public sealed record WorkloadRegistration
 {
     internal WorkloadRegistration(
-        Type componentType,
-        bool projector,
+        IWorkloadDescriptor descriptor,
         WorkloadScope scope,
         Action<WorkloadOptions>? configure)
     {
@@ -39,20 +38,19 @@ public sealed record WorkloadRegistration
         ArgumentNullException.ThrowIfNull(options.Processing);
         options.Processing.Validate();
         ExplicitName = options.Name;
-        Name = options.Name ?? componentType.FullName ?? componentType.Name;
+        Name = options.Name ?? descriptor.ComponentType.FullName ?? descriptor.ComponentType.Name;
         ArgumentException.ThrowIfNullOrWhiteSpace(Name);
-        if (!projector && options.Processing.RebuildId is not null)
+        if (descriptor is ReactorRegistration && options.Processing.RebuildId is not null)
             throw new ArgumentException("Reactors do not support projection rebuild generations.", nameof(configure));
-        ComponentType = componentType;
-        IsProjector = projector;
+        Descriptor = descriptor;
+        ComponentType = descriptor.ComponentType;
         PollInterval = options.PollInterval;
         Processing = options.Processing;
     }
 
     /// <summary>Gets the explicitly selected component type.</summary>
     public Type ComponentType { get; }
-    /// <summary>Gets whether the component is a projector.</summary>
-    public bool IsProjector { get; }
+    internal IWorkloadDescriptor Descriptor { get; }
     /// <summary>Gets the execution scope.</summary>
     public WorkloadScope Scope { get; }
     /// <summary>Gets the stable logical name used to coordinate ownership of this workload.</summary>

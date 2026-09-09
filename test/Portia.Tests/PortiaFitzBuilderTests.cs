@@ -77,7 +77,7 @@ public sealed class PortiaFitzBuilderTests
         _ = fitz.UseFleet(new FleetRunOptions { MembershipSelector = "lease://app/members/*" });
 
         Assert.Equal(
-            [new FitzWorkerDefinition("rpc", ""), new FitzWorkerDefinition("queue", "queue://app/accounts/*")],
+            [new FitzRpcWorkerDefinition(), new FitzQueueWorkerDefinition("queue://app/accounts/*")],
             fitz.Workers);
     }
 
@@ -112,10 +112,10 @@ public sealed class PortiaFitzBuilderTests
 
         Assert.Equal(
             [
-                new FitzWorkerDefinition("rpc", ""),
-                new FitzWorkerDefinition("queue", "queue://app/accounts/*"),
-                new FitzWorkerDefinition("notice", "notice://app/accounts/*"),
-                new FitzWorkerDefinition("schedule", "schedule://app/accounts/*/run"),
+                new FitzRpcWorkerDefinition(),
+                new FitzQueueWorkerDefinition("queue://app/accounts/*"),
+                new FitzNoticeWorkerDefinition("notice://app/accounts/*"),
+                new FitzScheduleWorkerDefinition("schedule://app/accounts/*/run"),
             ],
             fitz.Workers);
     }
@@ -132,7 +132,7 @@ public sealed class PortiaFitzBuilderTests
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
         _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Queuable));
 
-        Assert.Equal([new FitzWorkerDefinition("queue", "queue://app/accounts/*")], fitz.Workers);
+        Assert.Equal([new FitzQueueWorkerDefinition("queue://app/accounts/*")], fitz.Workers);
     }
 
     /// <summary>A deployment can activate one transport kind without repeating request types.</summary>
@@ -147,7 +147,7 @@ public sealed class PortiaFitzBuilderTests
 
         _ = fitz.AddQueueWorkers();
 
-        Assert.Equal([new FitzWorkerDefinition("queue", "queue://app/accounts/*")], fitz.Workers);
+        Assert.Equal([new FitzQueueWorkerDefinition("queue://app/accounts/*")], fitz.Workers);
     }
 
     /// <summary>Transport-specific selectors compose after the first one narrows the default.</summary>
@@ -164,7 +164,7 @@ public sealed class PortiaFitzBuilderTests
         _ = fitz.AddQueueWorkers().AddNoticeWorkers();
 
         Assert.Equal(
-            [new FitzWorkerDefinition("queue", "queue://app/accounts/*"), new FitzWorkerDefinition("notice", "notice://app/accounts/*")],
+            [new FitzQueueWorkerDefinition("queue://app/accounts/*"), new FitzNoticeWorkerDefinition("notice://app/accounts/*")],
             fitz.Workers);
     }
 
@@ -184,7 +184,7 @@ public sealed class PortiaFitzBuilderTests
         _ = application.AddGeneratedRequest(Transport<FitzOutboundOnlyRequest>(RequestTransports.Queuable));
 
         Assert.Same(first, fitz.Workers);
-        Assert.Equal([new FitzWorkerDefinition("queue", "queue://app/accounts/*")], fitz.Workers);
+        Assert.Equal([new FitzQueueWorkerDefinition("queue://app/accounts/*")], fitz.Workers);
     }
 
     /// <summary>The RPC server must not expose inferred requests that have no selected local handler.</summary>

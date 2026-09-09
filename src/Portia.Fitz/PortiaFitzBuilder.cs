@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Cntryl.Fitz;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,7 +23,11 @@ public sealed class PortiaFitzBuilder
     {
         _application = application;
         _workers = new(() => [.. BuildWorkers()], LazyThreadSafetyMode.ExecutionAndPublication);
-        _ = application.ConfigureWorker("Portia.Fitz", services => _ = services.AddSingleton<IHostedService>(provider => new FitzApplicationWorkers(provider, this)));
+        _ = application.ConfigureWorker("Portia.Fitz", services =>
+        {
+            _ = services.AddSingleton(this);
+            _ = services.AddSingleton<IHostedService, FitzApplicationWorkers>();
+        });
     }
 
     internal IReadOnlyList<FitzWorkerDefinition> Workers => _workers.Value;
@@ -34,9 +39,6 @@ public sealed class PortiaFitzBuilder
         if (!_capabilities.Add("events"))
             return this;
         var services = _application.Services;
-        services.TryAddSingleton<IDomainEventSerializer>(provider => new JsonDomainEventSerializer(
-            provider.GetRequiredService<DomainEventTypeCatalog>(), provider.GetServices<IJsonDomainEventUpcaster>(),
-            provider.GetRequiredService<System.Text.Json.JsonSerializerOptions>()));
         services.TryAddSingleton<IEventStore>(provider => new FitzEventStore(
             provider.GetRequiredService<FitzApplicationConnection>().Client.Stream,
             provider.GetRequiredService<IDomainEventSerializer>()));
@@ -123,17 +125,7 @@ public sealed class PortiaFitzBuilder
     }
 
     IEnumerable<RequestTransportRegistration> SelectedRequests(RequestTransports transport)
-    {
-        var handled = _application.Services
-            .Select(service => service.ImplementationInstance)
-            .OfType<RequestHandlerRegistration>()
-            .Select(registration => registration.RequestType)
-            .ToHashSet();
-        return _application.Services
-            .Select(service => service.ImplementationInstance)
-            .OfType<RequestTransportRegistration>()
-            .Where(registration => handled.Contains(registration.RequestType) && registration.Transports.HasFlag(transport));
-    }
+        => _application.SelectedRequests(transport);
 
     List<FitzWorkerDefinition> BuildWorkers()
     {
@@ -141,7 +133,7 @@ public sealed class PortiaFitzBuilder
         var workers = new List<FitzWorkerDefinition>();
         var keys = new HashSet<string>(StringComparer.Ordinal);
         if (_workerTransports.HasFlag(RequestTransports.Callable) && SelectedRequests(RequestTransports.Callable).Any())
-            AddWorker("rpc", "");
+            AddWorker(new FitzRpcWorkerDefinition());
         AddTransport(RequestTransports.Queuable, "queue", includeOperation: false);
         AddTransport(RequestTransports.Notifiable, "notice", includeOperation: false);
         AddTransport(RequestTransports.Schedulable, "schedule", includeOperation: true);
@@ -154,26 +146,25 @@ public sealed class PortiaFitzBuilder
             foreach (var registration in SelectedRequests(transport))
             {
                 var route = registration.Route;
-                AddWorker(kind, includeOperation
-                    ? $"{kind}://{route.Realm}/{route.Area}/{route.Resource}/{route.Operation}"
-                    : $"{kind}://{route.Realm}/{route.Area}/{route.Resource}");
+                AddWorker(kind switch
+                {
+                    "queue" => new FitzQueueWorkerDefinition(includeOperation
+                        ? $"{kind}://{route.Realm}/{route.Area}/{route.Resource}/{route.Operation}"
+                        : $"{kind}://{route.Realm}/{route.Area}/{route.Resource}"),
+                    "notice" => new FitzNoticeWorkerDefinition(includeOperation
+                        ? $"{kind}://{route.Realm}/{route.Area}/{route.Resource}/{route.Operation}"
+                        : $"{kind}://{route.Realm}/{route.Area}/{route.Resource}"),
+                    "schedule" => new FitzScheduleWorkerDefinition(includeOperation
+                        ? $"{kind}://{route.Realm}/{route.Area}/{route.Resource}/{route.Operation}"
+                        : $"{kind}://{route.Realm}/{route.Area}/{route.Resource}"),
+                    _ => throw new InvalidOperationException($"Unknown Fitz worker kind '{kind}'."),
+                });
             }
         }
 
-        void AddWorker(string kind, string route)
+        void AddWorker(FitzWorkerDefinition worker)
         {
-            if (kind == "rpc")
-            {
-                if (keys.Add("rpc:"))
-                    workers.Add(new FitzWorkerDefinition(kind, route));
-                return;
-            }
-            ArgumentException.ThrowIfNullOrWhiteSpace(route);
-            var segments = route.StartsWith(kind + "://", StringComparison.Ordinal) ? route[(kind.Length + 3)..].Split('/') : [];
-            if (segments.Length != (kind == "schedule" ? 4 : 3) || segments.Any(string.IsNullOrWhiteSpace))
-                throw new ArgumentException($"Invalid {kind} route '{route}'.", nameof(route));
-            if (keys.Add(kind + ":" + route))
-                workers.Add(new FitzWorkerDefinition(kind, route));
+            if (keys.Add(worker.Key)) workers.Add(worker);
         }
     }
 
@@ -210,6 +201,7 @@ public sealed class PortiaFitzBuilder
 /// <summary>Connects shared Portia application setup to Fitz.</summary>
 public static class PortiaFitzApplicationExtensions
 {
+    static readonly ConditionalWeakTable<PortiaBuilder, FitzSetup> Setups = [];
     /// <summary>Adds Fitz persistence, clients, coordination, and workers for every selected request transport.</summary>
     public static PortiaBuilder AddFitz(this PortiaBuilder application, IConfiguration configuration) =>
         AddFitz(application, configuration, static _ => { });
@@ -280,28 +272,62 @@ public static class PortiaFitzApplicationExtensions
         ArgumentNullException.ThrowIfNull(application);
         ArgumentNullException.ThrowIfNull(configure);
         var services = application.Services;
-        var existing = services.Select(service => service.ImplementationInstance).OfType<FitzSetup>().SingleOrDefault();
-        if (existing is not null)
+        lock (application)
         {
-            if (!Equals(existing.Identity, identity))
-                throw new InvalidOperationException("This application has conflicting Fitz connections. Configure one shared connection.");
-            configure(existing.Builder);
+            if (Setups.TryGetValue(application, out var existing))
+            {
+                if (!Equals(existing.Identity, identity))
+                    throw new InvalidOperationException("This application has conflicting Fitz connections. Configure one shared connection.");
+                configure(existing.Builder);
+                return application;
+            }
+            _ = services.AddSingleton(connection);
+            _ = services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<FitzApplicationConnection>());
+            var builder = new PortiaFitzBuilder(application);
+            Setups.Add(application, new FitzSetup(identity, builder));
+            services.TryAddSingleton<IWorkloadCoordinator>(provider => new FitzWorkloadCoordinator(
+                provider.GetRequiredService<FitzApplicationConnection>(), builder,
+                provider.GetService<Microsoft.Extensions.Logging.ILogger<FleetPartitionRunner>>(),
+                provider.GetService<TimeProvider>()));
+            _ = builder.AddEventStore().AddRequestClients();
+            configure(builder);
             return application;
         }
-        _ = services.AddSingleton(connection);
-        _ = services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<FitzApplicationConnection>());
-        var builder = new PortiaFitzBuilder(application);
-        _ = services.AddSingleton(new FitzSetup(identity, builder));
-        services.TryAddSingleton<IWorkloadCoordinator>(provider => new FitzWorkloadCoordinator(
-            provider.GetRequiredService<FitzApplicationConnection>(), builder,
-            provider.GetService<Microsoft.Extensions.Logging.ILogger<FleetPartitionRunner>>(),
-            provider.GetService<TimeProvider>()));
-        _ = builder.AddEventStore().AddRequestClients();
-        configure(builder);
-        return application;
     }
 
     sealed record FitzSetup(object Identity, PortiaFitzBuilder Builder);
 }
 
-sealed record FitzWorkerDefinition(string Kind, string Route);
+abstract record FitzWorkerDefinition(string Route)
+{
+    internal abstract string Key { get; }
+    internal abstract IReadOnlyCollection<Type> Requirements { get; }
+}
+
+sealed record FitzRpcWorkerDefinition() : FitzWorkerDefinition(string.Empty)
+{
+    static readonly Type[] RequiredServices =
+        [typeof(IRequestBus), typeof(IRequestActorValidator), typeof(IRequestDeserializer), typeof(IRequestOutcomeSerializer)];
+    internal override string Key => "rpc:";
+    internal override IReadOnlyCollection<Type> Requirements => RequiredServices;
+}
+
+abstract record FitzRoutedWorkerDefinition(string Route, string Scheme, int SegmentCount) : FitzWorkerDefinition(Validate(Route, Scheme, SegmentCount))
+{
+    static readonly Type[] RequiredServices =
+        [typeof(IRequestBus), typeof(IRequestActorValidator), typeof(IRequestDeserializer)];
+    internal override string Key => $"{Scheme}:{Route}";
+    internal override IReadOnlyCollection<Type> Requirements => RequiredServices;
+
+    static string Validate(string route, string scheme, int segmentCount)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(route);
+        var segments = route.StartsWith(scheme + "://", StringComparison.Ordinal) ? route[(scheme.Length + 3)..].Split('/') : [];
+        return segments.Length == segmentCount && segments.All(segment => !string.IsNullOrWhiteSpace(segment))
+            ? route : throw new ArgumentException($"Invalid {scheme} route '{route}'.", nameof(route));
+    }
+}
+
+sealed record FitzQueueWorkerDefinition(string Route) : FitzRoutedWorkerDefinition(Route, "queue", 3);
+sealed record FitzNoticeWorkerDefinition(string Route) : FitzRoutedWorkerDefinition(Route, "notice", 3);
+sealed record FitzScheduleWorkerDefinition(string Route) : FitzRoutedWorkerDefinition(Route, "schedule", 4);

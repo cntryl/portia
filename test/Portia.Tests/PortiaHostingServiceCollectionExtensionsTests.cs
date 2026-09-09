@@ -14,6 +14,28 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class PortiaHostingServiceCollectionExtensionsTests
 {
+    /// <summary>A failing worker contribution leaves the target collection unchanged.</summary>
+    [Fact]
+    public void ShouldStageAllWorkerRegistrationsBeforeApplyingAny()
+    {
+        var services = new ServiceCollection();
+        var portia = services.AddPortia()
+            .ConfigureWorker("first", staged => staged.AddSingleton<StagedWorkerMarker>())
+            .ConfigureWorker("broken", Throw);
+        var before = services.Count;
+
+        var error = Assert.Throws<InvalidOperationException>(portia.AddWorkers);
+
+        Assert.Equal("broken worker", error.Message);
+        Assert.Equal(before, services.Count);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(StagedWorkerMarker));
+
+        static void Throw(IServiceCollection _)
+        {
+            throw new InvalidOperationException("broken worker");
+        }
+    }
+
     /// <summary>A replacement serializer remains outside Portia's JSON-upcaster policy.</summary>
     [Fact]
     public async Task StartupValidatorSkipsJsonUpcasterPolicyForCustomSerializer()
@@ -326,6 +348,8 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         }
     }
 }
+
+sealed class StagedWorkerMarker;
 
 sealed class PassthroughDomainEventSerializer : IDomainEventSerializer
 {

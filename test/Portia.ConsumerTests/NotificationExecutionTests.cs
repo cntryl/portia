@@ -37,7 +37,8 @@ public sealed class NotificationExecutionTests
         var noticeTemplate = scheduled ? null : serializer.DeserializeEnvelope(wire.Body);
         var handler = new BrokerExecutionContextTests.Handler();
         await using var provider = BrokerExecutionContextTests.Services(handler).BuildServiceProvider();
-        await new RequestNotificationRunner(consumer, provider.GetRequiredService<IServiceScopeFactory>()).RunAsync();
+        await new RequestNotificationRunner(consumer,
+            new DependencyInjectionRequestDeliveryScopeFactory(provider.GetRequiredService<IServiceScopeFactory>())).RunAsync();
         Assert.Equal(2, handler.Contexts.Count);
         Assert.NotEqual(handler.Contexts[0].ExecutionId, handler.Contexts[1].ExecutionId);
         Assert.All(handler.Contexts, context =>
