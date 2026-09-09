@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,24 +11,12 @@ namespace Cntryl.Portia;
 /// <summary>Composes shared application services and explicitly activated worker services.</summary>
 public sealed class PortiaBuilder
 {
-    readonly Dictionary<string, Action<IServiceCollection>> _workers = new(StringComparer.Ordinal);
-    readonly Dictionary<Type, (WorkloadRegistration Registration, ServiceDescriptor Descriptor)> _workloads = [];
-    readonly Dictionary<string, Type> _workloadNames = new(StringComparer.Ordinal);
-    readonly HashSet<Type> _projectorDescriptors = [];
-    readonly HashSet<Type> _reactorDescriptors = [];
-    readonly HashSet<Type> _requests = [];
-    readonly HashSet<Type> _jsonRoots = [];
-    readonly Dictionary<Type, Type> _handlerRequests = [];
-    readonly Dictionary<(Type ScopeType, Type AuthorizerType), AuthorizationStage> _authorizers = [];
-    readonly Dictionary<(Type ScopeType, Type BehaviorType), int> _behaviors = [];
-    readonly List<Action<JsonSerializerOptions>> _jsonConfiguration = [];
-    readonly List<Func<JsonSerializerOptions, JsonSerializerContext>> _jsonContexts = [];
-    bool _worker;
+    readonly ApplicationComponentCatalog _catalog = new();
+    readonly PortiaJsonComposer _json = new();
 
     internal PortiaBuilder(IServiceCollection services)
     {
         Services = services;
-        _jsonContexts.Add(static options => new PortiaCoreJsonContext(options));
     }
 
     /// <summary>Gets the application's service collection.</summary>
@@ -37,7 +26,7 @@ public sealed class PortiaBuilder
     public PortiaBuilder ConfigureJson(Action<JsonSerializerOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(configure);
-        _jsonConfiguration.Add(configure);
+        _json.Configure(configure);
         return this;
     }
 
@@ -46,27 +35,11 @@ public sealed class PortiaBuilder
     public PortiaBuilder AddGeneratedJsonContext(Func<JsonSerializerOptions, JsonSerializerContext> factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
-        _jsonContexts.Add(factory);
+        _json.AddContext(factory);
         return this;
     }
 
-    internal JsonSerializerOptions BuildJsonOptions()
-    {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        };
-        foreach (var configure in _jsonConfiguration) configure(options);
-        foreach (var factory in _jsonContexts)
-            options.TypeInfoResolverChain.Add(factory(new JsonSerializerOptions(options)));
-        options.MakeReadOnly();
-        var missing = _jsonRoots.Where(type => !options.TryGetTypeInfo(type, out _))
-            .OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray();
-        _ = missing.Length == 0
-            ? true
-            : throw new InvalidOperationException($"Portia JSON metadata is missing for: {string.Join(", ", missing.Select(type => type.FullName ?? type.Name))}.");
-        return options;
-    }
+    internal JsonSerializerOptions BuildJsonOptions() => _json.Build();
 
     /// <summary>Registers a request handler through Portia.Generators' compile-time typed descriptor.</summary>
     /// <remarks>The generator is supplied by Portia.DependencyInjection.</remarks>
@@ -116,7 +89,7 @@ public sealed class PortiaBuilder
     public PortiaBuilder AddGeneratedEvent<TEvent>(int version, string name) where TEvent : DomainEvent
     {
         Services.AddPortiaEvent<TEvent>(version, name);
-        _ = _jsonRoots.Add(typeof(TEvent));
+        _json.AddRoot(typeof(TEvent));
         return this;
     }
 
@@ -129,17 +102,17 @@ public sealed class PortiaBuilder
     public PortiaBuilder AddGeneratedHandler(RequestHandlerRegistration registration)
     {
         ArgumentNullException.ThrowIfNull(registration);
-        if (_handlerRequests.TryGetValue(registration.RequestType, out var owner))
+        if (_catalog.HandlerRequests.TryGetValue(registration.RequestType, out var owner))
         {
             // One handler can serve several requests, so the same registration arriving twice is
             // an idempotent repeat; a different handler for the same request is a conflict.
             return owner == registration.HandlerType ? this
                 : throw new InvalidOperationException($"Request '{registration.RequestType}' has conflicting handlers.");
         }
-        _handlerRequests[registration.RequestType] = registration.HandlerType;
-        _ = _jsonRoots.Add(registration.RequestType);
+        _catalog.HandlerRequests[registration.RequestType] = registration.HandlerType;
+        _json.AddRoot(registration.RequestType);
         if (registration.ResultType is not null)
-            _ = _jsonRoots.Add(registration.ResultType);
+            _json.AddRoot(registration.ResultType);
         _ = Services.AddSingleton(registration);
         registration.Register(Services);
         return this;
@@ -157,13 +130,13 @@ public sealed class PortiaBuilder
         if (!Enum.IsDefined(registration.Stage))
             throw new ArgumentOutOfRangeException(nameof(registration), registration.Stage, "Choose a defined authorization stage.");
         var key = (registration.ScopeType, registration.AuthorizerType);
-        if (_authorizers.TryGetValue(key, out var stage))
+        if (_catalog.Authorizers.TryGetValue(key, out var stage))
         {
             return stage == registration.Stage ? this
                 : throw new InvalidOperationException($"Authorizer '{registration.AuthorizerType}' has conflicting stages.");
         }
 
-        _authorizers[key] = registration.Stage;
+        _catalog.Authorizers[key] = registration.Stage;
         _ = Services.AddSingleton(registration);
         registration.Register(Services);
         return this;
@@ -175,12 +148,12 @@ public sealed class PortiaBuilder
     {
         ArgumentNullException.ThrowIfNull(registration);
         var key = (registration.ScopeType, registration.BehaviorType);
-        if (_behaviors.TryGetValue(key, out var order))
+        if (_catalog.Behaviors.TryGetValue(key, out var order))
         {
             return order == registration.Order ? this
                 : throw new InvalidOperationException($"Pipeline behavior '{registration.BehaviorType}' has conflicting orders.");
         }
-        _behaviors.Add(key, registration.Order);
+        _catalog.Behaviors.Add(key, registration.Order);
         _ = Services.AddSingleton(registration);
         registration.Register(Services);
         return this;
@@ -196,68 +169,76 @@ public sealed class PortiaBuilder
     public PortiaBuilder AddGeneratedRequest(RequestTransportRegistration registration)
     {
         ArgumentNullException.ThrowIfNull(registration);
-        if (_requests.Add(registration.RequestType))
+        if (_catalog.Requests.TryAdd(registration.RequestType, registration))
             _ = Services.AddSingleton(registration);
-        _ = _jsonRoots.Add(registration.RequestType);
+        _json.AddRoot(registration.RequestType);
         if (registration.ResultType is not null)
-            _ = _jsonRoots.Add(registration.ResultType);
+            _json.AddRoot(registration.ResultType);
         return this;
     }
+
+    internal IEnumerable<RequestTransportRegistration> SelectedRequests(RequestTransports transport) =>
+        _catalog.Requests.Values.Where(registration =>
+            _catalog.HandlerRequests.ContainsKey(registration.RequestType) && registration.Transports.HasFlag(transport));
 
     /// <summary>Registers one reactor with an explicitly selected execution scope.</summary>
     public PortiaBuilder AddReactor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TReactor>(WorkloadScope scope, Action<WorkloadOptions>? configure = null)
         where TReactor : BaseReactor
     {
-        var registration = new WorkloadRegistration(typeof(TReactor), false, scope, configure);
+        var descriptor = ReactorRegistration.Create<TReactor>();
+        var registration = new WorkloadRegistration(descriptor, scope, configure);
         Services.TryAddScoped<TReactor>();
-        return AddWorkload(registration,
-            reactor: new ReactorRegistration(typeof(TReactor), static provider => provider.GetRequiredService<TReactor>()));
+        return AddWorkload(registration, reactor: descriptor);
     }
 
     /// <summary>Registers one projector with an explicitly selected execution scope.</summary>
     public PortiaBuilder AddProjector<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProjector>(WorkloadScope scope, Action<WorkloadOptions>? configure = null)
         where TProjector : BaseProjector
     {
-        var registration = new WorkloadRegistration(typeof(TProjector), true, scope, configure);
+        var descriptor = ProjectorRegistration.Create<TProjector>();
+        var registration = new WorkloadRegistration(descriptor, scope, configure);
         Services.TryAddScoped<TProjector>();
-        return AddWorkload(registration, ProjectorRegistration.Create<TProjector>());
+        return AddWorkload(registration, descriptor);
     }
 
     PortiaBuilder AddWorkload(WorkloadRegistration registration, ProjectorRegistration? descriptor = null, ReactorRegistration? reactor = null)
     {
         if (registration.ComponentType.IsAbstract || registration.ComponentType.ContainsGenericParameters)
             throw new ArgumentException("Register a concrete, closed component type.", nameof(registration));
-        if (_workloads.TryGetValue(registration.ComponentType, out var existing))
+        if (_catalog.Workloads.TryGetValue(registration.ComponentType, out var existing))
         {
-            return existing.Registration == registration ? this
+            return Equivalent(existing, registration) ? this
                 : throw new InvalidOperationException($"Conflicting workload registration '{registration.Name}'.");
         }
-        if (_workloadNames.TryGetValue(registration.Name, out var owner) && owner != registration.ComponentType)
+        if (_catalog.WorkloadNames.TryGetValue(registration.Name, out var owner) && owner != registration.ComponentType)
             throw new InvalidOperationException($"Conflicting workload registration '{registration.Name}'.");
         // The descriptor may already have been registered by hand, so a miss in the builder's own
         // set still has to check the collection — once per component, not once per call.
         if (descriptor is not null)
         {
-            if (_projectorDescriptors.Add(registration.ComponentType)
-                && !Services.Select(service => service.ImplementationInstance).OfType<ProjectorRegistration>()
-                    .Any(item => item.ProjectorType == registration.ComponentType))
+            if (_catalog.ProjectorDescriptors.Add(registration.ComponentType))
             {
                 _ = Services.AddSingleton(descriptor);
             }
         }
-        else if (_reactorDescriptors.Add(registration.ComponentType)
-            && !Services.Select(service => service.ImplementationInstance).OfType<ReactorRegistration>()
-                .Any(item => item.ReactorType == registration.ComponentType))
+        else if (_catalog.ReactorDescriptors.Add(registration.ComponentType))
         {
             _ = Services.AddSingleton(reactor ?? throw new InvalidOperationException("A generated reactor resolver is required."));
         }
         var workloadDescriptor = ServiceDescriptor.Singleton(registration);
         Services.Add(workloadDescriptor);
-        _workloads[registration.ComponentType] = (registration, workloadDescriptor);
-        _workloadNames[registration.Name] = registration.ComponentType;
+        _catalog.Workloads[registration.ComponentType] = registration;
+        _catalog.WorkloadNames[registration.Name] = registration.ComponentType;
         Services.TryAddScoped<ProjectorRunner>();
         Services.TryAddScoped<ReactorRunner>();
         return this;
+
+        static bool Equivalent(WorkloadRegistration left, WorkloadRegistration right)
+        {
+            return left.ComponentType == right.ComponentType && left.Scope == right.Scope && left.Name == right.Name
+                && left.ExplicitName == right.ExplicitName && left.PollInterval == right.PollInterval
+                && left.Processing == right.Processing;
+        }
     }
 
     /// <summary>Declares named worker-only registrations in shared application setup.</summary>
@@ -265,36 +246,29 @@ public sealed class PortiaBuilder
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(configure);
-        if (_workers.TryGetValue(name, out var existing))
+        if (_catalog.Workers.TryGetValue(name, out var existing))
         {
             return existing != configure ? throw new InvalidOperationException($"Worker '{name}' has conflicting registrations.") : this;
         }
-        if (_worker)
+        if (_catalog.WorkersActivated)
             configure(Services);
-        _workers.Add(name, configure);
+        _catalog.Workers.Add(name, configure);
         return this;
     }
 
     /// <summary>Activates the shared application's worker registrations once in this host.</summary>
     public PortiaBuilder AddWorkers()
     {
-        if (_worker)
+        if (_catalog.WorkersActivated)
             return this;
-        var count = Services.Count;
-        try
-        {
-            Services.TryAddEnumerable(ServiceDescriptor.Singleton<Microsoft.Extensions.Hosting.IHostedService, PortiaStartupValidator>());
-            foreach (var configure in _workers.Values)
-                configure(Services);
-            _ = Services.AddSingleton<Microsoft.Extensions.Hosting.IHostedService, PortiaWorkloadService>();
-            _worker = true;
-        }
-        catch
-        {
-            while (Services.Count > count)
-                Services.RemoveAt(Services.Count - 1);
-            throw;
-        }
+        var staged = new ServiceCollection();
+        staged.TryAddEnumerable(ServiceDescriptor.Singleton<Microsoft.Extensions.Hosting.IHostedService, PortiaStartupValidator>());
+        foreach (var configure in _catalog.Workers.Values)
+            configure(staged);
+        _ = staged.AddSingleton<Microsoft.Extensions.Hosting.IHostedService, PortiaWorkloadService>();
+        foreach (var descriptor in staged)
+            Services.Add(descriptor);
+        _catalog.WorkersActivated = true;
         return this;
     }
 }
@@ -302,15 +276,21 @@ public sealed class PortiaBuilder
 /// <summary>Registers shared Portia application setup in the standard DI container.</summary>
 public static class PortiaApplicationServiceCollectionExtensions
 {
+    static readonly ConditionalWeakTable<IServiceCollection, PortiaBuilder> Builders = [];
+
     /// <summary>Creates or resumes the application's fluent Portia composition root.</summary>
     public static PortiaBuilder AddPortia(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        var builder = services.Select(service => service.ImplementationInstance).OfType<PortiaBuilder>().SingleOrDefault();
-        if (builder is null)
+        PortiaBuilder builder;
+        lock (services)
         {
-            builder = new PortiaBuilder(services);
-            _ = services.AddSingleton(builder);
+            if (!Builders.TryGetValue(services, out builder!))
+            {
+                builder = new PortiaBuilder(services);
+                Builders.Add(services, builder);
+                _ = services.AddSingleton(builder);
+            }
         }
         services.TryAddScoped<IAggregateRepository>(provider => new AggregateRepository(provider.GetRequiredService<IEventStore>()));
         services.TryAddScoped<WorkloadContext>();

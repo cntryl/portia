@@ -37,7 +37,7 @@ static class FrameworkTestRegistration
         _ = portia.AddRequestAuthorizer<RecordingGuardedAndAuthorizedActionAuthorizer>();
         _ = portia.AddRequestPipelineBehavior<ChangeValuePipelineBehavior>(order: 10);
         services.TryAddScoped<TestReactor>();
-        _ = services.AddSingleton(new ReactorRegistration(typeof(TestReactor), provider => provider.GetRequiredService<TestReactor>()));
+        _ = services.AddSingleton(ReactorRegistration.Create<TestReactor>());
         services.TryAddScoped<TestProjector>();
         _ = services.AddSingleton(ProjectorRegistration.Create<TestProjector>());
         return services;

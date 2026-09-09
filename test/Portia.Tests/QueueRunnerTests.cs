@@ -21,7 +21,7 @@ public sealed class QueueRunnerTests
             new FakeQueuedRequest(new ChangeValue(3)),
         };
         var consumer = new FakeQueueConsumer(items);
-        var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator());
+        var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator()));
 
         await runner.RunAsync();
 
@@ -43,7 +43,7 @@ public sealed class QueueRunnerTests
         var failing = new FakeQueuedRequest(new ChangeValue(1), throwOnDispatch: true);
         var succeeding = new FakeQueuedRequest(new ChangeValue(2));
         var consumer = new FakeQueueConsumer([failing, succeeding]);
-        var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator());
+        var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator()));
 
         await runner.RunAsync();
 
@@ -64,7 +64,7 @@ public sealed class QueueRunnerTests
         var bus = busHost.Bus;
         var invalid = new FakeQueuedRequest(new InvalidChangeValue(1));
         var consumer = new FakeQueueConsumer([invalid]);
-        var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator());
+        var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator()));
 
         await runner.RunAsync();
 
@@ -87,7 +87,7 @@ public sealed class QueueRunnerTests
         var bus = busHost.Bus;
         var expired = new FakeQueuedRequest(new ChangeValue(1), actorToken: "expired-token");
         var consumer = new FakeQueueConsumer([expired]);
-        var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired-token"));
+        var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator(rejectToken: "expired-token")));
 
         await runner.RunAsync();
 
@@ -109,7 +109,7 @@ public sealed class QueueRunnerTests
         var expired = new FakeQueuedRequest(new ChangeValue(1), actorToken: "expired-token");
         var valid = new FakeQueuedRequest(new ChangeValue(2), actorToken: "valid-token");
         var consumer = new FakeQueueConsumer([expired, valid]);
-        var runner = new QueueRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired-token"));
+        var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator(rejectToken: "expired-token")));
 
         await runner.RunAsync();
 
@@ -125,8 +125,8 @@ public sealed class QueueRunnerTests
         using var busHost = TestRequestBus.Create();
         var queued = new FakeQueuedRequest(new ChangeValue(1), throwOnDispatch: true, attempt: 3);
         var terminal = new RecordingTerminalHandler();
-        var runner = new QueueRunner(new FakeQueueConsumer([queued]), busHost.Bus, new TestRequestActorValidator(),
-            new QueueRunnerOptions { TerminalAttempt = 3 }, terminal);
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
 
         await runner.RunAsync();
 
@@ -143,8 +143,9 @@ public sealed class QueueRunnerTests
     {
         using var busHost = TestRequestBus.Create();
         var queued = new FakeQueuedRequest(new ChangeValue(1), throwOnDispatch: true, attempt: 3);
-        var runner = new QueueRunner(new FakeQueueConsumer([queued]), busHost.Bus, new TestRequestActorValidator(),
-            new QueueRunnerOptions { TerminalAttempt = 3 }, new RecordingTerminalHandler(throws: true));
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 },
+            new RecordingTerminalHandler(throws: true)));
 
         var failure = await Assert.ThrowsAnyAsync<Exception>(() => runner.RunAsync());
 

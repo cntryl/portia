@@ -4,7 +4,7 @@ namespace Cntryl.Portia;
 
 /// <summary>Describes how one registered projector resolves and runs a pass. Built by
 /// <c>PortiaBuilder.AddProjector</c>; applications do not construct it.</summary>
-public sealed class ProjectorRegistration
+public sealed class ProjectorRegistration : IWorkloadDescriptor
 {
     ProjectorRegistration(
         Type projectorType,
@@ -24,6 +24,17 @@ public sealed class ProjectorRegistration
 
     /// <summary>Loads authoritative progress and runs one pass in the supplied scope.</summary>
     public Func<IServiceProvider, ProjectionRunOptions?, CancellationToken, ValueTask> RunPass { get; }
+
+    Type IWorkloadDescriptor.ComponentType => ProjectorType;
+
+    void IWorkloadDescriptor.Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName)
+        => services.GetRequiredService(ProjectorType).AsProjector().BindWorkload(identity, componentName);
+
+    EventStreamPattern IWorkloadDescriptor.Pattern(IServiceProvider services)
+        => services.GetRequiredService(ProjectorType).AsProjector().Pattern;
+
+    ValueTask IWorkloadDescriptor.RunPass(IServiceProvider services, ProjectionRunOptions options, CancellationToken ct)
+        => RunPass(services, options, ct);
 
     /// <summary>
     /// Creates a typed descriptor. This is a pure factory with no container side effects — to
@@ -48,4 +59,9 @@ public sealed class ProjectorRegistration
                 _ = await services.GetRequiredService<ProjectorRunner>()
                     .RunAsync(projector, checkpoint, options, ct).ConfigureAwait(false);
             });
+}
+
+static class ProjectorDescriptorExtensions
+{
+    internal static BaseProjector AsProjector(this object value) => (BaseProjector)value;
 }

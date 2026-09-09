@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Portia.Tests" />
+    <InternalsVisibleTo Include="Portia.ConsumerTests" />
     <InternalsVisibleTo Include="Portia.DependencyInjection" />
+    <InternalsVisibleTo Include="Portia.Fitz" />
   </ItemGroup>
 </Project>

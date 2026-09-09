@@ -31,8 +31,9 @@ public static class PortiaHostingServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         _ = services.AddOptions<QueueRunnerOptions>();
+        services.TryAddSingleton<IQueueDeliveryScopeFactory, DependencyInjectionQueueDeliveryScopeFactory>();
         services.TryAddSingleton(sp => new QueueRunner(sp.GetRequiredService<IRequestQueueConsumer>(),
-            sp.GetRequiredService<IServiceScopeFactory>(), sp.GetService<ILogger<QueueRunner>>()));
+            sp.GetRequiredService<IQueueDeliveryScopeFactory>(), sp.GetService<ILogger<QueueRunner>>()));
         _ = services.AddHostedService<QueueRunnerHostedService>();
         return services;
     }
@@ -48,8 +49,9 @@ public static class PortiaHostingServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        services.TryAddSingleton<IRequestDeliveryScopeFactory, DependencyInjectionRequestDeliveryScopeFactory>();
         services.TryAddSingleton(sp => new RequestNotificationRunner(sp.GetRequiredService<IRequestNotificationConsumer>(),
-            sp.GetRequiredService<IServiceScopeFactory>(), sp.GetService<ILogger<RequestNotificationRunner>>()));
+            sp.GetRequiredService<IRequestDeliveryScopeFactory>(), sp.GetService<ILogger<RequestNotificationRunner>>()));
         _ = services.AddHostedService<RequestNotificationRunnerHostedService>();
         return services;
     }

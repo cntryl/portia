@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
@@ -5,6 +6,7 @@ namespace Cntryl.Portia;
 /// <summary>Registers explicitly selected domain event types.</summary>
 public static class PortiaEventServiceCollectionExtensions
 {
+    static readonly ConditionalWeakTable<IServiceCollection, HashSet<Type>> Events = [];
     /// <summary>Contributes an event to the shared catalog. </summary>
     /// <typeparam name="TEvent">The event type.</typeparam>
     /// <param name="services">Application services.</param>
@@ -13,8 +15,11 @@ public static class PortiaEventServiceCollectionExtensions
     public static void AddPortiaEvent<TEvent>(this IServiceCollection services, int version, string name)
         where TEvent : DomainEvent
     {
-        if (!services.Any(service => service.ServiceType == typeof(EventMarker<TEvent>)))
+        HashSet<Type> events;
+        lock (services)
         {
+            events = Events.GetOrCreateValue(services);
+            if (!events.Add(typeof(TEvent))) return;
             _ = services.AddSingleton(new EventMarker<TEvent>());
             _ = services.AddSingleton(new EventRegistration(catalog => _ = catalog.Register<TEvent>(version, name)));
         }

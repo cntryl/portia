@@ -5,17 +5,24 @@ using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
-sealed partial class PortiaWorkloadService(IServiceProvider services) : BackgroundService, IHostedLifecycleService
+sealed partial class PortiaWorkloadService(
+    IServiceScopeFactory scopes,
+    IEnumerable<WorkloadRegistration> registrations,
+    IServiceProviderIsService available,
+    ITenantDirectory? tenantDirectory = null,
+    IWorkloadCoordinator? workloadCoordinator = null,
+    IDomainEventNotifier? notifier = null,
+    TimeProvider? timeProvider = null,
+    ILogger<PortiaWorkloadService>? logger = null) : BackgroundService, IHostedLifecycleService
 {
-    readonly WorkloadRegistration[] _registrations = [.. services.GetServices<WorkloadRegistration>()];
-    readonly TimeProvider _clock = services.GetService<TimeProvider>() ?? TimeProvider.System;
-    readonly ILogger<PortiaWorkloadService>? _logger = services.GetService<ILogger<PortiaWorkloadService>>();
+    readonly WorkloadRegistration[] _registrations = [.. registrations];
+    readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
+    readonly ILogger<PortiaWorkloadService>? _logger = logger;
 
     public Task StartingAsync(CancellationToken cancellationToken)
     {
         if (_registrations.Length == 0)
             return Task.CompletedTask;
-        var available = services.GetRequiredService<IServiceProviderIsService>();
         Require(typeof(IDomainEventReader));
         if (_registrations.Any(item => item.Scope == WorkloadScope.PerTenant))
             Require(typeof(ITenantDirectory));
@@ -43,7 +50,7 @@ sealed partial class PortiaWorkloadService(IServiceProvider services) : Backgrou
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         var perTenant = _registrations.Where(item => item.Scope == WorkloadScope.PerTenant).ToArray();
         var tenants = perTenant.Length == 0 ? Task.Delay(Timeout.InfiniteTimeSpan, lifetime.Token)
-            : new MultiTenantRunner(services.GetRequiredService<ITenantDirectory>(), services.GetService<ILogger<MultiTenantRunner>>(), timeProvider: _clock).RunAsync(
+            : new MultiTenantRunner(tenantDirectory!, timeProvider: _clock).RunAsync(
                 async (tenant, ct) =>
                 {
                     var identities = perTenant.Select(item => new WorkloadIdentity(item.Name, tenant)).ToArray();
@@ -83,8 +90,8 @@ sealed partial class PortiaWorkloadService(IServiceProvider services) : Backgrou
     /// </summary>
     IWorkloadCoordinator ResolveCoordinator()
     {
-        if (services.GetService<IWorkloadCoordinator>() is { } coordinator)
-            return coordinator;
+        if (workloadCoordinator is not null)
+            return workloadCoordinator;
         if (_logger is not null)
             LogSingleProcessCoordinator(_logger);
         // Reconcile cadence is infrastructure timing, not application time, so it deliberately
@@ -105,26 +112,12 @@ sealed partial class PortiaWorkloadService(IServiceProvider services) : Backgrou
                 var failed = false;
                 try
                 {
-                    await using var scope = services.CreateAsyncScope();
+                    await using var scope = scopes.CreateAsyncScope();
                     var provider = scope.ServiceProvider;
                     provider.GetRequiredService<WorkloadContext>().Initialize(identity, registration.ExplicitName);
-                    if (registration.IsProjector)
-                    {
-                        var projector = provider.GetServices<ProjectorRegistration>().Single(item => item.ProjectorType == registration.ComponentType);
-                        var component = (BaseProjector)provider.GetRequiredService(registration.ComponentType);
-                        subscription = await SubscribeAsync(component.Pattern, ct).ConfigureAwait(false);
-                        await projector.RunPass(provider, registration.Processing, ct).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        var reactor = (BaseReactor)provider.GetRequiredService(registration.ComponentType);
-                        reactor.BindWorkload(identity, registration.ExplicitName);
-                        subscription = await SubscribeAsync(reactor.Pattern, ct).ConfigureAwait(false);
-                        var checkpoints = reactor.Checkpoints;
-                        var checkpoint = await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
-                        _ = await provider.GetRequiredService<ReactorRunner>().RunAsync(reactor, checkpoint,
-                            registration.Processing.MaxBatchSize, ct).ConfigureAwait(false);
-                    }
+                    registration.Descriptor.Bind(provider, identity, registration.ExplicitName);
+                    subscription = await SubscribeAsync(registration.Descriptor.Pattern(provider), ct).ConfigureAwait(false);
+                    await registration.Descriptor.RunPass(provider, registration.Processing, ct).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
                 catch (Exception ex)
@@ -171,7 +164,7 @@ sealed partial class PortiaWorkloadService(IServiceProvider services) : Backgrou
 
         ValueTask<IDomainEventSubscription?> SubscribeAsync(EventStreamPattern pattern, CancellationToken token)
         {
-            return services.GetService<IDomainEventNotifier>() is { } notifier
+            return notifier is not null
                 ? SubscribeCoreAsync(notifier, pattern, token)
                 : ValueTask.FromResult<IDomainEventSubscription?>(null);
         }

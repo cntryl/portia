@@ -27,7 +27,7 @@ public sealed class AllTransportsSharedHandlerTests
 
         // Queue.
         var queueConsumer = new FakeQueueConsumer([new FakeQueuedItem(new UniversalAction(2))]);
-        var queueRunner = new QueueRunner(queueConsumer, bus, new AlwaysValidActorValidator());
+        var queueRunner = new QueueRunner(queueConsumer, RequestDeliveryScopes.FixedQueue(bus, new AlwaysValidActorValidator()));
         await queueRunner.RunAsync();
         Assert.Equal([1, 2], handler.HandledValues);
 
@@ -46,9 +46,7 @@ public sealed class AllTransportsSharedHandlerTests
         var notificationConsumer = new FakeRequestNotificationConsumer(
             [new RequestNotification(new UniversalAction(4), ActorToken: null, Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item"))]);
         var notificationRunner = new RequestNotificationRunner(
-            notificationConsumer,
-            bus,
-            new AlwaysValidActorValidator());
+            notificationConsumer, RequestDeliveryScopes.Fixed(bus, new AlwaysValidActorValidator()));
         await notificationRunner.RunAsync();
         Assert.Equal([1, 2, 3, 4], handler.HandledValues);
     }

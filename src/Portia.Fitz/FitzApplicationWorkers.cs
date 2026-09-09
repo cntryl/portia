@@ -4,28 +4,31 @@ using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
-sealed class FitzApplicationWorkers(IServiceProvider services, PortiaFitzBuilder configuration)
+sealed class FitzApplicationWorkers(
+    FitzApplicationConnection connection,
+    PortiaFitzBuilder configuration,
+    IServiceScopeFactory scopes,
+    IServiceProviderIsService available,
+    IEnumerable<WorkloadRegistration> workloads,
+    RequestTransportCatalog catalog,
+    IRequestDeserializer serializer,
+    TimeProvider? timeProvider = null,
+    ILogger<FitzApplicationWorkers>? logger = null,
+    ILogger<FitzRequestQueueConsumer>? queueLogger = null,
+    ILogger<QueueRunner>? runnerLogger = null,
+    ILogger<RequestNotificationRunner>? notificationLogger = null)
     : BackgroundService, IHostedLifecycleService, IAsyncDisposable
 {
-    readonly IServiceScopeFactory _scopes = services.GetRequiredService<IServiceScopeFactory>();
-    readonly TimeProvider _clock = services.GetService<TimeProvider>() ?? TimeProvider.System;
-    readonly ILogger<FitzApplicationWorkers>? _logger = services.GetService<ILogger<FitzApplicationWorkers>>();
+    readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
+    readonly ILogger<FitzApplicationWorkers>? _logger = logger;
     readonly IReadOnlyList<FitzWorkerDefinition> _workers = configuration.Workers;
+    readonly WorkloadRegistration[] _workloads = [.. workloads];
     IAsyncDisposable? _rpc;
 
     public Task StartingAsync(CancellationToken cancellationToken)
     {
-        var available = services.GetRequiredService<IServiceProviderIsService>();
-        var required = new HashSet<Type>();
-        if (_workers.Count > 0)
-        {
-            _ = required.Add(typeof(IRequestBus));
-            _ = required.Add(typeof(IRequestActorValidator));
-            _ = required.Add(typeof(IRequestDeserializer));
-            if (_workers.Any(worker => worker.Kind == "rpc"))
-                _ = required.Add(typeof(IRequestOutcomeSerializer));
-        }
-        foreach (var registration in services.GetServices<WorkloadRegistration>())
+        var required = _workers.SelectMany(worker => worker.Requirements).ToHashSet();
+        foreach (var registration in _workloads)
         {
             _ = required.Add(typeof(IEventStore));
             if (registration.Scope == WorkloadScope.PerTenant)
@@ -41,14 +44,12 @@ sealed class FitzApplicationWorkers(IServiceProvider services, PortiaFitzBuilder
     {
         // Also validate for callers that start the hosted service directly.
         await StartingAsync(cancellationToken).ConfigureAwait(false);
-        var connection = services.GetRequiredService<FitzApplicationConnection>();
         await connection.StartAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (_workers.Any(worker => worker.Kind == "rpc"))
+            if (_workers.OfType<FitzRpcWorkerDefinition>().Any())
             {
-                _rpc = await new FitzRpcRequestServer(connection.Client.Rpc, _scopes,
-                    services.GetRequiredService<RequestTransportCatalog>())
+                _rpc = await new FitzRpcRequestServer(connection.Client.Rpc, scopes, catalog)
                     .RegisterRequestsAsync(cancellationToken).ConfigureAwait(false);
             }
 
@@ -63,26 +64,25 @@ sealed class FitzApplicationWorkers(IServiceProvider services, PortiaFitzBuilder
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var client = services.GetRequiredService<FitzApplicationConnection>().Client;
+        var client = connection.Client;
         var tasks = new List<Task>();
         foreach (var worker in _workers)
         {
-            if (worker.Kind == "rpc")
-                continue;
-            var serializer = services.GetRequiredService<IRequestDeserializer>();
-            if (worker.Kind == "queue")
+            if (worker is FitzRpcWorkerDefinition) continue;
+            if (worker is FitzQueueWorkerDefinition)
             {
                 var runner = new QueueRunner(new FitzRequestQueueConsumer(client.Queue, serializer, worker.Route,
-                    timeProvider: _clock, logger: services.GetService<ILogger<FitzRequestQueueConsumer>>()),
-                    _scopes, services.GetService<ILogger<QueueRunner>>());
+                    timeProvider: _clock, logger: queueLogger),
+                    new DependencyInjectionQueueDeliveryScopeFactory(scopes), runnerLogger);
                 tasks.Add(RetryAsync(worker.Route, runner.RunAsync, TimeSpan.FromSeconds(1), stoppingToken));
             }
             else
             {
-                IRequestNotificationConsumer consumer = worker.Kind == "notice"
+                IRequestNotificationConsumer consumer = worker is FitzNoticeWorkerDefinition
                     ? new FitzNoticeRequestConsumer(client.Notice, serializer, worker.Route)
                     : new FitzScheduledRequestConsumer(client.Schedule, serializer, worker.Route);
-                var runner = new RequestNotificationRunner(consumer, _scopes, services.GetService<ILogger<RequestNotificationRunner>>());
+                var runner = new RequestNotificationRunner(consumer,
+                    new DependencyInjectionRequestDeliveryScopeFactory(scopes), notificationLogger);
                 tasks.Add(RetryAsync(worker.Route, runner.RunAsync, TimeSpan.FromSeconds(1), stoppingToken));
             }
         }

@@ -22,7 +22,7 @@ public sealed class RequestNotificationRunnerTests
             new RequestNotification(new ChangeValue(2), ActorToken: "valid-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
             new RequestNotification(new ChangeValue(3), ActorToken: "valid-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
         ]);
-        var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator());
+        var runner = new RequestNotificationRunner(consumer, RequestDeliveryScopes.Fixed(bus, new TestRequestActorValidator()));
 
         await runner.RunAsync();
 
@@ -44,7 +44,7 @@ public sealed class RequestNotificationRunnerTests
             new RequestNotification(new ThrowingChangeValue(0), ActorToken: "valid-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
             new RequestNotification(new ChangeValue(2), ActorToken: "valid-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
         ]);
-        var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator());
+        var runner = new RequestNotificationRunner(consumer, RequestDeliveryScopes.Fixed(bus, new TestRequestActorValidator()));
 
         await runner.RunAsync();
 
@@ -66,7 +66,7 @@ public sealed class RequestNotificationRunnerTests
         var consumer = new FakeRequestNotificationConsumer([
             new RequestNotification(new ChangeValue(1), ActorToken: "expired-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
         ]);
-        var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired-token"));
+        var runner = new RequestNotificationRunner(consumer, RequestDeliveryScopes.Fixed(bus, new TestRequestActorValidator(rejectToken: "expired-token")));
 
         await runner.RunAsync();
 
@@ -87,7 +87,7 @@ public sealed class RequestNotificationRunnerTests
             new RequestNotification(new ChangeValue(1), ActorToken: "expired-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
             new RequestNotification(new ChangeValue(2), ActorToken: "valid-token", Metadata: RequestMetadata.Create(), Invocation: new NoticeInvocation("notice://test/work/item")),
         ]);
-        var runner = new RequestNotificationRunner(consumer, bus, new TestRequestActorValidator(rejectToken: "expired-token"));
+        var runner = new RequestNotificationRunner(consumer, RequestDeliveryScopes.Fixed(bus, new TestRequestActorValidator(rejectToken: "expired-token")));
 
         await runner.RunAsync();
 

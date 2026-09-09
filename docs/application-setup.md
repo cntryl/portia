@@ -234,6 +234,11 @@ explicitly. Conflicting connection configurations are rejected.
 Default serializers use `TryAdd`; normal DI registrations can supply overrides.
 Request envelope serializers used by transport consumers must support singleton
 use. Actor validation and request execution happen inside per-delivery scopes.
+`QueueRunner` and `RequestNotificationRunner` each accept one delivery-scope factory and create
+and asynchronously dispose exactly one scope per delivery. Directly constructed runners use
+`RequestDeliveryScopes.FixedQueue(...)` or `RequestDeliveryScopes.Fixed(...)`; DI hosting uses
+the scoped factories installed by `AddPortiaQueueRunner()` and
+`AddPortiaRequestNotificationRunner()`.
 
 Low-level hosting APIs are available for manually managed runners. Do not also start the same
 component or listener through them. Duplicate component hosting is rejected before
