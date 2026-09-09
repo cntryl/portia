@@ -45,6 +45,8 @@ The Microsoft OpenAPI schema generator receives the same frozen options, resolve
 converters, property metadata, and naming policy. Document generation does not add a
 Portia-owned resolver or require reflection fallback; the reflection-disabled consumer exercises
 automatic application interception without manual OpenAPI calls.
+ASP.NET startup materializes the complete `v1` document after endpoint composition, so this
+validation uses the same Microsoft pipeline and frozen metadata as the served JSON and YAML.
 
 At host startup Portia freezes the configured options and resolves metadata for every generated
 registration before a Fitz hosted service can connect. All missing roots are reported together,

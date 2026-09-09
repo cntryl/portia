@@ -59,6 +59,32 @@ public sealed class ReactorTests
         Assert.Null(reactor.LastIncrementAmount);
     }
 
+    /// <summary>Stable effect IDs vary only with checkpoint, source event, and effect name.</summary>
+    [Fact]
+    public void ShouldCreateStableDistinctEffectIdsGivenReactionContextWhenNamingEffects()
+    {
+        var reactor = new TestReactor(new RecordingAggregateRepository());
+        var ev = Committed(new ValueChanged(42), Uuid.CreateVersion4(), 1);
+        var record = new DomainEventRecord(new EventStreamAddress("test", "reactors", "one"), ev, 0, 0, 0);
+        var context = new ReactionExecutionContext(record, RequestActor.System);
+
+        Assert.Equal(reactor.EffectId(context, "email"), reactor.EffectId(context, "email"));
+        Assert.NotEqual(reactor.EffectId(context, "email"), reactor.EffectId(context, "audit"));
+    }
+
+    /// <summary>Binding is idempotent for one identity and rejects accidental instance reuse.</summary>
+    [Fact]
+    public void ShouldRejectDifferentIdentityGivenAlreadyBoundReactorWhenBindingAgain()
+    {
+        var reactor = new TestReactor(new RecordingAggregateRepository());
+        var first = new WorkloadIdentity("test-reactor", new TenantId("one"));
+        reactor.BindWorkload(first, null);
+        reactor.BindWorkload(first, null);
+
+        _ = Assert.Throws<InvalidOperationException>(() =>
+            reactor.BindWorkload(new WorkloadIdentity("test-reactor", new TenantId("two")), null));
+    }
+
     static T Committed<T>(T ev, Uuid aggregateId, ulong aggregateVersion)
         where T : DomainEvent
     {
@@ -77,6 +103,8 @@ sealed partial class TestReactor(IAggregateRepository repository, IProjectionChe
       IReactorHandler<ValueIncremented>
 {
     public int? LastIncrementAmount { get; private set; }
+
+    public Uuid EffectId(IReactorContext context, string name) => CreateEffectId(context, name);
 
     public async ValueTask HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
     {

@@ -88,6 +88,11 @@ Manual implementations can override `ProjectEventAsync` / `ProjectBatchAsync`, o
 
 ## Reactions
 
+A base processor skips event types for which it has no handler, including manually implemented
+processors. A component instance can be bound repeatedly to the same workload identity, but it
+cannot be rebound to another identity; persisted checkpoints under the selected identity remain
+the resume and handoff state.
+
 A reactor performs an application effect after observing an event. There are two ordinary
 patterns; choose the one that describes the behavior rather than wrapping every effect in a
 command mechanically.
@@ -113,6 +118,10 @@ system actor, correlation, and causation. A failed command result throws
 `ReactionCommandFailedException`, so the reactor does not silently checkpoint a failed effect.
 Result-bearing requests use `SendAsync<T>` directly because the reactor must decide what the
 returned value and expected failures mean.
+
+`CreateEffectId(context, effectName)` derives a stable UUID from the reactor/checkpoint identity,
+source event ID, and effect name for use with an idempotent target. This does not make arbitrary
+effects exactly once: the effect and checkpoint are still not one atomic transaction.
 
 Call an injected integration service directly when the action is inherently caused by the event
 and adding a request contract would add no useful application boundary:

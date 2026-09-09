@@ -4,6 +4,7 @@ namespace Cntryl.Portia;
 /// Effects and progress are not atomic; reactions must tolerate replay.</summary>
 public abstract class BaseReactor
 {
+    WorkloadIdentity? _boundIdentity;
     /// <summary>Uses constructor-injected persistence for reaction progress.</summary>
     protected BaseReactor(IProjectionCheckpointStore checkpoints, EventStreamPattern pattern, string? name = null)
     {
@@ -26,10 +27,23 @@ public abstract class BaseReactor
     /// </summary>
     internal void BindWorkload(WorkloadIdentity identity, string? componentName)
     {
+        if (_boundIdentity is { } bound && bound != identity)
+            throw new InvalidOperationException($"Reactor '{GetType().FullName}' is already bound to workload '{bound}' and cannot be rebound to '{identity}'.");
+        if (_boundIdentity == identity)
+            return;
+        _boundIdentity = identity;
         if (componentName is not null)
             Name = componentName;
         if (identity.Tenant is { } tenant)
             Pattern = EventStreamPattern.ForPattern(tenant.Value, Pattern.Area, Pattern.Resource);
+    }
+    /// <summary>Creates a stable idempotency key for one named effect of the source event.</summary>
+    protected Uuid CreateEffectId(IReactorContext context, string effectName)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentException.ThrowIfNullOrWhiteSpace(effectName);
+        var identity = _boundIdentity?.ToString() ?? "unbound";
+        return Uuid.CreateVersion5(Uuid.UrlNamespace, $"portia:effect:{identity}:{Name}:{context.Source.Ev.Metadata.EventId}:{effectName}");
     }
     internal ValueTask ReactAsync(DomainEventRecord record, CancellationToken ct)
         => ReactToEventAsync(record, new ReactionExecutionContext(record, RequestActor.System), ct);
@@ -38,7 +52,7 @@ public abstract class BaseReactor
     internal ValueTask ReactAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct) => ReactBatchAsync(contexts, ct);
     /// <summary>Dispatches a triggering event with its own system execution context.</summary>
     protected virtual ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context, CancellationToken ct)
-        => throw new InvalidOperationException($"BaseReactor does not handle event type '{record.Ev.GetType()}'.");
+        => ValueTask.CompletedTask;
     /// <summary>Handles reactions in source order, preserving each event's causal context.</summary>
     protected virtual async ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
     {

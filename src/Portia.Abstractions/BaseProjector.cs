@@ -3,6 +3,7 @@ namespace Cntryl.Portia;
 /// <summary>Projects individual events, atomically committing each event's changes and checkpoint.</summary>
 public abstract class BaseProjector
 {
+    WorkloadIdentity? _boundIdentity;
     /// <summary>Uses the same repository for application writes and projection progress.</summary>
     protected BaseProjector(IProjectionStore store, EventStreamPattern pattern, string? name = null)
     {
@@ -25,6 +26,11 @@ public abstract class BaseProjector
     /// </summary>
     internal void BindWorkload(WorkloadIdentity identity, string? componentName)
     {
+        if (_boundIdentity is { } bound && bound != identity)
+            throw new InvalidOperationException($"Projector '{GetType().FullName}' is already bound to workload '{bound}' and cannot be rebound to '{identity}'.");
+        if (_boundIdentity == identity)
+            return;
+        _boundIdentity = identity;
         if (componentName is not null)
             Name = componentName;
         if (identity.Tenant is { } tenant)
@@ -34,7 +40,7 @@ public abstract class BaseProjector
         => ProjectBatchAsync(records, new ProjectorContext(identity), ct);
     /// <summary>Dispatches one event. Generated typed handlers skip unrelated event types.</summary>
     protected virtual ValueTask ProjectEventAsync(DomainEventRecord record, IProjectorContext context, CancellationToken ct)
-        => throw new InvalidOperationException($"Projector does not handle event type '{record.Ev.GetType()}'.");
+        => ValueTask.CompletedTask;
     /// <summary>Dispatches the current unit of work in source order.</summary>
     protected virtual async ValueTask ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records, IProjectorContext context, CancellationToken ct)
     {

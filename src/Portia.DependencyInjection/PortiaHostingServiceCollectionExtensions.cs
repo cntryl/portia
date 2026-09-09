@@ -30,6 +30,7 @@ public static class PortiaHostingServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        _ = services.AddOptions<QueueRunnerOptions>();
         services.TryAddSingleton(sp => new QueueRunner(sp.GetRequiredService<IRequestQueueConsumer>(),
             sp.GetRequiredService<IServiceScopeFactory>(), sp.GetService<ILogger<QueueRunner>>()));
         _ = services.AddHostedService<QueueRunnerHostedService>();

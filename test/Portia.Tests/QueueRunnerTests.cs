@@ -118,6 +118,40 @@ public sealed class QueueRunnerTests
         Assert.Equal(2, handler.LastValue);
     }
 
+    /// <summary>A successful terminal callback permits acknowledgment.</summary>
+    [Fact]
+    public async Task ShouldInvokeTerminalHandlerAndCompleteGivenRetryableFailureAtTerminalAttempt()
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = new FakeQueuedRequest(new ChangeValue(1), throwOnDispatch: true, attempt: 3);
+        var terminal = new RecordingTerminalHandler();
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), busHost.Bus, new TestRequestActorValidator(),
+            new QueueRunnerOptions { TerminalAttempt = 3 }, terminal);
+
+        await runner.RunAsync();
+
+        var failure = Assert.Single(terminal.Failures);
+        Assert.Equal((uint)3, failure.Attempt);
+        Assert.NotNull(failure.Exception);
+        Assert.True(queued.Completed);
+        Assert.False(queued.Abandoned);
+    }
+
+    /// <summary>A terminal callback failure leaves ownership with the transport.</summary>
+    [Fact]
+    public async Task ShouldLeaveDeliveryUnacknowledgedGivenTerminalHandlerFailureWhenAttemptIsTerminal()
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = new FakeQueuedRequest(new ChangeValue(1), throwOnDispatch: true, attempt: 3);
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), busHost.Bus, new TestRequestActorValidator(),
+            new QueueRunnerOptions { TerminalAttempt = 3 }, new RecordingTerminalHandler(throws: true));
+
+        await runner.RunAsync();
+
+        Assert.False(queued.Completed);
+        Assert.False(queued.Abandoned);
+    }
+
     sealed class FakeQueueConsumer(IReadOnlyList<IQueuedRequest> items) : IRequestQueueConsumer
     {
         public async IAsyncEnumerable<IQueuedRequest> ReadAsync(
@@ -132,7 +166,7 @@ public sealed class QueueRunnerTests
         }
     }
 
-    sealed class FakeQueuedRequest(IRequest request, bool throwOnDispatch = false, string? actorToken = "valid-token") : IQueuedRequest
+    sealed class FakeQueuedRequest(IRequest request, bool throwOnDispatch = false, string? actorToken = "valid-token", uint attempt = 1) : IQueuedRequest
     {
         public RequestMetadata Metadata { get; } = RequestMetadata.Create();
         public RequestInvocation Invocation => new QueueInvocation("queue://test/work/item", Attempt);
@@ -144,7 +178,7 @@ public sealed class QueueRunnerTests
 
         public string? ActorToken { get; } = actorToken;
 
-        public uint Attempt => 1;
+        public uint Attempt => attempt;
 
         public ValueTask CompleteAsync(CancellationToken ct = default)
         {
@@ -156,6 +190,16 @@ public sealed class QueueRunnerTests
         {
             Abandoned = true;
             return ValueTask.CompletedTask;
+        }
+    }
+
+    sealed class RecordingTerminalHandler(bool throws = false) : IQueuedRequestTerminalHandler
+    {
+        public List<QueuedRequestFailureContext> Failures { get; } = [];
+        public ValueTask HandleAsync(QueuedRequestFailureContext context, CancellationToken ct = default)
+        {
+            Failures.Add(context);
+            return throws ? ValueTask.FromException(new InvalidOperationException("terminal failed")) : ValueTask.CompletedTask;
         }
     }
 
