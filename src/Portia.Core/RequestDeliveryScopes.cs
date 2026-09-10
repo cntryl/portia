@@ -4,10 +4,29 @@ namespace Cntryl.Portia;
 public static class RequestDeliveryScopes
 {
     /// <summary>Uses the supplied notification dependencies for every delivery.</summary>
+    /// <param name="bus">The bus that executes validated requests.</param>
+    /// <param name="actorValidator">The transport-boundary actor-token validator.</param>
+    /// <param name="timeProvider">
+    ///     The clock request contexts are stamped with, or
+    ///     <see langword="null" /> to use <see cref="TimeProvider.System" />.
+    /// </param>
+    /// <returns>A factory handing out one independently disposable scope per delivery.</returns>
     public static IRequestDeliveryScopeFactory Fixed(IRequestBus bus, IRequestActorValidator actorValidator,
         TimeProvider? timeProvider = null) => new FixedFactory(bus, actorValidator, timeProvider);
 
     /// <summary>Uses the supplied queue dependencies and terminal policy for every delivery.</summary>
+    /// <param name="bus">The bus that executes validated requests.</param>
+    /// <param name="actorValidator">The transport-boundary actor-token validator.</param>
+    /// <param name="options">The queue runner settings, or <see langword="null" /> for the defaults.</param>
+    /// <param name="terminalHandler">
+    ///     Runs before a terminal delivery is acknowledged, or
+    ///     <see langword="null" /> to acknowledge without one.
+    /// </param>
+    /// <param name="timeProvider">
+    ///     The clock request contexts are stamped with, or
+    ///     <see langword="null" /> to use <see cref="TimeProvider.System" />.
+    /// </param>
+    /// <returns>A factory handing out one independently disposable scope per delivery.</returns>
     public static IQueueDeliveryScopeFactory FixedQueue(IRequestBus bus, IRequestActorValidator actorValidator,
         QueueRunnerOptions? options = null, IQueuedRequestTerminalHandler? terminalHandler = null,
         TimeProvider? timeProvider = null) => new FixedQueueFactory(

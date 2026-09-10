@@ -26,12 +26,12 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
     /// <summary>Gets the concrete projector type.</summary>
     public Type ProjectorType { get; }
 
-    /// <summary>Resolves and runs the projector from an explicit checkpoint.</summary>
+    /// <summary>Gets the delegate that resolves and runs the projector from an explicit checkpoint.</summary>
     public Func<ProjectorRunner, IServiceProvider, ProjectionCheckpoint, ProjectionRunOptions?, CancellationToken,
         ValueTask<ProjectionCheckpoint>> Run
     { get; }
 
-    /// <summary>Loads authoritative progress and runs one pass in the supplied scope.</summary>
+    /// <summary>Gets the delegate that loads authoritative progress and runs one pass in the supplied scope.</summary>
     public Func<IServiceProvider, ProjectionRunOptions?, CancellationToken, ValueTask> RunPass { get; }
 
     Type IWorkloadDescriptor.ComponentType => ProjectorType;
@@ -49,6 +49,8 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
         => RunPass(services, options, ct);
 
     /// <summary>Resolves the projector in the supplied application scope.</summary>
+    /// <param name="services">The scope the projector is resolved from.</param>
+    /// <returns>The projector instance for that scope.</returns>
     public Projector Resolve(IServiceProvider services) => _resolve(services);
 
     /// <summary>

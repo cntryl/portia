@@ -23,6 +23,8 @@ public sealed class PortiaBuilder
     public IServiceCollection Services { get; }
 
     /// <summary>Configures Portia-owned JSON options before generated contexts are created.</summary>
+    /// <param name="configure">Applied to the options before any generated context is created.</param>
+    /// <returns>This builder, for chaining.</returns>
     public PortiaBuilder ConfigureJson(Action<JsonSerializerOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(configure);
@@ -31,6 +33,8 @@ public sealed class PortiaBuilder
     }
 
     /// <summary>Adds a generated JSON context factory to the application resolver chain.</summary>
+    /// <param name="factory">Creates the context from the composed Portia JSON options.</param>
+    /// <returns>This builder, for chaining.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public PortiaBuilder AddGeneratedJsonContext(Func<JsonSerializerOptions, JsonSerializerContext> factory)
     {
@@ -46,6 +50,10 @@ public sealed class PortiaBuilder
         + "If the call is inside a generic method, the generator has no concrete type to emit a descriptor for; register each type at its own call site.");
 
     /// <summary>Adds a generated versioned domain-event descriptor.</summary>
+    /// <typeparam name="TEvent">The event type to register.</typeparam>
+    /// <param name="version">The event's schema version.</param>
+    /// <param name="name">The event's stable logical name.</param>
+    /// <returns>This builder, for chaining.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public PortiaBuilder AddGeneratedEvent<TEvent>(int version, string name) where TEvent : DomainEvent
     {
@@ -59,6 +67,8 @@ public sealed class PortiaBuilder
     ///     calls <see cref="AddRequestHandler{THandler}" /> instead of this method.
     /// </summary>
     /// <param name="registration">The generated descriptor.</param>
+    /// <returns>This builder, for chaining.</returns>
+    /// <exception cref="InvalidOperationException">Another handler is already registered for the request.</exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public PortiaBuilder AddGeneratedHandler(RequestHandlerRegistration registration)
     {
@@ -90,6 +100,8 @@ public sealed class PortiaBuilder
     ///     calls <see cref="AddRequestAuthorizer{TAuthorizer}(AuthorizationStage)" /> instead.
     /// </summary>
     /// <param name="registration">The generated descriptor.</param>
+    /// <returns>This builder, for chaining.</returns>
+    /// <exception cref="InvalidOperationException">The same authorizer is already registered at another stage.</exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public PortiaBuilder AddGeneratedAuthorizer(RequestAuthorizerRegistration registration)
     {
@@ -116,6 +128,9 @@ public sealed class PortiaBuilder
     }
 
     /// <summary>Adds a behavior descriptor built by Portia.Generators at compile time.</summary>
+    /// <param name="registration">The generated descriptor.</param>
+    /// <returns>This builder, for chaining.</returns>
+    /// <exception cref="InvalidOperationException">The same behavior is already registered at another order.</exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public PortiaBuilder AddGeneratedBehavior(RequestPipelineBehaviorRegistration registration)
     {
@@ -141,6 +156,7 @@ public sealed class PortiaBuilder
     ///     dispatches, handlers, and <see cref="RegisterDynamicRequest{TRequest}" /> escape hatches.
     /// </summary>
     /// <param name="registration">The generated descriptor.</param>
+    /// <returns>This builder, for chaining.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public PortiaBuilder AddGeneratedRequest(RequestTransportRegistration registration)
     {
@@ -165,6 +181,10 @@ public sealed class PortiaBuilder
             registration.Transports.HasFlag(transport));
 
     /// <summary>Registers one reactor with an explicitly selected execution scope.</summary>
+    /// <typeparam name="TReactor">The concrete reactor type.</typeparam>
+    /// <param name="scope">Whether the reactor runs once globally or once per active tenant.</param>
+    /// <param name="configure">Adjusts the workload's polling and failure behavior, or <see langword="null" /> for the defaults.</param>
+    /// <returns>This builder, for chaining.</returns>
     public PortiaBuilder AddReactor<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TReactor>(WorkloadScope scope,
         Action<WorkloadOptions>? configure = null)
@@ -176,6 +196,10 @@ public sealed class PortiaBuilder
     }
 
     /// <summary>Registers one projector with an explicitly selected execution scope.</summary>
+    /// <typeparam name="TProjector">The concrete projector type.</typeparam>
+    /// <param name="scope">Whether the projector runs once globally or once per active tenant.</param>
+    /// <param name="configure">Adjusts the workload's polling and failure behavior, or <see langword="null" /> for the defaults.</param>
+    /// <returns>This builder, for chaining.</returns>
     public PortiaBuilder AddProjector<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProjector>(WorkloadScope scope,
         Action<WorkloadOptions>? configure = null)
@@ -238,6 +262,7 @@ public sealed class PortiaBuilder
     /// </summary>
     /// <param name="name">The declaration's unique name within the application.</param>
     /// <param name="configure">Registers the worker-only services.</param>
+    /// <returns>This builder, for chaining.</returns>
     /// <remarks>
     ///     An earlier version compared the two callbacks and threw when they differed. That could not
     ///     distinguish a genuinely different declaration from the same one supplied again: a lambda
@@ -263,6 +288,7 @@ public sealed class PortiaBuilder
     }
 
     /// <summary>Activates the shared application's worker registrations once in this host.</summary>
+    /// <returns>This builder, for chaining.</returns>
     public PortiaBuilder AddWorkers()
     {
         if (_catalog.WorkersActivated)
@@ -296,27 +322,39 @@ public sealed class PortiaBuilder
     // a purpose.
 #pragma warning disable CA1822
     /// <summary>Registers a request handler through Portia.Generators' compile-time typed descriptor.</summary>
+    /// <typeparam name="THandler">The concrete handler type, known at this call site.</typeparam>
+    /// <returns>This builder, for chaining.</returns>
     /// <remarks>The generator is supplied by Portia.DependencyInjection.</remarks>
     public PortiaBuilder AddRequestHandler<THandler>() where THandler : class =>
         throw MissingGeneratedRegistration(typeof(THandler), "request handler");
 
     /// <summary>Registers a request authorizer through Portia.Generators' compile-time typed descriptor.</summary>
+    /// <typeparam name="TAuthorizer">The concrete authorizer type, known at this call site.</typeparam>
+    /// <param name="stage">The pipeline stage the authorizer runs in.</param>
+    /// <returns>This builder, for chaining.</returns>
     /// <remarks>The generator is supplied by Portia.DependencyInjection.</remarks>
     public PortiaBuilder AddRequestAuthorizer<TAuthorizer>(AuthorizationStage stage = AuthorizationStage.ResourceAccess)
         where TAuthorizer : class =>
         throw MissingGeneratedRegistration(typeof(TAuthorizer), $"request authorizer at stage '{stage}'");
 
     /// <summary>Registers a typed request pipeline behavior at the given order.</summary>
+    /// <typeparam name="TBehavior">The concrete behavior type, known at this call site.</typeparam>
+    /// <param name="order">The behavior's position in the pipeline; lower orders execute outermost.</param>
+    /// <returns>This builder, for chaining.</returns>
     /// <remarks>The generator is supplied by Portia.DependencyInjection. Lower orders execute outermost.</remarks>
     public PortiaBuilder AddRequestPipelineBehavior<TBehavior>(int order = 0) where TBehavior : class =>
         throw MissingGeneratedRegistration(typeof(TBehavior), $"request pipeline behavior at order '{order}'");
 
     /// <summary>Explicitly registers a request whose concrete type is hidden from compile-time dispatch analysis.</summary>
+    /// <typeparam name="TRequest">The concrete request type, known at this call site.</typeparam>
+    /// <returns>This builder, for chaining.</returns>
     /// <remarks>Normal strongly typed dispatch is inferred by Portia.Generators. Use this only at dynamic dispatch boundaries.</remarks>
     public PortiaBuilder RegisterDynamicRequest<TRequest>() where TRequest : IRequestBase =>
         throw MissingGeneratedRegistration(typeof(TRequest), "request");
 
     /// <summary>Includes an event type in the application's serializer catalog.</summary>
+    /// <typeparam name="TEvent">The concrete event type, known at this call site.</typeparam>
+    /// <returns>This builder, for chaining.</returns>
     public PortiaBuilder AddEvent<TEvent>() where TEvent : DomainEvent =>
         throw MissingGeneratedRegistration(typeof(TEvent), "domain event");
 #pragma warning restore CA1822

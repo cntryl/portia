@@ -19,6 +19,16 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
     readonly DomainEventSchemaResolver _resolver;
 
     /// <summary>Creates a serializer using the application's frozen source-generated JSON options.</summary>
+    /// <param name="catalog">Maps each logical event name and schema version to its current CLR type.</param>
+    /// <param name="upcasters">
+    ///     The registered payload upcasters, or <see langword="null" /> when the
+    ///     application registers none.
+    /// </param>
+    /// <param name="options">The application's frozen Portia JSON options.</param>
+    /// <exception cref="InvalidOperationException">
+    ///     An upcaster is malformed or duplicated, or a chain
+    ///     of upcasters cannot reach a version the catalog knows.
+    /// </exception>
     public JsonDomainEventSerializer(DomainEventTypeCatalog catalog, IEnumerable<IJsonDomainEventUpcaster>? upcasters,
         JsonSerializerOptions options)
     {

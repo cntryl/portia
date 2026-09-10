@@ -25,6 +25,9 @@ public static class RequestActor
     public static ClaimsPrincipal System => CreateSystem("portia:system");
 
     /// <summary>Creates an explicitly identified system principal for background execution.</summary>
+    /// <param name="subject">The stable subject identifying this system caller.</param>
+    /// <param name="issuer">The authority naming that subject.</param>
+    /// <returns>A principal that <see cref="IsSystem" /> recognizes.</returns>
     public static ClaimsPrincipal CreateSystem(string subject, string issuer = "Portia")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subject);
@@ -33,7 +36,12 @@ public static class RequestActor
             [new Claim(ClaimTypes.NameIdentifier, subject, ClaimValueTypes.String, issuer)], "Portia.System"));
     }
 
-    /// <summary>Whether every authenticated identity is explicitly a Portia system identity.</summary>
+    /// <summary>Reports whether every authenticated identity is explicitly a Portia system identity.</summary>
+    /// <param name="actor">The principal to test.</param>
+    /// <returns>
+    ///     <see langword="true" /> when the principal has at least one authenticated identity and
+    ///     every one of them was created by <see cref="CreateSystem" />.
+    /// </returns>
     public static bool IsSystem(ClaimsPrincipal actor)
     {
         ArgumentNullException.ThrowIfNull(actor);

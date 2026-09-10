@@ -12,6 +12,7 @@ public static class EventStoreConformance
     /// <summary>Runs the complete event-store conformance suite.</summary>
     /// <param name="probe">An isolated implementation adapter.</param>
     /// <param name="ct">A token that can cancel verification.</param>
+    /// <returns>A task that completes when every check has passed.</returns>
     /// <exception cref="ConformanceViolationException">The implementation violates a store invariant.</exception>
     public static async ValueTask VerifyAsync(IEventStoreConformanceProbe probe, CancellationToken ct = default)
     {

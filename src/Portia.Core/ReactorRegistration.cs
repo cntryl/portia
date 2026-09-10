@@ -35,9 +35,18 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
         => _runPass(services, options, ct);
 
     /// <summary>Resolves the reactor in the supplied application scope.</summary>
+    /// <param name="services">The scope the reactor is resolved from.</param>
+    /// <returns>The reactor instance for that scope.</returns>
     public Reactor Resolve(IServiceProvider services) => _resolve(services);
 
-    /// <summary>Creates a typed reactor descriptor.</summary>
+    /// <summary>
+    ///     Creates a typed descriptor. This is a pure factory with no container side effects — to
+    ///     register and run a reactor, call <c>PortiaBuilder.AddReactor</c>, which builds this
+    ///     descriptor and the workload declaration that drives it. Registering a descriptor by hand
+    ///     runs nothing.
+    /// </summary>
+    /// <typeparam name="TReactor">The concrete component.</typeparam>
+    /// <returns>The component descriptor.</returns>
     public static ReactorRegistration Create<TReactor>() where TReactor : Reactor => new(
         typeof(TReactor), static services => services.GetRequiredService<TReactor>(),
         static async (services, options, ct) =>

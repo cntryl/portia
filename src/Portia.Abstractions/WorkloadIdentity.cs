@@ -4,6 +4,8 @@ namespace Cntryl.Portia;
 public sealed record WorkloadIdentity
 {
     /// <summary>Creates an identity for a global workload or one tenant's workload.</summary>
+    /// <param name="name">The application's stable workload name.</param>
+    /// <param name="tenant">The owning tenant, or <see langword="null" /> for a global workload.</param>
     public WorkloadIdentity(string name, TenantId? tenant = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);

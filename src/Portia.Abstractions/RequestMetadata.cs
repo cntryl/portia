@@ -7,6 +7,7 @@ namespace Cntryl.Portia;
 public sealed record RequestMetadata(Uuid RequestId, Uuid CorrelationId, Uuid? CausationId = null)
 {
     /// <summary>Creates a new independent logical request.</summary>
+    /// <returns>Metadata whose request and correlation identities are the same new value.</returns>
     public static RequestMetadata Create()
     {
         var id = Uuid.CreateVersion4();
@@ -14,6 +15,11 @@ public sealed record RequestMetadata(Uuid RequestId, Uuid CorrelationId, Uuid? C
     }
 
     /// <summary>Creates a new child request with explicit causal inheritance.</summary>
+    /// <param name="parent">The execution this request is caused by.</param>
+    /// <returns>
+    ///     Metadata with a new request identity, the parent's correlation, and the parent's cause
+    ///     as its causation.
+    /// </returns>
     public static RequestMetadata FromParent(IExecutionContext parent)
     {
         ArgumentNullException.ThrowIfNull(parent);
@@ -23,6 +29,7 @@ public sealed record RequestMetadata(Uuid RequestId, Uuid CorrelationId, Uuid? C
     }
 
     /// <summary>Rejects empty identities in propagated metadata.</summary>
+    /// <exception cref="ArgumentException">Any carried identity is <see cref="Uuid.Empty" />.</exception>
     public void Validate()
     {
         if (RequestId == Uuid.Empty || CorrelationId == Uuid.Empty || CausationId == Uuid.Empty)

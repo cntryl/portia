@@ -17,6 +17,7 @@ public static class ResultHttpExtensions
     ///     error's <see cref="RequestErrorKind" />.
     /// </summary>
     /// <param name="result">The outcome to map.</param>
+    /// <returns>A 204 result on success, or a problem-details result describing the error.</returns>
     public static IResult ToHttpResult(this Result result) =>
         result.IsSuccess ? Results.NoContent() : ToProblem(result.Error);
 
@@ -27,6 +28,7 @@ public static class ResultHttpExtensions
     /// <typeparam name="T">The type of the value produced on success.</typeparam>
     /// <param name="result">The outcome to map.</param>
     /// <param name="typeInfo">The application-owned source-generated metadata for the result value.</param>
+    /// <returns>A 200 result carrying the value, or a problem-details result describing the error.</returns>
     public static IResult ToHttpResult<T>(this Result<T> result, JsonTypeInfo<T> typeInfo)
     {
         ArgumentNullException.ThrowIfNull(typeInfo);

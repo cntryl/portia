@@ -20,6 +20,12 @@ public interface IPartitionLeaseCompetitor
     ///     <paramref name="callback" /> until it returns, the lease is lost, or
     ///     <paramref name="ct" /> is cancelled.
     /// </summary>
+    /// <param name="route">The lease route to compete for.</param>
+    /// <param name="ttlSecs">The lease time-to-live, in seconds.</param>
+    /// <param name="callback">Runs for as long as this worker holds the lease.</param>
+    /// <param name="options">The lease execution settings, or <see langword="null" /> for the defaults.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>A task representing the lease-scoped run.</returns>
     Task WithLeaseAsync(
         string route,
         ulong ttlSecs,

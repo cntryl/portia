@@ -14,6 +14,8 @@ public static class PortiaHttpBinding
     static readonly JsonDocument EmptyObject = JsonDocument.Parse("{}");
 
     /// <summary>Creates execution context from authenticated HTTP state and concrete endpoint facts.</summary>
+    /// <param name="context">The current HTTP request.</param>
+    /// <returns>Execution state carrying the caller's principal and the endpoint's ingress facts.</returns>
     public static RequestDispatchContext CreateDispatchContext(HttpContext context)
         => new(context.User, new HttpInvocation(context.Request.Method,
             context.Request.PathBase.Add(context.Request.Path).Value ?? "/",
@@ -21,10 +23,17 @@ public static class PortiaHttpBinding
             context.TraceIdentifier), timeProvider: context.RequestServices.GetService<TimeProvider>());
 
     /// <summary>Gets the application's frozen Portia JSON options.</summary>
+    /// <param name="context">The current HTTP request.</param>
+    /// <returns>The options registered by <c>AddPortia</c>.</returns>
     public static JsonSerializerOptions GetJsonOptions(HttpContext context)
         => context.RequestServices.GetRequiredService<JsonSerializerOptions>();
 
     /// <summary>Reads one bounded JSON object request body.</summary>
+    /// <param name="context">The current HTTP request.</param>
+    /// <param name="bodyRequired">Whether an empty body is rejected rather than read as <c>{}</c>.</param>
+    /// <param name="ct">A token that can cancel the read.</param>
+    /// <returns>The parsed body, or an empty object when the body was empty and optional.</returns>
+    /// <exception cref="HttpPayloadTooLargeException">The body exceeds <c>PortiaHttpOptions.MaxJsonBodyBytes</c>.</exception>
     public static async ValueTask<JsonDocument> ReadJsonBodyAsync(HttpContext context, bool bodyRequired,
         CancellationToken ct)
     {
@@ -32,14 +41,10 @@ public static class PortiaHttpBinding
         var maximum = context.RequestServices.GetService<IOptions<PortiaHttpOptions>>()?.Value.MaxJsonBodyBytes
                       ?? PortiaHttpOptions.DefaultMaxJsonBodyBytes;
         if (maximum <= 0)
-        {
             throw new InvalidOperationException($"{nameof(PortiaHttpOptions.MaxJsonBodyBytes)} must be positive.");
-        }
 
         if (context.Request.ContentLength > 0 && context.Request.ContentLength > maximum)
-        {
             throw new HttpPayloadTooLargeException();
-        }
 
         await using var buffer = new MemoryStream((int)Math.Min(context.Request.ContentLength ?? 0, maximum));
         var chunk = new byte[81920];
@@ -76,13 +81,20 @@ public static class PortiaHttpBinding
         }, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Returns whether an exact RFC preference token requests asynchronous handling.</summary>
+    /// <summary>Reports whether an exact RFC 7240 preference token requests asynchronous handling.</summary>
+    /// <param name="context">The current HTTP request.</param>
+    /// <returns><see langword="true" /> when the caller sent <c>Prefer: respond-async</c>.</returns>
     public static bool PrefersRespondAsync(HttpContext context) => context.Request.Headers["Prefer"]
         .SelectMany(value => (value ?? string.Empty).Split(','))
         .Select(value => value.Trim().Split(';', 2)[0].Trim())
         .Any(value => string.Equals(value, "respond-async", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Reads exactly one nonempty Bearer credential, or null when authorization is absent.</summary>
+    /// <param name="context">The current HTTP request.</param>
+    /// <returns>The raw credential, or <see langword="null" /> when no Authorization header was sent.</returns>
+    /// <exception cref="Microsoft.AspNetCore.Http.BadHttpRequestException">
+    ///     The header is present but does not carry exactly one nonempty Bearer credential.
+    /// </exception>
     public static string? ReadBearerCredential(HttpContext context)
     {
         var values = context.Request.Headers.Authorization;
@@ -109,6 +121,9 @@ public static class PortiaHttpBinding
     }
 
     /// <summary>Creates the asynchronous acceptance receipt.</summary>
+    /// <param name="context">The current HTTP request, whose response gains <c>Preference-Applied</c>.</param>
+    /// <param name="requestId">The logical identity the caller can track the enqueued request by.</param>
+    /// <returns>A 202 Accepted result carrying the request identity.</returns>
     public static IResult Accepted(HttpContext context, Uuid requestId)
     {
         context.Response.Headers["Preference-Applied"] = "respond-async";
@@ -117,9 +132,15 @@ public static class PortiaHttpBinding
     }
 
     /// <summary>Writes the stable Portia problem contract.</summary>
+    /// <param name="statusCode">The HTTP status to respond with.</param>
+    /// <param name="message">The non-sensitive detail reported to the caller.</param>
+    /// <returns>A problem-details result.</returns>
     public static IResult Problem(int statusCode, string message) => new ProblemResult(statusCode, message);
 
     /// <summary>Logs an unexpected HTTP failure and returns a non-sensitive response.</summary>
+    /// <param name="context">The current HTTP request.</param>
+    /// <param name="exception">The unexpected failure, recorded through Portia's telemetry contract.</param>
+    /// <returns>A 500 problem-details result that discloses nothing about the failure.</returns>
     public static IResult Unexpected(HttpContext context, Exception exception)
     {
         PortiaTelemetry.RecordRunnerFault("Http", RunnerFaultStage.Execution, exception,
@@ -128,6 +149,11 @@ public static class PortiaHttpBinding
     }
 
     /// <summary>Resolves contextual queue route values configured on the selected endpoint.</summary>
+    /// <param name="context">The current HTTP request.</param>
+    /// <returns>
+    ///     The values supplied by <see cref="PortiaEndpointRouteBuilderExtensions.WithPortiaRouteValues" />,
+    ///     or <see cref="RequestRouteValues.None" /> when the endpoint configured none.
+    /// </returns>
     public static RequestRouteValues ResolveRouteValues(HttpContext context)
     {
         var metadata = context.GetEndpoint()?.Metadata.GetMetadata<PortiaHttpRouteValues>();
@@ -138,6 +164,10 @@ public static class PortiaHttpBinding
     }
 
     /// <summary>Reads one query value, distinguishing omission from an empty string.</summary>
+    /// <param name="context">The current HTTP request.</param>
+    /// <param name="name">The query parameter to read.</param>
+    /// <returns>The single value, or <see langword="null" /> when the parameter was not sent.</returns>
+    /// <exception cref="Microsoft.AspNetCore.Http.BadHttpRequestException">The parameter was sent more than once.</exception>
     public static string? ReadQuery(HttpContext context, string name)
     {
         return !context.Request.Query.TryGetValue(name, out var values)
@@ -148,6 +178,17 @@ public static class PortiaHttpBinding
     }
 
     /// <summary>Reads a constructor-bound property using the application's request JSON metadata.</summary>
+    /// <typeparam name="TRequest">The request type whose JSON contract names the member.</typeparam>
+    /// <typeparam name="TValue">The member's type.</typeparam>
+    /// <param name="body">The parsed request body.</param>
+    /// <param name="options">The application's frozen Portia JSON options.</param>
+    /// <param name="memberIndex">The member's position in the request's primary constructor.</param>
+    /// <param name="memberName">The member's declared name. Reserved; the name is resolved from JSON metadata.</param>
+    /// <param name="fallbackName">The wire name to use when JSON metadata is unavailable.</param>
+    /// <param name="nullable">Whether an explicit JSON null is a legal value.</param>
+    /// <param name="hasDefault">Whether the member has a default that applies when the property is absent.</param>
+    /// <param name="defaultValue">The value used when the property is absent or null and that is allowed.</param>
+    /// <returns>The bound member value.</returns>
     public static TValue ReadBody<TRequest, TValue>(JsonElement body, JsonSerializerOptions options, int memberIndex,
         string memberName,
         string fallbackName, bool nullable, bool hasDefault, TValue defaultValue)
@@ -184,6 +225,17 @@ public static class PortiaHttpBinding
     }
 
     /// <summary>Reads a body property with the configured naming, converters and null contract.</summary>
+    /// <typeparam name="T">The property's type.</typeparam>
+    /// <param name="body">The parsed request body.</param>
+    /// <param name="options">The application's frozen Portia JSON options.</param>
+    /// <param name="name">The wire name of the property to read.</param>
+    /// <param name="nullable">Whether an explicit JSON null is a legal value.</param>
+    /// <param name="hasDefault">Whether the property has a default that applies when it is absent.</param>
+    /// <param name="defaultValue">The value used when the property is absent or null and that is allowed.</param>
+    /// <returns>The bound property value.</returns>
+    /// <exception cref="Microsoft.AspNetCore.Http.BadHttpRequestException">
+    ///     The body is not a JSON object, or the property is missing or null where that is not allowed.
+    /// </exception>
     public static T ReadBody<T>(JsonElement body, JsonSerializerOptions options, string name, bool nullable,
         bool hasDefault, T defaultValue)
     {

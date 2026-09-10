@@ -16,6 +16,11 @@ public static class PortiaApplicationServiceCollectionExtensions
     static readonly Lock Gate = new();
 
     /// <summary>Creates or resumes the application's fluent Portia composition root.</summary>
+    /// <param name="services">The application's service collection.</param>
+    /// <returns>
+    ///     The builder for this service collection — the same instance on every call, so shared
+    ///     setup can be composed from more than one place.
+    /// </returns>
     public static PortiaBuilder AddPortia(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);

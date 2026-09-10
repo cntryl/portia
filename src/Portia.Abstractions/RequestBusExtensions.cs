@@ -19,6 +19,7 @@ public static class RequestBusExtensions
     /// <param name="command">The command caused by the triggering event.</param>
     /// <param name="reaction">The triggering reaction execution.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>A task that completes once the command has succeeded.</returns>
     /// <exception cref="ReactionCommandFailedException">The command returned an expected failure.</exception>
     public static async ValueTask SendReactionAsync(this IRequestBus bus, IRequest command,
         IReactorContext reaction, CancellationToken ct = default)

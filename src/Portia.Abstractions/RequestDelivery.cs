@@ -41,6 +41,7 @@ public sealed record RequestDelivery(
     /// <param name="actorToken">The opaque actor token received by the transport.</param>
     /// <param name="traceContext">The optional W3C context received with the request.</param>
     /// <param name="timeProvider">The optional clock used by the request context.</param>
+    /// <returns>The delivery, named by the transport or by the request's CLR type.</returns>
     public static RequestDelivery For(IRequestBase request, string? name, RequestInvocation invocation,
         RequestMetadata metadata, string? actorToken = null, RequestTraceContext? traceContext = null,
         TimeProvider? timeProvider = null)

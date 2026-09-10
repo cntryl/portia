@@ -6,6 +6,13 @@ namespace Cntryl.Portia;
 public sealed class ReactionExecutionContext : IReactorContext
 {
     /// <summary>Creates a system execution for a triggering event using the receiver's clock.</summary>
+    /// <param name="source">The stored record whose event triggers the reaction.</param>
+    /// <param name="actor">The system principal the reaction's effects run as.</param>
+    /// <param name="timeProvider">
+    ///     The clock that stamps the start time, or <see langword="null" /> to use
+    ///     <see cref="TimeProvider.System" />.
+    /// </param>
+    /// <exception cref="ArgumentException"><paramref name="actor" /> is not a system principal.</exception>
     public ReactionExecutionContext(DomainEventRecord source, ClaimsPrincipal actor, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(source);

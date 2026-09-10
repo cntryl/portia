@@ -31,10 +31,12 @@ public sealed class TestPermissionEvaluator(bool grantsEveryPermission) : IPermi
     /// <summary>
     ///     Creates an evaluator that grants every permission it's asked about.
     /// </summary>
+    /// <returns>An evaluator whose every evaluation succeeds.</returns>
     public static TestPermissionEvaluator AllowAll() => new(true);
 
     /// <summary>
     ///     Creates an evaluator that denies every permission it's asked about.
     /// </summary>
+    /// <returns>An evaluator whose every evaluation fails with <see cref="RequestErrorKind.Forbidden" />.</returns>
     public static TestPermissionEvaluator DenyAll() => new(false);
 }

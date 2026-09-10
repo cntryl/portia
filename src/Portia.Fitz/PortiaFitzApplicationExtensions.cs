@@ -15,10 +15,21 @@ public static class PortiaFitzApplicationExtensions
     static readonly ConditionalWeakTable<PortiaBuilder, FitzSetup> Setups = [];
 
     /// <summary>Adds Fitz persistence, clients, coordination, and workers for every selected request transport.</summary>
+    /// <param name="application">The application composition root to connect to Fitz.</param>
+    /// <param name="configuration">The <c>Fitz</c> configuration section.</param>
+    /// <returns>The same composition root, for chaining.</returns>
     public static PortiaBuilder AddFitz(this PortiaBuilder application, IConfiguration configuration) =>
         application.AddFitz(configuration, static _ => { });
 
     /// <summary>Configures an owned client from Endpoint and optional Token and StartupTimeoutSeconds settings.</summary>
+    /// <param name="application">The application composition root to connect to Fitz.</param>
+    /// <param name="configuration">
+    ///     The <c>Fitz</c> configuration section, supplying <c>Endpoint</c> and
+    ///     optionally <c>Token</c>, <c>StartupTimeoutSeconds</c>, and <c>ApplicationName</c>.
+    /// </param>
+    /// <param name="configure">Selects which workers run and how the fleet is composed.</param>
+    /// <returns>The same composition root, for chaining.</returns>
+    /// <exception cref="ArgumentException">A configured value is missing or out of range.</exception>
     public static PortiaBuilder AddFitz(this PortiaBuilder application, IConfiguration configuration,
         Action<PortiaFitzBuilder> configure)
     {
@@ -63,6 +74,13 @@ public static class PortiaFitzApplicationExtensions
     }
 
     /// <summary>Configures an owned client, including an optional rotating backend token provider.</summary>
+    /// <param name="application">The application composition root to connect to Fitz.</param>
+    /// <param name="configuration">The Fitz client settings.</param>
+    /// <param name="startupTimeout">
+    ///     How long the host waits for the connection, or
+    ///     <see langword="null" /> for 15 seconds.
+    /// </param>
+    /// <returns>The same composition root, for chaining.</returns>
     public static PortiaBuilder AddFitz(
         this PortiaBuilder application,
         ClientConfig configuration,
@@ -70,6 +88,14 @@ public static class PortiaFitzApplicationExtensions
         application.AddFitz(configuration, static _ => { }, startupTimeout);
 
     /// <summary>Configures an owned client with optional worker selection or fleet membership.</summary>
+    /// <param name="application">The application composition root to connect to Fitz.</param>
+    /// <param name="configuration">The Fitz client settings.</param>
+    /// <param name="configure">Selects which workers run and how the fleet is composed.</param>
+    /// <param name="startupTimeout">
+    ///     How long the host waits for the connection, or
+    ///     <see langword="null" /> for 15 seconds.
+    /// </param>
+    /// <returns>The same composition root, for chaining.</returns>
     public static PortiaBuilder AddFitz(this PortiaBuilder application, ClientConfig configuration,
         Action<PortiaFitzBuilder> configure, TimeSpan? startupTimeout = null)
     {
@@ -82,10 +108,17 @@ public static class PortiaFitzApplicationExtensions
     }
 
     /// <summary>Uses an already connected client and hosts every selected request transport.</summary>
+    /// <param name="application">The application composition root to connect to Fitz.</param>
+    /// <param name="client">The caller-owned client; Portia does not dispose it.</param>
+    /// <returns>The same composition root, for chaining.</returns>
     public static PortiaBuilder UseFitzClient(this PortiaBuilder application, Client client) =>
         application.UseFitzClient(client, static _ => { });
 
     /// <summary>Uses an already connected client with optional worker selection or fleet membership.</summary>
+    /// <param name="application">The application composition root to connect to Fitz.</param>
+    /// <param name="client">The caller-owned client; Portia does not dispose it.</param>
+    /// <param name="configure">Selects which workers run and how the fleet is composed.</param>
+    /// <returns>The same composition root, for chaining.</returns>
     public static PortiaBuilder UseFitzClient(this PortiaBuilder application, Client client,
         Action<PortiaFitzBuilder> configure)
     {

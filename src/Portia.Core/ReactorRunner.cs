@@ -1,6 +1,15 @@
 namespace Cntryl.Portia;
 
 /// <summary>Runs reactions and persists progress through the reactor's constructor dependency.</summary>
+/// <param name="reader">Reads the durable events the reactor consumes.</param>
+/// <param name="principals">
+///     Selects the system principal each reaction runs as, or
+///     <see langword="null" /> to use Portia's own system principal.
+/// </param>
+/// <param name="timeProvider">
+///     The clock reaction executions are stamped with, or
+///     <see langword="null" /> to use <see cref="TimeProvider.System" />.
+/// </param>
 public sealed class ReactorRunner(
     IDomainEventReader reader,
     IReactorPrincipalProvider? principals = null,
@@ -14,6 +23,12 @@ public sealed class ReactorRunner(
     ///     Processes available events. Single-event reactors checkpoint each event; batch reactors
     ///     checkpoint after the bounded batch succeeds. Failures can replay external effects.
     /// </summary>
+    /// <param name="reactor">The reactor to run.</param>
+    /// <param name="checkpoint">The authoritative progress the pass starts from.</param>
+    /// <param name="maxBatchSize">The upper bound on events read per pass; ignored by single-event reactors.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>The progress reached by this pass.</returns>
+    /// <exception cref="InvalidOperationException">The principal provider returned a non-system principal.</exception>
     public async ValueTask<ProjectionCheckpoint> RunAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
         int maxBatchSize = 512, CancellationToken ct = default)
     {

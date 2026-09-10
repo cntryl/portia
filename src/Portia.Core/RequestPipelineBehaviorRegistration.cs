@@ -3,6 +3,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Cntryl.Portia;
 
 /// <summary>Describes an ordered request pipeline behavior independently of a handler.</summary>
+/// <param name="scopeType">The request type or request-family interface matched by this behavior.</param>
+/// <param name="behaviorType">The concrete behavior type.</param>
+/// <param name="order">The behavior order; lower values execute outermost.</param>
 public abstract class RequestPipelineBehaviorRegistration(Type scopeType, Type behaviorType, int order)
 {
     /// <summary>Gets the request type or request-family interface matched by this behavior.</summary>

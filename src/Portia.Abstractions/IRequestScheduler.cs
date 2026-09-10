@@ -36,6 +36,20 @@ public interface IRequestScheduler
         => ScheduleAsync(request, spec, routeValues, actor, RequestMetadata.Create(), ct);
 
     /// <summary>Schedules a template with explicit causal identity.</summary>
+    /// <typeparam name="TRequest">The concrete request type.</typeparam>
+    /// <param name="request">The request to schedule.</param>
+    /// <param name="spec">When and how the request fires.</param>
+    /// <param name="routeValues">
+    ///     Values for any route segment the request's
+    ///     <see cref="RequestRouteAttribute" /> left as <see cref="RequestRouteAttribute.Wildcard" />.
+    /// </param>
+    /// <param name="actor">
+    ///     The explicit system identity under which every firing executes. User
+    ///     and anonymous identities are rejected and no bearer credential is persisted.
+    /// </param>
+    /// <param name="metadata">The logical request identity to propagate.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>An identity that can later cancel the schedule.</returns>
     ValueTask<string> ScheduleAsync<TRequest>(
         TRequest request,
         RequestScheduleSpec spec,

@@ -59,6 +59,7 @@ public readonly struct Result
     ///     Creates a failed result.
     /// </summary>
     /// <param name="error">The failure.</param>
+    /// <returns>A result carrying <paramref name="error" />.</returns>
     public static Result Failure(RequestError error)
     {
         ArgumentNullException.ThrowIfNull(error);
@@ -135,12 +136,14 @@ public readonly struct Result<T>
     ///     Creates a successful result.
     /// </summary>
     /// <param name="value">The value produced.</param>
+    /// <returns>A result carrying <paramref name="value" />.</returns>
     public static Result<T> Success(T value) => new(ResultState.Succeeded, value, null);
 
     /// <summary>
     ///     Creates a failed result.
     /// </summary>
     /// <param name="error">The failure.</param>
+    /// <returns>A result carrying <paramref name="error" />.</returns>
     public static Result<T> Failure(RequestError error)
     {
         ArgumentNullException.ThrowIfNull(error);

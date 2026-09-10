@@ -16,6 +16,7 @@ public sealed record DeserializedRequest(
     /// <summary>Builds the transport-neutral delivery this envelope describes.</summary>
     /// <param name="invocation">The concrete inbound transport facts.</param>
     /// <param name="timeProvider">The optional clock used by the request context.</param>
+    /// <returns>The delivery describing this envelope.</returns>
     public RequestDelivery ToDelivery(RequestInvocation invocation, TimeProvider? timeProvider = null) =>
         RequestDelivery.For(Request, Name, invocation, Metadata, ActorToken, TraceContext, timeProvider);
 }

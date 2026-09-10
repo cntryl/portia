@@ -52,8 +52,8 @@ public interface IQueuedRequest
     ValueTask CompleteAsync(CancellationToken ct = default);
 
     /// <summary>
-    ///     Stops processing without acknowledging the request. The transport owns redelivery;
-    ///     The queue technology waits for reservation expiration according to its own configuration.
+    ///     Stops processing without acknowledging the request. The transport owns redelivery: the
+    ///     queue technology waits for the reservation to expire according to its own configuration.
     /// </summary>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the abandonment.</returns>

@@ -26,7 +26,7 @@ static class PortiaComponentRoles
     /// <summary>Every role interface, for checks that apply to components generally.</summary>
     public static readonly string[] All = [.. Handler, .. Authorizer, .. Behavior];
 
-    /// <summary>Whether an implemented interface is one of the supplied Portia roles.</summary>
+    /// <summary>Reports whether an implemented interface is one of the supplied Portia roles.</summary>
     public static bool Is(INamedTypeSymbol iface, string[] roles)
     {
         var definition = iface.OriginalDefinition;
@@ -34,7 +34,7 @@ static class PortiaComponentRoles
                && Array.IndexOf(roles, definition.MetadataName) >= 0;
     }
 
-    /// <summary>Whether a type implements any Portia component role.</summary>
+    /// <summary>Reports whether a type implements any Portia component role.</summary>
     public static bool IsComponent(INamedTypeSymbol symbol) =>
         symbol.AllInterfaces.Any(iface => Is(iface, All));
 }

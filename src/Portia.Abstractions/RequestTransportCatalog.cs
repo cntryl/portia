@@ -8,6 +8,7 @@ public sealed class RequestTransportCatalog
     readonly FrozenDictionary<Type, RequestTransportRegistration> _registrations;
 
     /// <summary>Creates a catalog from generated request descriptors.</summary>
+    /// <param name="registrations">One descriptor per request type the application declares.</param>
     public RequestTransportCatalog(IEnumerable<RequestTransportRegistration> registrations)
     {
         ArgumentNullException.ThrowIfNull(registrations);
@@ -15,6 +16,9 @@ public sealed class RequestTransportCatalog
     }
 
     /// <summary>Gets the generated descriptor for a concrete request type.</summary>
+    /// <param name="requestType">The concrete request type to look up.</param>
+    /// <returns>The descriptor generated for that request type.</returns>
+    /// <exception cref="InvalidOperationException">The type is not present in the catalog.</exception>
     public RequestTransportRegistration Get(Type requestType)
     {
         ArgumentNullException.ThrowIfNull(requestType);

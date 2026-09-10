@@ -10,8 +10,12 @@ public interface IProjectionStoreConformanceProbe
     CheckpointIdentity RebuildIdentity { get; }
 
     /// <summary>Clears all data owned by the isolated conformance target.</summary>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>A task that completes once the target is empty.</returns>
     ValueTask ResetAsync(CancellationToken ct = default);
 
     /// <summary>Opens an independent persistence session against the same durable target.</summary>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>A session the caller disposes when finished with it.</returns>
     ValueTask<IProjectionStoreConformanceSession> OpenSessionAsync(CancellationToken ct = default);
 }

@@ -10,9 +10,15 @@ namespace Cntryl.Portia;
 public static class PortiaStreamResults
 {
     /// <summary>Writes a sequence as an incrementally flushed JSON array.</summary>
+    /// <typeparam name="T">The type of each item produced.</typeparam>
+    /// <param name="source">The sequence to write, enumerated as the response is flushed.</param>
+    /// <returns>A result that streams the sequence as one JSON array.</returns>
     public static IResult Json<T>(IAsyncEnumerable<T> source) => new StreamResult<T>(source, false);
 
     /// <summary>Writes a sequence as server-sent event data.</summary>
+    /// <typeparam name="T">The type of each item produced.</typeparam>
+    /// <param name="source">The sequence to write, enumerated as the response is flushed.</param>
+    /// <returns>A result that streams the sequence as <c>text/event-stream</c> data.</returns>
     public static IResult Sse<T>(IAsyncEnumerable<T> source) => new StreamResult<T>(source, true);
 
     sealed class StreamResult<T>(IAsyncEnumerable<T> source, bool sse) : IResult

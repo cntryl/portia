@@ -21,6 +21,12 @@ public abstract class Projector
     WorkloadIdentity? _boundIdentity;
 
     /// <summary>Uses the same repository for application writes and projection progress.</summary>
+    /// <param name="store">The repository that holds both the projected data and its checkpoint.</param>
+    /// <param name="pattern">The event streams this projector consumes.</param>
+    /// <param name="name">
+    ///     The stable checkpoint name, or <see langword="null" /> to use the projector's
+    ///     own type name.
+    /// </param>
     protected Projector(IProjectionStore store, EventStreamPattern pattern, string? name = null)
     {
         Store = store ?? throw new ArgumentNullException(nameof(store));
@@ -83,11 +89,19 @@ public abstract class Projector
         => ProjectBatchAsync(records, new ProjectorContext(identity), ct);
 
     /// <summary>Dispatches one event. Generated typed handlers skip unrelated event types.</summary>
+    /// <param name="record">The event to project, with its stream position.</param>
+    /// <param name="context">The projector context for the current batch.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>A task that completes once the event has been projected.</returns>
     protected virtual ValueTask ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
         CancellationToken ct)
         => ValueTask.CompletedTask;
 
     /// <summary>Dispatches the current unit of work in source order.</summary>
+    /// <param name="records">The events in this unit of work, in source order.</param>
+    /// <param name="context">The projector context for the current batch.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>A task that completes once every event has been projected.</returns>
     protected virtual async ValueTask ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records,
         IProjectorContext context, CancellationToken ct)
     {

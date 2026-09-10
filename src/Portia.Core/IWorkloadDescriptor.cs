@@ -11,7 +11,7 @@ interface IWorkloadDescriptor
 {
     Type ComponentType { get; }
 
-    /// <summary>Whether this kind of component can run a separate rebuild generation.</summary>
+    /// <summary>Gets whether this kind of component can run a separate rebuild generation.</summary>
     bool SupportsRebuild { get; }
 
     void Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName);
@@ -19,5 +19,6 @@ interface IWorkloadDescriptor
     ValueTask RunPass(IServiceProvider services, ProjectionRunOptions options, CancellationToken ct);
 
     /// <summary>Registers this descriptor under its own concrete type for the container.</summary>
+    /// <param name="services">The application's service collection.</param>
     void Register(IServiceCollection services);
 }

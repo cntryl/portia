@@ -16,6 +16,8 @@ public static class PortiaOpenApi
     const string DocumentName = "v1";
 
     /// <summary>Registers Portia's OpenAPI document and builds the application.</summary>
+    /// <param name="builder">The host builder to register the document on.</param>
+    /// <returns>The built application, with the OpenAPI endpoints mapped.</returns>
     public static WebApplication Build(WebApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -24,6 +26,8 @@ public static class PortiaOpenApi
     }
 
     /// <summary>Creates an application with Portia's OpenAPI document.</summary>
+    /// <param name="args">The process command-line arguments, or <see langword="null" /> for none.</param>
+    /// <returns>The built application, with the OpenAPI endpoints mapped.</returns>
     public static WebApplication Create(string[]? args)
     {
         var builder = WebApplication.CreateBuilder(args ?? []);

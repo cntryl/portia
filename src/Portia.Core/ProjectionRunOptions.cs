@@ -21,6 +21,8 @@ public sealed record ProjectionRunOptions
     public string? RebuildId { get; init; }
 
     /// <summary>Rejects invalid batching and generation settings before work starts.</summary>
+    /// <exception cref="ArgumentException"><see cref="RebuildId" /> is present but blank.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="MaxBatchSize" /> is not positive.</exception>
     public void Validate()
     {
         if (RebuildId is not null)

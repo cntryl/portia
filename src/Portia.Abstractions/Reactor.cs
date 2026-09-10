@@ -15,6 +15,12 @@ public abstract class Reactor
     WorkloadIdentity? _boundIdentity;
 
     /// <summary>Uses constructor-injected persistence for reaction progress.</summary>
+    /// <param name="checkpoints">The store that persists this reactor's progress.</param>
+    /// <param name="pattern">The event streams this reactor consumes.</param>
+    /// <param name="name">
+    ///     The stable checkpoint name, or <see langword="null" /> to use the reactor's
+    ///     own type name.
+    /// </param>
     protected Reactor(IProjectionCheckpointStore checkpoints, EventStreamPattern pattern, string? name = null)
     {
         Checkpoints = checkpoints ?? throw new ArgumentNullException(nameof(checkpoints));
@@ -79,6 +85,7 @@ public abstract class Reactor
     /// </summary>
     /// <param name="context">The reaction whose source event causes the effect.</param>
     /// <param name="effectName">A name distinguishing this effect from others the same reaction causes.</param>
+    /// <returns>The idempotency key for this effect of this source event.</returns>
     /// <remarks>
     ///     The workload portion preserves the text emitted by the original persisted-key algorithm.
     ///     Applications store these IDs, so its field order and formatting are a compatibility
@@ -111,11 +118,18 @@ public abstract class Reactor
         ReactBatchAsync(contexts, ct);
 
     /// <summary>Dispatches a triggering event with its own system execution context.</summary>
+    /// <param name="record">The triggering event, with its stream position.</param>
+    /// <param name="context">The execution the reaction's effects are attributed to.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>A task that completes once the reaction has run.</returns>
     protected virtual ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
         CancellationToken ct)
         => ValueTask.CompletedTask;
 
     /// <summary>Handles reactions in source order, preserving each event's causal context.</summary>
+    /// <param name="contexts">One context per triggering event, in source order.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>A task that completes once every reaction has run.</returns>
     protected virtual async ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
     {
         foreach (var context in contexts)

@@ -10,6 +10,13 @@ public sealed class ReactorContext<TEvent> : IReactorContext<TEvent>
     readonly IExecutionContext _execution;
 
     /// <summary>Associates a typed event with the actual source and system execution state.</summary>
+    /// <param name="ev">The triggering event, which must be the same instance <paramref name="source" /> carries.</param>
+    /// <param name="source">The stored record the event was read from.</param>
+    /// <param name="execution">The system execution the reaction's effects are attributed to.</param>
+    /// <exception cref="ArgumentException">
+    ///     <paramref name="ev" /> is not <paramref name="source" />'s own
+    ///     event, or <paramref name="execution" /> does not run as a system principal.
+    /// </exception>
     public ReactorContext(TEvent ev, DomainEventRecord source, IExecutionContext execution)
     {
         ArgumentNullException.ThrowIfNull(source);

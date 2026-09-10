@@ -11,7 +11,7 @@ namespace Cntryl.Portia;
 static class FitzEventStreamPatternOffsets
 {
     /// <summary>
-    ///     Returns whether <paramref name="stream" /> falls under <paramref name="pattern" /> — every
+    ///     Reports whether <paramref name="stream" /> falls under <paramref name="pattern" /> — every
     ///     realm and every non-null area or resource segment equal the stream's corresponding segment.
     /// </summary>
     public static bool Matches(EventStreamAddress stream, EventStreamPattern pattern) =>

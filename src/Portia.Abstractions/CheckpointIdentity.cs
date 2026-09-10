@@ -4,6 +4,11 @@ namespace Cntryl.Portia;
 public sealed record CheckpointIdentity
 {
     /// <summary>Creates a scoped checkpoint identity. Null rebuild IDs select live processing.</summary>
+    /// <param name="componentName">The stable name of the projector or reactor that owns the progress.</param>
+    /// <param name="pattern">The event streams the component consumes.</param>
+    /// <param name="rebuildId">
+    ///     The rebuild generation, or <see langword="null" /> for live processing.
+    /// </param>
     public CheckpointIdentity(string componentName, EventStreamPattern pattern, string? rebuildId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(componentName);

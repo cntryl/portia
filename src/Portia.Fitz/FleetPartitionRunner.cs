@@ -46,6 +46,11 @@ public sealed partial class FleetPartitionRunner(
     }
 
     /// <summary>Reconciles a changing partition snapshot without restarting retained assignments.</summary>
+    /// <param name="partitions">Reports the current set of exact lease routes outside the membership area.</param>
+    /// <param name="onPartitionAcquired">Runs while the partition lease is held.</param>
+    /// <param name="options">Membership, timing, and optional stable worker identity.</param>
+    /// <param name="ct">Cancels the run.</param>
+    /// <returns>The complete lifetime, including observation of all revoked work.</returns>
     public Task RunAsync(Func<IReadOnlyCollection<string>> partitions,
         Func<string, CancellationToken, Task> onPartitionAcquired,
         FleetRunOptions options, CancellationToken ct = default)

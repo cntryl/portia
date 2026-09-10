@@ -6,6 +6,22 @@ namespace Cntryl.Portia;
 public class RequestDispatchContext : IRequestContext
 {
     /// <summary>Creates a new receiver execution with optional propagated logical identity.</summary>
+    /// <param name="actor">
+    ///     The actor the request executes as. Never inferred ambiently — pass
+    ///     <see cref="RequestActor.Anonymous" /> or <see cref="RequestActor.System" /> explicitly.
+    /// </param>
+    /// <param name="invocation">
+    ///     Facts about the ingress that delivered the request, or
+    ///     <see langword="null" /> for a direct in-process invocation.
+    /// </param>
+    /// <param name="metadata">
+    ///     The logical identity to propagate, or <see langword="null" /> to start a
+    ///     new logical request.
+    /// </param>
+    /// <param name="timeProvider">
+    ///     The clock that stamps the start time, or <see langword="null" /> to use
+    ///     <see cref="TimeProvider.System" />.
+    /// </param>
     public RequestDispatchContext(ClaimsPrincipal actor, RequestInvocation? invocation = null,
         RequestMetadata? metadata = null, TimeProvider? timeProvider = null)
     {
@@ -18,6 +34,7 @@ public class RequestDispatchContext : IRequestContext
     }
 
     /// <summary>Copies an existing execution without generating another identity or start time.</summary>
+    /// <param name="context">The execution to copy.</param>
     protected RequestDispatchContext(RequestDispatchContext context)
     {
         ArgumentNullException.ThrowIfNull(context);

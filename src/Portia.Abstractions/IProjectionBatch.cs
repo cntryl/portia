@@ -10,6 +10,9 @@ public interface IProjectionBatch : IAsyncDisposable
     ///     Atomically commits repository changes and the next checkpoint. A failed response can be
     ///     ambiguous: the next attempt must reload authoritative progress before applying events again.
     /// </summary>
+    /// <param name="checkpoint">The progress recorded atomically with the batch's data changes.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>A task that completes once data and checkpoint are durable.</returns>
     /// <exception cref="ProjectionConcurrencyException">The checkpoint conflicts with a concurrent writer.</exception>
     ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default);
 }

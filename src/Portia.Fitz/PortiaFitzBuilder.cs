@@ -78,21 +78,27 @@ public sealed class PortiaFitzBuilder
     }
 
     /// <summary>Activates every transport declared by requests with selected handlers.</summary>
+    /// <returns>This builder, for chaining.</returns>
     public PortiaFitzBuilder AddRequestWorkers() => EnableWorkers(AllRequestTransports, false);
 
     /// <summary>Activates RPC serving when at least one selected handler accepts a callable request.</summary>
+    /// <returns>This builder, for chaining.</returns>
     public PortiaFitzBuilder AddRpcWorkers() => EnableWorkers(RequestTransports.Callable, true);
 
     /// <summary>Activates queue listeners for all selected handlers accepting queuable requests.</summary>
+    /// <returns>This builder, for chaining.</returns>
     public PortiaFitzBuilder AddQueueWorkers() => EnableWorkers(RequestTransports.Queuable, true);
 
     /// <summary>Activates notice listeners for all selected handlers accepting notifiable requests.</summary>
+    /// <returns>This builder, for chaining.</returns>
     public PortiaFitzBuilder AddNoticeWorkers() => EnableWorkers(RequestTransports.Notifiable, true);
 
     /// <summary>Activates schedule listeners for all selected handlers accepting schedulable requests.</summary>
+    /// <returns>This builder, for chaining.</returns>
     public PortiaFitzBuilder AddScheduledWorkers() => EnableWorkers(RequestTransports.Schedulable, true);
 
     /// <summary>Disables inbound request listeners while retaining Fitz persistence and outbound clients.</summary>
+    /// <returns>This builder, for chaining.</returns>
     public PortiaFitzBuilder DisableRequestWorkers()
     {
         _workerTransports = 0;
@@ -102,6 +108,9 @@ public sealed class PortiaFitzBuilder
     }
 
     /// <summary>Configures membership for the application's explicitly leased component workloads.</summary>
+    /// <param name="options">The membership selector and its lease and timing settings.</param>
+    /// <returns>This builder, for chaining.</returns>
+    /// <exception cref="InvalidOperationException">The application already configured a different fleet.</exception>
     public PortiaFitzBuilder UseFleet(FleetRunOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);

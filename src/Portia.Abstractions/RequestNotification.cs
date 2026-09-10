@@ -36,6 +36,7 @@ public readonly record struct RequestNotification(
 {
     /// <summary>Builds the transport-neutral delivery this notification describes.</summary>
     /// <param name="timeProvider">The optional clock used by the request context.</param>
+    /// <returns>The delivery describing this notification.</returns>
     public RequestDelivery ToDelivery(TimeProvider? timeProvider = null) =>
         RequestDelivery.For(Request, Name, Invocation, Metadata, ActorToken, TraceContext, timeProvider);
 }

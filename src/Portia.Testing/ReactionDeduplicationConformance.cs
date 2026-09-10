@@ -9,6 +9,7 @@ public static class ReactionDeduplicationConformance
     /// </summary>
     /// <param name="probe">An isolated durable deduplication adapter.</param>
     /// <param name="ct">A token that can cancel verification.</param>
+    /// <returns>A task that completes when every check has passed.</returns>
     /// <exception cref="ConformanceViolationException">The implementation executes a duplicate.</exception>
     public static async ValueTask VerifyAsync(IReactionDeduplicationProbe probe, CancellationToken ct = default)
     {

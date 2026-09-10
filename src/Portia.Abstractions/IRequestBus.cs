@@ -30,14 +30,28 @@ public interface IRequestBus
     /// <returns>Receiver-created execution state.</returns>
     RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null);
 
-    /// <summary>Dispatches receiver-created execution state. </summary>
+    /// <summary>Dispatches a no-result request using receiver-created execution state.</summary>
+    /// <param name="request">The request to dispatch.</param>
+    /// <param name="context">Execution state from <see cref="CreateContext" />.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>The outcome of handling the request.</returns>
     ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context, CancellationToken ct = default);
 
     /// <summary>Dispatches a result-bearing request using receiver-created execution state.</summary>
+    /// <typeparam name="TOut">The type of the value produced on success.</typeparam>
+    /// <param name="request">The request to dispatch.</param>
+    /// <param name="context">Execution state from <see cref="CreateContext" />.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>The outcome of handling the request.</returns>
     ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context,
         CancellationToken ct = default);
 
     /// <summary>Streams a request using receiver-created execution state.</summary>
+    /// <typeparam name="TOut">The type of the values produced.</typeparam>
+    /// <param name="request">The request to dispatch.</param>
+    /// <param name="context">Execution state from <see cref="CreateContext" />.</param>
+    /// <param name="ct">A token that can cancel enumeration.</param>
+    /// <returns>The values produced by the handler, yielded as they are produced.</returns>
     IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request, RequestDispatchContext context,
         CancellationToken ct = default);
 }

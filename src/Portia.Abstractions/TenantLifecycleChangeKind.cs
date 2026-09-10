@@ -1,7 +1,7 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-///     Whether a tenant became active or stopped being active.
+///     The kind of change reported by <see cref="TenantLifecycleChange" />.
 /// </summary>
 public enum TenantLifecycleChangeKind
 {

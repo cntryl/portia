@@ -15,7 +15,13 @@ public sealed class DomainEventTypeCatalog
     ///     Registers <typeparamref name="TEvent" /> under its own logical name and schema version.
     /// </summary>
     /// <typeparam name="TEvent">The event type to register.</typeparam>
+    /// <param name="version">The schema version, starting at 1.</param>
+    /// <param name="name">The logical event name.</param>
     /// <returns>This catalog, for chaining.</returns>
+    /// <exception cref="InvalidOperationException">
+    ///     The name and version pair, or the CLR type, is
+    ///     already registered.
+    /// </exception>
     public DomainEventTypeCatalog Register<TEvent>(int version, string name)
         where TEvent : DomainEvent
     {
@@ -42,6 +48,9 @@ public sealed class DomainEventTypeCatalog
         _types.TryGetValue((name, version), out type);
 
     /// <summary>Gets the generated discriminator for a concrete event type.</summary>
+    /// <param name="eventType">The concrete event type to look up.</param>
+    /// <returns>The logical name and schema version registered for that type.</returns>
+    /// <exception cref="InvalidOperationException">The type is not present in the catalog.</exception>
     public (string Name, int Version) Describe(Type eventType) =>
         _discriminators.TryGetValue(eventType, out var discriminator)
             ? discriminator
