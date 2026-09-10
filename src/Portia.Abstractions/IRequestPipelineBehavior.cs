@@ -4,7 +4,10 @@ namespace Cntryl.Portia;
 // RequestHandler/StreamRequestHandler, which read as siblings of IRequestHandler and
 // IStreamRequestHandler while being something else entirely.
 
-/// <summary>Continues a result-bearing request pipeline.</summary>
+/// <summary>
+///     Continues a result-bearing request pipeline. A behavior may invoke this delegate zero or one
+///     time during its own invocation; a second, concurrent, or retained late invocation is invalid.
+/// </summary>
 /// <typeparam name="TOut">The type of the value produced on success.</typeparam>
 /// <param name="ct">A token that can cancel the remainder of the pipeline.</param>
 /// <returns>The outcome produced by the rest of the pipeline.</returns>
@@ -16,7 +19,9 @@ public interface IRequestPipelineBehavior<in TRequest> where TRequest : IRequest
 {
     /// <summary>Executes this behavior and, when appropriate, the remainder of the pipeline.</summary>
     /// <param name="context">The request context for this execution.</param>
-    /// <param name="continuation">The rest of the pipeline; skip calling it to short-circuit.</param>
+    /// <param name="continuation">
+    ///     The rest of the pipeline; invoke it at most once during this method, or skip it to short-circuit.
+    /// </param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of the request, whether produced here or by the continuation.</returns>
     ValueTask<Result> HandleAsync(IRequestContext<TRequest> context, RequestPipelineNext continuation,
@@ -30,7 +35,9 @@ public interface IRequestPipelineBehavior<in TRequest, TOut> where TRequest : IR
 {
     /// <summary>Executes this behavior and, when appropriate, the remainder of the pipeline.</summary>
     /// <param name="context">The request context for this execution.</param>
-    /// <param name="continuation">The rest of the pipeline; skip calling it to short-circuit.</param>
+    /// <param name="continuation">
+    ///     The rest of the pipeline; invoke it at most once during this method, or skip it to short-circuit.
+    /// </param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of the request, whether produced here or by the continuation.</returns>
     ValueTask<Result<TOut>> HandleAsync(IRequestContext<TRequest> context, RequestPipelineNext<TOut> continuation,

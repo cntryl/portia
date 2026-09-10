@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia.Consumer;
 
-public sealed class ComponentHostingTests
+public sealed partial class ComponentHostingTests
 {
     [Theory]
     [InlineData(false)]
@@ -43,6 +43,71 @@ public sealed class ComponentHostingTests
         }
 
         Assert.Equal(2, effects.Items.Count);
+        Assert.Equal(2, effects.Items.Select(item => item.ScopeId).Distinct().Count());
+        Assert.Equal(1, changes.SubscriptionCount);
+        Assert.Equal(1, changes.DisposalCount);
+    }
+
+    [Fact]
+    public async Task BrokenNotificationSubscriptionIsDisposedAndRecreatedBeforeNextPass()
+    {
+        var clock = new ManualClock();
+        var changes = new Changes { FailNextWait = true };
+        var services = ConsumerHost.CreateServices();
+        _ = services.AddSingleton<TimeProvider>(clock);
+        _ = services.AddSingleton<IDomainEventNotifier>(changes);
+        _ = services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global,
+            options => options.PollInterval = TimeSpan.FromSeconds(1)).AddWorkers();
+        await using var provider = ConsumerHost.Build(services);
+        await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+        try
+        {
+            await worker.StartAsync(default);
+            Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+            Assert.Equal(1, changes.SubscriptionCount);
+            Assert.Equal(1, changes.DisposalCount);
+            clock.Advance(TimeSpan.FromSeconds(1));
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            while (changes.SubscriptionCount < 2)
+                await Task.Delay(10, timeout.Token);
+        }
+        finally
+        {
+            await worker.StopAsync(default);
+            (worker as IDisposable)?.Dispose();
+        }
+
+        Assert.Equal(2, changes.SubscriptionCount);
+        Assert.Equal(2, changes.DisposalCount);
+    }
+
+    [Fact]
+    public async Task ScopedComponentCannotChangeTheRetainedSubscriptionPattern()
+    {
+        var changes = new Changes();
+        var services = ConsumerHost.CreateServices();
+        _ = services.AddSingleton<IDomainEventNotifier>(changes);
+        _ = services.AddSingleton<PatternSequence>();
+        _ = services.AddPortia().AddProjector<ChangingPatternProjector>(WorkloadScope.Global, options =>
+        {
+            options.FailureAttemptLimit = 1;
+            options.PollInterval = TimeSpan.FromDays(1);
+        }).AddWorkers();
+        await using var provider = ConsumerHost.Build(services);
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+        await worker.StartAsync(default);
+        await changes.Subscribed.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        changes.Signal();
+
+        var failure = await Assert.ThrowsAsync<WorkloadFailureException>(async () =>
+            await (worker.ExecuteTask ?? throw new InvalidOperationException("The worker did not start.")));
+
+        Assert.Contains("changed its event-stream pattern", failure.InnerException?.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(1, changes.SubscriptionCount);
+        Assert.Equal(1, changes.DisposalCount);
+        worker.Dispose();
     }
 
     [Theory]
@@ -82,6 +147,7 @@ public sealed class ComponentHostingTests
             await worker.StopAsync(default);
             (worker as IDisposable)?.Dispose();
         }
+
     }
 
     [Fact]
@@ -90,6 +156,8 @@ public sealed class ComponentHostingTests
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
+        var changes = new Changes();
+        _ = services.AddSingleton<IDomainEventNotifier>(changes);
         _ = services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global, options =>
         {
             options.FailureAttemptLimit = 2;
@@ -108,6 +176,8 @@ public sealed class ComponentHostingTests
 
         Assert.Equal(2, failure.Attempts);
         _ = Assert.IsType<InvalidOperationException>(failure.InnerException);
+        Assert.Equal(1, changes.SubscriptionCount);
+        Assert.Equal(1, changes.DisposalCount);
         (worker as IDisposable)?.Dispose();
     }
 
@@ -289,21 +359,62 @@ public sealed class ComponentHostingTests
     sealed class Changes : IDomainEventNotifier
     {
         readonly Channel<bool> _signals = Channel.CreateUnbounded<bool>();
+        int _disposalCount;
+        int _failNextWait;
+        int _subscriptionCount;
         public TaskCompletionSource Subscribed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int DisposalCount => Volatile.Read(ref _disposalCount);
+        public bool FailNextWait { set => Volatile.Write(ref _failNextWait, value ? 1 : 0); }
+        public int SubscriptionCount => Volatile.Read(ref _subscriptionCount);
 
         public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
             CancellationToken ct = default)
         {
+            _ = Interlocked.Increment(ref _subscriptionCount);
             _ = Subscribed.TrySetResult();
-            return ValueTask.FromResult<IDomainEventSubscription>(new Subscription(_signals.Reader));
+            return ValueTask.FromResult<IDomainEventSubscription>(new Subscription(this, _signals.Reader));
         }
 
         public void Signal() => _signals.Writer.TryWrite(true);
 
-        sealed class Subscription(ChannelReader<bool> signals) : IDomainEventSubscription
+        sealed class Subscription(Changes owner, ChannelReader<bool> signals) : IDomainEventSubscription
         {
-            public async ValueTask WaitAsync(CancellationToken ct = default) => _ = await signals.ReadAsync(ct);
-            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+            int _disposed;
+
+            public async ValueTask WaitAsync(CancellationToken ct = default)
+            {
+                if (Interlocked.Exchange(ref owner._failNextWait, 0) != 0)
+                {
+                    throw new InvalidOperationException("Notification wait failed.");
+                }
+
+                _ = await signals.ReadAsync(ct);
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                {
+                    _ = Interlocked.Increment(ref owner._disposalCount);
+                }
+
+                return ValueTask.CompletedTask;
+            }
         }
+    }
+
+    internal sealed class PatternSequence
+    {
+        int _created;
+
+        public EventStreamPattern Next() => EventStreamPattern.ForPattern(
+            Interlocked.Increment(ref _created) == 1 ? "first-pattern" : "second-pattern");
+    }
+
+    internal sealed partial class ChangingPatternProjector(IAccountRepository target, PatternSequence patterns)
+        : Projector(target, patterns.Next(), "changing-pattern"), IProjectorHandler<Deposited>
+    {
+        public ValueTask HandleAsync(Deposited ev, IProjectorContext context, CancellationToken ct) =>
+            ValueTask.CompletedTask;
     }
 }

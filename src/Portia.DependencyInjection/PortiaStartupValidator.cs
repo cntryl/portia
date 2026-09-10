@@ -1,10 +1,18 @@
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia;
 
-/// <summary>Validates Portia's serialization boundary before transport workers start.</summary>
-sealed class PortiaStartupValidator(JsonSerializerOptions json, IDomainEventSerializer eventSerializer) : IHostedService
+/// <summary>
+///     Validates Portia's serialization and composed permission-evaluator boundaries before a
+///     hosted application starts accepting work.
+/// </summary>
+sealed class PortiaStartupValidator(
+    JsonSerializerOptions json,
+    IDomainEventSerializer eventSerializer,
+    RequestRegistry requests,
+    IServiceProviderIsService available) : IHostedService
 {
     public Task StartAsync(CancellationToken cancellationToken)
     {
@@ -14,6 +22,14 @@ sealed class PortiaStartupValidator(JsonSerializerOptions json, IDomainEventSeri
         // transitions; retaining both references here makes that startup contract explicit.
         _ = json;
         _ = eventSerializer;
+        if (requests.PermissionRequestTypes.Count > 0 && !available.IsService(typeof(IPermissionEvaluator)))
+        {
+            var guarded = requests.PermissionRequestTypes.Select(type => type.FullName ?? type.Name)
+                .Order(StringComparer.Ordinal);
+            throw new InvalidOperationException(
+                $"IPermissionEvaluator is required by guarded request types: {string.Join(", ", guarded)}.");
+        }
+
         return Task.CompletedTask;
     }
 

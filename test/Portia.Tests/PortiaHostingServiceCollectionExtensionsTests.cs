@@ -14,6 +14,53 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class PortiaHostingServiceCollectionExtensionsTests
 {
+    /// <summary>Hosted composition fails before serving when guarded requests have no evaluator.</summary>
+    [Fact]
+    public async Task StartupValidatorRequiresPermissionEvaluatorForGuardedRequests()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        _ = builder.Services.AddFrameworkTests();
+        using var host = builder.Build();
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+
+        Assert.Contains(nameof(IPermissionEvaluator), failure.Message, StringComparison.Ordinal);
+        var guarded = new[]
+        {
+            typeof(GetOrder), typeof(GuardedAction), typeof(GuardedAndAuthorizedAction), typeof(GuardedQuery),
+            typeof(GuardedSequence), typeof(HttpGuardedAction), typeof(TelemetryGuardedAction),
+            typeof(TelemetryGuardedSequence)
+        }.Select(type => type.FullName!).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(guarded, failure.Message[(failure.Message.IndexOf(':') + 1)..].TrimEnd('.').Trim()
+            .Split(", ", StringSplitOptions.None));
+    }
+
+    /// <summary>A registered evaluator satisfies hosted startup without constructing it eagerly.</summary>
+    [Fact]
+    public async Task StartupValidatorAcceptsGuardedRequestsGivenPermissionEvaluator()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        _ = builder.Services.AddFrameworkTests();
+        _ = builder.Services.AddScoped<IPermissionEvaluator>(_ =>
+            throw new InvalidOperationException("Startup must not resolve a scoped evaluator."));
+        using var host = builder.Build();
+
+        await host.StartAsync();
+        await host.StopAsync();
+    }
+
+    /// <summary>An unguarded composition has no permission-evaluator requirement.</summary>
+    [Fact]
+    public async Task StartupValidatorDoesNotRequireEvaluatorWithoutGuardedRequests()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        _ = builder.Services.AddPortia();
+        using var host = builder.Build();
+
+        await host.StartAsync();
+        await host.StopAsync();
+    }
+
     /// <summary>A failing worker contribution leaves the target collection unchanged.</summary>
     [Fact]
     public void ShouldStageAllWorkerRegistrationsBeforeApplyingAny()

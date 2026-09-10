@@ -101,14 +101,15 @@ sealed class FitzApplicationWorkers(
         {
             if (worker.CreateRunner(host) is { } run)
             {
-                tasks.Add(RetryAsync(worker.Route, run, TimeSpan.FromSeconds(1), stoppingToken));
+                tasks.Add(RetryAsync(worker.Route, run, TimeSpan.FromSeconds(1), _clock, _logger, stoppingToken));
             }
         }
 
         return Task.WhenAll(tasks);
     }
 
-    async Task RetryAsync(string name, Func<CancellationToken, Task> run, TimeSpan interval, CancellationToken ct)
+    internal static async Task RetryAsync(string name, Func<CancellationToken, Task> run, TimeSpan interval,
+        TimeProvider clock, ILogger<FitzApplicationWorkers>? logger, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -120,18 +121,18 @@ sealed class FitzApplicationWorkers(
             {
                 break;
             }
-            catch (TerminalHandlerFailureException)
+            catch (Exception ex) when (ex is TerminalHandlerFailureException or TerminalHandlerMissingException)
             {
                 throw;
             }
             catch (Exception ex)
             {
-                PortiaTelemetry.RecordRunnerFault(name, RunnerFaultStage.Execution, ex, _logger);
+                PortiaTelemetry.RecordRunnerFault(name, RunnerFaultStage.Execution, ex, logger);
             }
 
             try
             {
-                await Task.Delay(interval, _clock, ct).ConfigureAwait(false);
+                await Task.Delay(interval, clock, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

@@ -22,13 +22,12 @@ public sealed class QueueRunner(
 
     /// <summary>
     ///     Reserves and dispatches queued requests until the queue is exhausted or cancellation is
-    ///     requested. A request is completed after its handler succeeds, or after it fails with a
-    ///     non-transient error (bad input, unauthorized, a conflict — the request would fail
-    ///     identically on redelivery, so it is dropped, not retried). That includes actor
-    ///     re-validation failing (e.g. an expired token) — retrying won't make an expired token
-    ///     valid, so the request is dropped rather than redelivered forever. Any other failure — a
-    ///     transient error, or an unrecognized (unexpected, infrastructure-level) exception —
-    ///     abandons the reservation so the request is redelivered.
+    ///     requested. A request is completed after its handler succeeds. Permanent handler failures,
+    ///     actor-validation failures, and retryable or unexpected failures at the configured
+    ///     terminal attempt are first passed to the application terminal handler and are completed
+    ///     only after that callback succeeds. A terminal delivery without a handler faults the
+    ///     runner and remains transport-owned. Retryable or unexpected failures below the threshold
+    ///     are abandoned for redelivery.
     /// </summary>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the run.</returns>
@@ -48,34 +47,46 @@ public sealed class QueueRunner(
 
                 if (!dispatch.WasDispatched)
                 {
-                    // Actor validation failed (e.g. an expired token) — retrying won't make it
-                    // valid, so the request is dropped rather than redelivered forever.
                     PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Validation,
                         logger: _logger);
+                    await CompleteTerminalAsync(scope, queued, dispatch.Outcome.Error, null,
+                            QueuedRequestTerminalReason.ActorValidationFailure, ct)
+                        .ConfigureAwait(false);
+                }
+                else if (dispatch.Outcome.IsSuccess)
+                {
                     await queued.CompleteAsync(ct).ConfigureAwait(false);
+                }
+                else if (dispatch.Outcome.Error is { IsTransient: false } permanent)
+                {
+                    await CompleteTerminalAsync(scope, queued, permanent, null,
+                            QueuedRequestTerminalReason.PermanentFailure, ct)
+                        .ConfigureAwait(false);
+                }
+                else if (IsRetryLimitReached(scope, queued))
+                {
+                    await CompleteTerminalAsync(scope, queued, dispatch.Outcome.Error, null,
+                            QueuedRequestTerminalReason.RetryLimitReached, ct)
+                        .ConfigureAwait(false);
                 }
                 else
                 {
-                    if (dispatch.Outcome.IsSuccess || dispatch.Outcome.Error is { IsTransient: false })
-                    {
-                        await queued.CompleteAsync(ct).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        if (!await CompleteTerminalAsync(scope, queued, dispatch.Outcome.Error, null, ct)
-                                .ConfigureAwait(false))
-                        {
-                            await queued.AbandonAsync(ct).ConfigureAwait(false);
-                        }
-                    }
+                    await queued.AbandonAsync(ct).ConfigureAwait(false);
                 }
             }
-            catch (Exception ex) when (!ct.IsCancellationRequested && ex is not TerminalHandlerFailureException)
+            catch (Exception ex) when (!ct.IsCancellationRequested &&
+                                       ex is not (TerminalHandlerFailureException or TerminalHandlerMissingException))
             {
                 // An unrecognized exception's retriability is unknown; abandoning (rather than
                 // silently dropping the request) is the safer default.
                 PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, _logger);
-                if (!await CompleteTerminalAsync(scope, queued, null, ex, ct).ConfigureAwait(false))
+                if (IsRetryLimitReached(scope, queued))
+                {
+                    await CompleteTerminalAsync(scope, queued, null, ex,
+                            QueuedRequestTerminalReason.RetryLimitReached, ct)
+                        .ConfigureAwait(false);
+                }
+                else
                 {
                     await queued.AbandonAsync(ct).ConfigureAwait(false);
                 }
@@ -83,19 +94,19 @@ public sealed class QueueRunner(
         }
     }
 
-    async ValueTask<bool> CompleteTerminalAsync(IQueueDeliveryScope scope, IQueuedRequest queued, RequestError? error,
-        Exception? exception, CancellationToken ct)
+    static bool IsRetryLimitReached(IQueueDeliveryScope scope, IQueuedRequest queued) =>
+        scope.Options.TerminalAttempt is { } terminal && queued.Attempt >= terminal;
+
+    async ValueTask CompleteTerminalAsync(IQueueDeliveryScope scope, IQueuedRequest queued, RequestError? error,
+        Exception? exception, QueuedRequestTerminalReason reason, CancellationToken ct)
     {
-        if (scope.Options.TerminalAttempt is not { } terminal || queued.Attempt < terminal ||
-            scope.TerminalHandler is null)
-        {
-            return false;
-        }
+        var terminalHandler = scope.TerminalHandler ?? throw new TerminalHandlerMissingException(reason);
 
         try
         {
-            await scope.TerminalHandler.HandleAsync(new QueuedRequestFailureContext(
-                    queued.Request, queued.Metadata, queued.Invocation, queued.Attempt, error, exception), ct)
+            await terminalHandler.HandleAsync(new QueuedRequestFailureContext(
+                    queued.Request, queued.Metadata, queued.Invocation, queued.Attempt, error, exception)
+            { Reason = reason }, ct)
                 .ConfigureAwait(false);
         }
         catch (Exception handlerException) when (!ct.IsCancellationRequested)
@@ -113,6 +124,5 @@ public sealed class QueueRunner(
                 _logger);
         }
 
-        return true;
     }
 }

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
 using Microsoft.OpenApi.Reader;
 
@@ -29,6 +30,7 @@ public sealed class OpenApiTests : IAsyncDisposable
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddFrameworkTests();
+        _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
         _app = builder.Build();
 
         var group = _app.MapGroup("/api").WithTags("orders");
@@ -105,6 +107,7 @@ public sealed class OpenApiTests : IAsyncDisposable
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddFrameworkTests();
+        _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
         _app = builder.Build();
         _ = _app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");
         _ = _app.MapGet("/ordinary", () => Results.Ok()).WithName("httpGetWidget");

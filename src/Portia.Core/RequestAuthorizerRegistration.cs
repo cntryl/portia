@@ -32,7 +32,7 @@ public abstract class RequestAuthorizerRegistration(
     internal string StageName { get; } = PortiaTelemetry.StageName(stage);
 
     internal abstract ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request,
-        RequestDispatchContext context, CancellationToken ct);
+        IRequestContext context, CancellationToken ct);
 
     internal abstract void Register(IServiceCollection services);
 }

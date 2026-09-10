@@ -112,6 +112,246 @@ public sealed class RequestPipelineBehaviorTests
         Assert.Empty(calls);
     }
 
+    /// <summary>A no-result behavior may short-circuit without invoking downstream work.</summary>
+    [Fact]
+    public async Task ShouldAllowBehaviorToSkipContinuation()
+    {
+        var calls = new List<string>();
+        var services = Services(calls);
+        _ = services.AddSingleton<ShortCircuitBehavior>();
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineAction, PipelineActionHandler>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineAction, ShortCircuitBehavior>(0));
+        using var provider = services.BuildServiceProvider();
+
+        var result = await provider.GetRequiredService<IRequestBus>()
+            .SendAsync(new PipelineAction(), RequestActor.System);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(["short-circuit"], calls);
+    }
+
+    /// <summary>Result-bearing and streaming behaviors may also short-circuit their continuations.</summary>
+    [Fact]
+    public async Task ShouldAllowResultAndStreamingBehaviorsToSkipContinuation()
+    {
+        var services = Services([]);
+        _ = services.AddSingleton<ShortCircuitQueryBehavior>();
+        _ = services.AddSingleton<ShortCircuitStreamBehavior>();
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineQuery, PipelineQueryHandler, int>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new StreamRequestRegistration<PipelineStream, PipelineStreamHandler, int>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineQuery, ShortCircuitQueryBehavior, int>(0));
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new StreamRequestPipelineBehaviorRegistration<PipelineStream, ShortCircuitStreamBehavior, int>(0));
+        using var provider = services.BuildServiceProvider();
+        var bus = provider.GetRequiredService<IRequestBus>();
+
+        var query = await bus.SendAsync(new PipelineQuery(), RequestActor.System);
+        var stream = new List<int>();
+        await foreach (var item in bus.StreamAsync(new PipelineStream(), RequestActor.System))
+            stream.Add(item);
+
+        Assert.True(query.IsSuccess);
+        Assert.Equal(99, query.Value);
+        Assert.Equal([9], stream);
+    }
+
+    /// <summary>A continuation is single-use and cannot execute a handler twice.</summary>
+    [Fact]
+    public async Task ShouldRejectSecondSequentialContinuationInvocation()
+    {
+        var calls = new List<string>();
+        var services = Services(calls);
+        _ = services.AddSingleton<TwiceBehavior>();
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineAction, PipelineActionHandler>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineAction, TwiceBehavior>(0));
+        using var provider = services.BuildServiceProvider();
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await provider.GetRequiredService<IRequestBus>().SendAsync(new PipelineAction(), RequestActor.System));
+
+        Assert.Equal(SingleUseMessage, failure.Message);
+        Assert.Equal(["handler"], calls);
+    }
+
+    /// <summary>Two concurrent continuation calls admit one winner and reject the other.</summary>
+    [Fact]
+    public async Task ShouldAllowExactlyOneConcurrentContinuationInvocation()
+    {
+        var calls = new List<string>();
+        var behavior = new ConcurrentBehavior();
+        var services = Services(calls);
+        _ = services.AddSingleton(behavior);
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineAction, PipelineActionHandler>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineAction, ConcurrentBehavior>(0));
+        using var provider = services.BuildServiceProvider();
+
+        var result = await provider.GetRequiredService<IRequestBus>()
+            .SendAsync(new PipelineAction(), RequestActor.System);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(["handler"], calls);
+        Assert.Equal(SingleUseMessage, Assert.Single(behavior.Failures).Message);
+    }
+
+    /// <summary>Awaiting before the first continuation call is valid.</summary>
+    [Fact]
+    public async Task ShouldAllowAwaitBeforeFirstContinuationInvocation()
+    {
+        var calls = new List<string>();
+        var services = Services(calls);
+        _ = services.AddSingleton<YieldBeforeContinuationBehavior>();
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineAction, PipelineActionHandler>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineAction, YieldBeforeContinuationBehavior>(0));
+        using var provider = services.BuildServiceProvider();
+
+        var result = await provider.GetRequiredService<IRequestBus>()
+            .SendAsync(new PipelineAction(), RequestActor.System);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(["handler"], calls);
+    }
+
+    /// <summary>An inner continuation expires when its own behavior returns, even while an outer behavior remains.</summary>
+    [Fact]
+    public async Task ShouldRejectInnerContinuationAfterInnerBehaviorReturns()
+    {
+        var calls = new List<string>();
+        var retained = new RetainingBehavior();
+        var services = Services(calls);
+        _ = services.AddSingleton(retained);
+        _ = services.AddSingleton<InvokeRetainedInnerBehavior>();
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineAction, PipelineActionHandler>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineAction, InvokeRetainedInnerBehavior>(-10));
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineAction, RetainingBehavior>(0));
+        using var provider = services.BuildServiceProvider();
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await provider.GetRequiredService<IRequestBus>().SendAsync(new PipelineAction(), RequestActor.System));
+
+        Assert.Equal(SingleUseMessage, failure.Message);
+        Assert.Empty(calls);
+    }
+
+    /// <summary>A continuation retained by a behavior expires when that behavior returns.</summary>
+    [Fact]
+    public async Task ShouldRejectContinuationRetainedAfterBehaviorReturns()
+    {
+        var calls = new List<string>();
+        var behavior = new RetainingBehavior();
+        var services = Services(calls);
+        _ = services.AddSingleton(behavior);
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineAction, PipelineActionHandler>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineAction, RetainingBehavior>(0));
+        using var provider = services.BuildServiceProvider();
+
+        var result = await provider.GetRequiredService<IRequestBus>()
+            .SendAsync(new PipelineAction(), RequestActor.System);
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await behavior.Continuation!(default));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(SingleUseMessage, failure.Message);
+        Assert.Empty(calls);
+    }
+
+    /// <summary>Result-bearing and streaming continuations enforce the same single-use contract.</summary>
+    [Fact]
+    public async Task ShouldRejectSecondResultAndStreamingContinuationInvocations()
+    {
+        var calls = new List<string>();
+        var services = Services(calls);
+        _ = services.AddSingleton<TwiceQueryBehavior>();
+        _ = services.AddSingleton<TwiceStreamBehavior>();
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineQuery, PipelineQueryHandler, int>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new StreamRequestRegistration<PipelineStream, PipelineStreamHandler, int>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineQuery, TwiceQueryBehavior, int>(0));
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new StreamRequestPipelineBehaviorRegistration<PipelineStream, TwiceStreamBehavior, int>(0));
+        using var provider = services.BuildServiceProvider();
+        var bus = provider.GetRequiredService<IRequestBus>();
+
+        var queryFailure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await bus.SendAsync(new PipelineQuery(), RequestActor.System));
+        var streamFailure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (var _ in bus.StreamAsync(new PipelineStream(), RequestActor.System))
+            {
+            }
+        });
+
+        Assert.Equal(SingleUseMessage, queryFailure.Message);
+        Assert.Equal(SingleUseMessage, streamFailure.Message);
+    }
+
+    /// <summary>The concrete typed context instance is shared through a family behavior and handler.</summary>
+    [Fact]
+    public async Task ShouldShareOneConcreteRequestContextAcrossPipeline()
+    {
+        var seen = new List<IRequestContext>();
+        var services = Services([]);
+        _ = services.AddSingleton(seen);
+        _ = services.AddSingleton<ContextBehavior>();
+        _ = services.AddSingleton<ContextHandler>();
+        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<PipelineAction, ContextHandler>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<IBehaviorRequest, ContextBehavior>(0));
+        using var provider = services.BuildServiceProvider();
+
+        _ = await provider.GetRequiredService<IRequestBus>().SendAsync(new PipelineAction(), RequestActor.System);
+
+        Assert.Equal(2, seen.Count);
+        Assert.Same(seen[0], seen[1]);
+        Assert.IsType<RequestContext<PipelineAction>>(seen[0]);
+    }
+
+    /// <summary>Nested and concurrent dispatches through one scoped bus retain distinct execution frames.</summary>
+    [Fact]
+    public async Task ShouldIsolateNestedAndConcurrentDispatchFrames()
+    {
+        var services = Services([]);
+        var handled = new System.Collections.Concurrent.ConcurrentBag<int>();
+        var gate = new DispatchGate();
+        _ = services.AddSingleton(handled);
+        _ = services.AddSingleton(gate);
+        _ = services.AddScoped<NestedConcurrentBehavior>();
+        _ = services.AddSingleton<NestedConcurrentHandler>();
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<NestedConcurrentAction, NestedConcurrentHandler>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<NestedConcurrentAction, NestedConcurrentBehavior>(0));
+        using var provider = services.BuildServiceProvider();
+        var bus = provider.GetRequiredService<IRequestBus>();
+
+        var results = await Task.WhenAll(
+            bus.SendAsync(new NestedConcurrentAction(1, true), RequestActor.System).AsTask(),
+            bus.SendAsync(new NestedConcurrentAction(2, true), RequestActor.System).AsTask());
+        Assert.All(results, result => Assert.True(result.IsSuccess));
+
+        gate.Bypass = true;
+        var nested = await bus.SendAsync(new NestedConcurrentAction(3, false), RequestActor.System);
+        Assert.True(nested.IsSuccess);
+        Assert.Equal([1, 2, 3, 103], handled.Order());
+    }
+
     /// <summary>Built-in and custom invocations expose bounded transport names.</summary>
     [Fact]
     public void ShouldExposeStableBuiltInAndCustomTransportNames()
@@ -164,6 +404,8 @@ public sealed class RequestPipelineBehaviorTests
     internal sealed record InvalidPipelineAction : IRequest;
 
     internal sealed record MixedShape : IRequest<int>, IBehaviorRequest;
+
+    internal sealed record NestedConcurrentAction(int Id, bool Inner) : IRequest;
 
     internal sealed record CustomInvocation : RequestInvocation
     {
@@ -259,5 +501,191 @@ public sealed class RequestPipelineBehaviorTests
     {
         public ValueTask<Result> AuthorizeAsync(IRequestContext<PipelineAction> context, CancellationToken ct)
             => ValueTask.FromResult(Result.Failure(new RequestError(RequestErrorKind.Forbidden, "denied")));
+    }
+
+    const string SingleUseMessage =
+        "A request pipeline continuation may be invoked at most once and only during its behavior invocation.";
+
+    internal sealed class ShortCircuitBehavior(List<string> calls) : IRequestPipelineBehavior<PipelineAction>
+    {
+        public ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation, CancellationToken ct)
+        {
+            calls.Add("short-circuit");
+            return ValueTask.FromResult(Result.Success);
+        }
+    }
+
+    internal sealed class ShortCircuitQueryBehavior : IRequestPipelineBehavior<PipelineQuery, int>
+    {
+        public ValueTask<Result<int>> HandleAsync(IRequestContext<PipelineQuery> context,
+            RequestPipelineNext<int> continuation, CancellationToken ct) =>
+            ValueTask.FromResult(Result<int>.Success(99));
+    }
+
+    internal sealed class ShortCircuitStreamBehavior : IStreamRequestPipelineBehavior<PipelineStream, int>
+    {
+        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context,
+            StreamRequestPipelineNext<int> continuation, [EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            yield return 9;
+            await Task.CompletedTask;
+        }
+    }
+
+    internal sealed class TwiceBehavior : IRequestPipelineBehavior<PipelineAction>
+    {
+        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation, CancellationToken ct)
+        {
+            _ = await continuation(ct);
+            return await continuation(ct);
+        }
+    }
+
+    internal sealed class RetainingBehavior : IRequestPipelineBehavior<PipelineAction>
+    {
+        public RequestPipelineNext? Continuation { get; private set; }
+
+        public ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation, CancellationToken ct)
+        {
+            Continuation = continuation;
+            return ValueTask.FromResult(Result.Success);
+        }
+    }
+
+    internal sealed class ConcurrentBehavior : IRequestPipelineBehavior<PipelineAction>
+    {
+        int _ready;
+        readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public List<InvalidOperationException> Failures { get; } = [];
+
+        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation, CancellationToken ct)
+        {
+            async Task<Result?> AttemptAsync()
+            {
+                if (Interlocked.Increment(ref _ready) == 2)
+                    _ = _release.TrySetResult();
+                await _release.Task.WaitAsync(ct);
+                try
+                {
+                    return await continuation(ct);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Failures.Add(ex);
+                    return null;
+                }
+            }
+
+            var outcomes = await Task.WhenAll(Task.Run(AttemptAsync, ct), Task.Run(AttemptAsync, ct));
+            return outcomes.Single(result => result is not null)!.Value;
+        }
+    }
+
+    internal sealed class YieldBeforeContinuationBehavior : IRequestPipelineBehavior<PipelineAction>
+    {
+        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation, CancellationToken ct)
+        {
+            await Task.Yield();
+            return await continuation(ct);
+        }
+    }
+
+    internal sealed class InvokeRetainedInnerBehavior(RetainingBehavior inner)
+        : IRequestPipelineBehavior<PipelineAction>
+    {
+        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation, CancellationToken ct)
+        {
+            _ = await continuation(ct);
+            return await inner.Continuation!(ct);
+        }
+    }
+
+    internal sealed class TwiceQueryBehavior : IRequestPipelineBehavior<PipelineQuery, int>
+    {
+        public async ValueTask<Result<int>> HandleAsync(IRequestContext<PipelineQuery> context,
+            RequestPipelineNext<int> continuation, CancellationToken ct)
+        {
+            _ = await continuation(ct);
+            return await continuation(ct);
+        }
+    }
+
+    internal sealed class TwiceStreamBehavior : IStreamRequestPipelineBehavior<PipelineStream, int>
+    {
+        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context,
+            StreamRequestPipelineNext<int> continuation, [EnumeratorCancellation] CancellationToken ct)
+        {
+            await foreach (var item in continuation(ct).WithCancellation(ct))
+                yield return item;
+            await foreach (var item in continuation(ct).WithCancellation(ct))
+                yield return item;
+        }
+    }
+
+    internal sealed class ContextBehavior(List<IRequestContext> seen) : IRequestPipelineBehavior<IBehaviorRequest>
+    {
+        public ValueTask<Result> HandleAsync(IRequestContext<IBehaviorRequest> context,
+            RequestPipelineNext continuation, CancellationToken ct)
+        {
+            seen.Add(context);
+            return continuation(ct);
+        }
+    }
+
+    internal sealed class ContextHandler(List<IRequestContext> seen) : IRequestHandler<PipelineAction>
+    {
+        public ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context, CancellationToken ct)
+        {
+            seen.Add(context);
+            return ValueTask.FromResult(Result.Success);
+        }
+    }
+
+    internal sealed class DispatchGate
+    {
+        int _arrivals;
+        readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool Bypass { get; set; }
+
+        public async Task EnterAsync(CancellationToken ct)
+        {
+            if (Bypass)
+                return;
+            if (Interlocked.Increment(ref _arrivals) == 2)
+                _ = _release.TrySetResult();
+            await _release.Task.WaitAsync(ct);
+        }
+    }
+
+    internal sealed class NestedConcurrentBehavior(IRequestBus bus, DispatchGate gate)
+        : IRequestPipelineBehavior<NestedConcurrentAction>
+    {
+        public async ValueTask<Result> HandleAsync(IRequestContext<NestedConcurrentAction> context,
+            RequestPipelineNext continuation, CancellationToken ct)
+        {
+            await gate.EnterAsync(ct);
+            if (!context.Request.Inner)
+                _ = await bus.SendAsync(new NestedConcurrentAction(context.Request.Id + 100, true), context.Actor, ct);
+            return await continuation(ct);
+        }
+    }
+
+    internal sealed class NestedConcurrentHandler(System.Collections.Concurrent.ConcurrentBag<int> handled)
+        : IRequestHandler<NestedConcurrentAction>
+    {
+        public ValueTask<Result> HandleAsync(IRequestContext<NestedConcurrentAction> context, CancellationToken ct)
+        {
+            handled.Add(context.Request.Id);
+            return ValueTask.FromResult(Result.Success);
+        }
     }
 }

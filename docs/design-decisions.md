@@ -17,7 +17,8 @@ transaction is repeated on every failed commit and every rebuild generation. A p
 therefore reads events and writes its own projection and nothing else: no command dispatch, no
 HTTP call, no publish, no enqueue. Reactors exist for exactly the effects that cannot join the
 projection transaction, and are checkpointed separately because of it. `PORTIA100` warns when a
-projector takes a dependency capable of causing an effect.
+projector takes a known effect dependency. It deliberately remains a best-effort heuristic rather
+than claiming to prove arbitrary application behavior.
 
 ## Reactors model effects, not only commands
 
@@ -62,6 +63,12 @@ Portia intentionally has no aggregate snapshot contract and none is planned. Agg
 model bounded consistency boundaries that can rehydrate directly from their event streams.
 Projection rebuild generations are separate from aggregate hydration and do not introduce
 aggregate snapshots.
+
+Event-store appends are atomic for one aggregate stream. Cross-aggregate workflows use events and
+reactors with at-least-once replay safety; Portia does not add a multi-stream transaction or a
+transactional request outbox. Archival cannot renumber a retained suffix because aggregate
+hydration requires original contiguous offsets. Where a history no longer represents a bounded
+consistency boundary, model an explicit domain rollover to a new aggregate instead.
 
 ## Delivery evidence
 

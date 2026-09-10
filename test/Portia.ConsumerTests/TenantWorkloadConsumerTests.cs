@@ -90,8 +90,9 @@ public sealed class TenantWorkloadConsumerTests
             await TenantDirectoryConsumerTests.SeedAsync(store, id, 1,
                 new TenantDirectoryConsumerTests.Deactivated("globex"));
             clock.Advance(TimeSpan.FromSeconds(1));
-            _ = await clock.WaitForDelayAsync();
-            _ = await clock.WaitForDelayAsync();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            while (effects.Scopes.Values.Any(disposed => !disposed))
+                await Task.Delay(10, timeout.Token);
             Assert.All(effects.Scopes.Values, Assert.True);
             Assert.Equal(2, effects.Items.Count);
         }

@@ -155,11 +155,12 @@ sealed partial class PortiaWorkloadService(
         var telemetryScope = identity.Tenant is null ? "global" : "tenant";
         PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, true, _logger);
         var consecutiveFailures = 0;
+        IDomainEventSubscription? subscription = null;
+        EventStreamPattern? subscribedPattern = null;
         try
         {
             while (!ct.IsCancellationRequested)
             {
-                IDomainEventSubscription? subscription = null;
                 var failed = false;
                 WorkloadFailureException? terminalFailure = null;
                 try
@@ -168,8 +169,18 @@ sealed partial class PortiaWorkloadService(
                     var provider = scope.ServiceProvider;
                     provider.GetRequiredService<WorkloadContext>().Initialize(identity, registration.ExplicitName);
                     registration.Descriptor.Bind(provider, identity, registration.ExplicitName);
-                    subscription = await SubscribeAsync(registration.Descriptor.Pattern(provider), ct)
-                        .ConfigureAwait(false);
+                    var passPattern = registration.Descriptor.Pattern(provider);
+                    if (subscription is null)
+                    {
+                        subscription = await SubscribeAsync(passPattern, ct).ConfigureAwait(false);
+                        subscribedPattern = passPattern;
+                    }
+                    else if (passPattern != subscribedPattern)
+                    {
+                        throw new InvalidOperationException(
+                            $"Workload '{identity}' changed its event-stream pattern from '{subscribedPattern}' to '{passPattern}' across dependency-injection scopes.");
+                    }
+
                     await registration.Descriptor.RunPass(provider, registration.Processing, ct).ConfigureAwait(false);
                     consecutiveFailures = 0;
                 }
@@ -189,33 +200,51 @@ sealed partial class PortiaWorkloadService(
                     }
                 }
 
+                if (terminalFailure is not null)
+                {
+                    throw terminalFailure;
+                }
+
+                if (failed)
+                {
+                    try
+                    {
+                        await Task.Delay(GetFailureDelay(registration, consecutiveFailures), _clock, ct)
+                            .ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                if (subscription is null)
+                {
+                    try
+                    {
+                        await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                using var backstop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                backstop.CancelAfter(registration.PollInterval);
                 try
                 {
-                    if (!failed && subscription is not null)
-                    {
-                        using var backstop = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                        backstop.CancelAfter(registration.PollInterval);
-                        try
-                        {
-                            await subscription.WaitAsync(backstop.Token).ConfigureAwait(false);
-                        }
-                        catch (OperationCanceledException) when (!ct.IsCancellationRequested &&
-                                                                 backstop.IsCancellationRequested)
-                        {
-                            // A notification is only a wakeup. Periodically re-read durable state in
-                            // case a reconnect or bounded subscription buffer lost the signal.
-                        }
-                    }
-                    else
-                    {
-                        if (terminalFailure == null)
-                        {
-                            var delay = failed
-                                ? GetFailureDelay(registration, consecutiveFailures)
-                                : registration.PollInterval;
-                            await Task.Delay(delay, _clock, ct).ConfigureAwait(false);
-                        }
-                    }
+                    await subscription.WaitAsync(backstop.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested &&
+                                                         backstop.IsCancellationRequested)
+                {
+                    // A notification is only a wakeup. Periodically re-read durable state in
+                    // case a reconnect or bounded subscription buffer lost the signal.
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -225,6 +254,9 @@ sealed partial class PortiaWorkloadService(
                 {
                     PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Notification, ex,
                         _logger);
+                    await subscription.DisposeAsync().ConfigureAwait(false);
+                    subscription = null;
+                    subscribedPattern = null;
                     try
                     {
                         await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
@@ -234,22 +266,15 @@ sealed partial class PortiaWorkloadService(
                         break;
                     }
                 }
-                finally
-                {
-                    if (subscription is not null)
-                    {
-                        await subscription.DisposeAsync().ConfigureAwait(false);
-                    }
-                }
-
-                if (terminalFailure is not null)
-                {
-                    throw terminalFailure;
-                }
             }
         }
         finally
         {
+            if (subscription is not null)
+            {
+                await subscription.DisposeAsync().ConfigureAwait(false);
+            }
+
             PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, false, _logger);
         }
 

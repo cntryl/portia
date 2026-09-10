@@ -12,12 +12,12 @@ namespace Cntryl.Portia;
 [Generator(LanguageNames.CSharp)]
 public sealed class ComponentPracticeGenerator : IIncrementalGenerator
 {
-    static readonly DiagnosticDescriptor ProjectorEffect = new("PORTIA100", "Projector must not cause external effects",
-        "Projector '{0}' takes '{1}'. A projector is a pure function of events into its own store — its writes and checkpoint commit atomically, so any effect it causes replays on every commit failure and every rebuild. Move the effect to a reactor.",
+    static readonly DiagnosticDescriptor ProjectorEffect = new("PORTIA100", "Projector has known effect dependency",
+        "Projector '{0}' takes known effect dependency '{1}'. Effects can replay after commit failure or during rebuild; move the effect to a reactor.",
         "Portia", DiagnosticSeverity.Warning, true);
 
-    static readonly DiagnosticDescriptor ServiceLocation = new("PORTIA101", "Component resolves services at runtime",
-        "'{0}' takes '{1}'. Portia components declare what they need as constructor dependencies so the whole graph stays visible to the compiler and to trimming; resolving from the container hides it.",
+    static readonly DiagnosticDescriptor ServiceLocation = new("PORTIA101", "Component uses service location",
+        "'{0}' uses service location through '{1}'. Declare dependencies directly so the component graph remains visible.",
         "Portia", DiagnosticSeverity.Warning, true);
 
     static readonly DiagnosticDescriptor AggregateService = new("PORTIA102", "Aggregate depends on a service",
@@ -42,13 +42,20 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         "Cntryl.Portia.INoticeRequestSender",
         "Cntryl.Portia.IRequestScheduler",
         "Cntryl.Portia.IAggregateRepository",
-        "System.Net.Http.HttpClient"
+        "System.Net.Http.HttpClient",
+        "System.Net.Http.IHttpClientFactory",
+        "System.Net.Mail.SmtpClient",
+        "Stripe.IStripeClient",
+        "Microsoft.EntityFrameworkCore.DbContext",
+        "System.Data.Common.DbConnection",
+        "Grpc.Core.ClientBase`1"
     ];
 
     static readonly string[] LocatorTypes =
     [
         "System.IServiceProvider",
-        "Microsoft.Extensions.DependencyInjection.IServiceScopeFactory"
+        "Microsoft.Extensions.DependencyInjection.IServiceScopeFactory",
+        "Microsoft.Extensions.DependencyInjection.IServiceScope"
     ];
 
     static readonly string[] AggregateForbiddenTypes =
@@ -77,7 +84,7 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
             if (type.Symbol is not { IsAbstract: false } symbol)
                 return;
             ReportProjectorEffects(output, symbol);
-            ReportServiceLocation(output, symbol);
+            ReportServiceLocation(output, symbol, type.Node, compilation);
             ReportAggregateServices(output, symbol);
             ReportMultipleHandlers(output, symbol);
             ReportCaughtExceptionAsResult(output, symbol, type.Node, compilation);
@@ -95,7 +102,11 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         }
     }
 
-    static void ReportServiceLocation(SourceProductionContext output, INamedTypeSymbol symbol)
+    static void ReportServiceLocation(
+        SourceProductionContext output,
+        INamedTypeSymbol symbol,
+        TypeDeclarationSyntax node,
+        Compilation compilation)
     {
         if (!IsPortiaComponent(symbol))
             return;
@@ -103,6 +114,20 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         {
             output.ReportDiagnostic(Diagnostic.Create(ServiceLocation, Location(parameter), symbol.Name,
                 Display(parameter)));
+        }
+
+        var semanticModel = compilation.GetSemanticModel(node.SyntaxTree);
+        foreach (var invocation in node.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                     .Where(candidate => candidate.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() == node))
+        {
+            if (semanticModel.GetSymbolInfo(invocation, output.CancellationToken).Symbol is not IMethodSymbol method ||
+                MetadataName(method.ContainingType) != "Microsoft.Extensions.DependencyInjection.ActivatorUtilities")
+            {
+                continue;
+            }
+
+            output.ReportDiagnostic(Diagnostic.Create(ServiceLocation, invocation.GetLocation(), symbol.Name,
+                $"ActivatorUtilities.{method.Name}"));
         }
     }
 
@@ -240,7 +265,36 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         symbol.InstanceConstructors
             .Where(constructor => !constructor.IsImplicitlyDeclared)
             .SelectMany(constructor => constructor.Parameters)
-            .Where(parameter => Array.IndexOf(forbidden, parameter.Type.OriginalDefinition.ToDisplayString()) >= 0);
+            .Where(parameter => Matches(parameter.Type, forbidden));
+
+    static bool Matches(ITypeSymbol type, string[] forbidden)
+    {
+        if (type is not INamedTypeSymbol named)
+            return false;
+
+        for (var current = named; current is not null; current = current.BaseType)
+        {
+            if (Array.IndexOf(forbidden, MetadataName(current)) >= 0 ||
+                current.AllInterfaces.Any(iface => Array.IndexOf(forbidden, MetadataName(iface)) >= 0))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static string MetadataName(INamedTypeSymbol type)
+    {
+        type = type.OriginalDefinition;
+        var names = new Stack<string>();
+        for (var current = type; current is not null; current = current.ContainingType)
+            names.Push(current.MetadataName);
+        var name = string.Join("+", names);
+        return type.ContainingNamespace is { IsGlobalNamespace: false } space
+            ? $"{space.ToDisplayString()}.{name}"
+            : name;
+    }
 
     static Location? Location(IParameterSymbol parameter) => parameter.Locations.FirstOrDefault();
 

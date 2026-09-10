@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 
 namespace Cntryl.Portia;
 
@@ -81,7 +82,15 @@ public sealed class RequestRegistry
             .. extensions.DistinctBy(registration => (registration.ScopeType, registration.BehaviorType))
                 .OrderBy(registration => registration.Order)
         ];
+        PermissionRequestTypes = _handlers.Values
+            .Where(registration => registration.Permission is not null)
+            .Select(registration => registration.RequestType)
+            .ToFrozenSet();
     }
+
+    // This can only be known after generated registrations from every feature assembly compose.
+    // Hosting validates the resulting immutable set without resolving a scoped evaluator.
+    internal IReadOnlySet<Type> PermissionRequestTypes { get; }
 
     internal RequestHandlerRegistration Handler(Type requestType) =>
         _handlers.TryGetValue(requestType, out var registration)

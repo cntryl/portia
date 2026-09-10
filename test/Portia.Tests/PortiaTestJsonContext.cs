@@ -53,6 +53,7 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(RequestPipelineBehaviorTests.PipelineQuery))]
 [JsonSerializable(typeof(RequestPipelineBehaviorTests.PipelineStream))]
 [JsonSerializable(typeof(RequestPipelineBehaviorTests.InvalidPipelineAction))]
+[JsonSerializable(typeof(RequestPipelineBehaviorTests.NestedConcurrentAction))]
 [JsonSerializable(typeof(CreateUser))]
 [JsonSerializable(typeof(SendWelcomeEmail))]
 [JsonSerializable(typeof(UnhandledEvent))]

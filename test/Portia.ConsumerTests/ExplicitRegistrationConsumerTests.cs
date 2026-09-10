@@ -1,9 +1,25 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia.Consumer;
 
 public sealed class ExplicitRegistrationConsumerTests
 {
+    [Fact]
+    public async Task HostedStartupIncludesGuardedHandlerContributedByAFeatureAssembly()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        _ = builder.Services.AddPortia();
+        _ = builder.Services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<FeatureTwoRequest, FeatureTwoHandler, int>(_ => "features:two:read"));
+        using var host = builder.Build();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+
+        Assert.Contains(nameof(IPermissionEvaluator), error.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(FeatureTwoRequest).FullName!, error.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void StronglyTypedOutboundCallsInferEveryRequestTransportWithoutExplicitRegistration()
     {

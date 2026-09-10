@@ -18,9 +18,12 @@ public sealed class StreamRequestRegistration<TRequest,
     where THandler : class, IStreamRequestHandler<TRequest, TOut>
 {
     IAsyncEnumerable<TOut> IStreamRequestInvocation<TOut>.Invoke(IServiceProvider services,
-        IStreamRequest<TOut> request, RequestDispatchContext context, CancellationToken ct)
+        IStreamRequest<TOut> request, IRequestContext context, CancellationToken ct)
         => services.GetRequiredService<THandler>()
-            .HandleAsync(new RequestContext<TRequest>((TRequest)request, context), ct);
+            .HandleAsync((IRequestContext<TRequest>)context, ct);
+
+    internal override IRequestContext CreateContext(IRequestBase request, RequestDispatchContext context) =>
+        new RequestContext<TRequest>((TRequest)request, context);
 
     internal override void Register(IServiceCollection services) => services.TryAddScoped<THandler>();
 }

@@ -103,15 +103,16 @@ endpoints do not participate.
 
 ## Worker deployment
 
-Queue redelivery remains broker-owned unless `QueueRunnerOptions.TerminalAttempt` is configured
-and an `IQueuedRequestTerminalHandler` is registered. The attempt number is reported by the
-transport, not synthesized by Portia. Only retryable or unexpected failures at the threshold
-invoke the callback; Portia acknowledges after a successful callback. Callback, cancellation,
-or acknowledgment failure leaves the delivery unacknowledged. A callback failure also faults the
-runner and its hosted worker with `TerminalHandlerFailureException`, so an application can
-distinguish that fault; an acknowledgment failure is logged while transport
-ownership expires. The callback and acknowledgment are not atomic, so terminal handlers must
-tolerate replay. Expected business rejection continues
+Queue redelivery remains broker-owned below `QueueRunnerOptions.TerminalAttempt`, or indefinitely
+when no threshold is configured. Actor-validation failures and non-transient handler results are
+intrinsically terminal; retryable results and unexpected exceptions become terminal only at the
+configured threshold. Every terminal delivery requires an `IQueuedRequestTerminalHandler`. A
+missing handler faults the runner and hosted worker with `TerminalHandlerMissingException` before
+acknowledgment or abandonment; callback failure uses `TerminalHandlerFailureException` with the
+same ownership rule. The callback receives `QueuedRequestTerminalReason` plus the original
+request, metadata, invocation, attempt, error, and exception, and completes before Portia
+acknowledges once. Callback and acknowledgment are not atomic, so terminal handlers must tolerate
+replay; an acknowledgment failure is logged while transport ownership expires. Expected business rejection continues
 to use `Result.Validation` (and the other `RequestError` kinds); validation policy belongs to the
 application rather than a separate framework validation pipeline.
 
@@ -165,6 +166,10 @@ It also registers a startup validator in every host. Resolving the configured JS
 `IDomainEventSerializer` at startup validates the default serializer's upcaster identities,
 duplicates, and transition chains before an API-only host serves a request; replacing the domain
 event serializer opts out of that JSON-specific policy.
+If any selected handler carries `[RequiresPermission]`, hosted startup also requires a registered
+`IPermissionEvaluator` and names every guarded request type when it is missing. The check examines
+the completed cross-assembly registration graph without constructing a scoped evaluator. Direct
+non-host composition is unchanged.
 
 Hydration returns the same instance. It starts at `CommittedStreamPosition`, checks
 contiguous offsets, identities, event versions, and duplicate event IDs, and applies
@@ -215,6 +220,11 @@ Tenant additions become available for assignment. Removal cancels that tenant's 
 at the next coordinator reconciliation; retained global and other tenant workloads
 keep their ownership. Fleet membership changes transfer ownership between replicas.
 Each owned workload pass receives a fresh DI scope and reloads its checkpoint.
+When the directory supports `IResumableTenantDirectory`, Portia keeps one cursor across watch
+reconnects; its offset is in-process state and is not a durable restart checkpoint. Ordinary
+removal shares one `MultiTenantRunnerOptions.TenantStopTimeout` deadline between awaiting the
+cancelled workload and its stop callback. Host shutdown retains its separate shared
+`ShutdownGrace` budget.
 
 Projectors derive from `Projector` or `BatchProjector` and pass their ordinary
 repository into the base constructor. That repository implements `IProjectionStore`:

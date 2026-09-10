@@ -39,7 +39,7 @@ public sealed class AggregateRepository(IEventStore store) : IAggregateRepositor
             }
 
             ct.ThrowIfCancellationRequested();
-            aggregate.LoadDuringOperation([.. events], position);
+            aggregate.LoadDuringOperation(events, position);
             outcome = "success";
             return aggregate;
         }
