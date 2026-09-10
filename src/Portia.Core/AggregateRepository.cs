@@ -21,11 +21,8 @@ public sealed class AggregateRepository(IEventStore store) : IAggregateRepositor
                 throw new InvalidOperationException("Save pending aggregate changes before hydration.");
             }
 
-            var id = aggregate.Id;
             var events = new List<DomainEvent>();
-            var eventIds = new HashSet<Uuid>();
             var position = aggregate.CommittedStreamPosition;
-            var version = aggregate.Version;
             await foreach (var record in store.ReadAsync(aggregate.Stream, position, ct).ConfigureAwait(false))
             {
                 var ev = record.Event;
@@ -34,25 +31,6 @@ public sealed class AggregateRepository(IEventStore store) : IAggregateRepositor
                 {
                     throw new InvalidOperationException(
                         "Aggregate records must have contiguous physical stream offsets.");
-                }
-
-                if (ev.Metadata.AggregateId != id || !eventIds.Add(ev.Metadata.EventId))
-                {
-                    throw new InvalidOperationException(
-                        "Aggregate records must have matching aggregate identity and unique event identities.");
-                }
-
-                if (ev.Metadata.IsAudit)
-                {
-                    throw new InvalidOperationException(
-                        "An aggregate's source stream cannot contain audits; persist audits in session streams.");
-                }
-
-                version = checked(version + 1);
-                if (ev.Metadata.AggregateVersion != version)
-                {
-                    throw new InvalidOperationException(
-                        "Aggregate state versions must advance only for raised events.");
                 }
 
                 events.Add(ev);

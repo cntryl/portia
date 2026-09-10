@@ -301,6 +301,28 @@ public sealed class AggregateTests
     }
 
     /// <summary>
+    ///     Verifies that validation does not permanently reserve an event ID when its handler fails
+    ///     before the event is committed.
+    /// </summary>
+    [Fact]
+    public void ShouldReleaseEventIdWhenApplyingCommittedEventFails()
+    {
+        var id = Uuid.CreateVersion4();
+        var eventId = Uuid.CreateVersion4();
+        var aggregate = new TestAggregate(id);
+
+        _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([
+            Committed(new UnhandledEvent(), eventId, id, 1)
+        ]));
+
+        aggregate.Load([Committed(new ValueChanged(42), eventId, id, 1)]);
+
+        Assert.Equal(42, aggregate.Value);
+        Assert.Equal(1UL, aggregate.Version);
+        _ = Assert.Single(aggregate.CommittedEvents);
+    }
+
+    /// <summary>
     ///     Verifies that registering two handlers for the same event type fails fast — at
     ///     construction, not silently overwriting the first registration or only surfacing once the
     ///     event is eventually applied.

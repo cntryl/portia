@@ -1,24 +1,25 @@
 <Solution>
   <Folder Name="/bench/">
-    <Project Path="bench/Portia.Benchmarks/Portia.Benchmarks.csproj"/>
+    <Project Path="bench/Portia.Benchmarks/Portia.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/Portia.Abstractions/Portia.Abstractions.csproj"/>
-    <Project Path="src/Portia.Generators/Portia.Generators.csproj"/>
-    <Project Path="src/Portia.Analyzers/Portia.Analyzers.csproj"/>
-    <Project Path="src/Portia.Core/Portia.Core.csproj"/>
-    <Project Path="src/Portia.Testing/Portia.Testing.csproj"/>
-    <Project Path="src/Portia.DependencyInjection/Portia.DependencyInjection.csproj"/>
-    <Project Path="src/Portia.Fitz/Portia.Fitz.csproj"/>
-    <Project Path="src/Portia.AspNetCore/Portia.AspNetCore.csproj"/>
-    <Project Path="src/Portia.Jwt/Portia.Jwt.csproj"/>
+    <Project Path="src/Portia.Abstractions/Portia.Abstractions.csproj" />
+    <Project Path="src/Portia.Analyzers/Portia.Analyzers.csproj" />
+    <Project Path="src/Portia.CodeFixes/Portia.CodeFixes.csproj" />
+    <Project Path="src/Portia.Generators/Portia.Generators.csproj" />
+    <Project Path="src/Portia.Core/Portia.Core.csproj" />
+    <Project Path="src/Portia.Testing/Portia.Testing.csproj" />
+    <Project Path="src/Portia.DependencyInjection/Portia.DependencyInjection.csproj" />
+    <Project Path="src/Portia.Fitz/Portia.Fitz.csproj" />
+    <Project Path="src/Portia.AspNetCore/Portia.AspNetCore.csproj" />
+    <Project Path="src/Portia.Jwt/Portia.Jwt.csproj" />
   </Folder>
   <Folder Name="/test/">
-    <Project Path="test/Portia.Tests/Portia.Tests.csproj"/>
-    <Project Path="test/Consumer.Contracts/Consumer.Contracts.csproj"/>
-    <Project Path="test/Consumer.FeatureOne/Consumer.FeatureOne.csproj"/>
-    <Project Path="test/Consumer.FeatureTwo/Consumer.FeatureTwo.csproj"/>
-    <Project Path="test/Portia.ConsumerTests/Portia.ConsumerTests.csproj"/>
-    <Project Path="test/Portia.ReflectionDisabledTests/Portia.ReflectionDisabledTests.csproj"/>
+    <Project Path="test/Portia.Tests/Portia.Tests.csproj" />
+    <Project Path="test/Consumer.Contracts/Consumer.Contracts.csproj" />
+    <Project Path="test/Consumer.FeatureOne/Consumer.FeatureOne.csproj" />
+    <Project Path="test/Consumer.FeatureTwo/Consumer.FeatureTwo.csproj" />
+    <Project Path="test/Portia.ConsumerTests/Portia.ConsumerTests.csproj" />
+    <Project Path="test/Portia.ReflectionDisabledTests/Portia.ReflectionDisabledTests.csproj" />
   </Folder>
 </Solution>

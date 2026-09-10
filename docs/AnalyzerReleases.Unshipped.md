@@ -30,8 +30,3 @@ PORTIA025 | Portia | Error | Portia serializer root is not explicitly registered
 PORTIA026 | Portia | Error | Optional HTTP route tokens must use query parameters or separate endpoints
 PORTIA027 | Portia | Error | Visible Portia HTTP mappings must have unique camel-cased operation IDs
 PORTIA028 | Portia | Error | A processor cannot select single and batch handling for the same event
-PORTIA100 | Portia | Warning | Projectors must not take a dispatch or effect dependency
-PORTIA101 | Portia | Warning | Portia components must not resolve services from the container
-PORTIA102 | Portia | Warning | Aggregates must not depend on services
-PORTIA103 | Portia | Warning | A type should handle only one request
-PORTIA104 | Portia | Warning | Unexpected failures must stay exceptions, not become a failed Result

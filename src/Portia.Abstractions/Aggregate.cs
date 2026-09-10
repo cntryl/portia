@@ -75,18 +75,40 @@ public abstract class Aggregate(
             throw new InvalidOperationException("An aggregate with uncommitted changes cannot load committed events.");
         }
 
-        var eventIds = new HashSet<Uuid>();
-        for (var index = 0; index < committedEvents.Length; index++)
+        var validated = 0;
+        try
         {
-            var expectedVersion = checked(Version + (ulong)index + 1);
-            ValidateCommittedEvent(committedEvents[index], expectedVersion, eventIds);
+            for (; validated < committedEvents.Length; validated++)
+            {
+                var expectedVersion = checked(Version + (ulong)validated + 1);
+                ValidateCommittedEvent(committedEvents[validated], expectedVersion);
+            }
+        }
+        catch
+        {
+            for (var index = 0; index < validated; index++)
+                _ = _issuedEventIds.Remove(committedEvents[index].Metadata.EventId);
+            throw;
         }
 
-        foreach (var ev in committedEvents)
+        for (var index = 0; index < committedEvents.Length; index++)
         {
-            Apply(ev);
+            var ev = committedEvents[index];
+            try
+            {
+                Apply(ev);
+            }
+            catch
+            {
+                // Validation reserves the whole batch in the permanent set. Match the historical
+                // partial-apply behavior by releasing the failed event and everything after it;
+                // successfully applied events stay committed and keep their IDs reserved.
+                for (; index < committedEvents.Length; index++)
+                    _ = _issuedEventIds.Remove(committedEvents[index].Metadata.EventId);
+                throw;
+            }
+
             _committedEvents.Add(ev);
-            _ = _issuedEventIds.Add(ev.Metadata.EventId);
             Version++;
         }
 
@@ -274,7 +296,7 @@ public abstract class Aggregate(
         ev.AttachAggregateMetadata(metadata with { IsAudit = isAudit });
     }
 
-    void ValidateCommittedEvent(DomainEvent ev, ulong expectedVersion, HashSet<Uuid> eventIds)
+    void ValidateCommittedEvent(DomainEvent ev, ulong expectedVersion)
     {
         ArgumentNullException.ThrowIfNull(ev);
         var metadata = ev.Metadata;
@@ -288,11 +310,6 @@ public abstract class Aggregate(
             throw new InvalidOperationException("A committed event ID cannot be empty.");
         }
 
-        if (_issuedEventIds.Contains(metadata.EventId) || !eventIds.Add(metadata.EventId))
-        {
-            throw new InvalidOperationException($"Event ID '{metadata.EventId}' has already been committed.");
-        }
-
         if (metadata.AggregateId != Id)
         {
             throw new InvalidOperationException(
@@ -303,6 +320,11 @@ public abstract class Aggregate(
         {
             throw new InvalidOperationException(
                 $"Event aggregate version '{metadata.AggregateVersion}' does not match expected version '{expectedVersion}'.");
+        }
+
+        if (!_issuedEventIds.Add(metadata.EventId))
+        {
+            throw new InvalidOperationException($"Event ID '{metadata.EventId}' has already been committed.");
         }
     }
 

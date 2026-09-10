@@ -238,6 +238,9 @@
           "Portia.DependencyInjection": "[1.0.0, )"
         }
       },
+      "portia.codefixes": {
+        "type": "Project"
+      },
       "portia.core": {
         "type": "Project",
         "dependencies": {

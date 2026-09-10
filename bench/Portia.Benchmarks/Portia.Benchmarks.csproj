@@ -1,9 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet"/>
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../src/Portia.Abstractions/Portia.Abstractions.csproj"/>
+    <ProjectReference Include="../../src/Portia.DependencyInjection/Portia.DependencyInjection.csproj"/>
+    <ProjectReference Include="../../src/Portia.Testing/Portia.Testing.csproj"/>
+    <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App"/>
   </ItemGroup>
 </Project>

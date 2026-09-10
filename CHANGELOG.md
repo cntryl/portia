@@ -8,11 +8,17 @@ alerts are as breaking to change as an API.
 
 ### Changed
 
+- Unary request dispatch with no pipeline behaviors skips construction of an unused delegate chain.
+  Aggregate hydration validates event IDs in the aggregate's existing set instead of allocating a
+  second one, and the repository no longer repeats identity, version, and audit validation already
+  performed atomically by `Aggregate`. Runtime contracts and validation guarantees are unchanged.
+
 - Analyzer guidance now distinguishes a batch handler on the wrong processor base (`PORTIA017`)
   from selecting both single and batch handling for one event (`PORTIA028`), and duplicate
   domain-event discriminator errors (`PORTIA023`) name both CLR types at the duplicate declaration.
-  The workspace code-fix project and package are now named `Portia.Analyzers`; its fixes for
-  `PORTIA002` and `PORTIA005` add the missing `partial` modifier and support Fix All.
+  Architecture diagnostics now live in the pure `Portia.Analyzers` project, separate from the
+  workspace-dependent `Portia.CodeFixes` project. Its fixes for `PORTIA002` and `PORTIA005` add
+  the missing `partial` modifier and support Fix All.
   The getting-started guide now covers GitHub Packages authentication, core concepts, and the
   compile-time versus startup-validation boundary.
 

@@ -226,6 +226,9 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     ValueTask<Result> InvokeAsync(RequestHandlerRegistration registration, RequestPolicies policies, IRequest request,
         RequestDispatchContext context, CancellationToken ct)
     {
+        if (policies.BehaviorsInnermostFirst.Length == 0)
+            return InvokeHandlerAsync(registration, request, context, ct);
+
         RequestPipelineNext next = async token =>
         {
             var result = await ((IRequestInvocation)registration).InvokeAsync(services, request, context, token)
@@ -254,10 +257,22 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         return next(ct);
     }
 
+    async ValueTask<Result> InvokeHandlerAsync(RequestHandlerRegistration registration, IRequest request,
+        RequestDispatchContext context, CancellationToken ct)
+    {
+        var result = await ((IRequestInvocation)registration).InvokeAsync(services, request, context, ct)
+            .ConfigureAwait(false);
+        ValidateResult(result, registration.HandlerType, "request handler");
+        return result;
+    }
+
     ValueTask<Result<TOut>> InvokeAsync<TOut>(RequestHandlerRegistration registration, RequestPolicies policies,
         IRequest<TOut> request,
         RequestDispatchContext context, CancellationToken ct)
     {
+        if (policies.BehaviorsInnermostFirst.Length == 0)
+            return InvokeHandlerAsync(registration, request, context, ct);
+
         RequestPipelineNext<TOut> next = async token =>
         {
             var result = await ((IRequestInvocation<TOut>)registration).InvokeAsync(services, request, context, token)
@@ -284,6 +299,15 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
 
         return next(ct);
+    }
+
+    async ValueTask<Result<TOut>> InvokeHandlerAsync<TOut>(RequestHandlerRegistration registration,
+        IRequest<TOut> request, RequestDispatchContext context, CancellationToken ct)
+    {
+        var result = await ((IRequestInvocation<TOut>)registration).InvokeAsync(services, request, context, ct)
+            .ConfigureAwait(false);
+        ValidateResult(result, registration.HandlerType, "request handler");
+        return result;
     }
 
     IAsyncEnumerable<TOut> EnumerateStream<TOut>(RequestHandlerRegistration registration, RequestPolicies policies,

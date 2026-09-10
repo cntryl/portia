@@ -6,6 +6,14 @@ public sealed partial class DocumentationContractTests
 {
     static readonly string Root = FindRoot();
 
+    static readonly string[] DiagnosticSourceDirectories = ["src/Portia.Generators", "src/Portia.Analyzers"];
+
+    static readonly string[] DiagnosticReleaseManifests =
+    [
+        "docs/AnalyzerReleases.Unshipped.md",
+        "src/Portia.Analyzers/AnalyzerReleases.Unshipped.md"
+    ];
+
     static readonly string[] Maintained =
     [
         "README.md",
@@ -52,13 +60,14 @@ public sealed partial class DocumentationContractTests
     }
 
     [Fact]
-    public void AnalyzerManifestListsEveryGeneratorDiagnostic()
+    public void AnalyzerManifestsListEveryCompilerDiagnostic()
     {
-        var declared = Directory.EnumerateFiles(Path.Combine(Root, "src/Portia.Generators"), "*.cs")
+        var declared = DiagnosticSourceDirectories
+            .SelectMany(directory => Directory.EnumerateFiles(Path.Combine(Root, directory), "*.cs"))
             .SelectMany(path => DiagnosticId().Matches(File.ReadAllText(path)).Select(match => match.Value))
             .ToHashSet(StringComparer.Ordinal);
-        var documented = DiagnosticId()
-            .Matches(File.ReadAllText(Path.Combine(Root, "docs/AnalyzerReleases.Unshipped.md")))
+        var documented = DiagnosticReleaseManifests
+            .SelectMany(path => DiagnosticId().Matches(File.ReadAllText(Path.Combine(Root, path))))
             .Select(match => match.Value).ToHashSet(StringComparer.Ordinal);
         Assert.Subset(documented, declared);
     }
@@ -75,7 +84,8 @@ public sealed partial class DocumentationContractTests
         Assert.DoesNotContain("reactors must dispatch", text, StringComparison.OrdinalIgnoreCase);
         foreach (var project in Directory.EnumerateDirectories(Path.Combine(Root, "src"), "Portia.*")
                      .Where(path => !path.EndsWith("Portia.Generators", StringComparison.Ordinal)
-                                    && !path.EndsWith("Portia.Analyzers", StringComparison.Ordinal)))
+                                    && !path.EndsWith("Portia.Analyzers", StringComparison.Ordinal)
+                                    && !path.EndsWith("Portia.CodeFixes", StringComparison.Ordinal)))
         {
             var name = Path.GetFileName(project);
             Assert.True(File.Exists(Path.Combine(project, "bin/Release/net10.0", name + ".xml")),
