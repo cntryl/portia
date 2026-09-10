@@ -75,7 +75,7 @@ public sealed partial class DocumentationContractTests
         Assert.DoesNotContain("reactors must dispatch", text, StringComparison.OrdinalIgnoreCase);
         foreach (var project in Directory.EnumerateDirectories(Path.Combine(Root, "src"), "Portia.*")
                      .Where(path => !path.EndsWith("Portia.Generators", StringComparison.Ordinal)
-                                    && !path.EndsWith("Portia.CodeFixes", StringComparison.Ordinal)))
+                                    && !path.EndsWith("Portia.Analyzers", StringComparison.Ordinal)))
         {
             var name = Path.GetFileName(project);
             Assert.True(File.Exists(Path.Combine(project, "bin/Release/net10.0", name + ".xml")),

@@ -10,6 +10,32 @@ cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
 Review the [scope](scope.md) page for what Portia supports and the
 [design decisions](design-decisions.md) behind its operational boundaries.
 
+The repository's `NuGet.Config` already maps `Cntryl.*` packages to that feed and reads its
+credentials from the environment. Before `dotnet restore`, set your GitHub username and a
+[classic personal access token with `read:packages`](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry):
+
+```sh
+export GITHUB_ACTOR=your-github-username
+export GITHUB_TOKEN=your-classic-personal-access-token
+dotnet restore
+```
+
+Do not commit the token. A 401 usually means the username/token is missing, expired, or is not a
+classic PAT; a 403 usually means the token lacks `read:packages`, requires organization SSO
+authorization, or the account cannot read the package. In GitHub Actions, prefer the workflow's
+`GITHUB_TOKEN` when its repository has package read access; otherwise use a `read:packages`
+classic PAT stored as an Actions secret.
+
+## Concepts in one minute
+
+A **request** asks the application to do work, and one selected **handler** authorizes and
+executes that request. A **projector** consumes domain events to update application-owned read
+models; a **reactor** consumes them to cause idempotent external effects. A **workload** is one
+registered projector, reactor, or partition job running in its selected global or per-tenant
+scope. A **stream address** identifies an ordered event stream by realm, area, and resource. A
+**checkpoint** records how far a processor has committed progress so it can resume without
+claiming uncommitted events.
+
 ## Define contracts and register components
 
 ```csharp
@@ -35,8 +61,15 @@ Portia uses snake_case for application JSON by default, including HTTP. Keep the
 option aligned with that default. Use `ConfigureJson` only when the whole application deliberately
 chooses a different convention or adds converters.
 
+`PORTIA025` catches JSON roots that the generator can discover at compile time. Startup validation
+remains the defensive fallback for roots and resolver combinations that cross compilation
+boundaries or otherwise cannot be proven statically.
+
 Reference `Portia.DependencyInjection` in each assembly that registers handlers, authorizers, pipeline behaviors,
 or routed requests. The generator and interceptor configuration arrive with that package.
+Because libraries and applications can compose components across assemblies, Portia cannot prove
+that every declared handler has been registered; the application composition root owns that
+selection.
 
 Registration calls are rewritten at the call site, so each one must appear literally where you
 compose the application. They cannot be wrapped in a helper that takes the component as a type
@@ -140,7 +173,8 @@ services.AddPortia()
 ## Persist an aggregate
 
 Use `Uuid.CreateVersion4()` for a new random identity, or `Uuid.CreateVersion5(namespaceId, name)`
-when the same name must produce the same identity. `Uuid` implements `ISpanParsable<Uuid>`,
+when the same name must produce the same identity. `Uuid` supplies consistent UUID semantics and
+deterministic version-5 generation that the target BCL API does not provide. It implements `ISpanParsable<Uuid>`,
 `ISpanFormattable`, and `IComparable<Uuid>` by following the wrapped `Guid` behavior, so generic
 binding and allocation-conscious formatting do not require an adapter. Portia orders events
 using stream positions and aggregate versions; UUIDs do not define event order.

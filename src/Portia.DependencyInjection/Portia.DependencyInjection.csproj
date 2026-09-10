@@ -20,7 +20,7 @@
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false"
                       PrivateAssets="all"/>
-    <ProjectReference Include="../Portia.CodeFixes/Portia.CodeFixes.csproj"
+    <ProjectReference Include="../Portia.Analyzers/Portia.Analyzers.csproj"
                       ReferenceOutputAssembly="false"
                       PrivateAssets="all"/>
   </ItemGroup>
@@ -30,7 +30,7 @@
           Pack="true"
           PackagePath="analyzers/dotnet/cs"
           Visible="false"/>
-    <None Include="../Portia.CodeFixes/bin/$(Configuration)/netstandard2.0/Portia.CodeFixes.dll"
+    <None Include="../Portia.Analyzers/bin/$(Configuration)/netstandard2.0/Portia.Analyzers.dll"
           Pack="true"
           PackagePath="analyzers/dotnet/cs"
           Visible="false"/>

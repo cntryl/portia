@@ -11,14 +11,14 @@
 
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
-PORTIA002 | Portia | Error | Projector types must be partial for generated event dispatch
-PORTIA005 | Portia | Error | Reactor types must be partial for generated event dispatch
+PORTIA002 | Portia | Error | Projector types must be partial for generated event dispatch; code fix adds `partial`
+PORTIA005 | Portia | Error | Reactor types must be partial for generated event dispatch; code fix adds `partial`
 PORTIA011 | Portia | Error | RequiresPermission references an unknown request property
 PORTIA012 | Portia | Warning | IJsonDomainEventUpcaster.EventName references an unknown event name
 PORTIA013 | Portia | Error | RequiresPermission references a nullable request property
 PORTIA015 | Portia | Error | Generated components must have supported accessible non-generic declarations
 PORTIA016 | Portia | Error | Unsupported HTTP binding requires a constant route and supported constructor and scalar types
-PORTIA017 | Portia | Error | Batch handlers require batch bases and unambiguous event dispatch
+PORTIA017 | Portia | Error | Batch handlers require the corresponding batch processor base
 PORTIA018 | Portia | Error | Generic component registration requires a matching Portia role
 PORTIA019 | Portia | Error | Registration calls must appear at a call site supported by generated interceptors
 PORTIA020 | Portia | Error | Transported requests require a valid explicit discriminator
@@ -29,6 +29,7 @@ PORTIA024 | Portia | Error | Declared request route segments must be safe single
 PORTIA025 | Portia | Error | Portia serializer root is not explicitly registered on a PortiaJsonContext
 PORTIA026 | Portia | Error | Optional HTTP route tokens must use query parameters or separate endpoints
 PORTIA027 | Portia | Error | Visible Portia HTTP mappings must have unique camel-cased operation IDs
+PORTIA028 | Portia | Error | A processor cannot select single and batch handling for the same event
 PORTIA100 | Portia | Warning | Projectors must not take a dispatch or effect dependency
 PORTIA101 | Portia | Warning | Portia components must not resolve services from the container
 PORTIA102 | Portia | Warning | Aggregates must not depend on services

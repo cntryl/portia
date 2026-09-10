@@ -120,7 +120,7 @@ batch share one commit. Unhandled events still advance progress.
 Set `options.Processing.MaxBatchSize` through a new `ProjectionRunOptions` instance to
 bound a batch (default 512). This counts source events, not database write actions.
 Single-event bases always commit progress per event. Batch handler interfaces require
-a batch base, and one event type cannot select both handler modes (`PORTIA017`).
+a batch base (`PORTIA017`), and one event type cannot select both handler modes (`PORTIA028`).
 
 Manual implementations can override `ProjectEventAsync` / `ProjectBatchAsync`, or
 `ReactToEventAsync` / `ReactBatchAsync`, instead of using generated typed handlers.

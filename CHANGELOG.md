@@ -8,6 +8,14 @@ alerts are as breaking to change as an API.
 
 ### Changed
 
+- Analyzer guidance now distinguishes a batch handler on the wrong processor base (`PORTIA017`)
+  from selecting both single and batch handling for one event (`PORTIA028`), and duplicate
+  domain-event discriminator errors (`PORTIA023`) name both CLR types at the duplicate declaration.
+  The workspace code-fix project and package are now named `Portia.Analyzers`; its fixes for
+  `PORTIA002` and `PORTIA005` add the missing `partial` modifier and support Fix All.
+  The getting-started guide now covers GitHub Packages authentication, core concepts, and the
+  compile-time versus startup-validation boundary.
+
 - Component base types dropped their `Base` prefix: `Projector`, `Reactor`, `BatchProjector`,
   `BatchReactor`. `Aggregate` never carried one and these are the same kind of thing.
 

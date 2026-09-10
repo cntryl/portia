@@ -19,7 +19,11 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         true);
 
     static readonly DiagnosticDescriptor InvalidBatchHandler = new("PORTIA017", "Invalid batch handler",
-        "Processor '{0}' must use a batch base for batch handlers and select only one handler mode per event type",
+        "Processor '{0}' must use a batch base to implement handler '{1}'",
+        "Portia", DiagnosticSeverity.Error, true);
+
+    static readonly DiagnosticDescriptor AmbiguousHandlerMode = new("PORTIA028", "Ambiguous event handler mode",
+        "Processor '{0}' selects both single and batch handling for event '{1}'",
         "Portia", DiagnosticSeverity.Error, true);
 
     /// <inheritdoc />
@@ -52,7 +56,8 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
             .OrderByDescending(i => GetInheritanceDepth(i.TypeArguments[0]))
             .ThenBy(i => i.TypeArguments[0].ToDisplayString(), StringComparer.Ordinal)
             .Select(i => new Handler(i.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                i.Name == batchName)).ToArray();
+                i.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                i.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat), i.Name == batchName)).ToArray();
         return handlers.Length == 0
             ? null
             : new Processor(symbol, declaration.Modifiers.Any(SyntaxKind.PartialKeyword), projector,
@@ -73,11 +78,19 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
 
         if (!ValidateShape(context, symbol))
             return;
-        if ((!processor.Batch && processor.Handlers.Any(h => h.Batch)) ||
-            processor.Handlers.GroupBy(h => h.Type).Any(g => g.Count() > 1))
+        var invalidBatchHandler = processor.Handlers.FirstOrDefault(h => h.Batch && !processor.Batch);
+        if (invalidBatchHandler is not null)
         {
             context.ReportDiagnostic(Diagnostic.Create(InvalidBatchHandler, symbol.Locations.FirstOrDefault(),
-                symbol.Name));
+                symbol.Name, invalidBatchHandler.InterfaceType));
+            return;
+        }
+
+        var ambiguousEvent = processor.Handlers.GroupBy(h => h.Type).FirstOrDefault(g => g.Count() > 1);
+        if (ambiguousEvent is not null)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(AmbiguousHandlerMode, symbol.Locations.FirstOrDefault(),
+                symbol.Name, ambiguousEvent.First().DisplayType));
             return;
         }
 
@@ -215,9 +228,11 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         return depth;
     }
 
-    sealed class Handler(string type, bool batch)
+    sealed class Handler(string type, string displayType, string interfaceType, bool batch)
     {
         public string Type { get; } = type;
+        public string DisplayType { get; } = displayType;
+        public string InterfaceType { get; } = interfaceType;
         public bool Batch { get; } = batch;
     }
 

@@ -29,7 +29,7 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
 
     static readonly DiagnosticDescriptor DuplicateDiscriminator = new("PORTIA023",
         "Duplicate domain-event discriminator",
-        "Domain-event discriminator '{0}' version {1} is declared by multiple CLR types", "Portia",
+        "Domain-event CLR types '{0}' and '{1}' both declare discriminator '{2}' version {3}", "Portia",
         DiagnosticSeverity.Error, true);
 
     static readonly DiagnosticDescriptor InvalidDiscriminator = new("PORTIA021",
@@ -93,8 +93,11 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         foreach (var group in events.GroupBy(ev => (ev.Name, ev.Version))
                      .Where(group => group.Select(ev => ev.TypeName).Distinct().Count() > 1))
         {
-            context.ReportDiagnostic(Diagnostic.Create(DuplicateDiscriminator, Location.None, group.Key.Name,
-                group.Key.Version));
+            var declarations = group.GroupBy(ev => ev.TypeName).Select(types => types.First()).ToArray();
+            var original = declarations[0];
+            foreach (var duplicate in declarations.Skip(1))
+                context.ReportDiagnostic(Diagnostic.Create(DuplicateDiscriminator, duplicate.Location,
+                    original.TypeName, duplicate.TypeName, group.Key.Name, group.Key.Version));
         }
 
         if (events.IsDefaultOrEmpty)
@@ -138,7 +141,9 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         }
 
         var (name, version) = GetSchemaIdentity(symbol);
-        return name is null ? null : new EventModel(symbol.ToDisplayString(), name, version);
+        return name is null
+            ? null
+            : new EventModel(symbol.ToDisplayString(), name, version, declaration.Identifier.GetLocation());
     }
 
     static InvalidEventDiscriminator? GetInvalidEventDiscriminator(GeneratorSyntaxContext context)
@@ -224,13 +229,15 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         return true;
     }
 
-    sealed class EventModel(string typeName, string name, int version) : IEquatable<EventModel>
+    sealed class EventModel(string typeName, string name, int version, Location location) : IEquatable<EventModel>
     {
         public string TypeName { get; } = typeName;
 
         public string Name { get; } = name;
 
         public int Version { get; } = version;
+
+        public Location Location { get; } = location;
 
         public bool Equals(EventModel? other) =>
             other is not null && TypeName == other.TypeName && Name == other.Name && Version == other.Version;

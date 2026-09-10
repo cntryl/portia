@@ -9,6 +9,7 @@
     <PackageReference Include="Cntryl.Fitz"/>
     <PackageReference Include="Microsoft.AspNetCore.TestHost"/>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp"/>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces"/>
     <PackageReference Include="Microsoft.NET.Test.Sdk"/>
     <PackageReference Include="xunit"/>
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all"/>
@@ -19,7 +20,7 @@
     <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj"/>
     <ProjectReference Include="../../src/Portia.Fitz/Portia.Fitz.csproj"/>
     <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj"/>
-    <ProjectReference Include="../../src/Portia.CodeFixes/Portia.CodeFixes.csproj"/>
+    <ProjectReference Include="../../src/Portia.Analyzers/Portia.Analyzers.csproj"/>
   </ItemGroup>
   <ItemGroup>
     <!-- Portia's test doubles and conformance suites are their own namespace, so a consumer never

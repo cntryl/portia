@@ -3,6 +3,66 @@ namespace Cntryl.Portia.Consumer;
 public sealed class GeneratorDiagnosticsTests
 {
     [Fact]
+    public void BatchHandlerWithoutBatchBaseNamesProcessorAndHandlerAtProcessorDeclaration()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              public sealed record Changed : DomainEvent;
+                              public sealed partial class Projection
+                                  : Projector(null!, EventStreamPattern.ForPattern("events")), IBatchProjectorHandler<Changed>;
+                              """;
+
+        var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics(source,
+            new ProjectorReactorEventDispatcherGenerator()), item => item.Id == "PORTIA017");
+
+        Assert.Equal("Processor 'Projection' must use a batch base to implement handler " +
+                     "'Cntryl.Portia.IBatchProjectorHandler<Changed>'",
+            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal("Projection", source.Substring(diagnostic.Location.SourceSpan.Start,
+            diagnostic.Location.SourceSpan.Length));
+    }
+
+    [Fact]
+    public void SingleAndBatchHandlerForOneEventNamesProcessorAndEventAtProcessorDeclaration()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              public sealed record Changed : DomainEvent;
+                              public sealed partial class Projection
+                                  : BatchProjector(null!, EventStreamPattern.ForPattern("events")),
+                                    IProjectorHandler<Changed>, IBatchProjectorHandler<Changed>;
+                              """;
+
+        var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics(source,
+            new ProjectorReactorEventDispatcherGenerator()), item => item.Id == "PORTIA028");
+
+        Assert.Equal("Processor 'Projection' selects both single and batch handling for event 'Changed'",
+            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal("Projection", source.Substring(diagnostic.Location.SourceSpan.Start,
+            diagnostic.Location.SourceSpan.Length));
+    }
+
+    [Fact]
+    public void DuplicateDomainEventNamesBothClrTypesAtDuplicateDeclaration()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              [Discriminator("changed", 2)]
+                              public sealed record Original : DomainEvent;
+                              [Discriminator("changed", 2)]
+                              public sealed record Duplicate : DomainEvent;
+                              """;
+
+        var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics(source,
+            new DomainEventCatalogGenerator()), item => item.Id == "PORTIA023");
+
+        Assert.Equal("Domain-event CLR types 'Original' and 'Duplicate' both declare discriminator 'changed' " +
+                     "version 2", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal("Duplicate", source.Substring(diagnostic.Location.SourceSpan.Start,
+            diagnostic.Location.SourceSpan.Length));
+    }
+
+    [Fact]
     public void GenericHandlerHasActionableDiagnostic()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
