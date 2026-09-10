@@ -28,7 +28,7 @@ public sealed class DeliveryScopeTests
             _ = services.AddPortiaQueueRunner();
         }
         await using var provider = ConsumerHost.Build(services);
-        var worker = Assert.Single(provider.GetServices<IHostedService>());
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         try
         {

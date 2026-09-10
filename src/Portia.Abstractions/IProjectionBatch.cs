@@ -6,5 +6,6 @@ public interface IProjectionBatch : IAsyncDisposable
 {
     /// <summary>Atomically commits repository changes and the next checkpoint. A failed response can be
     /// ambiguous: the next attempt must reload authoritative progress before applying events again.</summary>
+    /// <exception cref="ProjectionConcurrencyException">The checkpoint conflicts with a concurrent writer.</exception>
     ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default);
 }

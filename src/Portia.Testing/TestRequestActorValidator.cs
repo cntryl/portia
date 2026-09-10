@@ -1,6 +1,6 @@
 using System.Security.Claims;
 
-namespace Cntryl.Portia;
+namespace Cntryl.Portia.Testing;
 
 /// <summary>
 /// An <see cref="IRequestActorValidator" /> for tests that don't need real JWT verification: any

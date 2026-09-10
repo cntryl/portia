@@ -376,7 +376,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .AppendLine(", httpContext.RequestAborted);")
             .AppendLine("                await result.ExecuteAsync(httpContext).ConfigureAwait(false);")
             .AppendLine("            }")
-            .AppendLine("            catch (global::Cntryl.Portia.PortiaHttpPayloadTooLargeException ex) when (!httpContext.Response.HasStarted)")
+            .AppendLine("            catch (global::Cntryl.Portia.HttpPayloadTooLargeException ex) when (!httpContext.Response.HasStarted)")
             .AppendLine("            {")
             .AppendLine("                await global::Cntryl.Portia.PortiaHttpBinding.Problem(413, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
             .AppendLine("            }")
@@ -453,7 +453,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             }
             _ = source.AppendLine("                }");
         }
-        _ = source.AppendLine("            }").AppendLine("            catch (global::Cntryl.Portia.PortiaHttpPayloadTooLargeException)")
+        _ = source.AppendLine("            }").AppendLine("            catch (global::Cntryl.Portia.HttpPayloadTooLargeException)")
             .AppendLine("            {")
             .AppendLine("                throw;")
             .AppendLine("            }")

@@ -25,7 +25,7 @@ public sealed class AggregateRepository(IEventStore store) : IAggregateRepositor
             var version = aggregate.Version;
             await foreach (var record in store.ReadAsync(aggregate.Stream, fromOffset: position, ct: ct).ConfigureAwait(false))
             {
-                var ev = record.Ev;
+                var ev = record.Event;
                 DomainEventValidation.Validate(ev);
                 if (record.Stream != aggregate.Stream || record.ResourceOffset != position)
                     throw new InvalidOperationException("Aggregate records must have contiguous physical stream offsets.");

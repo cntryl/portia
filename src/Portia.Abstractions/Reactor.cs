@@ -9,20 +9,29 @@ namespace Cntryl.Portia;
 /// members a runner needs are internal, so <c>ReactorRunner</c> is the only implementation of
 /// that role.</para>
 /// </summary>
-public abstract class BaseReactor
+public abstract class Reactor
 {
     WorkloadIdentity? _boundIdentity;
     /// <summary>Uses constructor-injected persistence for reaction progress.</summary>
-    protected BaseReactor(IProjectionCheckpointStore checkpoints, EventStreamPattern pattern, string? name = null)
+    protected Reactor(IProjectionCheckpointStore checkpoints, EventStreamPattern pattern, string? name = null)
     {
         Checkpoints = checkpoints ?? throw new ArgumentNullException(nameof(checkpoints));
         Pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
         Name = name ?? GetType().FullName ?? GetType().Name;
         ArgumentException.ThrowIfNullOrWhiteSpace(Name);
     }
-    /// <summary>Gets the stable checkpoint name.</summary>
+    /// <summary>
+    /// Gets the stable checkpoint name. Fixed for the life of this instance once the component
+    /// starts running: a registration that explicitly named the workload supplies that name, and
+    /// otherwise this keeps the name given at construction. It is never reassigned afterwards —
+    /// rebinding to a second workload throws rather than silently repointing the checkpoint this
+    /// component has already been writing.
+    /// </summary>
     public string Name { get; private set; }
-    /// <summary>Gets the consumed event stream pattern.</summary>
+    /// <summary>
+    /// Gets the consumed event stream pattern, narrowed to the running workload's tenant when it
+    /// has one. Like <see cref="Name" />, fixed once the component starts running.
+    /// </summary>
     public EventStreamPattern Pattern { get; private set; }
     internal IProjectionCheckpointStore Checkpoints { get; }
     internal virtual bool IsBatch => false;
@@ -44,14 +53,32 @@ public abstract class BaseReactor
         if (identity.Tenant is { } tenant)
             Pattern = EventStreamPattern.ForPattern(tenant.Value, Pattern.Area, Pattern.Resource);
     }
-    /// <summary>Creates a stable idempotency key for one named effect of the source event.</summary>
+    /// <summary>
+    /// Creates a stable idempotency key for one named effect of the source event. The same
+    /// reactor, tenant, source event, and effect name always produce the same key, so an effect
+    /// replayed after a failed checkpoint can be recognized as one already performed.
+    /// </summary>
+    /// <param name="context">The reaction whose source event causes the effect.</param>
+    /// <param name="effectName">A name distinguishing this effect from others the same reaction causes.</param>
+    /// <remarks>
+    /// The workload portion preserves the text emitted by the original persisted-key algorithm.
+    /// Applications store these IDs, so its field order and formatting are a compatibility
+    /// contract independent of future changes to <see cref="WorkloadIdentity" />.
+    /// </remarks>
     protected Uuid CreateEffectId(IReactorContext context, string effectName)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentException.ThrowIfNullOrWhiteSpace(effectName);
-        var identity = _boundIdentity?.ToString() ?? "unbound";
-        return Uuid.CreateVersion5(Uuid.UrlNamespace, $"portia:effect:{identity}:{Name}:{context.Source.Ev.Metadata.EventId}:{effectName}");
+        var identity = FormatPersistedWorkloadIdentity(_boundIdentity);
+        return Uuid.CreateVersion5(Uuid.UrlNamespace,
+            $"portia:effect:{identity}:{Name}:{context.Source.Event.Metadata.EventId}:{effectName}");
     }
+    static string FormatPersistedWorkloadIdentity(WorkloadIdentity? identity)
+        => identity is null
+            ? "unbound"
+            : $"WorkloadIdentity {{ Name = {identity.Name}, Tenant = {FormatPersistedTenant(identity.Tenant)} }}";
+    static string FormatPersistedTenant(TenantId? tenant)
+        => tenant is { } value ? $"TenantId {{ Value = {value.Value} }}" : string.Empty;
     internal ValueTask ReactAsync(DomainEventRecord record, CancellationToken ct)
         => ReactToEventAsync(record, new ReactionExecutionContext(record, RequestActor.System), ct);
     internal ValueTask ReactAsync(DomainEventRecord record, IExecutionContext context, CancellationToken ct)
@@ -70,15 +97,16 @@ public abstract class BaseReactor
 
 /// <summary>Reacts to bounded batches and saves progress after the complete batch succeeds.
 /// External effects can be replayed after failure; batching does not make them transactional.</summary>
-public abstract class BaseBatchReactor(IProjectionCheckpointStore checkpoints, EventStreamPattern pattern, string? name = null)
-    : BaseReactor(checkpoints, pattern, name)
+public abstract class BatchReactor(IProjectionCheckpointStore checkpoints, EventStreamPattern pattern, string? name = null)
+    : Reactor(checkpoints, pattern, name)
 {
     internal sealed override bool IsBatch => true;
 }
 
 /// <summary>Handles a contiguous group of triggering events with independent execution contexts.</summary>
 /// <typeparam name="TEvent">The selected event type.</typeparam>
-public interface IBatchReactorHandler<TEvent>
+public interface IBatchReactorHandler<in TEvent>
+    where TEvent : DomainEvent
 {
     /// <summary>Reacts in source order. Each context must be used for effects caused by its event.</summary>
     ValueTask HandleAsync(IReadOnlyList<IReactorContext<TEvent>> contexts, CancellationToken ct);

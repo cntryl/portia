@@ -1,5 +1,3 @@
-using System.Buffers;
-using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Http;
 
@@ -11,13 +9,16 @@ namespace Cntryl.Portia;
 /// </summary>
 public static class ResultHttpExtensions
 {
+    /// <summary>Identifies the response header that preserves <see cref="RequestError.IsTransient" />.</summary>
+    public const string TransientHeaderName = "Portia-Transient";
+
     /// <summary>
     /// Maps a no-result outcome onto an HTTP response: 204 on success, or a status matching the
     /// error's <see cref="RequestErrorKind" />.
     /// </summary>
     /// <param name="result">The outcome to map.</param>
     public static IResult ToHttpResult(this Result result) =>
-        result.IsSuccess ? Results.NoContent() : ToProblem(result.Error!);
+        result.IsSuccess ? Results.NoContent() : ToProblem(result.Error);
 
     /// <summary>
     /// Maps an outcome with a result value onto an HTTP response: 200 with the value on
@@ -29,7 +30,7 @@ public static class ResultHttpExtensions
     public static IResult ToHttpResult<T>(this Result<T> result, JsonTypeInfo<T> typeInfo)
     {
         ArgumentNullException.ThrowIfNull(typeInfo);
-        return result.IsSuccess ? Results.Json(result.Value, typeInfo) : ToProblem(result.Error!);
+        return result.IsSuccess ? Results.Json(result.Value, typeInfo) : ToProblem(result.Error);
     }
 
     static RequestErrorResult ToProblem(RequestError error) => new(error);
@@ -48,16 +49,14 @@ public static class ResultHttpExtensions
                 RequestErrorKind.Conflict => StatusCodes.Status409Conflict,
                 _ => StatusCodes.Status500InternalServerError,
             };
+            httpContext.Response.Headers[TransientHeaderName] = error.IsTransient ? "true" : "false";
             if (error.Kind == RequestErrorKind.Unauthorized)
+            {
+                httpContext.Response.Headers.WWWAuthenticate = "Bearer";
                 return;
-            httpContext.Response.ContentType = "application/problem+json";
-            var buffer = new ArrayBufferWriter<byte>();
-            using var writer = new Utf8JsonWriter(buffer);
-            writer.WriteStartObject();
-            writer.WriteString("message", error.Message);
-            writer.WriteEndObject();
-            writer.Flush();
-            await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted).ConfigureAwait(false);
+            }
+            await PortiaProblemDetails.WriteAsync(httpContext, httpContext.Response.StatusCode, error.Message, error.IsTransient)
+                .ConfigureAwait(false);
         }
     }
 }

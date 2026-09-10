@@ -105,12 +105,14 @@ sealed partial class PortiaWorkloadService(
     {
         var telemetryScope = identity.Tenant is null ? "global" : "tenant";
         PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, true, _logger);
+        var consecutiveFailures = 0;
         try
         {
             while (!ct.IsCancellationRequested)
             {
                 IDomainEventSubscription? subscription = null;
                 var failed = false;
+                WorkloadFailureException? terminalFailure = null;
                 try
                 {
                     await using var scope = scopes.CreateAsyncScope();
@@ -119,12 +121,16 @@ sealed partial class PortiaWorkloadService(
                     registration.Descriptor.Bind(provider, identity, registration.ExplicitName);
                     subscription = await SubscribeAsync(registration.Descriptor.Pattern(provider), ct).ConfigureAwait(false);
                     await registration.Descriptor.RunPass(provider, registration.Processing, ct).ConfigureAwait(false);
+                    consecutiveFailures = 0;
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
                 catch (Exception ex)
                 {
                     failed = true;
-                    PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), $"workload '{identity}' failed", ex, _logger);
+                    consecutiveFailures++;
+                    PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Workload, ex, _logger);
+                    if (consecutiveFailures >= registration.FailureAttemptLimit)
+                        terminalFailure = new WorkloadFailureException(identity, consecutiveFailures, ex);
                 }
                 try
                 {
@@ -139,15 +145,16 @@ sealed partial class PortiaWorkloadService(
                             // case a reconnect or bounded subscription buffer lost the signal.
                         }
                     }
-                    else
+                    else if (terminalFailure is null)
                     {
-                        await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
+                        var delay = failed ? GetFailureDelay(registration, consecutiveFailures) : registration.PollInterval;
+                        await Task.Delay(delay, _clock, ct).ConfigureAwait(false);
                     }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
                 catch (Exception ex)
                 {
-                    PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), $"workload '{identity}' notification failed", ex, _logger);
+                    PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Notification, ex, _logger);
                     try { await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false); }
                     catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
                 }
@@ -156,6 +163,8 @@ sealed partial class PortiaWorkloadService(
                     if (subscription is not null)
                         await subscription.DisposeAsync().ConfigureAwait(false);
                 }
+                if (terminalFailure is not null)
+                    throw terminalFailure;
             }
         }
         finally
@@ -177,6 +186,17 @@ sealed partial class PortiaWorkloadService(
         {
             return await notifier.SubscribeAsync(pattern, token).ConfigureAwait(false);
         }
+    }
+
+    static TimeSpan GetFailureDelay(WorkloadRegistration registration, int consecutiveFailures)
+    {
+        var maximumTicks = registration.MaximumFailureDelay.Ticks;
+        var initialTicks = Math.Min(registration.PollInterval.Ticks, maximumTicks);
+        var exponent = Math.Min(consecutiveFailures - 1, 30);
+        var ticks = initialTicks > maximumTicks >> exponent
+            ? maximumTicks
+            : initialTicks << exponent;
+        return TimeSpan.FromTicks(Math.Min(ticks, maximumTicks));
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "No IWorkloadCoordinator is registered; owning every workload in this process. That is correct for a single worker replica only \u2014 register a distributed coordinator before scaling workers out.")]

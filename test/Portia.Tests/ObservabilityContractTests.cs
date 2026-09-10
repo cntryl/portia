@@ -8,6 +8,30 @@ namespace Cntryl.Portia;
 [Collection(TelemetryTestGroup.Name)]
 public sealed class ObservabilityContractTests
 {
+    /// <summary>Workload lifecycle instruments publish their exact semantic units.</summary>
+    [Fact]
+    public void ShouldPublishWorkloadMetricUnits()
+    {
+        var units = new ConcurrentDictionary<string, string?>();
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, _) =>
+            {
+                if (instrument.Meter.Name == PortiaTelemetry.SourceName
+                    && instrument.Name is "portia.workload.active" or "portia.worker.failure" or "portia.worker.restart")
+                {
+                    units[instrument.Name] = instrument.Unit;
+                }
+            },
+        };
+        listener.Start();
+        _ = PortiaTelemetry.Meter;
+
+        Assert.Equal("{workload}", units["portia.workload.active"]);
+        Assert.Equal("{failure}", units["portia.worker.failure"]);
+        Assert.Equal("{restart}", units["portia.worker.restart"]);
+    }
+
     /// <summary>Local dispatch emits one static span and bounded request measurements.</summary>
     [Fact]
     public async Task ShouldEmitBoundedTelemetryGivenSuccessfulLocalDispatch()
@@ -23,6 +47,27 @@ public sealed class ObservabilityContractTests
         Assert.DoesNotContain(activity.TagObjects, tag => tag.Key.Contains("id", StringComparison.OrdinalIgnoreCase));
         var duration = Assert.Single(measurements, item => item.Name == "portia.request.duration" && item.Tags.Any(tag => Equals(tag.Value, nameof(TelemetrySuccessAction))));
         Assert.Equal(["request.type", "transport", "outcome"], duration.Tags.Select(tag => tag.Key));
+    }
+
+    /// <summary>
+    /// A stream denied at authorization reports the denial as its request outcome. The denial
+    /// leaves the method by throwing rather than by completing the enumeration, so it must not be
+    /// counted as an infrastructure fault alongside genuinely broken deliveries.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRecordDenialOutcomeGivenStreamRejectedByAuthorization()
+    {
+        using var meterListener = ListenToMeasurements(out var measurements);
+        using var host = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.DenyAll());
+
+        _ = await Assert.ThrowsAsync<RequestAuthorizationException>(async () =>
+        {
+            await foreach (var _ in host.Bus.StreamAsync(new TelemetryGuardedSequence(), RequestActor.Anonymous)) { }
+        });
+
+        var duration = Assert.Single(measurements, item => item.Name == "portia.request.duration"
+            && item.Tags.Any(tag => Equals(tag.Value, nameof(TelemetryGuardedSequence))));
+        Assert.Equal("forbidden", Assert.Single(duration.Tags, tag => tag.Key == "outcome").Value);
     }
 
     /// <summary>Scheduled delivery starts a new trace linked to, rather than parented by, the scheduling trace.</summary>

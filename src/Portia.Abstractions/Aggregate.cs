@@ -14,7 +14,11 @@ public abstract class Aggregate(
 {
     readonly Dictionary<Type, Action<DomainEvent>> _handlers = [];
     readonly List<DomainEvent> _committedEvents = [];
-    readonly HashSet<Uuid> _committedEventIds = [];
+    // Every event ID this aggregate has attached or replayed, committed or still pending. One
+    // set answers both "has this ID been used" for a newly issued event and "was this ID already
+    // committed" during replay: an aggregate can only load when it has nothing pending, so the
+    // two questions are the same question at the only moment replay asks it.
+    readonly HashSet<Uuid> _issuedEventIds = [];
     readonly List<DomainEvent> _uncommittedEvents = [];
     readonly List<DomainEvent> _uncommittedAudits = [];
     readonly IDomainEventMetadataFactory _metadataFactory = metadataFactory ?? SystemDomainEventMetadataFactory.Instance;
@@ -73,7 +77,7 @@ public abstract class Aggregate(
         {
             Apply(ev);
             _committedEvents.Add(ev);
-            _ = _committedEventIds.Add(ev.Metadata.EventId);
+            _ = _issuedEventIds.Add(ev.Metadata.EventId);
             Version++;
         }
 
@@ -83,7 +87,7 @@ public abstract class Aggregate(
     /// <summary>
     /// Registers the handler invoked when an event of type <typeparamref name="TEvent" /> is
     /// applied — call this from the constructor for every event type the aggregate handles.
-    /// Unlike <c>Projector</c>/<c>BaseReactor</c>'s interface-driven dispatch, this needs no public
+    /// Unlike <c>Projector</c>/<c>Reactor</c>'s interface-driven dispatch, this needs no public
     /// handler method and no source generator: <paramref name="handler" /> can be a private
     /// method, and a mismatched signature is still a compile error, from the ordinary generic
     /// delegate conversion <c>On&lt;TEvent&gt;</c> requires.
@@ -177,13 +181,8 @@ public abstract class Aggregate(
     {
         CommittedStreamPosition = checked(CommittedStreamPosition + (ulong)_uncommittedEvents.Count);
         _committedEvents.AddRange(_uncommittedEvents);
-
-        foreach (var ev in _uncommittedEvents)
-            _ = _committedEventIds.Add(ev.Metadata.EventId);
-
-        foreach (var audit in _uncommittedAudits)
-            _ = _committedEventIds.Add(audit.Metadata.EventId);
-
+        // Both lists' IDs entered the set when their metadata was attached, so committing them
+        // adds nothing new.
         _uncommittedEvents.Clear();
         _uncommittedAudits.Clear();
         _auditSessionStream = null;
@@ -192,12 +191,20 @@ public abstract class Aggregate(
     }
 
     internal EventStreamAddress GetAuditSessionStream() =>
-        _auditSessionStream ??= new EventStreamAddress(Stream.Realm, Stream.Area, Guid.NewGuid().ToString("D"));
+        _auditSessionStream ??= new EventStreamAddress(Stream.Realm, Stream.Area, Uuid.CreateVersion4().ToString());
 
     internal IDisposable BeginOperation()
     {
+        // This guards one aggregate operation at a time, and two different situations trip it:
+        // a genuinely concurrent call from another thread, and — far more often — a re-entrant
+        // one, where an On<TEvent> handler calls RaiseEvent or AuditEvent while the aggregate is
+        // still applying the event that ran it. Naming only concurrency sent readers hunting for
+        // a second thread that was never there, so the message names both.
         return Interlocked.CompareExchange(ref _operation, 1, 0) != 0
-            ? throw new InvalidOperationException("Concurrent aggregate emission, replay, or save is not supported.")
+            ? throw new InvalidOperationException(
+                "An aggregate operation is already in progress. Either another thread is using this "
+                + "aggregate concurrently, or an event handler raised, audited, or saved while applying "
+                + "an event — an On<TEvent> handler may only update state, never emit.")
             : (IDisposable)new Operation(this);
     }
 
@@ -222,9 +229,10 @@ public abstract class Aggregate(
         if (metadata.EventId == Uuid.Empty)
             throw new InvalidOperationException("The event metadata factory returned an empty event ID.");
 
-        if (_committedEventIds.Contains(metadata.EventId)
-            || _uncommittedEvents.Any(candidate => candidate.Metadata.EventId == metadata.EventId)
-            || _uncommittedAudits.Any(candidate => candidate.Metadata.EventId == metadata.EventId))
+        // Every issued ID is tracked in one set, so this stays a single lookup no matter how many
+        // events one command raises. Scanning the two pending lists made a batch of n events cost
+        // O(n squared) for a check a hash set already answers.
+        if (_issuedEventIds.Contains(metadata.EventId))
         {
             throw new InvalidOperationException(
                 $"The event metadata factory returned event ID '{metadata.EventId}', which this aggregate has already used.");
@@ -239,6 +247,7 @@ public abstract class Aggregate(
         if (metadata.OccurredOn.Offset != TimeSpan.Zero)
             throw new InvalidOperationException("The event metadata factory returned a non-UTC occurrence time.");
 
+        _ = _issuedEventIds.Add(metadata.EventId);
         ev.AttachAggregateMetadata(metadata with { IsAudit = isAudit });
     }
 
@@ -252,7 +261,7 @@ public abstract class Aggregate(
         if (metadata.EventId == Uuid.Empty)
             throw new InvalidOperationException("A committed event ID cannot be empty.");
 
-        if (_committedEventIds.Contains(metadata.EventId) || !eventIds.Add(metadata.EventId))
+        if (_issuedEventIds.Contains(metadata.EventId) || !eventIds.Add(metadata.EventId))
             throw new InvalidOperationException($"Event ID '{metadata.EventId}' has already been committed.");
 
         if (metadata.AggregateId != Id)

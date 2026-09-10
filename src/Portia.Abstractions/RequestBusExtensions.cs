@@ -28,7 +28,7 @@ public static class RequestBusExtensions
         ArgumentNullException.ThrowIfNull(reaction);
         var result = await bus.SendAsync(command, reaction, ct).ConfigureAwait(false);
         if (!result.IsSuccess)
-            throw new ReactionCommandFailedException(result.Error!);
+            throw new ReactionCommandFailedException(result.Error);
     }
 
     /// <summary>Dispatches a request that produces no result to its handler.</summary>

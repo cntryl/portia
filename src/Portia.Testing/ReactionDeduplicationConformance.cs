@@ -1,4 +1,4 @@
-namespace Cntryl.Portia;
+namespace Cntryl.Portia.Testing;
 
 /// <summary>Adapts an application's optional durable reaction deduplication primitive for verification.</summary>
 public interface IReactionDeduplicationProbe

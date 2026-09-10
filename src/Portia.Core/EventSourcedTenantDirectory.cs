@@ -33,7 +33,7 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
     {
         var active = new HashSet<TenantId>();
         await foreach (var record in _reader.ReadAsync(_pattern, 0, ct).WithCancellation(ct).ConfigureAwait(false))
-            _ = Apply(active, record.Ev);
+            _ = Apply(active, record.Event);
         foreach (var tenantId in active)
             yield return tenantId;
     }
@@ -56,7 +56,7 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
             {
                 offset = EventStreamOffsets.GetNextOffset(_pattern, record);
                 sawAny = true;
-                var change = Apply(active, record.Ev, initial ? initiallyRemoved : null);
+                var change = Apply(active, record.Event, initial ? initiallyRemoved : null);
                 if (!initial && change is { } delta)
                     yield return delta;
             }

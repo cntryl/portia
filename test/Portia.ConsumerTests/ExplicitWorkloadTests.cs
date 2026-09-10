@@ -78,9 +78,25 @@ public sealed class ExplicitWorkloadTests
         Assert.Equal(3, workloads.Length);
         Assert.Equal(WorkloadScope.PerTenant, workloads.Single(item => item.ComponentType == typeof(FirstProjector)).Scope);
         Assert.Equal(WorkloadScope.Global, workloads.Single(item => item.ComponentType == typeof(SecondProjector)).Scope);
-        Assert.DoesNotContain(services, service => service.ServiceType == typeof(IHostedService));
+        Assert.DoesNotContain(services, service => service.ServiceType == typeof(IHostedService)
+            && service.ImplementationType is not null
+            && typeof(BackgroundService).IsAssignableFrom(service.ImplementationType));
         _ = portia.AddProjector<FirstProjector>(WorkloadScope.PerTenant);
         Assert.Equal(3, services.Count(service => service.ServiceType == typeof(WorkloadRegistration)));
+    }
+
+    [Fact]
+    public void DuplicateWorkloadRejectsDifferentFailurePolicy()
+    {
+        var services = new ServiceCollection();
+        var portia = services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global,
+            options => options.FailureAttemptLimit = 3);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => portia.AddProjector<FirstProjector>(
+            WorkloadScope.Global, options => options.FailureAttemptLimit = 4));
+
+        Assert.Contains("Conflicting workload registration", exception.Message, StringComparison.Ordinal);
+        _ = Assert.Single(services, service => service.ServiceType == typeof(WorkloadRegistration));
     }
 
     [Fact]

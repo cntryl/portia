@@ -109,7 +109,7 @@ sealed class TransientReloadFailureCheckpointStore : IProjectionCheckpointStore
 }
 
 sealed partial class FlakyOnThirdAttemptReactor(IProjectionCheckpointStore? checkpoints = null)
-    : BaseBatchReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "flaky-on-third-attempt-reactor"), IReactorHandler<ValueChanged>
+    : BatchReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "flaky-on-third-attempt-reactor"), IReactorHandler<ValueChanged>
 {
     bool _hasFailedOnce;
 
@@ -118,13 +118,13 @@ sealed partial class FlakyOnThirdAttemptReactor(IProjectionCheckpointStore? chec
 
     public ValueTask HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
     {
-        if (context.Ev.Value == 3 && !_hasFailedOnce)
+        if (context.Trigger.Value == 3 && !_hasFailedOnce)
         {
             _hasFailedOnce = true;
             throw new InvalidOperationException("Simulated transient failure reacting to the third event.");
         }
 
-        HandledValues.Add(context.Ev.Value);
+        HandledValues.Add(context.Trigger.Value);
         return ValueTask.CompletedTask;
     }
 }

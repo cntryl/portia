@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Cntryl.Portia;
+namespace Cntryl.Portia.Testing;
 
 /// <summary>
 /// Keeps reactor checkpoints in memory — for tests, and for any single-instance

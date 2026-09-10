@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -6,7 +7,7 @@ namespace Cntryl.Portia;
 sealed class FitzWorkloadCoordinator(FitzApplicationConnection connection, PortiaFitzBuilder configuration,
     ILogger<FleetPartitionRunner>? logger, TimeProvider? clock) : IWorkloadCoordinator
 {
-    static readonly Uuid NamespaceId = Uuid.Parse("c41f6c39-9c25-4f7f-b8b0-fce08b5ccfc4");
+    static readonly Uuid NamespaceId = Uuid.Parse("c41f6c39-9c25-4f7f-b8b0-fce08b5ccfc4", CultureInfo.InvariantCulture);
 
     public async Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
         Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)

@@ -62,6 +62,7 @@ public sealed class ReviewRegressionTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.AspNetCore.Routing;
             public sealed record Binding(int Value) : IRequest<string>, ICallable, IQueuable;
             public static class Scenario

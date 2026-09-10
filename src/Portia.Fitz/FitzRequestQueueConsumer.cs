@@ -115,6 +115,7 @@ public sealed class FitzRequestQueueConsumer(
         }
 
         public IRequest Request => _payload.Value.Request as IRequest ?? throw new InvalidOperationException("Only no-result requests can be queued.");
+        public string? Name => _payload.Value.Name;
         public RequestMetadata Metadata => _payload.Value.Metadata;
         public RequestTraceContext? TraceContext => _payload.Value.TraceContext;
         public RequestInvocation Invocation => new QueueInvocation(_item.Route, _item.Attempt);
@@ -148,11 +149,11 @@ public sealed class FitzRequestQueueConsumer(
             catch (Exception ex)
             {
                 _renewalError = ex;
-                PortiaTelemetry.RecordRunnerFault(nameof(FitzRequestQueueConsumer), "reservation renewal failed", ex, logger);
+                PortiaTelemetry.RecordRunnerFault(nameof(FitzRequestQueueConsumer), RunnerFaultStage.Renewal, ex, logger);
                 try { await _lost.CancelAsync().ConfigureAwait(false); }
                 catch (Exception callbackError)
                 {
-                    PortiaTelemetry.RecordRunnerFault(nameof(FitzRequestQueueConsumer), "reservation cancellation callback failed", callbackError, logger);
+                    PortiaTelemetry.RecordRunnerFault(nameof(FitzRequestQueueConsumer), RunnerFaultStage.Cleanup, callbackError, logger);
                 }
             }
         }

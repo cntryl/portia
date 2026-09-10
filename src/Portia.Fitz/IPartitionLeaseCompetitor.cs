@@ -11,7 +11,7 @@ namespace Cntryl.Portia;
 /// query/subscribe/list/observe/acquire-without-callback members. Depending on this instead of
 /// <see cref="ILeaseClient" /> directly means a test double only has to implement the one
 /// operation actually used to be a fully honest, substitutable stand-in — see
-/// <see cref="InMemoryLeaseClient" />.
+/// <see cref="Testing.InMemoryLeaseClient" />.
 /// </summary>
 public interface IPartitionLeaseCompetitor
 {

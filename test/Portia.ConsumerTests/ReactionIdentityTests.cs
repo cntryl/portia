@@ -46,10 +46,10 @@ public sealed class ReactionIdentityTests
 
     sealed class PrincipalProvider(ClaimsPrincipal actor) : IReactorPrincipalProvider
     {
-        public ClaimsPrincipal GetPrincipal(BaseReactor reactor) => actor;
+        public ClaimsPrincipal GetPrincipal(Reactor reactor) => actor;
     }
 
-    sealed class RecordingReactor() : BaseReactor(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("identity", "source"), "billing")
+    sealed class RecordingReactor() : Reactor(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("identity", "source"), "billing")
     {
         public IExecutionContext? Context { get; private set; }
         protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context, CancellationToken ct)

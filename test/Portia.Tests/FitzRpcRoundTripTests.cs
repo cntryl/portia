@@ -68,7 +68,7 @@ public sealed class FitzRpcRoundTripTests
         var result = await sender.SendAsync(new RpcChangeValue(1), new RequestRouteValues(), actorToken: "any-token");
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(RequestErrorKind.Unauthorized, result.Error!.Kind);
+        Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
         Assert.Equal("Token expired.", result.Error.Message);
         Assert.Null(handler.LastValue);
     }

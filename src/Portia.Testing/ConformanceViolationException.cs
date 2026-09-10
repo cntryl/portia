@@ -1,4 +1,4 @@
-namespace Cntryl.Portia;
+namespace Cntryl.Portia.Testing;
 
 /// <summary>Indicates that an application implementation violated a Portia conformance invariant.</summary>
 /// <param name="message">The invariant that the implementation violated.</param>

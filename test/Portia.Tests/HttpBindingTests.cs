@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -146,7 +147,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.Equal("respond-async", response.Headers.GetValues("Preference-Applied").Single());
         using var receipt = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.NotEqual(Uuid.Empty, Uuid.Parse(receipt.RootElement.GetProperty("request_id").GetString()!));
+        Assert.NotEqual(Uuid.Empty, Uuid.Parse(receipt.RootElement.GetProperty("request_id").GetString()!, CultureInfo.InvariantCulture));
         _ = Assert.Single(publisher.Enqueued);
         _ = Assert.IsType<HttpSendPing>(publisher.Enqueued[0]);
     }
@@ -181,7 +182,10 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        Assert.True((await response.Content.ReadFromJsonAsync<JsonElement>()).TryGetProperty("message", out _));
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(400, problem.GetProperty("status").GetInt32());
+        Assert.Equal("Bad Request", problem.GetProperty("title").GetString());
+        Assert.True(problem.TryGetProperty("detail", out _));
     }
 
     /// <summary>Optional HTTP whitespace is removed before validating the Bearer credential.</summary>
@@ -257,6 +261,49 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var response = await client.PostAsJsonAsync("/guarded", new { });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("false", response.Headers.GetValues(ResultHttpExtensions.TransientHeaderName).Single());
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("about:blank", problem.RootElement.GetProperty("type").GetString());
+        Assert.Equal("Forbidden", problem.RootElement.GetProperty("title").GetString());
+        Assert.Equal(403, problem.RootElement.GetProperty("status").GetInt32());
+        Assert.Contains("http:guarded", problem.RootElement.GetProperty("detail").GetString(), StringComparison.Ordinal);
+        Assert.Equal("/guarded", problem.RootElement.GetProperty("instance").GetString());
+        Assert.False(problem.RootElement.GetProperty("transient").GetBoolean());
+        Assert.False(problem.RootElement.TryGetProperty("message", out _));
+    }
+
+    /// <summary>A transient request failure remains distinguishable over HTTP.</summary>
+    [Fact]
+    public async Task ShouldExposeTransientRequestFailureInProblemAndHeader()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/conflict";
+        context.Response.Body = new MemoryStream();
+        var result = Result.Failure(new RequestError(RequestErrorKind.Conflict, "Try again.", isTransient: true));
+
+        await result.ToHttpResult().ExecuteAsync(context);
+
+        Assert.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
+        Assert.Equal("true", context.Response.Headers[ResultHttpExtensions.TransientHeaderName].ToString());
+        context.Response.Body.Position = 0;
+        using var problem = await JsonDocument.ParseAsync(context.Response.Body);
+        Assert.True(problem.RootElement.GetProperty("transient").GetBoolean());
+    }
+
+    /// <summary>Unauthorized failures remain bodyless but advertise their authentication scheme.</summary>
+    [Fact]
+    public async Task ShouldChallengeBearerWithoutLeakingUnauthorizedDetail()
+    {
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+        var result = Result.Failure(new RequestError(RequestErrorKind.Unauthorized, "IDX secret", isTransient: false));
+
+        await result.ToHttpResult().ExecuteAsync(context);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
+        Assert.Equal("Bearer", context.Response.Headers.WWWAuthenticate.ToString());
+        Assert.Equal("false", context.Response.Headers[ResultHttpExtensions.TransientHeaderName].ToString());
+        Assert.Equal(0, context.Response.Body.Length);
     }
 
     /// <summary>

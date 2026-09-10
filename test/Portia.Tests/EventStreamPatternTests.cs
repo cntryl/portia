@@ -41,4 +41,14 @@ public sealed class EventStreamPatternTests
 
         Assert.Equal("realm", exception.ParamName);
     }
+
+    /// <summary>A resource cannot be selected beneath a wildcard area.</summary>
+    [Fact]
+    public void ShouldRejectResourceWithoutArea()
+    {
+        var exception = Assert.Throws<ArgumentException>(() =>
+            EventStreamPattern.ForPattern("sales", area: null, resource: "orders"));
+
+        Assert.Equal("resource", exception.ParamName);
+    }
 }

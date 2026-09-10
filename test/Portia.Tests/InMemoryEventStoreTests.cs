@@ -20,7 +20,7 @@ public sealed class InMemoryEventStoreTests
 
         var events = new List<DomainEvent>();
         await foreach (var ev in store.ReadAsync(stream, 1))
-            events.Add(ev.Ev);
+            events.Add(ev.Event);
 
         Assert.Same(second, Assert.Single(events));
     }
@@ -43,7 +43,7 @@ public sealed class InMemoryEventStoreTests
 
         var events = new List<DomainEvent>();
         await foreach (var ev in store.ReadAsync(stream))
-            events.Add(ev.Ev);
+            events.Add(ev.Event);
 
         Assert.Same(first, Assert.Single(events));
     }
@@ -68,7 +68,7 @@ public sealed class InMemoryEventStoreTests
             records.Add(record);
 
         var result = Assert.Single(records);
-        Assert.Same(second, result.Ev);
+        Assert.Same(second, result.Event);
         Assert.Equal(secondStream, result.Stream);
         Assert.Equal(0UL, result.ResourceOffset);
         Assert.Equal(0UL, result.AreaOffset);

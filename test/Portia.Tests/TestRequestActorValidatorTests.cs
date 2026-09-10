@@ -23,7 +23,7 @@ public sealed class TestRequestActorValidatorTests
         var result = await validator.ValidateAsync(null);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(RequestErrorKind.Unauthorized, result.Error!.Kind);
+        Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
 
     /// <summary>
@@ -54,6 +54,6 @@ public sealed class TestRequestActorValidatorTests
         var result = await validator.ValidateAsync("expired-token");
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(RequestErrorKind.Unauthorized, result.Error!.Kind);
+        Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
 }

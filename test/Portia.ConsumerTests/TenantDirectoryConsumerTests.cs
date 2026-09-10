@@ -12,6 +12,7 @@ public sealed class TenantDirectoryConsumerTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             public sealed record Added : DomainEvent;
             public sealed record Removed : DomainEvent;
             public sealed class Reader : IDomainEventReader

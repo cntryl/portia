@@ -32,6 +32,27 @@ public sealed class QueueBrokerTests
         Assert.Empty(await client.Queue.ReserveAsync(route, leaseSeconds: 1, waitSeconds: 0));
     }
 
+    /// <summary>
+    /// A Fitz reservation reports the wire name its envelope declared, so queue-side telemetry
+    /// stays pinned to the discriminator rather than falling back to the CLR type name.
+    /// </summary>
+    [Fact]
+    public async Task ReservationReportsTheEnvelopeDiscriminatorAsItsWireName()
+    {
+        await using var client = await ConsumerBroker.ConnectAsync();
+        var route = "queue://portia-consumer-tests/queue/" + Guid.NewGuid().ToString("N");
+        var serializer = ConsumerJson.CreateSerializer();
+        _ = await client.Queue.EnqueueAsync(route, serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null, RequestMetadata.Create(), null));
+        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, visibilityTimeoutSeconds: 1);
+        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+
+        Assert.True(await reader.MoveNextAsync());
+
+        Assert.Equal("consumer.scopes.scope-request", reader.Current.Name);
+        Assert.NotEqual(nameof(ScopeRequest), reader.Current.Name);
+        await reader.Current.CompleteAsync();
+    }
+
     [Fact]
     public async Task ActiveDeliveryRetainsLeaseThenHandsRedeliveryBackToFitzOnCancellation()
     {

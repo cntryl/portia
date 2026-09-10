@@ -6,7 +6,7 @@ namespace Cntryl.Portia;
 /// <summary>
 /// Runs one instance of a per-tenant component for every currently active tenant, starting a new
 /// instance as tenants are added and stopping it as they're removed — the tenant control plane.
-/// Deliberately decoupled from <see cref="BaseProjector" />/<see cref="BaseReactor" />
+/// Deliberately decoupled from <see cref="Projector" />/<see cref="Reactor" />
 /// specifics: a caller supplies what "start" and "stop" mean for one tenant (typically
 /// constructing a tenant-scoped <see cref="EventStreamPattern" /> — using the tenant's own id as
 /// its realm, the same convention <see cref="TenantId" /> documents — and driving
@@ -44,7 +44,8 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
     /// tenant is removed or the whole run is cancelled — typically a loop driving a runner
     /// against a tenant-scoped pattern, not a single pass.</param>
     /// <param name="onTenantStopped">Runs once for a tenant after it's removed and its
-    /// <paramref name="onTenantStarted" /> task has been cancelled and observed.</param>
+    /// <paramref name="onTenantStarted" /> task has been cancelled and observed. Normal removal
+    /// is allowed to finish; host shutdown passes and enforces <paramref name="ct" />.</param>
     /// <param name="ct">A token that can cancel the operation. Cancels every active tenant's
     /// <paramref name="onTenantStarted" /> task and stops watching for further changes.</param>
     /// <returns>A task representing the run.</returns>
@@ -82,7 +83,7 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
                     foreach (var tenantId in active.Keys.ToArray())
                     {
                         if (!snapshot.Contains(tenantId))
-                            await StopAsync(tenantId, onTenantStopped, active).ConfigureAwait(false);
+                            await StopAsync(tenantId, onTenantStopped, active, CancellationToken.None).ConfigureAwait(false);
                     }
 
                     await foreach (var change in _tenantDirectory.WatchAsync(ct).WithCancellation(ct).ConfigureAwait(false))
@@ -94,7 +95,7 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
                                 break;
 
                             case TenantLifecycleChangeKind.Removed:
-                                await StopAsync(change.TenantId, onTenantStopped, active).ConfigureAwait(false);
+                                await StopAsync(change.TenantId, onTenantStopped, active, CancellationToken.None).ConfigureAwait(false);
                                 break;
 
                             default:
@@ -110,7 +111,7 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
                     if (ct.IsCancellationRequested)
                         break;
 
-                    PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), "tenant directory watch completed without cancellation", null, _logger);
+                    PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), RunnerFaultStage.Watch, null, _logger);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -118,7 +119,7 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
                 }
                 catch (Exception ex)
                 {
-                    PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), "tenant directory watch faulted", ex, _logger);
+                    PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), RunnerFaultStage.Watch, ex, _logger);
                 }
 
                 // Reached after either a faulted or a normally-completed watch — always back off
@@ -138,9 +139,9 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
         finally
         {
             foreach (var (tenantId, run) in active)
-                Cancel(tenantId, run.Cancellation);
+                Cancel(run.Cancellation);
             foreach (var tenantId in active.Keys.ToArray())
-                await StopAsync(tenantId, onTenantStopped, active).ConfigureAwait(false);
+                await StopAsync(tenantId, onTenantStopped, active, ct).ConfigureAwait(false);
         }
     }
 
@@ -158,7 +159,7 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
             return;
 
         var cts = new CancellationTokenSource();
-        var registration = ct.Register(() => Cancel(tenantId, cts));
+        var registration = ct.Register(() => Cancel(cts));
         var task = Task.Run(() => RunTenantAsync(tenantId, onTenantStarted, cts.Token), cts.Token);
 
         active[tenantId] = new TenantRun(cts, task, registration);
@@ -172,12 +173,12 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
             {
                 await onTenantStarted(tenantId, ct).ConfigureAwait(false);
                 if (!ct.IsCancellationRequested)
-                    PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), $"tenant '{tenantId}' workload completed without cancellation", logger: _logger);
+                    PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), RunnerFaultStage.Workload, logger: _logger);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
             catch (Exception ex)
             {
-                PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), $"tenant '{tenantId}' start callback faulted", ex, _logger);
+                PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), RunnerFaultStage.Workload, ex, _logger);
             }
             try { await Task.Delay(_restartInterval, _clock, ct).ConfigureAwait(false); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
@@ -194,12 +195,13 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
     async ValueTask StopAsync(
         TenantId tenantId,
         Func<TenantId, CancellationToken, Task> onTenantStopped,
-        ConcurrentDictionary<TenantId, TenantRun> active)
+        ConcurrentDictionary<TenantId, TenantRun> active,
+        CancellationToken stopToken)
     {
         if (!active.TryRemove(tenantId, out var run))
             return;
 
-        Cancel(tenantId, run.Cancellation);
+        Cancel(run.Cancellation);
 
         try
         {
@@ -211,7 +213,7 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
         }
         catch (Exception ex)
         {
-            ReportCleanupFault(tenantId, "workload completion", ex);
+            ReportCleanupFault(ex);
         }
         finally
         {
@@ -219,27 +221,42 @@ public sealed class MultiTenantRunner(ITenantDirectory tenantDirectory, ILogger<
             run.Cancellation.Dispose();
         }
 
+        Task? stop = null;
         try
         {
-            await onTenantStopped(tenantId, CancellationToken.None).ConfigureAwait(false);
+            stop = onTenantStopped(tenantId, stopToken);
+            await stop.WaitAsync(stopToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
+        {
+            // Host shutdown is bounded by its token even if application cleanup ignores it.
+            if (stop is not null)
+                _ = ObserveLateStopAsync(stop);
         }
         catch (Exception ex)
         {
-            ReportCleanupFault(tenantId, "stop callback", ex);
+            ReportCleanupFault(ex);
         }
     }
 
-    void Cancel(TenantId tenantId, CancellationTokenSource cancellation)
+    async Task ObserveLateStopAsync(Task stop)
     {
-        try { cancellation.Cancel(); }
-        catch (Exception ex) { ReportCleanupFault(tenantId, "cancellation callback", ex); }
+        try { await stop.ConfigureAwait(false); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { ReportCleanupFault(ex); }
     }
 
-    void ReportCleanupFault(TenantId tenantId, string operation, Exception exception)
+    void Cancel(CancellationTokenSource cancellation)
+    {
+        try { cancellation.Cancel(); }
+        catch (Exception ex) { ReportCleanupFault(ex); }
+    }
+
+    void ReportCleanupFault(Exception exception)
     {
         var errors = exception is AggregateException aggregate ? aggregate.Flatten().InnerExceptions : [exception];
         foreach (var error in errors)
-            PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), $"tenant '{tenantId}' {operation} faulted", error, _logger);
+            PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), RunnerFaultStage.Cleanup, error, _logger);
     }
 
     sealed record TenantRun(CancellationTokenSource Cancellation, Task Task, CancellationTokenRegistration Registration);

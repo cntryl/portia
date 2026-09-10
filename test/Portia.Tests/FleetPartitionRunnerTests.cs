@@ -124,6 +124,24 @@ public sealed class FleetPartitionRunnerTests
         Assert.True(leases.Acquisitions.Count <= 2, $"Expected at most 2 acquisitions in 300ms with a 1s backoff, got {leases.Acquisitions.Count}.");
     }
 
+    /// <summary>A terminal hosted-workload fault crosses the fleet resilience boundary.</summary>
+    [Fact]
+    public async Task ShouldPropagateTerminalWorkloadFailure()
+    {
+        var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
+        var terminal = new WorkloadFailureException(new WorkloadIdentity("poison"), 2,
+            new InvalidOperationException("bad event"));
+        var options = SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
+        {
+            ReconciliationInterval = TimeSpan.FromMilliseconds(10),
+        };
+
+        var failure = await Assert.ThrowsAsync<WorkloadFailureException>(() => runner.RunAsync(
+            ["lease://portia/fleet/poison"], (_, _) => throw terminal, options).WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.Same(terminal, failure);
+    }
+
     /// <summary>
     /// Verifies that a non-positive lease TTL is rejected up front with a clear error, rather
     /// than surfacing later as an opaque overflow when converting to whole seconds.

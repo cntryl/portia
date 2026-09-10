@@ -6,11 +6,11 @@ namespace Cntryl.Portia;
 /// <c>PortiaBuilder.AddProjector</c>; applications do not construct it.</summary>
 public sealed class ProjectorRegistration : IWorkloadDescriptor
 {
-    readonly Func<IServiceProvider, BaseProjector> _resolve;
+    readonly Func<IServiceProvider, Projector> _resolve;
 
     ProjectorRegistration(
         Type projectorType,
-        Func<IServiceProvider, BaseProjector> resolve,
+        Func<IServiceProvider, Projector> resolve,
         Func<ProjectorRunner, IServiceProvider, ProjectionCheckpoint, ProjectionRunOptions?, CancellationToken, ValueTask<ProjectionCheckpoint>> run,
         Func<IServiceProvider, ProjectionRunOptions?, CancellationToken, ValueTask> runPass)
     {
@@ -24,7 +24,7 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
     public Type ProjectorType { get; }
 
     /// <summary>Resolves the projector in the supplied application scope.</summary>
-    public BaseProjector Resolve(IServiceProvider services) => _resolve(services);
+    public Projector Resolve(IServiceProvider services) => _resolve(services);
 
     /// <summary>Resolves and runs the projector from an explicit checkpoint.</summary>
     public Func<ProjectorRunner, IServiceProvider, ProjectionCheckpoint, ProjectionRunOptions?, CancellationToken, ValueTask<ProjectionCheckpoint>> Run { get; }
@@ -41,7 +41,7 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
     /// <typeparam name="TProjector">The concrete component.</typeparam>
     /// <returns>The component descriptor.</returns>
     public static ProjectorRegistration Create<TProjector>()
-        where TProjector : BaseProjector => new(
+        where TProjector : Projector => new(
             typeof(TProjector),
             static services => services.GetRequiredService<TProjector>(),
             static (runner, services, checkpoint, options, ct) =>

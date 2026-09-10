@@ -41,7 +41,9 @@ public sealed class JwtRequestActorValidatorTests
         var result = await validator.ValidateAsync(token);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal("user-1", result.Value!.FindFirst("sub")?.Value);
+        var actor = result.Value;
+        Assert.NotNull(actor);
+        Assert.Equal("user-1", actor.FindFirst("sub")?.Value);
     }
 
     /// <summary>
@@ -58,7 +60,7 @@ public sealed class JwtRequestActorValidatorTests
         var result = await validator.ValidateAsync(token);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(RequestErrorKind.Unauthorized, result.Error!.Kind);
+        Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
 
     /// <summary>
@@ -79,7 +81,7 @@ public sealed class JwtRequestActorValidatorTests
         var result = await validator.ValidateAsync(token);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(RequestErrorKind.Unauthorized, result.Error!.Kind);
+        Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
 
     /// <summary>
@@ -114,7 +116,7 @@ public sealed class JwtRequestActorValidatorTests
         var result = await validator.ValidateAsync(token);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(RequestErrorKind.Unauthorized, result.Error!.Kind);
+        Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
 
     /// <summary>
@@ -154,7 +156,7 @@ public sealed class JwtRequestActorValidatorTests
         var result = await validator.ValidateAsync(token);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(RequestErrorKind.Unauthorized, result.Error!.Kind);
+        Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
 
     /// <summary>
@@ -169,7 +171,7 @@ public sealed class JwtRequestActorValidatorTests
         var result = await validator.ValidateAsync("not-a-real-token");
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(RequestErrorKind.Unauthorized, result.Error!.Kind);
+        Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
 
     static string CreateToken(DateTime expires, string subject, SymmetricSecurityKey? signingKey = null, DateTime? notBefore = null)

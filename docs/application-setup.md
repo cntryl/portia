@@ -70,9 +70,10 @@ and its `TokenProvider`. No permissive actor validator is registered automatical
 
 ## API deployment
 
-Reference the shared project and `Portia.AspNetCore`. `Portia.DependencyInjection` supplies
-the generator transitively; the host does not need a separate analyzer reference or manual
-compiler property.
+Reference the shared project and `Portia.AspNetCore`. The HTTP package depends directly on
+`Portia.DependencyInjection`, so it supplies the registration APIs, generator/analyzer assets,
+and interceptor compiler configuration transitively. The host does not need a separate
+dependency-injection or analyzer package, or a manual compiler property.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -91,9 +92,10 @@ and authorization using the application's normal ASP.NET setup.
 Generated interception of `WebApplicationBuilder.Build()` (and `WebApplication.Create()`)
 registers Microsoft's `v1` OpenAPI 3.1 document before the provider is built and maps
 `/openapi/v1.json` and `/openapi/v1.yml` afterward. Registration and mapping are idempotent across
-route groups and multiple Portia endpoints, add no hosted service, and leave `AddPortia()`
-host-neutral. Security schemes are application-owned and are not inferred from authorization
-metadata.
+route groups and multiple Portia endpoints and add no hosted service. `AddPortia()` itself adds
+only the host-neutral startup validator described below; it does not activate transport or
+component workloads. Security schemes are application-owned and are not inferred from
+authorization metadata.
 Each asynchronous document request materializes the complete endpoint composition. This catches
 operation-ID collisions across route groups, feature assemblies, ordinary endpoints, and document
 transformers without making an unavailable specification fatal to application boot; excluded
@@ -106,7 +108,8 @@ and an `IQueuedRequestTerminalHandler` is registered. The attempt number is repo
 transport, not synthesized by Portia. Only retryable or unexpected failures at the threshold
 invoke the callback; Portia acknowledges after a successful callback. Callback, cancellation,
 or acknowledgment failure leaves the delivery unacknowledged. A callback failure also faults the
-runner so an application bug is visible; an acknowledgment failure is logged while transport
+runner and its hosted worker with `TerminalHandlerFailureException`, so an application can
+distinguish that fault; an acknowledgment failure is logged while transport
 ownership expires. The callback and acknowledgment are not atomic, so terminal handlers must
 tolerate replay. Expected business rejection continues
 to use `Result.Validation` (and the other `RequestError` kinds); validation policy belongs to the
@@ -127,7 +130,15 @@ await builder.Build().RunAsync();
 are also included, provided all setup happens before the host is built. Applications
 can declare other hosted services in shared setup with
 `portia.ConfigureWorker("name", services => services.AddHostedService<MyWorker>())`.
-Names must be unique; a different callback under the same name is rejected.
+The name is the declaration's identity: declaring the same name twice keeps the first
+callback and ignores the second, so shared setup that runs in both hosts composes
+without special-casing.
+
+Each hosted projector/reactor pass retries failures with exponential backoff beginning at its
+`PollInterval`, capped by `WorkloadOptions.MaximumFailureDelay`. Ten consecutive failures fault
+the worker with `WorkloadFailureException` by default; configure `FailureAttemptLimit` when
+registering the workload. A successful pass resets the count. Portia does not skip the failing
+event or advance its checkpoint, because doing so would make a projection incomplete.
 
 The API deployment can scale with HTTP demand, while worker replicas compete for
 queue work and serve RPC. Infrastructure autoscaling configuration remains deployment-owned.
@@ -149,6 +160,11 @@ await repository.HydrateAsync(account, ct);
 No aggregate factory registration or generated constructor wiring is needed.
 The developer owns ordinary construction, including constructor dependencies.
 `AddPortia()` registers the scoped repository once.
+
+It also registers a startup validator in every host. Resolving the configured JSON options and
+`IDomainEventSerializer` at startup validates the default serializer's upcaster identities,
+duplicates, and transition chains before an API-only host serves a request; replacing the domain
+event serializer opts out of that JSON-specific policy.
 
 Hydration returns the same instance. It starts at `CommittedStreamPosition`, checks
 contiguous offsets, identities, event versions, and duplicate event IDs, and applies
@@ -200,12 +216,12 @@ at the next coordinator reconciliation; retained global and other tenant workloa
 keep their ownership. Fleet membership changes transfer ownership between replicas.
 Each owned workload pass receives a fresh DI scope and reloads its checkpoint.
 
-Projectors derive from `BaseProjector` or `BaseBatchProjector` and pass their ordinary
+Projectors derive from `Projector` or `BatchProjector` and pass their ordinary
 repository into the base constructor. That repository implements `IProjectionStore`:
 loading progress and opening an atomic unit of work. There is no separate target
 registration and no repository lookup through projector context.
 
-Reactors derive from `BaseReactor` or `BaseBatchReactor` and pass a constructor dependency
+Reactors derive from `Reactor` or `BatchReactor` and pass a constructor dependency
 implementing `IProjectionCheckpointStore`. This can be the same application repository
 they use for reactions; Portia does not require a separate global store registration.
 Register `ITenantDirectory` when any workload is per tenant. Registration and infrastructure

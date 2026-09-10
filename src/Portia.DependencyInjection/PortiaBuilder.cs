@@ -41,48 +41,50 @@ public sealed class PortiaBuilder
 
     internal JsonSerializerOptions BuildJsonOptions() => _json.Build();
 
+    // The bodies below never run. Portia.Generators replaces each of these call sites with a
+    // typed descriptor, which is what makes naming a type that is not a handler a build error
+    // rather than a startup failure. They throw so that a call the generator could not reach
+    // fails immediately and says why, instead of silently registering nothing.
+    //
+    // A call it cannot reach is one where the type argument is not known at the call site — most
+    // often a generic helper that forwards, such as
+    // `static void Register<T>(PortiaBuilder b) => b.AddRequestHandler<T>();`. There is no
+    // concrete T there to build a descriptor from. PORTIA018 reports that at compile time; write
+    // the registration out per type instead.
+    //
+    // CA1822 is suppressed rather than satisfied with a throwaway read of Services: these must be
+    // instance methods to chain, and a discard written only to fool an analyzer reads like it has
+    // a purpose.
+#pragma warning disable CA1822
     /// <summary>Registers a request handler through Portia.Generators' compile-time typed descriptor.</summary>
     /// <remarks>The generator is supplied by Portia.DependencyInjection.</remarks>
-    public PortiaBuilder AddRequestHandler<THandler>() where THandler : class
-    {
-        _ = Services;
+    public PortiaBuilder AddRequestHandler<THandler>() where THandler : class =>
         throw MissingGeneratedRegistration(typeof(THandler), "request handler");
-    }
 
     /// <summary>Registers a request authorizer through Portia.Generators' compile-time typed descriptor.</summary>
     /// <remarks>The generator is supplied by Portia.DependencyInjection.</remarks>
     public PortiaBuilder AddRequestAuthorizer<TAuthorizer>(AuthorizationStage stage = AuthorizationStage.ResourceAccess)
-        where TAuthorizer : class
-    {
-        _ = Services;
+        where TAuthorizer : class =>
         throw MissingGeneratedRegistration(typeof(TAuthorizer), $"request authorizer at stage '{stage}'");
-    }
 
     /// <summary>Registers a typed request pipeline behavior at the given order.</summary>
     /// <remarks>The generator is supplied by Portia.DependencyInjection. Lower orders execute outermost.</remarks>
-    public PortiaBuilder AddRequestPipelineBehavior<TBehavior>(int order = 0) where TBehavior : class
-    {
-        _ = Services;
+    public PortiaBuilder AddRequestPipelineBehavior<TBehavior>(int order = 0) where TBehavior : class =>
         throw MissingGeneratedRegistration(typeof(TBehavior), $"request pipeline behavior at order '{order}'");
-    }
 
     /// <summary>Explicitly registers a request whose concrete type is hidden from compile-time dispatch analysis.</summary>
     /// <remarks>Normal strongly typed dispatch is inferred by Portia.Generators. Use this only at dynamic dispatch boundaries.</remarks>
-    public PortiaBuilder RegisterDynamicRequest<TRequest>() where TRequest : IRequestBase
-    {
-        _ = Services;
+    public PortiaBuilder RegisterDynamicRequest<TRequest>() where TRequest : IRequestBase =>
         throw MissingGeneratedRegistration(typeof(TRequest), "request");
-    }
-
-    static InvalidOperationException MissingGeneratedRegistration(Type type, string role) => new(
-        $"Portia.Generators did not intercept registration of {role} '{type}'. Ensure Portia.DependencyInjection's analyzer assets are enabled.");
 
     /// <summary>Includes an event type in the application's serializer catalog.</summary>
-    public PortiaBuilder AddEvent<TEvent>() where TEvent : DomainEvent
-    {
-        _ = Services;
+    public PortiaBuilder AddEvent<TEvent>() where TEvent : DomainEvent =>
         throw MissingGeneratedRegistration(typeof(TEvent), "domain event");
-    }
+#pragma warning restore CA1822
+
+    static InvalidOperationException MissingGeneratedRegistration(Type type, string role) => new(
+        $"Portia.Generators did not intercept registration of {role} '{type}'. Ensure Portia.DependencyInjection's analyzer assets are enabled. "
+        + "If the call is inside a generic method, the generator has no concrete type to emit a descriptor for; register each type at its own call site.");
 
     /// <summary>Adds a generated versioned domain-event descriptor.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
@@ -183,7 +185,7 @@ public sealed class PortiaBuilder
 
     /// <summary>Registers one reactor with an explicitly selected execution scope.</summary>
     public PortiaBuilder AddReactor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TReactor>(WorkloadScope scope, Action<WorkloadOptions>? configure = null)
-        where TReactor : BaseReactor
+        where TReactor : Reactor
     {
         var registration = new WorkloadRegistration(ReactorRegistration.Create<TReactor>(), scope, configure);
         Services.TryAddScoped<TReactor>();
@@ -192,7 +194,7 @@ public sealed class PortiaBuilder
 
     /// <summary>Registers one projector with an explicitly selected execution scope.</summary>
     public PortiaBuilder AddProjector<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProjector>(WorkloadScope scope, Action<WorkloadOptions>? configure = null)
-        where TProjector : BaseProjector
+        where TProjector : Projector
     {
         var registration = new WorkloadRegistration(ProjectorRegistration.Create<TProjector>(), scope, configure);
         Services.TryAddScoped<TProjector>();
@@ -226,22 +228,35 @@ public sealed class PortiaBuilder
         {
             return left.ComponentType == right.ComponentType && left.Scope == right.Scope && left.Name == right.Name
                 && left.ExplicitName == right.ExplicitName && left.PollInterval == right.PollInterval
+                && left.FailureAttemptLimit == right.FailureAttemptLimit
+                && left.MaximumFailureDelay == right.MaximumFailureDelay
                 && left.Processing == right.Processing;
         }
     }
 
-    /// <summary>Declares named worker-only registrations in shared application setup.</summary>
+    /// <summary>
+    /// Declares named worker-only registrations in shared application setup. The name is the
+    /// identity: calling this twice under one name keeps the first declaration and ignores the
+    /// second, so shared setup that runs in both an API host and a worker host — or twice on one
+    /// service collection — composes exactly like every other <see cref="PortiaBuilder" /> method.
+    /// </summary>
+    /// <param name="name">The declaration's unique name within the application.</param>
+    /// <param name="configure">Registers the worker-only services.</param>
+    /// <remarks>
+    /// An earlier version compared the two callbacks and threw when they differed. That could not
+    /// distinguish a genuinely different declaration from the same one supplied again: a lambda
+    /// that captures anything allocates a fresh delegate per call and never compares equal to its
+    /// predecessor, so re-running shared setup threw on its own registrations. There is no way to
+    /// ask whether two delegates mean the same thing, so the name is the contract instead.
+    /// </remarks>
     public PortiaBuilder ConfigureWorker(string name, Action<IServiceCollection> configure)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(configure);
-        if (_catalog.Workers.TryGetValue(name, out var existing))
-        {
-            return existing != configure ? throw new InvalidOperationException($"Worker '{name}' has conflicting registrations.") : this;
-        }
+        if (!_catalog.Workers.TryAdd(name, configure))
+            return this;
         if (_catalog.WorkersActivated)
             configure(Services);
-        _catalog.Workers.Add(name, configure);
         return this;
     }
 
@@ -251,7 +266,6 @@ public sealed class PortiaBuilder
         if (_catalog.WorkersActivated)
             return this;
         var staged = new ServiceCollection();
-        staged.TryAddEnumerable(ServiceDescriptor.Singleton<Microsoft.Extensions.Hosting.IHostedService, PortiaStartupValidator>());
         foreach (var configure in _catalog.Workers.Values)
             configure(staged);
         _ = staged.AddSingleton<Microsoft.Extensions.Hosting.IHostedService, PortiaWorkloadService>();
@@ -294,6 +308,7 @@ public static class PortiaApplicationServiceCollectionExtensions
             provider.GetRequiredService<DomainEventTypeCatalog>(), provider.GetServices<IJsonDomainEventUpcaster>(),
             provider.GetRequiredService<JsonSerializerOptions>()));
         services.TryAddSingleton<IReactorPrincipalProvider, SystemReactorPrincipalProvider>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<Microsoft.Extensions.Hosting.IHostedService, PortiaStartupValidator>());
         return builder;
     }
 }

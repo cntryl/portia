@@ -65,7 +65,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
 
                 if (ex is Fitz.Errors.KvException { DomainCode: FitzErrorCodes.KvIsolationConflict })
                 {
-                    throw new FitzKvConcurrencyException(
+                    throw new ProjectionConcurrencyException(
                         $"Projection batch for '{identity.ComponentName}' pattern '{identity.Pattern}' conflicted with a concurrent writer; reload the authoritative checkpoint before retrying.", ex);
                 }
 

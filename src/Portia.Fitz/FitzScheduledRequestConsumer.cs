@@ -53,7 +53,7 @@ public sealed class FitzScheduledRequestConsumer(
             yield return new RequestNotification(request, null,
                 new RequestMetadata(Uuid.CreateVersion4(), envelope.Metadata.CorrelationId, envelope.Metadata.RequestId),
                 new ScheduleInvocation(notification.Route), envelope.TraceContext,
-                RequestActor.CreateSystem(scheduled.SystemSubject, scheduled.SystemIssuer));
+                RequestActor.CreateSystem(scheduled.SystemSubject, scheduled.SystemIssuer), envelope.Name);
         }
     }
 }

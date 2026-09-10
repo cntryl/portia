@@ -73,6 +73,15 @@ public sealed class OpenApiTests : IAsyncDisposable
             parameter.GetProperty("name").GetString() == "include_archived"
             && parameter.GetProperty("schema").GetProperty("default").ValueKind == JsonValueKind.False);
         Assert.True(paths.GetProperty("/api/ping").GetProperty("post").GetProperty("responses").TryGetProperty("202", out _));
+        var responses = create.GetProperty("responses");
+        var problemSchema = responses.GetProperty("400").GetProperty("content")
+            .GetProperty("application/problem+json").GetProperty("schema");
+        Assert.True(problemSchema.GetProperty("properties").TryGetProperty("status", out _));
+        Assert.True(problemSchema.GetProperty("properties").TryGetProperty("detail", out _));
+        Assert.False(problemSchema.GetProperty("properties").TryGetProperty("message", out _));
+        Assert.True(responses.GetProperty("400").GetProperty("headers")
+            .TryGetProperty(ResultHttpExtensions.TransientHeaderName, out _));
+        Assert.True(responses.GetProperty("401").GetProperty("headers").TryGetProperty("WWW-Authenticate", out _));
         Assert.True(paths.TryGetProperty("/health", out _));
         Assert.False(paths.TryGetProperty("/api/widget-events", out _));
     }

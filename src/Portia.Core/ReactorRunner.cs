@@ -9,7 +9,7 @@ public sealed class ReactorRunner(IDomainEventReader reader, IReactorPrincipalPr
 
     /// <summary>Processes available events. Single-event reactors checkpoint each event; batch reactors
     /// checkpoint after the bounded batch succeeds. Failures can replay external effects.</summary>
-    public async ValueTask<ProjectionCheckpoint> RunAsync(BaseReactor reactor, ProjectionCheckpoint checkpoint,
+    public async ValueTask<ProjectionCheckpoint> RunAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
         int maxBatchSize = 512, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(reactor);
@@ -31,7 +31,7 @@ public sealed class ReactorRunner(IDomainEventReader reader, IReactorPrincipalPr
         {
             var started = PortiaTelemetry.StartTimestamp();
             var count = contexts.Count;
-            var lastOccurrence = contexts[^1].Source.Ev.Metadata.OccurredOn;
+            var lastOccurrence = contexts[^1].Source.Event.Metadata.OccurredOn;
             var outcome = "success";
             try
             {

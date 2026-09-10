@@ -7,6 +7,24 @@ namespace Cntryl.Portia.Consumer;
 
 static class GeneratorCompilation
 {
+    public static IReadOnlyList<Diagnostic> WarningsAsErrorsDiagnostics(string source)
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Append(typeof(Aggregate).Assembly.Location)
+            .Distinct(StringComparer.Ordinal)
+            .Select(path => MetadataReference.CreateFromFile(path));
+        var compilation = CSharpCompilation.Create(
+            "WarningsAsErrors_" + Guid.NewGuid().ToString("N"),
+            [CSharpSyntaxTree.ParseText(source, parseOptions, path: "ConsumerScenario.cs")],
+            references,
+            new CSharpCompilationOptions(
+                OutputKind.DynamicallyLinkedLibrary,
+                nullableContextOptions: NullableContextOptions.Enable,
+                generalDiagnosticOption: ReportDiagnostic.Error));
+        return compilation.GetDiagnostics();
+    }
+
     public static IReadOnlyList<Diagnostic> Diagnostics(string source, params IIncrementalGenerator[] generators)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(

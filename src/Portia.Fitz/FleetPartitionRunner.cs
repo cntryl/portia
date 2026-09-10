@@ -59,11 +59,12 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
                 await _membership.RunAsync(options, (observer, membershipCt) =>
                     ReconcileAsync(partitions, callback, options, observer, membershipCt), ct).ConfigureAwait(false);
                 if (!ct.IsCancellationRequested)
-                    Fault("membership ended without cancellation");
+                    Fault(RunnerFaultStage.Acquisition);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch (WorkloadFailureException) { throw; }
             catch (FleetPartitionTerminationTimeoutException) { throw; }
-            catch (Exception ex) { Fault("membership failed", ex); }
+            catch (Exception ex) { Fault(RunnerFaultStage.Acquisition, ex); }
             if (!await BackoffAsync(ct).ConfigureAwait(false))
                 break;
         }
@@ -85,7 +86,7 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
                     .Select(route => route[prefix.Length..]).Where(FleetRunOptions.IsSegment).ToArray();
                 ready &= observer.IsReady && workers.Contains(options.WorkerId, StringComparer.Ordinal);
                 if (!ready && !unavailable)
-                    Fault("membership snapshot is not ready or does not contain this worker");
+                    Fault(RunnerFaultStage.Acquisition);
                 unavailable = !ready;
                 var current = partitions();
                 options.Validate(current);
@@ -94,7 +95,7 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
                     : new HashSet<string>(StringComparer.Ordinal);
                 var revoked = active.Keys.Where(partition => !assigned.Contains(partition)).ToArray();
                 foreach (var partition in revoked)
-                    Cancel(partition, active[partition].Cancellation);
+                    Cancel(active[partition].Cancellation);
                 await ObserveAsync([.. revoked.Select(partition => (partition, active[partition]))],
                     options.PartitionStopTimeout).ConfigureAwait(false);
                 foreach (var partition in revoked)
@@ -109,18 +110,20 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
                         continue;
                     ct.ThrowIfCancellationRequested();
                     var cancellation = new CancellationTokenSource();
-                    var registration = ct.Register(() => Cancel(partition, cancellation));
+                    var registration = ct.Register(() => Cancel(cancellation));
                     active.Add(partition, new PartitionRun(cancellation,
                         Task.Run(() => CompeteAsync(partition, callback, options.TtlSeconds, cancellation.Token), CancellationToken.None), registration));
                     PortiaTelemetry.RecordFleetAssignment(options.WorkerId!, partition, true, _logger);
                 }
+                foreach (var run in active.Values.Where(run => run.Task.IsCompleted))
+                    await run.Task.ConfigureAwait(false);
                 await Task.Delay(options.ReconciliationInterval, _clock, ct).ConfigureAwait(false);
             }
         }
         finally
         {
             foreach (var (partition, run) in active)
-                Cancel(partition, run.Cancellation);
+                Cancel(run.Cancellation);
             await ObserveAsync([.. active.Select(pair => (pair.Key, pair.Value))],
                 options.PartitionStopTimeout).ConfigureAwait(false);
         }
@@ -167,9 +170,10 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
                 }, new LeaseExecutionOptions { WaitForAvailability = true }, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch (WorkloadFailureException) { throw; }
             catch (Exception ex)
             {
-                Fault(acquired ? $"partition '{partition}' callback faulted while held" : $"partition '{partition}' could not be acquired", ex);
+                Fault(acquired ? RunnerFaultStage.Workload : RunnerFaultStage.Acquisition, ex);
             }
             if (!await BackoffAsync(ct).ConfigureAwait(false))
                 break;
@@ -182,10 +186,10 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { return false; }
     }
 
-    void Cancel(string partition, CancellationTokenSource cancellation)
+    void Cancel(CancellationTokenSource cancellation)
     {
         try { cancellation.Cancel(); }
-        catch (Exception ex) { Fault($"partition '{partition}' cancellation failed", ex); }
+        catch (Exception ex) { Fault(RunnerFaultStage.Cleanup, ex); }
     }
 
     async Task ObserveAsync((string Partition, PartitionRun Run)[] runs, TimeSpan timeout)
@@ -206,13 +210,13 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
                 if (!run.TryClaimObservation())
                     continue;
                 if (run.Task.IsCompleted)
-                    await ObserveCompletedAsync(partition, run).ConfigureAwait(false);
+                    await ObserveCompletedAsync(run).ConfigureAwait(false);
                 else
-                    _ = ObserveLateAsync(partition, run);
+                    _ = ObserveLateAsync(run);
             }
             var exception = new FleetPartitionTerminationTimeoutException(
                 [.. timedOut.Select(item => item.Partition)], timeout);
-            PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), "partition termination timed out", exception);
+            PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), RunnerFaultStage.Cleanup, exception);
             if (_logger is not null)
                 LogPartitionTerminationTimeout(_logger, string.Join(",", exception.Partitions), exception);
             throw exception;
@@ -226,23 +230,23 @@ public sealed partial class FleetPartitionRunner(IPartitionLeaseCompetitor lease
         foreach (var (partition, run) in runs)
         {
             if (run.TryClaimObservation())
-                await ObserveCompletedAsync(partition, run).ConfigureAwait(false);
+                await ObserveCompletedAsync(run).ConfigureAwait(false);
         }
     }
 
-    async Task ObserveLateAsync(string partition, PartitionRun run) =>
-        await ObserveCompletedAsync(partition, run).ConfigureAwait(false);
+    async Task ObserveLateAsync(PartitionRun run) =>
+        await ObserveCompletedAsync(run).ConfigureAwait(false);
 
-    async Task ObserveCompletedAsync(string partition, PartitionRun run)
+    async Task ObserveCompletedAsync(PartitionRun run)
     {
         try { await run.Task.ConfigureAwait(false); }
         catch (OperationCanceledException) when (run.Cancellation.IsCancellationRequested) { }
-        catch (Exception ex) { Fault($"partition '{partition}' termination failed", ex); }
+        catch (Exception ex) { Fault(RunnerFaultStage.Cleanup, ex); }
         finally { run.Registration.Dispose(); run.Cancellation.Dispose(); }
     }
 
-    void Fault(string reason, Exception? exception = null) =>
-        PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), reason, exception, _logger);
+    void Fault(RunnerFaultStage stage, Exception? exception = null) =>
+        PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), stage, exception, _logger);
 
     [LoggerMessage(EventId = 1002, Level = LogLevel.Error,
         Message = "Portia FleetPartitionRunner fault at cleanup (FleetPartitionTerminationTimeoutException); partitions: {Partitions}")]

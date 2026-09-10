@@ -147,7 +147,27 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 },
             new RecordingTerminalHandler(throws: true)));
 
-        var failure = await Assert.ThrowsAnyAsync<Exception>(() => runner.RunAsync());
+        var failure = await Assert.ThrowsAsync<TerminalHandlerFailureException>(() => runner.RunAsync());
+
+        Assert.Equal("terminal failed", failure.InnerException?.Message);
+        Assert.False(queued.Completed);
+        Assert.False(queued.Abandoned);
+    }
+
+    /// <summary>The hosted transport must not turn a terminal callback fault into a restart loop.</summary>
+    [Fact]
+    public async Task ShouldFaultHostedRunnerGivenTerminalHandlerFailure()
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = new FakeQueuedRequest(new ChangeValue(1), throwOnDispatch: true, attempt: 3);
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 },
+            new RecordingTerminalHandler(throws: true)));
+        using var hosted = new QueueRunnerHostedService(runner);
+
+        await hosted.StartAsync(default);
+        var failure = await Assert.ThrowsAsync<TerminalHandlerFailureException>(async () =>
+            await (hosted.ExecuteTask ?? throw new InvalidOperationException("The hosted runner did not start.")));
 
         Assert.Equal("terminal failed", failure.InnerException?.Message);
         Assert.False(queued.Completed);

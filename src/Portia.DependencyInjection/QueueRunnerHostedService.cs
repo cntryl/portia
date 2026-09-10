@@ -20,12 +20,13 @@ sealed class QueueRunnerHostedService(
             {
                 await _runner.RunAsync(stoppingToken).ConfigureAwait(false);
                 if (!stoppingToken.IsCancellationRequested)
-                    PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "consumer completed without cancellation", logger: logger);
+                    PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, logger: logger);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            catch (TerminalHandlerFailureException) { throw; }
             catch (Exception ex)
             {
-                PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "consumer enumeration faulted", ex, logger);
+                PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, logger);
             }
             try
             {

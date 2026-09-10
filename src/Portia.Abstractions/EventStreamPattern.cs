@@ -12,6 +12,8 @@ public sealed record EventStreamPattern
         Realm = ValidateRequiredSegment(realm, nameof(realm));
         Area = ValidateOptionalSegment(area, nameof(area));
         Resource = ValidateOptionalSegment(resource, nameof(resource));
+        if (Area is null && Resource is not null)
+            throw new ArgumentException("A resource-specific stream pattern must also specify its area.", nameof(resource));
         Scope = GetScope(Area, Resource);
     }
 

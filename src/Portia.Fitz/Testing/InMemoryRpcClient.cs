@@ -1,6 +1,6 @@
 using Cntryl.Fitz.Abstractions.Domains.Rpc;
 
-namespace Cntryl.Portia;
+namespace Cntryl.Portia.Testing;
 
 /// <summary>
 /// Stands in for a real Fitz RPC broker for tests: routes a caller's <see cref="CallAsync" />

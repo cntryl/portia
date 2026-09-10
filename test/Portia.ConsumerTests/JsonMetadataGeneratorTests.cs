@@ -7,6 +7,7 @@ public sealed class JsonMetadataGeneratorTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             [Discriminator("created")]
             public sealed record Created : DomainEvent;
             public sealed record Query : IRequest<Answer>;
@@ -31,6 +32,7 @@ public sealed class JsonMetadataGeneratorTests
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using System.Text.Json.Serialization;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             public sealed record Query(Nested Value) : IRequest<Answer>;
             public sealed record Nested;
             public sealed record Answer;

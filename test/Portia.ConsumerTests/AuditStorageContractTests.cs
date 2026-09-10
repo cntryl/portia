@@ -23,7 +23,7 @@ public sealed class AuditStorageContractTests
         EventStreamAddress? session = null;
         await foreach (var record in fixture.Store.ReadAsync(EventStreamPattern.ForPattern(account.Stream.Realm, account.Stream.Area)))
         {
-            if (record.Ev.Metadata.AggregateId == account.Id)
+            if (record.Event.Metadata.AggregateId == account.Id)
             {
                 session = record.Stream;
                 break;
@@ -37,8 +37,8 @@ public sealed class AuditStorageContractTests
         Assert.Equal(1024UL, records[^1].ResourceOffset);
         Assert.All(records, record =>
         {
-            Assert.True(record.Ev.Metadata.IsAudit);
-            Assert.Equal(0UL, record.Ev.Metadata.AggregateVersion);
+            Assert.True(record.Event.Metadata.IsAudit);
+            Assert.Equal(0UL, record.Event.Metadata.AggregateVersion);
         });
         Assert.Equal(0UL, (await fixture.Repository.HydrateAsync(new Account(account.Id))).CommittedStreamPosition);
     }

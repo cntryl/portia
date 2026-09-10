@@ -1,4 +1,4 @@
-namespace Cntryl.Portia;
+namespace Cntryl.Portia.Testing;
 
 /// <summary>Builds identified events for business tests and event-store seeding.</summary>
 public static class DomainEventSeed

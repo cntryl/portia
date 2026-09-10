@@ -31,13 +31,13 @@ public sealed class RunnerFaultVisibilityTests
         meterListener.SetMeasurementEventCallback<long>((_, value, tags, _) => measurements.Add((value, tags.ToArray())));
         meterListener.Start();
 
-        PortiaTelemetry.RecordRunnerFault("QueueRunner", "request 123 failed", new InvalidOperationException("secret"));
+        PortiaTelemetry.RecordRunnerFault("QueueRunner", RunnerFaultStage.Execution, new InvalidOperationException("secret"));
 
         Assert.Empty(activities);
         var (Value, Tags) = Assert.Single(measurements);
         Assert.Equal(1, Value);
         Assert.Equal(["runner", "error.type"], Tags.Select(tag => tag.Key));
-        Assert.DoesNotContain(Tags, tag => Equals(tag.Value, "request 123 failed") || Equals(tag.Value, "secret"));
+        Assert.DoesNotContain(Tags, tag => Equals(tag.Value, "secret"));
     }
 
     internal sealed record RunnerFaultAction : IRequest;

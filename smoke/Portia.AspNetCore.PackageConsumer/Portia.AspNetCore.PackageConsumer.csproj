@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <PortiaSmokePackageVersion Condition="'$(PortiaSmokePackageVersion)' == ''">1.0.0-smoke</PortiaSmokePackageVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Portia.AspNetCore" Version="$(PortiaSmokePackageVersion)" />
+  </ItemGroup>
+</Project>

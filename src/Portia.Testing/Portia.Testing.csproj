@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>Testing utilities for Portia: in-memory stores, request doubles, and backend-neutral persistence conformance suites.</Description>
+    <!-- Test doubles and conformance suites live in their own namespace so they never appear in
+         an application's completion list beside the production contracts. -->
+    <RootNamespace>Cntryl.Portia.Testing</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

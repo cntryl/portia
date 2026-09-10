@@ -7,6 +7,7 @@ namespace Cntryl.Portia;
 /// </summary>
 /// <typeparam name="TEvent">The concrete event type handled.</typeparam>
 public interface IReactorHandler<in TEvent>
+    where TEvent : DomainEvent
 {
     /// <summary>
     /// Handles the event.

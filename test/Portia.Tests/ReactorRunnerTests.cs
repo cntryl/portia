@@ -139,7 +139,7 @@ public sealed class ReactorRunnerTests
 }
 
 sealed partial class FlakyOnSecondEventReactor(IProjectionCheckpointStore? checkpoints = null)
-    : BaseBatchReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "flaky-on-second-event-reactor"), IReactorHandler<ValueChanged>
+    : BatchReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "flaky-on-second-event-reactor"), IReactorHandler<ValueChanged>
 {
     bool _hasFailedOnce;
 
@@ -148,19 +148,19 @@ sealed partial class FlakyOnSecondEventReactor(IProjectionCheckpointStore? check
 
     public ValueTask HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
     {
-        if (context.Ev.Value == 2 && !_hasFailedOnce)
+        if (context.Trigger.Value == 2 && !_hasFailedOnce)
         {
             _hasFailedOnce = true;
             throw new InvalidOperationException("Simulated transient failure reacting to the second event.");
         }
 
-        HandledValues.Add(context.Ev.Value);
+        HandledValues.Add(context.Trigger.Value);
         return ValueTask.CompletedTask;
     }
 }
 
 sealed partial class FlakyOnThirdEventReactor(IProjectionCheckpointStore? checkpoints = null)
-    : BaseBatchReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "flaky-on-third-event-reactor"), IReactorHandler<ValueChanged>
+    : BatchReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "flaky-on-third-event-reactor"), IReactorHandler<ValueChanged>
 {
     bool _hasFailedOnce;
 
@@ -169,13 +169,13 @@ sealed partial class FlakyOnThirdEventReactor(IProjectionCheckpointStore? checkp
 
     public ValueTask HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
     {
-        if (context.Ev.Value == 3 && !_hasFailedOnce)
+        if (context.Trigger.Value == 3 && !_hasFailedOnce)
         {
             _hasFailedOnce = true;
             throw new InvalidOperationException("Simulated transient failure reacting to the third event.");
         }
 
-        HandledValues.Add(context.Ev.Value);
+        HandledValues.Add(context.Trigger.Value);
         return ValueTask.CompletedTask;
     }
 }

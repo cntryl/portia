@@ -15,5 +15,13 @@ namespace Cntryl.Portia;
 /// use these fields as an activity link; other notifications use them as their parent.</param>
 /// <param name="Actor">A trusted transport-resolved actor. Only scheduled system identities use
 /// this path; token-carrying transports leave it null and require validation.</param>
+/// <param name="Name">The request's stable wire name, or <see langword="null" /> when this
+/// adapter does not resolve one and the CLR type name should be used instead.</param>
 public readonly record struct RequestNotification(IRequest Request, string? ActorToken, RequestMetadata Metadata, RequestInvocation Invocation,
-    RequestTraceContext? TraceContext = null, ClaimsPrincipal? Actor = null);
+    RequestTraceContext? TraceContext = null, ClaimsPrincipal? Actor = null, string? Name = null)
+{
+    /// <summary>Builds the transport-neutral delivery this notification describes.</summary>
+    /// <param name="timeProvider">The optional clock used by the request context.</param>
+    public RequestDelivery ToDelivery(TimeProvider? timeProvider = null) =>
+        RequestDelivery.For(Request, Name, Invocation, Metadata, ActorToken, TraceContext, timeProvider);
+}

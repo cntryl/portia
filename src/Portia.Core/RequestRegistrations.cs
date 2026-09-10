@@ -106,6 +106,14 @@ public abstract class RequestAuthorizerRegistration(Type requestType, Type autho
     /// <summary>Gets the semantic stage at which the policy runs.</summary>
     public AuthorizationStage Stage { get; } = stage;
 
+    // The application's own authorizer type, not this generic registration wrapper — every
+    // registration shares one wrapper type name, so reporting that would tag every authorization
+    // measurement identically and name the wrong type in an uninitialized-result error.
+    internal string ComponentName { get; } = authorizerType.Name;
+
+    // Fixed for the life of the process, so it is rendered once rather than on every dispatch.
+    internal string StageName { get; } = PortiaTelemetry.StageName(stage);
+
     internal abstract ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request, RequestDispatchContext context, CancellationToken ct);
 
     internal abstract void Register(IServiceCollection services);
@@ -122,7 +130,7 @@ public sealed class RequestAuthorizerRegistration<TRequest, [DynamicallyAccessed
     internal override void Register(IServiceCollection services) => services.TryAddScoped<TAuthorizer>();
 
     internal override ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request, RequestDispatchContext context, CancellationToken ct)
-        => services.GetRequiredService<TAuthorizer>().AuthorizeAsync(new RequestContext<TRequest>((TRequest)request, context), context.Actor, ct);
+        => services.GetRequiredService<TAuthorizer>().AuthorizeAsync(new RequestContext<TRequest>((TRequest)request, context), ct);
 }
 
 /// <summary>Describes an ordered request pipeline behavior independently of a handler.</summary>
@@ -139,17 +147,17 @@ public abstract class RequestPipelineBehaviorRegistration(Type scopeType, Type b
 
 interface IRequestBehaviorInvocation
 {
-    ValueTask<Result> InvokeAsync(IServiceProvider services, IRequest request, RequestDispatchContext context, RequestHandler nextHandler, CancellationToken ct);
+    ValueTask<Result> InvokeAsync(IServiceProvider services, IRequest request, RequestDispatchContext context, RequestPipelineNext continuation, CancellationToken ct);
 }
 
 interface IRequestBehaviorInvocation<TOut>
 {
-    ValueTask<Result<TOut>> InvokeAsync(IServiceProvider services, IRequest<TOut> request, RequestDispatchContext context, RequestHandler<TOut> nextHandler, CancellationToken ct);
+    ValueTask<Result<TOut>> InvokeAsync(IServiceProvider services, IRequest<TOut> request, RequestDispatchContext context, RequestPipelineNext<TOut> continuation, CancellationToken ct);
 }
 
 interface IStreamRequestBehaviorInvocation<TOut>
 {
-    IAsyncEnumerable<TOut> Invoke(IServiceProvider services, IStreamRequest<TOut> request, RequestDispatchContext context, StreamRequestHandler<TOut> nextHandler, CancellationToken ct);
+    IAsyncEnumerable<TOut> Invoke(IServiceProvider services, IStreamRequest<TOut> request, RequestDispatchContext context, StreamRequestPipelineNext<TOut> continuation, CancellationToken ct);
 }
 
 /// <summary>Invokes one generated no-result pipeline behavior registration.</summary>
@@ -159,8 +167,8 @@ public sealed class RequestPipelineBehaviorRegistration<TRequest, [DynamicallyAc
     where TBehavior : class, IRequestPipelineBehavior<TRequest>
 {
     internal override void Register(IServiceCollection services) => services.TryAddScoped<TBehavior>();
-    ValueTask<Result> IRequestBehaviorInvocation.InvokeAsync(IServiceProvider services, IRequest request, RequestDispatchContext context, RequestHandler nextHandler, CancellationToken ct)
-        => services.GetRequiredService<TBehavior>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), nextHandler, ct);
+    ValueTask<Result> IRequestBehaviorInvocation.InvokeAsync(IServiceProvider services, IRequest request, RequestDispatchContext context, RequestPipelineNext continuation, CancellationToken ct)
+        => services.GetRequiredService<TBehavior>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), continuation, ct);
 }
 
 /// <summary>Invokes one generated result-bearing pipeline behavior registration.</summary>
@@ -170,8 +178,8 @@ public sealed class RequestPipelineBehaviorRegistration<TRequest, [DynamicallyAc
     where TBehavior : class, IRequestPipelineBehavior<TRequest, TOut>
 {
     internal override void Register(IServiceCollection services) => services.TryAddScoped<TBehavior>();
-    ValueTask<Result<TOut>> IRequestBehaviorInvocation<TOut>.InvokeAsync(IServiceProvider services, IRequest<TOut> request, RequestDispatchContext context, RequestHandler<TOut> nextHandler, CancellationToken ct)
-        => services.GetRequiredService<TBehavior>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), nextHandler, ct);
+    ValueTask<Result<TOut>> IRequestBehaviorInvocation<TOut>.InvokeAsync(IServiceProvider services, IRequest<TOut> request, RequestDispatchContext context, RequestPipelineNext<TOut> continuation, CancellationToken ct)
+        => services.GetRequiredService<TBehavior>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), continuation, ct);
 }
 
 /// <summary>Invokes one generated streaming pipeline behavior registration.</summary>
@@ -181,6 +189,6 @@ public sealed class StreamRequestPipelineBehaviorRegistration<TRequest, [Dynamic
     where TBehavior : class, IStreamRequestPipelineBehavior<TRequest, TOut>
 {
     internal override void Register(IServiceCollection services) => services.TryAddScoped<TBehavior>();
-    IAsyncEnumerable<TOut> IStreamRequestBehaviorInvocation<TOut>.Invoke(IServiceProvider services, IStreamRequest<TOut> request, RequestDispatchContext context, StreamRequestHandler<TOut> nextHandler, CancellationToken ct)
-        => services.GetRequiredService<TBehavior>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), nextHandler, ct);
+    IAsyncEnumerable<TOut> IStreamRequestBehaviorInvocation<TOut>.Invoke(IServiceProvider services, IStreamRequest<TOut> request, RequestDispatchContext context, StreamRequestPipelineNext<TOut> continuation, CancellationToken ct)
+        => services.GetRequiredService<TBehavior>().HandleAsync(new RequestContext<TRequest>((TRequest)request, context), continuation, ct);
 }

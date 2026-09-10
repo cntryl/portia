@@ -138,7 +138,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
 }
 
 sealed partial class NamedProjector(RecordingProjectionTarget target)
-    : BaseProjector(target, EventStreamPattern.ForPattern("test", "projectors"), "declared-projection-name"),
+    : Projector(target, EventStreamPattern.ForPattern("test", "projectors"), "declared-projection-name"),
         IProjectorHandler<ValueChanged>
 {
     public ValueTask HandleAsync(ValueChanged ev, IProjectorContext context, CancellationToken ct)

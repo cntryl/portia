@@ -16,6 +16,7 @@ public sealed class HttpStreamingConsumerTests
         using System.Threading;
         using System.Threading.Tasks;
         using Cntryl.Portia;
+        using Cntryl.Portia.Testing;
         using Microsoft.AspNetCore.Builder;
         using Microsoft.AspNetCore.Hosting;
         using Microsoft.AspNetCore.TestHost;
@@ -39,9 +40,9 @@ public sealed class HttpStreamingConsumerTests
         }
         public sealed class Authorizer(Stats stats) : IRequestAuthorizer<StreamRequest>, IRequestAuthorizer<SseStreamRequest>, IAsyncDisposable
         {
-            public ValueTask<Result> AuthorizeAsync(IRequestContext<StreamRequest> context, ClaimsPrincipal actor, CancellationToken ct = default)
+            public ValueTask<Result> AuthorizeAsync(IRequestContext<StreamRequest> context, CancellationToken ct)
                 => Authorize(context.Request.Mode);
-            public ValueTask<Result> AuthorizeAsync(IRequestContext<SseStreamRequest> context, ClaimsPrincipal actor, CancellationToken ct = default)
+            public ValueTask<Result> AuthorizeAsync(IRequestContext<SseStreamRequest> context, CancellationToken ct)
                 => Authorize(context.Request.Mode);
             static ValueTask<Result> Authorize(int mode)
                 => ValueTask.FromResult(mode is 401 or 403

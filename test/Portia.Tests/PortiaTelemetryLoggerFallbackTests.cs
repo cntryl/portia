@@ -23,14 +23,13 @@ public sealed class PortiaTelemetryLoggerFallbackTests
         var logger = new CapturingLogger();
         var exception = new InvalidOperationException("boom");
 
-        PortiaTelemetry.RecordRunnerFault("TestRunner", "test reason", exception, logger);
+        PortiaTelemetry.RecordRunnerFault("TestRunner", RunnerFaultStage.Execution, exception, logger);
 
         var entry = Assert.Single(logger.Entries);
         Assert.Equal(LogLevel.Error, entry.Level);
         Assert.Same(exception, entry.Exception);
         Assert.Contains("TestRunner", entry.Message, StringComparison.Ordinal);
         Assert.Contains("execution", entry.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("test reason", entry.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -39,7 +38,7 @@ public sealed class PortiaTelemetryLoggerFallbackTests
     /// </summary>
     [Fact]
     public void ShouldNotThrowWhenLoggerIsOmitted() =>
-        PortiaTelemetry.RecordRunnerFault("TestRunner", "test reason", new InvalidOperationException("boom"));
+        PortiaTelemetry.RecordRunnerFault("TestRunner", RunnerFaultStage.Execution, new InvalidOperationException("boom"));
 
     sealed class CapturingLogger : ILogger
     {

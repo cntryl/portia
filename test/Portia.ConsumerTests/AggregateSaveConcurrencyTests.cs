@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
@@ -81,7 +82,7 @@ public sealed class AggregateSaveConcurrencyTests
         Assert.Equal(store.Routes[0], store.Routes[1]);
         if (audit)
         {
-            Assert.Equal(4, Uuid.Parse(store.Routes[0].Resource).Version);
+            Assert.Equal(4, Uuid.Parse(store.Routes[0].Resource, CultureInfo.InvariantCulture).Version);
             Assert.NotEqual(aggregate.Stream, store.Routes[0]);
             aggregate.Audit(new Declined("new session"));
             await repository.SaveAsync(aggregate, _saveContext);

@@ -34,7 +34,7 @@ public static class PortiaStreamResults
             }
             catch (Exception ex) when (httpContext.Response.HasStarted)
             {
-                PortiaTelemetry.RecordRunnerFault("HttpStream", "stream failed after response started", ex,
+                PortiaTelemetry.RecordRunnerFault("HttpStream", RunnerFaultStage.Execution, ex,
                     httpContext.RequestServices.GetService<ILogger<StreamResult<T>>>());
                 httpContext.Abort();
             }

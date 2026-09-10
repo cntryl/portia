@@ -21,4 +21,11 @@
     <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj" />
     <ProjectReference Include="../../src/Portia.CodeFixes/Portia.CodeFixes.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Portia's test doubles and conformance suites are their own namespace, so a consumer never
+         sees them beside the production contracts. This project is entirely tests, so it opts in
+         once here rather than in every file. -->
+    <Using Include="Cntryl.Portia.Testing" />
+  </ItemGroup>
+
 </Project>

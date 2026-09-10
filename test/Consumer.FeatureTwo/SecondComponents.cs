@@ -1,23 +1,23 @@
 namespace Cntryl.Portia.Consumer;
 
 public sealed partial class SecondReactor(IConsumerEffects effects, IConsumerScope scope, IProjectionCheckpointStore checkpoints)
-    : BaseReactor(checkpoints, EventStreamPattern.ForPattern("consumer", "accounts"), "second-reactor"), IReactorHandler<Deposited>, IReactorHandler<Declined>
+    : Reactor(checkpoints, EventStreamPattern.ForPattern("consumer", "accounts"), "second-reactor"), IReactorHandler<Deposited>, IReactorHandler<Declined>
 {
     public ValueTask HandleAsync(IReactorContext<Declined> context, CancellationToken ct)
     {
-        effects.Record(Name, context.Ev.Metadata.AggregateId, 0, scope.Id);
+        effects.Record(Name, context.Trigger.Metadata.AggregateId, 0, scope.Id);
         return ValueTask.CompletedTask;
     }
 
     public ValueTask HandleAsync(IReactorContext<Deposited> context, CancellationToken ct)
     {
-        effects.Record(Name, context.Ev.Metadata.AggregateId, context.Ev.Amount, scope.Id);
+        effects.Record(Name, context.Trigger.Metadata.AggregateId, context.Trigger.Amount, scope.Id);
         return ValueTask.CompletedTask;
     }
 }
 
 public sealed partial class SecondProjector(IAccountRepository target, IConsumerScope scope)
-    : BaseBatchProjector(target, EventStreamPattern.ForPattern("consumer", "accounts"), "second-projector"),
+    : BatchProjector(target, EventStreamPattern.ForPattern("consumer", "accounts"), "second-projector"),
         IProjectorHandler<Deposited>, IProjectorHandler<Declined>
 {
     public ValueTask HandleAsync(Declined ev, IProjectorContext context, CancellationToken ct)

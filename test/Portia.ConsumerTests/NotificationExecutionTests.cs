@@ -74,6 +74,24 @@ public sealed class NotificationExecutionTests
     }
 
     [Fact]
+    public async Task FiredSchedulePreservesStableWireName()
+    {
+        var serializer = ConsumerJson.CreateSerializer();
+        var wire = new Wire();
+        _ = await new FitzRequestScheduler(wire, serializer).ScheduleAsync(
+            new BrokerExecutionContextTests.Command(2),
+            new RequestScheduleSpec("0 0 * * *"),
+            new RequestRouteValues(Resource: "actual"),
+            RequestActor.CreateSystem("scheduler"));
+        var consumer = new FitzScheduledRequestConsumer(
+            wire, serializer, "schedule://context/work/*/execute");
+        await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.Equal("consumer.context.command", enumerator.Current.Name);
+    }
+
+    [Fact]
     public async Task LegacyBearerTokenScheduleRequiresDrainAndRecreation()
     {
         var serializer = ConsumerJson.CreateSerializer();

@@ -7,6 +7,7 @@ public sealed class GeneratorDiagnosticsTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using System.Threading;
             using System.Threading.Tasks;
             public sealed record Request : IRequest;
@@ -23,6 +24,7 @@ public sealed class GeneratorDiagnosticsTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             [RequestRoute("*", "orders", "order", "create")]
             public sealed record CreateOrder : IRequest, IQueuable;
             """, new PortiaServiceRegistrationGenerator());
@@ -35,6 +37,7 @@ public sealed class GeneratorDiagnosticsTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             public sealed record OrderCreated : DomainEvent;
             """, new DomainEventCatalogGenerator());
 
@@ -46,6 +49,7 @@ public sealed class GeneratorDiagnosticsTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             [RequestRoute("tenant/escape", "orders", "order", "create")]
             [Discriminator("orders.create")]
             public sealed record CreateOrder : IRequest, IQueuable;
@@ -59,6 +63,7 @@ public sealed class GeneratorDiagnosticsTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using System;
             using System.Threading;
             using System.Threading.Tasks;
@@ -81,6 +86,7 @@ public sealed class GeneratorDiagnosticsTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using System;
             using System.Threading;
             using System.Threading.Tasks;
@@ -115,6 +121,7 @@ public sealed class GeneratorDiagnosticsTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using System.Threading;
             using System.Threading.Tasks;
             public sealed record Request : IRequest;

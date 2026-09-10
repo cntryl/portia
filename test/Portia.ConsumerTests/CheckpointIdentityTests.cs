@@ -105,7 +105,7 @@ public sealed class CheckpointIdentityTests
         }
     }
 
-    sealed class Projection(Target target, EventStreamPattern pattern) : BaseBatchProjector(target, pattern, "same")
+    sealed class Projection(Target target, EventStreamPattern pattern) : BatchProjector(target, pattern, "same")
     {
         protected override ValueTask ProjectEventAsync(DomainEventRecord record, IProjectorContext context, CancellationToken ct)
         {

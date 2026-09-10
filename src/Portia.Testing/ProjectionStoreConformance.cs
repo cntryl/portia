@@ -1,4 +1,4 @@
-namespace Cntryl.Portia;
+namespace Cntryl.Portia.Testing;
 
 /// <summary>Creates an isolated durable projection implementation for its conformance suite.</summary>
 public interface IProjectionStoreConformanceProbe
@@ -106,7 +106,7 @@ public static class ProjectionStoreConformance
         await first.StageValueAsync("winner", ct).ConfigureAwait(false);
         await stale.StageValueAsync("stale", ct).ConfigureAwait(false);
         await firstBatch.CommitAsync(new ProjectionCheckpoint(2), ct).ConfigureAwait(false);
-        await RequireFailureAsync(
+        await RequireConcurrencyFailureAsync(
             () => staleBatch.CommitAsync(new ProjectionCheckpoint(2), ct),
             "A stale projection checkpoint was allowed to commit.").ConfigureAwait(false);
         await RequireStateAsync(probe, probe.LiveIdentity, "winner", new ProjectionCheckpoint(2),
@@ -155,6 +155,28 @@ public static class ProjectionStoreConformance
         catch
         {
             return;
+        }
+        throw new ConformanceViolationException(message);
+    }
+
+    static async ValueTask RequireConcurrencyFailureAsync(Func<ValueTask> action, string message)
+    {
+        try
+        {
+            await action().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ProjectionConcurrencyException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            throw new ConformanceViolationException(
+                $"A stale projection commit threw '{ex.GetType().FullName}'; it must throw {nameof(ProjectionConcurrencyException)} so one catch covers every adapter.");
         }
         throw new ConformanceViolationException(message);
     }

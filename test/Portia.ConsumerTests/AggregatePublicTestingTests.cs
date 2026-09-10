@@ -8,6 +8,7 @@ public sealed class AggregatePublicTestingTests
         var assembly = GeneratorCompilation.Compile("""
             using System;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Cntryl.Portia.Consumer;
             public static class Scenario
             {

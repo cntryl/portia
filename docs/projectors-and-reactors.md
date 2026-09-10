@@ -5,10 +5,10 @@ application operations and the contract Portia needs to manage progress.
 
 | Base | Handling | Progress |
 |---|---|---|
-| `BaseProjector` | One event | Atomic projection-data/checkpoint commit per event |
-| `BaseBatchProjector` | Bounded batch | Atomic projection-data/checkpoint commit per batch |
-| `BaseReactor` | One event | Checkpoint after the reaction succeeds |
-| `BaseBatchReactor` | Bounded batch | Checkpoint after all reactions in the batch succeed |
+| `Projector` | One event | Atomic projection-data/checkpoint commit per event |
+| `BatchProjector` | Bounded batch | Atomic projection-data/checkpoint commit per batch |
+| `Reactor` | One event | Checkpoint after the reaction succeeds |
+| `BatchReactor` | Bounded batch | Checkpoint after all reactions in the batch succeed |
 
 ## Projectors are pure
 
@@ -21,6 +21,12 @@ that can cause one.
 
 That is also why `IProjectorContext` carries checkpoint identity and rebuild metadata and nothing
 else, and why application dependencies arrive through the constructor.
+
+Projector handlers receive the current event separately from `IProjectorContext` because one
+projection context describes the transaction or bounded batch shared by several events; binding
+an event to it would give that shared context conflicting identities. Reactor contexts have the
+opposite shape: each `IReactorContext<TEvent>` binds one triggering event to its own causal system
+execution, so child commands and direct effects retain the right cause even inside a batch.
 
 ## Constructor-injected repository
 
@@ -41,7 +47,7 @@ public sealed class AccountRepository : IAccountRepository, IProjectionStore
 }
 
 public sealed partial class AccountProjector(IAccountRepository accounts, IProjectionStore store)
-    : BaseBatchProjector(store, EventStreamPattern.ForPattern("accounts", "balances")),
+    : BatchProjector(store, EventStreamPattern.ForPattern("accounts", "balances")),
       IProjectorHandler<MoneyDeposited>
 {
     public ValueTask HandleAsync(
@@ -93,7 +99,7 @@ one unit of work. To issue bulk application operations, implement a batch handle
 
 ```csharp
 public sealed partial class AccountProjector(IAccountRepository accounts)
-    : BaseBatchProjector(accounts, EventStreamPattern.ForPattern("accounts", "balances")),
+    : BatchProjector(accounts, EventStreamPattern.ForPattern("accounts", "balances")),
       IBatchProjectorHandler<MoneyDeposited>
 {
     public async ValueTask HandleAsync(
@@ -137,12 +143,12 @@ authorization and handler pipeline, or can also originate outside the reactor:
 public sealed partial class AccountReactor(
     IProjectionCheckpointStore checkpoints,
     IRequestBus bus)
-    : BaseReactor(checkpoints, EventStreamPattern.ForPattern("accounts", "balances")),
+    : Reactor(checkpoints, EventStreamPattern.ForPattern("accounts", "balances")),
       IReactorHandler<MoneyDeposited>
 {
     public ValueTask HandleAsync(IReactorContext<MoneyDeposited> context, CancellationToken ct) =>
         bus.SendReactionAsync(
-            new SendDepositReceipt(context.Ev.Metadata.AggregateId), context, ct);
+            new SendDepositReceipt(context.Trigger.Metadata.AggregateId), context, ct);
 }
 ```
 
@@ -155,6 +161,9 @@ returned value and expected failures mean.
 `CreateEffectId(context, effectName)` derives a stable UUID from the reactor/checkpoint identity,
 source event ID, and effect name for use with an idempotent target. This does not make arbitrary
 effects exactly once: the effect and checkpoint are still not one atomic transaction.
+Its workload-identity text deliberately freezes the exact legacy persisted derivation. The
+explicit formatter prevents a future record-shape change from altering keys; it does not create
+new effect IDs, change any UUID already stored by an application, or require a migration.
 
 Call an injected integration service directly when the action is inherently caused by the event
 and adding a request contract would add no useful application boundary:
@@ -166,14 +175,14 @@ public interface IAccountReactions
 }
 
 public sealed partial class AccountReactor(IAccountReactions accounts, IProjectionCheckpointStore checkpoints)
-    : BaseBatchReactor(checkpoints, EventStreamPattern.ForPattern("accounts", "balances")),
+    : BatchReactor(checkpoints, EventStreamPattern.ForPattern("accounts", "balances")),
       IBatchReactorHandler<MoneyDeposited>
 {
     public async ValueTask HandleAsync(
         IReadOnlyList<IReactorContext<MoneyDeposited>> contexts, CancellationToken ct)
     {
         foreach (var context in contexts)
-            await accounts.SendReceiptAsync(context.Ev, context, ct);
+            await accounts.SendReceiptAsync(context.Trigger, context, ct);
     }
 }
 ```
@@ -212,10 +221,12 @@ batch sizes and their repositories must enforce backend limits without partially
 an oversized projection batch. Test atomicity, conditional conflicts, cancellation,
 and ambiguous commit responses against the chosen backend.
 
-`Portia.Testing` turns the storage requirements into executable suites:
+`Portia.Testing` turns the storage requirements into executable suites (all in the
+`Cntryl.Portia.Testing` namespace):
 
 - `ProjectionStoreConformance` verifies atomic data/checkpoint commits, rollback, optimistic
-  conflicts, authoritative reloads, and rebuild isolation.
+  conflicts reported as the adapter-neutral `ProjectionConcurrencyException`, authoritative
+  reloads, and rebuild isolation.
 - `EventStoreConformance` verifies append ordering, offset resumption, and that a stale append
   fails with `EventStreamConcurrencyException` and writes nothing.
 - `ReactionDeduplicationConformance` verifies an optional application deduplication primitive.
@@ -226,6 +237,12 @@ and ambiguous commit responses against the chosen backend.
 The suites accept small probe implementations and throw `ConformanceViolationException`, so an
 application can invoke them from its normal test framework. Future official persistence adapters
 must pass the applicable suites, but no database adapter is bundled today.
+
+Hosted passes retain their last committed checkpoint when application handling or persistence
+fails. Retries back off exponentially from the workload's poll interval, up to
+`MaximumFailureDelay`; after `FailureAttemptLimit` consecutive failures the hosted worker faults
+with `WorkloadFailureException`. This makes a poison event terminal and observable without
+silently skipping it. A successful pass resets both the count and the backoff.
 
 `Portia.Testing` supplies backend-neutral `ProjectionStoreConformance` and optional
 `ReactionDeduplicationConformance` suites. Implement

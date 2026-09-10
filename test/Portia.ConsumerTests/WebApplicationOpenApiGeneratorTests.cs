@@ -7,6 +7,7 @@ public sealed class WebApplicationOpenApiGeneratorTests
     {
         var generated = GeneratorCompilation.GeneratedSource("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.AspNetCore.Builder;
             public static class Scenario
             {
@@ -26,6 +27,7 @@ public sealed class WebApplicationOpenApiGeneratorTests
     {
         var generated = GeneratorCompilation.GeneratedSource("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.AspNetCore.Builder;
             public static class Scenario
             {

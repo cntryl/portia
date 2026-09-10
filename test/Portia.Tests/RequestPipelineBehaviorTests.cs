@@ -177,32 +177,32 @@ public sealed partial class RequestPipelineBehaviorTests
 
     internal sealed class OuterBehavior(List<string> calls) : IRequestPipelineBehavior<IBehaviorRequest>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<IBehaviorRequest> context, RequestHandler nextHandler, CancellationToken ct)
-        { calls.Add("outer-before"); var result = await nextHandler(ct); calls.Add("outer-after"); return result; }
+        public async ValueTask<Result> HandleAsync(IRequestContext<IBehaviorRequest> context, RequestPipelineNext continuation, CancellationToken ct)
+        { calls.Add("outer-before"); var result = await continuation(ct); calls.Add("outer-after"); return result; }
     }
 
     internal sealed class InnerBehavior(List<string> calls) : IRequestPipelineBehavior<PipelineAction>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context, RequestHandler nextHandler, CancellationToken ct)
-        { calls.Add("inner-before"); var result = await nextHandler(ct); calls.Add("inner-after"); return result; }
+        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context, RequestPipelineNext continuation, CancellationToken ct)
+        { calls.Add("inner-before"); var result = await continuation(ct); calls.Add("inner-after"); return result; }
     }
 
     internal sealed class QueryBehavior : IRequestPipelineBehavior<PipelineQuery, int>
     {
-        public async ValueTask<Result<int>> HandleAsync(IRequestContext<PipelineQuery> context, RequestHandler<int> nextHandler, CancellationToken ct)
-        { var result = await nextHandler(ct); return Result<int>.Success(result.Value + 1); }
+        public async ValueTask<Result<int>> HandleAsync(IRequestContext<PipelineQuery> context, RequestPipelineNext<int> continuation, CancellationToken ct)
+        { var result = await continuation(ct); return Result<int>.Success(result.Value + 1); }
     }
 
     internal sealed class StreamBehavior : IStreamRequestPipelineBehavior<PipelineStream, int>
     {
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context, StreamRequestHandler<int> nextHandler,
+        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context, StreamRequestPipelineNext<int> continuation,
             [EnumeratorCancellation] CancellationToken ct)
-        { yield return 0; await foreach (var item in nextHandler(ct).WithCancellation(ct)) yield return item; yield return 3; }
+        { yield return 0; await foreach (var item in continuation(ct).WithCancellation(ct)) yield return item; yield return 3; }
     }
 
     internal sealed class DenyingAuthorizer : IRequestAuthorizer<PipelineAction>
     {
-        public ValueTask<Result> AuthorizeAsync(IRequestContext<PipelineAction> context, System.Security.Claims.ClaimsPrincipal actor, CancellationToken ct = default)
+        public ValueTask<Result> AuthorizeAsync(IRequestContext<PipelineAction> context, CancellationToken ct)
             => ValueTask.FromResult(Result.Failure(new RequestError(RequestErrorKind.Forbidden, "denied")));
     }
 }

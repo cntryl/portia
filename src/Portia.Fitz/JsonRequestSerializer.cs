@@ -75,7 +75,7 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
         var actor = OptionalString(root, "actor_token");
         var traceparent = OptionalString(root, "traceparent");
         var trace = traceparent is null ? null : new RequestTraceContext(traceparent, OptionalString(root, "tracestate"));
-        return new DeserializedRequest(request, actor, metadata, trace);
+        return new DeserializedRequest(request, name, actor, metadata, trace);
     }
 
     /// <inheritdoc />

@@ -9,6 +9,7 @@ public sealed class HttpBindingShapeTests
     {
         var source = $$"""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.AspNetCore.Routing;
             public sealed record Binding({{parameters}}) : IRequest<string>, ICallable;
             public static class Scenario
@@ -27,6 +28,7 @@ public sealed class HttpBindingShapeTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.AspNetCore.Routing;
             public sealed record Binding(int? Id) : IRequest<string>, ICallable;
             public static class Scenario
@@ -43,6 +45,7 @@ public sealed class HttpBindingShapeTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.AspNetCore.Routing;
             namespace One { public sealed record CreateOrder : IRequest, ICallable; }
             namespace Two { public sealed record CreateOrder : IRequest, ICallable; }
@@ -66,6 +69,7 @@ public sealed class HttpBindingShapeTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.AspNetCore.Routing;
             public sealed record RefreshOrder : IRequest, ICallable;
             public static class Scenario
@@ -89,6 +93,7 @@ public sealed class HttpBindingShapeTests
     {
         var assembly = GeneratorCompilation.Compile("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             public sealed record Binding(int Value) : IRequest<string>, ICallable;
             public sealed class Unrelated
             {

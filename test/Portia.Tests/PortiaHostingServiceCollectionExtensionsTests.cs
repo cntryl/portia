@@ -52,6 +52,20 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = Assert.IsType<PassthroughDomainEventSerializer>(provider.GetRequiredService<IDomainEventSerializer>());
     }
 
+    /// <summary>API-only hosts validate the default serializer before serving requests.</summary>
+    [Fact]
+    public async Task StartupValidatorRejectsInvalidUpcastersWithoutWorkers()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        _ = builder.Services.AddPortia();
+        _ = builder.Services.AddSingleton<IJsonDomainEventUpcaster>(new RecordingUpcaster(string.Empty, 0));
+        using var host = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+
+        Assert.Contains("Invalid JSON domain-event upcaster registrations", exception.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>A terminal partition timeout requests host shutdown even when callbacks stay stuck.</summary>
     [Fact]
     public async Task ShouldStopHostGivenHostedPartitionIgnoresCancellation()

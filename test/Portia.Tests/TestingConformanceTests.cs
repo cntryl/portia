@@ -35,6 +35,16 @@ public sealed class TestingConformanceTests
         Assert.Contains("uncommitted", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>A projection adapter must translate stale commits to the shared exception.</summary>
+    [Fact]
+    public async Task ShouldRejectProbeGivenProjectionConflictUsesAdapterException()
+    {
+        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
+            ProjectionStoreConformance.VerifyAsync(new ProjectionProbe(leakOnDispose: false, translateConflict: false)).AsTask());
+
+        Assert.Contains(nameof(ProjectionConcurrencyException), exception.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>The in-memory event store honors ordering, offsets, and stream concurrency.</summary>
     [Fact]
     public async Task ShouldAcceptProbeGivenConformantEventStore() =>
@@ -102,7 +112,7 @@ public sealed class TestingConformanceTests
         }
     }
 
-    sealed class ProjectionProbe(bool leakOnDispose) : IProjectionStoreConformanceProbe
+    sealed class ProjectionProbe(bool leakOnDispose, bool translateConflict = true) : IProjectionStoreConformanceProbe
     {
         readonly Lock _gate = new();
         readonly Dictionary<CheckpointIdentity, ProjectionState> _states = [];
@@ -133,7 +143,11 @@ public sealed class TestingConformanceTests
             {
                 var current = _states.GetValueOrDefault(context.Identity) ?? new ProjectionState(null, ProjectionCheckpoint.Start);
                 if (current.Checkpoint != context.Checkpoint)
-                    throw new InvalidOperationException("stale checkpoint");
+                {
+                    if (!translateConflict)
+                        throw new InvalidOperationException("stale checkpoint");
+                    throw new ProjectionConcurrencyException("stale checkpoint");
+                }
                 _states[context.Identity] = new ProjectionState(value, checkpoint);
             }
         }

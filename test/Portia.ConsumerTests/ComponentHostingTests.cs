@@ -61,13 +61,13 @@ public sealed class ComponentHostingTests
             await worker.StartAsync(default);
             for (var pass = 1; pass <= 3; pass++)
             {
-                Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+                Assert.Equal(TimeSpan.FromSeconds(pass == 2 ? 2 : 1), await clock.WaitForDelayAsync());
                 Assert.Equal(pass, storage.LoadAttempts);
                 Assert.Equal(rebuildId, Assert.Single(storage.Checkpoints).Key.RebuildId);
                 _ = Assert.Single(effects.Items);
                 Assert.All(effects.Scopes.Values, Assert.True);
                 if (pass < 3)
-                    clock.Advance(TimeSpan.FromSeconds(1));
+                    clock.Advance(TimeSpan.FromSeconds(pass));
             }
         }
         finally
@@ -75,6 +75,33 @@ public sealed class ComponentHostingTests
             await worker.StopAsync(default);
             (worker as IDisposable)?.Dispose();
         }
+    }
+
+    [Fact]
+    public async Task PoisonEventBacksOffThenFaultsWorkerAtAttemptLimit()
+    {
+        var clock = new ManualClock();
+        var services = ConsumerHost.CreateServices();
+        _ = services.AddSingleton<TimeProvider>(clock);
+        _ = services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global, options =>
+        {
+            options.FailureAttemptLimit = 2;
+            options.PollInterval = TimeSpan.FromSeconds(1);
+        }).AddWorkers();
+        await using var provider = ConsumerHost.Build(services);
+        provider.GetRequiredService<ConsumerHost.ProjectionStorage>().FailAfterCommit = true;
+        await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
+        await worker.StartAsync(default);
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+        clock.Advance(TimeSpan.FromSeconds(1));
+        var failure = await Assert.ThrowsAsync<WorkloadFailureException>(async () =>
+            await (worker.ExecuteTask ?? throw new InvalidOperationException("The worker did not start.")));
+
+        Assert.Equal(2, failure.Attempts);
+        _ = Assert.IsType<InvalidOperationException>(failure.InnerException);
+        (worker as IDisposable)?.Dispose();
     }
 
     [Theory]

@@ -8,6 +8,10 @@ sealed class PortiaStartupValidator(JsonSerializerOptions json, IDomainEventSeri
 {
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        // Resolution is the validation step: DI must construct the frozen JSON options and the
+        // configured serializer before any endpoint or worker can deserialize an event. The
+        // default JsonDomainEventSerializer constructor validates all upcaster identities and
+        // transitions; retaining both references here makes that startup contract explicit.
         _ = json;
         _ = eventSerializer;
         return Task.CompletedTask;

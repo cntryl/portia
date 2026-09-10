@@ -38,9 +38,9 @@ public static partial class PortiaTelemetry
     static readonly Histogram<double> ProcessorDuration = Meter.CreateHistogram<double>("portia.processor.batch.duration", "s");
     static readonly Counter<long> ProcessorEvents = Meter.CreateCounter<long>("portia.processor.event.count", "{event}");
     static readonly Histogram<double> ProcessorLag = Meter.CreateHistogram<double>("portia.processor.lag", "s");
-    static readonly UpDownCounter<long> WorkloadActive = Meter.CreateUpDownCounter<long>("portia.workload.active", "{request}");
-    static readonly Counter<long> WorkerFailure = Meter.CreateCounter<long>("portia.worker.failure", "{request}");
-    static readonly Counter<long> WorkerRestart = Meter.CreateCounter<long>("portia.worker.restart", "{request}");
+    static readonly UpDownCounter<long> WorkloadActive = Meter.CreateUpDownCounter<long>("portia.workload.active", "{workload}");
+    static readonly Counter<long> WorkerFailure = Meter.CreateCounter<long>("portia.worker.failure", "{failure}");
+    static readonly Counter<long> WorkerRestart = Meter.CreateCounter<long>("portia.worker.restart", "{restart}");
     static readonly UpDownCounter<long> FleetAssignmentActive = Meter.CreateUpDownCounter<long>("portia.fleet.assignment.active", "{assignment}");
 
     /// <summary>Starts an internal activity for one request-handler execution.</summary>
@@ -203,32 +203,41 @@ public static partial class PortiaTelemetry
 
     /// <summary>Records a bounded background-fault metric and structured error log.</summary>
     /// <param name="runnerName">The stable runner name.</param>
-    /// <param name="reason">A diagnostic reason used only to select a closed-set log stage.</param>
+    /// <param name="stage">The phase of the runner's work that faulted.</param>
     /// <param name="exception">The unexpected exception, when available.</param>
     /// <param name="logger">An optional logger for the structured fault event.</param>
     /// <remarks>This method never starts an activity. When an activity is already current,
-    /// <paramref name="exception" /> is attached to it as an exception event.</remarks>
-    public static void RecordRunnerFault(string runnerName, string reason, Exception? exception = null, ILogger? logger = null)
+    /// <paramref name="exception" /> is attached to it as an exception event. Nothing about the
+    /// individual fault beyond <paramref name="stage" /> reaches the metric or the log message,
+    /// so neither can be widened by a caller's diagnostic text.</remarks>
+    public static void RecordRunnerFault(string runnerName, RunnerFaultStage stage, Exception? exception = null, ILogger? logger = null)
     {
         WorkerFailure.Add(1, new("runner", runnerName), new("error.type", exception?.GetType().Name ?? "unexpected_termination"));
-        if (logger is not null) LogRunnerFault(logger, runnerName, FaultStage(reason), exception?.GetType().Name ?? "unexpected_termination", exception);
+        if (logger is not null) LogRunnerFault(logger, runnerName, StageName(stage), exception?.GetType().Name ?? "unexpected_termination", exception);
         if (exception is not null && Activity.Current is { } activity) _ = activity.AddException(exception);
     }
 
-    static string FaultStage(string reason)
+    /// <summary>Maps an authorization stage to its stable lowercase metric vocabulary.</summary>
+    internal static string StageName(AuthorizationStage stage) => stage switch
     {
-        return reason switch
-        {
-            var value when value.Contains("renew", StringComparison.OrdinalIgnoreCase) => "renewal",
-            var value when value.Contains("cleanup", StringComparison.OrdinalIgnoreCase) || value.Contains("callback", StringComparison.OrdinalIgnoreCase) => "cleanup",
-            var value when value.Contains("validation", StringComparison.OrdinalIgnoreCase) => "validation",
-            var value when value.Contains("watch", StringComparison.OrdinalIgnoreCase) => "watch",
-            var value when value.Contains("acquir", StringComparison.OrdinalIgnoreCase) || value.Contains("lease", StringComparison.OrdinalIgnoreCase) => "acquisition",
-            var value when value.Contains("notification", StringComparison.OrdinalIgnoreCase) => "notification",
-            var value when value.Contains("workload", StringComparison.OrdinalIgnoreCase) => "workload",
-            _ => "execution",
-        };
-    }
+        AuthorizationStage.Principal => "principal",
+        AuthorizationStage.ResourceAccess => "resourceaccess",
+        AuthorizationStage.StepUp => "stepup",
+        _ => stage.ToString().ToLowerInvariant(),
+    };
+
+    /// <summary>Maps a fault stage to its stable lowercase log vocabulary.</summary>
+    internal static string StageName(RunnerFaultStage stage) => stage switch
+    {
+        RunnerFaultStage.Acquisition => "acquisition",
+        RunnerFaultStage.Renewal => "renewal",
+        RunnerFaultStage.Watch => "watch",
+        RunnerFaultStage.Validation => "validation",
+        RunnerFaultStage.Notification => "notification",
+        RunnerFaultStage.Workload => "workload",
+        RunnerFaultStage.Cleanup => "cleanup",
+        RunnerFaultStage.Execution or _ => "execution",
+    };
     /// <summary>Records a fleet-assignment gauge transition and optional information log.</summary>
     /// <param name="workerId">The worker identity used only in the lifecycle log.</param>
     /// <param name="partition">The partition identity used only in the lifecycle log.</param>
@@ -259,4 +268,30 @@ public sealed record RequestTraceContext(string TraceParent, string? TraceState 
     /// <param name="context">Receives the parsed activity context when valid.</param>
     /// <returns><see langword="true" /> when the fields form a valid W3C activity context.</returns>
     public bool TryParse(out ActivityContext context) => ActivityContext.TryParse(TraceParent, TraceState, out context);
+}
+
+/// <summary>
+/// The phase of a background runner's work that faulted. This is the complete, closed vocabulary
+/// behind the <c>Stage</c> field of Portia's runner-fault log; it is deliberately an enum rather
+/// than free text so a caller cannot widen the set, and so the stage a fault reports is decided
+/// where the fault is caught rather than inferred from the wording of a message.
+/// </summary>
+public enum RunnerFaultStage
+{
+    /// <summary>The runner's own work faulted, with no more specific phase.</summary>
+    Execution = 0,
+    /// <summary>Obtaining membership, a lease, or another right to run faulted.</summary>
+    Acquisition = 1,
+    /// <summary>Renewing an already-held reservation or lease faulted.</summary>
+    Renewal = 2,
+    /// <summary>Observing a durable source for changes faulted or ended unexpectedly.</summary>
+    Watch = 3,
+    /// <summary>Validating an inbound actor or credential faulted.</summary>
+    Validation = 4,
+    /// <summary>Delivering or consuming a notification faulted.</summary>
+    Notification = 5,
+    /// <summary>A hosted tenant or partition workload faulted or ended unexpectedly.</summary>
+    Workload = 6,
+    /// <summary>Releasing, cancelling, or otherwise winding down faulted.</summary>
+    Cleanup = 7,
 }

@@ -3,12 +3,55 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ExecutionContextContractTests
 {
     [Fact]
+    public async Task GeneratedRequestHandlerReceivesExactRequestAndCancellationToken()
+    {
+        var assembly = GeneratorCompilation.Compile("""
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Cntryl.Portia;
+            using Microsoft.Extensions.DependencyInjection;
+            public sealed record Probe : IRequest;
+            public sealed class Capture { public Probe? Expected; public CancellationToken Token; }
+            public sealed class Handler(Capture capture) : IRequestHandler<Probe>
+            {
+                public ValueTask<Result> HandleAsync(IRequestContext<Probe> context, CancellationToken ct)
+                {
+                    if (!ReferenceEquals(context.Request, capture.Expected) || ct != capture.Token)
+                        throw new Exception("Request or cancellation context was replaced");
+                    return ValueTask.FromResult(Result.Success);
+                }
+            }
+            public static class Scenario
+            {
+                public static async Task Run()
+                {
+                    var services = new ServiceCollection();
+                    services.AddSingleton<Capture>();
+                    services.AddPortia().AddRequestHandler<Handler>();
+                    await using var provider = services.BuildServiceProvider();
+                    await using var scope = provider.CreateAsyncScope();
+                    using var cancellation = new CancellationTokenSource();
+                    var request = new Probe();
+                    var capture = scope.ServiceProvider.GetRequiredService<Capture>();
+                    capture.Expected = request;
+                    capture.Token = cancellation.Token;
+                    await scope.ServiceProvider.GetRequiredService<IRequestBus>()
+                        .SendAsync(request, RequestActor.System, cancellation.Token);
+                }
+            }
+            """, new RegistrationCallInterceptorGenerator());
+        await assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task>>()();
+    }
+
+    [Fact]
     public async Task NormalHandlerSaveStampsDurableAttribution()
     {
         var assembly = GeneratorCompilation.Compile("""
             using System;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Cntryl.Portia.Consumer;
             using Microsoft.Extensions.DependencyInjection;
             public static class Scenario
@@ -28,7 +71,7 @@ public sealed class ExecutionContextContractTests
                     await repository.SaveAsync(account, context);
                     await foreach (var record in provider.GetRequiredService<IEventStore>().ReadAsync(account.Stream))
                     {
-                        var metadata = record.Ev.Metadata;
+                        var metadata = record.Event.Metadata;
                         if (metadata.CorrelationId != context.CorrelationId || metadata.CausationId != context.RequestId
                             || metadata.ExecutionId != context.ExecutionId || metadata.Actor?.Subject != "portia:system")
                             throw new Exception("Save did not stamp the execution context");
@@ -47,6 +90,7 @@ public sealed class ExecutionContextContractTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             public sealed record Outer : IRequest;
             public sealed record Inner : IRequest;

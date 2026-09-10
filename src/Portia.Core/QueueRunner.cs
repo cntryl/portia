@@ -36,14 +36,15 @@ public sealed class QueueRunner(IRequestQueueConsumer consumer, IQueueDeliverySc
             try
             {
                 using var delivery = CancellationTokenSource.CreateLinkedTokenSource(ct, queued.ReservationCancellation);
-                var dispatch = await RequestDispatch.SendAsync(
-                    scope.ActorValidator, scope.Bus, queued.Request, queued.ActorToken, queued.Invocation, queued.Metadata, scope.TimeProvider, queued.TraceContext, delivery.Token).ConfigureAwait(false);
+                var dispatch = await RequestDispatch.SendAsync(scope.ActorValidator, scope.Bus, queued.Request,
+                    RequestDelivery.For(queued.Request, queued.Name, queued.Invocation, queued.Metadata,
+                        queued.ActorToken, queued.TraceContext, scope.TimeProvider), delivery.Token).ConfigureAwait(false);
 
                 if (!dispatch.WasDispatched)
                 {
                     // Actor validation failed (e.g. an expired token) — retrying won't make it
                     // valid, so the request is dropped rather than redelivered forever.
-                    PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "actor validation failed", logger: _logger);
+                    PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Validation, logger: _logger);
                     await queued.CompleteAsync(ct).ConfigureAwait(false);
                 }
                 else if (dispatch.Outcome.IsSuccess || dispatch.Outcome.Error is { IsTransient: false })
@@ -60,7 +61,7 @@ public sealed class QueueRunner(IRequestQueueConsumer consumer, IQueueDeliverySc
             {
                 // An unrecognized exception's retriability is unknown; abandoning (rather than
                 // silently dropping the request) is the safer default.
-                PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "unrecognized exception", ex, _logger);
+                PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, _logger);
                 if (!await CompleteTerminalAsync(scope, queued, null, ex, ct).ConfigureAwait(false))
                     await queued.AbandonAsync(ct).ConfigureAwait(false);
             }
@@ -86,11 +87,8 @@ public sealed class QueueRunner(IRequestQueueConsumer consumer, IQueueDeliverySc
         }
         catch (Exception acknowledgmentException) when (!ct.IsCancellationRequested)
         {
-            PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), "terminal acknowledgment failed", acknowledgmentException, _logger);
+            PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Cleanup, acknowledgmentException, _logger);
         }
         return true;
     }
-
-    sealed class TerminalHandlerFailureException(Exception innerException)
-        : Exception("The queued request terminal handler failed.", innerException);
 }

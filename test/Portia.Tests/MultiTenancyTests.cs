@@ -161,6 +161,39 @@ public sealed class MultiTenancyTests
         Assert.Contains(new TenantId("b"), stopped);
     }
 
+    /// <summary>Shutdown does not wait forever for an application stop callback that ignores cancellation.</summary>
+    [Fact]
+    public async Task ShouldBoundTenantStopCallbackByShutdownToken()
+    {
+        var store = new InMemoryEventStore();
+        await RegisterTenantAsync(store, "blocked");
+        var runner = new MultiTenantRunner(CreateDirectory(store));
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cts = new CancellationTokenSource();
+        var run = runner.RunAsync(
+            async (tenantId, ct) =>
+            {
+                _ = tenantId;
+                _ = started.TrySetResult();
+                await WaitForCancellationAsync(ct);
+            },
+            async (tenantId, stopToken) =>
+            {
+                _ = tenantId;
+                _ = stopToken;
+                _ = stopEntered.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, CancellationToken.None);
+            },
+            cts.Token);
+
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cts.Cancel();
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(stopEntered.Task.IsCompleted);
+    }
+
     /// <summary>
     /// Verifies that every active-tenant read is a complete current snapshot, even though the
     /// event-sourced directory advances an internal stream offset between reads. Reconnect

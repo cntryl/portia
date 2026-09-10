@@ -1,4 +1,4 @@
-namespace Cntryl.Portia;
+namespace Cntryl.Portia.Testing;
 
 /// <summary>Supplies an isolated <see cref="IEventStore" /> for its conformance suite.</summary>
 public interface IEventStoreConformanceProbe
@@ -70,10 +70,10 @@ public static class EventStoreConformance
                 throw new ConformanceViolationException(
                     $"Record {index} reported resource offset {record.ResourceOffset}; offsets must be contiguous and zero-based.");
             }
-            if (record.Ev.Metadata.AggregateVersion != (ulong)(index + 1))
+            if (record.Event.Metadata.AggregateVersion != (ulong)(index + 1))
             {
                 throw new ConformanceViolationException(
-                    $"Record {index} reported aggregate version {record.Ev.Metadata.AggregateVersion}; reads must preserve append order.");
+                    $"Record {index} reported aggregate version {record.Event.Metadata.AggregateVersion}; reads must preserve append order.");
             }
             if (record.Stream != stream)
                 throw new ConformanceViolationException($"Record {index} reported stream '{record.Stream}'; expected '{stream}'.");

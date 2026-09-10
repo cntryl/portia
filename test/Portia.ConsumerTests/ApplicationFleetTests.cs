@@ -73,7 +73,7 @@ public sealed class ApplicationFleetTests
         public int Disposed;
     }
 
-    sealed class ProbeReactor : BaseReactor, IDisposable
+    sealed class ProbeReactor : Reactor, IDisposable
     {
         readonly string _worker;
         readonly Probe _probe;

@@ -27,6 +27,26 @@ public sealed class StartupValidationTests
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void WorkloadsRejectInvalidFailureAttemptLimits(int attempts)
+    {
+        var services = new ServiceCollection();
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => services.AddPortia()
+            .AddProjector<FirstProjector>(WorkloadScope.Global, options => options.FailureAttemptLimit = attempts));
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
+    }
+
+    [Fact]
+    public void WorkloadsRejectInvalidMaximumFailureDelay()
+    {
+        var services = new ServiceCollection();
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => services.AddPortia()
+            .AddProjector<FirstProjector>(WorkloadScope.Global, options => options.MaximumFailureDelay = TimeSpan.Zero));
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
+    }
+
     [Fact]
     public void ReactorsRejectRebuildGenerations()
     {

@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -72,6 +74,35 @@ public sealed class ReactorTests
         Assert.NotEqual(reactor.EffectId(context, "email"), reactor.EffectId(context, "audit"));
     }
 
+    /// <summary>Previously persisted effect IDs remain valid after framework upgrades.</summary>
+    [Theory]
+    [InlineData(null, null, "abf6bc71-89ac-5e92-8c04-a3d15c49c658")]
+    [InlineData("orders", null, "c2a326cf-7e40-5cd7-97a0-4a3e792ab8f6")]
+    [InlineData("orders", "acme", "e44c94b5-3b26-5cd3-adf6-66b09d8b28a6")]
+    public void ShouldPreservePersistedEffectIdGivenExistingReactionIdentity(
+        string? workloadName, string? tenantValue, string expectedId)
+    {
+        var reactor = new TestReactor(new RecordingAggregateRepository());
+        if (workloadName is not null)
+        {
+            TenantId? tenant = tenantValue is null ? null : new TenantId(tenantValue);
+            reactor.BindWorkload(new WorkloadIdentity(workloadName, tenant), null);
+        }
+        var ev = new ValueChanged(42);
+        ev.AttachMetadata(new DomainEventMetadata(
+            Uuid.Parse("11111111-1111-4111-8111-111111111111", CultureInfo.InvariantCulture),
+            Uuid.Parse("22222222-2222-4222-8222-222222222222", CultureInfo.InvariantCulture),
+            1,
+            new DateTimeOffset(2026, 9, 9, 12, 0, 0, TimeSpan.Zero)));
+        var record = new DomainEventRecord(
+            new EventStreamAddress("acme", "reactors", "one"), ev, 0, 0, 0);
+        var context = new ReactionExecutionContext(record, RequestActor.System);
+
+        var effectId = reactor.EffectId(context, "email");
+
+        Assert.Equal(Uuid.Parse(expectedId, CultureInfo.InvariantCulture), effectId);
+    }
+
     /// <summary>Binding is idempotent for one identity and rejects accidental instance reuse.</summary>
     [Fact]
     public void ShouldRejectDifferentIdentityGivenAlreadyBoundReactorWhenBindingAgain()
@@ -98,7 +129,7 @@ public sealed class ReactorTests
 }
 
 sealed partial class TestReactor(IAggregateRepository repository, IProjectionCheckpointStore? checkpoints = null)
-    : BaseReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "test-reactor"),
+    : Reactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "test-reactor"),
       IReactorHandler<ValueChanged>,
       IReactorHandler<ValueIncremented>
 {
@@ -109,13 +140,13 @@ sealed partial class TestReactor(IAggregateRepository repository, IProjectionChe
     public async ValueTask HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
     {
         var target = await repository.HydrateAsync(new TestAggregate(Uuid.CreateVersion4()), ct);
-        target.ChangeValue(context.Ev.Value);
+        target.ChangeValue(context.Trigger.Value);
         await repository.SaveAsync(target, context, ct);
     }
 
     public ValueTask HandleAsync(IReactorContext<ValueIncremented> context, CancellationToken ct)
     {
-        LastIncrementAmount = context.Ev.Amount;
+        LastIncrementAmount = context.Trigger.Amount;
         return ValueTask.CompletedTask;
     }
 }

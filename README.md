@@ -135,14 +135,16 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
 | `Portia.Abstractions` | The public contracts everything else implements — `Aggregate`, `DomainEvent`, `IRequest`/`IRequestHandler`/`IRequestBus`, `Result`, the transport marker interfaces (`ICallable`/`IQueuable`/`INotifiable`/`ISchedulable`), permission/authorization interfaces, `PortiaTelemetry`. |
 | `Portia.Core` | The runtime pieces built on those contracts: `AggregateRepository`, `RequestBus`, `QueueRunner`, `RequestNotificationRunner`, `ProjectorRunner`/`ReactorRunner`, `MultiTenantRunner`, `EventSourcedTenantDirectory`. |
 | `Portia.Generators` | The Roslyn source generators — DI registration, RPC worker registration, HTTP binding interceptors, the domain-event catalog, and the analyzers backing them (`PORTIA0xx` diagnostics). |
-| `Portia.AspNetCore` | Generated HTTP binding plus automatic Microsoft OpenAPI 3.1 JSON and YAML documents. |
+| `Portia.AspNetCore` | Generated HTTP binding plus automatic Microsoft OpenAPI 3.1 JSON and YAML documents. It depends directly on `Portia.DependencyInjection`, so an HTTP-only package reference also brings the registration APIs, generator/analyzer assets, and interceptor compiler configuration. |
 | `Portia.Fitz` | Fitz-backed transports: RPC send/receive, queue publish/consume, notice/schedule notifications, `FitzEventStore`, and `FleetPartitionRunner` (fleet distribution via Fitz leases). |
 | `Portia.Jwt` | A JWT-backed `IRequestActorValidator` — re-validates a request's carried actor token, no ASP.NET Core dependency. |
 | `Portia.DependencyInjection` | Composes the application with fluent `AddPortia()` and activates its workers with `AddWorkers()`, which runs every declared projector and reactor under one hosted service. |
-| `Portia.Testing` | Testing utilities for downstream apps: aggregate scenarios, in-memory stores, actor/permission doubles, and backend-neutral event-store, projection, and reaction-deduplication conformance suites. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) ship from `Portia.Fitz` instead, since they depend on it. |
+| `Portia.Testing` | Testing utilities for downstream apps: aggregate scenarios, in-memory stores, actor/permission doubles, and backend-neutral event-store, projection, and reaction-deduplication conformance suites. All of it lives in the `Cntryl.Portia.Testing` namespace, so a test double never turns up in an application's completion list beside the production contracts — add `using Cntryl.Portia.Testing;` in test code. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) share that namespace but ship from `Portia.Fitz`, since they depend on it. |
 
 ## Core concepts, briefly
 
+- **Components**: an event-sourced aggregate derives from `Aggregate`; a read-model builder from
+  `Projector` or `BatchProjector`; an effect-causing component from `Reactor` or `BatchReactor`.
 - **Event sourcing**: `Aggregate` with explicit `On<TEvent>(Action<TEvent> handler)` registration
   in the constructor — no source generator, no naming convention, a mismatched signature is an
   ordinary compile error. A stale `AppendAsync` (someone else committed to the stream first)
@@ -153,9 +155,15 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   [Request and reaction context](docs/request-context.md) supplies causal and actor attribution. Rehydrating the same
   instance reads only events after its committed position; no aggregate registration is needed. Raised events use the aggregate stream; audits use a fresh UUIDv4 session
   stream per batch in the same realm/area and leave aggregate OCC unchanged.
-- **CQRS dispatch**: `Result`/`Result<T>` instead of exceptions for expected failures; a request
-  opts into each transport by implementing that transport's marker interface, checked at compile
-  time.
+- **Projections**: an optimistic batch conflict throws the adapter-neutral
+  `ProjectionConcurrencyException`. Reload the authoritative checkpoint before deciding whether
+  to apply the batch again; `ProjectionStoreConformance` enforces the exception contract for
+  application and first-party adapters.
+- **CQRS dispatch**: `Result`/`Result<T>` instead of exceptions for expected failures. On success,
+  `Result<T>.Value` has the nullability declared by `T`: `Result<string>` exposes `string`, while
+  `Result<string?>` may legitimately contain null. Reading `Value` from a failure or reading any
+  member from an uninitialized result throws. A request opts into each transport by implementing
+  that transport's marker interface, checked at compile time.
 - **Permissions**: `[RequiresPermission("orders:{OrderId}:read")]` — the `{Token}` interpolates
   against the request's own primary-constructor properties, resolved and validated at compile
   time (`PORTIA011` catches an unknown token, `PORTIA013` catches a nullable one — a null value
@@ -188,7 +196,8 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   a missing version falls through a chain of JSON-adapter-specific
   `IJsonDomainEventUpcaster`s. The generator contributes referenced domain-event types to the
   application catalog at compile time; typed request dispatch is inferred without reflection.
-  Startup validates the actual JSON upcasters resolved from DI, including identities, duplicates,
+  Every host that calls `AddPortia()` validates the actual JSON upcasters resolved from DI at
+  startup, including API-only hosts and worker hosts. Validation covers identities, duplicates,
   and every declared prospective transition. An upcaster is checked beginning at its next version
   even when its source CLR type remains registered, while exact historical catalog versions still
   deserialize directly. Replacing `IDomainEventSerializer` opts out of this JSON-specific policy.
@@ -205,6 +214,10 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   partition lease for the complete projector or reactor run and cancels it when ownership is lost.
   Hosted workloads implement `ITenantWorkload` or `IPartitionWorkload`; each active tenant or
   held lease receives its own dependency-injection scope, which is disposed when that run stops.
+- **Worker failure policy**: a projector or reactor pass failure leaves its checkpoint unchanged
+  and retries with exponential backoff. `WorkloadOptions.FailureAttemptLimit` defaults to ten and
+  `MaximumFailureDelay` defaults to one minute. Exhausting the limit faults the worker with
+  `WorkloadFailureException`; Portia never skips the poison event or silently advances past it.
 - **Observability**: `PortiaTelemetry.ActivitySource` (`"Cntryl.Portia"`) traces every dispatch.
   An inbound activity names the delivery's shape (`http`, `rpc`, `queue`, `notice`, `schedule`,
   `local`), supplied by `RequestInvocation.TransportName`; outbound send activities inside an
@@ -221,7 +234,8 @@ broker. CI starts and removes the Compose stack automatically. The remaining tes
   starts and stop cleanly on shutdown. A projector loads the authoritative checkpoint from its
   constructor-injected `IProjectionStore`; each `IProjectionBatch` commits that checkpoint atomically with projection
   changes. Reactors, whose effects cannot share that transaction, use an
-  `IProjectionCheckpointStore` — `InMemoryProjectionCheckpointStore` (`Portia.Testing`) for tests
+  `IProjectionCheckpointStore` — `InMemoryProjectionCheckpointStore` (`Portia.Testing`, in the
+  `Cntryl.Portia.Testing` namespace) for tests
   or a single-instance deployment; anything durable needs its own implementation. Both ports use
   `CheckpointIdentity(componentName, pattern, rebuildId)`; persist its canonical `Pattern` and
   nullable `RebuildId` alongside the component name. `ProjectionRunOptions.RebuildId` selects

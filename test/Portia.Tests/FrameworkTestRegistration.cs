@@ -14,6 +14,7 @@ static class FrameworkTestRegistration
         _ = portia.AddRequestHandler<TelemetryFailureActionHandler>();
         _ = portia.AddRequestHandler<TelemetryGuardedActionHandler>();
         _ = portia.AddRequestHandler<TelemetrySequenceHandler>();
+        _ = portia.AddRequestHandler<TelemetryGuardedSequenceHandler>();
         _ = portia.AddRequestHandler<NoWorkerRegisteredPingHandler>();
         _ = portia.AddRequestHandler<GuardedActionHandler>();
         _ = portia.AddRequestHandler<GuardedQueryHandler>();

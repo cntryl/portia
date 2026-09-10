@@ -12,16 +12,17 @@ public sealed class ReactorExecutionContractTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Cntryl.Portia.Consumer;
             using Microsoft.Extensions.DependencyInjection;
             public sealed partial class Reaction(IAggregateRepository repository, Account account, Uuid sourceId)
-                : BaseReactor(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("reaction", "inputs", sourceId.ToString()), "reaction"), IReactorHandler<Deposited>
+                : Reactor(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("reaction", "inputs", sourceId.ToString()), "reaction"), IReactorHandler<Deposited>
             {
                 public async ValueTask HandleAsync(IReactorContext<Deposited> context, CancellationToken ct)
                 {
                     if (!RequestActor.IsSystem(context.Actor) || context.Source.Stream.Area != "inputs")
                         throw new Exception("Reaction context lost system authority or source");
-                    account.Deposit(context.Ev.Amount);
+                    account.Deposit(context.Trigger.Amount);
                     await repository.SaveAsync(account, context, ct);
                 }
             }
@@ -43,8 +44,8 @@ public sealed class ReactorExecutionContractTests
                     var reaction = new Reaction(scope.ServiceProvider.GetRequiredService<IAggregateRepository>(), account, id);
                     await new ReactorRunner(store).RunAsync(reaction, ProjectionCheckpoint.Start);
                     await foreach(var output in store.ReadAsync(account.Stream))
-                        if (output.Ev.Metadata.CausationId != ev.Metadata.EventId || output.Ev.Metadata.CorrelationId != correlation
-                            || output.Ev.Metadata.Actor?.Subject != "portia:system") throw new Exception("Incorrect reaction attribution");
+                        if (output.Event.Metadata.CausationId != ev.Metadata.EventId || output.Event.Metadata.CorrelationId != correlation
+                            || output.Event.Metadata.Actor?.Subject != "portia:system") throw new Exception("Incorrect reaction attribution");
                 }
             }
             """, new ProjectorReactorEventDispatcherGenerator());

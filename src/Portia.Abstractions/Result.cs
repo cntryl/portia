@@ -1,4 +1,17 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Cntryl.Portia;
+
+/// <summary>Distinguishes a produced result from <c>default</c>, which is neither outcome.</summary>
+enum ResultState : byte
+{
+    /// <summary>The zero value: no outcome was ever produced.</summary>
+    Uninitialized = 0,
+    /// <summary>The request succeeded.</summary>
+    Succeeded = 1,
+    /// <summary>The request failed in a way its handler anticipated.</summary>
+    Failed = 2,
+}
 
 /// <summary>
 /// The outcome of handling a no-result request: success, or an expected failure. An
@@ -15,10 +28,10 @@ namespace Cntryl.Portia;
 /// </summary>
 public readonly struct Result
 {
-    readonly byte _state;
+    readonly ResultState _state;
     RequestError? StoredError { get; }
 
-    Result(byte state, RequestError? error)
+    Result(ResultState state, RequestError? error)
     {
         _state = state;
         StoredError = error;
@@ -27,16 +40,19 @@ public readonly struct Result
     /// <summary>
     /// Gets a successful result.
     /// </summary>
-    public static Result Success { get; } = new(1, null);
+    public static Result Success { get; } = new(ResultState.Succeeded, null);
 
     /// <summary>
-    /// Gets whether the request succeeded.
+    /// Gets whether the request succeeded. When <see langword="false" />,
+    /// <see cref="Error" /> is non-null, so a failure branch needs no null check.
     /// </summary>
+    [MemberNotNullWhen(false, nameof(Error))]
+    [MemberNotNullWhen(false, nameof(StoredError))]
     public bool IsSuccess => _state switch
     {
-        1 => true,
-        2 => false,
-        _ => throw new InvalidOperationException("The result is uninitialized."),
+        ResultState.Succeeded => true,
+        ResultState.Failed => false,
+        ResultState.Uninitialized or _ => throw new InvalidOperationException("The result is uninitialized."),
     };
 
     /// <summary>
@@ -44,9 +60,9 @@ public readonly struct Result
     /// </summary>
     public RequestError? Error => _state switch
     {
-        1 => null,
-        2 => StoredError,
-        _ => throw new InvalidOperationException("The result is uninitialized."),
+        ResultState.Succeeded => null,
+        ResultState.Failed => StoredError,
+        ResultState.Uninitialized or _ => throw new InvalidOperationException("The result is uninitialized."),
     };
 
     /// <summary>
@@ -56,7 +72,7 @@ public readonly struct Result
     public static Result Failure(RequestError error)
     {
         ArgumentNullException.ThrowIfNull(error);
-        return new Result(2, error);
+        return new Result(ResultState.Failed, error);
     }
 }
 
@@ -73,11 +89,11 @@ public readonly struct Result
 /// <typeparam name="T">The type of the value produced on success.</typeparam>
 public readonly struct Result<T>
 {
-    readonly byte _state;
+    readonly ResultState _state;
     T? StoredValue { get; }
     RequestError? StoredError { get; }
 
-    Result(byte state, T? value, RequestError? error)
+    Result(ResultState state, T? value, RequestError? error)
     {
         _state = state;
         StoredValue = value;
@@ -85,23 +101,29 @@ public readonly struct Result<T>
     }
 
     /// <summary>
-    /// Gets whether the request succeeded.
+    /// Gets whether the request succeeded. When <see langword="false" />,
+    /// <see cref="Error" /> is non-null, so a failure branch needs no null check. On success,
+    /// <see cref="Value" /> has exactly the nullability declared by <typeparamref name="T" />:
+    /// <c>Result&lt;string&gt;</c> exposes <c>string</c>, while
+    /// <c>Result&lt;string?&gt;.Success(null)</c> remains a legitimate success carrying null.
     /// </summary>
+    [MemberNotNullWhen(false, nameof(Error))]
+    [MemberNotNullWhen(false, nameof(StoredError))]
     public bool IsSuccess => _state switch
     {
-        1 => true,
-        2 => false,
-        _ => throw new InvalidOperationException("The result is uninitialized."),
+        ResultState.Succeeded => true,
+        ResultState.Failed => false,
+        ResultState.Uninitialized or _ => throw new InvalidOperationException("The result is uninitialized."),
     };
 
     /// <summary>
     /// Gets the value, when <see cref="IsSuccess" /> is <see langword="true" />.
     /// </summary>
-    public T? Value => _state switch
+    public T Value => _state switch
     {
-        1 => StoredValue,
-        2 => throw new InvalidOperationException("A failed result has no value."),
-        _ => throw new InvalidOperationException("The result is uninitialized."),
+        ResultState.Succeeded => StoredValue!,
+        ResultState.Failed => throw new InvalidOperationException("A failed result has no value."),
+        ResultState.Uninitialized or _ => throw new InvalidOperationException("The result is uninitialized."),
     };
 
     /// <summary>
@@ -109,9 +131,9 @@ public readonly struct Result<T>
     /// </summary>
     public RequestError? Error => _state switch
     {
-        1 => null,
-        2 => StoredError,
-        _ => throw new InvalidOperationException("The result is uninitialized."),
+        ResultState.Succeeded => null,
+        ResultState.Failed => StoredError,
+        ResultState.Uninitialized or _ => throw new InvalidOperationException("The result is uninitialized."),
     };
 
     // CA1000 (no static members on generic types) is the wrong call for a Result<T> factory —
@@ -122,7 +144,7 @@ public readonly struct Result<T>
     /// Creates a successful result.
     /// </summary>
     /// <param name="value">The value produced.</param>
-    public static Result<T> Success(T value) => new(1, value, null);
+    public static Result<T> Success(T value) => new(ResultState.Succeeded, value, null);
 
     /// <summary>
     /// Creates a failed result.
@@ -131,7 +153,7 @@ public readonly struct Result<T>
     public static Result<T> Failure(RequestError error)
     {
         ArgumentNullException.ThrowIfNull(error);
-        return new Result<T>(2, default, error);
+        return new Result<T>(ResultState.Failed, default, error);
     }
 #pragma warning restore CA1000
 }

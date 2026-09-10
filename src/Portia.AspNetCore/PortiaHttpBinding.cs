@@ -32,7 +32,7 @@ public static class PortiaHttpBinding
         if (maximum <= 0)
             throw new InvalidOperationException($"{nameof(PortiaHttpOptions.MaxJsonBodyBytes)} must be positive.");
         if (context.Request.ContentLength is > 0 && context.Request.ContentLength > maximum)
-            throw new PortiaHttpPayloadTooLargeException();
+            throw new HttpPayloadTooLargeException();
 
         await using var buffer = new MemoryStream((int)Math.Min(context.Request.ContentLength ?? 0, maximum));
         var chunk = new byte[81920];
@@ -42,7 +42,7 @@ public static class PortiaHttpBinding
             if (read == 0)
                 break;
             if (buffer.Length + read > maximum)
-                throw new PortiaHttpPayloadTooLargeException();
+                throw new HttpPayloadTooLargeException();
             await buffer.WriteAsync(chunk.AsMemory(0, read), ct).ConfigureAwait(false);
         }
         if (buffer.Length == 0)
@@ -97,7 +97,7 @@ public static class PortiaHttpBinding
     /// <summary>Logs an unexpected HTTP failure and returns a non-sensitive response.</summary>
     public static IResult Unexpected(HttpContext context, Exception exception)
     {
-        PortiaTelemetry.RecordRunnerFault("Http", "request failed before response started", exception,
+        PortiaTelemetry.RecordRunnerFault("Http", RunnerFaultStage.Execution, exception,
             context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("Cntryl.Portia.Http"));
         return Problem(StatusCodes.Status500InternalServerError, "An unexpected error occurred.");
     }
@@ -193,16 +193,7 @@ public static class PortiaHttpBinding
 
     sealed class ProblemResult(int statusCode, string message) : IResult
     {
-        public async Task ExecuteAsync(HttpContext context)
-        {
-            context.Response.StatusCode = statusCode;
-            context.Response.ContentType = "application/problem+json";
-            await using var writer = new Utf8JsonWriter(context.Response.Body);
-            writer.WriteStartObject();
-            writer.WriteString("message", message);
-            writer.WriteEndObject();
-            await writer.FlushAsync(context.RequestAborted).ConfigureAwait(false);
-        }
+        public Task ExecuteAsync(HttpContext context) => PortiaProblemDetails.WriteAsync(context, statusCode, message);
     }
 }
 
@@ -216,8 +207,8 @@ public sealed class PortiaHttpOptions
 }
 
 /// <summary>Signals that a generated endpoint's bounded JSON body exceeded its configured limit.</summary>
-public sealed class PortiaHttpPayloadTooLargeException : BadHttpRequestException
+public sealed class HttpPayloadTooLargeException : BadHttpRequestException
 {
     /// <summary>Creates the boundary exception.</summary>
-    public PortiaHttpPayloadTooLargeException() : base("The request body is too large.", StatusCodes.Status413PayloadTooLarge) { }
+    public HttpPayloadTooLargeException() : base("The request body is too large.", StatusCodes.Status413PayloadTooLarge) { }
 }

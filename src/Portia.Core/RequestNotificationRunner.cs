@@ -41,26 +41,26 @@ public sealed class RequestNotificationRunner(IRequestNotificationConsumer consu
                     // Same transport label as the token-carrying branch below, which reads it from
                     // the invocation through RequestDispatch — a fired schedule must not report a
                     // different transport depending on which authentication path delivered it.
-                    using var process = PortiaTelemetry.StartProcess(delivered.Request.GetType().Name,
-                        delivered.Invocation.TransportName, delivered.TraceContext, linked: true);
+                    var trusted = delivered.ToDelivery(scope.TimeProvider);
+                    using var process = PortiaTelemetry.StartProcess(trusted.Name,
+                        trusted.Invocation.TransportName, trusted.TraceContext, linked: true);
                     _ = await scope.Bus.DispatchAsync(delivered.Request,
-                        new RequestDispatchContext(actor, delivered.Invocation, delivered.Metadata,
-                            scope.TimeProvider), ct).ConfigureAwait(false);
+                        new RequestDispatchContext(actor, trusted.Invocation, trusted.Metadata,
+                            trusted.TimeProvider), ct).ConfigureAwait(false);
                 }
                 else
                 {
-                    var dispatch = await RequestDispatch.SendAsync(
-                        scope.ActorValidator, scope.Bus, delivered.Request, delivered.ActorToken, delivered.Invocation, delivered.Metadata,
-                        scope.TimeProvider, delivered.TraceContext, ct).ConfigureAwait(false);
+                    var dispatch = await RequestDispatch.SendAsync(scope.ActorValidator, scope.Bus,
+                        delivered.Request, delivered.ToDelivery(scope.TimeProvider), ct).ConfigureAwait(false);
                     if (!dispatch.WasDispatched)
-                        PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), "actor validation failed", logger: _logger);
+                        PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), RunnerFaultStage.Validation, logger: _logger);
                 }
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
                 // Nothing to abandon or redeliver at this transport's level; a failed dispatch
                 // is simply lost. Continue processing later deliveries.
-                PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), "unrecognized exception", ex, _logger);
+                PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), RunnerFaultStage.Execution, ex, _logger);
             }
         }
     }

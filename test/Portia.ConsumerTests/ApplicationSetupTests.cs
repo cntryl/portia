@@ -8,6 +8,7 @@ public sealed class ApplicationSetupTests
         var assembly = GeneratorCompilation.Compile("""
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             public sealed class Account(Uuid id) : Aggregate(id, new EventStreamAddress("setup", "accounts", id.ToString()));
             public static class Scenario
@@ -36,6 +37,7 @@ public sealed class ApplicationSetupTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             using Microsoft.Extensions.Hosting;
             public sealed class Worker : IHostedService
@@ -52,7 +54,7 @@ public sealed class ApplicationSetupTests
                     var api = new ServiceCollection();
                     Shared(api);
                     using var apiProvider = api.BuildServiceProvider();
-                    if (System.Linq.Enumerable.Any(apiProvider.GetServices<IHostedService>())) throw new Exception("API started worker");
+                    if (System.Linq.Enumerable.Any(System.Linq.Enumerable.OfType<Worker>(apiProvider.GetServices<IHostedService>()))) throw new Exception("API started worker");
                     var worker = new ServiceCollection();
                     Shared(worker).AddWorkers().AddWorkers();
                     using var workerProvider = worker.BuildServiceProvider();

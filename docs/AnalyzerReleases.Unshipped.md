@@ -1,4 +1,11 @@
 ; Unshipped analyzer release
+;
+; Rules are listed in ID order. The 0xx band reports contracts the compiler must enforce for a
+; build to be sound; the 1xx band reports design rules that are warnings by choice.
+;
+; Retired IDs, never to be reused: PORTIA001, PORTIA003, PORTIA004, PORTIA006, PORTIA007,
+; PORTIA008, PORTIA009, PORTIA010, PORTIA014. Reusing one would make an old suppression in a
+; consumer's code silently apply to an unrelated rule.
 
 ### New Rules
 
@@ -8,7 +15,6 @@ PORTIA002 | Portia | Error | Projector types must be partial for generated event
 PORTIA005 | Portia | Error | Reactor types must be partial for generated event dispatch
 PORTIA011 | Portia | Error | RequiresPermission references an unknown request property
 PORTIA012 | Portia | Warning | IJsonDomainEventUpcaster.EventName references an unknown event name
-PORTIA025 | Portia | Error | Portia serializer root is not explicitly registered on a PortiaJsonContext
 PORTIA013 | Portia | Error | RequiresPermission references a nullable request property
 PORTIA015 | Portia | Error | Generated components must have supported accessible non-generic declarations
 PORTIA016 | Portia | Error | Unsupported HTTP binding requires a constant route and supported constructor and scalar types
@@ -20,6 +26,7 @@ PORTIA021 | Portia | Error | Domain events require a valid explicit discriminato
 PORTIA022 | Portia | Error | Request discriminator name and version pairs must be unique
 PORTIA023 | Portia | Error | Domain-event discriminator name and version pairs must be unique
 PORTIA024 | Portia | Error | Declared request route segments must be safe single segments
+PORTIA025 | Portia | Error | Portia serializer root is not explicitly registered on a PortiaJsonContext
 PORTIA026 | Portia | Error | Optional HTTP route tokens must use query parameters or separate endpoints
 PORTIA027 | Portia | Error | Visible Portia HTTP mappings must have unique camel-cased operation IDs
 PORTIA100 | Portia | Warning | Projectors must not take a dispatch or effect dependency

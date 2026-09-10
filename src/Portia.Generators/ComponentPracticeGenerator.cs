@@ -84,7 +84,7 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
 
     static void ReportProjectorEffects(SourceProductionContext output, INamedTypeSymbol symbol)
     {
-        if (!DerivesFrom(symbol, "Cntryl.Portia.BaseProjector"))
+        if (!DerivesFrom(symbol, "Cntryl.Portia.Projector"))
             return;
         foreach (var parameter in Parameters(symbol, EffectTypes))
             output.ReportDiagnostic(Diagnostic.Create(ProjectorEffect, Location(parameter), symbol.Name, Display(parameter)));
@@ -203,8 +203,8 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
 
     static bool IsPortiaComponent(INamedTypeSymbol symbol) =>
         PortiaComponentRoles.IsComponent(symbol)
-        || DerivesFrom(symbol, "Cntryl.Portia.BaseProjector")
-        || DerivesFrom(symbol, "Cntryl.Portia.BaseReactor")
+        || DerivesFrom(symbol, "Cntryl.Portia.Projector")
+        || DerivesFrom(symbol, "Cntryl.Portia.Reactor")
         || DerivesFrom(symbol, "Cntryl.Portia.Aggregate");
 
     static bool DerivesFrom(INamedTypeSymbol symbol, string baseTypeName)

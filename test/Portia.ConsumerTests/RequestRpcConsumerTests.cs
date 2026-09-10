@@ -13,6 +13,7 @@ public sealed class RequestRpcConsumerTests
             using System;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             public static class Scenario
             {
                 public static async Task<IAsyncDisposable> Run(FitzRpcRequestServer server)

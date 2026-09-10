@@ -1,6 +1,6 @@
 using Cntryl.Fitz.Abstractions.Domains.Lease;
 
-namespace Cntryl.Portia;
+namespace Cntryl.Portia.Testing;
 
 /// <summary>
 /// Stands in for a real Fitz lease broker for tests: exactly one <c>WithLeaseAsync</c> call per

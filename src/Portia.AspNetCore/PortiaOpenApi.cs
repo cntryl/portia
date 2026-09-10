@@ -213,13 +213,44 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         }
         foreach (var status in new[] { "400", "401", "403", "404", "409", "413", "500" })
         {
-            SetDefaultResponse(status, status == "401" ? new OpenApiResponse { Description = "Unauthorized" }
+            var response = status == "401" ? new OpenApiResponse
+            {
+                Description = "Unauthorized",
+                Headers = new Dictionary<string, IOpenApiHeader>
+                {
+                    ["WWW-Authenticate"] = new OpenApiHeader
+                    {
+                        Required = true,
+                        Schema = new OpenApiSchema { Type = JsonSchemaType.String },
+                    },
+                    [ResultHttpExtensions.TransientHeaderName] = new OpenApiHeader
+                    {
+                        Required = true,
+                        Schema = new OpenApiSchema { Type = JsonSchemaType.Boolean },
+                    },
+                },
+            }
                 : Response("Error", "application/problem+json", new OpenApiSchema
                 {
                     Type = JsonSchemaType.Object,
-                    Properties = new Dictionary<string, IOpenApiSchema> { ["message"] = new OpenApiSchema { Type = JsonSchemaType.String } },
-                    Required = new HashSet<string> { "message" },
-                }));
+                    Properties = new Dictionary<string, IOpenApiSchema>
+                    {
+                        ["type"] = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri-reference" },
+                        ["title"] = new OpenApiSchema { Type = JsonSchemaType.String },
+                        ["status"] = new OpenApiSchema { Type = JsonSchemaType.Integer },
+                        ["detail"] = new OpenApiSchema { Type = JsonSchemaType.String },
+                        ["instance"] = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri-reference" },
+                        ["transient"] = new OpenApiSchema { Type = JsonSchemaType.Boolean },
+                    },
+                    Required = new HashSet<string> { "type", "title", "status", "detail", "instance" },
+                });
+            response.Headers ??= new Dictionary<string, IOpenApiHeader>();
+            _ = response.Headers.TryAdd(ResultHttpExtensions.TransientHeaderName, new OpenApiHeader
+            {
+                Required = status == "401",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.Boolean },
+            });
+            SetDefaultResponse(status, response);
         }
     }
 

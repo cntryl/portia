@@ -78,7 +78,7 @@ public sealed class ContextSaveTests
         var second = new RequestContext<DepositAccount>(first.Request, RequestActor.System);
         await repository.SaveAsync(account, second);
         await foreach (var record in store.ReadAsync(account.Stream))
-            Assert.Equal(second.ExecutionId, record.Ev.Metadata.ExecutionId);
+            Assert.Equal(second.ExecutionId, record.Event.Metadata.ExecutionId);
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed class ContextSaveTests
         Assert.Same(original, first.Metadata);
         Assert.Equal(0UL, account.CommittedStreamPosition);
         await foreach (var record in store.ReadAsync(account.Stream))
-            Assert.Fail($"Unexpected appended event {record.Ev.Metadata.EventId}");
+            Assert.Fail($"Unexpected appended event {record.Event.Metadata.EventId}");
     }
 
     sealed class ConflictingFactory : IDomainEventMetadataFactory

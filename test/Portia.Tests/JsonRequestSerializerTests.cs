@@ -67,7 +67,7 @@ public sealed class JsonRequestSerializerTests
         var outcome = serializer.DeserializeOutcome(bytes);
 
         Assert.False(outcome.IsSuccess);
-        Assert.Equal(RequestErrorKind.Conflict, outcome.Error!.Kind);
+        Assert.Equal(RequestErrorKind.Conflict, outcome.Error.Kind);
         Assert.Equal("Already exists.", outcome.Error.Message);
         Assert.True(outcome.Error.IsTransient);
     }
@@ -100,7 +100,7 @@ public sealed class JsonRequestSerializerTests
         var result = serializer.DeserializeResult<string>(bytes);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(RequestErrorKind.NotFound, result.Error!.Kind);
+        Assert.Equal(RequestErrorKind.NotFound, result.Error.Kind);
     }
 
     /// <summary>

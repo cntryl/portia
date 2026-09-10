@@ -68,7 +68,7 @@ public sealed class ReactorEffectPatternsTests
         public ValueTask SendReceiptAsync(Deposited ev, IReactorContext context, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
-            if (!ReferenceEquals(ev, context.Source.Ev))
+            if (!ReferenceEquals(ev, context.Source.Event))
                 throw new InvalidOperationException("The direct effect lost its triggering context.");
             Receipts++;
             return ValueTask.CompletedTask;
@@ -78,19 +78,19 @@ public sealed class ReactorEffectPatternsTests
     sealed record SendReceipt(Uuid AccountId) : IRequest;
 
     sealed class CommandReaction(IProjectionCheckpointStore checkpoints, IRequestBus bus, Uuid aggregateId)
-        : BaseReactor(checkpoints, EventStreamPattern.ForPattern("testing", "reactions", aggregateId.ToString()), "command-reaction")
+        : Reactor(checkpoints, EventStreamPattern.ForPattern("testing", "reactions", aggregateId.ToString()), "command-reaction")
     {
         protected override ValueTask ReactToEventAsync(
             DomainEventRecord record, IExecutionContext context, CancellationToken ct) =>
             bus.SendReactionAsync(
-                new SendReceipt(record.Ev.Metadata.AggregateId), (IReactorContext)context, ct);
+                new SendReceipt(record.Event.Metadata.AggregateId), (IReactorContext)context, ct);
     }
 
     sealed class DirectEffectReaction(IProjectionCheckpointStore checkpoints, RecordingEffects effects, Uuid aggregateId)
-        : BaseReactor(checkpoints, EventStreamPattern.ForPattern("testing", "reactions", aggregateId.ToString()), "direct-effect-reaction")
+        : Reactor(checkpoints, EventStreamPattern.ForPattern("testing", "reactions", aggregateId.ToString()), "direct-effect-reaction")
     {
         protected override ValueTask ReactToEventAsync(
             DomainEventRecord record, IExecutionContext context, CancellationToken ct) =>
-            effects.SendReceiptAsync((Deposited)record.Ev, (IReactorContext)context, ct);
+            effects.SendReceiptAsync((Deposited)record.Event, (IReactorContext)context, ct);
     }
 }

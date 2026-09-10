@@ -1,4 +1,4 @@
-namespace Cntryl.Portia;
+namespace Cntryl.Portia.Testing;
 
 /// <summary>Provides business tests with replay and immutable snapshots of aggregate lifecycle collections.</summary>
 /// <typeparam name="TAggregate">The aggregate under test.</typeparam>

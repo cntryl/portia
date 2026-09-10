@@ -6,7 +6,7 @@ namespace Cntryl.Portia;
 /// <para>A projector is a pure function of events into its own <see cref="IProjectionStore" />:
 /// its writes and its checkpoint share one transaction, so any effect it causes outside that
 /// transaction is repeated on every failed commit and every rebuild. Dispatching a request,
-/// calling a remote service, publishing, or enqueuing belongs in <see cref="BaseReactor" />,
+/// calling a remote service, publishing, or enqueuing belongs in <see cref="Reactor" />,
 /// which is checkpointed separately for exactly that reason. <c>PORTIA100</c> warns when a
 /// projector takes a dependency capable of causing an effect.</para>
 ///
@@ -14,20 +14,29 @@ namespace Cntryl.Portia;
 /// <c>ProjectorRunner</c> is the only implementation of that role. Subclass this to write a
 /// projector; do not expect to write an alternative runner.</para>
 /// </summary>
-public abstract class BaseProjector
+public abstract class Projector
 {
     WorkloadIdentity? _boundIdentity;
     /// <summary>Uses the same repository for application writes and projection progress.</summary>
-    protected BaseProjector(IProjectionStore store, EventStreamPattern pattern, string? name = null)
+    protected Projector(IProjectionStore store, EventStreamPattern pattern, string? name = null)
     {
         Store = store ?? throw new ArgumentNullException(nameof(store));
         Pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
         Name = name ?? GetType().FullName ?? GetType().Name;
         ArgumentException.ThrowIfNullOrWhiteSpace(Name);
     }
-    /// <summary>Gets the stable checkpoint name.</summary>
+    /// <summary>
+    /// Gets the stable checkpoint name. Fixed for the life of this instance once the component
+    /// starts running: a registration that explicitly named the workload supplies that name, and
+    /// otherwise this keeps the name given at construction. It is never reassigned afterwards —
+    /// rebinding to a second workload throws rather than silently repointing the checkpoint this
+    /// component has already been writing.
+    /// </summary>
     public string Name { get; private set; }
-    /// <summary>Gets the consumed event stream pattern.</summary>
+    /// <summary>
+    /// Gets the consumed event stream pattern, narrowed to the running workload's tenant when it
+    /// has one. Like <see cref="Name" />, fixed once the component starts running.
+    /// </summary>
     public EventStreamPattern Pattern { get; private set; }
     internal IProjectionStore Store { get; }
     internal virtual bool IsBatch => false;
@@ -64,8 +73,8 @@ public abstract class BaseProjector
 
 /// <summary>Projects bounded batches with one atomic data-and-checkpoint commit per batch.
 /// Implement batch handler interfaces for bulk writes, or event handlers for ordered application.</summary>
-public abstract class BaseBatchProjector(IProjectionStore store, EventStreamPattern pattern, string? name = null)
-    : BaseProjector(store, pattern, name)
+public abstract class BatchProjector(IProjectionStore store, EventStreamPattern pattern, string? name = null)
+    : Projector(store, pattern, name)
 {
     internal sealed override bool IsBatch => true;
 }

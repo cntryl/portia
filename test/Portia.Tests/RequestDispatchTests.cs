@@ -7,20 +7,22 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class RequestDispatchTests
 {
-    /// <summary>Accepts explicit nullable trace context with cancellation last.</summary>
+    /// <summary>Dispatches both request shapes from one delivery description.</summary>
     [Fact]
-    public async Task ShouldAcceptPositionalCancellationTokenGivenExistingConsumerCall()
+    public async Task ShouldDispatchBothRequestShapesGivenOneDelivery()
     {
         using var busHost = TestRequestBus.Create();
         using var cancellation = new CancellationTokenSource();
         var invocation = new QueueInvocation("queue://test/work/item", 1);
 
         var command = await RequestDispatch.SendAsync(
-            new TestRequestActorValidator(), busHost.Bus, new ChangeValue(1), "valid-token",
-            invocation, RequestMetadata.Create(), null, null, cancellation.Token);
+            new TestRequestActorValidator(), busHost.Bus, new ChangeValue(1),
+            new RequestDelivery("test.change_value", invocation, RequestMetadata.Create(), "valid-token"),
+            cancellation.Token);
         var query = await RequestDispatch.SendAsync(
-            new TestRequestActorValidator(), busHost.Bus, new GetValue(), "valid-token",
-            invocation, RequestMetadata.Create(), null, null, cancellation.Token);
+            new TestRequestActorValidator(), busHost.Bus, new GetValue(),
+            new RequestDelivery("test.get_value", invocation, RequestMetadata.Create(), "valid-token"),
+            cancellation.Token);
 
         Assert.True(command.WasDispatched);
         Assert.True(query.WasDispatched);
@@ -38,12 +40,13 @@ public sealed class RequestDispatchTests
         var bus = busHost.Bus;
         var validator = new TestRequestActorValidator(rejectToken: "expired-token");
 
-        var dispatch = await RequestDispatch.SendAsync(
-            validator, bus, new ChangeValue(1), "expired-token", new QueueInvocation("queue://test/work/item", 1), RequestMetadata.Create(), null, null);
+        var dispatch = await RequestDispatch.SendAsync(validator, bus, new ChangeValue(1),
+            new RequestDelivery("test.change_value", new QueueInvocation("queue://test/work/item", 1),
+                RequestMetadata.Create(), "expired-token"));
 
         Assert.False(dispatch.WasDispatched);
         Assert.False(dispatch.Outcome.IsSuccess);
-        Assert.Equal("Token expired.", dispatch.Outcome.Error!.Message);
+        Assert.Equal("Token expired.", dispatch.Outcome.Error.Message);
         Assert.Null(handler.LastValue);
     }
 
@@ -59,8 +62,9 @@ public sealed class RequestDispatchTests
         var bus = busHost.Bus;
         var validator = new TestRequestActorValidator();
 
-        var dispatch = await RequestDispatch.SendAsync(
-            validator, bus, new ChangeValue(42), "valid-token", new QueueInvocation("queue://test/work/item", 1), RequestMetadata.Create(), null, null);
+        var dispatch = await RequestDispatch.SendAsync(validator, bus, new ChangeValue(42),
+            new RequestDelivery("test.change_value", new QueueInvocation("queue://test/work/item", 1),
+                RequestMetadata.Create(), "valid-token"));
 
         Assert.True(dispatch.WasDispatched);
         Assert.True(dispatch.Outcome.IsSuccess);

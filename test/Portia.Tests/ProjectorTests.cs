@@ -90,7 +90,7 @@ public sealed class ProjectorTests
 }
 
 sealed partial class TestProjector(ITestProjectionRepository target)
-    : BaseBatchProjector(target, EventStreamPattern.ForPattern("test", "projectors"), "test-projector"),
+    : BatchProjector(target, EventStreamPattern.ForPattern("test", "projectors"), "test-projector"),
       IProjectorHandler<ValueChanged>,
       IProjectorHandler<ValueIncremented>
 {

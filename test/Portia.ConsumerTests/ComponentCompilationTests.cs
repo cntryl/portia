@@ -10,7 +10,7 @@ public sealed class ComponentCompilationTests
     public async Task GlobalNestedAndPartialComponentsCompileAndExecute(bool nested, bool partial, string containerKind)
     {
         var components = """
-            public partial class Watcher : BaseReactor, IReactorHandler<Ev>
+            public partial class Watcher : Reactor, IReactorHandler<Ev>
             {
                 public Watcher() : base(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test"), "watcher") { }
                 public int Count { get; private set; }
@@ -24,7 +24,7 @@ public sealed class ComponentCompilationTests
                     return ReactToEventAsync(record, new ReactionExecutionContext(record, RequestActor.System), default);
                 }
             }
-            public partial class View : BaseProjector, IProjectorHandler<Ev>
+            public partial class View : Projector, IProjectorHandler<Ev>
             {
                 public View() : base(new Target(), EventStreamPattern.ForPattern("test"), "view") { }
                 public int Count { get; private set; }
@@ -42,6 +42,7 @@ public sealed class ComponentCompilationTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             public sealed record Ev : DomainEvent;
             public sealed class Context : IProjectorContext
             {

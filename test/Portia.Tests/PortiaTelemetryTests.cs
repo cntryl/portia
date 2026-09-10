@@ -145,6 +145,23 @@ sealed class TelemetryGuardedActionHandler : IRequestHandler<TelemetryGuardedAct
         ValueTask.FromResult(Result.Success);
 }
 
+// A guarded stream owned by the telemetry group. The metric listener is process-wide, so a
+// request type shared with a test in another (parallel) collection would let that test's
+// measurements land in this one's capture.
+[RequiresPermission("telemetry:guarded-stream")]
+sealed record TelemetryGuardedSequence : IStreamRequest<int>;
+
+sealed class TelemetryGuardedSequenceHandler : IStreamRequestHandler<TelemetryGuardedSequence, int>
+{
+    public async IAsyncEnumerable<int> HandleAsync(
+        IRequestContext<TelemetryGuardedSequence> context,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        yield return 1;
+        await Task.CompletedTask;
+    }
+}
+
 sealed record TelemetrySequence : IStreamRequest<int>;
 
 sealed class TelemetrySequenceHandler : IStreamRequestHandler<TelemetrySequence, int>

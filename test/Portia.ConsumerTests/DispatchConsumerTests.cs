@@ -15,6 +15,7 @@ public sealed class DispatchConsumerTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             public sealed record Outer : IRequest<int>;
             public sealed record Inner : IRequest<int>;
@@ -31,7 +32,7 @@ public sealed class DispatchConsumerTests
             public sealed class UnrelatedAuthorizer : IRequestAuthorizer<Unrelated>
             {
                 public UnrelatedAuthorizer() => throw new Exception("Unrelated authorizer constructed");
-                public ValueTask<Result> AuthorizeAsync(IRequestContext<Unrelated> c, System.Security.Claims.ClaimsPrincipal actor, CancellationToken ct = default) => ValueTask.FromResult(Result.Success);
+                public ValueTask<Result> AuthorizeAsync(IRequestContext<Unrelated> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
             }
             public static class Scenario
             {

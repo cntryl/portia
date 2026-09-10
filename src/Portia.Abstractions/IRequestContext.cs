@@ -24,13 +24,11 @@ public interface IRequestContext<out TRequest> : IRequestContext
 /// <summary>Receiver-created execution state shared by authorization and request handling.</summary>
 public class RequestDispatchContext : IRequestContext
 {
-    readonly ClaimsPrincipal _actor;
-
     /// <summary>Creates a new receiver execution with optional propagated logical identity.</summary>
     public RequestDispatchContext(ClaimsPrincipal actor, RequestInvocation? invocation = null,
         RequestMetadata? metadata = null, TimeProvider? timeProvider = null)
     {
-        _actor = PrincipalSnapshot.Copy(actor);
+        ActorSnapshot = PrincipalSnapshot.Copy(actor);
         Metadata = metadata ?? RequestMetadata.Create();
         Metadata.Validate();
         Invocation = invocation ?? new DirectInvocation();
@@ -42,7 +40,10 @@ public class RequestDispatchContext : IRequestContext
     protected RequestDispatchContext(RequestDispatchContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        _actor = PrincipalSnapshot.Copy(context._actor);
+        // The source already holds a snapshot taken at its own construction, and this execution
+        // is the same logical one, so its snapshot can be shared rather than copied again. The
+        // Actor property still hands every reader an independent copy of it.
+        ActorSnapshot = context.ActorSnapshot;
         Metadata = context.Metadata;
         Invocation = context.Invocation;
         ExecutionId = context.ExecutionId;
@@ -51,8 +52,12 @@ public class RequestDispatchContext : IRequestContext
 
     /// <summary>Gets the logical metadata that can be forwarded with this same request.</summary>
     public RequestMetadata Metadata { get; }
+    // Portia's own internal reads (null checks, system-identity tests) use this directly: they
+    // never hand the principal to application code, so they have nothing to isolate against and
+    // no reason to copy it. Everything that does reach application code goes through Actor.
+    internal ClaimsPrincipal ActorSnapshot { get; }
     /// <inheritdoc />
-    public ClaimsPrincipal Actor => PrincipalSnapshot.Copy(_actor);
+    public ClaimsPrincipal Actor => PrincipalSnapshot.Copy(ActorSnapshot);
     /// <inheritdoc />
     public Uuid ExecutionId { get; }
     /// <inheritdoc />

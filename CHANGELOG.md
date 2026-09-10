@@ -6,26 +6,152 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
-### Breaking
+### Changed
 
-- **Consumer-side transport names dropped their `fitz.` prefix.** `RequestInvocation` now supplies
-  its own `TransportName`, and inbound telemetry reports the transport *shape* rather than the
-  adapter carrying it. The `transport` metric tag and the `messaging.system` activity tag on
-  `portia.request.process` and `portia.request.execute` changed:
+- Component base types dropped their `Base` prefix: `Projector`, `Reactor`, `BatchProjector`,
+  `BatchReactor`. `Aggregate` never carried one and these are the same kind of thing.
 
-  | Before | After |
-  |---|---|
-  | `fitz.rpc` | `rpc` |
-  | `fitz.queue` | `queue` |
-  | `fitz.notice` | `notice` |
-  | `fitz.schedule` | `schedule` |
+- `IReactorContext<TEvent>.Ev` is now `.Trigger`, and `DomainEventRecord.Ev` is now `.Event`. `Ev`
+  was an abbreviation on the property reactor code touches most, against `IRequestContext`'s
+  spelled-out `Request`. The interface member cannot be called `Event` — CA1716 reserves it on a
+  virtual or interface member — so the typed one is named for its role instead.
 
-  `http` and `local` are unchanged. Update dashboards, alert rules, and trace filters that match
-  the old values before upgrading. Outbound `portia.request.send` activities raised inside
-  `Portia.Fitz` keep their `fitz.*` names: a producer names the adapter it is using, a consumer
-  names the shape of the delivery it received.
+- The pipeline continuation delegates are `RequestPipelineNext`, `RequestPipelineNext<TOut>`, and
+  `StreamRequestPipelineNext<TOut>`, with the parameter named `continuation`. They are the rest of
+  the pipeline, not siblings of `IRequestHandler` and `IStreamRequestHandler`.
+
+- `IRequestAuthorizer<TRequest>.AuthorizeAsync` lost its `actor` parameter: the actor is
+  `context.Actor`, and passing it twice gave one call two sources of truth for who is acting. `ct`
+  also lost its default, matching `IRequestHandler`.
+
+- `Portia.Testing` lives in the `Cntryl.Portia.Testing` namespace, along with `Portia.Fitz`'s
+  `InMemoryRpcClient` and `InMemoryLeaseClient`. Test doubles and conformance suites no longer sit
+  in an application's completion list beside the production contracts.
+
+- `RequestDispatch.SendAsync` takes a `RequestDelivery` rather than six positional arguments, two
+  of them adjacent nullables. `DeserializedRequest` carries the wire `Name` its envelope declared,
+  and an adapter builds one value with `envelope.ToDelivery(invocation, clock)`. `IQueuedRequest`
+  and `RequestNotification` gained an optional `Name` for adapters that resolve a discriminator.
+
+- `PortiaTelemetry.RecordRunnerFault` takes a `RunnerFaultStage` rather than a reason string. The
+  string was never logged — it only selected a stage, by substring match over its wording — so
+  callers were building messages, some interpolating a tenant id, that were then discarded.
+
+- `PortiaHttpPayloadTooLargeException` is `HttpPayloadTooLargeException`, matching
+  `EventStreamConcurrencyException` and every other exception in the framework.
+
+- `Result` and `Result<T>` annotate `IsSuccess` so `result.Error` in a failure branch needs no `!`.
+  `Result<T>.Value` now returns `T`, not `T?`, so a non-nullable type argument stays non-nullable to
+  consumers; `Result<string?>` still exposes `string?` and may legitimately succeed with null.
+  Failed and uninitialized access keep their existing exceptions.
+
+- `Uuid` implements `ISpanParsable<Uuid>`, `ISpanFormattable`, and `IComparable<Uuid>`, delegating
+  parsing, standard formatting, and ordering to its wrapped `Guid`. Parameterless formatting,
+  equality, JSON representation, and UUID generation semantics are unchanged.
+
+- `Portia.AspNetCore` now depends directly on `Portia.DependencyInjection`. A consumer referencing
+  only the HTTP package receives the registration APIs, generator/analyzer assets, and interceptor
+  compiler configuration transitively.
+
+- HTTP errors advertised as `application/problem+json` now contain RFC 9457 problem details
+  (`type`, `title`, `status`, `detail`, and `instance`) instead of a Portia-only `message` object.
+  Request errors additionally expose their retry classification through the `transient` problem
+  extension and the `Portia-Transient` header. Bodyless 401 responses now send
+  `WWW-Authenticate: Bearer` without exposing authorization failure details.
+
+- Projection-store optimistic conflicts now derive from the public, adapter-neutral
+  `ProjectionConcurrencyException`, and `ProjectionStoreConformance` enforces that contract.
+  `FitzKvConcurrencyException` remains as an obsolete compatibility subtype, while current Fitz
+  stores throw the shared type directly.
+
+- `TerminalHandlerFailureException` is public, so applications can distinguish a queue terminal
+  callback failure that faults `QueueRunner` and deliberately leaves its delivery unacknowledged.
+  Both the standalone hosted runner and Fitz application worker propagate this terminal fault
+  instead of treating it as a reconnectable transport-stream failure.
+
+- `AddPortia()` now registers serialization startup validation even when `AddWorkers()` is not
+  called. API-only hosts therefore validate the resolved JSON options, upcaster identities,
+  duplicates, and transitions before accepting requests.
+
+- Hosted projector and reactor failures now retry with exponential backoff from `PollInterval`,
+  capped by `WorkloadOptions.MaximumFailureDelay` (one minute by default). After
+  `FailureAttemptLimit` consecutive failures (ten by default), the worker faults with public
+  `WorkloadFailureException` instead of silently rereading one poison event forever. A successful
+  pass resets the failure count and delay; checkpoints still advance only through successful
+  commits. Duplicate workload declarations compare these policy values and reject conflicts
+  rather than silently retaining the first declaration.
+
+- `EventStreamPattern.ForPattern` now rejects a resource when its area is absent instead of
+  silently treating `stream://realm/*/resource` as a realm-scoped checkpoint.
+
+- `MultiTenantRunner` passes the run cancellation token to tenant-stop callbacks during shutdown
+  and bounds the wait with that token. Ordinary tenant removal still uses a non-cancelled token so
+  application cleanup can finish.
+
+- `IExecutionContext.Actor` still returns an independent copy per read — an authorizer's mutation
+  must not reach the handler — but Portia no longer takes that copy for its own internal null
+  checks and system-identity tests. A dispatch with three authorizers took five deep copies of the
+  principal; it now takes only the ones application code asks for.
+
+- Authorizers are split by stage once at registration rather than re-filtered per dispatch, and
+  each stage name is rendered once rather than through `ToString().ToLowerInvariant()` per call.
+
+- `IProjectorHandler`, `IBatchProjectorHandler`, `IReactorHandler`, `IBatchReactorHandler`, and
+  `IReactorContext<TEvent>` constrain `TEvent` to `DomainEvent`, matching `Aggregate.On<TEvent>`;
+  `IReactorHandler<string>` used to compile. The two batch interfaces are contravariant like their
+  single-event counterparts.
+
+- `RequestBus`'s two unary dispatch paths are written out rather than unified through four
+  delegates. The streaming path could never use that unifier — a `yield return` cannot sit inside a
+  `try` with a `catch` — so it covered two of three paths at the cost of a five-argument delegate
+  at each, and the third duplicated the sequence anyway.
+
+### Telemetry
+
+- `request.type` carries each request's declared discriminator rather than its CLR type name:
+  `greetings.create`, not `CreateGreeting`. A request with no discriminator — one never transported
+  — still reports its type name. This is what the discriminator is for; the framework makes it a
+  compile error to omit one on a transported request, then named spans after the class anyway, so
+  renaming a class silently re-keyed every dashboard.
+
+- The `component` tag on `portia.authorization.duration` names the authorizer. It reported
+  `RequestAuthorizerRegistration\`2` — the generic registration wrapper — identically for every
+  authorizer, so measurements from different policies could not be told apart.
+
+- A tenant workload that faulted reported the `cleanup` stage, because its diagnostic text
+  happened to contain the word "callback"; fleet membership faults reported `execution` for the
+  same reason. Both now report the stage the calling code names.
+
+- The units on `portia.workload.active`, `portia.worker.failure`, and `portia.worker.restart` are
+  corrected from `{request}` to `{workload}`, `{failure}`, and `{restart}` respectively. Instrument
+  names, dimensions, and telemetry version remain unchanged.
 
 ### Fixed
+
+- `ConfigureWorker` rejected its own registrations. It compared the two callbacks to decide whether
+  a repeat declaration conflicted, but a lambda that captures anything allocates a fresh delegate
+  per call and never compares equal, so running shared application setup twice — the documented
+  API-host-and-worker-host pattern — threw. The name is now the identity: the first declaration
+  under a name wins, like every other builder method.
+
+- An uninitialized `Result` returned from an authorizer named
+  `Cntryl.Portia.RequestAuthorizerRegistration\`2` rather than the offending authorizer, defeating
+  the point of naming it.
+
+- `CreateEffectId` derived a persisted deduplication key from `WorkloadIdentity`'s generated
+  `ToString`, so adding a property to that record could silently re-key every future effect. The
+  explicit formatter now freezes the exact legacy field order and text. Every existing persisted
+  effect UUID remains unchanged; this introduces neither new keys nor a migration.
+
+- `Aggregate` reported "Concurrent aggregate emission, replay, or save is not supported" for a
+  re-entrant emit — an `On<TEvent>` handler raising while applying — sending readers looking for a
+  second thread that was never there. The message names both causes.
+
+- `Aggregate` rescanned both pending-event lists on every raise to check event-ID uniqueness,
+  making a command that raises n events cost O(n squared) for a question one hash set answers.
+
+- `Aggregate`'s audit session stream used `Guid.NewGuid()` directly, bypassing `Uuid` and the
+  injectable metadata factory, so it was the one aggregate identity a test could not control.
 
 - A fired durable schedule delivered with a trusted system actor reported `fitz.schedule` while
   every other path reported the invocation's own name, so the transport label depended on which

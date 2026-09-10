@@ -44,7 +44,7 @@ public sealed class FitzKvCheckpointStore(IKvClient client, string route) : IPro
 
             if (ex is Fitz.Errors.KvException { DomainCode: FitzErrorCodes.KvIsolationConflict })
             {
-                throw new FitzKvConcurrencyException(
+                throw new ProjectionConcurrencyException(
                     $"Checkpoint '{identity.ComponentName}' pattern '{identity.Pattern}' conflicted with a concurrent writer; reload before retrying.", ex);
             }
 

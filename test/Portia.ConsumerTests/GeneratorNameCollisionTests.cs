@@ -8,6 +8,7 @@ public sealed class StableRegistrationIdentityTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             namespace Requests
             {
@@ -26,7 +27,7 @@ public sealed class StableRegistrationIdentityTests
             {
                 public sealed class Component : IRequestAuthorizer<Requests.Component>
                 {
-                    public ValueTask<Result> AuthorizeAsync(IRequestContext<Requests.Component> context, System.Security.Claims.ClaimsPrincipal actor, CancellationToken ct = default) =>
+                    public ValueTask<Result> AuthorizeAsync(IRequestContext<Requests.Component> context, CancellationToken ct) =>
                         ValueTask.FromResult(Result.Success);
                 }
             }
@@ -45,6 +46,7 @@ public sealed class StableRegistrationIdentityTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             public sealed record One : IRequest<int>;
             public sealed record Two : IRequest<int>;

@@ -10,6 +10,7 @@ public sealed class GeneratorShapeTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             public sealed record Request : IRequest;
             public sealed class Handler : IRequestHandler<Request>
@@ -35,6 +36,7 @@ public sealed class GeneratorShapeTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             public abstract record AccountRequest(string AccountId) : IRequest;
             [RequiresPermission("accounts:{AccountId}:read")]
@@ -66,6 +68,7 @@ public sealed class GeneratorShapeTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             [RequiresPermission("accounts:{Missing}:read")]
             public sealed record ReadAccount(string AccountId) : IRequest;
@@ -93,6 +96,7 @@ public sealed class GeneratorShapeTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             public abstract class AccountRequest { public string? AccountId { get; init; } }
             [RequiresPermission("accounts:{AccountId}:read")]
@@ -117,6 +121,7 @@ public sealed class GeneratorShapeTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             [RequiresPermission("accounts:{Missing}:read")]
             public sealed record ReadAccount(string AccountId) : IRequest;
             public sealed class Handler : IRequestHandler<ReadAccount>
@@ -136,6 +141,7 @@ public sealed class GeneratorShapeTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics($$"""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             [RequiresPermission("{{permission}}")]
             public sealed record ReadAccount(string? AccountId) : IRequest;
@@ -159,6 +165,7 @@ public sealed class GeneratorShapeTests
     {
         var generated = GeneratorCompilation.GeneratedSource("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             [Discriminator("AccountOpened")]
             public sealed record AccountOpened : DomainEvent;
             """, new DomainEventCatalogGenerator());
@@ -173,6 +180,7 @@ public sealed class GeneratorShapeTests
     {
         var contracts = GeneratorCompilation.Reference("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             namespace Contracts;
             [Discriminator("UsedEvent")]
             public sealed record UsedEvent(string Value) : DomainEvent;
@@ -181,6 +189,7 @@ public sealed class GeneratorShapeTests
             """);
         var generated = GeneratorCompilation.GeneratedSource("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Contracts;
             using Microsoft.Extensions.DependencyInjection;
             public sealed class Projection : IProjectorHandler<UsedEvent>
@@ -207,6 +216,7 @@ public sealed class GeneratorShapeTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             public sealed record Request : IRequest;
             public sealed class Handler : IRequestHandler<Request>
@@ -237,6 +247,7 @@ public sealed class GeneratorShapeTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             public sealed record First : IRequest<int>;
             public sealed record Second : IRequest<int>;
@@ -248,8 +259,8 @@ public sealed class GeneratorShapeTests
             public class Authorizer : IRequestAuthorizer<First>, IRequestAuthorizer<Second>
             {
                 public static int Calls;
-                public ValueTask<Result> AuthorizeAsync(IRequestContext<First> c, System.Security.Claims.ClaimsPrincipal actor, CancellationToken ct = default) { Calls++; return ValueTask.FromResult(Result.Success); }
-                public ValueTask<Result> AuthorizeAsync(IRequestContext<Second> c, System.Security.Claims.ClaimsPrincipal actor, CancellationToken ct = default) { Calls++; return ValueTask.FromResult(Result.Success); }
+                public ValueTask<Result> AuthorizeAsync(IRequestContext<First> c, CancellationToken ct) { Calls++; return ValueTask.FromResult(Result.Success); }
+                public ValueTask<Result> AuthorizeAsync(IRequestContext<Second> c, CancellationToken ct) { Calls++; return ValueTask.FromResult(Result.Success); }
             }
             public static class Scenario
             {

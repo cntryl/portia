@@ -1,6 +1,6 @@
 using System.Security.Claims;
 
-namespace Cntryl.Portia;
+namespace Cntryl.Portia.Testing;
 
 /// <summary>
 /// An <see cref="IPermissionEvaluator" /> that either grants or denies every permission it's

@@ -17,7 +17,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The next checkpoint after every committed batch.</returns>
     public async ValueTask<ProjectionCheckpoint> RunAsync(
-        BaseProjector projector,
+        Projector projector,
         ProjectionCheckpoint checkpoint,
         ProjectionRunOptions? options = null,
         CancellationToken ct = default)
@@ -48,7 +48,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
     }
 
     static async ValueTask<ProjectionCheckpoint> CommitAsync(
-        BaseProjector projector,
+        Projector projector,
         List<DomainEventRecord> records,
         ProjectionCheckpoint checkpoint,
         string? rebuildId,
@@ -56,7 +56,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
     {
         var started = PortiaTelemetry.StartTimestamp();
         var count = records.Count;
-        var lastOccurrence = records[^1].Ev.Metadata.OccurredOn;
+        var lastOccurrence = records[^1].Event.Metadata.OccurredOn;
         var outcome = "success";
         try
         {

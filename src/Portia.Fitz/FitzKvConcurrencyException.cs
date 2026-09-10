@@ -9,5 +9,6 @@ namespace Cntryl.Portia;
 /// </summary>
 /// <param name="message">A description of the conflict.</param>
 /// <param name="innerException">The underlying Fitz KV exception this was translated from.</param>
+[Obsolete($"Catch {nameof(ProjectionConcurrencyException)} so the same handler works with every projection-store adapter.")]
 public sealed class FitzKvConcurrencyException(string message, Exception? innerException = null)
-    : Exception(message, innerException);
+    : ProjectionConcurrencyException(message, innerException);

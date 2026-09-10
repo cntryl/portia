@@ -11,5 +11,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj" />
+    <ProjectReference Include="../Portia.DependencyInjection/Portia.DependencyInjection.csproj" />
   </ItemGroup>
 </Project>

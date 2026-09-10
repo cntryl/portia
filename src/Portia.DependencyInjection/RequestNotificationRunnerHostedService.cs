@@ -20,12 +20,12 @@ sealed class RequestNotificationRunnerHostedService(
             {
                 await _runner.RunAsync(stoppingToken).ConfigureAwait(false);
                 if (!stoppingToken.IsCancellationRequested)
-                    PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), "consumer completed without cancellation", logger: logger);
+                    PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), RunnerFaultStage.Notification, logger: logger);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception ex)
             {
-                PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), "consumer enumeration faulted", ex, logger);
+                PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), RunnerFaultStage.Notification, ex, logger);
             }
             try
             {

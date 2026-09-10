@@ -33,9 +33,9 @@ Durations use monotonic seconds. Hot-path recordings have at most three tags in 
 | `portia.processor.batch.duration` | `s` | `component`, `runner`, `outcome` |
 | `portia.processor.event.count` | `{event}` | `component`, `runner` |
 | `portia.processor.lag` | `s` | `component`, `runner` |
-| `portia.workload.active` | `{request}` | `component`, `scope` |
-| `portia.worker.failure` | `{request}` | `runner`, `error.type` |
-| `portia.worker.restart` | `{request}` | `runner`, `stage` |
+| `portia.workload.active` | `{workload}` | `component`, `scope` |
+| `portia.worker.failure` | `{failure}` | `runner`, `error.type` |
+| `portia.worker.restart` | `{restart}` | `runner`, `stage` |
 | `portia.fleet.assignment.active` | `{assignment}` | `scope` |
 
 Registered request/component names are startup-bounded. Closed dimensions include transport, operation, scope, stage, outcome, error type, and runner. Never use tenant, aggregate, partition, worker, request, correlation, or execution IDs; concrete routes; exception messages; payload values; or arbitrary reasons as metric values. Outcomes are `success`, a known request-error kind, `rejected`, `abandoned`, `lost`, `canceled`, or `fault`. Processor lag uses the last committed event occurrence and is clamped to zero; checkpoints are intentionally absent.

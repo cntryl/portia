@@ -60,11 +60,11 @@ public sealed class ExecutionLifecycleTests
     sealed class Authorizer : IRequestAuthorizer<Query>
     {
         public IRequestContext<Query>? Context { get; private set; }
-        public ValueTask<Result> AuthorizeAsync(IRequestContext<Query> context, ClaimsPrincipal actor, CancellationToken ct = default)
+        public ValueTask<Result> AuthorizeAsync(IRequestContext<Query> context, CancellationToken ct)
         {
             Context = context;
+            // Mutating what this authorizer read must not reach the handler, or the caller.
             ((ClaimsIdentity)context.Actor.Identity!).AddClaim(new Claim("mutated", "yes"));
-            ((ClaimsIdentity)actor.Identity!).AddClaim(new Claim("mutated", "yes"));
             return ValueTask.FromResult(Result.Success);
         }
     }

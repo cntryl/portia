@@ -37,6 +37,7 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(TelemetryFailureAction))]
 [JsonSerializable(typeof(TelemetryGuardedAction))]
 [JsonSerializable(typeof(TelemetrySequence))]
+[JsonSerializable(typeof(TelemetryGuardedSequence))]
 [JsonSerializable(typeof(TelemetrySuccessAction))]
 [JsonSerializable(typeof(AuthorizedAction))]
 [JsonSerializable(typeof(GetOrder))]

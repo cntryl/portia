@@ -1,3 +1,4 @@
+using System.Globalization;
 using Cntryl.Fitz.Abstractions.Domains.Stream;
 using Cntryl.Fitz.Errors;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,7 +43,7 @@ public sealed class FitzPersistenceFailureTests
             Assert.Equal(1, session.Rollbacks);
         }
         Assert.Equal(0UL, account.CommittedStreamPosition);
-        Assert.Equal(4, Uuid.Parse(EventStreamAddress.Parse(streams.Route!).Resource).Version);
+        Assert.Equal(4, Uuid.Parse(EventStreamAddress.Parse(streams.Route!).Resource, CultureInfo.InvariantCulture).Version);
         Assert.True(session.Disposed);
     }
 

@@ -20,6 +20,7 @@ public sealed class CompleteWorkflowTests
     {
         var endpoints = GeneratorCompilation.Compile("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Cntryl.Portia.Consumer;
             using Microsoft.AspNetCore.Routing;
             public static class Endpoints
@@ -87,26 +88,26 @@ public sealed class CompleteWorkflowTests
                 var records = new List<DomainEventRecord>();
                 await foreach (var record in scope.ServiceProvider.GetRequiredService<IEventStore>().ReadAsync(EventStreamPattern.ForPattern("consumer", "accounts")))
                 {
-                    if (record.Ev.Metadata.AggregateId == id)
+                    if (record.Event.Metadata.AggregateId == id)
                         records.Add(record);
                 }
                 Assert.Equal(5, records.Count);
                 Assert.All(records, record =>
                 {
-                    Assert.NotNull(record.Ev.Metadata.Actor);
-                    _ = Assert.NotNull(record.Ev.Metadata.ExecutionId);
-                    _ = Assert.NotNull(record.Ev.Metadata.CausationId);
-                    _ = Assert.NotNull(record.Ev.Metadata.CorrelationId);
+                    Assert.NotNull(record.Event.Metadata.Actor);
+                    _ = Assert.NotNull(record.Event.Metadata.ExecutionId);
+                    _ = Assert.NotNull(record.Event.Metadata.CausationId);
+                    _ = Assert.NotNull(record.Event.Metadata.CorrelationId);
                 });
-                var audit = Assert.Single(records, record => record.Ev.Metadata.IsAudit);
+                var audit = Assert.Single(records, record => record.Event.Metadata.IsAudit);
                 Assert.NotEqual(account.Stream, audit.Stream);
                 Assert.Equal('4', audit.Stream.Resource[14]);
-                Assert.Equal(4UL, audit.Ev.Metadata.AggregateVersion);
+                Assert.Equal(4UL, audit.Event.Metadata.AggregateVersion);
                 Assert.Equal(0UL, audit.ResourceOffset);
-                _ = Assert.IsType<Declined>(audit.Ev);
-                Assert.Equal(Deposits, records.Where(record => !record.Ev.Metadata.IsAudit)
-                    .Select(record => Assert.IsType<Deposited>(record.Ev).Amount));
-                Assert.All(records.Where(record => !record.Ev.Metadata.IsAudit), record => Assert.Equal(account.Stream, record.Stream));
+                _ = Assert.IsType<Declined>(audit.Event);
+                Assert.Equal(Deposits, records.Where(record => !record.Event.Metadata.IsAudit)
+                    .Select(record => Assert.IsType<Deposited>(record.Event).Amount));
+                Assert.All(records.Where(record => !record.Event.Metadata.IsAudit), record => Assert.Equal(account.Stream, record.Stream));
             }
             foreach (var component in new[] { "first-projector", "second-projector", "first-reactor", "second-reactor" })
             {

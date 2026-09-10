@@ -11,6 +11,7 @@ public sealed class ExplicitRegistrationConsumerTests
             using System.Linq;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             [RequestRoute("app", "accounts", "*", "deposit")]
             [Discriminator("app.accounts.call")]
@@ -66,17 +67,18 @@ public sealed class ExplicitRegistrationConsumerTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.Extensions.DependencyInjection;
             public sealed record Request : IRequest;
             public class Selected : IRequestHandler<Request>, IRequestAuthorizer<Request>
             {
                 public ValueTask<Result> HandleAsync(IRequestContext<Request> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
-                public ValueTask<Result> AuthorizeAsync(IRequestContext<Request> c, ClaimsPrincipal actor, CancellationToken ct = default) => ValueTask.FromResult(Result.Success);
+                public ValueTask<Result> AuthorizeAsync(IRequestContext<Request> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
             }
             public class Unselected : IRequestHandler<Request>, IRequestAuthorizer<Request>
             {
                 public ValueTask<Result> HandleAsync(IRequestContext<Request> c, CancellationToken ct) => throw new Exception();
-                public ValueTask<Result> AuthorizeAsync(IRequestContext<Request> c, ClaimsPrincipal actor, CancellationToken ct = default) => throw new Exception();
+                public ValueTask<Result> AuthorizeAsync(IRequestContext<Request> c, CancellationToken ct) => throw new Exception();
             }
             public static class Scenario
             {
@@ -141,6 +143,7 @@ public sealed class ExplicitRegistrationConsumerTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Cntryl.Portia.Consumer;
             using Microsoft.Extensions.DependencyInjection;
             public static class Scenario
@@ -169,6 +172,7 @@ public sealed class ExplicitRegistrationConsumerTests
     {
         var assembly = GeneratorCompilation.Compile("""
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Cntryl.Portia.Consumer;
             using Microsoft.Extensions.DependencyInjection;
             public static class Scenario

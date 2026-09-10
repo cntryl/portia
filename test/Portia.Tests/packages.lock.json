@@ -164,7 +164,8 @@
         "dependencies": {
           "Microsoft.AspNetCore.OpenApi": "[10.0.11, )",
           "Microsoft.OpenApi": "[2.12.0, )",
-          "Portia.Abstractions": "[1.0.0, )"
+          "Portia.Abstractions": "[1.0.0, )",
+          "Portia.DependencyInjection": "[1.0.0, )"
         }
       },
       "portia.core": {

@@ -1,4 +1,4 @@
-namespace Cntryl.Portia;
+namespace Cntryl.Portia.Testing;
 
 /// <summary>
 /// Stores ordered aggregate event histories in memory for tests.
@@ -128,7 +128,7 @@ public sealed class InMemoryEventStore : IEventStore
                     $"Aggregate stream '{stream}' is at position '{committedRecords.Count}', not expected position '{expectedStreamPosition}'.");
             }
 
-            var eventIds = committedRecords.Select(record => record.Ev.Metadata.EventId).ToHashSet();
+            var eventIds = committedRecords.Select(record => record.Event.Metadata.EventId).ToHashSet();
 
             for (var index = 0; index < events.Count; index++)
             {

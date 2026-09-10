@@ -5,10 +5,10 @@ namespace Cntryl.Portia;
 /// <summary>Describes how one registered reactor binds, subscribes, loads progress, and runs a pass.</summary>
 public sealed class ReactorRegistration : IWorkloadDescriptor
 {
-    readonly Func<IServiceProvider, BaseReactor> _resolve;
+    readonly Func<IServiceProvider, Reactor> _resolve;
     readonly Func<IServiceProvider, ProjectionRunOptions, CancellationToken, ValueTask> _runPass;
 
-    ReactorRegistration(Type reactorType, Func<IServiceProvider, BaseReactor> resolve,
+    ReactorRegistration(Type reactorType, Func<IServiceProvider, Reactor> resolve,
         Func<IServiceProvider, ProjectionRunOptions, CancellationToken, ValueTask> runPass)
     {
         ReactorType = reactorType;
@@ -20,10 +20,10 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
     public Type ReactorType { get; }
 
     /// <summary>Resolves the reactor in the supplied application scope.</summary>
-    public BaseReactor Resolve(IServiceProvider services) => _resolve(services);
+    public Reactor Resolve(IServiceProvider services) => _resolve(services);
 
     /// <summary>Creates a typed reactor descriptor.</summary>
-    public static ReactorRegistration Create<TReactor>() where TReactor : BaseReactor => new(
+    public static ReactorRegistration Create<TReactor>() where TReactor : Reactor => new(
         typeof(TReactor), static services => services.GetRequiredService<TReactor>(),
         static async (services, options, ct) =>
         {

@@ -1,5 +1,3 @@
-using System.Security.Claims;
-
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -16,13 +14,14 @@ public interface IRequestAuthorizer<TRequest>
     where TRequest : IRequestBase
 {
     /// <summary>
-    /// Authorizes the request.
+    /// Authorizes the request. The actor is <see cref="IExecutionContext.Actor" /> on
+    /// <paramref name="context" />; it is deliberately not a second parameter, so there is one
+    /// answer to who is acting rather than two that a caller could let disagree.
     /// </summary>
-    /// <param name="context">The request context.</param>
-    /// <param name="actor">The actor attempting the request.</param>
+    /// <param name="context">The request context, carrying both the request and its actor.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of the authorization.</returns>
-    ValueTask<Result> AuthorizeAsync(IRequestContext<TRequest> context, ClaimsPrincipal actor, CancellationToken ct = default);
+    ValueTask<Result> AuthorizeAsync(IRequestContext<TRequest> context, CancellationToken ct);
 }
 
 /// <summary>Orders independent authorization policies without arbitrary numeric priorities.</summary>

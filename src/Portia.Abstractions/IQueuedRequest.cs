@@ -10,6 +10,14 @@ public interface IQueuedRequest
     /// </summary>
     IRequest Request { get; }
 
+    /// <summary>
+    /// Gets the request's stable wire name, or <see langword="null" /> when this queue adapter
+    /// does not resolve one. Portia falls back to the CLR type name only in that case, so an
+    /// adapter that knows the request's <see cref="DiscriminatorAttribute" /> should report it
+    /// and keep telemetry independent of CLR renames.
+    /// </summary>
+    string? Name => null;
+
     /// <summary>Gets the logical identity preserved across deliveries.</summary>
     RequestMetadata Metadata { get; }
 

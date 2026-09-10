@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Cntryl.Portia.Consumer;
 
 public sealed class AggregatePersistenceTests
@@ -32,24 +34,24 @@ public sealed class AggregatePersistenceTests
         await foreach (var record in fixture.Store.ReadAsync(account.Stream))
             events.Add(record);
         Assert.Equal([0UL, 1UL], events.Select(record => record.ResourceOffset));
-        Assert.All(events, record => Assert.False(record.Ev.Metadata.IsAudit));
+        Assert.All(events, record => Assert.False(record.Event.Metadata.IsAudit));
 
         var records = new List<DomainEventRecord>();
         await foreach (var record in fixture.Store.ReadAsync(EventStreamPattern.ForPattern(account.Stream.Realm, account.Stream.Area)))
         {
-            if (record.Ev.Metadata.AggregateId == account.Id)
+            if (record.Event.Metadata.AggregateId == account.Id)
                 records.Add(record);
         }
         Assert.Equal(5, records.Count);
-        var sessions = records.Where(record => record.Ev.Metadata.IsAudit).GroupBy(record => record.Stream).ToArray();
+        var sessions = records.Where(record => record.Event.Metadata.IsAudit).GroupBy(record => record.Stream).ToArray();
         Assert.Equal(2, sessions.Length);
         Assert.Equal([1, 2], sessions.Select(session => session.Count()).Order());
         Assert.All(sessions, session =>
         {
             Assert.NotEqual(account.Stream, session.Key);
-            Assert.Equal(4, Uuid.Parse(session.Key.Resource).Version);
+            Assert.Equal(4, Uuid.Parse(session.Key.Resource, CultureInfo.InvariantCulture).Version);
             Assert.Equal(0UL, session.First().ResourceOffset);
-            Assert.All(session, record => Assert.Equal(1UL, record.Ev.Metadata.AggregateVersion));
+            Assert.All(session, record => Assert.Equal(1UL, record.Event.Metadata.AggregateVersion));
         });
         var multiAuditSession = sessions.Single(session => session.Count() == 2);
         var tail = new List<DomainEventRecord>();
@@ -103,6 +105,7 @@ public sealed class AggregatePersistenceTests
             using System;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Cntryl.Portia.Consumer;
             using Microsoft.Extensions.DependencyInjection;
             public static class Scenario

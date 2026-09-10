@@ -82,7 +82,8 @@ sealed class FitzApplicationWorkers(
         {
             try { await run(ct).ConfigureAwait(false); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
-            catch (Exception ex) { PortiaTelemetry.RecordRunnerFault(name, "worker pass failed", ex, _logger); }
+            catch (TerminalHandlerFailureException) { throw; }
+            catch (Exception ex) { PortiaTelemetry.RecordRunnerFault(name, RunnerFaultStage.Execution, ex, _logger); }
             try { await Task.Delay(interval, _clock, ct).ConfigureAwait(false); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
         }

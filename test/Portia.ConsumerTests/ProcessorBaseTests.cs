@@ -11,7 +11,7 @@ public sealed class ProcessorBaseTests
     {
         var events = await Seed();
         var repository = new Repository();
-        BaseProjector projector = batch ? new BatchAccounts(repository) : new Accounts(repository);
+        Projector projector = batch ? new BatchAccounts(repository) : new Accounts(repository);
         var runner = new ProjectorRunner(events);
         _ = await runner.RunAsync(projector, ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxBatchSize = 2 });
         Assert.Equal(6, repository.Value);
@@ -55,14 +55,14 @@ public sealed class ProcessorBaseTests
     {
         var events = await Seed();
         var repository = new ReactionRepository();
-        BaseReactor reactor = batch ? new BatchReaction(repository) : new Reaction(repository);
+        Reactor reactor = batch ? new BatchReaction(repository) : new Reaction(repository);
         _ = await new ReactorRunner(events).RunAsync(reactor, ProjectionCheckpoint.Start, 2);
         Assert.Equal(batch ? new ulong[] { 2, 3 } : [1, 2, 3], repository.Commits);
         Assert.Equal(3, repository.Contexts.Select(c => c.ExecutionId).Distinct().Count());
         Assert.All(repository.Contexts, context =>
         {
             Assert.True(RequestActor.IsSystem(context.Actor));
-            Assert.Equal(context.Source.Ev.Metadata.EventId, context.CauseId);
+            Assert.Equal(context.Source.Event.Metadata.EventId, context.CauseId);
         });
     }
 
@@ -73,7 +73,7 @@ public sealed class ProcessorBaseTests
     {
         var events = await Seed();
         var repository = new ReactionRepository { FailSave = true };
-        BaseReactor reactor = batch ? new BatchReaction(repository) : new Reaction(repository);
+        Reactor reactor = batch ? new BatchReaction(repository) : new Reaction(repository);
         var runner = new ReactorRunner(events);
         _ = await Assert.ThrowsAsync<IOException>(() => runner.RunAsync(reactor, ProjectionCheckpoint.Start, 2).AsTask());
         Assert.Equal(ProjectionCheckpoint.Start, repository.Checkpoint);
@@ -97,7 +97,7 @@ public sealed class ProcessorBaseTests
         Assert.Equal(1, repository.Disposals);
     }
 
-    sealed class Reaction(ReactionRepository repository) : BaseReactor(repository, EventStreamPattern.ForPattern("bases", "accounts"))
+    sealed class Reaction(ReactionRepository repository) : Reactor(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
         protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context, CancellationToken ct)
         {
@@ -105,7 +105,7 @@ public sealed class ProcessorBaseTests
             return ValueTask.CompletedTask;
         }
     }
-    sealed class BatchReaction(ReactionRepository repository) : BaseBatchReactor(repository, EventStreamPattern.ForPattern("bases", "accounts"))
+    sealed class BatchReaction(ReactionRepository repository) : BatchReactor(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
         protected override ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
         {
@@ -138,21 +138,21 @@ public sealed class ProcessorBaseTests
         return events;
     }
 
-    sealed class Accounts(Repository repository) : BaseProjector(repository, EventStreamPattern.ForPattern("bases", "accounts"))
+    sealed class Accounts(Repository repository) : Projector(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
         protected override ValueTask ProjectEventAsync(DomainEventRecord record, IProjectorContext context, CancellationToken ct)
         {
-            repository.Add(((Deposited)record.Ev).Amount);
+            repository.Add(((Deposited)record.Event).Amount);
             return ValueTask.CompletedTask;
         }
     }
 
-    sealed class BatchAccounts(Repository repository) : BaseBatchProjector(repository, EventStreamPattern.ForPattern("bases", "accounts"))
+    sealed class BatchAccounts(Repository repository) : BatchProjector(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
         protected override ValueTask ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records, IProjectorContext context, CancellationToken ct)
         {
             foreach (var record in records)
-                repository.Add(((Deposited)record.Ev).Amount);
+                repository.Add(((Deposited)record.Event).Amount);
             return ValueTask.CompletedTask;
         }
     }

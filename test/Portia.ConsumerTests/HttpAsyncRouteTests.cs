@@ -13,6 +13,7 @@ public sealed class HttpAsyncRouteTests
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
+            using Cntryl.Portia.Testing;
             using Microsoft.AspNetCore.Builder;
             using Microsoft.AspNetCore.Hosting;
             using Microsoft.AspNetCore.TestHost;

@@ -147,7 +147,9 @@ public static class PortiaEndpointRouteBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(app);
         ArgumentException.ThrowIfNullOrWhiteSpace(pattern);
-        throw new InvalidOperationException("Portia.Generators did not intercept this endpoint mapping. Ensure Portia.DependencyInjection's analyzer assets are enabled.");
+        throw new InvalidOperationException(
+            "Portia.Generators did not intercept this endpoint mapping. Ensure Portia.DependencyInjection's analyzer assets are enabled. "
+            + "If the call is inside a generic method, the generator has no concrete request type to bind; map each request at its own call site.");
     }
 
 }

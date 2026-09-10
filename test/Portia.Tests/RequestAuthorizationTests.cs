@@ -39,7 +39,7 @@ public sealed class RequestAuthorizationTests
         var result = await bus.SendAsync(new GuardedAction(), RequestActor.Anonymous);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(RequestErrorKind.Forbidden, result.Error!.Kind);
+        Assert.Equal(RequestErrorKind.Forbidden, result.Error.Kind);
         Assert.False(handler.WasInvoked);
     }
 
@@ -73,7 +73,7 @@ public sealed class RequestAuthorizationTests
         var result = await bus.SendAsync(new GuardedQuery(), RequestActor.Anonymous);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(RequestErrorKind.Forbidden, result.Error!.Kind);
+        Assert.Equal(RequestErrorKind.Forbidden, result.Error.Kind);
     }
 
     /// <summary>
@@ -266,7 +266,7 @@ sealed class TieredHandler(List<string> calls) : IRequestHandler<TieredRequest>
 
 sealed class PrincipalAuthorizer(List<string> calls) : IRequestAuthorizer<IRequestBase>
 {
-    public ValueTask<Result> AuthorizeAsync(IRequestContext<IRequestBase> context, ClaimsPrincipal actor, CancellationToken ct = default)
+    public ValueTask<Result> AuthorizeAsync(IRequestContext<IRequestBase> context, CancellationToken ct)
     {
         calls.Add("principal");
         return ValueTask.FromResult(Result.Success);
@@ -275,7 +275,7 @@ sealed class PrincipalAuthorizer(List<string> calls) : IRequestAuthorizer<IReque
 
 sealed class AccountRoleAuthorizer(List<string> calls) : IRequestAuthorizer<IAccountRequest>
 {
-    public ValueTask<Result> AuthorizeAsync(IRequestContext<IAccountRequest> context, ClaimsPrincipal actor, CancellationToken ct = default)
+    public ValueTask<Result> AuthorizeAsync(IRequestContext<IAccountRequest> context, CancellationToken ct)
     {
         calls.Add("account-role");
         return ValueTask.FromResult(Result.Success);
@@ -284,7 +284,7 @@ sealed class AccountRoleAuthorizer(List<string> calls) : IRequestAuthorizer<IAcc
 
 sealed class MfaConfirmationAuthorizer(List<string> calls) : IRequestAuthorizer<IMfaConfirmedRequest>
 {
-    public ValueTask<Result> AuthorizeAsync(IRequestContext<IMfaConfirmedRequest> context, ClaimsPrincipal actor, CancellationToken ct = default)
+    public ValueTask<Result> AuthorizeAsync(IRequestContext<IMfaConfirmedRequest> context, CancellationToken ct)
     {
         calls.Add("mfa");
         return ValueTask.FromResult(Result.Success);
@@ -350,7 +350,7 @@ sealed class AuthorizedActionHandler : IRequestHandler<AuthorizedAction>
 // (which the generator rejects as ambiguous).
 sealed class AuthorizedActionAuthorizer : IRequestAuthorizer<AuthorizedAction>
 {
-    public ValueTask<Result> AuthorizeAsync(IRequestContext<AuthorizedAction> context, ClaimsPrincipal actor, CancellationToken ct) =>
+    public ValueTask<Result> AuthorizeAsync(IRequestContext<AuthorizedAction> context, CancellationToken ct) =>
         ValueTask.FromResult(context.Request.OwnerId == 7
             ? Result.Success
             : Result.Failure(new RequestError(RequestErrorKind.Forbidden, "Not the owner.")));
@@ -389,7 +389,7 @@ sealed class RecordingGuardedAndAuthorizedActionAuthorizer(bool grant = true) : 
 {
     public bool WasInvoked { get; private set; }
 
-    public ValueTask<Result> AuthorizeAsync(IRequestContext<GuardedAndAuthorizedAction> context, ClaimsPrincipal actor, CancellationToken ct)
+    public ValueTask<Result> AuthorizeAsync(IRequestContext<GuardedAndAuthorizedAction> context, CancellationToken ct)
     {
         WasInvoked = true;
         return ValueTask.FromResult(grant

@@ -18,7 +18,10 @@ public sealed class WorkloadOptions
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(1);
     /// <summary>Gets or sets projection/reaction batch limits and rebuild settings.</summary>
     public ProjectionRunOptions Processing { get; set; } = ProjectionRunOptions.Default;
-
+    /// <summary>Gets or sets the consecutive failed-pass limit before the hosted worker faults.</summary>
+    public int FailureAttemptLimit { get; set; } = 10;
+    /// <summary>Gets or sets the maximum delay between failed-pass attempts.</summary>
+    public TimeSpan MaximumFailureDelay { get; set; } = TimeSpan.FromMinutes(1);
 }
 
 /// <summary>An immutable application workload declaration, independent of infrastructure.</summary>
@@ -35,6 +38,8 @@ public sealed record WorkloadRegistration
         configure?.Invoke(options);
         Scope = scope;
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(options.PollInterval, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.FailureAttemptLimit, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(options.MaximumFailureDelay, TimeSpan.Zero);
         ArgumentNullException.ThrowIfNull(options.Processing);
         options.Processing.Validate();
         ExplicitName = options.Name;
@@ -47,6 +52,8 @@ public sealed record WorkloadRegistration
         Descriptor = descriptor;
         ComponentType = descriptor.ComponentType;
         PollInterval = options.PollInterval;
+        FailureAttemptLimit = options.FailureAttemptLimit;
+        MaximumFailureDelay = options.MaximumFailureDelay;
         Processing = options.Processing;
     }
 
@@ -62,6 +69,10 @@ public sealed record WorkloadRegistration
     internal string? ExplicitName { get; }
     /// <summary>Gets the delay between passes.</summary>
     public TimeSpan PollInterval { get; }
+    /// <summary>Gets the consecutive failed-pass limit before the hosted worker faults.</summary>
+    public int FailureAttemptLimit { get; }
+    /// <summary>Gets the maximum delay between failed-pass attempts.</summary>
+    public TimeSpan MaximumFailureDelay { get; }
     /// <summary>Gets batch processing settings.</summary>
     public ProjectionRunOptions Processing { get; }
 }

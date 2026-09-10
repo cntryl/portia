@@ -87,9 +87,9 @@ public sealed partial class DocumentationContractTests
             "T:Cntryl.Portia.FleetPartitionTerminationTimeoutException",
             "P:Cntryl.Portia.FleetRunOptions.PartitionStopTimeout");
         AssertXmlMembers("Portia.Testing",
-            "T:Cntryl.Portia.ProjectionStoreConformance",
-            "T:Cntryl.Portia.ReactionDeduplicationConformance",
-            "T:Cntryl.Portia.ConformanceViolationException");
+            "T:Cntryl.Portia.Testing.ProjectionStoreConformance",
+            "T:Cntryl.Portia.Testing.ReactionDeduplicationConformance",
+            "T:Cntryl.Portia.Testing.ConformanceViolationException");
     }
 
     static void AssertXmlMembers(string project, params string[] expected)

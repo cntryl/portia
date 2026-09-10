@@ -1,9 +1,11 @@
 # Getting started
 
 Portia targets .NET 10. Most applications reference `Portia.Abstractions` and
-`Portia.DependencyInjection`, which includes the compile-time generator. Add
-`Portia.AspNetCore` for HTTP, `Portia.Fitz` for Fitz storage/transports, and
-`Portia.Jwt` when inbound work carries JWT actor identities. Packages use the
+`Portia.DependencyInjection`, which includes the compile-time generator. An HTTP host may
+reference only `Portia.AspNetCore`: it depends directly on `Portia.DependencyInjection`, so the
+registration APIs, generator/analyzer assets, and interceptor compiler configuration arrive
+transitively. Add `Portia.Fitz` for Fitz storage/transports and `Portia.Jwt` when inbound work
+carries JWT actor identities. Packages use the
 cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
 Review the [scope](scope.md) page for what Portia supports and the
 [design decisions](design-decisions.md) behind its operational boundaries.
@@ -112,8 +114,13 @@ Implement `IRequestPipelineBehavior<TRequest>` for commands,
 `IStreamRequestPipelineBehavior<TRequest,TOut>` for streams. A behavior can target a concrete
 request or request-family interface. Lower orders are outermost; registration order breaks ties.
 An authorization failure never enters the behavior chain. Every behavior must either return a
-fully initialized `Result` or call its typed `nextHandler`; Portia names the responsible behavior
+fully initialized `Result` or call its typed `continuation`; Portia names the responsible behavior
 or handler when an uninitialized result crosses the framework boundary.
+
+For a successful `Result<T>`, `Value` has exactly the nullability declared by `T`.
+`Result<string>.Value` is therefore non-nullable, while `Result<string?>.Success(null)` is valid
+and exposes a nullable value. Reading `Value` from a failed result throws; reading any member from
+`default(Result<T>)` throws because no outcome was produced.
 
 Behaviors are where cross-cutting concerns belong: a transaction or unit of work around the
 handler, an idempotency check, retry, caching, flushing an outbox, or logging that needs the
@@ -132,7 +139,11 @@ services.AddPortia()
 
 ## Persist an aggregate
 
-Use `Uuid.CreateVersion4()` for a new random identity, or `Uuid.CreateVersion5(namespaceId, name)` when the same name must produce the same identity. Portia orders events using stream positions and aggregate versions; UUIDs do not define event order.
+Use `Uuid.CreateVersion4()` for a new random identity, or `Uuid.CreateVersion5(namespaceId, name)`
+when the same name must produce the same identity. `Uuid` implements `ISpanParsable<Uuid>`,
+`ISpanFormattable`, and `IComparable<Uuid>` by following the wrapped `Guid` behavior, so generic
+binding and allocation-conscious formatting do not require an adapter. Portia orders events
+using stream positions and aggregate versions; UUIDs do not define event order.
 
 Construction always receives an explicit identity and defines its stream address:
 
@@ -201,9 +212,10 @@ Microsoft's standard generator. The routes are served in every environment. To d
 curl http://localhost:5000/openapi/v1.yml --output openapi.yml
 ```
 
-`Portia.DependencyInjection` supplies the generator and interceptor namespace to the HTTP host;
-no separate analyzer package or `InterceptorsNamespaces` property is needed. Repository project
-references receive the analyzer directly from the dependency-injection project.
+`Portia.AspNetCore` depends directly on `Portia.DependencyInjection`, which supplies the generator
+and interceptor namespace to the HTTP host. A host referencing only the HTTP package therefore
+needs no separate dependency-injection/analyzer package or `InterceptorsNamespaces` property.
+Repository project references receive the analyzer directly from the dependency-injection project.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -223,6 +235,11 @@ null requires a nullable parameter. Invalid root/value kinds return 400.
 An absent body is treated as `{}` only when every body member is optional. JSON bodies
 are bounded to 10 MiB by default; configure `PortiaHttpOptions.MaxJsonBodyBytes` through
 standard options registration. Exceeding the bound returns `413 application/problem+json`.
+Problem responses contain RFC 9457 `type`, `title`, `status`, `detail`, and `instance` members.
+Expected request failures also include a Boolean `transient` extension and matching
+`Portia-Transient` response header, preserving `RequestError.IsTransient` without inventing a
+retry delay. Unauthorized results remain bodyless to avoid leaking authentication details and
+send `WWW-Authenticate: Bearer`.
 Query names are case-insensitive through ASP.NET Core's query collection, while repeated
 scalar values are rejected as ambiguous.
 
@@ -256,7 +273,7 @@ in this resolver. One well-formed, nonempty Bearer credential may be carried to 
 and is validated again when the work executes. Authentication schemes and token validation
 remain application-owned.
 
-Generated endpoints return the advertised `{ "message": ... }` problem body for binding
+Generated endpoints return the advertised RFC 9457 problem body for binding
 and unexpected failures before a response starts. Once streaming output has started, HTTP
 cannot replace it with a problem response; Portia logs the failure and aborts the connection.
 
@@ -306,6 +323,11 @@ and remain unacknowledged; Fitz controls expiration, redelivery, and configured
 dead-letter policy. Hosted stream failures reconnect after backoff. This does not
 republish failed messages or add application retry counters.
 
+Projector and reactor passes use a separate bounded policy: failures leave the checkpoint
+unchanged, retry with exponential backoff, and fault the worker with `WorkloadFailureException`
+after ten consecutive attempts by default. Configure `FailureAttemptLimit` and
+`MaximumFailureDelay` on the component's `WorkloadOptions`; successful passes reset the policy.
+
 Register workloads in shared application setup, then activate the worker deployment:
 
 ```csharp
@@ -321,8 +343,8 @@ Fitz coordinates these registrations across replicas. `WorkloadScope.PerTenant` 
 See [shared application setup](application-setup.md) for application identity and fleet coordination.
 
 Inject ordinary application repositories into your processors. Projectors pass a repository
-implementing `IProjectionStore` into `BaseProjector` or `BaseBatchProjector`; reactors pass
-a dependency implementing `IProjectionCheckpointStore` into `BaseReactor` or `BaseBatchReactor`.
+implementing `IProjectionStore` into `Projector` or `BatchProjector`; reactors pass
+a dependency implementing `IProjectionCheckpointStore` into `Reactor` or `BatchReactor`.
 The same repository can implement framework persistence and application operations.
 
 Each worker pass uses a fresh scope. Projection changes and progress commit atomically
