@@ -31,28 +31,53 @@ public sealed class ReactorRunner(
     /// <exception cref="InvalidOperationException">The principal provider returned a non-system principal.</exception>
     public async ValueTask<ProjectionCheckpoint> RunAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
         int maxBatchSize = 512, CancellationToken ct = default)
+        => await RunAsync(reactor, checkpoint,
+            ProjectionRunOptions.Default with { MaxBatchSize = maxBatchSize }, ct).ConfigureAwait(false);
+
+    /// <summary>Processes a bounded pass using the supplied batch and pass limits.</summary>
+    public async ValueTask<ProjectionCheckpoint> RunAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
+        ProjectionRunOptions options, CancellationToken ct = default)
+        => (await RunPassAsync(reactor, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
+
+    internal async ValueTask<ProjectionPassResult> RunPassAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
+        ProjectionRunOptions options, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(reactor);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBatchSize);
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate();
         var actor = _principals.GetPrincipal(reactor);
         if (!RequestActor.IsSystem(actor))
         {
             throw new InvalidOperationException("A reactor principal provider must return a system principal.");
         }
 
-        var batchSize = reactor.IsBatch ? maxBatchSize : 1;
+        var batchSize = reactor.IsBatch ? options.MaxBatchSize : 1;
         var contexts = new List<IReactorContext>(batchSize);
+        var processed = 0;
+        var budgetExhausted = false;
         await foreach (var record in _reader.ReadAsync(reactor.Pattern, checkpoint.NextOffset, ct).WithCancellation(ct)
                            .ConfigureAwait(false))
         {
             contexts.Add(new ReactionExecutionContext(record, actor, _clock));
+            processed++;
             if (contexts.Count == batchSize)
             {
                 checkpoint = await CommitAsync().ConfigureAwait(false);
             }
+
+            if (processed == options.MaxEventsPerPass)
+            {
+                budgetExhausted = true;
+                break;
+            }
         }
 
-        return contexts.Count == 0 ? checkpoint : await CommitAsync().ConfigureAwait(false);
+        if (contexts.Count != 0)
+        {
+            checkpoint = await CommitAsync().ConfigureAwait(false);
+        }
+
+        return new ProjectionPassResult(checkpoint, budgetExhausted);
 
         async ValueTask<ProjectionCheckpoint> CommitAsync()
         {

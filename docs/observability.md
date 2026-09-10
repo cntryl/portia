@@ -34,11 +34,11 @@ Durations use monotonic seconds. Hot-path recordings have at most three tags in 
 | `portia.processor.event.count` | `{event}` | `component`, `runner` |
 | `portia.processor.lag` | `s` | `component`, `runner` |
 | `portia.workload.active` | `{workload}` | `component`, `scope` |
-| `portia.worker.failure` | `{failure}` | `runner`, `error.type` |
+| `portia.worker.failure` | `{failure}` | `runner`, `stage` |
 | `portia.worker.restart` | `{restart}` | `runner`, `stage` |
 | `portia.fleet.assignment.active` | `{assignment}` | `scope` |
 
-Registered request/component names are startup-bounded. Closed dimensions include transport, operation, scope, stage, outcome, error type, and runner. Never use tenant, aggregate, partition, worker, request, correlation, or execution IDs; concrete routes; exception messages; payload values; or arbitrary reasons as metric values. Outcomes are `success`, a known request-error kind, `rejected`, `abandoned`, `lost`, `canceled`, or `fault`. Processor lag uses the last committed event occurrence and is clamped to zero; checkpoints are intentionally absent.
+Registered request/component names are startup-bounded. Closed dimensions include transport, operation, scope, stage, outcome, and runner. Never use tenant, aggregate, partition, worker, request, correlation, or execution IDs; concrete routes; exception types or messages; payload values; or arbitrary reasons as metric values. Outcomes are `success`, a known request-error kind, `rejected`, `abandoned`, `lost`, `canceled`, or `fault`. Processor lag uses the last committed event occurrence and is clamped to zero; checkpoints are intentionally absent.
 
 ## Log catalog
 
@@ -51,6 +51,11 @@ Event 1001 records fleet assignment lifecycle at Information, 1002 records swall
 - Latency: p50/p95/p99 histogram quantiles grouped by `request.type`
 - Lag: max `portia_processor_lag_seconds` by `component`
 - Retries/failures: rate of `portia_worker_restart_total` / `portia_worker_failure_total`
+
+Worker failure stages use a stable lowercase vocabulary (`acquisition`, `renewal`, `watch`,
+`validation`, `notification`, `workload`, `cleanup`, or `execution`). Exception types remain in
+structured log event `1002` and current-activity exception events; they are never metric dimensions.
+Fitz partition-stop timeouts use the distinct structured log event `1101`.
 - Active work: `portia_request_active`, `portia_workload_active`, and `portia_fleet_assignment_active`
 
 Exporter-specific name normalization varies; verify final names in the selected backend.

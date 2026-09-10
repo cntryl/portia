@@ -65,6 +65,7 @@ sealed partial class PortiaWorkloadService(
         var active = new ConcurrentDictionary<WorkloadIdentity, WorkloadRegistration>();
         foreach (var registration in _registrations.Where(item => item.Scope == WorkloadScope.Global))
             active[new WorkloadIdentity(registration.Name)] = registration;
+        WorkloadIdentity[] workloadSnapshot = [.. active.Keys];
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         var perTenant = _registrations.Where(item => item.Scope == WorkloadScope.PerTenant).ToArray();
         var tenants = perTenant.Length == 0
@@ -82,6 +83,7 @@ sealed partial class PortiaWorkloadService(
                     var identities = perTenant.Select(item => new WorkloadIdentity(item.Name, tenant)).ToArray();
                     for (var i = 0; i < identities.Length; i++)
                         active[identities[i]] = perTenant[i];
+                    RefreshWorkloadSnapshot();
                     try
                     {
                         await Task.Delay(Timeout.InfiniteTimeSpan, ct).ConfigureAwait(false);
@@ -90,6 +92,7 @@ sealed partial class PortiaWorkloadService(
                     {
                         foreach (var identity in identities)
                             _ = active.TryRemove(identity, out _);
+                        RefreshWorkloadSnapshot();
                     }
                 }, (_, _) => Task.CompletedTask, lifetime.Token);
         }
@@ -97,11 +100,13 @@ sealed partial class PortiaWorkloadService(
         async Task CoordinateAsync()
         {
             await ResolveCoordinator().RunAsync(
-                () => [.. active.Keys],
+                () => Volatile.Read(ref workloadSnapshot),
                 (identity, ct) => active.TryGetValue(identity, out var registration)
                     ? RunAsync(registration, identity, ct)
                     : Task.CompletedTask, lifetime.Token).ConfigureAwait(false);
         }
+
+        void RefreshWorkloadSnapshot() => Volatile.Write(ref workloadSnapshot, [.. active.Keys]);
 
         try
         {
@@ -181,8 +186,13 @@ sealed partial class PortiaWorkloadService(
                             $"Workload '{identity}' changed its event-stream pattern from '{subscribedPattern}' to '{passPattern}' across dependency-injection scopes.");
                     }
 
-                    await registration.Descriptor.RunPass(provider, registration.Processing, ct).ConfigureAwait(false);
+                    var pass = await registration.Descriptor.RunPass(provider, registration.Processing, ct)
+                        .ConfigureAwait(false);
                     consecutiveFailures = 0;
+                    if (pass.BudgetExhausted)
+                    {
+                        continue;
+                    }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {

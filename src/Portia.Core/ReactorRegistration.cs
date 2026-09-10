@@ -31,8 +31,17 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
 
     EventStreamPattern IWorkloadDescriptor.Pattern(IServiceProvider services) => _resolve(services).Pattern;
 
-    ValueTask IWorkloadDescriptor.RunPass(IServiceProvider services, ProjectionRunOptions options, CancellationToken ct)
-        => _runPass(services, options, ct);
+    async ValueTask<ProjectionPassResult> IWorkloadDescriptor.RunPass(IServiceProvider services,
+        ProjectionRunOptions options, CancellationToken ct)
+    {
+        options.Validate();
+        var reactor = _resolve(services);
+        WorkloadBinding.Apply(services, reactor.BindWorkload);
+        var checkpoint = await reactor.Checkpoints.LoadAsync(
+            new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
+        return await services.GetRequiredService<ReactorRunner>()
+            .RunPassAsync(reactor, checkpoint, options, ct).ConfigureAwait(false);
+    }
 
     /// <summary>Resolves the reactor in the supplied application scope.</summary>
     /// <param name="services">The scope the reactor is resolved from.</param>
@@ -57,6 +66,6 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
             var checkpoint = await reactor.Checkpoints.LoadAsync(
                 new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
             _ = await services.GetRequiredService<ReactorRunner>().RunAsync(
-                reactor, checkpoint, options.MaxBatchSize, ct).ConfigureAwait(false);
+                reactor, checkpoint, options, ct).ConfigureAwait(false);
         });
 }

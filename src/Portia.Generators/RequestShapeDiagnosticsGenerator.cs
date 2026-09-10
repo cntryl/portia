@@ -12,24 +12,25 @@ public sealed class RequestShapeDiagnosticsGenerator : IIncrementalGenerator
     {
         var types = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => node is ClassDeclarationSyntax,
-            static (syntaxContext, ct) =>
-                syntaxContext.SemanticModel.GetDeclaredSymbol((ClassDeclarationSyntax)syntaxContext.Node, ct) as
-                    INamedTypeSymbol);
-        context.RegisterSourceOutput(types, static (output, symbol) =>
+            static (syntaxContext, ct) => Analyze(syntaxContext, ct))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!);
+        context.RegisterSourceOutput(types, static (output, model) =>
         {
-            if (symbol is null || symbol.IsAbstract || GeneratedTypeShape.IsSupported(symbol))
-            {
-                return;
-            }
-
-            // Every role, from the shared list — a role added to the pipeline but not to this
-            // check would silently lose its PORTIA015 diagnostic, which is what happened to
-            // pipeline behaviors when they were introduced.
-            if (PortiaComponentRoles.IsComponent(symbol))
-            {
-                output.ReportDiagnostic(Diagnostic.Create(GeneratedTypeShape.Unsupported,
-                    symbol.Locations.FirstOrDefault(), symbol.ToDisplayString()));
-            }
+            output.ReportDiagnostic(Diagnostic.Create(GeneratedTypeShape.Unsupported,
+                model.Location.ToLocation(), model.TypeName));
         });
     }
+
+    static Model? Analyze(GeneratorSyntaxContext context, CancellationToken ct)
+    {
+        var symbol = context.SemanticModel.GetDeclaredSymbol((ClassDeclarationSyntax)context.Node, ct) as
+            INamedTypeSymbol;
+        return symbol is null || symbol.IsAbstract || GeneratedTypeShape.IsSupported(symbol) ||
+               !PortiaComponentRoles.IsComponent(symbol)
+            ? null
+            : new Model(symbol.ToDisplayString(), DiagnosticLocation.From(symbol.Locations.FirstOrDefault()));
+    }
+
+    sealed record Model(string TypeName, DiagnosticLocation Location);
 }

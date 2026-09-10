@@ -50,7 +50,8 @@ static class RequestTransportDiscovery
         var version = attribute?.ConstructorArguments.ElementAtOrDefault(1).Value as int? ?? 0;
         return attribute is not null && !string.IsNullOrWhiteSpace(name) && version > 0
             ? null
-            : new InvalidDiscriminator(symbol.ToDisplayString(), declaration.Identifier.GetLocation());
+            : new InvalidDiscriminator(symbol.ToDisplayString(),
+                DiagnosticLocation.From(declaration.Identifier.GetLocation()));
     }
 
     public static InvalidRoute? GetInvalidRoute(GeneratorSyntaxContext context)
@@ -78,7 +79,7 @@ static class RequestTransportDiscovery
             if (!IsValidRouteSegment(segment))
             {
                 return new InvalidRoute(symbol.ToDisplayString(), segment ?? string.Empty,
-                    declaration.Identifier.GetLocation());
+                    DiagnosticLocation.From(declaration.Identifier.GetLocation()));
             }
         }
 

@@ -153,3 +153,9 @@ dependency transparency. `PORTIA100` recognizes Portia dispatch/effect APIs, `Ht
 generated gRPC client ancestry. `PORTIA101` recognizes DI service-provider/scope dependencies and
 semantic `ActivatorUtilities` calls. An application-defined gateway without one of those known
 markers remains intentionally unreported and still needs architectural review.
+# Bounded processor passes
+
+Projector and reactor workers enumerate at most `ProjectionRunOptions.MaxEventsPerPass` records per
+dependency-injection scope (4,096 by default). A budget-exhausted backlog continues immediately in a
+fresh scope from the durable checkpoint; caught-up workloads retain notification and polling waits.
+`MaxBatchSize` continues to control transactional batch size independently.

@@ -21,6 +21,13 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         ProjectionCheckpoint checkpoint,
         ProjectionRunOptions? options = null,
         CancellationToken ct = default)
+        => (await RunPassAsync(projector, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
+
+    internal async ValueTask<ProjectionPassResult> RunPassAsync(
+        Projector projector,
+        ProjectionCheckpoint checkpoint,
+        ProjectionRunOptions? options = null,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(projector);
         options ??= ProjectionRunOptions.Default;
@@ -28,23 +35,36 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
 
         var batchSize = projector.IsBatch ? options.MaxBatchSize : 1;
         var records = new List<DomainEventRecord>(batchSize);
+        var processed = 0;
+        var budgetExhausted = false;
         await foreach (var record in _reader
                            .ReadAsync(projector.Pattern, checkpoint.NextOffset, ct)
                            .WithCancellation(ct)
                            .ConfigureAwait(false))
         {
             records.Add(record);
+            processed++;
 
             if (records.Count == batchSize)
             {
                 checkpoint = await CommitAsync(projector, records, checkpoint, options.RebuildId, ct)
                     .ConfigureAwait(false);
             }
+
+            if (processed == options.MaxEventsPerPass)
+            {
+                budgetExhausted = true;
+                break;
+            }
         }
 
-        return records.Count == 0
-            ? checkpoint
-            : await CommitAsync(projector, records, checkpoint, options.RebuildId, ct).ConfigureAwait(false);
+        if (records.Count != 0)
+        {
+            checkpoint = await CommitAsync(projector, records, checkpoint, options.RebuildId, ct)
+                .ConfigureAwait(false);
+        }
+
+        return new ProjectionPassResult(checkpoint, budgetExhausted);
     }
 
     static async ValueTask<ProjectionCheckpoint> CommitAsync(

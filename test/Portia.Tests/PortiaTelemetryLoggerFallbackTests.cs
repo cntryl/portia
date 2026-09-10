@@ -27,6 +27,7 @@ public sealed class PortiaTelemetryLoggerFallbackTests
 
         var entry = Assert.Single(logger.Entries);
         Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Equal(1002, entry.EventId.Id);
         Assert.Same(exception, entry.Exception);
         Assert.Contains("TestRunner", entry.Message, StringComparison.Ordinal);
         Assert.Contains("execution", entry.Message, StringComparison.Ordinal);
@@ -43,7 +44,7 @@ public sealed class PortiaTelemetryLoggerFallbackTests
 
     sealed class CapturingLogger : ILogger
     {
-        public List<(LogLevel Level, string Message, Exception? Exception)> Entries { get; } = [];
+        public List<(LogLevel Level, EventId EventId, string Message, Exception? Exception)> Entries { get; } = [];
 
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull => null;
@@ -52,6 +53,6 @@ public sealed class PortiaTelemetryLoggerFallbackTests
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter) =>
-            Entries.Add((logLevel, formatter(state, exception), exception));
+            Entries.Add((logLevel, eventId, formatter(state, exception), exception));
     }
 }

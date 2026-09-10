@@ -56,6 +56,41 @@ public sealed class ProjectorTests
         Assert.All(target.Contexts, context => Assert.True(context.IsRebuild));
     }
 
+    /// <summary>A pass stops at its record budget and resumes from the returned checkpoint.</summary>
+    [Fact]
+    public async Task ShouldBoundPassWithoutReadingAheadAndResume()
+    {
+        var id = Uuid.CreateVersion4();
+        var stream = new EventStreamAddress("test", "projectors", id.ToString());
+        var store = new InMemoryEventStore();
+        await store.AppendAsync(stream, 0, [
+            Committed(new ValueChanged(40), id, 1),
+            Committed(new ValueIncremented(1), id, 2),
+            Committed(new ValueIncremented(1), id, 3)
+        ]);
+        var target = new RecordingProjectionTarget();
+        var projector = new TestProjector(target);
+        var runner = new ProjectorRunner(store);
+        var options = new ProjectionRunOptions { MaxBatchSize = 8, MaxEventsPerPass = 2 };
+
+        var first = await runner.RunAsync(projector, ProjectionCheckpoint.Start, options);
+        var second = await runner.RunAsync(projector, first, options);
+
+        Assert.Equal(2UL, first.NextOffset);
+        Assert.Equal(3UL, second.NextOffset);
+        Assert.Equal([2UL, 3UL], target.CommittedOffsets);
+    }
+
+    /// <summary>Non-positive pass budgets are rejected before enumeration.</summary>
+    [Fact]
+    public async Task ShouldRejectNonPositivePassBudget()
+    {
+        var runner = new ProjectorRunner(new InMemoryEventStore());
+        var projector = new TestProjector(new RecordingProjectionTarget());
+        _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => runner.RunAsync(projector,
+            ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxEventsPerPass = 0 }).AsTask());
+    }
+
     /// <summary>
     ///     Verifies that an unhandled event type is silently skipped, not an error — a projector's
     ///     pattern is expected to span more than it handles, and filtering by event type (its

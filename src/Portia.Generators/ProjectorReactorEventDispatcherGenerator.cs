@@ -60,41 +60,49 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
                 i.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat), i.Name == batchName)).ToArray();
         return handlers.Length == 0
             ? null
-            : new Processor(symbol, declaration.Modifiers.Any(SyntaxKind.PartialKeyword), projector,
+            : new Processor(symbol.Name, symbol.ToDisplayString(),
+                symbol.ContainingNamespace.IsGlobalNamespace ? null : symbol.ContainingNamespace.ToDisplayString(),
+                GetParents(symbol), GeneratedTypeShape.HintName(symbol),
+                DiagnosticLocation.From(symbol.Locations.FirstOrDefault()),
+                GeneratedTypeShape.IsSupported(symbol, true),
+                declaration.Modifiers.Any(SyntaxKind.PartialKeyword), projector,
                 InheritsFrom(symbol, projector ? "Cntryl.Portia.BatchProjector" : "Cntryl.Portia.BatchReactor"),
                 handlers);
     }
 
     static void Generate(SourceProductionContext context, Processor processor)
     {
-        var symbol = processor.Symbol;
         if (!processor.Partial)
         {
             context.ReportDiagnostic(Diagnostic.Create(
-                processor.Projector ? ProjectorMustBePartial : ReactorMustBePartial, symbol.Locations.FirstOrDefault(),
-                symbol.Name));
+                processor.Projector ? ProjectorMustBePartial : ReactorMustBePartial,
+                processor.Location.ToLocation(), processor.Name));
             return;
         }
 
-        if (!ValidateShape(context, symbol))
+        if (!processor.ShapeSupported)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(GeneratedTypeShape.Unsupported,
+                processor.Location.ToLocation(), processor.DisplayName));
             return;
+        }
         var invalidBatchHandler = processor.Handlers.FirstOrDefault(h => h.Batch && !processor.Batch);
         if (invalidBatchHandler is not null)
         {
-            context.ReportDiagnostic(Diagnostic.Create(InvalidBatchHandler, symbol.Locations.FirstOrDefault(),
-                symbol.Name, invalidBatchHandler.InterfaceType));
+            context.ReportDiagnostic(Diagnostic.Create(InvalidBatchHandler, processor.Location.ToLocation(),
+                processor.Name, invalidBatchHandler.InterfaceType));
             return;
         }
 
         var ambiguousEvent = processor.Handlers.GroupBy(h => h.Type).FirstOrDefault(g => g.Count() > 1);
         if (ambiguousEvent is not null)
         {
-            context.ReportDiagnostic(Diagnostic.Create(AmbiguousHandlerMode, symbol.Locations.FirstOrDefault(),
-                symbol.Name, ambiguousEvent.First().DisplayType));
+            context.ReportDiagnostic(Diagnostic.Create(AmbiguousHandlerMode, processor.Location.ToLocation(),
+                processor.Name, ambiguousEvent.First().DisplayType));
             return;
         }
 
-        var source = OpenShape(symbol);
+        var source = OpenShape(processor);
         _ = source.AppendLine(processor.Projector
                 ? "protected override global::System.Threading.Tasks.ValueTask ProjectEventAsync(global::Cntryl.Portia.DomainEventRecord record, global::Cntryl.Portia.IProjectorContext context, global::System.Threading.CancellationToken ct) {"
                 : "protected override global::System.Threading.Tasks.ValueTask ReactToEventAsync(global::Cntryl.Portia.DomainEventRecord record, global::Cntryl.Portia.IExecutionContext execution, global::System.Threading.CancellationToken ct) {")
@@ -114,9 +122,9 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         if (processor.Handlers.Any(h => h.Batch))
             AppendBatch(source, processor);
         _ = source.AppendLine("}");
-        for (var parent = symbol.ContainingType; parent is not null; parent = parent.ContainingType)
+        for (var index = 0; index < processor.Parents.Length; index++)
             _ = source.AppendLine("}");
-        context.AddSource(GeneratedTypeShape.HintName(symbol) + ".EventDispatcher.g.cs",
+        context.AddSource(processor.HintName + ".EventDispatcher.g.cs",
             SourceText.From(source.ToString(), Encoding.UTF8));
     }
 
@@ -173,33 +181,28 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         symbol.DeclaringSyntaxReferences[0].SyntaxTree == declaration.SyntaxTree
         && symbol.DeclaringSyntaxReferences[0].Span == declaration.Span;
 
-    static bool ValidateShape(SourceProductionContext context, INamedTypeSymbol symbol)
+    static string[] GetParents(INamedTypeSymbol symbol)
     {
-        if (GeneratedTypeShape.IsSupported(symbol, true))
-            return true;
-        context.ReportDiagnostic(Diagnostic.Create(GeneratedTypeShape.Unsupported, symbol.Locations.FirstOrDefault(),
-            symbol.ToDisplayString()));
-        return false;
-    }
-
-    static StringBuilder OpenShape(INamedTypeSymbol symbol)
-    {
-        var source = new StringBuilder().AppendLine("// <auto-generated />").AppendLine("#nullable enable");
-        if (!symbol.ContainingNamespace.IsGlobalNamespace)
-            _ = source.Append("namespace ").Append(symbol.ContainingNamespace.ToDisplayString()).AppendLine(";");
-
-        var parents = new Stack<INamedTypeSymbol>();
+        var parents = new Stack<string>();
         for (var parent = symbol.ContainingType; parent is not null; parent = parent.ContainingType)
-            parents.Push(parent);
-        foreach (var parent in parents)
         {
             var kind = parent.IsRecord ? parent.IsValueType ? "record struct" : "record"
                 : parent.TypeKind == TypeKind.Interface ? "interface"
                 : parent.IsValueType ? "struct" : "class";
-            _ = source.Append("partial ").Append(kind).Append(" @").Append(parent.Name).AppendLine(" {");
+            parents.Push($"partial {kind} @{parent.Name} {{");
         }
+        return [.. parents];
+    }
 
-        return source.Append("partial class @").Append(symbol.Name).AppendLine(" {");
+    static StringBuilder OpenShape(Processor processor)
+    {
+        var source = new StringBuilder().AppendLine("// <auto-generated />").AppendLine("#nullable enable");
+        if (processor.Namespace is not null)
+            _ = source.Append("namespace ").Append(processor.Namespace).AppendLine(";");
+        foreach (var parent in processor.Parents)
+            _ = source.AppendLine(parent);
+
+        return source.Append("partial class @").Append(processor.Name).AppendLine(" {");
     }
 
     static bool InheritsFrom(INamedTypeSymbol symbol, string metadataName)
@@ -228,20 +231,38 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         return depth;
     }
 
-    sealed class Handler(string type, string displayType, string interfaceType, bool batch)
-    {
-        public string Type { get; } = type;
-        public string DisplayType { get; } = displayType;
-        public string InterfaceType { get; } = interfaceType;
-        public bool Batch { get; } = batch;
-    }
+    sealed record Handler(string Type, string DisplayType, string InterfaceType, bool Batch);
 
-    sealed class Processor(INamedTypeSymbol symbol, bool partial, bool projector, bool batch, Handler[] handlers)
+    sealed class Processor(
+        string name,
+        string displayName,
+        string? @namespace,
+        string[] parents,
+        string hintName,
+        DiagnosticLocation location,
+        bool shapeSupported,
+        bool partial,
+        bool projector,
+        bool batch,
+        Handler[] handlers) : IEquatable<Processor>
     {
-        public INamedTypeSymbol Symbol { get; } = symbol;
+        public string Name { get; } = name;
+        public string DisplayName { get; } = displayName;
+        public string? Namespace { get; } = @namespace;
+        public string[] Parents { get; } = parents;
+        public string HintName { get; } = hintName;
+        public DiagnosticLocation Location { get; } = location;
+        public bool ShapeSupported { get; } = shapeSupported;
         public bool Partial { get; } = partial;
         public bool Projector { get; } = projector;
         public bool Batch { get; } = batch;
         public Handler[] Handlers { get; } = handlers;
+        public bool Equals(Processor? other) => other is not null && Name == other.Name &&
+            DisplayName == other.DisplayName && Namespace == other.Namespace && HintName == other.HintName &&
+            Location.Equals(other.Location) && ShapeSupported == other.ShapeSupported && Partial == other.Partial &&
+            Projector == other.Projector && Batch == other.Batch && Parents.SequenceEqual(other.Parents) &&
+            Handlers.SequenceEqual(other.Handlers);
+        public override bool Equals(object? obj) => Equals(obj as Processor);
+        public override int GetHashCode() => (Name, DisplayName, Namespace, HintName).GetHashCode();
     }
 }

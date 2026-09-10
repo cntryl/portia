@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 
 namespace Cntryl.Portia;
 
@@ -74,91 +75,96 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
     {
         var types = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
-            static (syntaxContext, ct) => (
-                Symbol: syntaxContext.SemanticModel.GetDeclaredSymbol((TypeDeclarationSyntax)syntaxContext.Node, ct),
-                Node: (TypeDeclarationSyntax)syntaxContext.Node));
+            static (syntaxContext, ct) => Analyze(syntaxContext, ct));
 
-        context.RegisterSourceOutput(types.Combine(context.CompilationProvider), static (output, pair) =>
+        context.RegisterSourceOutput(types, static (output, findings) =>
         {
-            var (type, compilation) = pair;
-            if (type.Symbol is not { IsAbstract: false } symbol)
-                return;
-            ReportProjectorEffects(output, symbol);
-            ReportServiceLocation(output, symbol, type.Node, compilation);
-            ReportAggregateServices(output, symbol);
-            ReportMultipleHandlers(output, symbol);
-            ReportCaughtExceptionAsResult(output, symbol, type.Node, compilation);
+            foreach (var finding in findings)
+                output.ReportDiagnostic(Diagnostic.Create(Descriptor(finding.Kind), finding.Location.ToLocation(),
+                    finding.Arguments));
         });
     }
 
-    static void ReportProjectorEffects(SourceProductionContext output, INamedTypeSymbol symbol)
+    static Finding[] Analyze(GeneratorSyntaxContext context, CancellationToken ct)
+    {
+        var node = (TypeDeclarationSyntax)context.Node;
+        if (context.SemanticModel.GetDeclaredSymbol(node, ct) is not { IsAbstract: false } symbol)
+            return [];
+        var findings = new List<Finding>();
+        ReportProjectorEffects(findings, symbol);
+        ReportServiceLocation(findings, symbol, node, context.SemanticModel);
+        ReportAggregateServices(findings, symbol);
+        ReportMultipleHandlers(findings, symbol);
+        ReportCaughtExceptionAsResult(findings, symbol, node, context.SemanticModel, ct);
+        return [.. findings];
+    }
+
+    static void ReportProjectorEffects(List<Finding> findings, INamedTypeSymbol symbol)
     {
         if (!DerivesFrom(symbol, "Cntryl.Portia.Projector"))
             return;
         foreach (var parameter in Parameters(symbol, EffectTypes))
         {
-            output.ReportDiagnostic(Diagnostic.Create(ProjectorEffect, Location(parameter), symbol.Name,
-                Display(parameter)));
+            findings.Add(Finding.Create(Kind.ProjectorEffect, Location(parameter), symbol.Name, Display(parameter)));
         }
     }
 
     static void ReportServiceLocation(
-        SourceProductionContext output,
+        List<Finding> findings,
         INamedTypeSymbol symbol,
         TypeDeclarationSyntax node,
-        Compilation compilation)
+        SemanticModel semanticModel)
     {
         if (!IsPortiaComponent(symbol))
             return;
         foreach (var parameter in Parameters(symbol, LocatorTypes))
         {
-            output.ReportDiagnostic(Diagnostic.Create(ServiceLocation, Location(parameter), symbol.Name,
-                Display(parameter)));
+            findings.Add(Finding.Create(Kind.ServiceLocation, Location(parameter), symbol.Name, Display(parameter)));
         }
 
-        var semanticModel = compilation.GetSemanticModel(node.SyntaxTree);
         foreach (var invocation in node.DescendantNodes().OfType<InvocationExpressionSyntax>()
                      .Where(candidate => candidate.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() == node))
         {
-            if (semanticModel.GetSymbolInfo(invocation, output.CancellationToken).Symbol is not IMethodSymbol method ||
+            if (semanticModel.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method ||
                 MetadataName(method.ContainingType) != "Microsoft.Extensions.DependencyInjection.ActivatorUtilities")
             {
                 continue;
             }
 
-            output.ReportDiagnostic(Diagnostic.Create(ServiceLocation, invocation.GetLocation(), symbol.Name,
+            findings.Add(Finding.Create(Kind.ServiceLocation, invocation.GetLocation(), symbol.Name,
                 $"ActivatorUtilities.{method.Name}"));
         }
     }
 
-    static void ReportAggregateServices(SourceProductionContext output, INamedTypeSymbol symbol)
+    static void ReportAggregateServices(List<Finding> findings, INamedTypeSymbol symbol)
     {
         if (!DerivesFrom(symbol, "Cntryl.Portia.Aggregate"))
             return;
         foreach (var parameter in Parameters(symbol, AggregateForbiddenTypes))
         {
-            output.ReportDiagnostic(Diagnostic.Create(AggregateService, Location(parameter), symbol.Name,
-                Display(parameter)));
+            findings.Add(Finding.Create(Kind.AggregateService, Location(parameter), symbol.Name, Display(parameter)));
         }
     }
 
-    static void ReportMultipleHandlers(SourceProductionContext output, INamedTypeSymbol symbol)
+    static void ReportMultipleHandlers(List<Finding> findings, INamedTypeSymbol symbol)
     {
         var handlers =
             symbol.AllInterfaces.Count(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Handler));
         if (handlers > 1)
         {
-            output.ReportDiagnostic(Diagnostic.Create(MultipleHandlers, symbol.Locations.FirstOrDefault(), symbol.Name,
+            findings.Add(Finding.Create(Kind.MultipleHandlers, symbol.Locations.FirstOrDefault(), symbol.Name,
                 handlers));
         }
     }
 
     static void ReportCaughtExceptionAsResult(
-        SourceProductionContext output,
+        List<Finding> findings,
         INamedTypeSymbol symbol,
         TypeDeclarationSyntax node,
-        Compilation compilation)
+        SemanticModel semanticModel,
+        CancellationToken ct)
     {
+        var compilation = semanticModel.Compilation;
         var exceptionType = compilation.GetTypeByMetadataName("System.Exception");
         var resultType = compilation.GetTypeByMetadataName("Cntryl.Portia.Result");
         var genericResultType = compilation.GetTypeByMetadataName("Cntryl.Portia.Result`1");
@@ -184,21 +190,20 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         {
             foreach (var syntaxReference in implementation.DeclaringSyntaxReferences)
             {
-                if (syntaxReference.GetSyntax(output.CancellationToken) is not MethodDeclarationSyntax method
+                if (syntaxReference.GetSyntax(ct) is not MethodDeclarationSyntax method
                     || method.SyntaxTree != node.SyntaxTree
                     || !method.Ancestors().Contains(node))
                 {
                     continue;
                 }
 
-                var semanticModel = compilation.GetSemanticModel(method.SyntaxTree);
                 foreach (var clause in method.DescendantNodes(DescendIntoHandlerBody).OfType<CatchClauseSyntax>())
                 {
                     if (clause.Declaration?.Type is
                         // A bare catch, or one naming System.Exception itself — a specific exception
                         // type is a failure the handler genuinely anticipates, which is what Result is for.
                         { } caught && !SymbolEqualityComparer.Default.Equals(
-                            semanticModel.GetTypeInfo(caught, output.CancellationToken).Type,
+                            semanticModel.GetTypeInfo(caught, ct).Type,
                             exceptionType))
                     {
                         continue;
@@ -206,7 +211,7 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
 
                     if (!clause.Block.DescendantNodes(DescendIntoCatchBlock).OfType<InvocationExpressionSyntax>()
                             .Any(invocation => IsResultFailure(
-                                semanticModel.GetSymbolInfo(invocation, output.CancellationToken).Symbol as
+                                semanticModel.GetSymbolInfo(invocation, ct).Symbol as
                                     IMethodSymbol,
                                 resultType,
                                 genericResultType)))
@@ -214,8 +219,7 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
                         continue;
                     }
 
-                    output.ReportDiagnostic(Diagnostic.Create(CaughtExceptionAsResult, clause.GetLocation(),
-                        symbol.Name));
+                    findings.Add(Finding.Create(Kind.CaughtExceptionAsResult, clause.GetLocation(), symbol.Name));
                 }
             }
         }
@@ -299,4 +303,63 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
     static Location? Location(IParameterSymbol parameter) => parameter.Locations.FirstOrDefault();
 
     static string Display(IParameterSymbol parameter) => parameter.Type.Name;
+
+    static DiagnosticDescriptor Descriptor(Kind kind) => kind switch
+    {
+        Kind.ProjectorEffect => ProjectorEffect,
+        Kind.ServiceLocation => ServiceLocation,
+        Kind.AggregateService => AggregateService,
+        Kind.MultipleHandlers => MultipleHandlers,
+        _ => CaughtExceptionAsResult
+    };
+
+    enum Kind { ProjectorEffect, ServiceLocation, AggregateService, MultipleHandlers, CaughtExceptionAsResult }
+
+    sealed class Finding(Kind kind, SourceLocation location, object[] arguments) : IEquatable<Finding>
+    {
+        public Kind Kind { get; } = kind;
+        public SourceLocation Location { get; } = location;
+        public object[] Arguments { get; } = arguments;
+        public static Finding Create(Kind kind, Location? location, params object[] arguments) =>
+            new(kind, SourceLocation.From(location), arguments);
+        public bool Equals(Finding? other) => other is not null && Kind == other.Kind && Location.Equals(other.Location)
+                                             && Arguments.SequenceEqual(other.Arguments);
+        public override bool Equals(object? obj) => Equals(obj as Finding);
+        public override int GetHashCode() => Kind.GetHashCode();
+    }
+
+    readonly struct SourceLocation(string path, int start, int length, int startLine, int startCharacter,
+        int endLine, int endCharacter) : IEquatable<SourceLocation>
+    {
+        readonly string _path = path;
+        readonly int _start = start;
+        readonly int _length = length;
+        readonly int _startLine = startLine;
+        readonly int _startCharacter = startCharacter;
+        readonly int _endLine = endLine;
+        readonly int _endCharacter = endCharacter;
+
+        public static SourceLocation From(Location? location)
+        {
+            if (location is null || !location.IsInSource)
+                return default;
+            var lines = location.GetLineSpan().Span;
+            return new SourceLocation(location.SourceTree?.FilePath ?? string.Empty, location.SourceSpan.Start,
+                location.SourceSpan.Length, lines.Start.Line, lines.Start.Character, lines.End.Line,
+                lines.End.Character);
+        }
+        public Microsoft.CodeAnalysis.Location ToLocation() =>
+            string.IsNullOrEmpty(_path) && _start == 0 && _length == 0
+                ? Microsoft.CodeAnalysis.Location.None
+                : Microsoft.CodeAnalysis.Location.Create(_path, new TextSpan(_start, _length),
+                    new LinePositionSpan(new LinePosition(_startLine, _startCharacter),
+                        new LinePosition(_endLine, _endCharacter)));
+        public bool Equals(SourceLocation other) => _path == other._path && _start == other._start &&
+                                                    _length == other._length && _startLine == other._startLine &&
+                                                    _startCharacter == other._startCharacter &&
+                                                    _endLine == other._endLine &&
+                                                    _endCharacter == other._endCharacter;
+        public override bool Equals(object? obj) => obj is SourceLocation other && Equals(other);
+        public override int GetHashCode() => (_path, _start, _length).GetHashCode();
+    }
 }

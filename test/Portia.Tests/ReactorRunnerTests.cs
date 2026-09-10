@@ -48,6 +48,29 @@ public sealed class ReactorRunnerTests
         Assert.Equal(checkpoint, nextCheckpoint);
     }
 
+    /// <summary>The options overload bounds a pass and resumes from durable progress.</summary>
+    [Fact]
+    public async Task ShouldBoundPassAndResumeWithOptionsOverload()
+    {
+        var id = Uuid.CreateVersion4();
+        var stream = new EventStreamAddress("test", "reactors", id.ToString());
+        var store = new InMemoryEventStore();
+        await store.AppendAsync(stream, 0, [
+            Committed(new ValueChanged(1), id, 1),
+            Committed(new ValueChanged(2), id, 2),
+            Committed(new ValueChanged(3), id, 3)
+        ]);
+        var reactor = new TestReactor(new RecordingAggregateRepository());
+        var runner = new ReactorRunner(store);
+        var options = new ProjectionRunOptions { MaxEventsPerPass = 2 };
+
+        var first = await runner.RunAsync(reactor, ProjectionCheckpoint.Start, options);
+        var second = await runner.RunAsync(reactor, first, options);
+
+        Assert.Equal(2UL, first.NextOffset);
+        Assert.Equal(3UL, second.NextOffset);
+    }
+
     /// <summary>
     ///     Documents the behavior when a caller doesn't opt into checkpointed batching (no
     ///     <see cref="IProjectionCheckpointStore" /> passed to <c>ReactorRunner.RunAsync</c>):
