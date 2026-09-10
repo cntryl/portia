@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Cntryl.Portia;
@@ -9,11 +10,14 @@ namespace Cntryl.Portia;
 [Generator(LanguageNames.CSharp)]
 public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
 {
-    static readonly DiagnosticDescriptor InvalidDiscriminator = new("PORTIA020", "Missing or invalid request discriminator",
+    static readonly DiagnosticDescriptor InvalidDiscriminator = new("PORTIA020",
+        "Missing or invalid request discriminator",
         "Transported request '{0}' must declare [Discriminator(\"name\", version)] with a non-empty name and positive version",
         "Portia", DiagnosticSeverity.Error, true);
+
     static readonly DiagnosticDescriptor DuplicateDiscriminator = new("PORTIA022", "Duplicate request discriminator",
         "Request discriminator '{0}' version {1} is also declared by '{2}'", "Portia", DiagnosticSeverity.Error, true);
+
     static readonly DiagnosticDescriptor InvalidRoute = new("PORTIA024", "Invalid request route segment",
         "Transported request '{0}' declares invalid route segment '{1}'; use '*' or letters, digits, '.', '_', '-', and '~'",
         "Portia", DiagnosticSeverity.Error, true);
@@ -50,11 +54,14 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(invalidRoutes, static (sourceContext, invalid) =>
         {
             foreach (var model in invalid)
-                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidRoute, model.Location, model.TypeName, model.Segment));
+            {
+                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidRoute, model.Location, model.TypeName,
+                    model.Segment));
+            }
         });
         var components = context.SyntaxProvider
             .CreateSyntaxProvider(
-                static (node, _) => node is Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax,
+                static (node, _) => node is ClassDeclarationSyntax,
                 static (syntaxContext, _) => RegistrationComponentDiscovery.GetComponentTypeName(syntaxContext))
             .Where(static component => component is not null)
             .Select(static (component, _) => component!)
@@ -70,7 +77,9 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         Compilation compilation)
     {
         if (requests.IsDefaultOrEmpty || compilation.GetTypeByMetadataName("Cntryl.Portia.PortiaBuilder") is null)
+        {
             return;
+        }
 
         var ordered = requests
             .GroupBy(request => request.TypeName, StringComparer.Ordinal)
@@ -86,6 +95,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
                     group.Key.DiscriminatorName, group.Key.DiscriminatorVersion, group.First().TypeName));
             }
         }
+
         var names = GeneratedRegistrationNames.Resolve(ordered.Select(request => request.TypeName).Concat(components));
 
         var source = new StringBuilder()
@@ -98,7 +108,9 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         foreach (var request in ordered)
         {
             _ = source.Append("    /// <summary>Registers the transports <see cref=\"")
-                .Append(request.TypeName.StartsWith("global::", StringComparison.Ordinal) ? request.TypeName.Substring(8) : request.TypeName)
+                .Append(request.TypeName.StartsWith("global::", StringComparison.Ordinal)
+                    ? request.TypeName.Substring(8)
+                    : request.TypeName)
                 .AppendLine("\" /> declares.</summary>")
                 .Append("    public static global::Cntryl.Portia.PortiaBuilder ").Append(names[request.TypeName])
                 .AppendLine("(this global::Cntryl.Portia.PortiaBuilder builder)")
@@ -110,6 +122,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         }
 
         _ = source.AppendLine("}");
-        context.AddSource("PortiaGeneratedServiceCollectionExtensions.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        context.AddSource("PortiaGeneratedServiceCollectionExtensions.g.cs",
+            SourceText.From(source.ToString(), Encoding.UTF8));
     }
 }

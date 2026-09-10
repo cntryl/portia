@@ -1,17 +1,19 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies UUID generation and representation.
+///     Verifies UUID generation and representation.
 /// </summary>
 public sealed class UuidTests
 {
     const string CanonicalText = "21f7f8de-8051-5b89-8680-0195ef798b6a";
 
     /// <summary>
-    /// Verifies UUID version 5 against the RFC name-based example.
+    ///     Verifies UUID version 5 against the RFC name-based example.
     /// </summary>
     [Fact]
     public void ShouldCreateKnownVersion5UuidForDnsName()
@@ -23,7 +25,7 @@ public sealed class UuidTests
     }
 
     /// <summary>
-    /// Verifies that identical namespace and name inputs produce identical UUIDs.
+    ///     Verifies that identical namespace and name inputs produce identical UUIDs.
     /// </summary>
     [Fact]
     public void ShouldCreateSameVersion5UuidForSameNamespaceAndName()
@@ -35,7 +37,7 @@ public sealed class UuidTests
     }
 
     /// <summary>
-    /// Verifies that the text overload uses the same UTF-8 representation as the byte overload.
+    ///     Verifies that the text overload uses the same UTF-8 representation as the byte overload.
     /// </summary>
     [Fact]
     public void ShouldCreateSameVersion5UuidFromTextAndUtf8Bytes()
@@ -49,7 +51,7 @@ public sealed class UuidTests
     }
 
     /// <summary>
-    /// Verifies safe version 5 generation for names larger than the stack-buffer threshold.
+    ///     Verifies safe version 5 generation for names larger than the stack-buffer threshold.
     /// </summary>
     [Fact]
     public void ShouldCreateVersion5UuidForLargeName()
@@ -64,7 +66,7 @@ public sealed class UuidTests
     }
 
     /// <summary>
-    /// Verifies that namespaces participate in version 5 identity.
+    ///     Verifies that namespaces participate in version 5 identity.
     /// </summary>
     [Fact]
     public void ShouldCreateDifferentVersion5UuidForDifferentNamespace()
@@ -76,7 +78,7 @@ public sealed class UuidTests
     }
 
     /// <summary>
-    /// Verifies that generated UUID version 4 values report the correct version.
+    ///     Verifies that generated UUID version 4 values report the correct version.
     /// </summary>
     [Fact]
     public void ShouldCreateVersion4Uuid()
@@ -88,7 +90,7 @@ public sealed class UuidTests
     }
 
     /// <summary>
-    /// Verifies canonical text parsing and formatting.
+    ///     Verifies canonical text parsing and formatting.
     /// </summary>
     [Fact]
     public void ShouldRoundTripCanonicalUuidText()
@@ -163,7 +165,7 @@ public sealed class UuidTests
     }
 
     /// <summary>
-    /// Verifies failed parsing returns the empty UUID sentinel.
+    ///     Verifies failed parsing returns the empty UUID sentinel.
     /// </summary>
     [Fact]
     public void ShouldReturnEmptyUuidWhenTryParseFails()
@@ -175,44 +177,44 @@ public sealed class UuidTests
     }
 
     /// <summary>
-    /// Verifies that a UUID serializes as a plain canonical string, not its default struct shape
-    /// (which would otherwise just be the public <see cref="Uuid.Version" /> property) —
-    /// <see cref="UuidJsonConverter" /> is picked up automatically via <c>[JsonConverter]</c> on
-    /// <see cref="Uuid" /> itself, with no per-<see cref="System.Text.Json.JsonSerializerOptions" />
-    /// setup required.
+    ///     Verifies that a UUID serializes as a plain canonical string, not its default struct shape
+    ///     (which would otherwise just be the public <see cref="Uuid.Version" /> property) —
+    ///     <see cref="UuidJsonConverter" /> is picked up automatically via <c>[JsonConverter]</c> on
+    ///     <see cref="Uuid" /> itself, with no per-<see cref="JsonSerializerOptions" />
+    ///     setup required.
     /// </summary>
     [Fact]
     public void ShouldSerializeAsPlainCanonicalString()
     {
         var uuid = Uuid.Parse("21f7f8de-8051-5b89-8680-0195ef798b6a", CultureInfo.InvariantCulture);
 
-        var json = System.Text.Json.JsonSerializer.Serialize(uuid);
+        var json = JsonSerializer.Serialize(uuid);
 
         Assert.Equal("\"21f7f8de-8051-5b89-8680-0195ef798b6a\"", json);
     }
 
     /// <summary>
-    /// Verifies that a UUID deserializes from its canonical string form back to an equal value.
+    ///     Verifies that a UUID deserializes from its canonical string form back to an equal value.
     /// </summary>
     [Fact]
     public void ShouldDeserializeFromCanonicalString()
     {
-        var deserialized = System.Text.Json.JsonSerializer.Deserialize<Uuid>("\"21f7f8de-8051-5b89-8680-0195ef798b6a\"");
+        var deserialized = JsonSerializer.Deserialize<Uuid>("\"21f7f8de-8051-5b89-8680-0195ef798b6a\"");
 
         Assert.Equal(Uuid.Parse("21f7f8de-8051-5b89-8680-0195ef798b6a", CultureInfo.InvariantCulture), deserialized);
     }
 
     /// <summary>
-    /// Verifies that deserializing an invalid UUID string throws rather than silently producing
-    /// <see cref="Uuid.Empty" /> — unlike <c>TryParse</c>, JSON deserialization has
-    /// no natural "did it work" boolean to report failure through, so this is the correct failure
-    /// channel.
+    ///     Verifies that deserializing an invalid UUID string throws rather than silently producing
+    ///     <see cref="Uuid.Empty" /> — unlike <c>TryParse</c>, JSON deserialization has
+    ///     no natural "did it work" boolean to report failure through, so this is the correct failure
+    ///     channel.
     /// </summary>
     [Fact]
     public void ShouldThrowWhenDeserializingInvalidUuidString()
     {
-        _ = Assert.Throws<System.Text.Json.JsonException>(() =>
-            System.Text.Json.JsonSerializer.Deserialize<Uuid>("\"not-a-uuid\""));
+        _ = Assert.Throws<JsonException>(() =>
+            JsonSerializer.Deserialize<Uuid>("\"not-a-uuid\""));
     }
 
     static T Parse<T>(string value) where T : IParsable<T> =>
@@ -221,11 +223,11 @@ public sealed class UuidTests
     static T ParseSpan<T>(string value) where T : ISpanParsable<T> =>
         T.Parse(value.AsSpan(), CultureInfo.InvariantCulture);
 
-    static bool TryParse<T>(string value, out T parsed) where T : IParsable<T> =>
-        T.TryParse(value, CultureInfo.InvariantCulture, out parsed!);
+    static bool TryParse<T>(string value, [MaybeNullWhen(false)] out T parsed) where T : IParsable<T> =>
+        T.TryParse(value, CultureInfo.InvariantCulture, out parsed);
 
-    static bool TryParseSpan<T>(string value, out T parsed) where T : ISpanParsable<T> =>
-        T.TryParse(value.AsSpan(), CultureInfo.InvariantCulture, out parsed!);
+    static bool TryParseSpan<T>(string value, [MaybeNullWhen(false)] out T parsed) where T : ISpanParsable<T> =>
+        T.TryParse(value.AsSpan(), CultureInfo.InvariantCulture, out parsed);
 
     static string Format<T>(T value, string format) where T : IFormattable =>
         value.ToString(format, CultureInfo.InvariantCulture);

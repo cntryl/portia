@@ -10,17 +10,18 @@ public sealed class RequestRpcConsumerTests
     public async Task RequestDescriptorsRegisterAllRpcWorkersAndOwnTheirLifetime(bool reverse)
     {
         var assembly = GeneratorCompilation.Compile("""
-            using System;
-            using System.Threading.Tasks;
-            using Cntryl.Portia;
-            using Cntryl.Portia.Testing;
-            public static class Scenario
-            {
-                public static async Task<IAsyncDisposable> Run(FitzRpcRequestServer server)
-                    => await server.RegisterRequestsAsync();
-            }
-            """);
-        var register = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<FitzRpcRequestServer, Task<IAsyncDisposable>>>();
+                                                    using System;
+                                                    using System.Threading.Tasks;
+                                                    using Cntryl.Portia;
+                                                    using Cntryl.Portia.Testing;
+                                                    public static class Scenario
+                                                    {
+                                                        public static async Task<IAsyncDisposable> Run(FitzRpcRequestServer server)
+                                                            => await server.RegisterRequestsAsync();
+                                                    }
+                                                    """);
+        var register = assembly.GetType("Scenario")!.GetMethod("Run")!
+            .CreateDelegate<Func<FitzRpcRequestServer, Task<IAsyncDisposable>>>();
         var services = ConsumerHost.CreateServices();
         if (reverse)
         {
@@ -32,6 +33,7 @@ public sealed class RequestRpcConsumerTests
             _ = services.AddAccounts();
             _ = services.AddReporting();
         }
+
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
         var serializer = ConsumerJson.CreateSerializer();
@@ -43,10 +45,15 @@ public sealed class RequestRpcConsumerTests
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
         await using (await register(server))
         {
-            Assert.Equal(11, (await sender.SendAsync<FeatureOneRequest, int>(new(10), new(), null)).Value);
-            Assert.Equal(12, (await sender.SendAsync<FeatureTwoRequest, int>(new(10), new(), null)).Value);
+            Assert.Equal(11,
+                (await sender.SendAsync<FeatureOneRequest, int>(new FeatureOneRequest(10), new RequestRouteValues(),
+                    null)).Value);
+            Assert.Equal(12,
+                (await sender.SendAsync<FeatureTwoRequest, int>(new FeatureTwoRequest(10), new RequestRouteValues(),
+                    null)).Value);
         }
+
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await sender.SendAsync<FeatureOneRequest, int>(new(10), new(), null));
+            await sender.SendAsync<FeatureOneRequest, int>(new FeatureOneRequest(10), new RequestRouteValues(), null));
     }
 }

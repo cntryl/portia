@@ -21,15 +21,19 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
     where TStartEvent : DomainEvent
     where TStopEvent : DomainEvent
 {
-    readonly IDomainEventReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
-    readonly EventStreamPattern _pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
-    readonly Func<DomainEvent, TenantId> _getTenantId = getTenantId ?? throw new ArgumentNullException(nameof(getTenantId));
-    readonly TimeSpan _pollInterval = GetInterval(pollInterval);
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
+
+    readonly Func<DomainEvent, TenantId> _getTenantId =
+        getTenantId ?? throw new ArgumentNullException(nameof(getTenantId));
+
     readonly IDomainEventNotifier? _notifier = notifier;
+    readonly EventStreamPattern _pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
+    readonly TimeSpan _pollInterval = GetInterval(pollInterval);
+    readonly IDomainEventReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync([EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync(
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         var active = new HashSet<TenantId>();
         await foreach (var record in _reader.ReadAsync(_pattern, 0, ct).WithCancellation(ct).ConfigureAwait(false))
@@ -39,7 +43,8 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync([EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync(
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         await using var subscription = _notifier is null
             ? null
@@ -52,7 +57,8 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
         {
             ct.ThrowIfCancellationRequested();
             var sawAny = false;
-            await foreach (var record in _reader.ReadAsync(_pattern, offset, ct).WithCancellation(ct).ConfigureAwait(false))
+            await foreach (var record in _reader.ReadAsync(_pattern, offset, ct).WithCancellation(ct)
+                               .ConfigureAwait(false))
             {
                 offset = EventStreamOffsets.GetNextOffset(_pattern, record);
                 sawAny = true;
@@ -60,6 +66,7 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                 if (!initial && change is { } delta)
                     yield return delta;
             }
+
             if (initial)
             {
                 // Reconcile the gap after a preceding snapshot without replaying historical
@@ -71,27 +78,37 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                 initiallyRemoved.Clear();
                 initial = false;
             }
+
             if (subscription is not null)
+            {
                 await subscription.WaitAsync(ct).ConfigureAwait(false);
+            }
             else if (!sawAny)
+            {
                 await Task.Delay(_pollInterval, _clock, ct).ConfigureAwait(false);
+            }
         }
     }
 
     TenantLifecycleChange? Apply(HashSet<TenantId> active, DomainEvent ev, HashSet<TenantId>? initiallyRemoved = null)
     {
-        switch (ev)
+        if (ev is TStartEvent)
         {
-            case TStartEvent:
-                var added = _getTenantId(ev);
-                _ = initiallyRemoved?.Remove(added);
-                return active.Add(added) ? new TenantLifecycleChange(TenantLifecycleChangeKind.Added, added) : null;
-            case TStopEvent:
-                var removed = _getTenantId(ev);
-                _ = initiallyRemoved?.Add(removed);
-                return active.Remove(removed) ? new TenantLifecycleChange(TenantLifecycleChangeKind.Removed, removed) : null;
-            default:
-                return null;
+            var added = _getTenantId(ev);
+            _ = initiallyRemoved?.Remove(added);
+            return active.Add(added) ? new TenantLifecycleChange(TenantLifecycleChangeKind.Added, added) : null;
+        }
+        else if (ev is TStopEvent)
+        {
+            var removed = _getTenantId(ev);
+            _ = initiallyRemoved?.Add(removed);
+            return active.Remove(removed)
+                ? new TenantLifecycleChange(TenantLifecycleChangeKind.Removed, removed)
+                : null;
+        }
+        else
+        {
+            return null;
         }
     }
 

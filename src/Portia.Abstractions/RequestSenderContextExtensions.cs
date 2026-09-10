@@ -31,7 +31,8 @@ public static class RequestSenderContextExtensions
 
     /// <summary>Creates a schedule template caused by the current execution.</summary>
     public static ValueTask<string> ScheduleAsync<TRequest>(this IRequestScheduler sender, TRequest request,
-        RequestScheduleSpec spec, RequestRouteValues routeValues, ClaimsPrincipal actor, IExecutionContext parent, CancellationToken ct = default)
+        RequestScheduleSpec spec, RequestRouteValues routeValues, ClaimsPrincipal actor, IExecutionContext parent,
+        CancellationToken ct = default)
         where TRequest : IRequest, ISchedulable
         => sender.ScheduleAsync(request, spec, routeValues, actor, RequestMetadata.FromParent(parent), ct);
 }

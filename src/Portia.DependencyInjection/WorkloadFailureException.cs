@@ -1,9 +1,9 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Thrown when a hosted projector or reactor reaches its configured consecutive-failure limit.
-/// The checkpoint is left unchanged and the worker faults rather than silently retrying the same
-/// event forever.
+///     Thrown when a hosted projector or reactor reaches its configured consecutive-failure limit.
+///     The checkpoint is left unchanged and the worker faults rather than silently retrying the same
+///     event forever.
 /// </summary>
 /// <param name="identity">The workload that exhausted its attempts.</param>
 /// <param name="attempts">The number of consecutive failed passes.</param>

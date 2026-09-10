@@ -1,20 +1,20 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// A request reserved off a queue, independent of which queue technology delivered it.
+///     A request reserved off a queue, independent of which queue technology delivered it.
 /// </summary>
 public interface IQueuedRequest
 {
     /// <summary>
-    /// Gets the reserved request.
+    ///     Gets the reserved request.
     /// </summary>
     IRequest Request { get; }
 
     /// <summary>
-    /// Gets the request's stable wire name, or <see langword="null" /> when this queue adapter
-    /// does not resolve one. Portia falls back to the CLR type name only in that case, so an
-    /// adapter that knows the request's <see cref="DiscriminatorAttribute" /> should report it
-    /// and keep telemetry independent of CLR renames.
+    ///     Gets the request's stable wire name, or <see langword="null" /> when this queue adapter
+    ///     does not resolve one. Portia falls back to the CLR type name only in that case, so an
+    ///     adapter that knows the request's <see cref="DiscriminatorAttribute" /> should report it
+    ///     and keep telemetry independent of CLR renames.
     /// </summary>
     string? Name => null;
 
@@ -29,15 +29,15 @@ public interface IQueuedRequest
     RequestInvocation Invocation { get; }
 
     /// <summary>
-    /// Gets the transport-reported delivery attempt. Portia does not synthesize a retry counter.
+    ///     Gets the transport-reported delivery attempt. Portia does not synthesize a retry counter.
     /// </summary>
     uint Attempt { get; }
 
     /// <summary>
-    /// Gets the raw bearer token of the actor that enqueued this request, or
-    /// <see langword="null" /> for an unauthenticated actor. Re-validate this (via
-    /// <see cref="IRequestActorValidator" />) rather than trusting it as-is — it may have expired
-    /// since it was enqueued.
+    ///     Gets the raw bearer token of the actor that enqueued this request, or
+    ///     <see langword="null" /> for an unauthenticated actor. Re-validate this (via
+    ///     <see cref="IRequestActorValidator" />) rather than trusting it as-is — it may have expired
+    ///     since it was enqueued.
     /// </summary>
     string? ActorToken { get; }
 
@@ -45,15 +45,15 @@ public interface IQueuedRequest
     CancellationToken ReservationCancellation => CancellationToken.None;
 
     /// <summary>
-    /// Marks the request as successfully handled, so it is not redelivered.
+    ///     Marks the request as successfully handled, so it is not redelivered.
     /// </summary>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the completion.</returns>
     ValueTask CompleteAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Stops processing without acknowledging the request. The transport owns redelivery;
-    /// The queue technology waits for reservation expiration according to its own configuration.
+    ///     Stops processing without acknowledging the request. The transport owns redelivery;
+    ///     The queue technology waits for reservation expiration according to its own configuration.
     /// </summary>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the abandonment.</returns>

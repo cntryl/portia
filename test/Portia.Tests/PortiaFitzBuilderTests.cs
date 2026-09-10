@@ -71,7 +71,8 @@ public sealed class PortiaFitzBuilderTests
         var services = new ServiceCollection();
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
-        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Callable | RequestTransports.Queuable));
+        _ = application.AddGeneratedRequest(
+            Transport<FitzHostedRequest>(RequestTransports.Callable | RequestTransports.Queuable));
         var fitz = new PortiaFitzBuilder(application);
 
         _ = fitz.UseFleet(new FleetRunOptions { MembershipSelector = "lease://app/members/*" });
@@ -104,7 +105,9 @@ public sealed class PortiaFitzBuilderTests
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
         _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Callable
-            | RequestTransports.Queuable | RequestTransports.Notifiable | RequestTransports.Schedulable));
+                                                                         | RequestTransports.Queuable |
+                                                                         RequestTransports.Notifiable |
+                                                                         RequestTransports.Schedulable));
         _ = application.AddGeneratedRequest(Transport<FitzOutboundOnlyRequest>(RequestTransports.Queuable));
         var fitz = new PortiaFitzBuilder(application);
 
@@ -115,7 +118,7 @@ public sealed class PortiaFitzBuilderTests
                 new FitzRpcWorkerDefinition(),
                 new FitzQueueWorkerDefinition("queue://app/accounts/*"),
                 new FitzNoticeWorkerDefinition("notice://app/accounts/*"),
-                new FitzScheduleWorkerDefinition("schedule://app/accounts/*/run"),
+                new FitzScheduleWorkerDefinition("schedule://app/accounts/*/run")
             ],
             fitz.Workers);
     }
@@ -142,7 +145,8 @@ public sealed class PortiaFitzBuilderTests
         var services = new ServiceCollection();
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
-        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Callable | RequestTransports.Queuable));
+        _ = application.AddGeneratedRequest(
+            Transport<FitzHostedRequest>(RequestTransports.Callable | RequestTransports.Queuable));
         var fitz = new PortiaFitzBuilder(application);
 
         _ = fitz.AddQueueWorkers();
@@ -158,13 +162,17 @@ public sealed class PortiaFitzBuilderTests
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
         _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Callable
-            | RequestTransports.Queuable | RequestTransports.Notifiable));
+                                                                         | RequestTransports.Queuable |
+                                                                         RequestTransports.Notifiable));
         var fitz = new PortiaFitzBuilder(application);
 
         _ = fitz.AddQueueWorkers().AddNoticeWorkers();
 
         Assert.Equal(
-            [new FitzQueueWorkerDefinition("queue://app/accounts/*"), new FitzNoticeWorkerDefinition("notice://app/accounts/*")],
+            [
+                new FitzQueueWorkerDefinition("queue://app/accounts/*"),
+                new FitzNoticeWorkerDefinition("notice://app/accounts/*")
+            ],
             fitz.Workers);
     }
 
@@ -180,7 +188,8 @@ public sealed class PortiaFitzBuilderTests
         _ = fitz.AddQueueWorkers();
 
         var first = fitz.Workers;
-        _ = application.AddGeneratedHandler(new RequestRegistration<FitzOutboundOnlyRequest, FitzOutboundOnlyHandler>());
+        _ = application.AddGeneratedHandler(
+            new RequestRegistration<FitzOutboundOnlyRequest, FitzOutboundOnlyHandler>());
         _ = application.AddGeneratedRequest(Transport<FitzOutboundOnlyRequest>(RequestTransports.Queuable));
 
         Assert.Same(first, fitz.Workers);
@@ -193,14 +202,20 @@ public sealed class PortiaFitzBuilderTests
     {
         var calls = 0;
         var services = new ServiceCollection();
-        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
         _ = services.AddSingleton<FitzHostedHandler>();
-        _ = services.AddSingleton(new RequestTransportRegistration(typeof(FitzHostedRequest), RequestTransports.Callable,
-            new RequestRouteAttribute("app", "accounts", "*", "hosted"), new DiscriminatorAttribute("test.fitz.hosted"), Register));
-        _ = services.AddSingleton(new RequestTransportRegistration(typeof(FitzOutboundCallableRequest), RequestTransports.Callable,
-            new RequestRouteAttribute("app", "accounts", "*", "outbound"), new DiscriminatorAttribute("test.fitz.outbound-callable"), Register));
+        _ = services.AddSingleton(new RequestTransportRegistration(typeof(FitzHostedRequest),
+            RequestTransports.Callable,
+            new RequestRouteAttribute("app", "accounts", "*", "hosted"), new DiscriminatorAttribute("test.fitz.hosted"),
+            Register));
+        _ = services.AddSingleton(new RequestTransportRegistration(typeof(FitzOutboundCallableRequest),
+            RequestTransports.Callable,
+            new RequestRouteAttribute("app", "accounts", "*", "outbound"),
+            new DiscriminatorAttribute("test.fitz.outbound-callable"), Register));
         using var provider = services.BuildServiceProvider();
-        var server = new FitzRpcRequestServer(new InMemoryRpcClient(), provider.GetRequiredService<IServiceScopeFactory>());
+        var server =
+            new FitzRpcRequestServer(new InMemoryRpcClient(), provider.GetRequiredService<IServiceScopeFactory>());
 
         await using var workers = await server.RegisterRequestsAsync();
 
@@ -214,29 +229,8 @@ public sealed class PortiaFitzBuilderTests
         }
     }
 
-    static RequestTransportRegistration Transport<TRequest>(RequestTransports transports) where TRequest : IRequestBase =>
+    static RequestTransportRegistration Transport<TRequest>(RequestTransports transports)
+        where TRequest : IRequestBase =>
         new(typeof(TRequest), transports, new RequestRouteAttribute("app", "accounts", "*", "run"),
             new DiscriminatorAttribute("test.fitz." + typeof(TRequest).Name));
-
-}
-
-sealed record FitzHostedRequest : IRequest, ICallable, IQueuable, INotifiable, ISchedulable;
-sealed record FitzOutboundOnlyRequest : IRequest, IQueuable;
-sealed record FitzOutboundCallableRequest : IRequest, ICallable;
-
-sealed class FitzHostedHandler : IRequestHandler<FitzHostedRequest>
-{
-    public ValueTask<Result> HandleAsync(IRequestContext<FitzHostedRequest> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result.Success);
-}
-
-sealed class FitzOutboundOnlyHandler : IRequestHandler<FitzOutboundOnlyRequest>
-{
-    public ValueTask<Result> HandleAsync(IRequestContext<FitzOutboundOnlyRequest> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result.Success);
-}
-
-sealed class NoopAsyncDisposable : IAsyncDisposable
-{
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

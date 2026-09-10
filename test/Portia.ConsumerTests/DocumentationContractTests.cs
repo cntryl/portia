@@ -5,6 +5,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed partial class DocumentationContractTests
 {
     static readonly string Root = FindRoot();
+
     static readonly string[] Maintained =
     [
         "README.md",
@@ -15,7 +16,7 @@ public sealed partial class DocumentationContractTests
         "docs/observability.md",
         "docs/native-aot.md",
         "docs/scope.md",
-        "docs/design-decisions.md",
+        "docs/design-decisions.md"
     ];
 
     [Fact]
@@ -39,7 +40,10 @@ public sealed partial class DocumentationContractTests
             {
                 var target = match.Groups[1].Value;
                 if (target.StartsWith("http", StringComparison.OrdinalIgnoreCase) || target.StartsWith('#'))
+                {
                     continue;
+                }
+
                 var path = target.Split('#')[0];
                 Assert.True(File.Exists(Path.GetFullPath(path, Path.GetDirectoryName(Path.Combine(Root, relative))!)),
                     $"{relative} links to missing file '{target}'.");
@@ -53,7 +57,8 @@ public sealed partial class DocumentationContractTests
         var declared = Directory.EnumerateFiles(Path.Combine(Root, "src/Portia.Generators"), "*.cs")
             .SelectMany(path => DiagnosticId().Matches(File.ReadAllText(path)).Select(match => match.Value))
             .ToHashSet(StringComparer.Ordinal);
-        var documented = DiagnosticId().Matches(File.ReadAllText(Path.Combine(Root, "docs/AnalyzerReleases.Unshipped.md")))
+        var documented = DiagnosticId()
+            .Matches(File.ReadAllText(Path.Combine(Root, "docs/AnalyzerReleases.Unshipped.md")))
             .Select(match => match.Value).ToHashSet(StringComparer.Ordinal);
         Assert.Subset(documented, declared);
     }
@@ -69,8 +74,8 @@ public sealed partial class DocumentationContractTests
         Assert.DoesNotContain("AOT/trim analyzers are not enabled", text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("reactors must dispatch", text, StringComparison.OrdinalIgnoreCase);
         foreach (var project in Directory.EnumerateDirectories(Path.Combine(Root, "src"), "Portia.*")
-            .Where(path => !path.EndsWith("Portia.Generators", StringComparison.Ordinal)
-                && !path.EndsWith("Portia.CodeFixes", StringComparison.Ordinal)))
+                     .Where(path => !path.EndsWith("Portia.Generators", StringComparison.Ordinal)
+                                    && !path.EndsWith("Portia.CodeFixes", StringComparison.Ordinal)))
         {
             var name = Path.GetFileName(project);
             Assert.True(File.Exists(Path.Combine(project, "bin/Release/net10.0", name + ".xml")),
@@ -101,11 +106,16 @@ public sealed partial class DocumentationContractTests
 
     static string FindRoot()
     {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
         {
             if (File.Exists(Path.Combine(directory.FullName, "Portia.slnx")))
+            {
                 return directory.FullName;
+            }
         }
+
         throw new InvalidOperationException("Could not locate the Portia repository root.");
     }
 

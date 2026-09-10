@@ -4,8 +4,8 @@ using System.Text.Json.Serialization;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Serializes a <see cref="Uuid" /> as its canonical string form, not as its default struct
-/// shape (which would otherwise just be the public <see cref="Uuid.Version" /> property).
+///     Serializes a <see cref="Uuid" /> as its canonical string form, not as its default struct
+///     shape (which would otherwise just be the public <see cref="Uuid.Version" /> property).
 /// </summary>
 public sealed class UuidJsonConverter : JsonConverter<Uuid>
 {

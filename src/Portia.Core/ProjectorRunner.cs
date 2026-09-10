@@ -1,7 +1,7 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Runs datastore-agnostic projectors in bounded, checkpointed batches.
+///     Runs datastore-agnostic projectors in bounded, checkpointed batches.
 /// </summary>
 /// <param name="reader">The domain-event reader.</param>
 public sealed class ProjectorRunner(IDomainEventReader reader)
@@ -9,7 +9,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
     readonly IDomainEventReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
 
     /// <summary>
-    /// Projects all currently readable events beginning at a checkpoint.
+    ///     Projects all currently readable events beginning at a checkpoint.
     /// </summary>
     /// <param name="projector">The projector to run.</param>
     /// <param name="checkpoint">The first scope offset to read.</param>
@@ -29,9 +29,9 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         var batchSize = projector.IsBatch ? options.MaxBatchSize : 1;
         var records = new List<DomainEventRecord>(batchSize);
         await foreach (var record in _reader
-            .ReadAsync(projector.Pattern, checkpoint.NextOffset, ct)
-            .WithCancellation(ct)
-            .ConfigureAwait(false))
+                           .ReadAsync(projector.Pattern, checkpoint.NextOffset, ct)
+                           .WithCancellation(ct)
+                           .ConfigureAwait(false))
         {
             records.Add(record);
 
@@ -60,7 +60,9 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         var outcome = "success";
         try
         {
-            var context = new ProjectionBatchContext(new CheckpointIdentity(projector.Name, projector.Pattern, rebuildId), checkpoint);
+            var context =
+                new ProjectionBatchContext(new CheckpointIdentity(projector.Name, projector.Pattern, rebuildId),
+                    checkpoint);
             await using var batch = await projector.Store.BeginAsync(context, ct).ConfigureAwait(false);
 
             await projector.ProjectAsync(records, context.Identity, ct).ConfigureAwait(false);
@@ -73,8 +75,20 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
             records.Clear();
             return nextCheckpoint;
         }
-        catch (OperationCanceledException) { outcome = "canceled"; throw; }
-        catch { outcome = "fault"; throw; }
-        finally { PortiaTelemetry.ProcessorBatchFinished(started, projector.Name, "projector", outcome, count, lastOccurrence); }
+        catch (OperationCanceledException)
+        {
+            outcome = "canceled";
+            throw;
+        }
+        catch
+        {
+            outcome = "fault";
+            throw;
+        }
+        finally
+        {
+            PortiaTelemetry.ProcessorBatchFinished(started, projector.Name, "projector", outcome, count,
+                lastOccurrence);
+        }
     }
 }

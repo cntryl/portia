@@ -1,21 +1,22 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using Cntryl.Fitz.Abstractions.Domains.Stream;
+using Cntryl.Fitz.Errors;
 
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Persists aggregate event histories in Fitz streams.
+///     Persists aggregate event histories in Fitz streams.
 /// </summary>
 public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
 {
     const ulong ReadPageSize = 1024;
-
-    readonly IStreamClient _streams;
     readonly IDomainEventSerializer _serializer;
 
+    readonly IStreamClient _streams;
+
     /// <summary>
-    /// Creates a Fitz-backed event store.
+    ///     Creates a Fitz-backed event store.
     /// </summary>
     /// <param name="streams">The Fitz stream client.</param>
     /// <param name="serializer">The durable domain-event serializer.</param>
@@ -26,6 +27,16 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
 
         _streams = streams;
         _serializer = serializer;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<IDomainEventSubscription> SubscribeAsync(
+        EventStreamPattern pattern,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(pattern);
+        var subscription = await _streams.SubscribeAsync(pattern.ToString(), ct).ConfigureAwait(false);
+        return new FitzDomainEventSubscription(subscription);
     }
 
     /// <inheritdoc />
@@ -78,11 +89,17 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                     telemetryOutcome = "success";
                     yield break;
                 }
-
-                startOffset = checked(page.Cursor.LastResourceOffset + 1);
+                else
+                {
+                    startOffset = checked(page.Cursor.LastResourceOffset + 1);
+                }
             }
         }
-        finally { PortiaTelemetry.EventStoreFinished(telemetryStarted, "read", "stream", ct.IsCancellationRequested ? "canceled" : telemetryOutcome, telemetryCount); }
+        finally
+        {
+            PortiaTelemetry.EventStoreFinished(telemetryStarted, "read", "stream",
+                ct.IsCancellationRequested ? "canceled" : telemetryOutcome, telemetryCount);
+        }
     }
 
     /// <inheritdoc />
@@ -122,7 +139,8 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
 
                     var areaOffset = record.AreaOffset;
                     var realmOffset = record.RealmOffset;
-                    var scopeOffset = FitzEventStreamPatternOffsets.GetPatternOffset(pattern, record.Offset, areaOffset, realmOffset);
+                    var scopeOffset =
+                        FitzEventStreamPatternOffsets.GetPatternOffset(pattern, record.Offset, areaOffset, realmOffset);
 
                     if (scopeOffset != nextOffset)
                     {
@@ -142,11 +160,17 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                     telemetryOutcome = "success";
                     yield break;
                 }
-
-                startOffset = FitzEventStreamPatternOffsets.GetNextOffset(pattern, page.Cursor);
+                else
+                {
+                    startOffset = FitzEventStreamPatternOffsets.GetNextOffset(pattern, page.Cursor);
+                }
             }
         }
-        finally { PortiaTelemetry.EventStoreFinished(telemetryStarted, "read", "pattern", ct.IsCancellationRequested ? "canceled" : telemetryOutcome, telemetryCount); }
+        finally
+        {
+            PortiaTelemetry.EventStoreFinished(telemetryStarted, "read", "pattern",
+                ct.IsCancellationRequested ? "canceled" : telemetryOutcome, telemetryCount);
+        }
     }
 
     /// <inheritdoc />
@@ -194,10 +218,15 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
             failed = true;
             await RollbackAsync(session).ConfigureAwait(false);
 
-            if (ex is Fitz.Errors.StreamException { DomainCode: 2001 })
-                throw new EventStreamConcurrencyException($"Stream '{stream}' is not at the expected physical stream position.", ex);
-
-            throw;
+            if (ex is StreamException { DomainCode: 2001 })
+            {
+                throw new EventStreamConcurrencyException(
+                    $"Stream '{stream}' is not at the expected physical stream position.", ex);
+            }
+            else
+            {
+                throw;
+            }
         }
         finally
         {
@@ -209,7 +238,9 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
             {
                 // Cleanup must not replace the append/commit failure seen by the caller.
             }
-            PortiaTelemetry.EventStoreFinished(telemetryStarted, "append", "stream", ct.IsCancellationRequested ? "canceled" : telemetryOutcome,
+
+            PortiaTelemetry.EventStoreFinished(telemetryStarted, "append", "stream",
+                ct.IsCancellationRequested ? "canceled" : telemetryOutcome,
                 telemetryOutcome == "success" ? events.Count : 0);
         }
     }
@@ -226,21 +257,11 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
         }
     }
 
-    /// <inheritdoc />
-    public async ValueTask<IDomainEventSubscription> SubscribeAsync(
-        EventStreamPattern pattern,
-        CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(pattern);
-        var subscription = await _streams.SubscribeAsync(pattern.ToString(), ct).ConfigureAwait(false);
-        return new FitzDomainEventSubscription(subscription);
-    }
-
     sealed class FitzDomainEventSubscription : IDomainEventSubscription
     {
-        readonly StreamSubscription _subscription;
-        readonly CancellationTokenSource _stop = new();
         readonly IAsyncEnumerator<StreamCommitEvent> _notifications;
+        readonly CancellationTokenSource _stop = new();
+        readonly StreamSubscription _subscription;
         Task<bool>? _pending;
 
         public FitzDomainEventSubscription(StreamSubscription subscription)
@@ -270,9 +291,15 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
             await _stop.CancelAsync().ConfigureAwait(false);
             if (_pending is not null)
             {
-                try { _ = await _pending.ConfigureAwait(false); }
-                catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
+                try
+                {
+                    _ = await _pending.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (_stop.IsCancellationRequested)
+                {
+                }
             }
+
             await _notifications.DisposeAsync().ConfigureAwait(false);
             await _subscription.DisposeAsync().ConfigureAwait(false);
             _stop.Dispose();

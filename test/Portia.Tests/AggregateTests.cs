@@ -1,12 +1,12 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies the aggregate event lifecycle.
+///     Verifies the aggregate event lifecycle.
 /// </summary>
 public sealed class AggregateTests
 {
     /// <summary>
-    /// Verifies that an aggregate cannot have an empty identity.
+    ///     Verifies that an aggregate cannot have an empty identity.
     /// </summary>
     [Fact]
     public void ShouldRejectEmptyAggregateIdWhenConstructed()
@@ -17,7 +17,7 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies that raising an event updates state and tracks the event for persistence.
+    ///     Verifies that raising an event updates state and tracks the event for persistence.
     /// </summary>
     [Fact]
     public void ShouldApplyAndTrackEventWhenRaised()
@@ -38,8 +38,8 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies aggregate metadata creation is replaceable so applications can control time,
-    /// identity, correlation, and causation without modifying the aggregate base class.
+    ///     Verifies aggregate metadata creation is replaceable so applications can control time,
+    ///     identity, correlation, and causation without modifying the aggregate base class.
     /// </summary>
     [Fact]
     public void ShouldUseConfiguredMetadataFactoryWhenEventIsRaised()
@@ -64,8 +64,8 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies a custom metadata factory cannot assign one event ID to two pending events in the
-    /// same append batch.
+    ///     Verifies a custom metadata factory cannot assign one event ID to two pending events in the
+    ///     same append batch.
     /// </summary>
     [Fact]
     public void ShouldRejectFactoryEventIdAlreadyUsedByPendingEvent()
@@ -83,8 +83,8 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies a custom metadata factory cannot reuse an event ID after the original event has
-    /// been committed.
+    ///     Verifies a custom metadata factory cannot reuse an event ID after the original event has
+    ///     been committed.
     /// </summary>
     [Fact]
     public void ShouldRejectFactoryEventIdAlreadyUsedByCommittedEvent()
@@ -104,7 +104,7 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies that replay updates state, version, and committed history only.
+    ///     Verifies that replay updates state, version, and committed history only.
     /// </summary>
     [Fact]
     public void ShouldTrackCommittedEventWhenReplayed()
@@ -122,7 +122,7 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies that generated dispatch invokes the concrete overload for each event type.
+    ///     Verifies that generated dispatch invokes the concrete overload for each event type.
     /// </summary>
     [Fact]
     public void ShouldDispatchEachEventToConcreteOnEventMethodWhenLoaded()
@@ -132,7 +132,7 @@ public sealed class AggregateTests
 
         aggregate.Load([
             Committed(new ValueChanged(40), id, 1),
-            Committed(new ValueIncremented(2), id, 2),
+            Committed(new ValueIncremented(2), id, 2)
         ]);
 
         Assert.Equal(42, aggregate.Value);
@@ -141,7 +141,7 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies that a cached aggregate can catch up from the next committed event.
+    ///     Verifies that a cached aggregate can catch up from the next committed event.
     /// </summary>
     [Fact]
     public void ShouldLoadAdditionalCommittedEventsAfterCachedHistory()
@@ -152,7 +152,7 @@ public sealed class AggregateTests
 
         aggregate.Load([
             Committed(new ValueIncremented(1), id, 2),
-            Committed(new ValueIncremented(1), id, 3),
+            Committed(new ValueIncremented(1), id, 3)
         ]);
 
         Assert.Equal(42, aggregate.Value);
@@ -162,7 +162,7 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies that a catch-up batch must continue directly after the cached version.
+    ///     Verifies that a catch-up batch must continue directly after the cached version.
     /// </summary>
     [Fact]
     public void ShouldRejectAdditionalCommittedEventsWhenVersionIsNotContiguous()
@@ -172,7 +172,7 @@ public sealed class AggregateTests
         aggregate.Load([Committed(new ValueChanged(40), id, 1)]);
 
         _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([
-            Committed(new ValueIncremented(2), id, 3),
+            Committed(new ValueIncremented(2), id, 3)
         ]));
 
         Assert.Equal(40, aggregate.Value);
@@ -181,7 +181,7 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies that duplicate event identities cannot appear in committed history.
+    ///     Verifies that duplicate event identities cannot appear in committed history.
     /// </summary>
     [Fact]
     public void ShouldRejectAdditionalCommittedEventWhenEventIdIsAlreadyLoaded()
@@ -192,7 +192,7 @@ public sealed class AggregateTests
         aggregate.Load([Committed(new ValueChanged(40), eventId, id, 1)]);
 
         _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([
-            Committed(new ValueIncremented(2), eventId, id, 2),
+            Committed(new ValueIncremented(2), eventId, id, 2)
         ]));
 
         Assert.Equal(40, aggregate.Value);
@@ -201,7 +201,7 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies that catch-up cannot overwrite pending local decisions.
+    ///     Verifies that catch-up cannot overwrite pending local decisions.
     /// </summary>
     [Fact]
     public void ShouldRejectCommittedEventsWhenAggregateHasUncommittedChanges()
@@ -211,7 +211,7 @@ public sealed class AggregateTests
         aggregate.ChangeValue(40);
 
         _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([
-            Committed(new ValueIncremented(2), id, 2),
+            Committed(new ValueIncremented(2), id, 2)
         ]));
 
         Assert.Equal(40, aggregate.Value);
@@ -221,7 +221,7 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies that an audit is pending without changing aggregate state or version.
+    ///     Verifies that an audit is pending without changing aggregate state or version.
     /// </summary>
     [Fact]
     public void ShouldTrackAuditWithoutChangingStateWhenAudited()
@@ -241,7 +241,7 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies that committing promotes events and clears both pending buffers.
+    ///     Verifies that committing promotes events and clears both pending buffers.
     /// </summary>
     [Fact]
     public void ShouldPromoteEventsAndClearPendingChangesWhenCommitted()
@@ -269,7 +269,7 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies that events cannot be associated with a different aggregate instance.
+    ///     Verifies that events cannot be associated with a different aggregate instance.
     /// </summary>
     [Fact]
     public void ShouldRejectEventWhenAggregateIdDoesNotMatch()
@@ -285,8 +285,8 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies that an event with no <see cref="Aggregate.On{TEvent}" /> registration at all —
-    /// not even a base type's — fails the same way an unhandled event always has.
+    ///     Verifies that an event with no <see cref="Aggregate.On{TEvent}" /> registration at all —
+    ///     not even a base type's — fails the same way an unhandled event always has.
     /// </summary>
     [Fact]
     public void ShouldThrowWhenApplyingEventWithNoRegisteredHandler()
@@ -301,9 +301,9 @@ public sealed class AggregateTests
     }
 
     /// <summary>
-    /// Verifies that registering two handlers for the same event type fails fast — at
-    /// construction, not silently overwriting the first registration or only surfacing once the
-    /// event is eventually applied.
+    ///     Verifies that registering two handlers for the same event type fails fast — at
+    ///     construction, not silently overwriting the first registration or only surfacing once the
+    ///     event is eventually applied.
     /// </summary>
     [Fact]
     public void ShouldThrowWhenRegisteringDuplicateHandlerForSameEventType() =>
@@ -323,61 +323,4 @@ public sealed class AggregateTests
             DateTimeOffset.UtcNow));
         return ev;
     }
-
 }
-
-sealed class TestAggregate : Aggregate
-{
-    public TestAggregate(Uuid id, IDomainEventMetadataFactory? metadataFactory = null)
-        : base(id, new EventStreamAddress("test", "aggregates", id.ToString()), metadataFactory)
-    {
-        On<ValueChanged>(ev => Value = ev.Value);
-        On<ValueIncremented>(ev => Value += ev.Amount);
-    }
-
-    public int Value { get; private set; }
-
-    public void ChangeValue(int value) => RaiseEvent(new ValueChanged(value));
-
-    public void Audit(string reason) => AuditEvent(new ValueAudited(reason));
-}
-
-sealed class FixedDomainEventMetadataFactory(
-    Uuid eventId,
-    DateTimeOffset occurredOn,
-    Uuid correlationId,
-    Uuid causationId) : IDomainEventMetadataFactory
-{
-    public DomainEventMetadata Create(Uuid aggregateId, ulong aggregateVersion) =>
-        new(eventId, aggregateId, aggregateVersion, occurredOn, correlationId, causationId);
-}
-
-sealed class RepeatingDomainEventMetadataFactory(Uuid eventId) : IDomainEventMetadataFactory
-{
-    public DomainEventMetadata Create(Uuid aggregateId, ulong aggregateVersion) =>
-        new(eventId, aggregateId, aggregateVersion, DateTimeOffset.UtcNow);
-}
-
-sealed class DuplicateHandlerAggregate : Aggregate
-{
-    public DuplicateHandlerAggregate(Uuid id)
-        : base(id, new EventStreamAddress("test", "aggregates", id.ToString()))
-    {
-        On<ValueChanged>(ev => Value = ev.Value);
-        On<ValueChanged>(ev => Value = ev.Value * 2);
-    }
-
-    public int Value { get; private set; }
-}
-
-[Discriminator("test.value.changed")]
-sealed record ValueChanged(int Value) : DomainEvent;
-
-[Discriminator("test.value.incremented")]
-sealed record ValueIncremented(int Amount) : DomainEvent;
-
-[Discriminator("test.value.audited")]
-sealed record ValueAudited(string Reason) : DomainEvent;
-
-[Discriminator("test.event.unhandled")]
-sealed record UnhandledEvent : DomainEvent;

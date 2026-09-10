@@ -3,10 +3,10 @@ using System.Text;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Emits the construction of one <c>RequestTransportRegistration</c>. Shared by the request and
-/// handler registration generators so a request's transport metadata is written in exactly one
-/// place, whether it reaches the container through its own generated method or through the
-/// generated method of the handler that handles it.
+///     Emits the construction of one <c>RequestTransportRegistration</c>. Shared by the request and
+///     handler registration generators so a request's transport metadata is written in exactly one
+///     place, whether it reaches the container through its own generated method or through the
+///     generated method of the handler that handles it.
 /// </summary>
 static class RequestTransportRegistrationEmitter
 {
@@ -41,7 +41,10 @@ static class RequestTransportRegistrationEmitter
         if (request.ResultType is not null)
         {
             if (!request.Transports.HasFlag(RequestTransports.Callable))
+            {
                 _ = source.Append(", null");
+            }
+
             _ = source.Append(", typeof(").Append(request.ResultType).Append(')');
         }
 

@@ -6,11 +6,11 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Discovers every concrete <c>DomainEvent</c> type in the compilation and emits
-/// <c>DomainEventTypeCatalog.AddPortiaGeneratedDomainEvents()</c>, registering each one under its
-/// logical name and schema version (see <c>DiscriminatorAttribute</c>) — no per-type
-/// <c>.Register&lt;T&gt;()</c> call to remember, matching the zero-boilerplate discovery already
-/// used for reactors, projectors, and request transports.
+///     Discovers every concrete <c>DomainEvent</c> type in the compilation and emits
+///     <c>DomainEventTypeCatalog.AddPortiaGeneratedDomainEvents()</c>, registering each one under its
+///     logical name and schema version (see <c>DiscriminatorAttribute</c>) — no per-type
+///     <c>.Register&lt;T&gt;()</c> call to remember, matching the zero-boilerplate discovery already
+///     used for reactors, projectors, and request transports.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
@@ -25,10 +25,15 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         "'{0}'.EventName returns '{1}', which does not match the logical name of any DomainEvent type in the compilation",
         "Portia",
         DiagnosticSeverity.Warning,
-        isEnabledByDefault: true);
-    static readonly DiagnosticDescriptor DuplicateDiscriminator = new("PORTIA023", "Duplicate domain-event discriminator",
-        "Domain-event discriminator '{0}' version {1} is declared by multiple CLR types", "Portia", DiagnosticSeverity.Error, true);
-    static readonly DiagnosticDescriptor InvalidDiscriminator = new("PORTIA021", "Missing or invalid domain-event discriminator",
+        true);
+
+    static readonly DiagnosticDescriptor DuplicateDiscriminator = new("PORTIA023",
+        "Duplicate domain-event discriminator",
+        "Domain-event discriminator '{0}' version {1} is declared by multiple CLR types", "Portia",
+        DiagnosticSeverity.Error, true);
+
+    static readonly DiagnosticDescriptor InvalidDiscriminator = new("PORTIA021",
+        "Missing or invalid domain-event discriminator",
         "Domain event '{0}' must declare [Discriminator(\"name\", version)] with a non-empty name and positive version",
         "Portia", DiagnosticSeverity.Error, true);
 
@@ -85,8 +90,12 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             }
         }
 
-        foreach (var group in events.GroupBy(ev => (ev.Name, ev.Version)).Where(group => group.Select(ev => ev.TypeName).Distinct().Count() > 1))
-            context.ReportDiagnostic(Diagnostic.Create(DuplicateDiscriminator, Location.None, group.Key.Name, group.Key.Version));
+        foreach (var group in events.GroupBy(ev => (ev.Name, ev.Version))
+                     .Where(group => group.Select(ev => ev.TypeName).Distinct().Count() > 1))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(DuplicateDiscriminator, Location.None, group.Key.Name,
+                group.Key.Version));
+        }
 
         if (events.IsDefaultOrEmpty)
             return;
@@ -97,14 +106,16 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         _ = builder.AppendLine();
         _ = builder.AppendLine("static class DomainEventTypeCatalogGeneratedExtensions");
         _ = builder.AppendLine("{");
-        _ = builder.AppendLine("    public static global::Cntryl.Portia.DomainEventTypeCatalog AddPortiaGeneratedDomainEvents(this global::Cntryl.Portia.DomainEventTypeCatalog catalog)");
+        _ = builder.AppendLine(
+            "    public static global::Cntryl.Portia.DomainEventTypeCatalog AddPortiaGeneratedDomainEvents(this global::Cntryl.Portia.DomainEventTypeCatalog catalog)");
         _ = builder.AppendLine("    {");
         _ = builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(catalog);");
 
         foreach (var ev in events.Distinct())
         {
             _ = builder.Append("        _ = catalog.Register<global::").Append(ev.TypeName).Append(">(")
-                .Append(ev.Version).Append(", ").Append(RequestTransportDiscovery.FormatStringLiteral(ev.Name)).AppendLine(");");
+                .Append(ev.Version).Append(", ").Append(RequestTransportDiscovery.FormatStringLiteral(ev.Name))
+                .AppendLine(");");
         }
 
         _ = builder.AppendLine("        return catalog;");
@@ -160,9 +171,10 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
 
         var eventNameProperty = symbol.GetMembers("EventName").OfType<IPropertySymbol>().FirstOrDefault();
 
-        return eventNameProperty?.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is not PropertyDeclarationSyntax propertySyntax
-            || propertySyntax.ExpressionBody?.Expression is not LiteralExpressionSyntax literal
-            || context.SemanticModel.GetConstantValue(literal) is not { HasValue: true, Value: string eventName }
+        return eventNameProperty?.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is not
+                   PropertyDeclarationSyntax propertySyntax
+               || propertySyntax.ExpressionBody?.Expression is not LiteralExpressionSyntax literal
+               || context.SemanticModel.GetConstantValue(literal) is not { HasValue: true, Value: string eventName }
             ? null
             : new UpcasterModel(symbol.ToDisplayString(), eventName, declaration.Identifier.GetLocation());
     }
@@ -202,8 +214,11 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
     {
         for (var type = symbol; type is not null; type = type.ContainingType)
         {
-            if (type.DeclaredAccessibility is Accessibility.Private or Accessibility.Protected or Accessibility.ProtectedAndInternal)
+            if (type.DeclaredAccessibility is Accessibility.Private or Accessibility.Protected
+                or Accessibility.ProtectedAndInternal)
+            {
                 return false;
+            }
         }
 
         return true;

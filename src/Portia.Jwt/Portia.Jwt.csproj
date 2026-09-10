@@ -4,10 +4,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens"/>
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj" />
+    <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj"/>
   </ItemGroup>
 </Project>

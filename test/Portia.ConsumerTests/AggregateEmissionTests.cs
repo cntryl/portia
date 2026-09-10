@@ -12,16 +12,24 @@ public sealed class AggregateEmissionTests
         var first = new Deposited(10);
         var rejected = new Deposited(20);
         if (auditFirst)
+        {
             account.Audit(first);
+        }
         else
+        {
             account.Raise(first);
+        }
 
         _ = Assert.Throws<InvalidOperationException>(() =>
         {
             if (auditFirst)
+            {
                 account.Raise(rejected);
+            }
             else
+            {
                 account.Audit(rejected);
+            }
         });
 
         Assert.Equal(1, factory.Calls);
@@ -29,11 +37,16 @@ public sealed class AggregateEmissionTests
         Assert.Equal(auditFirst ? 0UL : 1UL, account.Version);
         _ = Assert.Throws<InvalidOperationException>(() => rejected.Metadata);
 
-        // Same-kind emission is still permitted after rejection.
         if (auditFirst)
+        {
+            // Same-kind emission is still permitted after rejection.
             account.Audit(new Declined("second audit"));
+        }
         else
+        {
             account.Deposit(5);
+        }
+
         Assert.Equal(2, factory.Calls);
         Assert.Equal(auditFirst ? 0 : 15, account.Balance);
         Assert.Equal(auditFirst ? 0UL : 2UL, account.Version);

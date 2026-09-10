@@ -1,14 +1,14 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies <see cref="JsonRequestSerializer" /> round-trips requests, outcomes, and the actor
-/// token carried alongside a request correctly — the concrete serializer every Fitz transport
-/// test (queue, RPC) ultimately depends on.
+///     Verifies <see cref="JsonRequestSerializer" /> round-trips requests, outcomes, and the actor
+///     token carried alongside a request correctly — the concrete serializer every Fitz transport
+///     test (queue, RPC) ultimately depends on.
 /// </summary>
 public sealed class JsonRequestSerializerTests
 {
     /// <summary>
-    /// Verifies that a request round-trips to an equal instance, alongside its actor token.
+    ///     Verifies that a request round-trips to an equal instance, alongside its actor token.
     /// </summary>
     [Fact]
     public void ShouldRoundTripRequestWithActorToken()
@@ -24,8 +24,8 @@ public sealed class JsonRequestSerializerTests
     }
 
     /// <summary>
-    /// Verifies that a request with no actor token round-trips with a null token, not an empty
-    /// string or a missing-field exception.
+    ///     Verifies that a request with no actor token round-trips with a null token, not an empty
+    ///     string or a missing-field exception.
     /// </summary>
     [Fact]
     public void ShouldRoundTripRequestWithNullActorToken()
@@ -40,7 +40,7 @@ public sealed class JsonRequestSerializerTests
     }
 
     /// <summary>
-    /// Verifies that a successful no-result outcome round-trips as success, with no error.
+    ///     Verifies that a successful no-result outcome round-trips as success, with no error.
     /// </summary>
     [Fact]
     public void ShouldRoundTripSuccessfulOutcome()
@@ -54,14 +54,14 @@ public sealed class JsonRequestSerializerTests
     }
 
     /// <summary>
-    /// Verifies that a failed no-result outcome round-trips with its error kind, message, and
-    /// transience preserved.
+    ///     Verifies that a failed no-result outcome round-trips with its error kind, message, and
+    ///     transience preserved.
     /// </summary>
     [Fact]
     public void ShouldRoundTripFailedOutcomeWithErrorDetails()
     {
         var serializer = TestJson.Serializer();
-        var error = new RequestError(RequestErrorKind.Conflict, "Already exists.", isTransient: true);
+        var error = new RequestError(RequestErrorKind.Conflict, "Already exists.", true);
 
         var bytes = serializer.SerializeOutcome(Result.Failure(error));
         var outcome = serializer.DeserializeOutcome(bytes);
@@ -73,7 +73,7 @@ public sealed class JsonRequestSerializerTests
     }
 
     /// <summary>
-    /// Verifies that a successful with-result outcome round-trips with its value intact.
+    ///     Verifies that a successful with-result outcome round-trips with its value intact.
     /// </summary>
     [Fact]
     public void ShouldRoundTripSuccessfulResultWithValue()
@@ -88,7 +88,7 @@ public sealed class JsonRequestSerializerTests
     }
 
     /// <summary>
-    /// Verifies that a failed with-result outcome round-trips its error without a value.
+    ///     Verifies that a failed with-result outcome round-trips its error without a value.
     /// </summary>
     [Fact]
     public void ShouldRoundTripFailedResult()
@@ -104,9 +104,9 @@ public sealed class JsonRequestSerializerTests
     }
 
     /// <summary>
-    /// Verifies that a request field of type <see cref="Uuid" /> round-trips correctly through
-    /// the serializer's source-generated envelope — proving <see cref="UuidJsonConverter" />
-    /// still applies at this JSON boundary, not just at the HTTP one.
+    ///     Verifies that a request field of type <see cref="Uuid" /> round-trips correctly through
+    ///     the serializer's source-generated envelope — proving <see cref="UuidJsonConverter" />
+    ///     still applies at this JSON boundary, not just at the HTTP one.
     /// </summary>
     [Fact]
     public void ShouldRoundTripUuidFieldOnRequest()
@@ -121,7 +121,3 @@ public sealed class JsonRequestSerializerTests
         Assert.Equal(id, Assert.IsType<SerializerTestUuidRequest>(envelope.Request).Id);
     }
 }
-
-sealed record SerializerTestRequest(string Name, int Count) : IRequest;
-
-sealed record SerializerTestUuidRequest(Uuid Id) : IRequest;

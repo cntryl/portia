@@ -1,7 +1,9 @@
+using Cntryl.Fitz;
+
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Shares the endpoint of the Docker Compose-managed Fitz broker across the integration tests.
+///     Shares the endpoint of the Docker Compose-managed Fitz broker across the integration tests.
 /// </summary>
 public sealed class FitzBrokerFixture
 {
@@ -10,29 +12,29 @@ public sealed class FitzBrokerFixture
     readonly Uri _endpoint;
 
     /// <summary>
-    /// Reads the broker endpoint started by Docker Compose.
+    ///     Reads the broker endpoint started by Docker Compose.
     /// </summary>
     public FitzBrokerFixture()
     {
         var configuredEndpoint = Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT")
-            ?? DefaultEndpoint;
+                                 ?? DefaultEndpoint;
         _endpoint = new Uri(configuredEndpoint, UriKind.Absolute);
     }
 
     /// <summary>
-    /// Creates and connects a real Fitz .NET client to the isolated broker.
+    ///     Creates and connects a real Fitz .NET client to the isolated broker.
     /// </summary>
     /// <returns>A connected client owned by the caller.</returns>
-    public async Task<Fitz.Client> CreateClientAsync()
+    public async Task<Client> CreateClientAsync()
     {
-        var client = new Fitz.Client(new Fitz.ClientConfig(
+        var client = new Client(new ClientConfig(
             _endpoint,
             Timeout: TimeSpan.FromSeconds(10)));
 
         try
         {
             await client.ConnectWhenReadyAsync(
-                new Fitz.ConnectWhenReadyOptions(Timeout: TimeSpan.FromSeconds(15)))
+                    new ConnectWhenReadyOptions(TimeSpan.FromSeconds(15)))
                 .ConfigureAwait(false);
             return client;
         }
@@ -42,16 +44,4 @@ public sealed class FitzBrokerFixture
             throw;
         }
     }
-}
-
-/// <summary>
-/// Prevents the shared broker fixture from running concurrently with another collection instance.
-/// </summary>
-[CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class FitzBrokerCollectionDefinition : ICollectionFixture<FitzBrokerFixture>
-{
-    /// <summary>
-    /// Identifies the live Fitz integration-test collection.
-    /// </summary>
-    public const string Name = "Fitz broker integration";
 }

@@ -5,16 +5,21 @@ namespace Cntryl.Portia.Consumer;
 sealed class ManualClock : TimeProvider
 {
     readonly Lock _gate = new();
-    readonly List<ClockTimer> _timers = [];
     readonly Channel<TimeSpan> _scheduled = Channel.CreateUnbounded<TimeSpan>();
+    readonly List<ClockTimer> _timers = [];
     DateTimeOffset _now = DateTimeOffset.UnixEpoch;
 
-    public override DateTimeOffset GetUtcNow() { lock (_gate) return _now; }
+    public override DateTimeOffset GetUtcNow()
+    {
+        lock (_gate)
+            return _now;
+    }
 
     public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
     {
         var timer = new ClockTimer(this, callback, state);
-        lock (_gate) _timers.Add(timer);
+        lock (_gate)
+            _timers.Add(timer);
         _ = timer.Change(dueTime, period);
         return timer;
     }
@@ -32,6 +37,7 @@ sealed class ManualClock : TimeProvider
             foreach (var timer in ready)
                 timer.Due = timer.Period > TimeSpan.Zero ? _now + timer.Period : DateTimeOffset.MaxValue;
         }
+
         foreach (var timer in ready)
             timer.Callback(timer.State);
     }
@@ -49,11 +55,17 @@ sealed class ManualClock : TimeProvider
             lock (clock._gate)
             {
                 if (_disposed)
+                {
                     return false;
+                }
+
                 Due = dueTime < TimeSpan.Zero ? DateTimeOffset.MaxValue : clock._now + dueTime;
                 Period = period;
                 if (dueTime >= TimeSpan.Zero)
+                {
                     _ = clock._scheduled.Writer.TryWrite(dueTime);
+                }
+
                 return true;
             }
         }
@@ -67,6 +79,10 @@ sealed class ManualClock : TimeProvider
             }
         }
 
-        public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        public ValueTask DisposeAsync()
+        {
+            Dispose();
+            return ValueTask.CompletedTask;
+        }
     }
 }

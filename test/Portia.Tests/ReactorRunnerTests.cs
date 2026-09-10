@@ -1,13 +1,13 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies checkpointed reactor execution.
+///     Verifies checkpointed reactor execution.
 /// </summary>
 public sealed class ReactorRunnerTests
 {
     /// <summary>
-    /// Verifies that every currently readable event is dispatched and the checkpoint advances
-    /// past the last one.
+    ///     Verifies that every currently readable event is dispatched and the checkpoint advances
+    ///     past the last one.
     /// </summary>
     [Fact]
     public async Task ShouldDispatchReadableEventsAndAdvanceCheckpointWhenRun()
@@ -18,7 +18,7 @@ public sealed class ReactorRunnerTests
         await store.AppendAsync(stream, 0, [
             Committed(new ValueChanged(40), id, 1),
             Committed(new ValueIncremented(1), id, 2),
-            Committed(new ValueIncremented(1), id, 3),
+            Committed(new ValueIncremented(1), id, 3)
         ]);
         var repository = new RecordingAggregateRepository();
         var reactor = new TestReactor(repository);
@@ -33,7 +33,7 @@ public sealed class ReactorRunnerTests
     }
 
     /// <summary>
-    /// Verifies that running with nothing to read leaves the checkpoint unchanged.
+    ///     Verifies that running with nothing to read leaves the checkpoint unchanged.
     /// </summary>
     [Fact]
     public async Task ShouldKeepCheckpointWhenNothingIsReadable()
@@ -49,12 +49,12 @@ public sealed class ReactorRunnerTests
     }
 
     /// <summary>
-    /// Documents the behavior when a caller doesn't opt into checkpointed batching (no
-    /// <see cref="IProjectionCheckpointStore" /> passed to <c>ReactorRunner.RunAsync</c>):
-    /// a failure partway through a pass returns no checkpoint at all, and a subsequent retry
-    /// re-reacts to every event already successfully handled earlier in that same pass. See
-    /// <see cref="ShouldOnlyReprocessCurrentBatchWhenCheckpointStoreIsSuppliedAndMidPassFailureOccurs" />
-    /// for the bounded version of this same scenario.
+    ///     Documents the behavior when a caller doesn't opt into checkpointed batching (no
+    ///     <see cref="IProjectionCheckpointStore" /> passed to <c>ReactorRunner.RunAsync</c>):
+    ///     a failure partway through a pass returns no checkpoint at all, and a subsequent retry
+    ///     re-reacts to every event already successfully handled earlier in that same pass. See
+    ///     <see cref="ShouldOnlyReprocessCurrentBatchWhenCheckpointStoreIsSuppliedAndMidPassFailureOccurs" />
+    ///     for the bounded version of this same scenario.
     /// </summary>
     [Fact]
     public async Task ShouldReprocessAlreadyHandledEventsOnRetryAfterMidPassFailure()
@@ -65,13 +65,14 @@ public sealed class ReactorRunnerTests
         await store.AppendAsync(stream, 0, [
             Committed(new ValueChanged(1), id, 1),
             Committed(new ValueChanged(2), id, 2),
-            Committed(new ValueChanged(3), id, 3),
+            Committed(new ValueChanged(3), id, 3)
         ]);
         var reactor = new FlakyOnSecondEventReactor();
         var runner = new ReactorRunner(store);
 
         // First pass fails on the second event — no checkpoint is returned at all.
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(reactor, ProjectionCheckpoint.Start).AsTask());
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runner.RunAsync(reactor, ProjectionCheckpoint.Start).AsTask());
         Assert.Equal([1], reactor.HandledValues);
 
         // A caller has nothing but the original (unchanged) checkpoint to retry from — the only
@@ -85,12 +86,12 @@ public sealed class ReactorRunnerTests
     }
 
     /// <summary>
-    /// Verifies the fix: when a caller supplies an <see cref="IProjectionCheckpointStore" /> and
-    /// a bounded batch size, a failure partway through a pass only loses progress back to the
-    /// start of the *current* batch — not the whole pass. Four events, batch size 2, the fourth
-    /// event fails: the first batch (events 1-2) must already be durably checkpointed by the time
-    /// the failure happens, so a retry starting from that saved checkpoint only re-reacts to
-    /// events 3-4, never events 1-2 again.
+    ///     Verifies the fix: when a caller supplies an <see cref="IProjectionCheckpointStore" /> and
+    ///     a bounded batch size, a failure partway through a pass only loses progress back to the
+    ///     start of the *current* batch — not the whole pass. Four events, batch size 2, the fourth
+    ///     event fails: the first batch (events 1-2) must already be durably checkpointed by the time
+    ///     the failure happens, so a retry starting from that saved checkpoint only re-reacts to
+    ///     events 3-4, never events 1-2 again.
     /// </summary>
     [Fact]
     public async Task ShouldOnlyReprocessCurrentBatchWhenCheckpointStoreIsSuppliedAndMidPassFailureOccurs()
@@ -102,14 +103,14 @@ public sealed class ReactorRunnerTests
             Committed(new ValueChanged(1), id, 1),
             Committed(new ValueChanged(2), id, 2),
             Committed(new ValueChanged(3), id, 3),
-            Committed(new ValueChanged(4), id, 4),
+            Committed(new ValueChanged(4), id, 4)
         ]);
         var runner = new ReactorRunner(store);
         var checkpointStore = new InMemoryProjectionCheckpointStore();
         var reactor = new FlakyOnThirdEventReactor(checkpointStore);
 
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            runner.RunAsync(reactor, ProjectionCheckpoint.Start, maxBatchSize: 2).AsTask());
+            runner.RunAsync(reactor, ProjectionCheckpoint.Start, 2).AsTask());
 
         // The first batch (events 1-2) must already be durably saved — not just held in memory —
         // by the time the second batch's failure propagates.
@@ -120,7 +121,7 @@ public sealed class ReactorRunnerTests
         // Retrying from the saved checkpoint (not ProjectionCheckpoint.Start) only re-reacts to
         // events 3-4 — events 1-2 are never handled a second time.
         var resumeFrom = await checkpointStore.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern));
-        var finalCheckpoint = await runner.RunAsync(reactor, resumeFrom, maxBatchSize: 2);
+        var finalCheckpoint = await runner.RunAsync(reactor, resumeFrom, 2);
 
         Assert.Equal([1, 2, 3, 4], reactor.HandledValues);
         Assert.Equal(4UL, finalCheckpoint.NextOffset);
@@ -135,47 +136,5 @@ public sealed class ReactorRunnerTests
             aggregateVersion,
             DateTimeOffset.UtcNow));
         return ev;
-    }
-}
-
-sealed partial class FlakyOnSecondEventReactor(IProjectionCheckpointStore? checkpoints = null)
-    : BatchReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "flaky-on-second-event-reactor"), IReactorHandler<ValueChanged>
-{
-    bool _hasFailedOnce;
-
-
-    public List<int> HandledValues { get; } = [];
-
-    public ValueTask HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
-    {
-        if (context.Trigger.Value == 2 && !_hasFailedOnce)
-        {
-            _hasFailedOnce = true;
-            throw new InvalidOperationException("Simulated transient failure reacting to the second event.");
-        }
-
-        HandledValues.Add(context.Trigger.Value);
-        return ValueTask.CompletedTask;
-    }
-}
-
-sealed partial class FlakyOnThirdEventReactor(IProjectionCheckpointStore? checkpoints = null)
-    : BatchReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "flaky-on-third-event-reactor"), IReactorHandler<ValueChanged>
-{
-    bool _hasFailedOnce;
-
-
-    public List<int> HandledValues { get; } = [];
-
-    public ValueTask HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
-    {
-        if (context.Trigger.Value == 3 && !_hasFailedOnce)
-        {
-            _hasFailedOnce = true;
-            throw new InvalidOperationException("Simulated transient failure reacting to the third event.");
-        }
-
-        HandledValues.Add(context.Trigger.Value);
-        return ValueTask.CompletedTask;
     }
 }

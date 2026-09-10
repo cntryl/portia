@@ -1,5 +1,5 @@
 <Project>
-  <Import Project="../Directory.Build.props" />
+  <Import Project="../Directory.Build.props"/>
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
@@ -8,6 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Using Include="Xunit" />
+    <Using Include="Xunit"/>
   </ItemGroup>
 </Project>

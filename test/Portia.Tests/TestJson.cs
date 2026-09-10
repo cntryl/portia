@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 namespace Cntryl.Portia;
@@ -16,11 +17,14 @@ static class TestJson
         Options());
 
     static RequestRouteAttribute Route(Type type, int index) => type == typeof(UniversalAction)
-        ? new("test", "shared", "action", "run")
-        : type == typeof(RpcGetValue) ? new("test", "rpc", "value", "get")
-        : type == typeof(RpcChangeValue) ? new("test", "rpc", "value", "change")
-        : type == typeof(NoWorkerRegisteredPing) ? new("portia-integration", "rpc", "no-worker-registered", "ping")
-        : new("test", "test", index.ToString(System.Globalization.CultureInfo.InvariantCulture), "run");
+        ? new RequestRouteAttribute("test", "shared", "action", "run")
+        : type == typeof(RpcGetValue)
+            ? new RequestRouteAttribute("test", "rpc", "value", "get")
+            : type == typeof(RpcChangeValue)
+                ? new RequestRouteAttribute("test", "rpc", "value", "change")
+                : type == typeof(NoWorkerRegisteredPing)
+                    ? new RequestRouteAttribute("portia-integration", "rpc", "no-worker-registered", "ping")
+                    : new RequestRouteAttribute("test", "test", index.ToString(CultureInfo.InvariantCulture), "run");
 
     static string Name(Type type) => type == typeof(UniversalAction) ? "test.shared.universal-action"
         : type == typeof(RpcGetValue) ? "test.rpc.get-value"

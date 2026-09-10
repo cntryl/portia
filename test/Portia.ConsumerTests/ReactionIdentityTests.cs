@@ -15,7 +15,7 @@ public sealed class ReactionIdentityTests
         source.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), id, 1, DateTimeOffset.UtcNow)
         {
             Actor = new ActorAttribution("alice", "users"),
-            ExecutionId = Uuid.CreateVersion4(),
+            ExecutionId = Uuid.CreateVersion4()
         });
         await store.AppendAsync(new EventStreamAddress("identity", "source", id.ToString()), 0, [source]);
         var actor = userPrincipal
@@ -26,10 +26,12 @@ public sealed class ReactionIdentityTests
         var runner = new ReactorRunner(store, new PrincipalProvider(actor), clock);
         if (userPrincipal)
         {
-            _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await runner.RunAsync(reactor, ProjectionCheckpoint.Start));
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await runner.RunAsync(reactor, ProjectionCheckpoint.Start));
             Assert.Null(reactor.Context);
             return;
         }
+
         _ = await runner.RunAsync(reactor, ProjectionCheckpoint.Start);
         var context = Assert.IsAssignableFrom<IExecutionContext>(reactor.Context);
         Assert.Equal("billing", context.Actor.FindFirst(ClaimTypes.NameIdentifier)!.Value);
@@ -49,10 +51,13 @@ public sealed class ReactionIdentityTests
         public ClaimsPrincipal GetPrincipal(Reactor reactor) => actor;
     }
 
-    sealed class RecordingReactor() : Reactor(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("identity", "source"), "billing")
+    sealed class RecordingReactor() : Reactor(new InMemoryProjectionCheckpointStore(),
+        EventStreamPattern.ForPattern("identity", "source"), "billing")
     {
         public IExecutionContext? Context { get; private set; }
-        protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context, CancellationToken ct)
+
+        protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+            CancellationToken ct)
         {
             Context = context;
             return ValueTask.CompletedTask;

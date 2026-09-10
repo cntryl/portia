@@ -17,7 +17,7 @@ public sealed class RunnerFaultVisibilityTests
         {
             ShouldListenTo = source => source.Name == PortiaTelemetry.SourceName,
             Sample = static (ref _) => ActivitySamplingResult.AllData,
-            ActivityStopped = activities.Add,
+            ActivityStopped = activities.Add
         };
         ActivitySource.AddActivityListener(activityListener);
 
@@ -26,12 +26,16 @@ public sealed class RunnerFaultVisibilityTests
         meterListener.InstrumentPublished = (instrument, listener) =>
         {
             if (instrument.Meter.Name == PortiaTelemetry.SourceName && instrument.Name == "portia.worker.failure")
+            {
                 listener.EnableMeasurementEvents(instrument);
+            }
         };
-        meterListener.SetMeasurementEventCallback<long>((_, value, tags, _) => measurements.Add((value, tags.ToArray())));
+        meterListener.SetMeasurementEventCallback<long>((_, value, tags, _) =>
+            measurements.Add((value, tags.ToArray())));
         meterListener.Start();
 
-        PortiaTelemetry.RecordRunnerFault("QueueRunner", RunnerFaultStage.Execution, new InvalidOperationException("secret"));
+        PortiaTelemetry.RecordRunnerFault("QueueRunner", RunnerFaultStage.Execution,
+            new InvalidOperationException("secret"));
 
         Assert.Empty(activities);
         var (Value, Tags) = Assert.Single(measurements);

@@ -8,12 +8,20 @@ static class DomainEventValidation
         var metadata = ev.Metadata;
         if (metadata.EventId == Uuid.Empty || metadata.AggregateId == Uuid.Empty)
             throw new InvalidOperationException("Event and aggregate identities cannot be empty.");
-        if (metadata.CorrelationId == Uuid.Empty || metadata.CausationId == Uuid.Empty || metadata.ExecutionId == Uuid.Empty)
+        if (metadata.CorrelationId == Uuid.Empty || metadata.CausationId == Uuid.Empty ||
+            metadata.ExecutionId == Uuid.Empty)
+        {
             throw new InvalidOperationException("Supplied event attribution identities cannot be empty.");
+        }
+
         if ((metadata.ExecutionId is null) != (metadata.Actor is null))
             throw new InvalidOperationException("Execution identity and actor attribution must be supplied together.");
-        if (metadata.Actor is { } actor && (string.IsNullOrWhiteSpace(actor.Subject) || string.IsNullOrWhiteSpace(actor.Issuer)))
+        if (metadata.Actor is { } actor &&
+            (string.IsNullOrWhiteSpace(actor.Subject) || string.IsNullOrWhiteSpace(actor.Issuer)))
+        {
             throw new InvalidOperationException("Event actor attribution requires a subject and issuer.");
+        }
+
         if (metadata.OccurredOn.Offset != TimeSpan.Zero)
             throw new InvalidOperationException("Event occurrence time must be UTC.");
         if (!metadata.IsAudit && metadata.AggregateVersion == 0)
@@ -30,9 +38,10 @@ static class DomainEventValidation
             var first = events[0].Metadata;
             var expectedVersion = checked(first.AggregateVersion + (first.IsAudit ? 0 : (ulong)index));
             if (ev.Metadata.AggregateId != first.AggregateId || ev.Metadata.IsAudit != first.IsAudit
-                || ev.Metadata.AggregateVersion != expectedVersion)
+                                                             || ev.Metadata.AggregateVersion != expectedVersion)
             {
-                throw new InvalidOperationException("A batch must contain one aggregate's raised events in order or audits at one state version.");
+                throw new InvalidOperationException(
+                    "A batch must contain one aggregate's raised events in order or audits at one state version.");
             }
 
             if (!eventIds.Add(ev.Metadata.EventId))

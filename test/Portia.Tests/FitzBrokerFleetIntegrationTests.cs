@@ -1,8 +1,8 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies renewable partition leases and disconnect handoff against Compose, with singleton
-/// membership fixtures. Public FleetBrokerTests separately verify real membership scale-out and TTL expiry.
+///     Verifies renewable partition leases and disconnect handoff against Compose, with singleton
+///     membership fixtures. Public FleetBrokerTests separately verify real membership scale-out and TTL expiry.
 /// </summary>
 [Collection(FitzBrokerCollectionDefinition.Name)]
 public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
@@ -10,15 +10,16 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
     readonly FitzBrokerFixture _broker = broker;
 
     /// <summary>
-    /// Verifies that a lease held by <see cref="FleetPartitionRunner" /> survives well past its
-    /// own TTL, as long as the callback holding it keeps running — proving Fitz really does
-    /// renew it automatically, not just that the API shape suggests it should.
+    ///     Verifies that a lease held by <see cref="FleetPartitionRunner" /> survives well past its
+    ///     own TTL, as long as the callback holding it keeps running — proving Fitz really does
+    ///     renew it automatically, not just that the API shape suggests it should.
     /// </summary>
     [Fact]
     public async Task ShouldRenewLeaseAutomaticallyWhileCallbackOutlivesTtl()
     {
         await using var client = await _broker.CreateClientAsync();
-        var runner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(client.Lease), new SingleWorkerMembership());
+        var runner =
+            new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(client.Lease), new SingleWorkerMembership());
         var partition = $"lease://portia-integration/fleet/renewal-{Uuid.CreateVersion4()}";
         using var cts = new CancellationTokenSource();
         var iterationsCompleted = 0;
@@ -62,10 +63,10 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
     }
 
     /// <summary>
-    /// Verifies lease handoff: a worker holding a partition's lease that
-    /// disappears without releasing it gracefully (its connection is torn down, not a clean
-    /// shutdown) still frees that partition for another, already-waiting worker once the lease's
-    /// TTL lapses — real crash recovery, not just a cooperative handoff.
+    ///     Verifies lease handoff: a worker holding a partition's lease that
+    ///     disappears without releasing it gracefully (its connection is torn down, not a clean
+    ///     shutdown) still frees that partition for another, already-waiting worker once the lease's
+    ///     TTL lapses — real crash recovery, not just a cooperative handoff.
     /// </summary>
     [Fact]
     public async Task ShouldGrantPartitionToWaitingWorkerWhenHolderDisconnectsWithoutReleasing()
@@ -76,7 +77,8 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
         var holderAcquired = new TaskCompletionSource();
         var waiterAcquired = new TaskCompletionSource();
 
-        var holderRunner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(holderClient.Lease), new SingleWorkerMembership());
+        var holderRunner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(holderClient.Lease),
+            new SingleWorkerMembership());
         using var holderCts = new CancellationTokenSource();
         var holderRun = holderRunner.RunAsync(
             [partition],
@@ -91,7 +93,8 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
 
         await holderAcquired.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-        var waiterRunner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(waiterClient.Lease), new SingleWorkerMembership());
+        var waiterRunner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(waiterClient.Lease),
+            new SingleWorkerMembership());
         using var waiterCts = new CancellationTokenSource();
         var waiterRun = waiterRunner.RunAsync(
             [partition],

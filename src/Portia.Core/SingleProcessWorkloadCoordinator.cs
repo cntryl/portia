@@ -1,31 +1,35 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Owns every declared workload unconditionally, without leases or competition. This is the
-/// default coordinator for a host that runs one worker replica: it lets projectors and reactors
-/// registered with <c>AddProjector</c>/<c>AddReactor</c> run with no coordination infrastructure
-/// at all.
-///
-/// It is safe only while exactly one replica is running. A deployment that scales workers beyond
-/// one replica must register a distributed <see cref="IWorkloadCoordinator" /> — Fitz supplies one
-/// through <c>AddFitz</c> — because this implementation cannot detect a second owner of the
-/// same workload.
+///     Owns every declared workload unconditionally, without leases or competition. This is the
+///     default coordinator for a host that runs one worker replica: it lets projectors and reactors
+///     registered with <c>AddProjector</c>/<c>AddReactor</c> run with no coordination infrastructure
+///     at all.
+///     It is safe only while exactly one replica is running. A deployment that scales workers beyond
+///     one replica must register a distributed <see cref="IWorkloadCoordinator" /> — Fitz supplies one
+///     through <c>AddFitz</c> — because this implementation cannot detect a second owner of the
+///     same workload.
 /// </summary>
 public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
 {
-    readonly TimeSpan _reconcileInterval;
     readonly TimeProvider _clock;
+    readonly TimeSpan _reconcileInterval;
 
     /// <summary>Creates a coordinator that reconciles the declared workloads on an interval.</summary>
-    /// <param name="reconcileInterval">How long to wait between snapshots of the declared
-    /// workloads; defaults to one second. Per-tenant workloads appearing after start are picked up
-    /// on the next reconcile.</param>
-    /// <param name="timeProvider">The clock used for the reconcile delay, or
-    /// <see langword="null" /> for the system clock.</param>
+    /// <param name="reconcileInterval">
+    ///     How long to wait between snapshots of the declared
+    ///     workloads; defaults to one second. Per-tenant workloads appearing after start are picked up
+    ///     on the next reconcile.
+    /// </param>
+    /// <param name="timeProvider">
+    ///     The clock used for the reconcile delay, or
+    ///     <see langword="null" /> for the system clock.
+    /// </param>
     public SingleProcessWorkloadCoordinator(TimeSpan? reconcileInterval = null, TimeProvider? timeProvider = null)
     {
         _reconcileInterval = reconcileInterval ?? TimeSpan.FromSeconds(1);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(_reconcileInterval, TimeSpan.Zero, nameof(reconcileInterval));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(_reconcileInterval, TimeSpan.Zero,
+            nameof(reconcileInterval));
         _clock = timeProvider ?? TimeProvider.System;
     }
 
@@ -46,7 +50,7 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
                 ct.ThrowIfCancellationRequested();
 
                 var declared = workloads()
-                    ?? throw new InvalidOperationException("The workload snapshot cannot be null.");
+                               ?? throw new InvalidOperationException("The workload snapshot cannot be null.");
                 var current = new HashSet<WorkloadIdentity>(declared);
 
                 // Release ownership of workloads that are no longer declared, awaiting each
@@ -60,14 +64,22 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
                 {
                     var workload = owned[identity];
                     if (!workload.Run.IsCompleted)
+                    {
                         continue;
-                    await ReleaseAsync(owned, identity).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await ReleaseAsync(owned, identity).ConfigureAwait(false);
+                    }
                 }
 
                 foreach (var identity in current)
                 {
                     if (owned.ContainsKey(identity))
+                    {
                         continue;
+                    }
+
                     var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     owned[identity] = new OwnedWorkload(cancellation, run(identity, cancellation.Token));
                 }

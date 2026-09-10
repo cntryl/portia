@@ -43,7 +43,8 @@ public sealed class TransportExecutionContextTests
         var first = new Queued(metadata, 1);
         var second = new Queued(metadata, 2);
         var bus = new RecordingBus();
-        await new QueueRunner(new Consumer(first, second), RequestDeliveryScopes.FixedQueue(bus, new Validator())).RunAsync();
+        await new QueueRunner(new Consumer(first, second), RequestDeliveryScopes.FixedQueue(bus, new Validator()))
+            .RunAsync();
         Assert.Equal(2, bus.Contexts.Count);
         Assert.All(bus.Contexts, ctx => Assert.Equal(metadata.RequestId, ctx.RequestId));
         Assert.NotEqual(bus.Contexts[0].ExecutionId, bus.Contexts[1].ExecutionId);
@@ -57,14 +58,22 @@ public sealed class TransportExecutionContextTests
     sealed class RecordingBus : IRequestBus
     {
         public List<RequestDispatchContext> Contexts { get; } = [];
-        public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) => new(actor, metadata: metadata);
-        public ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context, CancellationToken ct = default)
+
+        public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
+            new(actor, metadata: metadata);
+
+        public ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
+            CancellationToken ct = default)
         {
             Contexts.Add(context);
             return ValueTask.FromResult(Result.Success);
         }
-        public ValueTask<Result<T>> DispatchAsync<T>(IRequest<T> request, RequestDispatchContext context, CancellationToken ct = default) => throw new NotSupportedException();
-        public IAsyncEnumerable<T> DispatchStreamAsync<T>(IStreamRequest<T> request, RequestDispatchContext context, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public ValueTask<Result<T>> DispatchAsync<T>(IRequest<T> request, RequestDispatchContext context,
+            CancellationToken ct = default) => throw new NotSupportedException();
+
+        public IAsyncEnumerable<T> DispatchStreamAsync<T>(IStreamRequest<T> request, RequestDispatchContext context,
+            CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     sealed class Validator : IRequestActorValidator

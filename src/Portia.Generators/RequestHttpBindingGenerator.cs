@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
@@ -10,34 +11,37 @@ using Microsoft.CodeAnalysis.Text;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Intercepts every <c>app.MapPortiaGet/Post/Put/Patch/Delete&lt;TRequest[,TOut]&gt;(pattern)</c>
-/// call site and replaces it with generated code that builds <c>TRequest</c> straight from the
-/// route, query string, and JSON body — no attributes, no <c>BindAsync</c> on the request type, and
-/// no ASP.NET Core reference required by whatever project declares <c>TRequest</c>. A primary
-/// constructor parameter binds from the route if its name matches a <c>{token}</c> in the pattern;
-/// otherwise it binds from the JSON body on POST/PUT/PATCH, or the query string on GET/DELETE.
-///
-/// This only works because interception happens in the compilation that calls the mapping method
-/// (which already references ASP.NET Core, since it's calling an ASP.NET Core extension), and
-/// <c>TRequest</c> is resolved purely through its symbol — its own source doesn't need to be part
-/// of this compilation at all, so it's free to live in a plain class library.
+///     Intercepts every <c>app.MapPortiaGet/Post/Put/Patch/Delete&lt;TRequest[,TOut]&gt;(pattern)</c>
+///     call site and replaces it with generated code that builds <c>TRequest</c> straight from the
+///     route, query string, and JSON body — no attributes, no <c>BindAsync</c> on the request type, and
+///     no ASP.NET Core reference required by whatever project declares <c>TRequest</c>. A primary
+///     constructor parameter binds from the route if its name matches a <c>{token}</c> in the pattern;
+///     otherwise it binds from the JSON body on POST/PUT/PATCH, or the query string on GET/DELETE.
+///     This only works because interception happens in the compilation that calls the mapping method
+///     (which already references ASP.NET Core, since it's calling an ASP.NET Core extension), and
+///     <c>TRequest</c> is resolved purely through its symbol — its own source doesn't need to be part
+///     of this compilation at all, so it's free to live in a plain class library.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 {
     static readonly DiagnosticDescriptor UnsupportedBinding = new("PORTIA016", "Unsupported HTTP binding",
-        "Cannot generate Portia HTTP binding: {0}", "Portia", DiagnosticSeverity.Error, isEnabledByDefault: true);
-    static readonly DiagnosticDescriptor OptionalRoute = new("PORTIA026", "Optional route tokens are unsupported",
-        "Portia route '{0}' contains optional token '{1}'; use a query parameter or separate endpoint", "Portia", DiagnosticSeverity.Error, isEnabledByDefault: true);
-    static readonly DiagnosticDescriptor DuplicateOperationId = new("PORTIA027", "Duplicate OpenAPI operation ID",
-        "Portia mappings produce duplicate operationId '{0}'", "Portia", DiagnosticSeverity.Error, isEnabledByDefault: true);
+        "Cannot generate Portia HTTP binding: {0}", "Portia", DiagnosticSeverity.Error, true);
 
-    static readonly Regex RouteTokenPattern = new(@"\{\*{0,2}([A-Za-z_][A-Za-z0-9_]*)(?:[:=?][^}]*)?\}", RegexOptions.Compiled);
+    static readonly DiagnosticDescriptor OptionalRoute = new("PORTIA026", "Optional route tokens are unsupported",
+        "Portia route '{0}' contains optional token '{1}'; use a query parameter or separate endpoint", "Portia",
+        DiagnosticSeverity.Error, true);
+
+    static readonly DiagnosticDescriptor DuplicateOperationId = new("PORTIA027", "Duplicate OpenAPI operation ID",
+        "Portia mappings produce duplicate operationId '{0}'", "Portia", DiagnosticSeverity.Error, true);
+
+    static readonly Regex RouteTokenPattern =
+        new(@"\{\*{0,2}([A-Za-z_][A-Za-z0-9_]*)(?:[:=?][^}]*)?\}", RegexOptions.Compiled);
 
     static readonly HashSet<string> MappingMethodNames =
     [
         "MapPortiaGet", "MapPortiaPost", "MapPortiaPut", "MapPortiaPatch", "MapPortiaDelete",
-        "MapPortiaGetStream", "MapPortiaGetSse",
+        "MapPortiaGetStream", "MapPortiaGetSse"
     ];
 
     /// <inheritdoc />
@@ -62,12 +66,17 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             foreach (var duplicate in calls.Where(call => call.Model is not null).Select(call => call.Model!)
                          .Where(call => !call.ExcludedFromDescription)
                          .GroupBy(call => call.OperationId, StringComparer.Ordinal)
-                         .Where(group => group.Select(call => call.RequestTypeFullName).Distinct(StringComparer.Ordinal).Count() > 1
-                             || group.GroupBy(call => (call.RequestTypeFullName, call.ContainingSymbol), StringTupleComparer.Instance)
+                         .Where(group =>
+                             group.Select(call => call.RequestTypeFullName).Distinct(StringComparer.Ordinal).Count() > 1
+                             || group.GroupBy(call => (call.RequestTypeFullName, call.ContainingSymbol),
+                                     StringTupleComparer.Instance)
                                  .Any(sameRequestInScope => sameRequestInScope.Count() > 1)))
             {
                 foreach (var call in duplicate)
-                    sourceContext.ReportDiagnostic(Diagnostic.Create(DuplicateOperationId, call.DiagnosticLocation, duplicate.Key));
+                {
+                    sourceContext.ReportDiagnostic(Diagnostic.Create(DuplicateOperationId, call.DiagnosticLocation,
+                        duplicate.Key));
+                }
             }
 
             Generate(sourceContext, [.. calls.Where(call => call.Model is not null).Select(call => call.Model!)]);
@@ -78,7 +87,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         node is InvocationExpressionSyntax
         {
             Expression: MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.ValueText: var name } },
-            ArgumentList.Arguments.Count: > 0,
+            ArgumentList.Arguments.Count: > 0
         }
         && MappingMethodNames.Contains(name);
 
@@ -103,9 +112,13 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         if (constant is not { HasValue: true, Value: string pattern })
             return Invalid(invocation, "the route must be a compile-time string constant");
 
-        var optionalToken = RouteTokenPattern.Matches(pattern).Cast<Match>().FirstOrDefault(match => match.Value.IndexOf('?') >= 0);
+        var optionalToken = RouteTokenPattern.Matches(pattern).Cast<Match>()
+            .FirstOrDefault(match => match.Value.IndexOf('?') >= 0);
         if (optionalToken is not null)
-            return new CallAnalysis(null, Diagnostic.Create(OptionalRoute, invocation.GetLocation(), pattern, optionalToken.Groups[1].Value));
+        {
+            return new CallAnalysis(null,
+                Diagnostic.Create(OptionalRoute, invocation.GetLocation(), pattern, optionalToken.Groups[1].Value));
+        }
 
         var verb = method.Name switch
         {
@@ -114,10 +127,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             "MapPortiaPut" => "Put",
             "MapPortiaPatch" => "Patch",
             "MapPortiaDelete" => "Delete",
-            _ => null,
+            _ => null
         };
 
-        if (verb is null)
+        if (verb == null)
             return null;
 
         // A mutating verb whose request also opted into IQueuable automatically gets the
@@ -131,11 +144,14 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             "MapPortiaGetStream" => CallKind.Stream,
             "MapPortiaGetSse" => CallKind.Sse,
             _ when verb != "Get" && isQueuable => CallKind.Queue,
-            _ => CallKind.Send,
+            _ => CallKind.Send
         };
 
         if (kind == CallKind.Queue && method.TypeArguments.Length == 2)
-            return Invalid(invocation, "asynchronous queue dispatch requires a no-result IRequest; remove IQueuable from a result-bearing request");
+        {
+            return Invalid(invocation,
+                "asynchronous queue dispatch requires a no-result IRequest; remove IQueuable from a result-bearing request");
+        }
 
         var resultType = kind is CallKind.Queue
             ? null
@@ -143,7 +159,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 ? method.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                 : null;
 
-        var constructors = requestType.Constructors.Where(c => c.DeclaredAccessibility == Accessibility.Public && !c.IsStatic).ToArray();
+        var constructors = requestType.Constructors
+            .Where(c => c.DeclaredAccessibility == Accessibility.Public && !c.IsStatic).ToArray();
         if (constructors.Length != 1)
             return Invalid(invocation, "the request must expose exactly one public constructor");
         var primaryConstructor = constructors[0];
@@ -161,24 +178,36 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 var routeToken = routeTokens.FirstOrDefault(token => Normalize(token) == Normalize(parameter.Name));
                 var source = routeToken is not null
                     ? ParameterSource.Route
-                    : bodyCapable ? ParameterSource.Body : ParameterSource.Query;
+                    : bodyCapable
+                        ? ParameterSource.Body
+                        : ParameterSource.Query;
 
-                var underlying = parameter.Type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } named
-                    ? named.TypeArguments[0] : parameter.Type;
+                var underlying = parameter.Type is INamedTypeSymbol
+                {
+                    OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
+                } named
+                    ? named.TypeArguments[0]
+                    : parameter.Type;
                 var property = requestType.GetMembers().OfType<IPropertySymbol>()
                     .FirstOrDefault(p => string.Equals(p.Name, parameter.Name, StringComparison.OrdinalIgnoreCase));
-                var jsonName = property?.GetAttributes().FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonPropertyNameAttribute")
+                var jsonName = property?.GetAttributes().FirstOrDefault(a =>
+                        a.AttributeClass?.ToDisplayString() ==
+                        "System.Text.Json.Serialization.JsonPropertyNameAttribute")
                     ?.ConstructorArguments.FirstOrDefault().Value as string;
-                var typeName = parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
-                    SymbolDisplayMiscellaneousOptions.UseSpecialTypes | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier));
+                var typeName = parameter.Type.ToDisplayString(
+                    SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
+                        SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
+                        SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier));
                 return new ParameterModel(
                     parameter.Name, typeName,
                     underlying.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), source, routeToken,
-                    parameter.NullableAnnotation == NullableAnnotation.Annotated || !SymbolEqualityComparer.Default.Equals(underlying, parameter.Type),
+                    parameter.NullableAnnotation == NullableAnnotation.Annotated ||
+                    !SymbolEqualityComparer.Default.Equals(underlying, parameter.Type),
                     parameter.HasExplicitDefaultValue ? DefaultValue(parameter, typeName) : null,
                     jsonName,
                     underlying.TypeKind == TypeKind.Enum,
-                    underlying.GetMembers("TryParse").OfType<IMethodSymbol>().Any(m => m.IsStatic && m.Parameters.Length == 3
+                    underlying.GetMembers("TryParse").OfType<IMethodSymbol>().Any(m => m.IsStatic &&
+                        m.Parameters.Length == 3
                         && m.Parameters[1].Type.ToDisplayString() == "System.IFormatProvider"));
             })
             .ToArray();
@@ -186,17 +215,29 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         for (var i = 0; i < parameters.Length; i++)
         {
             var parameter = primaryConstructor.Parameters[i];
-            var type = parameter.Type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
-                ? nullable.TypeArguments[0] : parameter.Type;
-            if (parameter.RefKind != RefKind.None || (parameters[i].Source != ParameterSource.Body
-                && type.SpecialType != SpecialType.System_String && type.TypeKind != TypeKind.Enum
-                && !type.GetMembers("TryParse").OfType<IMethodSymbol>().Any(m => m.IsStatic && m.DeclaredAccessibility == Accessibility.Public
-                    && m.ReturnType.SpecialType == SpecialType.System_Boolean && m.Parameters.Length is 2 or 3
-                    && m.Parameters[0].Type.SpecialType == SpecialType.System_String && m.Parameters.Last().RefKind == RefKind.Out)))
+            var type = parameter.Type is INamedTypeSymbol
             {
-                return Invalid(invocation, $"parameter '{parameter.Name}' requires a supported scalar TryParse for route/query binding; move complex values into a JSON body");
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
+            } nullable
+                ? nullable.TypeArguments[0]
+                : parameter.Type;
+            if (parameter.RefKind != RefKind.None || (parameters[i].Source != ParameterSource.Body
+                                                      && type.SpecialType != SpecialType.System_String &&
+                                                      type.TypeKind != TypeKind.Enum
+                                                      && !type.GetMembers("TryParse").OfType<IMethodSymbol>().Any(m =>
+                                                          m.IsStatic && m.DeclaredAccessibility == Accessibility.Public
+                                                                     && m.ReturnType.SpecialType ==
+                                                                     SpecialType.System_Boolean &&
+                                                                     m.Parameters.Length is 2 or 3
+                                                                     && m.Parameters[0].Type.SpecialType ==
+                                                                     SpecialType.System_String &&
+                                                                     m.Parameters.Last().RefKind == RefKind.Out)))
+            {
+                return Invalid(invocation,
+                    $"parameter '{parameter.Name}' requires a supported scalar TryParse for route/query binding; move complex values into a JSON body");
             }
         }
+
         var location = context.SemanticModel.GetInterceptableLocation(invocation);
 
         return location is null
@@ -217,33 +258,30 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     static CallAnalysis Invalid(InvocationExpressionSyntax invocation, string reason)
         => new(null, Diagnostic.Create(UnsupportedBinding, invocation.GetLocation(), reason));
 
-    sealed class CallAnalysis(CallModel? model, Diagnostic? diagnostic)
-    {
-        public CallModel? Model { get; } = model;
-        public Diagnostic? Diagnostic { get; } = diagnostic;
-    }
-
     static string Normalize(string name) => name.Replace("_", string.Empty).ToLowerInvariant();
 
     static string DefaultValue(IParameterSymbol parameter, string typeName) => parameter.ExplicitDefaultValue is null
-        ? "default!" : $"({typeName})({SymbolDisplay.FormatPrimitive(parameter.ExplicitDefaultValue, quoteStrings: true, useHexadecimalNumbers: false)})";
+        ? "default!"
+        : $"({typeName})({SymbolDisplay.FormatPrimitive(parameter.ExplicitDefaultValue, true, false)})";
 
-    static string Literal(string value) => SymbolDisplay.FormatLiteral(value, quote: true);
+    static string Literal(string value) => SymbolDisplay.FormatLiteral(value, true);
 
-    static bool IsExcludedFromDescription(InvocationExpressionSyntax invocation) => invocation.Parent is MemberAccessExpressionSyntax
-    {
-        Parent: InvocationExpressionSyntax
+    static bool IsExcludedFromDescription(InvocationExpressionSyntax invocation) =>
+        invocation.Parent is MemberAccessExpressionSyntax
         {
-            Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "ExcludeFromDescription" },
-        },
-    };
+            Parent: InvocationExpressionSyntax
+            {
+                Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "ExcludeFromDescription" }
+            }
+        };
 
     static string ContainingScope(InvocationExpressionSyntax invocation)
     {
-        var declaration = invocation.Ancestors().FirstOrDefault(node => node is LocalFunctionStatementSyntax or BaseMethodDeclarationSyntax);
+        var declaration = invocation.Ancestors()
+            .FirstOrDefault(node => node is LocalFunctionStatementSyntax or BaseMethodDeclarationSyntax);
         return declaration is null
             ? invocation.SyntaxTree.FilePath + ":top-level"
-            : invocation.SyntaxTree.FilePath + ":" + declaration.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            : invocation.SyntaxTree.FilePath + ":" + declaration.SpanStart.ToString(CultureInfo.InvariantCulture);
     }
 
     static string CamelCase(string value)
@@ -260,6 +298,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 break;
             chars[i] = char.ToLowerInvariant(chars[i]);
         }
+
         return new string(chars);
     }
 
@@ -279,7 +318,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             // structurally by name, so a self-declared copy works exactly like the real one.
             .AppendLine("namespace System.Runtime.CompilerServices")
             .AppendLine("{")
-            .AppendLine("    [global::System.AttributeUsage(global::System.AttributeTargets.Method, AllowMultiple = true)]")
+            .AppendLine(
+                "    [global::System.AttributeUsage(global::System.AttributeTargets.Method, AllowMultiple = true)]")
             .AppendLine("    file sealed class InterceptsLocationAttribute : global::System.Attribute")
             .AppendLine("    {")
             .AppendLine("        public InterceptsLocationAttribute(int version, string data)")
@@ -319,26 +359,31 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .AppendLine("(this global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder app, string pattern)")
             .AppendLine("    {")
             .Append("        return app.MapMethods(pattern, new[] { \"").Append(call.Verb.ToUpperInvariant())
-            .Append("\" }, (global::System.Func<global::Microsoft.AspNetCore.Http.HttpContext, global::System.Threading.Tasks.Task>)Dispatch)")
+            .Append(
+                "\" }, (global::System.Func<global::Microsoft.AspNetCore.Http.HttpContext, global::System.Threading.Tasks.Task>)Dispatch)")
             .AppendLine()
             .Append("            .WithMetadata(new global::Cntryl.Portia.PortiaOpenApiOperation(")
             .Append(Literal(call.OperationId)).Append(", ")
             .Append(call.ResultType is null ? "null" : $"typeof({call.ResultType.TrimEnd('?')})").Append(", ")
-            .Append(call.ResultType is null && call.Kind is CallKind.Send or CallKind.Queue ? "true" : "false").Append(", ")
+            .Append(call.ResultType is null && call.Kind is CallKind.Send or CallKind.Queue ? "true" : "false")
+            .Append(", ")
             .Append(call.Kind == CallKind.Stream ? "true" : "false").Append(", ")
             .Append(call.Kind == CallKind.Sse ? "true" : "false").Append(", ")
-            .Append(call.Kind == CallKind.Queue ? "true" : "false").AppendLine(", new global::Cntryl.Portia.PortiaOpenApiParameter[]")
+            .Append(call.Kind == CallKind.Queue ? "true" : "false")
+            .AppendLine(", new global::Cntryl.Portia.PortiaOpenApiParameter[]")
             .AppendLine("            {");
         foreach (var parameter in call.Parameters)
         {
             var wireNameExpression = parameter.Source == ParameterSource.Route ? Literal(parameter.RouteToken!)
                 : parameter.JsonName is not null ? Literal(parameter.JsonName) : "default(string)";
             _ = source.Append("                new(").Append(Literal(parameter.Name)).Append(", typeof(")
-                .Append(parameter.Type.TrimEnd('?')).Append("), ").Append(Literal(parameter.Source.ToString().ToLowerInvariant())).Append(", ")
+                .Append(parameter.Type.TrimEnd('?')).Append("), ")
+                .Append(Literal(parameter.Source.ToString().ToLowerInvariant())).Append(", ")
                 .Append(!parameter.Nullable && parameter.Default is null ? "true" : "false").Append(", ")
                 .Append(parameter.Default is not null ? "true" : "false").Append(", ")
                 .Append(parameter.Default ?? "null").Append(", ").Append(wireNameExpression).AppendLine("),");
         }
+
         _ = source.AppendLine("            }));")
             .AppendLine();
 
@@ -352,8 +397,9 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         {
             CallKind.Stream => "global::Microsoft.AspNetCore.Http.IResult",
             CallKind.Sse => "global::Microsoft.AspNetCore.Http.IResult",
-            CallKind.Send or CallKind.Queue => "global::System.Threading.Tasks.Task<global::Microsoft.AspNetCore.Http.IResult>",
-            _ => throw new ArgumentOutOfRangeException(nameof(call)),
+            CallKind.Send or CallKind.Queue =>
+                "global::System.Threading.Tasks.Task<global::Microsoft.AspNetCore.Http.IResult>",
+            _ => throw new ArgumentOutOfRangeException(nameof(call))
         };
         var handlePrefix = call.Kind is CallKind.Stream or CallKind.Sse ? string.Empty : "async ";
         var bindingFailure = call.Kind is CallKind.Stream or CallKind.Sse
@@ -361,32 +407,44 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             : "return global::Cntryl.Portia.PortiaHttpBinding.Problem(400, \"Malformed request.\");";
 
         _ = source
-            .AppendLine("        async global::System.Threading.Tasks.Task Dispatch(global::Microsoft.AspNetCore.Http.HttpContext httpContext)")
+            .AppendLine(
+                "        async global::System.Threading.Tasks.Task Dispatch(global::Microsoft.AspNetCore.Http.HttpContext httpContext)")
             .AppendLine("        {")
             .AppendLine("            try")
             .AppendLine("            {")
-            .AppendLine("                var bus = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestBus>(httpContext.RequestServices);");
-        if (call.Kind is CallKind.Queue)
-            _ = source.AppendLine("                var queue = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestQueuePublisher>(httpContext.RequestServices);");
+            .AppendLine(
+                "                var bus = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestBus>(httpContext.RequestServices);");
+        if (call.Kind == CallKind.Queue)
+        {
+            _ = source.AppendLine(
+                "                var queue = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestQueuePublisher>(httpContext.RequestServices);");
+        }
+
         _ = source.Append("                var result = ");
         if (call.Kind is CallKind.Send or CallKind.Queue)
             _ = source.Append("await ");
+
         _ = source.Append("Handle(httpContext, bus")
             .Append(call.Kind is CallKind.Queue ? ", queue" : string.Empty)
             .AppendLine(", httpContext.RequestAborted);")
             .AppendLine("                await result.ExecuteAsync(httpContext).ConfigureAwait(false);")
             .AppendLine("            }")
-            .AppendLine("            catch (global::Cntryl.Portia.HttpPayloadTooLargeException ex) when (!httpContext.Response.HasStarted)")
+            .AppendLine(
+                "            catch (global::Cntryl.Portia.HttpPayloadTooLargeException ex) when (!httpContext.Response.HasStarted)")
             .AppendLine("            {")
-            .AppendLine("                await global::Cntryl.Portia.PortiaHttpBinding.Problem(413, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
+            .AppendLine(
+                "                await global::Cntryl.Portia.PortiaHttpBinding.Problem(413, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
             .AppendLine("            }")
-            .AppendLine("            catch (global::Microsoft.AspNetCore.Http.BadHttpRequestException ex) when (!httpContext.Response.HasStarted)")
+            .AppendLine(
+                "            catch (global::Microsoft.AspNetCore.Http.BadHttpRequestException ex) when (!httpContext.Response.HasStarted)")
             .AppendLine("            {")
-            .AppendLine("                await global::Cntryl.Portia.PortiaHttpBinding.Problem(400, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
+            .AppendLine(
+                "                await global::Cntryl.Portia.PortiaHttpBinding.Problem(400, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
             .AppendLine("            }")
             .AppendLine("            catch (global::System.Exception ex) when (!httpContext.Response.HasStarted)")
             .AppendLine("            {")
-            .AppendLine("                await global::Cntryl.Portia.PortiaHttpBinding.Unexpected(httpContext, ex).ExecuteAsync(httpContext).ConfigureAwait(false);")
+            .AppendLine(
+                "                await global::Cntryl.Portia.PortiaHttpBinding.Unexpected(httpContext, ex).ExecuteAsync(httpContext).ConfigureAwait(false);")
             .AppendLine("            }")
             .AppendLine("            catch (global::System.Exception)")
             .AppendLine("            {")
@@ -402,89 +460,123 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .AppendLine(", global::System.Threading.CancellationToken ct)")
             .AppendLine("        {");
 
-        _ = source.AppendLine("            var jsonOptions = global::Cntryl.Portia.PortiaHttpBinding.GetJsonOptions(httpContext);");
+        _ = source.AppendLine(
+            "            var jsonOptions = global::Cntryl.Portia.PortiaHttpBinding.GetJsonOptions(httpContext);");
         foreach (var (parameter, i) in call.Parameters.Select((p, i) => (p, i)))
             _ = source.Append("            ").Append(parameter.Type).Append(" value").Append(i).AppendLine(";");
         _ = source.AppendLine("            try").AppendLine("            {");
         if (hasBody)
         {
-            _ = source.Append("                using var body = await global::Cntryl.Portia.PortiaHttpBinding.ReadJsonBodyAsync(httpContext, ")
-                .Append(bodyParameters.Any(parameter => !parameter.Nullable && parameter.Default is null) ? "true" : "false")
+            _ = source.Append(
+                    "                using var body = await global::Cntryl.Portia.PortiaHttpBinding.ReadJsonBodyAsync(httpContext, ")
+                .Append(bodyParameters.Any(parameter => !parameter.Nullable && parameter.Default is null)
+                    ? "true"
+                    : "false")
                 .AppendLine(", ct).ConfigureAwait(false);");
         }
+
         foreach (var (parameter, i) in call.Parameters.Select((p, i) => (p, i)))
         {
-            var name = parameter.JsonName is not null ? Literal(parameter.JsonName)
+            var name = parameter.JsonName is not null
+                ? Literal(parameter.JsonName)
                 : $"(jsonOptions.PropertyNamingPolicy?.ConvertName({Literal(parameter.Name)}) ?? {Literal(parameter.Name)})";
             if (parameter.Source == ParameterSource.Body)
             {
-                _ = source.Append("                value").Append(i).Append(" = global::Cntryl.Portia.PortiaHttpBinding.ReadBody<")
+                _ = source.Append("                value").Append(i)
+                    .Append(" = global::Cntryl.Portia.PortiaHttpBinding.ReadBody<")
                     .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
-                    .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ").Append(Literal(parameter.Name)).Append(", ").Append(name)
+                    .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ").Append(Literal(parameter.Name))
+                    .Append(", ").Append(name)
                     .Append(parameter.Nullable ? ", true" : ", false")
                     .Append(parameter.Default is not null ? ", true, " : ", false, ")
                     .Append(parameter.Default ?? "default!").AppendLine(");");
                 continue;
             }
+
             var raw = parameter.Source == ParameterSource.Route
                 ? $"global::System.Convert.ToString(httpContext.Request.RouteValues[{Literal(parameter.RouteToken!)}], global::System.Globalization.CultureInfo.InvariantCulture)"
                 : $"global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name})";
-            // Convert.ToString(null) returns an empty string; an absent route is still missing.
-            if (parameter.Source == ParameterSource.Route)
+            if (parameter.Source ==
+                // Convert.ToString(null) returns an empty string; an absent route is still missing.
+                ParameterSource.Route)
+            {
                 raw = $"(httpContext.Request.RouteValues[{Literal(parameter.RouteToken!)}] is null ? null : {raw})";
+            }
+
             _ = source.Append("                var raw").Append(i).Append(" = ").Append(raw).AppendLine(";")
                 .Append("                if (raw").Append(i).AppendLine(" is null)")
                 .AppendLine("                {");
             _ = parameter.Default is not null || parameter.Nullable
-                ? source.Append("                    value").Append(i).Append(" = ").Append(parameter.Default ?? "default").AppendLine(";")
-                : source.AppendLine("                    throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Missing required value.\");");
-            _ = source.AppendLine("                }").AppendLine("                else").AppendLine("                {");
+                ? source.Append("                    value").Append(i).Append(" = ")
+                    .Append(parameter.Default ?? "default").AppendLine(";")
+                : source.AppendLine(
+                    "                    throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Missing required value.\");");
+            _ = source.AppendLine("                }").AppendLine("                else")
+                .AppendLine("                {");
             if (IsString(parameter.UnderlyingType))
             {
                 _ = source.Append("                    value").Append(i).Append(" = raw").Append(i).AppendLine(";");
             }
             else
             {
-                var parse = parameter.IsEnum ? $"global::System.Enum.TryParse<{parameter.UnderlyingType}>(raw{i}, true, out var parsed{i})"
-                    : $"{parameter.UnderlyingType}.TryParse(raw{i}, " + (parameter.HasProviderParse ? "global::System.Globalization.CultureInfo.InvariantCulture, " : "") + $"out var parsed{i})";
+                var parse = parameter.IsEnum
+                    ? $"global::System.Enum.TryParse<{parameter.UnderlyingType}>(raw{i}, true, out var parsed{i})"
+                    : $"{parameter.UnderlyingType}.TryParse(raw{i}, " +
+                      (parameter.HasProviderParse
+                          ? "global::System.Globalization.CultureInfo.InvariantCulture, "
+                          : "") + $"out var parsed{i})";
                 _ = source.Append("                    if (!").Append(parse).AppendLine(")")
-                    .AppendLine("                        throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Invalid scalar value.\");")
+                    .AppendLine(
+                        "                        throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Invalid scalar value.\");")
                     .Append("                    value").Append(i).Append(" = parsed").Append(i).AppendLine(";");
             }
+
             _ = source.AppendLine("                }");
         }
-        _ = source.AppendLine("            }").AppendLine("            catch (global::Cntryl.Portia.HttpPayloadTooLargeException)")
+
+        _ = source.AppendLine("            }")
+            .AppendLine("            catch (global::Cntryl.Portia.HttpPayloadTooLargeException)")
             .AppendLine("            {")
             .AppendLine("                throw;")
             .AppendLine("            }")
             .AppendLine("            catch (global::System.Text.Json.JsonException)")
-            .AppendLine("            {").Append("                ").AppendLine(bindingFailure).AppendLine("            }")
+            .AppendLine("            {").Append("                ").AppendLine(bindingFailure)
+            .AppendLine("            }")
             .AppendLine("            catch (global::Microsoft.AspNetCore.Http.BadHttpRequestException)")
-            .AppendLine("            {").Append("                ").AppendLine(bindingFailure).AppendLine("            }")
+            .AppendLine("            {").Append("                ").AppendLine(bindingFailure)
+            .AppendLine("            }")
             .Append("            var request = new ").Append(call.RequestTypeFullName).Append('(')
             .Append(string.Join(", ", call.Parameters.Select((_, i) => "value" + i)))
             .AppendLine(");");
 
         // The actor is never inferred beyond this point — httpContext.User is where "ambient"
         // stops and an explicit value starts, exactly like every other transport's call site.
-        _ = source.AppendLine("            var context = global::Cntryl.Portia.PortiaHttpBinding.CreateDispatchContext(httpContext);");
+        _ = source.AppendLine(
+            "            var context = global::Cntryl.Portia.PortiaHttpBinding.CreateDispatchContext(httpContext);");
 
-        if (call.Kind is CallKind.Queue)
+        if (call.Kind == CallKind.Queue)
         {
             _ = source
                 .AppendLine("            if (global::Cntryl.Portia.PortiaHttpBinding.PrefersRespondAsync(httpContext))")
                 .AppendLine("            {")
-                .AppendLine("                var actorToken = global::Cntryl.Portia.PortiaHttpBinding.ReadBearerCredential(httpContext);")
-                .AppendLine("                await queue.EnqueueAsync(request, global::Cntryl.Portia.PortiaHttpBinding.ResolveRouteValues(httpContext), actorToken, context.Metadata, ct).ConfigureAwait(false);")
-                .AppendLine("                return global::Cntryl.Portia.PortiaHttpBinding.Accepted(httpContext, context.Metadata.RequestId);")
+                .AppendLine(
+                    "                var actorToken = global::Cntryl.Portia.PortiaHttpBinding.ReadBearerCredential(httpContext);")
+                .AppendLine(
+                    "                await queue.EnqueueAsync(request, global::Cntryl.Portia.PortiaHttpBinding.ResolveRouteValues(httpContext), actorToken, context.Metadata, ct).ConfigureAwait(false);")
+                .AppendLine(
+                    "                return global::Cntryl.Portia.PortiaHttpBinding.Accepted(httpContext, context.Metadata.RequestId);")
                 .AppendLine("            }")
                 .AppendLine();
         }
 
         _ = call.Kind switch
         {
-            CallKind.Stream => source.Append("            return global::Cntryl.Portia.PortiaStreamResults.Json(bus.DispatchStreamAsync<").Append(call.ResultType).AppendLine(">(request, context, ct));"),
-            CallKind.Sse => source.Append("            return global::Cntryl.Portia.PortiaStreamResults.Sse(bus.DispatchStreamAsync<").Append(call.ResultType).AppendLine(">(request, context, ct));"),
+            CallKind.Stream => source
+                .Append("            return global::Cntryl.Portia.PortiaStreamResults.Json(bus.DispatchStreamAsync<")
+                .Append(call.ResultType).AppendLine(">(request, context, ct));"),
+            CallKind.Sse => source
+                .Append("            return global::Cntryl.Portia.PortiaStreamResults.Sse(bus.DispatchStreamAsync<")
+                .Append(call.ResultType).AppendLine(">(request, context, ct));"),
             CallKind.Send or CallKind.Queue => source
                 .Append("            return (await bus.DispatchAsync")
                 .Append(call.ResultType is null ? string.Empty : $"<{call.ResultType}>")
@@ -493,7 +585,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     ? string.Empty
                     : $"(global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<{call.ResultType}>)jsonOptions.GetTypeInfo(typeof({call.ResultType}))")
                 .AppendLine(");"),
-            _ => throw new ArgumentOutOfRangeException(nameof(call)),
+            _ => throw new ArgumentOutOfRangeException(nameof(call))
         };
 
         _ = source
@@ -505,11 +597,17 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     static bool IsString(string type) =>
         type is "string" or "string?" or "global::System.String" or "global::System.String?";
 
+    sealed class CallAnalysis(CallModel? model, Diagnostic? diagnostic)
+    {
+        public CallModel? Model { get; } = model;
+        public Diagnostic? Diagnostic { get; } = diagnostic;
+    }
+
     enum ParameterSource
     {
         Route,
         Body,
-        Query,
+        Query
     }
 
     enum CallKind
@@ -517,11 +615,20 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         Send,
         Queue,
         Stream,
-        Sse,
+        Sse
     }
 
-    sealed class ParameterModel(string name, string type, string underlyingType, ParameterSource source, string? routeToken,
-        bool nullable, string? defaultValue, string? jsonName, bool isEnum, bool hasProviderParse)
+    sealed class ParameterModel(
+        string name,
+        string type,
+        string underlyingType,
+        ParameterSource source,
+        string? routeToken,
+        bool nullable,
+        string? defaultValue,
+        string? jsonName,
+        bool isEnum,
+        bool hasProviderParse)
     {
         public string Name { get; } = name;
         public string Type { get; } = type;
@@ -574,7 +681,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     {
         public static StringTupleComparer Instance { get; } = new();
 
-        public bool Equals((string RequestTypeFullName, string ContainingSymbol) x, (string RequestTypeFullName, string ContainingSymbol) y) =>
+        public bool Equals((string RequestTypeFullName, string ContainingSymbol) x,
+            (string RequestTypeFullName, string ContainingSymbol) y) =>
             StringComparer.Ordinal.Equals(x.RequestTypeFullName, y.RequestTypeFullName)
             && StringComparer.Ordinal.Equals(x.ContainingSymbol, y.ContainingSymbol);
 
@@ -583,7 +691,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             unchecked
             {
                 return (StringComparer.Ordinal.GetHashCode(obj.RequestTypeFullName) * 397)
-                    ^ StringComparer.Ordinal.GetHashCode(obj.ContainingSymbol);
+                       ^ StringComparer.Ordinal.GetHashCode(obj.ContainingSymbol);
             }
         }
     }

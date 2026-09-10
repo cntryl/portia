@@ -1,27 +1,11 @@
 namespace Cntryl.Portia.Testing;
 
-/// <summary>Supplies an isolated <see cref="IEventStore" /> for its conformance suite.</summary>
-public interface IEventStoreConformanceProbe
-{
-    /// <summary>Gets the realm every stream in one run shares.</summary>
-    string Realm { get; }
-
-    /// <summary>Gets the area every stream in one run shares.</summary>
-    string Area { get; }
-
-    /// <summary>Clears all data owned by the isolated conformance target.</summary>
-    ValueTask ResetAsync(CancellationToken ct = default);
-
-    /// <summary>Opens the store under test. Repeated calls address the same durable data.</summary>
-    ValueTask<IEventStore> OpenAsync(CancellationToken ct = default);
-}
-
 /// <summary>
-/// Reusable ordering, offset, and optimistic-concurrency checks for an
-/// <see cref="IEventStore" />. These are the invariants aggregate hydration and every projector
-/// depend on but cannot verify themselves — most importantly that a stale append fails with
-/// <see cref="EventStreamConcurrencyException" /> rather than the backing store's own exception
-/// type, which is what lets an application write one <c>catch</c> across every adapter.
+///     Reusable ordering, offset, and optimistic-concurrency checks for an
+///     <see cref="IEventStore" />. These are the invariants aggregate hydration and every projector
+///     depend on but cannot verify themselves — most importantly that a stale append fails with
+///     <see cref="EventStreamConcurrencyException" /> rather than the backing store's own exception
+///     type, which is what lets an application write one <c>catch</c> across every adapter.
 /// </summary>
 public static class EventStoreConformance
 {
@@ -48,7 +32,10 @@ public static class EventStoreConformance
         var store = await probe.OpenAsync(ct).ConfigureAwait(false);
         var records = await ReadAsync(store, Stream(probe, "absent"), 0, ct).ConfigureAwait(false);
         if (records.Count != 0)
-            throw new ConformanceViolationException($"Reading a stream that was never written returned {records.Count} records; expected none.");
+        {
+            throw new ConformanceViolationException(
+                $"Reading a stream that was never written returned {records.Count} records; expected none.");
+        }
     }
 
     static async ValueTask VerifyAppendAndReadOrderAsync(IEventStoreConformanceProbe probe, CancellationToken ct)
@@ -61,7 +48,10 @@ public static class EventStoreConformance
 
         var records = await ReadAsync(store, stream, 0, ct).ConfigureAwait(false);
         if (records.Count != 3)
+        {
             throw new ConformanceViolationException($"Expected 3 appended records; read {records.Count}.");
+        }
+
         for (var index = 0; index < records.Count; index++)
         {
             var record = records[index];
@@ -70,13 +60,18 @@ public static class EventStoreConformance
                 throw new ConformanceViolationException(
                     $"Record {index} reported resource offset {record.ResourceOffset}; offsets must be contiguous and zero-based.");
             }
+
             if (record.Event.Metadata.AggregateVersion != (ulong)(index + 1))
             {
                 throw new ConformanceViolationException(
                     $"Record {index} reported aggregate version {record.Event.Metadata.AggregateVersion}; reads must preserve append order.");
             }
+
             if (record.Stream != stream)
-                throw new ConformanceViolationException($"Record {index} reported stream '{record.Stream}'; expected '{stream}'.");
+            {
+                throw new ConformanceViolationException(
+                    $"Record {index} reported stream '{record.Stream}'; expected '{stream}'.");
+            }
         }
     }
 
@@ -118,10 +113,12 @@ public static class EventStoreConformance
                 $"A stale append threw '{ex.GetType().FullName}'; it must throw {nameof(EventStreamConcurrencyException)} so one catch covers every adapter.");
         }
 
-        throw new ConformanceViolationException("A stale append succeeded; the expected stream position was not enforced.");
+        throw new ConformanceViolationException(
+            "A stale append succeeded; the expected stream position was not enforced.");
     }
 
-    static async ValueTask VerifyConflictLeavesStreamUnchangedAsync(IEventStoreConformanceProbe probe, CancellationToken ct)
+    static async ValueTask VerifyConflictLeavesStreamUnchangedAsync(IEventStoreConformanceProbe probe,
+        CancellationToken ct)
     {
         var store = await probe.OpenAsync(ct).ConfigureAwait(false);
         var stream = Stream(probe, "conflict");
@@ -144,13 +141,21 @@ public static class EventStoreConformance
             throw new ConformanceViolationException(
                 $"A pattern read returned streams [{string.Join(", ", streams)}]; it must cover every stream in the area.");
         }
+
         if (records.Any(record => record.AreaOffset is null))
-            throw new ConformanceViolationException("A pattern read must supply the area offset a projector checkpoints against.");
+        {
+            throw new ConformanceViolationException(
+                "A pattern read must supply the area offset a projector checkpoints against.");
+        }
+
         var offsets = records.Select(record => record.AreaOffset!.Value).ToArray();
         for (var index = 1; index < offsets.Length; index++)
         {
             if (offsets[index] <= offsets[index - 1])
-                throw new ConformanceViolationException("A pattern read must return records in ascending, distinct scope-offset order.");
+            {
+                throw new ConformanceViolationException(
+                    "A pattern read must return records in ascending, distinct scope-offset order.");
+            }
         }
     }
 
@@ -160,7 +165,8 @@ public static class EventStoreConformance
     static ConformanceEvent Event(Uuid aggregateId, ulong version) => DomainEventSeed.Attach(
         new ConformanceEvent(version), aggregateId, version);
 
-    static async ValueTask<List<DomainEventRecord>> ReadAsync(IEventStore store, EventStreamAddress stream, ulong fromOffset, CancellationToken ct)
+    static async ValueTask<List<DomainEventRecord>> ReadAsync(IEventStore store, EventStreamAddress stream,
+        ulong fromOffset, CancellationToken ct)
     {
         var records = new List<DomainEventRecord>();
         await foreach (var record in store.ReadAsync(stream, fromOffset, ct).ConfigureAwait(false))
@@ -168,7 +174,8 @@ public static class EventStoreConformance
         return records;
     }
 
-    static async ValueTask<List<DomainEventRecord>> ReadAsync(IEventStore store, EventStreamPattern pattern, ulong fromOffset, CancellationToken ct)
+    static async ValueTask<List<DomainEventRecord>> ReadAsync(IEventStore store, EventStreamPattern pattern,
+        ulong fromOffset, CancellationToken ct)
     {
         var records = new List<DomainEventRecord>();
         await foreach (var record in store.ReadAsync(pattern, fromOffset, ct).ConfigureAwait(false))
@@ -176,8 +183,3 @@ public static class EventStoreConformance
         return records;
     }
 }
-
-/// <summary>The event the conformance suite appends. Applications never persist this type.</summary>
-/// <param name="Sequence">The suite's own ordering marker.</param>
-[Discriminator("portia.conformance.event")]
-public sealed record ConformanceEvent(ulong Sequence) : DomainEvent;

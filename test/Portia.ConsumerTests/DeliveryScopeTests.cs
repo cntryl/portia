@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
+using Cntryl.Fitz.Abstractions.Domains.Rpc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -12,8 +13,11 @@ public sealed class DeliveryScopeTests
     [InlineData(true)]
     public async Task EveryDeliveryOwnsScopeThroughNestedDispatchFailureAndCancellation(bool notification)
     {
-        var requests = new[] { new ScopeRequest(Uuid.CreateVersion4()), new ScopeRequest(Uuid.CreateVersion4(), 1),
-            new ScopeRequest(Uuid.CreateVersion4()), new ScopeRequest(Uuid.CreateVersion4(), 2) };
+        var requests = new[]
+        {
+            new ScopeRequest(Uuid.CreateVersion4()), new ScopeRequest(Uuid.CreateVersion4(), 1),
+            new ScopeRequest(Uuid.CreateVersion4()), new ScopeRequest(Uuid.CreateVersion4(), 2)
+        };
         var services = ConsumerHost.CreateServices();
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, ScopeValidator>();
@@ -27,6 +31,7 @@ public sealed class DeliveryScopeTests
             _ = services.AddSingleton<IRequestQueueConsumer>(new Queue(requests));
             _ = services.AddPortiaQueueRunner();
         }
+
         await using var provider = ConsumerHost.Build(services);
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
@@ -40,6 +45,7 @@ public sealed class DeliveryScopeTests
             await worker.StopAsync(default);
             (worker as IDisposable)?.Dispose();
         }
+
         var deliveries = effects.Items.Where(item => item.Component == "delivery").ToArray();
         Assert.Equal(4, deliveries.Select(item => item.ScopeId).Distinct().Count());
         foreach (var delivery in deliveries)
@@ -48,6 +54,7 @@ public sealed class DeliveryScopeTests
                 item => item.Component == "nested" && item.AggregateId == delivery.AggregateId).ScopeId);
             Assert.Contains(effects.Items, item => item.Component == "validator" && item.ScopeId == delivery.ScopeId);
         }
+
         Assert.All(effects.Scopes.Values, Assert.True);
     }
 
@@ -57,7 +64,7 @@ public sealed class DeliveryScopeTests
         var services = ConsumerHost.CreateServices();
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, ScopeValidator>();
-        _ = services.AddSingleton<Fitz.Abstractions.Domains.Rpc.IRpcClient, InMemoryRpcClient>();
+        _ = services.AddSingleton<IRpcClient, InMemoryRpcClient>();
         var serializer = ConsumerJson.CreateSerializer();
         _ = services.AddSingleton<IRequestDeserializer>(serializer);
         _ = services.AddSingleton<IRequestOutcomeSerializer>(serializer);
@@ -65,13 +72,19 @@ public sealed class DeliveryScopeTests
         await using var provider = ConsumerHost.Build(services);
         var server = provider.GetRequiredService<FitzRpcRequestServer>();
         await using var registration = await server.RegisterAsync<ScopeRequest>();
-        var sender = new FitzRemoteRequestSender(provider.GetRequiredService<Fitz.Abstractions.Domains.Rpc.IRpcClient>(), serializer, serializer);
+        var sender = new FitzRemoteRequestSender(provider.GetRequiredService<IRpcClient>(), serializer, serializer);
         for (var i = 0; i < 2; i++)
-            Assert.True((await sender.SendAsync(new ScopeRequest(Uuid.CreateVersion4()), new RequestRouteValues(), actorToken: null)).IsSuccess);
+        {
+            Assert.True(
+                (await sender.SendAsync(new ScopeRequest(Uuid.CreateVersion4()), new RequestRouteValues(), null))
+                .IsSuccess);
+        }
+
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await sender.SendAsync(new ScopeRequest(Uuid.CreateVersion4(), 1), new RequestRouteValues(), actorToken: null));
+            await sender.SendAsync(new ScopeRequest(Uuid.CreateVersion4(), 1), new RequestRouteValues(), null));
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
-        Assert.Equal(3, effects.Items.Where(item => item.Component == "delivery").Select(item => item.ScopeId).Distinct().Count());
+        Assert.Equal(3,
+            effects.Items.Where(item => item.Component == "delivery").Select(item => item.ScopeId).Distinct().Count());
         Assert.All(effects.Scopes.Values, Assert.True);
     }
 
@@ -93,6 +106,7 @@ public sealed class DeliveryScopeTests
                 ct.ThrowIfCancellationRequested();
                 yield return new Queued(request);
             }
+
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
         }
     }
@@ -110,13 +124,16 @@ public sealed class DeliveryScopeTests
 
     sealed class Notifications(ScopeRequest[] requests) : IRequestNotificationConsumer
     {
-        public async IAsyncEnumerable<RequestNotification> ReadAsync([EnumeratorCancellation] CancellationToken ct = default)
+        public async IAsyncEnumerable<RequestNotification> ReadAsync(
+            [EnumeratorCancellation] CancellationToken ct = default)
         {
             foreach (var request in requests)
             {
                 ct.ThrowIfCancellationRequested();
-                yield return new RequestNotification(request, null, RequestMetadata.Create(), new NoticeInvocation("notice://test/work/item"));
+                yield return new RequestNotification(request, null, RequestMetadata.Create(),
+                    new NoticeInvocation("notice://test/work/item"));
             }
+
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
         }
     }

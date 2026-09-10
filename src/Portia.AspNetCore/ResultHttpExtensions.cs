@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Http;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Maps <see cref="Result" />/<see cref="Result{T}" /> outcomes onto HTTP responses, using the
-/// same <see cref="RequestErrorKind" /> every transport already branches on.
+///     Maps <see cref="Result" />/<see cref="Result{T}" /> outcomes onto HTTP responses, using the
+///     same <see cref="RequestErrorKind" /> every transport already branches on.
 /// </summary>
 public static class ResultHttpExtensions
 {
@@ -13,16 +13,16 @@ public static class ResultHttpExtensions
     public const string TransientHeaderName = "Portia-Transient";
 
     /// <summary>
-    /// Maps a no-result outcome onto an HTTP response: 204 on success, or a status matching the
-    /// error's <see cref="RequestErrorKind" />.
+    ///     Maps a no-result outcome onto an HTTP response: 204 on success, or a status matching the
+    ///     error's <see cref="RequestErrorKind" />.
     /// </summary>
     /// <param name="result">The outcome to map.</param>
     public static IResult ToHttpResult(this Result result) =>
         result.IsSuccess ? Results.NoContent() : ToProblem(result.Error);
 
     /// <summary>
-    /// Maps an outcome with a result value onto an HTTP response: 200 with the value on
-    /// success, or a status matching the error's <see cref="RequestErrorKind" />.
+    ///     Maps an outcome with a result value onto an HTTP response: 200 with the value on
+    ///     success, or a status matching the error's <see cref="RequestErrorKind" />.
     /// </summary>
     /// <typeparam name="T">The type of the value produced on success.</typeparam>
     /// <param name="result">The outcome to map.</param>
@@ -47,7 +47,7 @@ public static class ResultHttpExtensions
                 RequestErrorKind.Forbidden => StatusCodes.Status403Forbidden,
                 RequestErrorKind.NotFound => StatusCodes.Status404NotFound,
                 RequestErrorKind.Conflict => StatusCodes.Status409Conflict,
-                _ => StatusCodes.Status500InternalServerError,
+                _ => StatusCodes.Status500InternalServerError
             };
             httpContext.Response.Headers[TransientHeaderName] = error.IsTransient ? "true" : "false";
             if (error.Kind == RequestErrorKind.Unauthorized)
@@ -55,8 +55,12 @@ public static class ResultHttpExtensions
                 httpContext.Response.Headers.WWWAuthenticate = "Bearer";
                 return;
             }
-            await PortiaProblemDetails.WriteAsync(httpContext, httpContext.Response.StatusCode, error.Message, error.IsTransient)
-                .ConfigureAwait(false);
+            else
+            {
+                await PortiaProblemDetails.WriteAsync(httpContext, httpContext.Response.StatusCode, error.Message,
+                        error.IsTransient)
+                    .ConfigureAwait(false);
+            }
         }
     }
 }

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Cntryl.Fitz.Abstractions.Domains.Queue;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,8 +17,9 @@ public sealed class QueueConsumerContractTests
         var clock = new ManualClock();
         var serializer = ConsumerJson.CreateSerializer();
         var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
-        var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer, "queue://consumer/scopes/delivery",
-            visibilityTimeoutSeconds: 4, timeProvider: clock);
+        var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
+            "queue://consumer/scopes/delivery",
+            4, timeProvider: clock);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
         Assert.True(await reader.MoveNextAsync());
         Assert.Equal(TimeSpan.FromSeconds(2), await clock.WaitForDelayAsync());
@@ -28,6 +30,7 @@ public sealed class QueueConsumerContractTests
             await reader.Current.CompleteAsync();
         else
             await reader.Current.AbandonAsync();
+
         clock.Advance(TimeSpan.FromDays(1));
         Assert.Equal(1, item.Extensions);
         Assert.Equal(acknowledge ? 1 : 0, item.Completions);
@@ -38,9 +41,11 @@ public sealed class QueueConsumerContractTests
     {
         var clock = new ManualClock();
         var serializer = ConsumerJson.CreateSerializer();
-        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1) { BlockCompletion = true };
-        var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer, "queue://consumer/scopes/delivery",
-            visibilityTimeoutSeconds: 4, timeProvider: clock);
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1)
+        { BlockCompletion = true };
+        var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
+            "queue://consumer/scopes/delivery",
+            4, timeProvider: clock);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
         Assert.True(await reader.MoveNextAsync());
         _ = await clock.WaitForDelayAsync();
@@ -63,14 +68,16 @@ public sealed class QueueConsumerContractTests
     {
         var clock = new ManualClock();
         var serializer = ConsumerJson.CreateSerializer();
-        var failed = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4(), 2)), 6) { FailExtension = true };
+        var failed = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4(), 2)), 6)
+        { FailExtension = true };
         var success = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
         var queue = new QueueClient([failed, success]);
         var services = ConsumerHost.CreateServices();
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
-        _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(queue, serializer, "queue://consumer/scopes/delivery",
-            visibilityTimeoutSeconds: 4, timeProvider: clock));
+        _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(queue, serializer,
+            "queue://consumer/scopes/delivery",
+            4, timeProvider: clock));
         _ = services.AddPortiaQueueRunner();
         await using var provider = ConsumerHost.Build(services);
         using var cancellation = new CancellationTokenSource();
@@ -91,8 +98,13 @@ public sealed class QueueConsumerContractTests
         finally
         {
             cancellation.Cancel();
-            try { await run; }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            try
+            {
+                await run;
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+            }
         }
     }
 
@@ -101,14 +113,16 @@ public sealed class QueueConsumerContractTests
     {
         var clock = new ManualClock();
         var serializer = ConsumerJson.CreateSerializer();
-        var failed = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1) { FailExtension = true };
+        var failed = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1)
+        { FailExtension = true };
         var success = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
         var consumer = new FitzRequestQueueConsumer(new QueueClient([failed, success]), serializer,
-            "queue://consumer/scopes/delivery", visibilityTimeoutSeconds: 4, timeProvider: clock);
+            "queue://consumer/scopes/delivery", 4, timeProvider: clock);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
         Assert.True(await reader.MoveNextAsync());
         var lost = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var failingCallback = reader.Current.ReservationCancellation.Register(() => throw new IOException("Application cancellation callback failed"));
+        using var failingCallback = reader.Current.ReservationCancellation.Register(() =>
+            throw new IOException("Application cancellation callback failed"));
         using var observed = reader.Current.ReservationCancellation.Register(lost.SetResult);
         _ = await clock.WaitForDelayAsync();
         _ = await clock.WaitForDelayAsync();
@@ -125,7 +139,7 @@ public sealed class QueueConsumerContractTests
     public async Task SubscriptionIsEstablishedBeforeImmediateReserveWithoutChangingAttempt()
     {
         var serializer = ConsumerJson.CreateSerializer();
-        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), attempt: 9);
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 9);
         var queue = new QueueClient([item]);
         var consumer = new FitzRequestQueueConsumer(queue, serializer, "queue://consumer/scopes/delivery");
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
@@ -150,7 +164,8 @@ public sealed class QueueConsumerContractTests
         var services = ConsumerHost.CreateServices();
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
-        _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(queue, serializer, "queue://consumer/scopes/delivery"));
+        _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(queue, serializer,
+            "queue://consumer/scopes/delivery"));
         _ = services.AddPortiaQueueRunner();
         await using var provider = ConsumerHost.Build(services);
         using var cancellation = new CancellationTokenSource();
@@ -171,8 +186,13 @@ public sealed class QueueConsumerContractTests
         finally
         {
             cancellation.Cancel();
-            try { await run; }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            try
+            {
+                await run;
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+            }
         }
     }
 
@@ -186,13 +206,15 @@ public sealed class QueueConsumerContractTests
         public bool SubscribedBeforeReserve { get; private set; }
         public TaskCompletionSource Idle { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body, int? delayMs = null, CancellationToken ct = default)
+        public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body, int? delayMs = null,
+            CancellationToken ct = default)
         {
             Enqueues++;
             return Task.FromResult(0UL);
         }
 
-        public async Task<IQueueReservedItem[]> ReserveAsync(string route, ulong leaseSeconds, int batchSize = 1, int? waitSeconds = null, CancellationToken ct = default)
+        public async Task<IQueueReservedItem[]> ReserveAsync(string route, ulong leaseSeconds, int batchSize = 1,
+            int? waitSeconds = null, CancellationToken ct = default)
         {
             SubscribedBeforeReserve = Subscribed;
             WaitSeconds = waitSeconds;
@@ -201,9 +223,14 @@ public sealed class QueueConsumerContractTests
                 return items;
             _ = Idle.TrySetResult();
             if (waitSeconds == 0)
+            {
                 return [];
-            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-            return [];
+            }
+            else
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                return [];
+            }
         }
 
         public Task<QueueSubscription> SubscribeAsync(string pattern, CancellationToken ct = default)
@@ -213,7 +240,7 @@ public sealed class QueueConsumerContractTests
         }
 
         static async IAsyncEnumerable<QueueAvailabilityEvent> Wait(
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+            [EnumeratorCancellation] CancellationToken ct)
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             yield break;
@@ -222,29 +249,40 @@ public sealed class QueueConsumerContractTests
 
     internal sealed class Reserved(ReadOnlyMemory<byte> body, uint attempt) : IQueueReservedItem
     {
-        public string Route => "queue://consumer/scopes/delivery";
-        public ReadOnlyMemory<byte> Body => body;
-        public uint Attempt => attempt;
         public int Completions { get; private set; }
         public int Extensions { get; private set; }
         public TaskCompletionSource Extended { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool FailExtension { get; init; }
+        public bool BlockCompletion { get; init; }
+
+        public TaskCompletionSource CompletionStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource ReleaseCompletion { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string Route => "queue://consumer/scopes/delivery";
+        public ReadOnlyMemory<byte> Body => body;
+        public uint Attempt => attempt;
+
         public Task ExtendAsync(ulong leaseSeconds, CancellationToken ct = default)
         {
             Extensions++;
             _ = Extended.TrySetResult();
-            return FailExtension ? Task.FromException(new IOException("Reservation renewal disconnected")) : Task.CompletedTask;
+            return FailExtension
+                ? Task.FromException(new IOException("Reservation renewal disconnected"))
+                : Task.CompletedTask;
         }
-        public bool BlockCompletion { get; init; }
-        public TaskCompletionSource CompletionStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TaskCompletionSource ReleaseCompletion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public async Task CompleteAsync(CancellationToken ct = default)
         {
             _ = CompletionStarted.TrySetResult();
             if (BlockCompletion)
                 await ReleaseCompletion.Task.WaitAsync(ct);
+
             Completions++;
         }
+
         public Task CompleteWithTokenAsync(ulong token, CancellationToken ct = default) => CompleteAsync(ct);
     }
 }

@@ -4,8 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies the <c>SendAsync</c>/<c>StreamAsync</c> overloads that moved off <see cref="IRequestBus" />
-/// into <see cref="RequestBusExtensions" /> behave exactly as the interface members did.
+///     Verifies the <c>SendAsync</c>/<c>StreamAsync</c> overloads that moved off <see cref="IRequestBus" />
+///     into <see cref="RequestBusExtensions" /> behave exactly as the interface members did.
 /// </summary>
 public sealed class RequestBusExtensionsTests
 {
@@ -39,11 +39,11 @@ public sealed class RequestBusExtensionsTests
     }
 
     /// <summary>
-    /// Regression test for the narrowing of <see cref="IRequestBus" />: the six convenience
-    /// overloads used to exist twice — as interface default implementations that built a context
-    /// with no <see cref="TimeProvider" />, and as <c>RequestBus</c> overrides that passed the
-    /// registered one. Building the context through <see cref="IRequestBus.CreateContext" />
-    /// removes that fork, so a registered clock is honoured no matter which overload is called.
+    ///     Regression test for the narrowing of <see cref="IRequestBus" />: the six convenience
+    ///     overloads used to exist twice — as interface default implementations that built a context
+    ///     with no <see cref="TimeProvider" />, and as <c>RequestBus</c> overrides that passed the
+    ///     registered one. Building the context through <see cref="IRequestBus.CreateContext" />
+    ///     removes that fork, so a registered clock is honoured no matter which overload is called.
     /// </summary>
     [Fact]
     public async Task ShouldStampExecutionStartFromTheRegisteredTimeProvider()
@@ -71,11 +71,6 @@ public sealed class RequestBusExtensionsTests
         Assert.Equal(parent.CorrelationId, handler.CorrelationId);
     }
 
-    sealed class FixedClock(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
-
     static ReactionExecutionContext CreateReactionContext()
     {
         var aggregateId = Uuid.CreateVersion4();
@@ -87,6 +82,11 @@ public sealed class RequestBusExtensionsTests
             RequestActor.System);
     }
 
+    sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
     sealed class RecordingRequestBus(Result outcome) : IRequestBus
     {
         public RequestDispatchContext? Context { get; private set; }
@@ -94,33 +94,19 @@ public sealed class RequestBusExtensionsTests
         public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
             new(actor, metadata: metadata);
 
-        public ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context, CancellationToken ct = default)
+        public ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
+            CancellationToken ct = default)
         {
             Context = context;
             return ValueTask.FromResult(outcome);
         }
 
-        public ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context, CancellationToken ct = default) =>
+        public ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context,
+            CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request, RequestDispatchContext context, CancellationToken ct = default) =>
+        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request,
+            RequestDispatchContext context, CancellationToken ct = default) =>
             throw new NotSupportedException();
-    }
-}
-
-/// <summary>A request used to observe the execution context a dispatch runs under.</summary>
-public sealed record ClockProbe : IRequest;
-
-sealed class ClockProbeHandler : IRequestHandler<ClockProbe>
-{
-    public DateTimeOffset? StartedAt { get; set; }
-
-    public Uuid CorrelationId { get; private set; }
-
-    public ValueTask<Result> HandleAsync(IRequestContext<ClockProbe> context, CancellationToken ct)
-    {
-        StartedAt = context.StartedAt;
-        CorrelationId = context.CorrelationId;
-        return ValueTask.FromResult(Result.Success);
     }
 }

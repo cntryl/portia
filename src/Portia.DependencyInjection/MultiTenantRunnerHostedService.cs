@@ -4,10 +4,10 @@ using Microsoft.Extensions.Hosting;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Runs a <see cref="MultiTenantRunner" /> for the life of the host and creates one dependency-
-/// injection scope per active tenant. Registered by
-/// <see cref="PortiaHostingServiceCollectionExtensions.AddPortiaMultiTenantRunner" /> — not meant
-/// to be constructed directly.
+///     Runs a <see cref="MultiTenantRunner" /> for the life of the host and creates one dependency-
+///     injection scope per active tenant. Registered by
+///     <see cref="PortiaHostingServiceCollectionExtensions.AddPortiaMultiTenantRunner" /> — not meant
+///     to be constructed directly.
 /// </summary>
 /// <typeparam name="TWorkload">The typed workload resolved inside each tenant scope.</typeparam>
 /// <param name="runner">The tenant lifecycle runner.</param>

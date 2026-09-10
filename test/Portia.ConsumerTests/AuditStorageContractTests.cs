@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -6,6 +7,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class AuditStorageContractTests
 {
     readonly RequestDispatchContext _saveContext = new(RequestActor.System);
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -14,14 +16,15 @@ public sealed class AuditStorageContractTests
         await using var fixture = await StoreFixture.CreateAsync(fitz);
         var account = new Account(Uuid.CreateVersion4());
         for (var index = 0; index < 1025; index++)
-            account.Audit(new Declined(index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            account.Audit(new Declined(index.ToString(CultureInfo.InvariantCulture)));
         await fixture.Repository.SaveAsync(account, _saveContext);
         var scenario = new AggregateScenario<Account>(account);
         Assert.Empty(scenario.PendingAudits);
         Assert.Empty(scenario.CommittedEvents);
         Assert.Equal(0UL, account.CommittedStreamPosition);
         EventStreamAddress? session = null;
-        await foreach (var record in fixture.Store.ReadAsync(EventStreamPattern.ForPattern(account.Stream.Realm, account.Stream.Area)))
+        await foreach (var record in fixture.Store.ReadAsync(
+                           EventStreamPattern.ForPattern(account.Stream.Realm, account.Stream.Area)))
         {
             if (record.Event.Metadata.AggregateId == account.Id)
             {
@@ -29,6 +32,7 @@ public sealed class AuditStorageContractTests
                 break;
             }
         }
+
         Assert.NotNull(session);
         var records = new List<DomainEventRecord>();
         await foreach (var record in fixture.Store.ReadAsync(session))
@@ -46,7 +50,8 @@ public sealed class AuditStorageContractTests
     [Fact]
     public void StoredEventsWithoutAuditFlagRemainNonAudits()
     {
-        var serializer = ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Deposited>(1, "Deposited"));
+        var serializer =
+            ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Deposited>(1, "Deposited"));
         var ev = DomainEventSeed.Attach(new Deposited(3), Uuid.CreateVersion4(), 1);
         var envelope = JsonNode.Parse(serializer.Serialize(ev).Span)!.AsObject();
         Assert.True(envelope["metadata"]!.AsObject().Remove("is_audit"));
@@ -64,11 +69,17 @@ public sealed class AuditStorageContractTests
         var account = new Account(Uuid.CreateVersion4(), new MisclassifyingFactory(audit));
         var ev = new Deposited(1);
         if (audit)
+        {
             account.Audit(ev);
+        }
         else
+        {
             account.Raise(ev);
+        }
+
         Assert.Equal(audit, ev.Metadata.IsAudit);
-        var serializer = ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Deposited>(1, "Deposited"));
+        var serializer =
+            ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Deposited>(1, "Deposited"));
         Assert.Equal(ev.Metadata, serializer.Deserialize(serializer.Serialize(ev)).Metadata);
     }
 

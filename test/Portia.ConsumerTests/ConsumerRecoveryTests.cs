@@ -15,7 +15,8 @@ public sealed class ConsumerRecoveryTests
     [InlineData(false, true, true)]
     [InlineData(true, false, true)]
     [InlineData(true, true, true)]
-    public async Task HostedConsumerRestartsAfterFaultOrUnexpectedCompletion(bool notification, bool fault, bool stopDuringBackoff)
+    public async Task HostedConsumerRestartsAfterFaultOrUnexpectedCompletion(bool notification, bool fault,
+        bool stopDuringBackoff)
     {
         var clock = new ManualClock();
         var consumer = new RecoveringConsumer(fault);
@@ -33,6 +34,7 @@ public sealed class ConsumerRecoveryTests
             _ = services.AddSingleton<IRequestQueueConsumer>(consumer);
             _ = services.AddPortiaQueueRunner();
         }
+
         await using var provider = ConsumerHost.Build(services);
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         using var cancellation = new CancellationTokenSource();
@@ -59,6 +61,7 @@ public sealed class ConsumerRecoveryTests
             await worker.StopAsync(default);
             worker.Dispose();
         }
+
         Assert.Equal(stopDuringBackoff ? 1 : 2, consumer.Disposals);
         Assert.All(provider.GetRequiredService<ConsumerHost.Effects>().Scopes.Values, Assert.True);
         clock.Advance(TimeSpan.FromDays(1));
@@ -70,16 +73,21 @@ public sealed class ConsumerRecoveryTests
         public int Starts { get; private set; }
         public int Disposals { get; private set; }
 
-        async IAsyncEnumerable<IQueuedRequest> IRequestQueueConsumer.ReadAsync([EnumeratorCancellation] CancellationToken ct)
+        async IAsyncEnumerable<RequestNotification> IRequestNotificationConsumer.ReadAsync(
+            [EnumeratorCancellation] CancellationToken ct)
+        {
+            await foreach (var request in ReadAsync(ct))
+            {
+                yield return new RequestNotification(request, null, RequestMetadata.Create(),
+                    new NoticeInvocation("notice://test/work/item"));
+            }
+        }
+
+        async IAsyncEnumerable<IQueuedRequest> IRequestQueueConsumer.ReadAsync(
+            [EnumeratorCancellation] CancellationToken ct)
         {
             await foreach (var request in ReadAsync(ct))
                 yield return new Queued(request);
-        }
-
-        async IAsyncEnumerable<RequestNotification> IRequestNotificationConsumer.ReadAsync([EnumeratorCancellation] CancellationToken ct)
-        {
-            await foreach (var request in ReadAsync(ct))
-                yield return new RequestNotification(request, null, RequestMetadata.Create(), new NoticeInvocation("notice://test/work/item"));
         }
 
         async IAsyncEnumerable<ScopeRequest> ReadAsync([EnumeratorCancellation] CancellationToken ct)
@@ -89,13 +97,22 @@ public sealed class ConsumerRecoveryTests
                 if (++Starts == 1)
                 {
                     if (fault)
+                    {
                         throw new IOException("Transport disconnected");
-                    yield break;
+                    }
+                    else
+                    {
+                        yield break;
+                    }
                 }
+
                 yield return new ScopeRequest(Uuid.CreateVersion4());
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             }
-            finally { Disposals++; }
+            finally
+            {
+                Disposals++;
+            }
         }
     }
 

@@ -4,38 +4,38 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Portia.Fitz" />
-    <InternalsVisibleTo Include="Portia.Tests" />
+    <InternalsVisibleTo Include="Portia.Fitz"/>
+    <InternalsVisibleTo Include="Portia.Tests"/>
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"/>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions"/>
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj" />
-    <ProjectReference Include="../Portia.Core/Portia.Core.csproj" />
+    <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj"/>
+    <ProjectReference Include="../Portia.Core/Portia.Core.csproj"/>
     <ProjectReference Include="../Portia.Generators/Portia.Generators.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false"
-                      PrivateAssets="all" />
+                      PrivateAssets="all"/>
     <ProjectReference Include="../Portia.CodeFixes/Portia.CodeFixes.csproj"
                       ReferenceOutputAssembly="false"
-                      PrivateAssets="all" />
+                      PrivateAssets="all"/>
   </ItemGroup>
 
   <ItemGroup>
     <None Include="../Portia.Generators/bin/$(Configuration)/netstandard2.0/Portia.Generators.dll"
           Pack="true"
           PackagePath="analyzers/dotnet/cs"
-          Visible="false" />
+          Visible="false"/>
     <None Include="../Portia.CodeFixes/bin/$(Configuration)/netstandard2.0/Portia.CodeFixes.dll"
           Pack="true"
           PackagePath="analyzers/dotnet/cs"
-          Visible="false" />
+          Visible="false"/>
     <None Include="../Portia.Generators/buildTransitive/Portia.Generators.props"
           Pack="true"
-          PackagePath="buildTransitive/Portia.DependencyInjection.props" />
+          PackagePath="buildTransitive/Portia.DependencyInjection.props"/>
   </ItemGroup>
 </Project>

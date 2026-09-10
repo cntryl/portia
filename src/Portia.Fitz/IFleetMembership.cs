@@ -6,5 +6,6 @@ namespace Cntryl.Portia;
 public interface IFleetMembership
 {
     /// <summary>Runs the callback with an owned observer while membership is held; cancels and observes it before returning.</summary>
-    Task RunAsync(FleetRunOptions options, Func<ILeaseInventoryObserver, CancellationToken, Task> callback, CancellationToken ct = default);
+    Task RunAsync(FleetRunOptions options, Func<ILeaseInventoryObserver, CancellationToken, Task> callback,
+        CancellationToken ct = default);
 }

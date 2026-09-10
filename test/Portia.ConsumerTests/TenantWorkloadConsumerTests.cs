@@ -39,6 +39,7 @@ public sealed class TenantWorkloadConsumerTests
                 Assert.Equal(2, effects.Items.Count);
                 Assert.Equal(2, effects.Items.Select(item => item.ScopeId).Distinct().Count());
             }
+
             await directory.PublishAsync(TenantLifecycleChangeKind.Removed);
             clock.Advance(TimeSpan.FromDays(1));
             Assert.Equal(removeDuringBackoff ? 1 : 2, effects.Items.Count);
@@ -50,6 +51,7 @@ public sealed class TenantWorkloadConsumerTests
             await worker.StopAsync(default);
             (worker as IDisposable)?.Dispose();
         }
+
         Assert.All(effects.Scopes.Values, Assert.True);
     }
 
@@ -59,7 +61,8 @@ public sealed class TenantWorkloadConsumerTests
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
-        _ = services.AddSingleton<ITenantDirectory>(provider => TenantDirectoryConsumerTests.CreateDirectory(provider.GetRequiredService<IEventStore>(), clock));
+        _ = services.AddSingleton<ITenantDirectory>(provider =>
+            TenantDirectoryConsumerTests.CreateDirectory(provider.GetRequiredService<IEventStore>(), clock));
         _ = services.AddSingleton(new State { FailFirst = false });
         _ = services.AddScoped<Workload>();
         _ = services.AddScoped<SecondWorkload>();
@@ -77,13 +80,15 @@ public sealed class TenantWorkloadConsumerTests
                 await worker.StartAsync(default);
             _ = await clock.WaitForDelayAsync();
             _ = await clock.WaitForDelayAsync();
-            await TenantDirectoryConsumerTests.SeedAsync(store, id, 0, new TenantDirectoryConsumerTests.Activated("globex"));
+            await TenantDirectoryConsumerTests.SeedAsync(store, id, 0,
+                new TenantDirectoryConsumerTests.Activated("globex"));
             clock.Advance(TimeSpan.FromSeconds(1));
             await effects.WaitForAsync("tenant:globex");
             await effects.WaitForAsync("second:globex");
             _ = await clock.WaitForDelayAsync();
             _ = await clock.WaitForDelayAsync();
-            await TenantDirectoryConsumerTests.SeedAsync(store, id, 1, new TenantDirectoryConsumerTests.Deactivated("globex"));
+            await TenantDirectoryConsumerTests.SeedAsync(store, id, 1,
+                new TenantDirectoryConsumerTests.Deactivated("globex"));
             clock.Advance(TimeSpan.FromSeconds(1));
             _ = await clock.WaitForDelayAsync();
             _ = await clock.WaitForDelayAsync();
@@ -98,6 +103,7 @@ public sealed class TenantWorkloadConsumerTests
                 (worker as IDisposable)?.Dispose();
             }
         }
+
         Assert.All(effects.Scopes.Values, Assert.True);
     }
 
@@ -112,8 +118,8 @@ public sealed class TenantWorkloadConsumerTests
 
     public sealed class State
     {
-        public bool FailFirst { get; init; } = true;
         int _attempts;
+        public bool FailFirst { get; init; } = true;
         public int NextAttempt() => Interlocked.Increment(ref _attempts);
     }
 
@@ -124,36 +130,44 @@ public sealed class TenantWorkloadConsumerTests
             var attempt = state.NextAttempt();
             effects.Record("tenant:" + tenantId.Value, default, attempt, scope.Id);
             if (state.FailFirst && attempt == 1)
+            {
                 throw new IOException("Tenant workload failed");
-            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
+            else
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
         }
     }
 
     sealed class Directory : ITenantDirectory
     {
-        readonly Channel<(TenantLifecycleChange Change, TaskCompletionSource Done)> _changes = Channel.CreateUnbounded<(TenantLifecycleChange, TaskCompletionSource)>();
+        readonly Channel<(TenantLifecycleChange Change, TaskCompletionSource Done)> _changes =
+            Channel.CreateUnbounded<(TenantLifecycleChange, TaskCompletionSource)>();
 
-        public async Task PublishAsync(TenantLifecycleChangeKind kind)
-        {
-            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            await _changes.Writer.WriteAsync((new TenantLifecycleChange(kind, new TenantId("acme")), done));
-            await done.Task.WaitAsync(TimeSpan.FromSeconds(3));
-        }
-
-        public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync([EnumeratorCancellation] CancellationToken ct = default)
+        public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync(
+            [EnumeratorCancellation] CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
             await Task.CompletedTask;
             yield return new TenantId("acme");
         }
 
-        public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync([EnumeratorCancellation] CancellationToken ct = default)
+        public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync(
+            [EnumeratorCancellation] CancellationToken ct = default)
         {
             await foreach (var (change, done) in _changes.Reader.ReadAllAsync(ct))
             {
                 yield return change;
                 _ = done.TrySetResult();
             }
+        }
+
+        public async Task PublishAsync(TenantLifecycleChangeKind kind)
+        {
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            await _changes.Writer.WriteAsync((new TenantLifecycleChange(kind, new TenantId("acme")), done));
+            await done.Task.WaitAsync(TimeSpan.FromSeconds(3));
         }
     }
 }

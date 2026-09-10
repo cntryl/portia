@@ -1,14 +1,16 @@
+using Cntryl.Fitz;
+
 namespace Cntryl.Portia.Consumer;
 
 static class ConsumerBroker
 {
-    public static async Task<Fitz.Client> ConnectAsync()
+    public static async Task<Client> ConnectAsync()
     {
         var endpoint = new Uri(Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT") ?? "ws://127.0.0.1:4090/ws");
-        var client = new Fitz.Client(new Fitz.ClientConfig(endpoint, Timeout: TimeSpan.FromSeconds(10)));
+        var client = new Client(new ClientConfig(endpoint, Timeout: TimeSpan.FromSeconds(10)));
         try
         {
-            await client.ConnectWhenReadyAsync(new Fitz.ConnectWhenReadyOptions(Timeout: TimeSpan.FromSeconds(15)));
+            await client.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(15)));
             return client;
         }
         catch

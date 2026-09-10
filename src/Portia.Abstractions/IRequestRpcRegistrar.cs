@@ -7,12 +7,14 @@ public interface IRequestRpcRegistrar
     /// <typeparam name="TRequest">The request type.</typeparam>
     /// <param name="ct">Cancels registration.</param>
     /// <returns>Owns the worker registration.</returns>
-    ValueTask<IAsyncDisposable> RegisterAsync<TRequest>(CancellationToken ct = default) where TRequest : IRequest, ICallable;
+    ValueTask<IAsyncDisposable> RegisterAsync<TRequest>(CancellationToken ct = default)
+        where TRequest : IRequest, ICallable;
 
     /// <summary>Registers a callable request with a result.</summary>
     /// <typeparam name="TRequest">The request type.</typeparam>
     /// <typeparam name="TOut">The result type.</typeparam>
     /// <param name="ct">Cancels registration.</param>
     /// <returns>Owns the worker registration.</returns>
-    ValueTask<IAsyncDisposable> RegisterAsync<TRequest, TOut>(CancellationToken ct = default) where TRequest : IRequest<TOut>, ICallable;
+    ValueTask<IAsyncDisposable> RegisterAsync<TRequest, TOut>(CancellationToken ct = default)
+        where TRequest : IRequest<TOut>, ICallable;
 }

@@ -4,19 +4,19 @@ using System.Diagnostics;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies that every dispatch through <see cref="RequestBus" /> is traced via
-/// <see cref="PortiaTelemetry.ActivitySource" /> — instrumented once at the bus, the one
-/// chokepoint every transport already funnels through, so this is the whole tracing story
-/// regardless of transport. Uses a real <see cref="ActivityListener" />, the same mechanism an
-/// app's actual OpenTelemetry SDK subscribes through, rather than asserting on generated source
-/// text.
+///     Verifies that every dispatch through <see cref="RequestBus" /> is traced via
+///     <see cref="PortiaTelemetry.ActivitySource" /> — instrumented once at the bus, the one
+///     chokepoint every transport already funnels through, so this is the whole tracing story
+///     regardless of transport. Uses a real <see cref="ActivityListener" />, the same mechanism an
+///     app's actual OpenTelemetry SDK subscribes through, rather than asserting on generated source
+///     text.
 /// </summary>
 [Collection(TelemetryTestGroup.Name)]
 public sealed class PortiaTelemetryTests
 {
     /// <summary>
-    /// Verifies that a successful dispatch produces one activity, named after the request type,
-    /// tagged as successful, with no error status.
+    ///     Verifies that a successful dispatch produces one activity, named after the request type,
+    ///     tagged as successful, with no error status.
     /// </summary>
     [Fact]
     public async Task ShouldRecordSuccessfulActivity()
@@ -33,15 +33,16 @@ public sealed class PortiaTelemetryTests
         // land in this test's own capture list — filtering by tag alone isn't enough for that,
         // since a shared request type (e.g. GetValue) really can be dispatched by another test
         // file at the same moment this listener is active.
-        var activity = Assert.Single(activities, a => (a.GetTagItem("request.type") as string) == "TelemetrySuccessAction");
+        var activity = Assert.Single(activities,
+            a => (a.GetTagItem("request.type") as string) == "TelemetrySuccessAction");
         Assert.Equal(PortiaTelemetry.ExecuteActivityName, activity.DisplayName);
         Assert.Equal("success", activity.GetTagItem("outcome"));
         Assert.Equal(ActivityStatusCode.Unset, activity.Status);
     }
 
     /// <summary>
-    /// Verifies that a handler failure is recorded on the activity as an error status, tagged
-    /// with the failure's category, not just silently swallowed.
+    ///     Verifies that a handler failure is recorded on the activity as an error status, tagged
+    ///     with the failure's category, not just silently swallowed.
     /// </summary>
     [Fact]
     public async Task ShouldRecordHandlerFailureAsErrorStatus()
@@ -52,15 +53,16 @@ public sealed class PortiaTelemetryTests
 
         _ = await bus.SendAsync(new TelemetryFailureAction(), RequestActor.System);
 
-        var activity = Assert.Single(activities, a => (a.GetTagItem("request.type") as string) == "TelemetryFailureAction");
+        var activity = Assert.Single(activities,
+            a => (a.GetTagItem("request.type") as string) == "TelemetryFailureAction");
         Assert.Equal("validation", activity.GetTagItem("outcome"));
         Assert.Equal(ActivityStatusCode.Error, activity.Status);
     }
 
     /// <summary>
-    /// Verifies that a request denied by <see cref="RequiresPermissionAttribute" /> still
-    /// produces a properly closed, error-tagged activity — the handler never running doesn't mean
-    /// the dispatch goes untraced.
+    ///     Verifies that a request denied by <see cref="RequiresPermissionAttribute" /> still
+    ///     produces a properly closed, error-tagged activity — the handler never running doesn't mean
+    ///     the dispatch goes untraced.
     /// </summary>
     [Fact]
     public async Task ShouldRecordPermissionDenialAsErrorStatus()
@@ -71,14 +73,15 @@ public sealed class PortiaTelemetryTests
 
         _ = await bus.SendAsync(new TelemetryGuardedAction(), RequestActor.Anonymous);
 
-        var activity = Assert.Single(activities, a => (a.GetTagItem("request.type") as string) == "TelemetryGuardedAction");
+        var activity = Assert.Single(activities,
+            a => (a.GetTagItem("request.type") as string) == "TelemetryGuardedAction");
         Assert.Equal("forbidden", activity.GetTagItem("outcome"));
         Assert.Equal(ActivityStatusCode.Error, activity.Status);
     }
 
     /// <summary>
-    /// Verifies that a streamed request produces one activity spanning the whole stream, still
-    /// open (not yet stopped) while items are being enumerated.
+    ///     Verifies that a streamed request produces one activity spanning the whole stream, still
+    ///     open (not yet stopped) while items are being enumerated.
     /// </summary>
     [Fact]
     public async Task ShouldRecordActivityForStreamedRequest()
@@ -112,7 +115,7 @@ public sealed class PortiaTelemetryTests
         {
             ShouldListenTo = source => source.Name == PortiaTelemetry.SourceName,
             Sample = static (ref options) => ActivitySamplingResult.AllData,
-            ActivityStopped = captured.Add,
+            ActivityStopped = captured.Add
         };
 
         ActivitySource.AddActivityListener(listener);
@@ -120,59 +123,6 @@ public sealed class PortiaTelemetryTests
     }
 }
 
-sealed record TelemetrySuccessAction : IRequest;
-
-sealed class TelemetrySuccessActionHandler : IRequestHandler<TelemetrySuccessAction>
-{
-    public ValueTask<Result> HandleAsync(IRequestContext<TelemetrySuccessAction> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result.Success);
-}
-
-sealed record TelemetryFailureAction : IRequest;
-
-sealed class TelemetryFailureActionHandler : IRequestHandler<TelemetryFailureAction>
-{
-    public ValueTask<Result> HandleAsync(IRequestContext<TelemetryFailureAction> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result.Failure(new RequestError(RequestErrorKind.Validation, "Invalid.")));
-}
-
-[RequiresPermission("telemetry:guarded")]
-sealed record TelemetryGuardedAction : IRequest;
-
-sealed class TelemetryGuardedActionHandler : IRequestHandler<TelemetryGuardedAction>
-{
-    public ValueTask<Result> HandleAsync(IRequestContext<TelemetryGuardedAction> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result.Success);
-}
-
 // A guarded stream owned by the telemetry group. The metric listener is process-wide, so a
 // request type shared with a test in another (parallel) collection would let that test's
 // measurements land in this one's capture.
-[RequiresPermission("telemetry:guarded-stream")]
-sealed record TelemetryGuardedSequence : IStreamRequest<int>;
-
-sealed class TelemetryGuardedSequenceHandler : IStreamRequestHandler<TelemetryGuardedSequence, int>
-{
-    public async IAsyncEnumerable<int> HandleAsync(
-        IRequestContext<TelemetryGuardedSequence> context,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
-    {
-        yield return 1;
-        await Task.CompletedTask;
-    }
-}
-
-sealed record TelemetrySequence : IStreamRequest<int>;
-
-sealed class TelemetrySequenceHandler : IStreamRequestHandler<TelemetrySequence, int>
-{
-    public async IAsyncEnumerable<int> HandleAsync(
-        IRequestContext<TelemetrySequence> context,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
-    {
-        yield return 1;
-        yield return 2;
-        yield return 3;
-        await Task.CompletedTask;
-    }
-}

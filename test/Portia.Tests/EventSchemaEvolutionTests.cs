@@ -1,23 +1,22 @@
-using System.Text.Json.Nodes;
-
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies <see cref="JsonDomainEventSerializer" />'s two evolution paths: an upcaster chain
-/// bridging a stored schema version forward to whatever the catalog currently has registered,
-/// and an old CLR type staying directly registered (and so directly readable, no upcasting at
-/// all) alongside its replacement.
+///     Verifies <see cref="JsonDomainEventSerializer" />'s two evolution paths: an upcaster chain
+///     bridging a stored schema version forward to whatever the catalog currently has registered,
+///     and an old CLR type staying directly registered (and so directly readable, no upcasting at
+///     all) alongside its replacement.
 /// </summary>
 public sealed class EventSchemaEvolutionTests
 {
     /// <summary>
-    /// Verifies a plain round trip using an explicit <see cref="DiscriminatorAttribute" />
-    /// to its CLR type name and schema version 1, and serializes/deserializes with no upcasting.
+    ///     Verifies a plain round trip using an explicit <see cref="DiscriminatorAttribute" />
+    ///     to its CLR type name and schema version 1, and serializes/deserializes with no upcasting.
     /// </summary>
     [Fact]
     public void ShouldRoundTripEventWithDefaultSchemaIdentity()
     {
-        var serializer = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed"));
+        var serializer =
+            TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed"));
         var original = Committed(new WidgetNamed("Sprocket"));
 
         var deserialized = serializer.Deserialize(serializer.Serialize(original));
@@ -28,9 +27,9 @@ public sealed class EventSchemaEvolutionTests
     }
 
     /// <summary>
-    /// Verifies that an event stored at schema version 1, with only the version-2 replacement
-    /// type registered in the catalog, is upcast forward through a registered
-    /// <see cref="IJsonDomainEventUpcaster" /> before being deserialized into the current type.
+    ///     Verifies that an event stored at schema version 1, with only the version-2 replacement
+    ///     type registered in the catalog, is upcast forward through a registered
+    ///     <see cref="IJsonDomainEventUpcaster" /> before being deserialized into the current type.
     /// </summary>
     [Fact]
     public void ShouldUpcastEventWhenOnlyLaterSchemaVersionIsRegistered()
@@ -49,20 +48,23 @@ public sealed class EventSchemaEvolutionTests
     }
 
     /// <summary>
-    /// Verifies that an event whose exact stored schema version is still registered in the
-    /// catalog deserializes directly into its own (superseded) CLR type — no upcasting runs, so
-    /// old and new versions can simply coexist forever with no upcaster written at all.
+    ///     Verifies that an event whose exact stored schema version is still registered in the
+    ///     catalog deserializes directly into its own (superseded) CLR type — no upcasting runs, so
+    ///     old and new versions can simply coexist forever with no upcaster written at all.
     /// </summary>
     [Fact]
     public void ShouldResolveDirectlyWhenExactSchemaVersionIsStillRegistered()
     {
-        var v1Writer = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<OrderPlacedV1>(1, "OrderPlaced"));
-        var v2Writer = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<OrderPlacedV2>(2, "OrderPlaced"));
+        var v1Writer =
+            TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<OrderPlacedV1>(1, "OrderPlaced"));
+        var v2Writer =
+            TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<OrderPlacedV2>(2, "OrderPlaced"));
         var storedV1 = v1Writer.Serialize(Committed(new OrderPlacedV1(100)));
         var storedV2 = v2Writer.Serialize(Committed(new OrderPlacedV2(100, "USD")));
 
         var reader = TestJson.DomainSerializer(
-            new DomainEventTypeCatalog().Register<OrderPlacedV1>(1, "OrderPlaced").Register<OrderPlacedV2>(2, "OrderPlaced"));
+            new DomainEventTypeCatalog().Register<OrderPlacedV1>(1, "OrderPlaced")
+                .Register<OrderPlacedV2>(2, "OrderPlaced"));
 
         var deserializedV1 = Assert.IsType<OrderPlacedV1>(reader.Deserialize(storedV1));
         var deserializedV2 = Assert.IsType<OrderPlacedV2>(reader.Deserialize(storedV2));
@@ -72,8 +74,8 @@ public sealed class EventSchemaEvolutionTests
     }
 
     /// <summary>
-    /// Verifies that a stored schema version with neither a catalog registration nor an upcaster
-    /// to bridge it forward fails loudly rather than silently dropping data.
+    ///     Verifies that a stored schema version with neither a catalog registration nor an upcaster
+    ///     to bridge it forward fails loudly rather than silently dropping data.
     /// </summary>
     [Fact]
     public void ShouldThrowWhenNoRegistrationOrUpcasterCanResolveStoredVersion()
@@ -88,8 +90,8 @@ public sealed class EventSchemaEvolutionTests
     }
 
     /// <summary>
-    /// Verifies that registering two upcasters for the same event name and source version fails
-    /// fast at construction.
+    ///     Verifies that registering two upcasters for the same event name and source version fails
+    ///     fast at construction.
     /// </summary>
     [Fact]
     public void ShouldThrowWhenRegisteringDuplicateUpcasterForSameNameAndVersion() =>
@@ -104,7 +106,8 @@ public sealed class EventSchemaEvolutionTests
         var first = new RecordingUpcaster("WidgetNamed", 1);
         var second = new RecordingUpcaster("WidgetNamed", 2);
 
-        _ = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetRenamed>(3, "WidgetNamed"), [first, second]);
+        _ = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetRenamed>(3, "WidgetNamed"),
+            [first, second]);
 
         Assert.False(first.Executed);
         Assert.False(second.Executed);
@@ -117,16 +120,20 @@ public sealed class EventSchemaEvolutionTests
         var exception = Assert.Throws<InvalidOperationException>(() => TestJson.DomainSerializer(
             new DomainEventTypeCatalog(), [new RecordingUpcaster("Zulu", 3), new RecordingUpcaster("Alpha", 1)]));
 
-        Assert.Contains("Alpha' is missing an upcaster from schema version 2", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("Zulu' is missing an upcaster from schema version 4", exception.Message, StringComparison.Ordinal);
-        Assert.True(exception.Message.IndexOf("Alpha", StringComparison.Ordinal) < exception.Message.IndexOf("Zulu", StringComparison.Ordinal));
+        Assert.Contains("Alpha' is missing an upcaster from schema version 2", exception.Message,
+            StringComparison.Ordinal);
+        Assert.Contains("Zulu' is missing an upcaster from schema version 4", exception.Message,
+            StringComparison.Ordinal);
+        Assert.True(exception.Message.IndexOf("Alpha", StringComparison.Ordinal) <
+                    exception.Message.IndexOf("Zulu", StringComparison.Ordinal));
     }
 
     /// <summary>A staged chain is validated even while its source CLR version remains readable.</summary>
     [Fact]
     public void ShouldValidateStagedUpcasterWhoseSourceTypeRemainsRegistered() =>
         _ = TestJson.DomainSerializer(
-            new DomainEventTypeCatalog().Register<OrderPlacedV1>(1, "OrderPlaced").Register<OrderPlacedV2>(2, "OrderPlaced"),
+            new DomainEventTypeCatalog().Register<OrderPlacedV1>(1, "OrderPlaced")
+                .Register<OrderPlacedV2>(2, "OrderPlaced"),
             [new RecordingUpcaster("OrderPlaced", 1)]);
 
     /// <summary>Rejects identities that cannot represent a valid next transition.</summary>
@@ -139,7 +146,8 @@ public sealed class EventSchemaEvolutionTests
     {
         var exception = Assert.Throws<InvalidOperationException>(() => TestJson.DomainSerializer(
             new DomainEventTypeCatalog(), [new RecordingUpcaster(name, version)]));
-        Assert.Contains("Invalid JSON domain-event upcaster registrations", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Invalid JSON domain-event upcaster registrations", exception.Message,
+            StringComparison.Ordinal);
     }
 
     static T Committed<T>(T ev)
@@ -153,39 +161,3 @@ public sealed class EventSchemaEvolutionTests
         return ev;
     }
 }
-
-sealed class RecordingUpcaster(string name, int fromVersion) : IJsonDomainEventUpcaster
-{
-    public string EventName => name;
-    public int FromVersion => fromVersion;
-    public bool Executed { get; private set; }
-    public JsonObject Upcast(JsonObject payload)
-    {
-        Executed = true;
-        return payload;
-    }
-}
-
-[Discriminator("WidgetNamed")]
-sealed record WidgetNamed(string Name) : DomainEvent;
-
-[Discriminator("WidgetNamed", 2)]
-sealed record WidgetRenamed(string DisplayName) : DomainEvent;
-
-sealed class WidgetNamedToRenamedUpcaster : IJsonDomainEventUpcaster
-{
-    public string EventName => "WidgetNamed";
-
-    public int FromVersion => 1;
-
-    public JsonObject Upcast(JsonObject payload) => new()
-    {
-        ["display_name"] = payload["name"]?.GetValue<string>(),
-    };
-}
-
-[Discriminator("OrderPlaced")]
-sealed record OrderPlacedV1(int AmountCents) : DomainEvent;
-
-[Discriminator("OrderPlaced", 2)]
-sealed record OrderPlacedV2(int AmountCents, string Currency) : DomainEvent;

@@ -5,17 +5,17 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies that every <see cref="DomainEvent" /> type declared anywhere in the compilation is
-/// registered into a <see cref="DomainEventTypeCatalog" /> by generated code — no per-type
-/// <c>.Register&lt;T&gt;()</c> call to remember, matching the zero-boilerplate discovery already
-/// used for reactors, projectors, and request transports.
+///     Verifies that every <see cref="DomainEvent" /> type declared anywhere in the compilation is
+///     registered into a <see cref="DomainEventTypeCatalog" /> by generated code — no per-type
+///     <c>.Register&lt;T&gt;()</c> call to remember, matching the zero-boilerplate discovery already
+///     used for reactors, projectors, and request transports.
 /// </summary>
 public sealed class DomainEventCatalogGeneratorTests
 {
     /// <summary>
-    /// Verifies that a plain, default-schema event type is registered under its CLR type name at
-    /// version 1, and that a type carrying an explicit <see cref="DiscriminatorAttribute" /> is
-    /// registered under its declared name and version.
+    ///     Verifies that a plain, default-schema event type is registered under its CLR type name at
+    ///     version 1, and that a type carrying an explicit <see cref="DiscriminatorAttribute" /> is
+    ///     registered under its declared name and version.
     /// </summary>
     [Fact]
     public void ShouldRegisterEveryDomainEventTypeInCompilation()
@@ -30,9 +30,9 @@ public sealed class DomainEventCatalogGeneratorTests
     }
 
     /// <summary>
-    /// Verifies that a fully wired <see cref="IDomainEventSerializer" /> is resolvable from DI
-    /// after one generated call — the catalog, its population, and the serializer itself are all
-    /// zero-boilerplate.
+    ///     Verifies that a fully wired <see cref="IDomainEventSerializer" /> is resolvable from DI
+    ///     after one generated call — the catalog, its population, and the serializer itself are all
+    ///     zero-boilerplate.
     /// </summary>
     [Fact]
     public void ShouldResolveDomainEventSerializerAfterGeneratedRegistration()
@@ -47,20 +47,20 @@ public sealed class DomainEventCatalogGeneratorTests
     }
 
     /// <summary>
-    /// End-to-end proof for schema evolution through the DI-resolved, generator-populated
-    /// <see cref="IDomainEventSerializer" />: bytes representing a schema version whose CLR type
-    /// no longer exists in the codebase (so the generated catalog has nothing to auto-register
-    /// for it) are still upcast forward, via an app-registered <see cref="IJsonDomainEventUpcaster" />
-    /// picked up automatically from DI's <c>IEnumerable&lt;IJsonDomainEventUpcaster&gt;</c> — no
-    /// manual serializer construction, matching how <see cref="FitzEventStore" /> would resolve
-    /// one in a real app.
+    ///     End-to-end proof for schema evolution through the DI-resolved, generator-populated
+    ///     <see cref="IDomainEventSerializer" />: bytes representing a schema version whose CLR type
+    ///     no longer exists in the codebase (so the generated catalog has nothing to auto-register
+    ///     for it) are still upcast forward, via an app-registered <see cref="IJsonDomainEventUpcaster" />
+    ///     picked up automatically from DI's <c>IEnumerable&lt;IJsonDomainEventUpcaster&gt;</c> — no
+    ///     manual serializer construction, matching how <see cref="FitzEventStore" /> would resolve
+    ///     one in a real app.
     /// </summary>
     [Fact]
     public void ShouldUpcastThroughGeneratedSerializerWhenUpcasterIsRegisteredInDi()
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
-            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
         };
 
         // Simulates bytes durably stored back when a "Gadget" v1 type still existed in the
@@ -72,7 +72,7 @@ public sealed class DomainEventCatalogGeneratorTests
             ["name"] = "Gadget",
             ["version"] = 1,
             ["metadata"] = JsonSerializer.SerializeToNode(metadata, options),
-            ["payload"] = new JsonObject { ["name"] = "Sprocket" },
+            ["payload"] = new JsonObject { ["name"] = "Sprocket" }
         };
         var stored = JsonSerializer.SerializeToUtf8Bytes(envelope, options);
 
@@ -87,19 +87,4 @@ public sealed class DomainEventCatalogGeneratorTests
         var gadget = Assert.IsType<GadgetRenamed>(deserialized);
         Assert.Equal("Sprocket", gadget.DisplayName);
     }
-}
-
-[Discriminator("Gadget", 2)]
-sealed record GadgetRenamed(string DisplayName) : DomainEvent;
-
-sealed class GadgetV1ToV2Upcaster : IJsonDomainEventUpcaster
-{
-    public string EventName => "Gadget";
-
-    public int FromVersion => 1;
-
-    public JsonObject Upcast(JsonObject payload) => new()
-    {
-        ["display_name"] = payload["name"]?.GetValue<string>(),
-    };
 }

@@ -26,6 +26,8 @@ public sealed record RequestMetadata(Uuid RequestId, Uuid CorrelationId, Uuid? C
     public void Validate()
     {
         if (RequestId == Uuid.Empty || CorrelationId == Uuid.Empty || CausationId == Uuid.Empty)
+        {
             throw new ArgumentException("Request, correlation, and supplied causation identities cannot be empty.");
+        }
     }
 }

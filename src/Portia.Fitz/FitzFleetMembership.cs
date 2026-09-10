@@ -20,7 +20,9 @@ public sealed class FitzFleetMembership(ILeaseClient client) : IFleetMembership
             async (_, membershipCt) =>
             {
                 await using var observer = await _client.ObserveAsync(options.MembershipSelector,
-                    new LeaseObserveOptions { ReconciliationInterval = options.ReconciliationInterval }, membershipCt).ConfigureAwait(false);
+                        new LeaseObserveOptions { ReconciliationInterval = options.ReconciliationInterval },
+                        membershipCt)
+                    .ConfigureAwait(false);
                 await callback(observer, membershipCt).ConfigureAwait(false);
             }, new LeaseExecutionOptions { WaitForAvailability = true }, ct);
     }

@@ -26,7 +26,8 @@ public sealed class ProcessorBaseTests
         var events = await Seed();
         var repository = new Repository { Fail = true };
         var runner = new ProjectorRunner(events);
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(new BatchAccounts(repository), ProjectionCheckpoint.Start).AsTask());
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runner.RunAsync(new BatchAccounts(repository), ProjectionCheckpoint.Start).AsTask());
         Assert.Equal(0, repository.Value);
         Assert.Equal(ProjectionCheckpoint.Start, repository.Checkpoint);
         Assert.Equal(1, repository.Disposals);
@@ -43,7 +44,8 @@ public sealed class ProcessorBaseTests
         _ = services.AddScoped<Repository>();
         _ = services.AddSingleton<IDomainEventReader, InMemoryEventStore>();
         _ = services.AddPortia().AddProjector<BatchAccounts>(WorkloadScope.PerTenant);
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        { ValidateScopes = true, ValidateOnBuild = true });
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<BatchAccounts>());
     }
@@ -75,7 +77,8 @@ public sealed class ProcessorBaseTests
         var repository = new ReactionRepository { FailSave = true };
         Reactor reactor = batch ? new BatchReaction(repository) : new Reaction(repository);
         var runner = new ReactorRunner(events);
-        _ = await Assert.ThrowsAsync<IOException>(() => runner.RunAsync(reactor, ProjectionCheckpoint.Start, 2).AsTask());
+        _ = await Assert.ThrowsAsync<IOException>(() =>
+            runner.RunAsync(reactor, ProjectionCheckpoint.Start, 2).AsTask());
         Assert.Equal(ProjectionCheckpoint.Start, repository.Checkpoint);
         Assert.Equal(batch ? 2 : 1, repository.Contexts.Count);
         repository.FailSave = false;
@@ -91,42 +94,12 @@ public sealed class ProcessorBaseTests
         using var cancellation = new CancellationTokenSource();
         var repository = new Repository { OnAdd = cancellation.Cancel };
         var runner = new ProjectorRunner(await Seed());
-        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(new BatchAccounts(repository), ProjectionCheckpoint.Start, ct: cancellation.Token).AsTask());
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            runner.RunAsync(new BatchAccounts(repository), ProjectionCheckpoint.Start, ct: cancellation.Token)
+                .AsTask());
         Assert.Equal(0, repository.Value);
         Assert.Equal(ProjectionCheckpoint.Start, repository.Checkpoint);
         Assert.Equal(1, repository.Disposals);
-    }
-
-    sealed class Reaction(ReactionRepository repository) : Reactor(repository, EventStreamPattern.ForPattern("bases", "accounts"))
-    {
-        protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context, CancellationToken ct)
-        {
-            repository.Contexts.Add((IReactorContext)context);
-            return ValueTask.CompletedTask;
-        }
-    }
-    sealed class BatchReaction(ReactionRepository repository) : BatchReactor(repository, EventStreamPattern.ForPattern("bases", "accounts"))
-    {
-        protected override ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
-        {
-            repository.Contexts.AddRange(contexts);
-            return ValueTask.CompletedTask;
-        }
-    }
-    sealed class ReactionRepository : IProjectionCheckpointStore
-    {
-        public ProjectionCheckpoint Checkpoint;
-        public bool FailSave;
-        public List<ulong> Commits { get; } = [];
-        public List<IReactorContext> Contexts { get; } = [];
-        public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default) => ValueTask.FromResult(Checkpoint);
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
-        {
-            if (FailSave) throw new IOException("Checkpoint write failed");
-            Checkpoint = checkpoint;
-            Commits.Add(checkpoint.NextOffset);
-            return ValueTask.CompletedTask;
-        }
     }
 
     static async Task<InMemoryEventStore> Seed()
@@ -134,22 +107,74 @@ public sealed class ProcessorBaseTests
         var events = new InMemoryEventStore();
         var id = Uuid.CreateVersion4();
         await events.AppendAsync(new EventStreamAddress("bases", "accounts", id.ToString()), 0,
-            [DomainEventSeed.Attach(new Deposited(1), id, 1), DomainEventSeed.Attach(new Deposited(2), id, 2), DomainEventSeed.Attach(new Deposited(3), id, 3)]);
+        [
+            DomainEventSeed.Attach(new Deposited(1), id, 1), DomainEventSeed.Attach(new Deposited(2), id, 2),
+            DomainEventSeed.Attach(new Deposited(3), id, 3)
+        ]);
         return events;
     }
 
-    sealed class Accounts(Repository repository) : Projector(repository, EventStreamPattern.ForPattern("bases", "accounts"))
+    sealed class Reaction(ReactionRepository repository)
+        : Reactor(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
-        protected override ValueTask ProjectEventAsync(DomainEventRecord record, IProjectorContext context, CancellationToken ct)
+        protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+            CancellationToken ct)
+        {
+            repository.Contexts.Add((IReactorContext)context);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    sealed class BatchReaction(ReactionRepository repository)
+        : BatchReactor(repository, EventStreamPattern.ForPattern("bases", "accounts"))
+    {
+        protected override ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
+        {
+            repository.Contexts.AddRange(contexts);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    sealed class ReactionRepository : IProjectionCheckpointStore
+    {
+        public ProjectionCheckpoint Checkpoint;
+        public bool FailSave;
+        public List<ulong> Commits { get; } = [];
+        public List<IReactorContext> Contexts { get; } = [];
+
+        public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default) =>
+            ValueTask.FromResult(Checkpoint);
+
+        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default)
+        {
+            if (FailSave)
+            {
+                throw new IOException("Checkpoint write failed");
+            }
+
+            Checkpoint = checkpoint;
+            Commits.Add(checkpoint.NextOffset);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    sealed class Accounts(Repository repository)
+        : Projector(repository, EventStreamPattern.ForPattern("bases", "accounts"))
+    {
+        protected override ValueTask ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
+            CancellationToken ct)
         {
             repository.Add(((Deposited)record.Event).Amount);
             return ValueTask.CompletedTask;
         }
     }
 
-    sealed class BatchAccounts(Repository repository) : BatchProjector(repository, EventStreamPattern.ForPattern("bases", "accounts"))
+    sealed class BatchAccounts(Repository repository)
+        : BatchProjector(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
-        protected override ValueTask ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records, IProjectorContext context, CancellationToken ct)
+        protected override ValueTask ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records,
+            IProjectorContext context, CancellationToken ct)
         {
             foreach (var record in records)
                 repository.Add(((Deposited)record.Event).Amount);
@@ -159,31 +184,45 @@ public sealed class ProcessorBaseTests
 
     sealed class Repository : IProjectionStore
     {
-        int _pending;
-        public int Value;
+        public ProjectionCheckpoint Checkpoint;
+        public int Disposals;
         public bool Fail;
         public Action? OnAdd;
-        public int Disposals;
-        public ProjectionCheckpoint Checkpoint;
+        public int Value;
+        int _pending;
         public List<ulong> Commits { get; } = [];
-        public void Add(int value) { _pending += value; OnAdd?.Invoke(); }
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default) => ValueTask.FromResult(Checkpoint);
+
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
+            CancellationToken ct = default) => ValueTask.FromResult(Checkpoint);
+
         public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
         {
             _pending = 0;
             return ValueTask.FromResult<IProjectionBatch>(new Batch(this));
         }
+
+        public void Add(int value)
+        {
+            _pending += value;
+            OnAdd?.Invoke();
+        }
+
         sealed class Batch(Repository repository) : IProjectionBatch
         {
             public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
             {
                 ct.ThrowIfCancellationRequested();
-                if (repository.Fail) throw new InvalidOperationException("Commit failed");
+                if (repository.Fail)
+                {
+                    throw new InvalidOperationException("Commit failed");
+                }
+
                 repository.Value += repository._pending;
                 repository.Checkpoint = checkpoint;
                 repository.Commits.Add(checkpoint.NextOffset);
                 return ValueTask.CompletedTask;
             }
+
             public ValueTask DisposeAsync()
             {
                 repository._pending = 0;

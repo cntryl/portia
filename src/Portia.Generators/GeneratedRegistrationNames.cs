@@ -1,10 +1,10 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Names the per-component <c>Add&lt;Component&gt;()</c> methods the registration generators emit.
-/// Two components in one compilation can share a simple name (different namespaces, or a nested
-/// type), so a colliding name is disambiguated by its fully qualified type name rather than by
-/// declaration order — the emitted API has to stay stable across builds.
+///     Names the per-component <c>Add&lt;Component&gt;()</c> methods the registration generators emit.
+///     Two components in one compilation can share a simple name (different namespaces, or a nested
+///     type), so a colliding name is disambiguated by its fully qualified type name rather than by
+///     declaration order — the emitted API has to stay stable across builds.
 /// </summary>
 static class GeneratedRegistrationNames
 {
@@ -42,5 +42,5 @@ static class GeneratedRegistrationNames
     // "global::Acme.Billing.Charge" -> "AcmeBillingCharge": every identifier in the qualified
     // name, so two same-named components stay distinguishable and readable.
     static string Qualify(string fullyQualifiedTypeName) =>
-        string.Concat(Unqualify(fullyQualifiedTypeName).Split(['.', '+']).Where(part => part.Length > 0));
+        string.Concat(Unqualify(fullyQualifiedTypeName).Split('.', '+').Where(part => part.Length > 0));
 }

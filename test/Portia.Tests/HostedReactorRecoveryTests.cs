@@ -4,20 +4,20 @@ using Microsoft.Extensions.Hosting;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies the hosted reactor loop actually recovers correctly after a faulted
-/// pass — not just that it doesn't crash the host, but that its retry starts from where the
-/// pass genuinely got to, not from a stale, pre-pass checkpoint held only in this loop's own
-/// local variable.
+///     Verifies the hosted reactor loop actually recovers correctly after a faulted
+///     pass — not just that it doesn't crash the host, but that its retry starts from where the
+///     pass genuinely got to, not from a stale, pre-pass checkpoint held only in this loop's own
+///     local variable.
 /// </summary>
 public sealed class HostedReactorRecoveryTests
 {
     /// <summary>
-    /// Regression test: <c>ReactorRunner.RunAsync</c> can durably save one or more
-    /// batches via its own <c>checkpointStore</c> parameter and then still fault partway through
-    /// the next batch. The hosted service's own local <c>checkpoint</c> variable only advances on
-    /// a successful <c>RunAsync</c> return, so without reloading from the store after a fault, a
-    /// retry redoes every batch that was already durably saved — exactly the duplicate-side-effect
-    /// risk the whole batched-checkpointing feature exists to bound.
+    ///     Regression test: <c>ReactorRunner.RunAsync</c> can durably save one or more
+    ///     batches via its own <c>checkpointStore</c> parameter and then still fault partway through
+    ///     the next batch. The hosted service's own local <c>checkpoint</c> variable only advances on
+    ///     a successful <c>RunAsync</c> return, so without reloading from the store after a fault, a
+    ///     retry redoes every batch that was already durably saved — exactly the duplicate-side-effect
+    ///     risk the whole batched-checkpointing feature exists to bound.
     /// </summary>
     [Fact]
     public async Task ShouldResumeFromStoreCheckpointAfterFaultedPassRatherThanStaleLocalValue()
@@ -29,7 +29,7 @@ public sealed class HostedReactorRecoveryTests
             Committed(new ValueChanged(1), id, 1),
             Committed(new ValueChanged(2), id, 2),
             Committed(new ValueChanged(3), id, 3),
-            Committed(new ValueChanged(4), id, 4),
+            Committed(new ValueChanged(4), id, 4)
         ]);
         var checkpointStore = new TransientReloadFailureCheckpointStore();
         var reactor = new FlakyOnThirdAttemptReactor(checkpointStore);
@@ -47,7 +47,7 @@ public sealed class HostedReactorRecoveryTests
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await hostedService.StartAsync(default);
         var executeTask = hostedService.ExecuteTask
-            ?? throw new InvalidOperationException("The reactor hosted service did not start.");
+                          ?? throw new InvalidOperationException("The reactor hosted service did not start.");
         var firstCompletion = await Task.WhenAny(checkpointStore.CheckpointReloaded, executeTask);
         Assert.Same(checkpointStore.CheckpointReloaded, firstCompletion);
         await checkpointStore.CheckpointReloaded;
@@ -74,57 +74,8 @@ public sealed class HostedReactorRecoveryTests
     static T Committed<T>(T ev, Uuid aggregateId, ulong aggregateVersion)
         where T : DomainEvent
     {
-        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, aggregateVersion, DateTimeOffset.UtcNow));
+        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, aggregateVersion,
+            DateTimeOffset.UtcNow));
         return ev;
-    }
-}
-
-sealed class TransientReloadFailureCheckpointStore : IProjectionCheckpointStore
-{
-    readonly InMemoryProjectionCheckpointStore _inner = new();
-    readonly TaskCompletionSource _checkpointReloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    int _loadAttempts;
-
-    public Task CheckpointReloaded => _checkpointReloaded.Task;
-
-    public async ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
-    {
-        var loadAttempt = Interlocked.Increment(ref _loadAttempts);
-
-        if (loadAttempt == 2)
-            throw new InvalidOperationException("Simulated transient checkpoint reload failure.");
-
-        var checkpoint = await _inner.LoadAsync(identity, ct);
-
-        if (loadAttempt == 3)
-            _ = _checkpointReloaded.TrySetResult();
-
-        return checkpoint;
-    }
-
-    public ValueTask SaveAsync(
-        CheckpointIdentity identity,
-        ProjectionCheckpoint checkpoint,
-        CancellationToken ct = default) => _inner.SaveAsync(identity, checkpoint, ct);
-}
-
-sealed partial class FlakyOnThirdAttemptReactor(IProjectionCheckpointStore? checkpoints = null)
-    : BatchReactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "flaky-on-third-attempt-reactor"), IReactorHandler<ValueChanged>
-{
-    bool _hasFailedOnce;
-
-
-    public List<int> HandledValues { get; } = [];
-
-    public ValueTask HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
-    {
-        if (context.Trigger.Value == 3 && !_hasFailedOnce)
-        {
-            _hasFailedOnce = true;
-            throw new InvalidOperationException("Simulated transient failure reacting to the third event.");
-        }
-
-        HandledValues.Add(context.Trigger.Value);
-        return ValueTask.CompletedTask;
     }
 }

@@ -4,8 +4,8 @@ using System.Diagnostics.Metrics;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Lease exclusion, cancellation, and backoff regressions using independent singleton inventories.
-/// Fleet membership redistribution is covered by the public consumer and broker fleet tests.
+///     Lease exclusion, cancellation, and backoff regressions using independent singleton inventories.
+///     Fleet membership redistribution is covered by the public consumer and broker fleet tests.
 /// </summary>
 [Collection(TelemetryTestGroup.Name)]
 public sealed class FleetPartitionRunnerTests
@@ -23,7 +23,9 @@ public sealed class FleetPartitionRunnerTests
         listener.InstrumentPublished = (instrument, meterListener) =>
         {
             if (instrument.Meter.Name == PortiaTelemetry.SourceName && instrument.Name == "portia.worker.failure")
+            {
                 meterListener.EnableMeasurementEvents(instrument);
+            }
         };
         listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
         {
@@ -34,7 +36,7 @@ public sealed class FleetPartitionRunnerTests
         using var lifetime = new CancellationTokenSource();
         var options = SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
         {
-            PartitionStopTimeout = TimeSpan.FromMilliseconds(50),
+            PartitionStopTimeout = TimeSpan.FromMilliseconds(50)
         };
         var run = runner.RunAsync([partition], (_, _) =>
         {
@@ -60,7 +62,7 @@ public sealed class FleetPartitionRunnerTests
         var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
         var options = SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
         {
-            PartitionStopTimeout = TimeSpan.Zero,
+            PartitionStopTimeout = TimeSpan.Zero
         };
 
         _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
@@ -77,20 +79,36 @@ public sealed class FleetPartitionRunnerTests
         var starts = new ConcurrentDictionary<string, int>();
         using var lifetime = new CancellationTokenSource();
         var run = runner.RunAsync(() => Volatile.Read(ref snapshot), async (route, ct) =>
-        {
-            _ = starts.AddOrUpdate(route, 1, (_, count) => count + 1);
-            active[route] = true;
-            try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
-            finally { _ = active.TryRemove(route, out _); }
-        }, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with { ReconciliationInterval = TimeSpan.FromMilliseconds(10) }, lifetime.Token);
+            {
+                _ = starts.AddOrUpdate(route, 1, (_, count) => count + 1);
+                active[route] = true;
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                }
+                finally
+                {
+                    _ = active.TryRemove(route, out _);
+                }
+            },
+            SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
+            {
+                ReconciliationInterval = TimeSpan.FromMilliseconds(10)
+            }, lifetime.Token);
         try
         {
             await Wait(() => active.Count == 2);
             Volatile.Write(ref snapshot, ["lease://portia/work/global", "lease://portia/work/beta"]);
-            await Wait(() => active.ContainsKey("lease://portia/work/beta") && !active.ContainsKey("lease://portia/work/alpha"));
+            await Wait(() =>
+                active.ContainsKey("lease://portia/work/beta") && !active.ContainsKey("lease://portia/work/alpha"));
             Assert.Equal(1, starts["lease://portia/work/global"]);
         }
-        finally { await lifetime.CancelAsync(); await AwaitCancelled(run); }
+        finally
+        {
+            await lifetime.CancelAsync();
+            await AwaitCancelled(run);
+        }
+
         Assert.Empty(active);
 
         static async Task Wait(Func<bool> condition)
@@ -102,11 +120,11 @@ public sealed class FleetPartitionRunnerTests
     }
 
     /// <summary>
-    /// Regression test: a callback that returns quickly — by its own design, or because its
-    /// lease was lost — must not spin the competition loop with no backoff at all. An earlier
-    /// version of this class hammered the lease client fast enough, with no pause between
-    /// attempts, that it starved the process; this bounds how many times a fast-returning
-    /// callback's partition can possibly be re-acquired in a short window.
+    ///     Regression test: a callback that returns quickly — by its own design, or because its
+    ///     lease was lost — must not spin the competition loop with no backoff at all. An earlier
+    ///     version of this class hammered the lease client fast enough, with no pause between
+    ///     attempts, that it starved the process; this bounds how many times a fast-returning
+    ///     callback's partition can possibly be re-acquired in a short window.
     /// </summary>
     [Fact]
     public async Task ShouldBackOffWhenCallbackReturnsImmediately()
@@ -115,13 +133,15 @@ public sealed class FleetPartitionRunnerTests
         var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
         using var cts = new CancellationTokenSource();
 
-        var run = runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), cts.Token);
+        var run = runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask,
+            SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), cts.Token);
 
         await Task.Delay(300);
         cts.Cancel();
         await AwaitCancelled(run);
 
-        Assert.True(leases.Acquisitions.Count <= 2, $"Expected at most 2 acquisitions in 300ms with a 1s backoff, got {leases.Acquisitions.Count}.");
+        Assert.True(leases.Acquisitions.Count <= 2,
+            $"Expected at most 2 acquisitions in 300ms with a 1s backoff, got {leases.Acquisitions.Count}.");
     }
 
     /// <summary>A terminal hosted-workload fault crosses the fleet resilience boundary.</summary>
@@ -133,7 +153,7 @@ public sealed class FleetPartitionRunnerTests
             new InvalidOperationException("bad event"));
         var options = SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
         {
-            ReconciliationInterval = TimeSpan.FromMilliseconds(10),
+            ReconciliationInterval = TimeSpan.FromMilliseconds(10)
         };
 
         var failure = await Assert.ThrowsAsync<WorkloadFailureException>(() => runner.RunAsync(
@@ -143,8 +163,8 @@ public sealed class FleetPartitionRunnerTests
     }
 
     /// <summary>
-    /// Verifies that a non-positive lease TTL is rejected up front with a clear error, rather
-    /// than surfacing later as an opaque overflow when converting to whole seconds.
+    ///     Verifies that a non-positive lease TTL is rejected up front with a clear error, rather
+    ///     than surfacing later as an opaque overflow when converting to whole seconds.
     /// </summary>
     [Fact]
     public async Task ShouldRejectNonPositiveLeaseTtl()
@@ -153,18 +173,19 @@ public sealed class FleetPartitionRunnerTests
         var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
 
         _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.Zero)));
+            runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask,
+                SingleWorkerMembership.Options(TimeSpan.Zero)));
     }
 
     /// <summary>
-    /// Verifies that any partition route not shaped exactly like Fitz's required
-    /// <c>lease://{realm}/{area}/{resource}</c> is rejected up front, rather than failing every
-    /// single acquisition attempt forever with a silent per-attempt retry. A prefix check alone
-    /// (an earlier, incomplete version of this validation) still let a route with too few
-    /// segments, an empty segment, or a wildcard segment through — every one of those would still
-    /// have been rejected by a real broker on every single attempt, exactly the silent-forever-retry
-    /// case this validation exists to prevent, discovered only because a live broker actually
-    /// rejects a malformed route instead of this fake accepting anything.
+    ///     Verifies that any partition route not shaped exactly like Fitz's required
+    ///     <c>lease://{realm}/{area}/{resource}</c> is rejected up front, rather than failing every
+    ///     single acquisition attempt forever with a silent per-attempt retry. A prefix check alone
+    ///     (an earlier, incomplete version of this validation) still let a route with too few
+    ///     segments, an empty segment, or a wildcard segment through — every one of those would still
+    ///     have been rejected by a real broker on every single attempt, exactly the silent-forever-retry
+    ///     case this validation exists to prevent, discovered only because a live broker actually
+    ///     rejects a malformed route instead of this fake accepting anything.
     /// </summary>
     [Theory]
     [InlineData("portia/fleet/not-a-lease-route", "missing the scheme entirely")]
@@ -191,15 +212,16 @@ public sealed class FleetPartitionRunnerTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            runner.RunAsync([route], (_, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), cts.Token));
+            runner.RunAsync([route], (_, _) => Task.CompletedTask,
+                SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), cts.Token));
         Assert.Contains("lease://{realm}/{area}/{resource}", exception.Message, StringComparison.Ordinal);
         _ = reason;
     }
 
     /// <summary>
-    /// Verifies that a properly-shaped route — the thing every other test in this class already
-    /// relies on working — is still accepted, so the stricter validation above hasn't become
-    /// overzealous.
+    ///     Verifies that a properly-shaped route — the thing every other test in this class already
+    ///     relies on working — is still accepted, so the stricter validation above hasn't become
+    ///     overzealous.
     /// </summary>
     [Fact]
     public async Task ShouldAcceptWellFormedPartitionRoute()
@@ -210,7 +232,8 @@ public sealed class FleetPartitionRunnerTests
 
         var run = runner.RunAsync(
             ["lease://portia/fleet/well-formed"],
-            (_, ct) => RunUntilCancelled("lease://portia/fleet/well-formed", new ConcurrentDictionary<string, bool>(), ct),
+            (_, ct) => RunUntilCancelled("lease://portia/fleet/well-formed", new ConcurrentDictionary<string, bool>(),
+                ct),
             SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
             cts.Token);
 
@@ -220,9 +243,9 @@ public sealed class FleetPartitionRunnerTests
     }
 
     /// <summary>
-    /// Verifies that a duplicate partition key is rejected up front, rather than silently
-    /// leaving one of the two competition loops permanently blocked on a route this same
-    /// process already holds — nothing in that process would ever release it.
+    ///     Verifies that a duplicate partition key is rejected up front, rather than silently
+    ///     leaving one of the two competition loops permanently blocked on a route this same
+    ///     process already holds — nothing in that process would ever release it.
     /// </summary>
     [Fact]
     public async Task ShouldRejectDuplicatePartitionKeys()
@@ -231,15 +254,16 @@ public sealed class FleetPartitionRunnerTests
         var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
 
         _ = await Assert.ThrowsAsync<ArgumentException>(() =>
-            runner.RunAsync(["lease://portia/fleet/p", "lease://portia/fleet/p"], (_, _) => Task.CompletedTask, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30))));
+            runner.RunAsync(["lease://portia/fleet/p", "lease://portia/fleet/p"], (_, _) => Task.CompletedTask,
+                SingleWorkerMembership.Options(TimeSpan.FromSeconds(30))));
     }
 
     /// <summary>
-    /// Verifies that a failure to even acquire a partition's lease (contention still in
-    /// progress, no callback ever ran) is reported with a distinctly different fault reason
-    /// than a callback that acquired the lease and then failed on its own — conflating the two
-    /// would make routine, expected contention look identical to a genuine bug every time it's
-    /// observed.
+    ///     Verifies that a failure to even acquire a partition's lease (contention still in
+    ///     progress, no callback ever ran) is reported with a distinctly different fault reason
+    ///     than a callback that acquired the lease and then failed on its own — conflating the two
+    ///     would make routine, expected contention look identical to a genuine bug every time it's
+    ///     observed.
     /// </summary>
     [Fact]
     public async Task ShouldReportDifferentFaultReasonForFailedAcquisitionThanFailedCallback()
@@ -251,7 +275,9 @@ public sealed class FleetPartitionRunnerTests
         listener.InstrumentPublished = (instrument, meterListener) =>
         {
             if (instrument.Meter.Name == PortiaTelemetry.SourceName && instrument.Name == "portia.worker.failure")
+            {
                 meterListener.EnableMeasurementEvents(instrument);
+            }
         };
         listener.SetMeasurementEventCallback<long>((_, _, tags, _) => failures.Add(tags.ToArray()));
         listener.Start();
@@ -275,13 +301,14 @@ public sealed class FleetPartitionRunnerTests
         Assert.All(failures, tags =>
         {
             Assert.Equal(["runner", "error.type"], tags.Select(tag => tag.Key));
-            Assert.DoesNotContain(tags, tag => (tag.Value as string)?.Contains("lease://", StringComparison.Ordinal) == true);
+            Assert.DoesNotContain(tags,
+                tag => (tag.Value as string)?.Contains("lease://", StringComparison.Ordinal) == true);
         });
     }
 
     /// <summary>
-    /// Verifies that a single worker with no competition simply acquires and holds every
-    /// partition it's given.
+    ///     Verifies that a single worker with no competition simply acquires and holds every
+    ///     partition it's given.
     /// </summary>
     [Fact]
     public async Task ShouldAcquireEveryPartitionWhenNoWorkerContestsThem()
@@ -306,9 +333,9 @@ public sealed class FleetPartitionRunnerTests
     }
 
     /// <summary>
-    /// Verifies the core contention guarantee: when two workers compete for the same single
-    /// partition, only one of them ever holds it — the second stays blocked, never running its
-    /// callback concurrently with the first.
+    ///     Verifies the core contention guarantee: when two workers compete for the same single
+    ///     partition, only one of them ever holds it — the second stays blocked, never running its
+    ///     callback concurrently with the first.
     /// </summary>
     [Fact]
     public async Task ShouldGrantPartitionToExactlyOneCompetingWorker()
@@ -340,8 +367,10 @@ public sealed class FleetPartitionRunnerTests
             }
         }
 
-        var runA = runnerA.RunAsync(["lease://portia/fleet/shared-partition"], OnAcquired, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), ctsA.Token);
-        var runB = runnerB.RunAsync(["lease://portia/fleet/shared-partition"], OnAcquired, SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), ctsB.Token);
+        var runA = runnerA.RunAsync(["lease://portia/fleet/shared-partition"], OnAcquired,
+            SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), ctsA.Token);
+        var runB = runnerB.RunAsync(["lease://portia/fleet/shared-partition"], OnAcquired,
+            SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), ctsB.Token);
 
         await WaitUntil(() => leases.Acquisitions.Count >= 1);
         // Give the loser a real chance to have (incorrectly) run concurrently, if the
@@ -357,9 +386,9 @@ public sealed class FleetPartitionRunnerTests
     }
 
     /// <summary>
-    /// The key minimal-shuffle guarantee: when a worker holding one partition stops, only that
-    /// partition moves to another worker — a second partition already stably held elsewhere is
-    /// never interrupted, restarted, or even briefly re-contended.
+    ///     The key minimal-shuffle guarantee: when a worker holding one partition stops, only that
+    ///     partition moves to another worker — a second partition already stably held elsewhere is
+    ///     never interrupted, restarted, or even briefly re-contended.
     /// </summary>
     [Fact]
     public async Task ShouldOnlyMoveThePartitionThatWasReleasedWhenAWorkerStops()
@@ -380,7 +409,7 @@ public sealed class FleetPartitionRunnerTests
             (partition, ct) => partition switch
             {
                 "lease://portia/fleet/stable-partition" => CountRestartsUntilCancelled(stablePartitionRestarts, ct),
-                _ => RunUntilCancelledRecordingAcquisition(partition, movedPartitionAcquisitions, ct),
+                _ => RunUntilCancelledRecordingAcquisition(partition, movedPartitionAcquisitions, ct)
             },
             SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
             ctsA.Token);
@@ -423,7 +452,8 @@ public sealed class FleetPartitionRunnerTests
         }
     }
 
-    static async Task RunUntilCancelledRecordingAcquisition(string partition, ConcurrentBag<string> acquisitions, CancellationToken ct)
+    static async Task RunUntilCancelledRecordingAcquisition(string partition, ConcurrentBag<string> acquisitions,
+        CancellationToken ct)
     {
         acquisitions.Add(partition);
 
@@ -460,9 +490,10 @@ public sealed class FleetPartitionRunnerTests
             initial = target;
 
             if (candidate <= initial)
+            {
                 return;
-        }
-        while (Interlocked.CompareExchange(ref target, candidate, initial) != initial);
+            }
+        } while (Interlocked.CompareExchange(ref target, candidate, initial) != initial);
     }
 
     static async Task WaitUntil(Func<bool> condition)

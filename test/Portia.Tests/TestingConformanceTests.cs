@@ -23,14 +23,14 @@ public sealed class TestingConformanceTests
     /// <summary>A projection repository with atomic commits and isolated generations passes.</summary>
     [Fact]
     public async Task ShouldAcceptProbeGivenAtomicProjectionStoreSemantics() =>
-        await ProjectionStoreConformance.VerifyAsync(new ProjectionProbe(leakOnDispose: false));
+        await ProjectionStoreConformance.VerifyAsync(new ProjectionProbe(false));
 
     /// <summary>A projection repository that exposes uncommitted data is rejected.</summary>
     [Fact]
     public async Task ShouldRejectProbeGivenProjectionDisposalLeaksChanges()
     {
         var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            ProjectionStoreConformance.VerifyAsync(new ProjectionProbe(leakOnDispose: true)).AsTask());
+            ProjectionStoreConformance.VerifyAsync(new ProjectionProbe(true)).AsTask());
 
         Assert.Contains("uncommitted", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -40,7 +40,7 @@ public sealed class TestingConformanceTests
     public async Task ShouldRejectProbeGivenProjectionConflictUsesAdapterException()
     {
         var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            ProjectionStoreConformance.VerifyAsync(new ProjectionProbe(leakOnDispose: false, translateConflict: false)).AsTask());
+            ProjectionStoreConformance.VerifyAsync(new ProjectionProbe(false, false)).AsTask());
 
         Assert.Contains(nameof(ProjectionConcurrencyException), exception.Message, StringComparison.Ordinal);
     }
@@ -48,14 +48,14 @@ public sealed class TestingConformanceTests
     /// <summary>The in-memory event store honors ordering, offsets, and stream concurrency.</summary>
     [Fact]
     public async Task ShouldAcceptProbeGivenConformantEventStore() =>
-        await EventStoreConformance.VerifyAsync(new EventStoreProbe(enforceExpectedPosition: true));
+        await EventStoreConformance.VerifyAsync(new EventStoreProbe(true));
 
     /// <summary>A store that accepts a stale append is rejected.</summary>
     [Fact]
     public async Task ShouldRejectProbeGivenEventStoreIgnoresExpectedStreamPosition()
     {
         var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            EventStoreConformance.VerifyAsync(new EventStoreProbe(enforceExpectedPosition: false)).AsTask());
+            EventStoreConformance.VerifyAsync(new EventStoreProbe(false)).AsTask());
 
         Assert.Contains("stale append", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -65,7 +65,13 @@ public sealed class TestingConformanceTests
         InMemoryEventStore _store = new();
         public string Realm => "portia-conformance";
         public string Area => "event-store";
-        public ValueTask ResetAsync(CancellationToken ct = default) { _store = new InMemoryEventStore(); return ValueTask.CompletedTask; }
+
+        public ValueTask ResetAsync(CancellationToken ct = default)
+        {
+            _store = new InMemoryEventStore();
+            return ValueTask.CompletedTask;
+        }
+
         public ValueTask<IEventStore> OpenAsync(CancellationToken ct = default) => ValueTask.FromResult<IEventStore>(
             enforceExpectedPosition ? _store : new PermissiveEventStore(_store));
     }
@@ -74,15 +80,20 @@ public sealed class TestingConformanceTests
     // shows the suite fails a store that would silently lose a concurrent writer's events.
     sealed class PermissiveEventStore(InMemoryEventStore inner) : IEventStore
     {
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0, CancellationToken ct = default)
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
+            CancellationToken ct = default)
             => inner.ReadAsync(stream, fromOffset, ct);
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0, CancellationToken ct = default)
+
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
+            CancellationToken ct = default)
             => inner.ReadAsync(pattern, fromOffset, ct);
+
         public async ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
             IReadOnlyList<DomainEvent> events, CancellationToken ct = default)
         {
             var actual = 0UL;
-            await foreach (var _ in inner.ReadAsync(stream, 0, ct)) actual++;
+            await foreach (var _ in inner.ReadAsync(stream, 0, ct))
+                actual++;
             await inner.AppendAsync(stream, actual, events, ct);
         }
     }
@@ -90,12 +101,23 @@ public sealed class TestingConformanceTests
     sealed class CorrectDeduplicationProbe : IReactionDeduplicationProbe
     {
         readonly ConcurrentDictionary<Uuid, byte> _seen = new();
-        public ValueTask ResetAsync(CancellationToken ct = default) { _seen.Clear(); return ValueTask.CompletedTask; }
+
+        public ValueTask ResetAsync(CancellationToken ct = default)
+        {
+            _seen.Clear();
+            return ValueTask.CompletedTask;
+        }
+
         public ValueTask ReopenAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
-        public async ValueTask<bool> ExecuteAsync(Uuid eventId, Func<CancellationToken, ValueTask> effect, CancellationToken ct = default)
+
+        public async ValueTask<bool> ExecuteAsync(Uuid eventId, Func<CancellationToken, ValueTask> effect,
+            CancellationToken ct = default)
         {
             if (!_seen.TryAdd(eventId, 0))
+            {
                 return false;
+            }
+
             await effect(ct);
             return true;
         }
@@ -105,7 +127,9 @@ public sealed class TestingConformanceTests
     {
         public ValueTask ResetAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
         public ValueTask ReopenAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
-        public async ValueTask<bool> ExecuteAsync(Uuid eventId, Func<CancellationToken, ValueTask> effect, CancellationToken ct = default)
+
+        public async ValueTask<bool> ExecuteAsync(Uuid eventId, Func<CancellationToken, ValueTask> effect,
+            CancellationToken ct = default)
         {
             await effect(ct);
             return true;
@@ -125,7 +149,8 @@ public sealed class TestingConformanceTests
 
         public ValueTask ResetAsync(CancellationToken ct = default)
         {
-            lock (_gate) _states.Clear();
+            lock (_gate)
+                _states.Clear();
             return ValueTask.CompletedTask;
         }
 
@@ -134,20 +159,28 @@ public sealed class TestingConformanceTests
 
         internal ProjectionState Read(CheckpointIdentity identity)
         {
-            lock (_gate) return _states.GetValueOrDefault(identity) ?? new ProjectionState(null, ProjectionCheckpoint.Start);
+            lock (_gate)
+                return _states.GetValueOrDefault(identity) ?? new ProjectionState(null, ProjectionCheckpoint.Start);
         }
 
         internal void Commit(ProjectionBatchContext context, string? value, ProjectionCheckpoint checkpoint)
         {
             lock (_gate)
             {
-                var current = _states.GetValueOrDefault(context.Identity) ?? new ProjectionState(null, ProjectionCheckpoint.Start);
+                var current = _states.GetValueOrDefault(context.Identity) ??
+                              new ProjectionState(null, ProjectionCheckpoint.Start);
                 if (current.Checkpoint != context.Checkpoint)
                 {
                     if (!translateConflict)
+                    {
                         throw new InvalidOperationException("stale checkpoint");
-                    throw new ProjectionConcurrencyException("stale checkpoint");
+                    }
+                    else
+                    {
+                        throw new ProjectionConcurrencyException("stale checkpoint");
+                    }
                 }
+
                 _states[context.Identity] = new ProjectionState(value, checkpoint);
             }
         }
@@ -156,7 +189,8 @@ public sealed class TestingConformanceTests
         {
             lock (_gate)
             {
-                var current = _states.GetValueOrDefault(context.Identity) ?? new ProjectionState(null, ProjectionCheckpoint.Start);
+                var current = _states.GetValueOrDefault(context.Identity) ??
+                              new ProjectionState(null, ProjectionCheckpoint.Start);
                 _states[context.Identity] = current with { Value = value };
             }
         }
@@ -169,18 +203,22 @@ public sealed class TestingConformanceTests
         ProjectionBatch? _batch;
         bool _failNextCommit;
 
-        public IProjectionStore Store => this;
-
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default) =>
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
+            CancellationToken ct = default) =>
             ValueTask.FromResult(_probe.Read(identity).Checkpoint);
 
         public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
         {
             if (_batch is not null)
+            {
                 throw new InvalidOperationException("batch already active");
+            }
+
             _batch = new ProjectionBatch(this, context, leakOnDispose);
             return ValueTask.FromResult<IProjectionBatch>(_batch);
         }
+
+        public IProjectionStore Store => this;
 
         public ValueTask StageValueAsync(string value, CancellationToken ct = default)
         {
@@ -216,6 +254,7 @@ public sealed class TestingConformanceTests
                     session._failNextCommit = false;
                     throw new InvalidOperationException("injected commit failure");
                 }
+
                 session._probe.Commit(context, Value, checkpoint);
                 _committed = true;
                 return ValueTask.CompletedTask;
@@ -224,7 +263,10 @@ public sealed class TestingConformanceTests
             public ValueTask DisposeAsync()
             {
                 if (!_committed && leakOnDispose)
+                {
                     session._probe.Leak(context, Value);
+                }
+
                 session._batch = null;
                 return ValueTask.CompletedTask;
             }

@@ -5,10 +5,10 @@ using Microsoft.Extensions.Hosting;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies the coordinator that lets projectors and reactors run with no coordination
-/// infrastructure at all. Before it existed, <c>AddProjector</c>/<c>AddReactor</c> plus
-/// <c>AddWorkers()</c> could not start a single workload unless Fitz supplied an
-/// <see cref="IWorkloadCoordinator" />, which is why the low-level hosting extensions existed.
+///     Verifies the coordinator that lets projectors and reactors run with no coordination
+///     infrastructure at all. Before it existed, <c>AddProjector</c>/<c>AddReactor</c> plus
+///     <c>AddWorkers()</c> could not start a single workload unless Fitz supplied an
+///     <see cref="IWorkloadCoordinator" />, which is why the low-level hosting extensions existed.
 /// </summary>
 public sealed class SingleProcessWorkloadCoordinatorTests
 {
@@ -36,8 +36,8 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     }
 
     /// <summary>
-    /// A per-tenant workload only appears once its tenant does, so ownership has to be reconciled
-    /// after start rather than captured once from the opening snapshot.
+    ///     A per-tenant workload only appears once its tenant does, so ownership has to be reconciled
+    ///     after start rather than captured once from the opening snapshot.
     /// </summary>
     [Fact]
     public async Task ShouldStartWorkloadThatAppearsAfterStartAndCancelOneThatDisappears()
@@ -61,7 +61,9 @@ public sealed class SingleProcessWorkloadCoordinatorTests
                 {
                     running[identity.Name] = false;
                     if (identity.Name == "second")
+                    {
                         _ = cancelled.TrySetResult();
+                    }
                 }
             },
             lifetime.Token);
@@ -85,15 +87,16 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     }
 
     /// <summary>
-    /// Regression test: a projector's or reactor's own <c>Name</c> is its checkpoint identity. A
-    /// workload registration that does not set <c>WorkloadOptions.Name</c> must leave it alone —
-    /// renaming it to the component's type name would silently repoint an existing deployment's
-    /// checkpoints and replay the whole stream.
+    ///     Regression test: a projector's or reactor's own <c>Name</c> is its checkpoint identity. A
+    ///     workload registration that does not set <c>WorkloadOptions.Name</c> must leave it alone —
+    ///     renaming it to the component's type name would silently repoint an existing deployment's
+    ///     checkpoints and replay the whole stream.
     /// </summary>
     [Theory]
     [InlineData(null, "declared-projection-name")]
     [InlineData("chosen-by-the-host", "chosen-by-the-host")]
-    public async Task ShouldPreserveComponentCheckpointNameUnlessWorkloadNamesItExplicitly(string? workloadName, string expected)
+    public async Task ShouldPreserveComponentCheckpointNameUnlessWorkloadNamesItExplicitly(string? workloadName,
+        string expected)
     {
         var id = Uuid.CreateVersion4();
         var store = new InMemoryEventStore();
@@ -132,18 +135,8 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     static T Committed<T>(T ev, Uuid aggregateId, ulong aggregateVersion)
         where T : DomainEvent
     {
-        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, aggregateVersion, DateTimeOffset.UtcNow));
+        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, aggregateVersion,
+            DateTimeOffset.UtcNow));
         return ev;
-    }
-}
-
-sealed partial class NamedProjector(RecordingProjectionTarget target)
-    : Projector(target, EventStreamPattern.ForPattern("test", "projectors"), "declared-projection-name"),
-        IProjectorHandler<ValueChanged>
-{
-    public ValueTask HandleAsync(ValueChanged ev, IProjectorContext context, CancellationToken ct)
-    {
-        target.Projection.Value = ev.Value;
-        return ValueTask.CompletedTask;
     }
 }

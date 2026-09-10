@@ -5,32 +5,33 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Reports application-design mistakes this architecture makes easy and nothing else catches.
-/// These are warnings, not errors: each one restates a boundary Portia's own documentation
-/// already asserts, and an application that means to cross one can suppress it deliberately.
+///     Reports application-design mistakes this architecture makes easy and nothing else catches.
+///     These are warnings, not errors: each one restates a boundary Portia's own documentation
+///     already asserts, and an application that means to cross one can suppress it deliberately.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class ComponentPracticeGenerator : IIncrementalGenerator
 {
     static readonly DiagnosticDescriptor ProjectorEffect = new("PORTIA100", "Projector must not cause external effects",
         "Projector '{0}' takes '{1}'. A projector is a pure function of events into its own store — its writes and checkpoint commit atomically, so any effect it causes replays on every commit failure and every rebuild. Move the effect to a reactor.",
-        "Portia", DiagnosticSeverity.Warning, isEnabledByDefault: true);
+        "Portia", DiagnosticSeverity.Warning, true);
 
     static readonly DiagnosticDescriptor ServiceLocation = new("PORTIA101", "Component resolves services at runtime",
         "'{0}' takes '{1}'. Portia components declare what they need as constructor dependencies so the whole graph stays visible to the compiler and to trimming; resolving from the container hides it.",
-        "Portia", DiagnosticSeverity.Warning, isEnabledByDefault: true);
+        "Portia", DiagnosticSeverity.Warning, true);
 
     static readonly DiagnosticDescriptor AggregateService = new("PORTIA102", "Aggregate depends on a service",
         "Aggregate '{0}' takes '{1}'. An aggregate receives data and an optional IDomainEventMetadataFactory; loading and persisting are the repository's job, and a service dependency makes the aggregate impossible to replay in isolation.",
-        "Portia", DiagnosticSeverity.Warning, isEnabledByDefault: true);
+        "Portia", DiagnosticSeverity.Warning, true);
 
     static readonly DiagnosticDescriptor MultipleHandlers = new("PORTIA103", "Type handles more than one request",
         "'{0}' implements {1} request handler interfaces. The request and its handler are Portia's unit of responsibility; split them so each request's behavior can change on its own.",
-        "Portia", DiagnosticSeverity.Warning, isEnabledByDefault: true);
+        "Portia", DiagnosticSeverity.Warning, true);
 
-    static readonly DiagnosticDescriptor CaughtExceptionAsResult = new("PORTIA104", "Unexpected failure converted to a Result",
+    static readonly DiagnosticDescriptor CaughtExceptionAsResult = new("PORTIA104",
+        "Unexpected failure converted to a Result",
         "'{0}' catches Exception and returns a failed Result. Result describes failures a handler anticipates; an unrecognized failure must stay an exception so transports can tell 'this request is invalid' from 'this call broke'.",
-        "Portia", DiagnosticSeverity.Warning, isEnabledByDefault: true);
+        "Portia", DiagnosticSeverity.Warning, true);
 
     // Anything that reaches outside the component's own unit of work.
     static readonly string[] EffectTypes =
@@ -41,13 +42,13 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         "Cntryl.Portia.INoticeRequestSender",
         "Cntryl.Portia.IRequestScheduler",
         "Cntryl.Portia.IAggregateRepository",
-        "System.Net.Http.HttpClient",
+        "System.Net.Http.HttpClient"
     ];
 
     static readonly string[] LocatorTypes =
     [
         "System.IServiceProvider",
-        "Microsoft.Extensions.DependencyInjection.IServiceScopeFactory",
+        "Microsoft.Extensions.DependencyInjection.IServiceScopeFactory"
     ];
 
     static readonly string[] AggregateForbiddenTypes =
@@ -58,7 +59,7 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         "Cntryl.Portia.IDomainEventReader",
         "Cntryl.Portia.IDomainEventWriter",
         "Cntryl.Portia.IProjectionStore",
-        "Cntryl.Portia.IProjectionCheckpointStore",
+        "Cntryl.Portia.IProjectionCheckpointStore"
     ];
 
     /// <inheritdoc />
@@ -66,7 +67,8 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
     {
         var types = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
-            static (syntaxContext, ct) => (Symbol: syntaxContext.SemanticModel.GetDeclaredSymbol((TypeDeclarationSyntax)syntaxContext.Node, ct),
+            static (syntaxContext, ct) => (
+                Symbol: syntaxContext.SemanticModel.GetDeclaredSymbol((TypeDeclarationSyntax)syntaxContext.Node, ct),
                 Node: (TypeDeclarationSyntax)syntaxContext.Node));
 
         context.RegisterSourceOutput(types.Combine(context.CompilationProvider), static (output, pair) =>
@@ -87,7 +89,10 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         if (!DerivesFrom(symbol, "Cntryl.Portia.Projector"))
             return;
         foreach (var parameter in Parameters(symbol, EffectTypes))
-            output.ReportDiagnostic(Diagnostic.Create(ProjectorEffect, Location(parameter), symbol.Name, Display(parameter)));
+        {
+            output.ReportDiagnostic(Diagnostic.Create(ProjectorEffect, Location(parameter), symbol.Name,
+                Display(parameter)));
+        }
     }
 
     static void ReportServiceLocation(SourceProductionContext output, INamedTypeSymbol symbol)
@@ -95,7 +100,10 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         if (!IsPortiaComponent(symbol))
             return;
         foreach (var parameter in Parameters(symbol, LocatorTypes))
-            output.ReportDiagnostic(Diagnostic.Create(ServiceLocation, Location(parameter), symbol.Name, Display(parameter)));
+        {
+            output.ReportDiagnostic(Diagnostic.Create(ServiceLocation, Location(parameter), symbol.Name,
+                Display(parameter)));
+        }
     }
 
     static void ReportAggregateServices(SourceProductionContext output, INamedTypeSymbol symbol)
@@ -103,14 +111,21 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         if (!DerivesFrom(symbol, "Cntryl.Portia.Aggregate"))
             return;
         foreach (var parameter in Parameters(symbol, AggregateForbiddenTypes))
-            output.ReportDiagnostic(Diagnostic.Create(AggregateService, Location(parameter), symbol.Name, Display(parameter)));
+        {
+            output.ReportDiagnostic(Diagnostic.Create(AggregateService, Location(parameter), symbol.Name,
+                Display(parameter)));
+        }
     }
 
     static void ReportMultipleHandlers(SourceProductionContext output, INamedTypeSymbol symbol)
     {
-        var handlers = symbol.AllInterfaces.Count(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Handler));
+        var handlers =
+            symbol.AllInterfaces.Count(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Handler));
         if (handlers > 1)
-            output.ReportDiagnostic(Diagnostic.Create(MultipleHandlers, symbol.Locations.FirstOrDefault(), symbol.Name, handlers));
+        {
+            output.ReportDiagnostic(Diagnostic.Create(MultipleHandlers, symbol.Locations.FirstOrDefault(), symbol.Name,
+                handlers));
+        }
     }
 
     static void ReportCaughtExceptionAsResult(
@@ -126,13 +141,14 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
             return;
 
         var implementations = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
-        foreach (var handler in symbol.AllInterfaces.Where(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Handler)))
+        foreach (var handler in symbol.AllInterfaces.Where(iface =>
+                     PortiaComponentRoles.Is(iface, PortiaComponentRoles.Handler)))
         {
             foreach (var contractMethod in handler.GetMembers("HandleAsync").OfType<IMethodSymbol>())
             {
                 var implementation = symbol.FindImplementationForInterfaceMember(contractMethod);
-                if (implementation is IMethodSymbol { IsAbstract: false } method
-                    && SymbolEqualityComparer.Default.Equals(method.ContainingType, symbol))
+                if (implementation is IMethodSymbol { IsAbstract: false } method &&
+                    SymbolEqualityComparer.Default.Equals(method.ContainingType, symbol))
                 {
                     _ = implementations.Add(method);
                 }
@@ -153,10 +169,10 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
                 var semanticModel = compilation.GetSemanticModel(method.SyntaxTree);
                 foreach (var clause in method.DescendantNodes(DescendIntoHandlerBody).OfType<CatchClauseSyntax>())
                 {
-                    // A bare catch, or one naming System.Exception itself — a specific exception
-                    // type is a failure the handler genuinely anticipates, which is what Result is for.
-                    if (clause.Declaration?.Type is { } caught
-                        && !SymbolEqualityComparer.Default.Equals(
+                    if (clause.Declaration?.Type is
+                        // A bare catch, or one naming System.Exception itself — a specific exception
+                        // type is a failure the handler genuinely anticipates, which is what Result is for.
+                        { } caught && !SymbolEqualityComparer.Default.Equals(
                             semanticModel.GetTypeInfo(caught, output.CancellationToken).Type,
                             exceptionType))
                     {
@@ -164,15 +180,17 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
                     }
 
                     if (!clause.Block.DescendantNodes(DescendIntoCatchBlock).OfType<InvocationExpressionSyntax>()
-                        .Any(invocation => IsResultFailure(
-                            semanticModel.GetSymbolInfo(invocation, output.CancellationToken).Symbol as IMethodSymbol,
-                            resultType,
-                            genericResultType)))
+                            .Any(invocation => IsResultFailure(
+                                semanticModel.GetSymbolInfo(invocation, output.CancellationToken).Symbol as
+                                    IMethodSymbol,
+                                resultType,
+                                genericResultType)))
                     {
                         continue;
                     }
 
-                    output.ReportDiagnostic(Diagnostic.Create(CaughtExceptionAsResult, clause.GetLocation(), symbol.Name));
+                    output.ReportDiagnostic(Diagnostic.Create(CaughtExceptionAsResult, clause.GetLocation(),
+                        symbol.Name));
                 }
             }
         }
@@ -197,7 +215,7 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
 
             var containingType = method.ContainingType.OriginalDefinition;
             return SymbolEqualityComparer.Default.Equals(containingType, result)
-                || SymbolEqualityComparer.Default.Equals(containingType, genericResult);
+                   || SymbolEqualityComparer.Default.Equals(containingType, genericResult);
         }
     }
 
@@ -214,6 +232,7 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
             if (current.OriginalDefinition.ToDisplayString() == baseTypeName)
                 return true;
         }
+
         return false;
     }
 

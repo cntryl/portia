@@ -1,13 +1,14 @@
+using System.Runtime.CompilerServices;
 using Cntryl.Fitz.Abstractions.Domains.Rpc;
 
 namespace Cntryl.Portia.Testing;
 
 /// <summary>
-/// Stands in for a real Fitz RPC broker for tests: routes a caller's <see cref="CallAsync" />
-/// directly to whichever worker last registered against that exact route, in-process, with no
-/// network hop. Shipped from <c>Portia.Fitz</c> (not <c>Portia.Testing</c>) since it depends on
-/// <c>Cntryl.Fitz.Abstractions</c> — an app testing its own RPC-based code can reuse this exact
-/// type instead of writing its own fake.
+///     Stands in for a real Fitz RPC broker for tests: routes a caller's <see cref="CallAsync" />
+///     directly to whichever worker last registered against that exact route, in-process, with no
+///     network hop. Shipped from <c>Portia.Fitz</c> (not <c>Portia.Testing</c>) since it depends on
+///     <c>Cntryl.Fitz.Abstractions</c> — an app testing its own RPC-based code can reuse this exact
+///     type instead of writing its own fake.
 /// </summary>
 public sealed class InMemoryRpcClient : IRpcClient
 {
@@ -17,10 +18,12 @@ public sealed class InMemoryRpcClient : IRpcClient
     public async IAsyncEnumerable<RpcResponseFrame> CallAsync(
         string route,
         ReadOnlyMemory<byte> body,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         if (!_workers.TryGetValue(route, out var worker))
+        {
             throw new InvalidOperationException($"No worker is registered for route '{route}'.");
+        }
 
         var writer = new CapturingResponseWriter();
         await worker(new RpcRequest(route, body), writer, ct).ConfigureAwait(false);

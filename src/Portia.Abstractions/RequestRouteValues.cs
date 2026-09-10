@@ -1,9 +1,9 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Supplies the route segments a request's <see cref="RequestRouteAttribute" /> left as
-/// <see cref="RequestRouteAttribute.Wildcard" /> (most commonly the realm, which is often
-/// contextual — e.g. the caller's tenant — rather than fixed per request type).
+///     Supplies the route segments a request's <see cref="RequestRouteAttribute" /> left as
+///     <see cref="RequestRouteAttribute.Wildcard" /> (most commonly the realm, which is often
+///     contextual — e.g. the caller's tenant — rather than fixed per request type).
 /// </summary>
 /// <param name="Realm">The realm, if the request's route wildcards it.</param>
 /// <param name="Area">The area, if the request's route wildcards it.</param>
@@ -16,7 +16,7 @@ public sealed record RequestRouteValues(
     string? Operation = null)
 {
     /// <summary>
-    /// Gets an empty set of route values, for a request whose route has no wildcarded segments.
+    ///     Gets an empty set of route values, for a request whose route has no wildcarded segments.
     /// </summary>
     public static RequestRouteValues None { get; } = new();
 }

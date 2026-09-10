@@ -4,19 +4,28 @@ using System.Runtime.CompilerServices;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies the tenant control plane end to end: <see cref="EventSourcedTenantDirectory{TStart,TStop}" />
-/// reading real tenant lifecycle events off a real <see cref="InMemoryEventStore" />, driving a
-/// real <see cref="MultiTenantRunner" /> — not mocked at either layer — so tenants discovered at
-/// startup and tenants added or removed live both actually start and stop the right per-tenant
-/// work.
+///     Verifies the tenant control plane end to end: <see cref="EventSourcedTenantDirectory{TStart,TStop}" />
+///     reading real tenant lifecycle events off a real <see cref="InMemoryEventStore" />, driving a
+///     real <see cref="MultiTenantRunner" /> — not mocked at either layer — so tenants discovered at
+///     startup and tenants added or removed live both actually start and stop the right per-tenant
+///     work.
 /// </summary>
 public sealed class MultiTenancyTests
 {
-    static readonly EventStreamPattern TenantRegistryPattern = EventStreamPattern.ForPattern("global", "tenants", "registry");
+    static readonly EventStreamPattern TenantRegistryPattern =
+        EventStreamPattern.ForPattern("global", "tenants", "registry");
+
+    static readonly EventStreamAddress RegistryStream = new("global", "tenants", "registry");
+
+    // AppendAsync is optimistic-concurrency versioned per aggregate stream, and every test in
+    // this file appends to the same fixed registry stream address — each test tracks its own
+    // running version here rather than assuming a fixed 0/1, since tests appending more than one
+    // event (or more than one tenant) would otherwise collide on a hardcoded expected version.
+    readonly ConditionalWeakTable<InMemoryEventStore, StrongBox<ulong>> _registryVersions = [];
 
     /// <summary>
-    /// Verifies that a tenant already registered before the runner starts is picked up at
-    /// startup — not missed because it predates the run.
+    ///     Verifies that a tenant already registered before the runner starts is picked up at
+    ///     startup — not missed because it predates the run.
     /// </summary>
     [Fact]
     public async Task ShouldStartAlreadyRegisteredTenantAtStartup()
@@ -29,12 +38,12 @@ public sealed class MultiTenancyTests
         using var cts = new CancellationTokenSource();
 
         var run = runner.RunAsync(
-            onTenantStarted: async (tenantId, ct) =>
+            async (tenantId, ct) =>
             {
                 started.Add(tenantId);
                 await WaitForCancellationAsync(ct);
             },
-            onTenantStopped: (_, _) => Task.CompletedTask,
+            (_, _) => Task.CompletedTask,
             cts.Token);
 
         await WaitUntilAsync(() => started.Contains(new TenantId("acme")));
@@ -45,8 +54,8 @@ public sealed class MultiTenancyTests
     }
 
     /// <summary>
-    /// Verifies that a tenant registered after the runner has already started is picked up live,
-    /// through <see cref="ITenantDirectory.WatchAsync" />.
+    ///     Verifies that a tenant registered after the runner has already started is picked up live,
+    ///     through <see cref="ITenantDirectory.WatchAsync" />.
     /// </summary>
     [Fact]
     public async Task ShouldStartTenantRegisteredWhileRunning()
@@ -58,12 +67,12 @@ public sealed class MultiTenancyTests
         using var cts = new CancellationTokenSource();
 
         var run = runner.RunAsync(
-            onTenantStarted: async (tenantId, ct) =>
+            async (tenantId, ct) =>
             {
                 started.Add(tenantId);
                 await WaitForCancellationAsync(ct);
             },
-            onTenantStopped: (_, _) => Task.CompletedTask,
+            (_, _) => Task.CompletedTask,
             cts.Token);
 
         await RegisterTenantAsync(store, "globex");
@@ -76,8 +85,8 @@ public sealed class MultiTenancyTests
     }
 
     /// <summary>
-    /// Verifies that removing a tenant cancels its running work and calls the stop callback —
-    /// the per-tenant instance actually stops, not just gets forgotten.
+    ///     Verifies that removing a tenant cancels its running work and calls the stop callback —
+    ///     the per-tenant instance actually stops, not just gets forgotten.
     /// </summary>
     [Fact]
     public async Task ShouldStopTenantWhenDeregistered()
@@ -92,7 +101,7 @@ public sealed class MultiTenancyTests
         using var cts = new CancellationTokenSource();
 
         var run = runner.RunAsync(
-            onTenantStarted: async (tenantId, ct) =>
+            async (tenantId, ct) =>
             {
                 started.Add(tenantId);
 
@@ -105,7 +114,7 @@ public sealed class MultiTenancyTests
                     _ = observedCancellation.TrySetResult();
                 }
             },
-            onTenantStopped: (tenantId, _) =>
+            (tenantId, _) =>
             {
                 stopped.Add(tenantId);
                 return Task.CompletedTask;
@@ -125,8 +134,8 @@ public sealed class MultiTenancyTests
     }
 
     /// <summary>
-    /// Verifies that cancelling the whole run stops every still-active tenant, calling the stop
-    /// callback for each.
+    ///     Verifies that cancelling the whole run stops every still-active tenant, calling the stop
+    ///     callback for each.
     /// </summary>
     [Fact]
     public async Task ShouldStopEveryActiveTenantWhenRunCancelled()
@@ -141,12 +150,12 @@ public sealed class MultiTenancyTests
         using var cts = new CancellationTokenSource();
 
         var run = runner.RunAsync(
-            onTenantStarted: async (tenantId, ct) =>
+            async (tenantId, ct) =>
             {
                 started.Add(tenantId);
                 await WaitForCancellationAsync(ct);
             },
-            onTenantStopped: (tenantId, _) =>
+            (tenantId, _) =>
             {
                 stopped.Add(tenantId);
                 return Task.CompletedTask;
@@ -167,7 +176,7 @@ public sealed class MultiTenancyTests
     {
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "blocked");
-        var runner = new MultiTenantRunner(CreateDirectory(store));
+        var runner = new MultiTenantRunner(CreateDirectory(store), shutdownGrace: TimeSpan.FromMilliseconds(50));
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stopEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cts = new CancellationTokenSource();
@@ -194,11 +203,43 @@ public sealed class MultiTenancyTests
         Assert.True(stopEntered.Task.IsCompleted);
     }
 
+    /// <summary>Shutdown gives cooperative application cleanup a real bounded grace interval.</summary>
+    [Fact]
+    public async Task ShouldAllowTenantStopCallbackToCompleteWithinShutdownGrace()
+    {
+        var store = new InMemoryEventStore();
+        await RegisterTenantAsync(store, "cooperative");
+        var runner = new MultiTenantRunner(CreateDirectory(store), shutdownGrace: TimeSpan.FromSeconds(1));
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupCompleted = false;
+        using var cts = new CancellationTokenSource();
+        var run = runner.RunAsync(
+            async (tenantId, ct) =>
+            {
+                _ = tenantId;
+                _ = started.TrySetResult();
+                await WaitForCancellationAsync(ct);
+            },
+            async (tenantId, stopToken) =>
+            {
+                _ = tenantId;
+                await Task.Delay(TimeSpan.FromMilliseconds(50), stopToken);
+                cleanupCompleted = true;
+            },
+            cts.Token);
+
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cts.Cancel();
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(cleanupCompleted);
+    }
+
     /// <summary>
-    /// Verifies that every active-tenant read is a complete current snapshot, even though the
-    /// event-sourced directory advances an internal stream offset between reads. Reconnect
-    /// reconciliation depends on unchanged tenants remaining present while newly removed tenants
-    /// disappear.
+    ///     Verifies that every active-tenant read is a complete current snapshot, even though the
+    ///     event-sourced directory advances an internal stream offset between reads. Reconnect
+    ///     reconciliation depends on unchanged tenants remaining present while newly removed tenants
+    ///     disappear.
     /// </summary>
     [Fact]
     public async Task ShouldReturnCompleteActiveSnapshotAcrossRepeatedReads()
@@ -223,11 +264,11 @@ public sealed class MultiTenancyTests
     }
 
     /// <summary>
-    /// Verifies that a transient failure from the tenant directory's live watch stream — a
-    /// network blip in a real implementation — doesn't permanently kill tenant management for
-    /// the rest of the process. <see cref="MultiTenantRunner" /> must reconnect and keep
-    /// discovering tenant changes, the same resilience <see cref="QueueRunner" /> and
-    /// <see cref="RequestNotificationRunner" /> already has for its own notification stream.
+    ///     Verifies that a transient failure from the tenant directory's live watch stream — a
+    ///     network blip in a real implementation — doesn't permanently kill tenant management for
+    ///     the rest of the process. <see cref="MultiTenantRunner" /> must reconnect and keep
+    ///     discovering tenant changes, the same resilience <see cref="QueueRunner" /> and
+    ///     <see cref="RequestNotificationRunner" /> already has for its own notification stream.
     /// </summary>
     [Fact]
     public async Task ShouldReconnectAfterTenantDirectoryWatchStreamFaults()
@@ -238,12 +279,12 @@ public sealed class MultiTenancyTests
         using var cts = new CancellationTokenSource();
 
         var run = runner.RunAsync(
-            onTenantStarted: (tenantId, ct) =>
+            (tenantId, ct) =>
             {
                 started.Add(tenantId);
                 return WaitForCancellationAsync(ct);
             },
-            onTenantStopped: (_, _) => Task.CompletedTask,
+            (_, _) => Task.CompletedTask,
             cts.Token);
 
         // The first watch stream throws as soon as it's subscribed to; a working runner
@@ -255,13 +296,13 @@ public sealed class MultiTenancyTests
     }
 
     /// <summary>
-    /// Regression test for a stateful directory (like <see cref="EventSourcedTenantDirectory{TStart,TStop}" />)
-    /// whose <c>GetActiveTenantsAsync</c> resumes from its own internal offset rather than a
-    /// fresh read: a tenant deregistered during a watch-stream outage never appears as its own
-    /// "Removed" change (the offset already moved past it) — it's simply absent from the next
-    /// snapshot. A runner that only starts what a reconnect snapshot yields, without reconciling
-    /// against what it's still tracking as active, orphans that tenant forever: it keeps running,
-    /// with no future change left to ever stop it.
+    ///     Regression test for a stateful directory (like <see cref="EventSourcedTenantDirectory{TStart,TStop}" />)
+    ///     whose <c>GetActiveTenantsAsync</c> resumes from its own internal offset rather than a
+    ///     fresh read: a tenant deregistered during a watch-stream outage never appears as its own
+    ///     "Removed" change (the offset already moved past it) — it's simply absent from the next
+    ///     snapshot. A runner that only starts what a reconnect snapshot yields, without reconciling
+    ///     against what it's still tracking as active, orphans that tenant forever: it keeps running,
+    ///     with no future change left to ever stop it.
     /// </summary>
     [Fact]
     public async Task ShouldStopTenantOmittedFromSnapshotAfterWatchStreamOutage()
@@ -273,12 +314,12 @@ public sealed class MultiTenancyTests
         using var cts = new CancellationTokenSource();
 
         var run = runner.RunAsync(
-            onTenantStarted: (tenantId, ct) =>
+            (tenantId, ct) =>
             {
                 started.Add(tenantId);
                 return WaitForCancellationAsync(ct);
             },
-            onTenantStopped: (tenantId, _) =>
+            (tenantId, _) =>
             {
                 stopped.Add(tenantId);
                 return Task.CompletedTask;
@@ -298,10 +339,10 @@ public sealed class MultiTenancyTests
     }
 
     /// <summary>
-    /// Verifies that a watch stream which keeps completing cleanly (never throwing, never
-    /// blocking) — an unusual but real possibility — still gets the same one-second backoff
-    /// between reconnect attempts as a genuinely faulting one, rather than spinning as fast as
-    /// the directory allows.
+    ///     Verifies that a watch stream which keeps completing cleanly (never throwing, never
+    ///     blocking) — an unusual but real possibility — still gets the same one-second backoff
+    ///     between reconnect attempts as a genuinely faulting one, rather than spinning as fast as
+    ///     the directory allows.
     /// </summary>
     [Fact]
     public async Task ShouldBackOffWhenWatchStreamCompletesCleanlyInsteadOfThrowing()
@@ -311,8 +352,8 @@ public sealed class MultiTenancyTests
         var runner = new MultiTenantRunner(directory, timeProvider: clock);
         using var cts = new CancellationTokenSource();
         var run = runner.RunAsync(
-            onTenantStarted: (_, ct) => WaitForCancellationAsync(ct),
-            onTenantStopped: (_, _) => Task.CompletedTask,
+            (_, ct) => WaitForCancellationAsync(ct),
+            (_, _) => Task.CompletedTask,
             cts.Token);
         Assert.Equal(TimeSpan.FromSeconds(1), await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(5)));
         cts.Cancel();
@@ -320,39 +361,16 @@ public sealed class MultiTenancyTests
         Assert.Equal(1, directory.WatchAttempts);
     }
 
-    sealed class WaitingClock : TimeProvider
-    {
-        public TaskCompletionSource<TimeSpan> Scheduled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
-        {
-            _ = Scheduled.TrySetResult(dueTime);
-            return new WaitingTimer();
-        }
-        sealed class WaitingTimer : ITimer
-        {
-            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
-            public void Dispose() { }
-            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-        }
-    }
-
-    static EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered> CreateDirectory(InMemoryEventStore store) =>
-        new(store, TenantRegistryPattern, GetTenantId, pollInterval: TimeSpan.FromMilliseconds(10));
+    static EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>
+        CreateDirectory(InMemoryEventStore store) =>
+        new(store, TenantRegistryPattern, GetTenantId, TimeSpan.FromMilliseconds(10));
 
     static TenantId GetTenantId(DomainEvent ev) => ev switch
     {
         TenantRegistered r => new TenantId(r.TenantId),
         TenantDeregistered d => new TenantId(d.TenantId),
-        _ => throw new InvalidOperationException($"Unexpected event type '{ev.GetType()}'."),
+        _ => throw new InvalidOperationException($"Unexpected event type '{ev.GetType()}'.")
     };
-
-    static readonly EventStreamAddress RegistryStream = new("global", "tenants", "registry");
-
-    // AppendAsync is optimistic-concurrency versioned per aggregate stream, and every test in
-    // this file appends to the same fixed registry stream address — each test tracks its own
-    // running version here rather than assuming a fixed 0/1, since tests appending more than one
-    // event (or more than one tenant) would otherwise collide on a hardcoded expected version.
-    readonly ConditionalWeakTable<InMemoryEventStore, StrongBox<ulong>> _registryVersions = [];
 
     async Task RegisterTenantAsync(InMemoryEventStore store, string tenantId) =>
         await AppendAsync(store, new TenantRegistered(tenantId));
@@ -363,7 +381,8 @@ public sealed class MultiTenancyTests
     async Task AppendAsync(InMemoryEventStore store, DomainEvent ev)
     {
         var version = _registryVersions.GetOrCreateValue(store);
-        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), version.Value + 1, DateTimeOffset.UtcNow));
+        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), version.Value + 1,
+            DateTimeOffset.UtcNow));
         await store.AppendAsync(RegistryStream, version.Value, [ev]);
         version.Value++;
     }
@@ -393,7 +412,9 @@ public sealed class MultiTenancyTests
         while (!condition())
         {
             if (DateTime.UtcNow > deadline)
+            {
                 throw new TimeoutException("Condition was not met in time.");
+            }
 
             await Task.Delay(10);
         }
@@ -410,103 +431,27 @@ public sealed class MultiTenancyTests
             // Expected once the driving CancellationTokenSource is cancelled.
         }
     }
-}
 
-[Discriminator("test.tenant.registered")]
-sealed record TenantRegistered(string TenantId) : DomainEvent;
-
-[Discriminator("test.tenant.deregistered")]
-sealed record TenantDeregistered(string TenantId) : DomainEvent;
-
-/// <summary>
-/// An <see cref="ITenantDirectory" /> whose first <see cref="WatchAsync" /> subscription throws
-/// as soon as it's iterated, and whose second attempt yields one tenant and then blocks forever
-/// (matching a real, healthy watch stream) — for proving a runner reconnects after a transient
-/// failure instead of dying with it.
-/// </summary>
-sealed class FlakyWatchTenantDirectory : ITenantDirectory
-{
-    int _watchAttempts;
-
-    public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync([EnumeratorCancellation] CancellationToken ct = default)
+    sealed class WaitingClock : TimeProvider
     {
-        await Task.Yield();
-        yield break;
-    }
+        public TaskCompletionSource<TimeSpan> Scheduled { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync([EnumeratorCancellation] CancellationToken ct = default)
-    {
-        var attempt = Interlocked.Increment(ref _watchAttempts);
-        await Task.Yield();
-        _ = attempt == 1 ? throw new InvalidOperationException("Simulated transient watch stream failure.") : attempt;
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            _ = Scheduled.TrySetResult(dueTime);
+            return new WaitingTimer();
+        }
 
-        yield return new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("recovered-after-reconnect"));
+        sealed class WaitingTimer : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
 
-        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using (ct.Register(() => tcs.TrySetResult()))
-            await tcs.Task.ConfigureAwait(false);
-    }
-}
+            public void Dispose()
+            {
+            }
 
-/// <summary>
-/// Models a stateful directory (like <see cref="EventSourcedTenantDirectory{TStart,TStop}" />)
-/// across an outage: the first <c>GetActiveTenantsAsync</c> call reports "acme" active, the
-/// first <c>WatchAsync</c> subscription then throws, and the *second* <c>GetActiveTenantsAsync</c>
-/// call (the reconnect snapshot) reports nothing at all — as if "acme" had been deregistered
-/// during the outage and that removal folded silently into the directory's own internal offset,
-/// never surfaced as its own change.
-/// </summary>
-sealed class OutageDuringWhichTenantWasRemovedDirectory : ITenantDirectory
-{
-    int _snapshotAttempts;
-    int _watchAttempts;
-
-    public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync([EnumeratorCancellation] CancellationToken ct = default)
-    {
-        var attempt = Interlocked.Increment(ref _snapshotAttempts);
-        await Task.Yield();
-
-        if (attempt == 1)
-            yield return new TenantId("acme");
-
-        // Second and later snapshots report nothing — "acme" is gone, but never as a change.
-    }
-
-    public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync([EnumeratorCancellation] CancellationToken ct = default)
-    {
-        var attempt = Interlocked.Increment(ref _watchAttempts);
-        await Task.Yield();
-
-        if (attempt == 1)
-            throw new InvalidOperationException("Simulated transient watch stream failure.");
-
-        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using (ct.Register(() => tcs.TrySetResult()))
-            await tcs.Task.ConfigureAwait(false);
-
-        yield break;
-    }
-}
-
-/// <summary>
-/// A directory whose <c>WatchAsync</c> subscription always ends cleanly and immediately — never
-/// throwing, never blocking — for proving a runner still backs off between reconnect attempts
-/// instead of spinning as fast as this allows.
-/// </summary>
-sealed class CleanlyCompletingWatchDirectory : ITenantDirectory
-{
-    public int WatchAttempts { get; private set; }
-
-    public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync([EnumeratorCancellation] CancellationToken ct = default)
-    {
-        await Task.Yield();
-        yield break;
-    }
-
-    public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync([EnumeratorCancellation] CancellationToken ct = default)
-    {
-        WatchAttempts++;
-        await Task.Yield();
-        yield break;
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 }

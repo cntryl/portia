@@ -3,14 +3,14 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies that reactors and projectors declared in the compilation are registered into a
-/// service collection through explicit component declarations and typed descriptors.
+///     Verifies that reactors and projectors declared in the compilation are registered into a
+///     service collection through explicit component declarations and typed descriptors.
 /// </summary>
 public sealed class ComponentRegistrationTests
 {
     /// <summary>
-    /// Verifies that the request bus is resolvable after explicit registration, so a consumer
-    /// never has to remember to register it manually.
+    ///     Verifies that the request bus is resolvable after explicit registration, so a consumer
+    ///     never has to remember to register it manually.
     /// </summary>
     [Fact]
     public void ShouldResolveRequestBusAfterExplicitRegistration()
@@ -30,7 +30,7 @@ public sealed class ComponentRegistrationTests
     }
 
     /// <summary>
-    /// Verifies that a concrete reactor is resolvable after explicit registration.
+    ///     Verifies that a concrete reactor is resolvable after explicit registration.
     /// </summary>
     [Fact]
     public void ShouldResolveReactorAfterExplicitRegistration()
@@ -46,7 +46,7 @@ public sealed class ComponentRegistrationTests
     }
 
     /// <summary>
-    /// Verifies that a concrete projector is resolvable after explicit registration.
+    ///     Verifies that a concrete projector is resolvable after explicit registration.
     /// </summary>
     [Fact]
     public void ShouldResolveProjectorAfterExplicitRegistration()
@@ -62,8 +62,8 @@ public sealed class ComponentRegistrationTests
     }
 
     /// <summary>
-    /// Verifies that the reactor registry lets a runner enumerate and resolve every reactor
-    /// declared in this compilation without knowing its concrete type up front.
+    ///     Verifies that the reactor registry lets a runner enumerate and resolve every reactor
+    ///     declared in this compilation without knowing its concrete type up front.
     /// </summary>
     [Fact]
     public void ShouldResolveReactorThroughReactorRegistration()
@@ -73,15 +73,16 @@ public sealed class ComponentRegistrationTests
         _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
 
-        var registration = Assert.Single(provider.GetServices<ReactorRegistration>(), r => r.ReactorType == typeof(TestReactor));
+        var registration = Assert.Single(provider.GetServices<ReactorRegistration>(),
+            r => r.ReactorType == typeof(TestReactor));
         var reactor = registration.Resolve(provider);
 
         _ = Assert.IsType<TestReactor>(reactor);
     }
 
     /// <summary>
-    /// Verifies that the projector registry lets a runner enumerate and run every projector
-    /// declared in this compilation without knowing its concrete or projection type up front.
+    ///     Verifies that the projector registry lets a runner enumerate and run every projector
+    ///     declared in this compilation without knowing its concrete or projection type up front.
     /// </summary>
     [Fact]
     public async Task ShouldRunProjectorThroughProjectorRegistration()
@@ -99,15 +100,16 @@ public sealed class ComponentRegistrationTests
         using var provider = services.BuildServiceProvider();
         var runner = new ProjectorRunner(store);
 
-        var registration = Assert.Single(provider.GetServices<ProjectorRegistration>(), r => r.ProjectorType == typeof(TestProjector));
+        var registration = Assert.Single(provider.GetServices<ProjectorRegistration>(),
+            r => r.ProjectorType == typeof(TestProjector));
         _ = await registration.Run(runner, provider, ProjectionCheckpoint.Start, null, default);
 
         Assert.Equal(42, target.Projection.Value);
     }
 
     /// <summary>
-    /// Verifies that every routed, transport-marked request declared in this compilation is
-    /// registered with the transports it actually implements, and only those.
+    ///     Verifies that every routed, transport-marked request declared in this compilation is
+    ///     registered with the transports it actually implements, and only those.
     /// </summary>
     [Fact]
     public void ShouldRegisterRequestTransportsMatchingDeclaredMarkers()
@@ -128,7 +130,8 @@ public sealed class ComponentRegistrationTests
 
         var sendWelcomeEmail = Assert.Single(registrations, r => r.RequestType == typeof(SendWelcomeEmail));
         Assert.Equal(
-            RequestTransports.Callable | RequestTransports.Queuable | RequestTransports.Notifiable | RequestTransports.Schedulable,
+            RequestTransports.Callable | RequestTransports.Queuable | RequestTransports.Notifiable |
+            RequestTransports.Schedulable,
             sendWelcomeEmail.Transports);
         Assert.Equal("welcome", sendWelcomeEmail.Route.Operation);
     }

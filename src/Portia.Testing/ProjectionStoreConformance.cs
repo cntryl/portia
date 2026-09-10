@@ -1,35 +1,5 @@
 namespace Cntryl.Portia.Testing;
 
-/// <summary>Creates an isolated durable projection implementation for its conformance suite.</summary>
-public interface IProjectionStoreConformanceProbe
-{
-    /// <summary>Gets the live projection identity used by the suite.</summary>
-    CheckpointIdentity LiveIdentity { get; }
-    /// <summary>Gets a rebuild identity for the same logical projection.</summary>
-    CheckpointIdentity RebuildIdentity { get; }
-    /// <summary>Clears all data owned by the isolated conformance target.</summary>
-    ValueTask ResetAsync(CancellationToken ct = default);
-    /// <summary>Opens an independent persistence session against the same durable target.</summary>
-    ValueTask<IProjectionStoreConformanceSession> OpenSessionAsync(CancellationToken ct = default);
-}
-
-/// <summary>
-/// Represents one independently scoped application repository used by projection conformance tests.
-/// Application writes staged through this session must participate in batches begun through
-/// <see cref="Store" />.
-/// </summary>
-public interface IProjectionStoreConformanceSession : IAsyncDisposable
-{
-    /// <summary>Gets the projection store implemented by this repository session.</summary>
-    IProjectionStore Store { get; }
-    /// <summary>Stages the suite's application value in the currently active batch.</summary>
-    ValueTask StageValueAsync(string value, CancellationToken ct = default);
-    /// <summary>Reads the committed application value for an identity, outside an active batch.</summary>
-    ValueTask<string?> ReadValueAsync(CheckpointIdentity identity, CancellationToken ct = default);
-    /// <summary>Injects one failure at the next commit before either data or progress becomes visible.</summary>
-    ValueTask FailNextCommitAsync(CancellationToken ct = default);
-}
-
 /// <summary>Reusable atomicity, concurrency, and generation-isolation checks for projection stores.</summary>
 public static class ProjectionStoreConformance
 {
@@ -54,10 +24,12 @@ public static class ProjectionStoreConformance
         await using (var session = await probe.OpenSessionAsync(ct).ConfigureAwait(false))
         {
             var checkpoint = await session.Store.LoadCheckpointAsync(probe.LiveIdentity, ct).ConfigureAwait(false);
-            await using var batch = await session.Store.BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, checkpoint), ct)
+            await using var batch = await session.Store
+                .BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, checkpoint), ct)
                 .ConfigureAwait(false);
             await session.StageValueAsync("discarded", ct).ConfigureAwait(false);
         }
+
         await RequireStateAsync(probe, probe.LiveIdentity, null, ProjectionCheckpoint.Start,
             "disposing an uncommitted batch", ct).ConfigureAwait(false);
     }
@@ -67,11 +39,13 @@ public static class ProjectionStoreConformance
         await using (var session = await probe.OpenSessionAsync(ct).ConfigureAwait(false))
         {
             var checkpoint = await session.Store.LoadCheckpointAsync(probe.LiveIdentity, ct).ConfigureAwait(false);
-            await using var batch = await session.Store.BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, checkpoint), ct)
+            await using var batch = await session.Store
+                .BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, checkpoint), ct)
                 .ConfigureAwait(false);
             await session.StageValueAsync("committed", ct).ConfigureAwait(false);
             await batch.CommitAsync(new ProjectionCheckpoint(1), ct).ConfigureAwait(false);
         }
+
         await RequireStateAsync(probe, probe.LiveIdentity, "committed", new ProjectionCheckpoint(1),
             "committing application data and progress", ct).ConfigureAwait(false);
     }
@@ -81,7 +55,8 @@ public static class ProjectionStoreConformance
         await using (var session = await probe.OpenSessionAsync(ct).ConfigureAwait(false))
         {
             var checkpoint = await session.Store.LoadCheckpointAsync(probe.LiveIdentity, ct).ConfigureAwait(false);
-            await using var batch = await session.Store.BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, checkpoint), ct)
+            await using var batch = await session.Store
+                .BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, checkpoint), ct)
                 .ConfigureAwait(false);
             await session.StageValueAsync("must-not-commit", ct).ConfigureAwait(false);
             await session.FailNextCommitAsync(ct).ConfigureAwait(false);
@@ -89,6 +64,7 @@ public static class ProjectionStoreConformance
                 () => batch.CommitAsync(new ProjectionCheckpoint(2), ct),
                 "The injected projection commit failure did not fail.").ConfigureAwait(false);
         }
+
         await RequireStateAsync(probe, probe.LiveIdentity, "committed", new ProjectionCheckpoint(1),
             "a failed atomic commit", ct).ConfigureAwait(false);
     }
@@ -99,9 +75,11 @@ public static class ProjectionStoreConformance
         await using var stale = await probe.OpenSessionAsync(ct).ConfigureAwait(false);
         var checkpoint = await first.Store.LoadCheckpointAsync(probe.LiveIdentity, ct).ConfigureAwait(false);
         var staleCheckpoint = await stale.Store.LoadCheckpointAsync(probe.LiveIdentity, ct).ConfigureAwait(false);
-        await using var firstBatch = await first.Store.BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, checkpoint), ct)
+        await using var firstBatch = await first.Store
+            .BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, checkpoint), ct)
             .ConfigureAwait(false);
-        await using var staleBatch = await stale.Store.BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, staleCheckpoint), ct)
+        await using var staleBatch = await stale.Store
+            .BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, staleCheckpoint), ct)
             .ConfigureAwait(false);
         await first.StageValueAsync("winner", ct).ConfigureAwait(false);
         await stale.StageValueAsync("stale", ct).ConfigureAwait(false);
@@ -118,11 +96,13 @@ public static class ProjectionStoreConformance
         await using (var session = await probe.OpenSessionAsync(ct).ConfigureAwait(false))
         {
             var checkpoint = await session.Store.LoadCheckpointAsync(probe.RebuildIdentity, ct).ConfigureAwait(false);
-            await using var batch = await session.Store.BeginAsync(new ProjectionBatchContext(probe.RebuildIdentity, checkpoint), ct)
+            await using var batch = await session.Store
+                .BeginAsync(new ProjectionBatchContext(probe.RebuildIdentity, checkpoint), ct)
                 .ConfigureAwait(false);
             await session.StageValueAsync("rebuild", ct).ConfigureAwait(false);
             await batch.CommitAsync(new ProjectionCheckpoint(7), ct).ConfigureAwait(false);
         }
+
         await RequireStateAsync(probe, probe.LiveIdentity, "winner", new ProjectionCheckpoint(2),
             "writing a rebuild generation", ct).ConfigureAwait(false);
         await RequireStateAsync(probe, probe.RebuildIdentity, "rebuild", new ProjectionCheckpoint(7),
@@ -156,6 +136,7 @@ public static class ProjectionStoreConformance
         {
             return;
         }
+
         throw new ConformanceViolationException(message);
     }
 
@@ -178,6 +159,7 @@ public static class ProjectionStoreConformance
             throw new ConformanceViolationException(
                 $"A stale projection commit threw '{ex.GetType().FullName}'; it must throw {nameof(ProjectionConcurrencyException)} so one catch covers every adapter.");
         }
+
         throw new ConformanceViolationException(message);
     }
 
@@ -186,7 +168,8 @@ public static class ProjectionStoreConformance
         ArgumentNullException.ThrowIfNull(live);
         ArgumentNullException.ThrowIfNull(rebuild);
         if (live.RebuildId is not null || rebuild.RebuildId is null
-            || live.ComponentName != rebuild.ComponentName || live.Pattern != rebuild.Pattern)
+                                       || live.ComponentName != rebuild.ComponentName ||
+                                       live.Pattern != rebuild.Pattern)
         {
             throw new ArgumentException("The probe must provide matching live and rebuild identities.");
         }

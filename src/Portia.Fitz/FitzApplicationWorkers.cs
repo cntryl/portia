@@ -25,6 +25,13 @@ sealed class FitzApplicationWorkers(
     readonly WorkloadRegistration[] _workloads = [.. workloads];
     IAsyncDisposable? _rpc;
 
+    public async ValueTask DisposeAsync()
+    {
+        await StopAsync(CancellationToken.None).ConfigureAwait(false);
+        Dispose();
+        GC.SuppressFinalize(this);
+    }
+
     public Task StartingAsync(CancellationToken cancellationToken)
     {
         var required = _workers.SelectMany(worker => worker.Requirements).ToHashSet();
@@ -32,12 +39,17 @@ sealed class FitzApplicationWorkers(
         {
             _ = required.Add(typeof(IEventStore));
             if (registration.Scope == WorkloadScope.PerTenant)
+            {
                 _ = required.Add(typeof(ITenantDirectory));
+            }
         }
-        var missing = required.Where(type => !available.IsService(type)).OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray();
+
+        var missing = required.Where(type => !available.IsService(type))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray();
         return missing.Length == 0
             ? Task.CompletedTask
-            : throw new InvalidOperationException($"Portia worker setup requires: {string.Join(", ", missing.Select(type => type.FullName))}. Register them in the shared application setup.");
+            : throw new InvalidOperationException(
+                $"Portia worker setup requires: {string.Join(", ", missing.Select(type => type.FullName))}. Register them in the shared application setup.");
     }
 
     public override async Task StartAsync(CancellationToken cancellationToken)
@@ -62,17 +74,37 @@ sealed class FitzApplicationWorkers(
         }
     }
 
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await base.StopAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            await ReleaseRpcAsync().ConfigureAwait(false);
+        }
+    }
+
+    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Each definition builds its own runner, so a worker kind added later is hosted here
         // without an arm to add — and cannot silently fall into another kind's branch.
-        var host = new FitzWorkerHost(connection.Client, scopes, serializer, _clock, queueLogger, runnerLogger, notificationLogger);
+        var host = new FitzWorkerHost(connection.Client, scopes, serializer, _clock, queueLogger, runnerLogger,
+            notificationLogger);
         var tasks = new List<Task>();
         foreach (var worker in _workers)
         {
             if (worker.CreateRunner(host) is { } run)
+            {
                 tasks.Add(RetryAsync(worker.Route, run, TimeSpan.FromSeconds(1), stoppingToken));
+            }
         }
+
         return Task.WhenAll(tasks);
     }
 
@@ -80,37 +112,40 @@ sealed class FitzApplicationWorkers(
     {
         while (!ct.IsCancellationRequested)
         {
-            try { await run(ct).ConfigureAwait(false); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
-            catch (TerminalHandlerFailureException) { throw; }
-            catch (Exception ex) { PortiaTelemetry.RecordRunnerFault(name, RunnerFaultStage.Execution, ex, _logger); }
-            try { await Task.Delay(interval, _clock, ct).ConfigureAwait(false); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            try
+            {
+                await run(ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (TerminalHandlerFailureException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                PortiaTelemetry.RecordRunnerFault(name, RunnerFaultStage.Execution, ex, _logger);
+            }
+
+            try
+            {
+                await Task.Delay(interval, _clock, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
+            }
         }
     }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        try { await base.StopAsync(cancellationToken).ConfigureAwait(false); }
-        finally { await ReleaseRpcAsync().ConfigureAwait(false); }
-    }
-
-    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     async ValueTask ReleaseRpcAsync()
     {
         var rpc = Interlocked.Exchange(ref _rpc, null);
         if (rpc is not null)
+        {
             await rpc.DisposeAsync().ConfigureAwait(false);
+        }
     }
-
-    public async ValueTask DisposeAsync()
-    {
-        await StopAsync(CancellationToken.None).ConfigureAwait(false);
-        Dispose();
-        GC.SuppressFinalize(this);
-    }
-
 }

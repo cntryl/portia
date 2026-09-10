@@ -9,9 +9,9 @@ static class RegistrationComponentDiscovery
     /// <summary>Gets the fully qualified name of a handler, authorizer, or pipeline behavior.</summary>
     public static string? GetComponentTypeName(GeneratorSyntaxContext context)
         => context.Node is ClassDeclarationSyntax declaration
-        && context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol { IsAbstract: false } symbol
-        && GeneratedTypeShape.IsSupported(symbol)
-        && PortiaComponentRoles.IsComponent(symbol)
+           && context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol { IsAbstract: false } symbol
+           && GeneratedTypeShape.IsSupported(symbol)
+           && PortiaComponentRoles.IsComponent(symbol)
             ? symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
             : null;
 }

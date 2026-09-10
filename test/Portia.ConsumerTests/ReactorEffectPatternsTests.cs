@@ -52,33 +52,43 @@ public sealed class ReactorEffectPatternsTests
         public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
             new(actor, metadata: metadata);
 
-        public ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context, CancellationToken ct = default) =>
+        public ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
+            CancellationToken ct = default) =>
             ValueTask.FromResult(Outcome);
 
-        public ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context, CancellationToken ct = default) =>
+        public ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context,
+            CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request, RequestDispatchContext context, CancellationToken ct = default) =>
+        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request,
+            RequestDispatchContext context, CancellationToken ct = default) =>
             throw new NotSupportedException();
     }
 
     sealed class RecordingEffects
     {
         public int Receipts { get; private set; }
+
         public ValueTask SendReceiptAsync(Deposited ev, IReactorContext context, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
             if (!ReferenceEquals(ev, context.Source.Event))
+            {
                 throw new InvalidOperationException("The direct effect lost its triggering context.");
-            Receipts++;
-            return ValueTask.CompletedTask;
+            }
+            else
+            {
+                Receipts++;
+                return ValueTask.CompletedTask;
+            }
         }
     }
 
     sealed record SendReceipt(Uuid AccountId) : IRequest;
 
     sealed class CommandReaction(IProjectionCheckpointStore checkpoints, IRequestBus bus, Uuid aggregateId)
-        : Reactor(checkpoints, EventStreamPattern.ForPattern("testing", "reactions", aggregateId.ToString()), "command-reaction")
+        : Reactor(checkpoints, EventStreamPattern.ForPattern("testing", "reactions", aggregateId.ToString()),
+            "command-reaction")
     {
         protected override ValueTask ReactToEventAsync(
             DomainEventRecord record, IExecutionContext context, CancellationToken ct) =>
@@ -86,8 +96,12 @@ public sealed class ReactorEffectPatternsTests
                 new SendReceipt(record.Event.Metadata.AggregateId), (IReactorContext)context, ct);
     }
 
-    sealed class DirectEffectReaction(IProjectionCheckpointStore checkpoints, RecordingEffects effects, Uuid aggregateId)
-        : Reactor(checkpoints, EventStreamPattern.ForPattern("testing", "reactions", aggregateId.ToString()), "direct-effect-reaction")
+    sealed class DirectEffectReaction(
+        IProjectionCheckpointStore checkpoints,
+        RecordingEffects effects,
+        Uuid aggregateId)
+        : Reactor(checkpoints, EventStreamPattern.ForPattern("testing", "reactions", aggregateId.ToString()),
+            "direct-effect-reaction")
     {
         protected override ValueTask ReactToEventAsync(
             DomainEventRecord record, IExecutionContext context, CancellationToken ct) =>

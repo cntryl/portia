@@ -20,6 +20,7 @@ public sealed class RequestTransportCatalog
         ArgumentNullException.ThrowIfNull(requestType);
         return _registrations.TryGetValue(requestType, out var registration)
             ? registration
-            : throw new InvalidOperationException($"Request type '{requestType}' is not present in the generated transport catalog.");
+            : throw new InvalidOperationException(
+                $"Request type '{requestType}' is not present in the generated transport catalog.");
     }
 }

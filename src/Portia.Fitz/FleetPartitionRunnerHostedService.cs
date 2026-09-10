@@ -4,10 +4,10 @@ using Microsoft.Extensions.Hosting;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Runs a <see cref="FleetPartitionRunner" /> for the life of the host and creates one dependency-
-/// injection scope per held partition lease.
-/// Registered by <see cref="PortiaFitzHostingServiceCollectionExtensions.AddPortiaFleetPartitionRunner" />
-/// — not meant to be constructed directly.
+///     Runs a <see cref="FleetPartitionRunner" /> for the life of the host and creates one dependency-
+///     injection scope per held partition lease.
+///     Registered by <see cref="PortiaFitzHostingServiceCollectionExtensions.AddPortiaFleetPartitionRunner" />
+///     — not meant to be constructed directly.
 /// </summary>
 /// <typeparam name="TWorkload">The typed workload resolved inside each lease scope.</typeparam>
 /// <param name="runner">The partition competition runner.</param>
@@ -23,10 +23,13 @@ sealed class FleetPartitionRunnerHostedService<TWorkload>(
     IHostApplicationLifetime? applicationLifetime = null) : BackgroundService
     where TWorkload : class, IPartitionWorkload
 {
+    readonly FleetRunOptions _options = options;
+
+    readonly IReadOnlyCollection<string>
+        _partitions = partitions ?? throw new ArgumentNullException(nameof(partitions));
+
     readonly FleetPartitionRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
     readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-    readonly IReadOnlyCollection<string> _partitions = partitions ?? throw new ArgumentNullException(nameof(partitions));
-    readonly FleetRunOptions _options = options;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

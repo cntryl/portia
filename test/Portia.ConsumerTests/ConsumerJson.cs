@@ -10,7 +10,7 @@ static class ConsumerJson
         Registration<FeatureOneRequest>("consumer", "modules", "one", "get", "consumer.modules.feature-one"),
         Registration<FeatureTwoRequest>("consumer", "modules", "two", "get", "consumer.modules.feature-two"),
         Registration<ScopeRequest>("consumer", "scopes", "delivery", "run", "consumer.scopes.scope-request"),
-        Registration<BrokerExecutionContextTests.Command>("context", "work", "*", "execute", "consumer.context.command"),
+        Registration<BrokerExecutionContextTests.Command>("context", "work", "*", "execute", "consumer.context.command")
     ];
 
     public static JsonSerializerOptions Options() => new(PortiaConsumerJsonContext.Default.Options);
@@ -24,6 +24,7 @@ static class ConsumerJson
 
     static RequestTransportRegistration Registration<TRequest>(string realm, string area, string resource,
         string operation, string discriminator) where TRequest : IRequestBase => new(typeof(TRequest),
-        RequestTransports.Callable | RequestTransports.Queuable | RequestTransports.Notifiable | RequestTransports.Schedulable,
+        RequestTransports.Callable | RequestTransports.Queuable | RequestTransports.Notifiable |
+        RequestTransports.Schedulable,
         new RequestRouteAttribute(realm, area, resource, operation), new DiscriminatorAttribute(discriminator));
 }

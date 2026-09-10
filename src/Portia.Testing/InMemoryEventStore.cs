@@ -1,14 +1,14 @@
 namespace Cntryl.Portia.Testing;
 
 /// <summary>
-/// Stores ordered aggregate event histories in memory for tests.
+///     Stores ordered aggregate event histories in memory for tests.
 /// </summary>
 public sealed class InMemoryEventStore : IEventStore
 {
-    readonly Lock _gate = new();
-    readonly Dictionary<EventStreamAddress, List<DomainEventRecord>> _streams = [];
     readonly Dictionary<(string Realm, string Area), ulong> _areaOffsets = [];
+    readonly Lock _gate = new();
     readonly Dictionary<string, ulong> _realmOffsets = [];
+    readonly Dictionary<EventStreamAddress, List<DomainEventRecord>> _streams = [];
 
     /// <inheritdoc />
     public IAsyncEnumerable<DomainEventRecord> ReadAsync(
@@ -47,56 +47,17 @@ public sealed class InMemoryEventStore : IEventStore
 
         lock (_gate)
         {
-            readBuffer = [.. _streams
-                .Where(pair => Matches(pair.Key, pattern))
-                .SelectMany(pair => pair.Value)
-                .Where(record => GetPatternOffset(record, pattern) >= fromOffset)
-                .OrderBy(record => GetPatternOffset(record, pattern))];
+            readBuffer =
+            [
+                .. _streams
+                    .Where(pair => Matches(pair.Key, pattern))
+                    .SelectMany(pair => pair.Value)
+                    .Where(record => GetPatternOffset(record, pattern) >= fromOffset)
+                    .OrderBy(record => GetPatternOffset(record, pattern))
+            ];
         }
 
         return new BufferedAsyncEnumerable<DomainEventRecord>(readBuffer, ct);
-    }
-
-    sealed class BufferedAsyncEnumerable<T>(T[] items, CancellationToken readCt)
-        : IAsyncEnumerable<T>
-    {
-        public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken ct = default)
-            => new BufferedAsyncEnumerator<T>(items, readCt, ct);
-    }
-
-    sealed class BufferedAsyncEnumerator<T> : IAsyncEnumerator<T>
-    {
-        readonly T[] _items;
-        readonly CancellationTokenSource? _linkedCts;
-        readonly CancellationToken _ct;
-        int _index = -1;
-
-        public BufferedAsyncEnumerator(
-            T[] items,
-            CancellationToken readCt,
-            CancellationToken enumerationCt)
-        {
-            _items = items;
-            _linkedCts = readCt.CanBeCanceled && enumerationCt.CanBeCanceled && readCt != enumerationCt
-                ? CancellationTokenSource.CreateLinkedTokenSource(readCt, enumerationCt)
-                : null;
-            _ct = _linkedCts?.Token ?? (readCt.CanBeCanceled ? readCt : enumerationCt);
-        }
-
-        public T Current => _items[_index];
-
-        public ValueTask<bool> MoveNextAsync()
-        {
-            _ct.ThrowIfCancellationRequested();
-            _index++;
-            return ValueTask.FromResult(_index < _items.Length);
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            _linkedCts?.Dispose();
-            return ValueTask.CompletedTask;
-        }
     }
 
     /// <inheritdoc />
@@ -111,7 +72,9 @@ public sealed class InMemoryEventStore : IEventStore
         ct.ThrowIfCancellationRequested();
 
         if (events.Count == 0)
+        {
             return ValueTask.CompletedTask;
+        }
 
         DomainEventValidation.ValidateBatch(events);
         lock (_gate)
@@ -136,7 +99,9 @@ public sealed class InMemoryEventStore : IEventStore
                 DomainEventValidation.Validate(ev);
 
                 if (!eventIds.Add(ev.Metadata.EventId))
+                {
                     throw new InvalidOperationException($"Event ID '{ev.Metadata.EventId}' has already been appended.");
+                }
             }
 
             var areaKey = (stream.Realm, stream.Area);
@@ -168,8 +133,52 @@ public sealed class InMemoryEventStore : IEventStore
     static ulong GetPatternOffset(DomainEventRecord record, EventStreamPattern pattern) => pattern.Scope switch
     {
         EventStreamPatternScope.Resource => record.ResourceOffset,
-        EventStreamPatternScope.Area => record.AreaOffset ?? throw new InvalidOperationException("Missing area offset."),
-        EventStreamPatternScope.Realm => record.RealmOffset ?? throw new InvalidOperationException("Missing realm offset."),
-        _ => throw new ArgumentOutOfRangeException(nameof(pattern)),
+        EventStreamPatternScope.Area =>
+            record.AreaOffset ?? throw new InvalidOperationException("Missing area offset."),
+        EventStreamPatternScope.Realm => record.RealmOffset ??
+                                         throw new InvalidOperationException("Missing realm offset."),
+        _ => throw new ArgumentOutOfRangeException(nameof(pattern))
     };
+
+    sealed class BufferedAsyncEnumerable<T>(T[] items, CancellationToken readCt)
+        : IAsyncEnumerable<T>
+    {
+        public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken ct = default)
+            => new BufferedAsyncEnumerator<T>(items, readCt, ct);
+    }
+
+    sealed class BufferedAsyncEnumerator<T> : IAsyncEnumerator<T>
+    {
+        readonly CancellationToken _ct;
+        readonly T[] _items;
+        readonly CancellationTokenSource? _linkedCts;
+        int _index = -1;
+
+        public BufferedAsyncEnumerator(
+            T[] items,
+            CancellationToken readCt,
+            CancellationToken enumerationCt)
+        {
+            _items = items;
+            _linkedCts = readCt.CanBeCanceled && enumerationCt.CanBeCanceled && readCt != enumerationCt
+                ? CancellationTokenSource.CreateLinkedTokenSource(readCt, enumerationCt)
+                : null;
+            _ct = _linkedCts?.Token ?? (readCt.CanBeCanceled ? readCt : enumerationCt);
+        }
+
+        public T Current => _items[_index];
+
+        public ValueTask<bool> MoveNextAsync()
+        {
+            _ct.ThrowIfCancellationRequested();
+            _index++;
+            return ValueTask.FromResult(_index < _items.Length);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            _linkedCts?.Dispose();
+            return ValueTask.CompletedTask;
+        }
+    }
 }

@@ -9,7 +9,10 @@ public sealed record CheckpointIdentity
         ArgumentException.ThrowIfNullOrWhiteSpace(componentName);
         ArgumentNullException.ThrowIfNull(pattern);
         if (rebuildId is not null)
+        {
             ArgumentException.ThrowIfNullOrWhiteSpace(rebuildId);
+        }
+
         ComponentName = componentName;
         Pattern = pattern.ToString();
         RebuildId = rebuildId;
@@ -17,8 +20,10 @@ public sealed record CheckpointIdentity
 
     /// <summary>Gets the stable component name.</summary>
     public string ComponentName { get; }
+
     /// <summary>Gets the canonical stream selector.</summary>
     public string Pattern { get; }
+
     /// <summary>Gets the rebuild generation, or null for live processing.</summary>
     public string? RebuildId { get; }
 }

@@ -1,12 +1,12 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Reads ordered domain events from durable streams.
+///     Reads ordered domain events from durable streams.
 /// </summary>
 public interface IDomainEventReader
 {
     /// <summary>
-    /// Reads committed records from an inclusive physical stream offset, including audits.
+    ///     Reads committed records from an inclusive physical stream offset, including audits.
     /// </summary>
     /// <param name="stream">The aggregate stream identity.</param>
     /// <param name="fromOffset">The first inclusive physical resource offset to read.</param>
@@ -18,7 +18,7 @@ public interface IDomainEventReader
         CancellationToken ct = default);
 
     /// <summary>
-    /// Reads events selected for a projector or reactor from a scope offset.
+    ///     Reads events selected for a projector or reactor from a scope offset.
     /// </summary>
     /// <param name="pattern">The realm or area stream pattern.</param>
     /// <param name="fromOffset">The first inclusive realm or area offset to read.</param>

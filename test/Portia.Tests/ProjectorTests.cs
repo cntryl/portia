@@ -1,12 +1,12 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies generated projector dispatch.
+///     Verifies generated projector dispatch.
 /// </summary>
 public sealed class ProjectorTests
 {
     /// <summary>
-    /// Verifies that multiple async handlers share one batch-scoped projection.
+    ///     Verifies that multiple async handlers share one batch-scoped projection.
     /// </summary>
     [Fact]
     public async Task ShouldDispatchHandlersThroughSameProjection()
@@ -17,8 +17,10 @@ public sealed class ProjectorTests
         var first = Committed(new ValueChanged(40), 1);
         var second = Committed(new ValueIncremented(2), 2);
 
-        await projector.ProjectAsync([new DomainEventRecord(stream, first, 0, 0, 0)], new CheckpointIdentity(projector.Name, projector.Pattern), default);
-        await projector.ProjectAsync([new DomainEventRecord(stream, second, 1, 1, 1)], new CheckpointIdentity(projector.Name, projector.Pattern), default);
+        await projector.ProjectAsync([new DomainEventRecord(stream, first, 0, 0, 0)],
+            new CheckpointIdentity(projector.Name, projector.Pattern), default);
+        await projector.ProjectAsync([new DomainEventRecord(stream, second, 1, 1, 1)],
+            new CheckpointIdentity(projector.Name, projector.Pattern), default);
 
         Assert.Equal(42, projection.Value);
         Assert.Equal(2, projection.HandlerCount);
@@ -26,7 +28,7 @@ public sealed class ProjectorTests
     }
 
     /// <summary>
-    /// Verifies trickle and rebuild execution use the same bounded batch pipeline.
+    ///     Verifies trickle and rebuild execution use the same bounded batch pipeline.
     /// </summary>
     [Fact]
     public async Task ShouldCommitBoundedBatchesAndAdvanceCheckpointWhenRun()
@@ -37,7 +39,7 @@ public sealed class ProjectorTests
         await store.AppendAsync(stream, 0, [
             Committed(new ValueChanged(40), id, 1),
             Committed(new ValueIncremented(1), id, 2),
-            Committed(new ValueIncremented(1), id, 3),
+            Committed(new ValueIncremented(1), id, 3)
         ]);
         var target = new RecordingProjectionTarget();
         var projector = new TestProjector(target);
@@ -55,9 +57,9 @@ public sealed class ProjectorTests
     }
 
     /// <summary>
-    /// Verifies that an unhandled event type is silently skipped, not an error — a projector's
-    /// pattern is expected to span more than it handles, and filtering by event type (its
-    /// handler interfaces) is exactly how that's supposed to work.
+    ///     Verifies that an unhandled event type is silently skipped, not an error — a projector's
+    ///     pattern is expected to span more than it handles, and filtering by event type (its
+    ///     handler interfaces) is exactly how that's supposed to work.
     /// </summary>
     [Fact]
     public async Task ShouldSkipUnhandledEventType()
@@ -67,7 +69,8 @@ public sealed class ProjectorTests
         var stream = new EventStreamAddress("test", "projectors", "one");
         var ev = Committed(new ValueAudited("unhandled"), 1);
 
-        await projector.ProjectAsync([new DomainEventRecord(stream, ev, 0, 0, 0)], new CheckpointIdentity(projector.Name, projector.Pattern), default);
+        await projector.ProjectAsync([new DomainEventRecord(stream, ev, 0, 0, 0)],
+            new CheckpointIdentity(projector.Name, projector.Pattern), default);
 
         Assert.Equal(0, projection.Value);
         Assert.Equal(0, projection.HandlerCount);
@@ -87,104 +90,4 @@ public sealed class ProjectorTests
             DateTimeOffset.UtcNow));
         return ev;
     }
-}
-
-sealed partial class TestProjector(ITestProjectionRepository target)
-    : BatchProjector(target, EventStreamPattern.ForPattern("test", "projectors"), "test-projector"),
-      IProjectorHandler<ValueChanged>,
-      IProjectorHandler<ValueIncremented>
-{
-    public ValueTask HandleAsync(ValueChanged ev, IProjectorContext context, CancellationToken ct)
-    {
-        target.Projection.Value = ev.Value;
-        target.Projection.HandlerCount++;
-        return ValueTask.CompletedTask;
-    }
-
-    public async ValueTask HandleAsync(ValueIncremented ev, IProjectorContext context, CancellationToken ct)
-    {
-        await target.Projection.LoadAsync(ct);
-        target.Projection.Value += ev.Amount;
-        target.Projection.HandlerCount++;
-    }
-}
-
-sealed class TestProjection
-{
-    public int Value { get; set; }
-
-    public int HandlerCount { get; set; }
-
-    public int LoadCount { get; set; }
-
-    public async ValueTask LoadAsync(CancellationToken ct)
-    {
-        LoadCount++;
-        await Task.Yield();
-        ct.ThrowIfCancellationRequested();
-    }
-}
-
-sealed class UnusedProjectionTarget : ITestProjectionRepository
-{
-    public TestProjection Projection { get; } = new();
-    public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
-        CheckpointIdentity identity,
-        CancellationToken ct = default) => throw new NotSupportedException();
-
-    public ValueTask<IProjectionBatch> BeginAsync(
-        ProjectionBatchContext context,
-        CancellationToken ct = default) => throw new NotSupportedException();
-}
-
-sealed class RecordingProjectionTarget : ITestProjectionRepository
-{
-    ProjectionCheckpoint _checkpoint;
-
-    public TestProjection Projection { get; } = new();
-
-    public List<ProjectionBatchContext> Contexts { get; } = [];
-
-    public List<ulong> CommittedOffsets { get; } = [];
-
-    public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
-        CheckpointIdentity identity,
-        CancellationToken ct = default)
-    {
-        ct.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(_checkpoint);
-    }
-
-    public ValueTask<IProjectionBatch> BeginAsync(
-        ProjectionBatchContext context,
-        CancellationToken ct = default)
-    {
-        ct.ThrowIfCancellationRequested();
-        Contexts.Add(context);
-        return ValueTask.FromResult<IProjectionBatch>(
-            new RecordingProjectionBatch(Projection, CommittedOffsets, checkpoint => _checkpoint = checkpoint));
-    }
-}
-
-sealed class RecordingProjectionBatch(
-    TestProjection projection,
-    List<ulong> committedOffsets,
-    Action<ProjectionCheckpoint> saveCheckpoint) : IProjectionBatch
-{
-    public TestProjection Projection { get; } = projection;
-
-    public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
-    {
-        ct.ThrowIfCancellationRequested();
-        committedOffsets.Add(checkpoint.NextOffset);
-        saveCheckpoint(checkpoint);
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-}
-
-interface ITestProjectionRepository : IProjectionStore
-{
-    TestProjection Projection { get; }
 }

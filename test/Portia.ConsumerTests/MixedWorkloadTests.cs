@@ -21,9 +21,21 @@ public sealed class MixedWorkloadTests
         _ = builder.Services.AddSingleton<IWorkloadCoordinator>(coordinator);
         _ = builder.Services.AddSingleton<ITenantDirectory>(tenants);
         _ = builder.Services.AddPortia()
-            .AddProjector<FirstProjector>(WorkloadScope.PerTenant, o => { o.Name = "accounts"; o.PollInterval = TimeSpan.FromMilliseconds(10); })
-            .AddProjector<SecondProjector>(WorkloadScope.Global, o => { o.Name = "summary"; o.PollInterval = TimeSpan.FromMilliseconds(10); })
-            .AddReactor<FirstReactor>(WorkloadScope.PerTenant, o => { o.Name = "reaction"; o.PollInterval = TimeSpan.FromMilliseconds(10); })
+            .AddProjector<FirstProjector>(WorkloadScope.PerTenant, o =>
+            {
+                o.Name = "accounts";
+                o.PollInterval = TimeSpan.FromMilliseconds(10);
+            })
+            .AddProjector<SecondProjector>(WorkloadScope.Global, o =>
+            {
+                o.Name = "summary";
+                o.PollInterval = TimeSpan.FromMilliseconds(10);
+            })
+            .AddReactor<FirstReactor>(WorkloadScope.PerTenant, o =>
+            {
+                o.Name = "reaction";
+                o.PollInterval = TimeSpan.FromMilliseconds(10);
+            })
             .AddWorkers();
         using var host = builder.Build();
         var store = host.Services.GetRequiredService<IEventStore>();
@@ -53,21 +65,32 @@ public sealed class MixedWorkloadTests
             Assert.Equal(3, storage.Checkpoints.Count);
             tenants.Change(TenantLifecycleChangeKind.Removed, "alpha");
             await Until(() => !coordinator.Active.ContainsKey(new WorkloadIdentity("accounts", new TenantId("alpha")))
-                && !coordinator.Active.ContainsKey(new WorkloadIdentity("reaction", new TenantId("alpha"))));
+                              && !coordinator.Active.ContainsKey(
+                                  new WorkloadIdentity("reaction", new TenantId("alpha"))));
             await store.AppendAsync(new EventStreamAddress("alpha", "accounts", ids[0].ToString()), 1,
                 [DomainEventSeed.Attach(new Deposited(8), ids[0], 2)]);
             tenants.Change(TenantLifecycleChangeKind.Added, "alpha");
             await effects.WaitForAsync("accounts", 2, ids[0]);
             await effects.WaitForAsync("reaction", 2, ids[0]);
-            Assert.Equal([1, 8], effects.Items.Where(item => item.Component == "accounts" && item.AggregateId == ids[0]).Select(item => item.Amount));
-            Assert.Equal([1, 8], effects.Items.Where(item => item.Component == "reaction" && item.AggregateId == ids[0]).Select(item => item.Amount));
+            Assert.Equal([1, 8],
+                effects.Items.Where(item => item.Component == "accounts" && item.AggregateId == ids[0])
+                    .Select(item => item.Amount));
+            Assert.Equal([1, 8],
+                effects.Items.Where(item => item.Component == "reaction" && item.AggregateId == ids[0])
+                    .Select(item => item.Amount));
             Assert.Equal(1, coordinator.Starts[global]);
         }
-        finally { await host.StopAsync(); }
+        finally
+        {
+            await host.StopAsync();
+        }
+
         var scopes = host.Services.GetRequiredService<ObservedScopes>();
         Assert.Contains(scopes.Items, item => item.Identity.Name == "summary" && item.Identity.Tenant is null);
-        Assert.Contains(scopes.Items, item => item.Identity.Name == "accounts" && item.Identity.Tenant == new TenantId("alpha"));
-        Assert.Contains(scopes.Items, item => item.Identity.Name == "reaction" && item.Identity.Tenant == new TenantId("beta"));
+        Assert.Contains(scopes.Items,
+            item => item.Identity.Name == "accounts" && item.Identity.Tenant == new TenantId("alpha"));
+        Assert.Contains(scopes.Items,
+            item => item.Identity.Name == "reaction" && item.Identity.Tenant == new TenantId("beta"));
         Assert.Empty(coordinator.Active);
         Assert.All(host.Services.GetRequiredService<ConsumerHost.Effects>().Scopes.Values, Assert.True);
     }
@@ -87,6 +110,7 @@ public sealed class MixedWorkloadTests
     sealed class ScopeProbe : IConsumerScope, IDisposable
     {
         readonly ConsumerHost.Effects _effects;
+
         public ScopeProbe(WorkloadContext context, ObservedScopes observed, ConsumerHost.Effects effects)
         {
             _ = context.Identity;
@@ -94,6 +118,7 @@ public sealed class MixedWorkloadTests
             _effects = effects;
             effects.Scopes[Id] = false;
         }
+
         public Guid Id { get; } = Guid.NewGuid();
         public void Dispose() => _effects.Scopes[Id] = true;
     }
@@ -101,34 +126,49 @@ public sealed class MixedWorkloadTests
     sealed class Directory : ITenantDirectory
     {
         readonly Channel<TenantLifecycleChange> _changes = Channel.CreateUnbounded<TenantLifecycleChange>();
-        public void Change(TenantLifecycleChangeKind kind, string tenant) => Assert.True(_changes.Writer.TryWrite(new(kind, new TenantId(tenant))));
-        public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync([EnumeratorCancellation] CancellationToken ct = default)
+
+        public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync(
+            [EnumeratorCancellation] CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
             yield return new TenantId("alpha");
             await Task.CompletedTask;
         }
-        public IAsyncEnumerable<TenantLifecycleChange> WatchAsync(CancellationToken ct = default) => _changes.Reader.ReadAllAsync(ct);
+
+        public IAsyncEnumerable<TenantLifecycleChange> WatchAsync(CancellationToken ct = default) =>
+            _changes.Reader.ReadAllAsync(ct);
+
+        public void Change(TenantLifecycleChangeKind kind, string tenant) =>
+            Assert.True(_changes.Writer.TryWrite(new TenantLifecycleChange(kind, new TenantId(tenant))));
     }
 
     sealed class Coordinator : IWorkloadCoordinator
     {
         public ConcurrentDictionary<WorkloadIdentity, bool> Active { get; } = new();
         public ConcurrentDictionary<WorkloadIdentity, int> Starts { get; } = new();
+
         public async Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
             Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
         {
             var runs = new Dictionary<WorkloadIdentity, (CancellationTokenSource Cancellation, Task Task)>();
+
             async Task Stop(WorkloadIdentity id)
             {
                 var item = runs[id];
                 await item.Cancellation.CancelAsync();
-                try { await item.Task; }
-                catch (OperationCanceledException) when (item.Cancellation.IsCancellationRequested) { }
+                try
+                {
+                    await item.Task;
+                }
+                catch (OperationCanceledException) when (item.Cancellation.IsCancellationRequested)
+                {
+                }
+
                 item.Cancellation.Dispose();
                 _ = runs.Remove(id);
                 _ = Active.TryRemove(id, out _);
             }
+
             try
             {
                 while (true)
@@ -143,10 +183,13 @@ public sealed class MixedWorkloadTests
                         Active[id] = true;
                         runs.Add(id, (cancellation, run(id, cancellation.Token)));
                     }
+
                     await Task.Delay(10, ct);
                 }
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+            }
             finally
             {
                 foreach (var id in runs.Keys.ToArray())

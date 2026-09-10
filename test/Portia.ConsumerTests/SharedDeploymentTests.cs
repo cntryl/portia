@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Cntryl.Fitz;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +11,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class SharedDeploymentTests
 {
     readonly RequestDispatchContext _saveContext = new(RequestActor.System);
+
     [Fact]
     public async Task SharedApplicationStartsListenersOnlyInWorkerAndKeepsExternalClientAlive()
     {
@@ -24,7 +26,8 @@ public sealed class SharedDeploymentTests
         try
         {
             var publisher = api.Services.GetRequiredService<IRequestQueuePublisher>();
-            await publisher.EnqueueAsync(new DepositAccount(id, 3), new RequestRouteValues(Resource: id.ToString()), null);
+            await publisher.EnqueueAsync(new DepositAccount(id, 3), new RequestRouteValues(Resource: id.ToString()),
+                null);
             Assert.Empty(effects.Items);
             var workerBuilder = Host.CreateApplicationBuilder();
             _ = Shared(workerBuilder.Services, client, effects, id).AddWorkers().AddWorkers();
@@ -34,7 +37,8 @@ public sealed class SharedDeploymentTests
             {
                 await effects.WaitForAsync("business", aggregateId: id);
                 await effects.WaitForAsync("first-projector", aggregateId: id);
-                await publisher.EnqueueAsync(new DepositAccount(secondId, 4), new RequestRouteValues(Resource: secondId.ToString()), null);
+                await publisher.EnqueueAsync(new DepositAccount(secondId, 4),
+                    new RequestRouteValues(Resource: secondId.ToString()), null);
                 await effects.WaitForAsync("business", aggregateId: secondId);
                 var response = await api.Services.GetRequiredService<IRemoteRequestSender>().SendAsync(
                     new DepositAccount(id, 5), new RequestRouteValues(Resource: id.ToString()), null);
@@ -46,9 +50,16 @@ public sealed class SharedDeploymentTests
                 Assert.Same(store, api.Services.GetRequiredService<IDomainEventReader>());
                 Assert.Same(store, api.Services.GetRequiredService<IDomainEventWriter>());
             }
-            finally { await worker.StopAsync(); }
+            finally
+            {
+                await worker.StopAsync();
+            }
         }
-        finally { await api.StopAsync(); }
+        finally
+        {
+            await api.StopAsync();
+        }
+
         // Disposing both hosts must not dispose a supplied application-owned connection.
         api.Dispose();
         _ = await client.Queue.EnqueueAsync($"queue://consumer/business/{Uuid.CreateVersion4()}", new byte[] { 1 });
@@ -60,7 +71,7 @@ public sealed class SharedDeploymentTests
         var builder = Host.CreateApplicationBuilder();
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Endpoint"] = Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT") ?? "ws://127.0.0.1:4090/ws",
+            ["Endpoint"] = Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT") ?? "ws://127.0.0.1:4090/ws"
         }).Build();
         _ = builder.Services.AddContracts();
         _ = builder.Services.AddPortia().AddFitz(configuration);
@@ -78,7 +89,10 @@ public sealed class SharedDeploymentTests
             await repository.SaveAsync(account, _saveContext);
             Assert.Equal(10, (await repository.HydrateAsync(new Account(account.Id))).Balance);
         }
-        finally { await host.StopAsync(); }
+        finally
+        {
+            await host.StopAsync();
+        }
     }
 
     [Fact]
@@ -120,7 +134,11 @@ public sealed class SharedDeploymentTests
         _ = services.AddScoped<IRequestActorValidator, AcceptActor>();
         _ = services.AddAccounts();
         return services.AddPortia()
-            .AddProjector<FirstProjector>(WorkloadScope.Global, o => { o.Name = "first-projector"; o.PollInterval = TimeSpan.FromMilliseconds(10); })
+            .AddProjector<FirstProjector>(WorkloadScope.Global, o =>
+            {
+                o.Name = "first-projector";
+                o.PollInterval = TimeSpan.FromMilliseconds(10);
+            })
             .UseFitzClient(client, fitz =>
             {
                 _ = fitz.UseFleet(new FleetRunOptions { MembershipSelector = $"lease://app-{first}/members/*" });
@@ -131,7 +149,7 @@ public sealed class SharedDeploymentTests
 
     sealed class AcceptActor : IRequestActorValidator
     {
-        public ValueTask<Result<System.Security.Claims.ClaimsPrincipal>> ValidateAsync(string? token, CancellationToken ct = default)
-            => ValueTask.FromResult(Result<System.Security.Claims.ClaimsPrincipal>.Success(RequestActor.System));
+        public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string? token, CancellationToken ct = default)
+            => ValueTask.FromResult(Result<ClaimsPrincipal>.Success(RequestActor.System));
     }
 }

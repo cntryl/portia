@@ -15,7 +15,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         => new(actor, metadata: metadata, timeProvider: services.GetService<TimeProvider>());
 
     /// <inheritdoc />
-    public async ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context, CancellationToken ct = default)
+    public async ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(context);
         Validate(request, context, ct);
@@ -29,7 +30,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         var completed = false;
         try
         {
-            var authorization = await AuthorizeAsync(registration, policies, request, context, ct).ConfigureAwait(false);
+            var authorization =
+                await AuthorizeAsync(registration, policies, request, context, ct).ConfigureAwait(false);
             var result = authorization.IsSuccess
                 ? await InvokeAsync(registration, policies, request, context, ct).ConfigureAwait(false)
                 : authorization;
@@ -38,13 +40,26 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             completed = true;
             return result;
         }
-        catch (OperationCanceledException) { _ = activity?.SetStatus(ActivityStatusCode.Error); throw; }
-        catch (Exception ex) { _ = activity?.AddException(ex); _ = activity?.SetStatus(ActivityStatusCode.Error); throw; }
-        finally { PortiaTelemetry.RequestFinished(started, policies.Name, transport, Finish(completed, outcome, ct)); }
+        catch (OperationCanceledException)
+        {
+            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _ = activity?.AddException(ex);
+            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        finally
+        {
+            PortiaTelemetry.RequestFinished(started, policies.Name, transport, Finish(completed, outcome, ct));
+        }
     }
 
     /// <inheritdoc />
-    public async ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context, CancellationToken ct = default)
+    public async ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(context);
         Validate(request, context, ct);
@@ -58,7 +73,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         var completed = false;
         try
         {
-            var authorization = await AuthorizeAsync(registration, policies, request, context, ct).ConfigureAwait(false);
+            var authorization =
+                await AuthorizeAsync(registration, policies, request, context, ct).ConfigureAwait(false);
             var result = authorization.IsSuccess
                 ? await InvokeAsync(registration, policies, request, context, ct).ConfigureAwait(false)
                 : Result<TOut>.Failure(authorization.Error);
@@ -67,20 +83,26 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             completed = true;
             return result;
         }
-        catch (OperationCanceledException) { _ = activity?.SetStatus(ActivityStatusCode.Error); throw; }
-        catch (Exception ex) { _ = activity?.AddException(ex); _ = activity?.SetStatus(ActivityStatusCode.Error); throw; }
-        finally { PortiaTelemetry.RequestFinished(started, policies.Name, transport, Finish(completed, outcome, ct)); }
+        catch (OperationCanceledException)
+        {
+            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _ = activity?.AddException(ex);
+            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        finally
+        {
+            PortiaTelemetry.RequestFinished(started, policies.Name, transport, Finish(completed, outcome, ct));
+        }
     }
 
-    // The three dispatch paths deliberately repeat this preamble rather than share it through a
-    // generic unifier: the streaming path cannot use one (a yield return cannot sit inside a try
-    // with a catch), so a unifier would have covered two of three call sites while costing a
-    // five-argument delegate at each. Only the outcome-selection rule is shared.
-    static string Finish(bool completed, string outcome, CancellationToken ct) =>
-        completed ? outcome : ct.IsCancellationRequested ? "canceled" : "fault";
-
     /// <inheritdoc />
-    public async IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request, RequestDispatchContext context,
+    public async IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request,
+        RequestDispatchContext context,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -95,7 +117,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         var completed = false;
         try
         {
-            var authorization = await AuthorizeAsync(registration, policies, request, context, ct).ConfigureAwait(false);
+            var authorization =
+                await AuthorizeAsync(registration, policies, request, context, ct).ConfigureAwait(false);
             if (!authorization.IsSuccess)
             {
                 PortiaTelemetry.RecordOutcome(activity, false, authorization.Error);
@@ -105,13 +128,28 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
                 completed = true;
                 throw new RequestAuthorizationException(authorization.Error);
             }
-            await foreach (var item in CatchStream(EnumerateStream(registration, policies, request, context, ct), activity, ct).ConfigureAwait(false))
+
+            await foreach (var item in CatchStream(EnumerateStream(registration, policies, request, context, ct),
+                               activity, ct).ConfigureAwait(false))
+            {
                 yield return item;
+            }
+
             outcome = "success";
             completed = true;
         }
-        finally { PortiaTelemetry.RequestFinished(started, policies.Name, transport, Finish(completed, outcome, ct)); }
+        finally
+        {
+            PortiaTelemetry.RequestFinished(started, policies.Name, transport, Finish(completed, outcome, ct));
+        }
     }
+
+    // The three dispatch paths deliberately repeat this preamble rather than share it through a
+    // generic unifier: the streaming path cannot use one (a yield return cannot sit inside a try
+    // with a catch), so a unifier would have covered two of three call sites while costing a
+    // five-argument delegate at each. Only the outcome-selection rule is shared.
+    static string Finish(bool completed, string outcome, CancellationToken ct) =>
+        completed ? outcome : ct.IsCancellationRequested ? "canceled" : "fault";
 
     // A yield return cannot sit inside a try with a catch, so enumeration is wrapped in methods
     // that can, keeping mid-stream faults on the activity like the unary paths.
@@ -125,28 +163,60 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             {
                 var (hasValue, value) = await MoveNextAsync(enumerator, activity).ConfigureAwait(false);
                 if (!hasValue)
+                {
                     yield break;
-                yield return value!;
+                }
+                else
+                {
+                    yield return value!;
+                }
             }
         }
-        finally { await DisposeAsync(enumerator, activity).ConfigureAwait(false); }
+        finally
+        {
+            await DisposeAsync(enumerator, activity).ConfigureAwait(false);
+        }
     }
 
-    static async ValueTask<(bool HasValue, TOut? Value)> MoveNextAsync<TOut>(IAsyncEnumerator<TOut> enumerator, Activity? activity)
+    static async ValueTask<(bool HasValue, TOut? Value)> MoveNextAsync<TOut>(IAsyncEnumerator<TOut> enumerator,
+        Activity? activity)
     {
         try
         {
-            return await enumerator.MoveNextAsync().ConfigureAwait(false) ? (true, enumerator.Current) : (false, default);
+            return await enumerator.MoveNextAsync().ConfigureAwait(false)
+                ? (true, enumerator.Current)
+                : (false, default);
         }
-        catch (OperationCanceledException) { _ = activity?.SetStatus(ActivityStatusCode.Error); throw; }
-        catch (Exception ex) { _ = activity?.AddException(ex); _ = activity?.SetStatus(ActivityStatusCode.Error); throw; }
+        catch (OperationCanceledException)
+        {
+            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _ = activity?.AddException(ex);
+            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
     }
 
     static async ValueTask DisposeAsync<TOut>(IAsyncEnumerator<TOut> enumerator, Activity? activity)
     {
-        try { await enumerator.DisposeAsync().ConfigureAwait(false); }
-        catch (OperationCanceledException) { _ = activity?.SetStatus(ActivityStatusCode.Error); throw; }
-        catch (Exception ex) { _ = activity?.AddException(ex); _ = activity?.SetStatus(ActivityStatusCode.Error); throw; }
+        try
+        {
+            await enumerator.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _ = activity?.AddException(ex);
+            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
     }
 
     // Behaviors are selected by scope assignability, which says nothing about request shape: a
@@ -158,98 +228,132 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     {
         RequestPipelineNext next = async token =>
         {
-            var result = await ((IRequestInvocation)registration).InvokeAsync(services, request, context, token).ConfigureAwait(false);
+            var result = await ((IRequestInvocation)registration).InvokeAsync(services, request, context, token)
+                .ConfigureAwait(false);
             ValidateResult(result, registration.HandlerType, "request handler");
             return result;
         };
         foreach (var behavior in policies.BehaviorsInnermostFirst)
         {
             if (behavior is not IRequestBehaviorInvocation current)
+            {
                 continue;
+            }
+
             var owner = behavior.BehaviorType;
             var remainder = next;
             next = async token =>
             {
-                var result = await current.InvokeAsync(services, request, context, remainder, token).ConfigureAwait(false);
+                var result = await current.InvokeAsync(services, request, context, remainder, token)
+                    .ConfigureAwait(false);
                 ValidateResult(result, owner, "pipeline behavior");
                 return result;
             };
         }
+
         return next(ct);
     }
 
-    ValueTask<Result<TOut>> InvokeAsync<TOut>(RequestHandlerRegistration registration, RequestPolicies policies, IRequest<TOut> request,
+    ValueTask<Result<TOut>> InvokeAsync<TOut>(RequestHandlerRegistration registration, RequestPolicies policies,
+        IRequest<TOut> request,
         RequestDispatchContext context, CancellationToken ct)
     {
         RequestPipelineNext<TOut> next = async token =>
         {
-            var result = await ((IRequestInvocation<TOut>)registration).InvokeAsync(services, request, context, token).ConfigureAwait(false);
+            var result = await ((IRequestInvocation<TOut>)registration).InvokeAsync(services, request, context, token)
+                .ConfigureAwait(false);
             ValidateResult(result, registration.HandlerType, "request handler");
             return result;
         };
         foreach (var behavior in policies.BehaviorsInnermostFirst)
         {
             if (behavior is not IRequestBehaviorInvocation<TOut> current)
+            {
                 continue;
+            }
+
             var owner = behavior.BehaviorType;
             var remainder = next;
             next = async token =>
             {
-                var result = await current.InvokeAsync(services, request, context, remainder, token).ConfigureAwait(false);
+                var result = await current.InvokeAsync(services, request, context, remainder, token)
+                    .ConfigureAwait(false);
                 ValidateResult(result, owner, "pipeline behavior");
                 return result;
             };
         }
+
         return next(ct);
     }
 
     IAsyncEnumerable<TOut> EnumerateStream<TOut>(RequestHandlerRegistration registration, RequestPolicies policies,
         IStreamRequest<TOut> request, RequestDispatchContext context, CancellationToken ct)
     {
-        StreamRequestPipelineNext<TOut> next = token => ((IStreamRequestInvocation<TOut>)registration).Invoke(services, request, context, token);
+        StreamRequestPipelineNext<TOut> next = token =>
+            ((IStreamRequestInvocation<TOut>)registration).Invoke(services, request, context, token);
         foreach (var behavior in policies.BehaviorsInnermostFirst)
         {
             if (behavior is not IStreamRequestBehaviorInvocation<TOut> current)
+            {
                 continue;
+            }
+
             var remainder = next;
             next = token => current.Invoke(services, request, context, remainder, token);
         }
+
         return next(ct);
     }
 
     static void ValidateResult(Result result, Type ownerType, string role)
     {
-        try { _ = result.IsSuccess; }
+        try
+        {
+            _ = result.IsSuccess;
+        }
         catch (InvalidOperationException ex)
         {
-            throw new InvalidOperationException($"Portia {role} '{ownerType.FullName}' returned an uninitialized Result.", ex);
+            throw new InvalidOperationException(
+                $"Portia {role} '{ownerType.FullName}' returned an uninitialized Result.", ex);
         }
     }
 
     static void ValidateResult<TOut>(Result<TOut> result, Type ownerType, string role)
     {
-        try { _ = result.IsSuccess; }
+        try
+        {
+            _ = result.IsSuccess;
+        }
         catch (InvalidOperationException ex)
         {
-            throw new InvalidOperationException($"Portia {role} '{ownerType.FullName}' returned an uninitialized Result<{typeof(TOut).FullName}>.", ex);
+            throw new InvalidOperationException(
+                $"Portia {role} '{ownerType.FullName}' returned an uninitialized Result<{typeof(TOut).FullName}>.", ex);
         }
     }
 
     async ValueTask<Result> AuthorizeAsync(RequestHandlerRegistration registration, RequestPolicies policies,
         IRequestBase request, RequestDispatchContext context, CancellationToken ct)
     {
-        var principal = await RunAuthorizersAsync(policies.PrincipalAuthorizers, request, context, ct).ConfigureAwait(false);
+        var principal = await RunAuthorizersAsync(policies.PrincipalAuthorizers, request, context, ct)
+            .ConfigureAwait(false);
         if (!principal.IsSuccess)
+        {
             return principal;
+        }
+
         if (registration.Permission is not null)
         {
             var started = PortiaTelemetry.StartTimestamp();
             var permission = await services.GetRequiredService<IPermissionEvaluator>()
                 .EvaluateAsync(context.Actor, registration.Permission(request), ct).ConfigureAwait(false);
-            PortiaTelemetry.AuthorizationFinished(started, "permission", "permission", PortiaTelemetry.Outcome(permission.IsSuccess, permission.Error));
+            PortiaTelemetry.AuthorizationFinished(started, "permission", "permission",
+                PortiaTelemetry.Outcome(permission.IsSuccess, permission.Error));
             if (!permission.IsSuccess)
+            {
                 return permission;
+            }
         }
+
         return await RunAuthorizersAsync(policies.ResourceAuthorizers, request, context, ct).ConfigureAwait(false);
     }
 
@@ -264,8 +368,11 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             PortiaTelemetry.AuthorizationFinished(started, authorizer.ComponentName, authorizer.StageName,
                 PortiaTelemetry.Outcome(result.IsSuccess, result.Error));
             if (!result.IsSuccess)
+            {
                 return result;
+            }
         }
+
         return Result.Success;
     }
 

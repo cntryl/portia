@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -15,8 +17,9 @@ public sealed class ComponentHostingTests
         _ = services.AddSingleton<IDomainEventNotifier>(changes);
         var portia = services.AddPortia();
         _ = (projector
-            ? portia.AddProjector<FirstProjector>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromDays(1))
-            : portia.AddReactor<FirstReactor>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromDays(1))).AddWorkers();
+                ? portia.AddProjector<FirstProjector>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromDays(1))
+                : portia.AddReactor<FirstReactor>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromDays(1)))
+            .AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         var id = Uuid.CreateVersion4();
@@ -38,6 +41,7 @@ public sealed class ComponentHostingTests
             await worker.StopAsync(default);
             (worker as IDisposable)?.Dispose();
         }
+
         Assert.Equal(2, effects.Items.Count);
     }
 
@@ -49,7 +53,8 @@ public sealed class ComponentHostingTests
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
-        _ = services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global, o => o.Processing = new ProjectionRunOptions { RebuildId = rebuildId }).AddWorkers();
+        _ = services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global,
+            o => o.Processing = new ProjectionRunOptions { RebuildId = rebuildId }).AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         var storage = provider.GetRequiredService<ConsumerHost.ProjectionStorage>();
         storage.FailAfterCommit = true;
@@ -67,7 +72,9 @@ public sealed class ComponentHostingTests
                 _ = Assert.Single(effects.Items);
                 Assert.All(effects.Scopes.Values, Assert.True);
                 if (pass < 3)
+                {
                     clock.Advance(TimeSpan.FromSeconds(pass));
+                }
             }
         }
         finally
@@ -128,42 +135,9 @@ public sealed class ComponentHostingTests
             await worker.StopAsync(default);
             (worker as IDisposable)?.Dispose();
         }
+
         Assert.True(reader.Disposed);
         Assert.True(Assert.Single(provider.GetRequiredService<ConsumerHost.Effects>().Scopes).Value);
-    }
-
-    sealed class BlockingReader : IDomainEventReader
-    {
-        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public bool Disposed { get; private set; }
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0, CancellationToken ct = default)
-            => throw new NotSupportedException();
-
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
-        {
-            Entered.SetResult();
-            try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
-            finally { Disposed = true; }
-            yield break;
-        }
-    }
-
-    sealed class Changes : IDomainEventNotifier
-    {
-        readonly System.Threading.Channels.Channel<bool> _signals = System.Threading.Channels.Channel.CreateUnbounded<bool>();
-        public TaskCompletionSource Subscribed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern, CancellationToken ct = default)
-        {
-            _ = Subscribed.TrySetResult();
-            return ValueTask.FromResult<IDomainEventSubscription>(new Subscription(_signals.Reader));
-        }
-        public void Signal() => _signals.Writer.TryWrite(true);
-        sealed class Subscription(System.Threading.Channels.ChannelReader<bool> signals) : IDomainEventSubscription
-        {
-            public async ValueTask WaitAsync(CancellationToken ct = default) => _ = await signals.ReadAsync(ct);
-            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-        }
     }
 
     [Theory]
@@ -204,6 +178,7 @@ public sealed class ComponentHostingTests
             await worker.StopAsync(default);
             (worker as IDisposable)?.Dispose();
         }
+
         Assert.All(effects.Scopes.Values, Assert.True);
     }
 
@@ -239,8 +214,11 @@ public sealed class ComponentHostingTests
                 (worker as IDisposable)?.Dispose();
             }
         }
+
         if (scoped)
+        {
             Assert.All(effects.Scopes.Values, Assert.True);
+        }
     }
 
     [Theory]
@@ -275,7 +253,57 @@ public sealed class ComponentHostingTests
                 (worker as IDisposable)?.Dispose();
             }
         }
+
         if (scoped)
+        {
             Assert.All(effects.Scopes.Values, Assert.True);
+        }
+    }
+
+    sealed class BlockingReader : IDomainEventReader
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool Disposed { get; private set; }
+
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
+            CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            Entered.SetResult();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
+            finally
+            {
+                Disposed = true;
+            }
+
+            yield break;
+        }
+    }
+
+    sealed class Changes : IDomainEventNotifier
+    {
+        readonly Channel<bool> _signals = Channel.CreateUnbounded<bool>();
+        public TaskCompletionSource Subscribed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
+            CancellationToken ct = default)
+        {
+            _ = Subscribed.TrySetResult();
+            return ValueTask.FromResult<IDomainEventSubscription>(new Subscription(_signals.Reader));
+        }
+
+        public void Signal() => _signals.Writer.TryWrite(true);
+
+        sealed class Subscription(ChannelReader<bool> signals) : IDomainEventSubscription
+        {
+            public async ValueTask WaitAsync(CancellationToken ct = default) => _ = await signals.ReadAsync(ct);
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 }

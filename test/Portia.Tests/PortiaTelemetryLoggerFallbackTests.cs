@@ -3,19 +3,19 @@ using Microsoft.Extensions.Logging;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies that <see cref="PortiaTelemetry.RecordRunnerFault" /> is still visible with no
-/// <see cref="System.Diagnostics.ActivityListener" /> attached at all — the default state for an
-/// app that hasn't configured OpenTelemetry yet. Without this, a fault reported only via
-/// <see cref="System.Diagnostics.ActivitySource" /> is a complete no-op in that state
-/// (<c>ActivitySource.StartActivity</c> returns <see langword="null" /> with nothing listening),
-/// silently defeating the entire point of reporting it at all.
+///     Verifies that <see cref="PortiaTelemetry.RecordRunnerFault" /> is still visible with no
+///     <see cref="System.Diagnostics.ActivityListener" /> attached at all — the default state for an
+///     app that hasn't configured OpenTelemetry yet. Without this, a fault reported only via
+///     <see cref="System.Diagnostics.ActivitySource" /> is a complete no-op in that state
+///     (<c>ActivitySource.StartActivity</c> returns <see langword="null" /> with nothing listening),
+///     silently defeating the entire point of reporting it at all.
 /// </summary>
 public sealed class PortiaTelemetryLoggerFallbackTests
 {
     /// <summary>
-    /// Verifies that a fault is logged even when nothing is listening to
-    /// <see cref="PortiaTelemetry.ActivitySource" />, as long as an <see cref="ILogger" /> was
-    /// supplied.
+    ///     Verifies that a fault is logged even when nothing is listening to
+    ///     <see cref="PortiaTelemetry.ActivitySource" />, as long as an <see cref="ILogger" /> was
+    ///     supplied.
     /// </summary>
     [Fact]
     public void ShouldLogFaultWhenNoActivityListenerIsAttached()
@@ -33,12 +33,13 @@ public sealed class PortiaTelemetryLoggerFallbackTests
     }
 
     /// <summary>
-    /// Verifies that omitting the logger (the previous call shape) still works — the fallback is
-    /// additive, not a required parameter every existing call site has to be rewritten for.
+    ///     Verifies that omitting the logger (the previous call shape) still works — the fallback is
+    ///     additive, not a required parameter every existing call site has to be rewritten for.
     /// </summary>
     [Fact]
     public void ShouldNotThrowWhenLoggerIsOmitted() =>
-        PortiaTelemetry.RecordRunnerFault("TestRunner", RunnerFaultStage.Execution, new InvalidOperationException("boom"));
+        PortiaTelemetry.RecordRunnerFault("TestRunner", RunnerFaultStage.Execution,
+            new InvalidOperationException("boom"));
 
     sealed class CapturingLogger : ILogger
     {
@@ -49,7 +50,8 @@ public sealed class PortiaTelemetryLoggerFallbackTests
 
         public bool IsEnabled(LogLevel logLevel) => true;
 
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
             Entries.Add((logLevel, formatter(state, exception), exception));
     }
 }

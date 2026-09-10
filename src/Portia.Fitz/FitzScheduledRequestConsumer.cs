@@ -5,7 +5,7 @@ using Cntryl.Fitz.Abstractions.Domains.Schedule;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Receives requests as their Fitz schedule entries fire.
+///     Receives requests as their Fitz schedule entries fire.
 /// </summary>
 /// <param name="schedule">The Fitz schedule client.</param>
 /// <param name="serializer">The request serializer.</param>
@@ -15,14 +15,16 @@ public sealed class FitzScheduledRequestConsumer(
     IRequestDeserializer serializer,
     string route) : IRequestNotificationConsumer
 {
-    readonly IScheduleClient _schedule = schedule ?? throw new ArgumentNullException(nameof(schedule));
-    readonly IRequestDeserializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     readonly string _route = string.IsNullOrWhiteSpace(route)
         ? throw new ArgumentException("A schedule route cannot be empty.", nameof(route))
         : route;
 
+    readonly IScheduleClient _schedule = schedule ?? throw new ArgumentNullException(nameof(schedule));
+    readonly IRequestDeserializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+
     /// <inheritdoc />
-    public async IAsyncEnumerable<RequestNotification> ReadAsync([EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<RequestNotification> ReadAsync(
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         // A Fitz schedule subscription is itself a pull-based IAsyncEnumerable (as of
         // Cntryl.Fitz.Abstractions 0.1.1) — no callback bridging needed here anymore.
@@ -35,23 +37,29 @@ public sealed class FitzScheduledRequestConsumer(
             {
                 throw new LegacyScheduledRequestException(notification.Route);
             }
-            var scheduled = JsonSerializer.Deserialize(notification.Payload.Span, FitzJsonContext.Default.FitzScheduledRequestEnvelope)
-                ?? throw new InvalidOperationException("A fired schedule envelope deserialized to null.");
+
+            var scheduled = JsonSerializer.Deserialize(notification.Payload.Span,
+                                FitzJsonContext.Default.FitzScheduledRequestEnvelope)
+                            ?? throw new InvalidOperationException("A fired schedule envelope deserialized to null.");
             if (scheduled.Version != 1 || string.IsNullOrWhiteSpace(scheduled.SystemSubject)
-                || string.IsNullOrWhiteSpace(scheduled.SystemIssuer))
+                                       || string.IsNullOrWhiteSpace(scheduled.SystemIssuer))
             {
                 throw new InvalidOperationException("A fired schedule has an invalid system identity envelope.");
             }
+
             var envelope = _serializer.DeserializeEnvelope(scheduled.RequestEnvelope);
             if (envelope.ActorToken is not null)
             {
-                throw new InvalidOperationException("A durable schedule request envelope cannot contain an actor token.");
+                throw new InvalidOperationException(
+                    "A durable schedule request envelope cannot contain an actor token.");
             }
+
             var request = envelope.Request as IRequest
-                ?? throw new InvalidOperationException(
-                    "A fired Fitz schedule entry deserialized to a result-bearing request; only no-result requests can be scheduled.");
+                          ?? throw new InvalidOperationException(
+                              "A fired Fitz schedule entry deserialized to a result-bearing request; only no-result requests can be scheduled.");
             yield return new RequestNotification(request, null,
-                new RequestMetadata(Uuid.CreateVersion4(), envelope.Metadata.CorrelationId, envelope.Metadata.RequestId),
+                new RequestMetadata(Uuid.CreateVersion4(), envelope.Metadata.CorrelationId,
+                    envelope.Metadata.RequestId),
                 new ScheduleInvocation(notification.Route), envelope.TraceContext,
                 RequestActor.CreateSystem(scheduled.SystemSubject, scheduled.SystemIssuer), envelope.Name);
         }

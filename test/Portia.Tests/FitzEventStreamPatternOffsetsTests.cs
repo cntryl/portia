@@ -1,9 +1,9 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies <see cref="FitzEventStreamPatternOffsets" /> — the pattern-scope offset arithmetic
-/// extracted out of <see cref="FitzEventStore" /> so that class is left responsible only for
-/// stream I/O orchestration, not scope semantics.
+///     Verifies <see cref="FitzEventStreamPatternOffsets" /> — the pattern-scope offset arithmetic
+///     extracted out of <see cref="FitzEventStore" /> so that class is left responsible only for
+///     stream I/O orchestration, not scope semantics.
 /// </summary>
 public sealed class FitzEventStreamPatternOffsetsTests
 {
@@ -13,7 +13,7 @@ public sealed class FitzEventStreamPatternOffsetsTests
     {
         var pattern = EventStreamPattern.ForPattern("realm", "area", "resource");
 
-        var offset = FitzEventStreamPatternOffsets.GetPatternOffset(pattern, resourceOffset: 1, areaOffset: 2, realmOffset: 3);
+        var offset = FitzEventStreamPatternOffsets.GetPatternOffset(pattern, 1, 2, 3);
 
         Assert.Equal(1UL, offset);
     }
@@ -24,7 +24,7 @@ public sealed class FitzEventStreamPatternOffsetsTests
     {
         var pattern = EventStreamPattern.ForPattern("realm", "area");
 
-        var offset = FitzEventStreamPatternOffsets.GetPatternOffset(pattern, resourceOffset: 1, areaOffset: 2, realmOffset: 3);
+        var offset = FitzEventStreamPatternOffsets.GetPatternOffset(pattern, 1, 2, 3);
 
         Assert.Equal(2UL, offset);
     }
@@ -35,7 +35,7 @@ public sealed class FitzEventStreamPatternOffsetsTests
     {
         var pattern = EventStreamPattern.ForPattern("realm");
 
-        var offset = FitzEventStreamPatternOffsets.GetPatternOffset(pattern, resourceOffset: 1, areaOffset: 2, realmOffset: 3);
+        var offset = FitzEventStreamPatternOffsets.GetPatternOffset(pattern, 1, 2, 3);
 
         Assert.Equal(3UL, offset);
     }

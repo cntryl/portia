@@ -4,7 +4,7 @@
           Condition="'$(DesignTimeBuild)' == 'true'">
     <ItemGroup>
       <_ProjectReferencedAnalyzer Include="@(ProjectReference)"
-                                  Condition="'%(ProjectReference.OutputItemType)' == 'Analyzer'" />
+                                  Condition="'%(ProjectReference.OutputItemType)' == 'Analyzer'"/>
     </ItemGroup>
 
     <MSBuild Projects="@(_ProjectReferencedAnalyzer)"
@@ -12,13 +12,13 @@
              BuildInParallel="false"
              RemoveProperties="DesignTimeBuild;SkipCompilerExecution;ProvideCommandLineArgs;BuildingProject;BuildingInsideVisualStudio;TargetFramework;TargetFrameworks;RuntimeIdentifier;SelfContained"
              Properties="Configuration=$(Configuration)"
-             Condition="'@(_ProjectReferencedAnalyzer)' != ''" />
+             Condition="'@(_ProjectReferencedAnalyzer)' != ''"/>
   </Target>
 
   <Target Name="ValidatePackageMetadata" BeforeTargets="Pack" Condition="'$(IsPackable)' == 'true'">
-    <Error Condition="'$(PackageId)' == ''" Text="Packable projects must define PackageId." />
-    <Error Condition="'$(Description)' == ''" Text="Packable projects must define Description." />
-    <Error Condition="'$(Authors)' == ''" Text="Packable projects must define Authors." />
-    <Error Condition="'$(RepositoryUrl)' == ''" Text="Packable projects must define RepositoryUrl." />
+    <Error Condition="'$(PackageId)' == ''" Text="Packable projects must define PackageId."/>
+    <Error Condition="'$(Description)' == ''" Text="Packable projects must define Description."/>
+    <Error Condition="'$(Authors)' == ''" Text="Packable projects must define Authors."/>
+    <Error Condition="'$(RepositoryUrl)' == ''" Text="Packable projects must define RepositoryUrl."/>
   </Target>
 </Project>

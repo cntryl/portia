@@ -13,20 +13,29 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Exercises <c>RequestHttpBindingGenerator</c>'s generated interceptors end to end through a
-/// real ASP.NET Core <see cref="TestServer" /> — an actual HTTP request/response round trip, not
-/// an assertion on generated source text. Nothing in this repository tested this path before:
-/// every gap here (most notably <see cref="ShouldReturnBadRequestWhenNestedBodyPropertyIsMalformed" />,
-/// a regression test for a bug that previously only surfaced during manual HTTP probing) had no
-/// automated coverage at all.
+///     Exercises <c>RequestHttpBindingGenerator</c>'s generated interceptors end to end through a
+///     real ASP.NET Core <see cref="TestServer" /> — an actual HTTP request/response round trip, not
+///     an assertion on generated source text. Nothing in this repository tested this path before:
+///     every gap here (most notably <see cref="ShouldReturnBadRequestWhenNestedBodyPropertyIsMalformed" />,
+///     a regression test for a bug that previously only surfaced during manual HTTP probing) had no
+///     automated coverage at all.
 /// </summary>
 public sealed class HttpBindingTests : IAsyncDisposable
 {
     WebApplication? _app;
 
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        if (_app is not null)
+        {
+            await _app.DisposeAsync();
+        }
+    }
+
     /// <summary>
-    /// Verifies that a route token binds from the route and a non-matching parameter falls back
-    /// to the query string, on the same GET request.
+    ///     Verifies that a route token binds from the route and a non-matching parameter falls back
+    ///     to the query string, on the same GET request.
     /// </summary>
     [Fact]
     public async Task ShouldBindRouteTokenAndFallBackToQueryString()
@@ -42,8 +51,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Verifies that a route value failing its type's <c>TryParse</c> convention (an
-    /// unparseable Uuid) is a 400, not an unhandled exception.
+    ///     Verifies that a route value failing its type's <c>TryParse</c> convention (an
+    ///     unparseable Uuid) is a 400, not an unhandled exception.
     /// </summary>
     [Fact]
     public async Task ShouldReturnBadRequestWhenRouteValueFailsTryParse()
@@ -56,8 +65,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Verifies that a nested collection body property (no <c>TryParse</c> convention available)
-    /// binds correctly via the generator's JSON-fallback path.
+    ///     Verifies that a nested collection body property (no <c>TryParse</c> convention available)
+    ///     binds correctly via the generator's JSON-fallback path.
     /// </summary>
     [Fact]
     public async Task ShouldBindNestedCollectionBodyProperty()
@@ -66,7 +75,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         var response = await client.PostAsJsonAsync("/orders", new
         {
-            lines = new[] { new { sku = "ABC", quantity = 2 } },
+            lines = new[] { new { sku = "ABC", quantity = 2 } }
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -75,10 +84,10 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Regression test: a nested body property whose JSON shape doesn't match its target type
-    /// (a string where an array was expected) must be a 400, not an unhandled 500 — this exact
-    /// case previously threw an uncaught <see cref="JsonException" /> straight through to the
-    /// client, discovered only through a manual HTTP request.
+    ///     Regression test: a nested body property whose JSON shape doesn't match its target type
+    ///     (a string where an array was expected) must be a 400, not an unhandled 500 — this exact
+    ///     case previously threw an uncaught <see cref="JsonException" /> straight through to the
+    ///     client, discovered only through a manual HTTP request.
     /// </summary>
     [Fact]
     public async Task ShouldReturnBadRequestWhenNestedBodyPropertyIsMalformed()
@@ -87,13 +96,13 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         var response = await client.PostAsync(
             "/orders",
-            new StringContent(/*lang=json,strict*/ """{"lines":"not-an-array"}""", Encoding.UTF8, "application/json"));
+            new StringContent( /*lang=json,strict*/ """{"lines":"not-an-array"}""", Encoding.UTF8, "application/json"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     /// <summary>
-    /// Verifies that malformed top-level JSON (not just a malformed nested property) is a 400.
+    ///     Verifies that malformed top-level JSON (not just a malformed nested property) is a 400.
     /// </summary>
     [Fact]
     public async Task ShouldReturnBadRequestWhenTopLevelBodyIsNotValidJson()
@@ -108,10 +117,10 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Verifies that a completely empty body on an endpoint that requires one is a 400, not an
-    /// unhandled exception — an empty stream isn't "malformed JSON" in the same sense as
-    /// truncated or garbled text, so it's worth checking <c>JsonDocument.ParseAsync</c> fails the
-    /// same clean way for it.
+    ///     Verifies that a completely empty body on an endpoint that requires one is a 400, not an
+    ///     unhandled exception — an empty stream isn't "malformed JSON" in the same sense as
+    ///     truncated or garbled text, so it's worth checking <c>JsonDocument.ParseAsync</c> fails the
+    ///     same clean way for it.
     /// </summary>
     [Fact]
     public async Task ShouldReturnBadRequestWhenBodyIsCompletelyEmpty()
@@ -124,9 +133,9 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Verifies the <c>Prefer: respond-async</c> pivot: a request that's also
-    /// <see cref="IQueuable" /> is enqueued and answered with 202 Accepted instead of dispatched
-    /// synchronously, with no separate "Async"-suffixed endpoint to opt into it.
+    ///     Verifies the <c>Prefer: respond-async</c> pivot: a request that's also
+    ///     <see cref="IQueuable" /> is enqueued and answered with 202 Accepted instead of dispatched
+    ///     synchronously, with no separate "Async"-suffixed endpoint to opt into it.
     /// </summary>
     [Fact]
     public async Task ShouldPivotToQueueWhenPreferRespondAsyncHeaderIsSent()
@@ -138,7 +147,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/ping")
         {
-            Content = JsonContent.Create(new { }),
+            Content = JsonContent.Create(new { })
         };
         request.Headers.Add("Prefer", "respond-async");
 
@@ -147,7 +156,9 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.Equal("respond-async", response.Headers.GetValues("Preference-Applied").Single());
         using var receipt = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.NotEqual(Uuid.Empty, Uuid.Parse(receipt.RootElement.GetProperty("request_id").GetString()!, CultureInfo.InvariantCulture));
+        var requestId = receipt.RootElement.GetProperty("request_id").GetString();
+        Assert.NotNull(requestId);
+        Assert.NotEqual(Uuid.Empty, Uuid.Parse(requestId, CultureInfo.InvariantCulture));
         _ = Assert.Single(publisher.Enqueued);
         _ = Assert.IsType<HttpSendPing>(publisher.Enqueued[0]);
     }
@@ -232,8 +243,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Verifies that the same endpoint dispatches synchronously — never touching the queue —
-    /// when the caller doesn't send the <c>Prefer: respond-async</c> header.
+    ///     Verifies that the same endpoint dispatches synchronously — never touching the queue —
+    ///     when the caller doesn't send the <c>Prefer: respond-async</c> header.
     /// </summary>
     [Fact]
     public async Task ShouldDispatchSynchronouslyWithoutPreferHeader()
@@ -250,8 +261,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Verifies that <see cref="RequiresPermissionAttribute" /> is enforced through the real HTTP
-    /// pipeline — a caller lacking the permission gets 403, never reaching the handler.
+    ///     Verifies that <see cref="RequiresPermissionAttribute" /> is enforced through the real HTTP
+    ///     pipeline — a caller lacking the permission gets 403, never reaching the handler.
     /// </summary>
     [Fact]
     public async Task ShouldReturnForbiddenWhenCallerLacksRequiredPermission()
@@ -266,7 +277,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Equal("about:blank", problem.RootElement.GetProperty("type").GetString());
         Assert.Equal("Forbidden", problem.RootElement.GetProperty("title").GetString());
         Assert.Equal(403, problem.RootElement.GetProperty("status").GetInt32());
-        Assert.Contains("http:guarded", problem.RootElement.GetProperty("detail").GetString(), StringComparison.Ordinal);
+        Assert.Contains("http:guarded", problem.RootElement.GetProperty("detail").GetString(),
+            StringComparison.Ordinal);
         Assert.Equal("/guarded", problem.RootElement.GetProperty("instance").GetString());
         Assert.False(problem.RootElement.GetProperty("transient").GetBoolean());
         Assert.False(problem.RootElement.TryGetProperty("message", out _));
@@ -279,7 +291,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var context = new DefaultHttpContext();
         context.Request.Path = "/conflict";
         context.Response.Body = new MemoryStream();
-        var result = Result.Failure(new RequestError(RequestErrorKind.Conflict, "Try again.", isTransient: true));
+        var result = Result.Failure(new RequestError(RequestErrorKind.Conflict, "Try again.", true));
 
         await result.ToHttpResult().ExecuteAsync(context);
 
@@ -296,7 +308,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     {
         var context = new DefaultHttpContext();
         context.Response.Body = new MemoryStream();
-        var result = Result.Failure(new RequestError(RequestErrorKind.Unauthorized, "IDX secret", isTransient: false));
+        var result = Result.Failure(new RequestError(RequestErrorKind.Unauthorized, "IDX secret", false));
 
         await result.ToHttpResult().ExecuteAsync(context);
 
@@ -307,7 +319,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Verifies that a caller who does carry the required permission claim reaches the handler.
+    ///     Verifies that a caller who does carry the required permission claim reaches the handler.
     /// </summary>
     [Fact]
     public async Task ShouldSucceedWhenCallerHasRequiredPermission()
@@ -315,7 +327,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var client = await StartAsync(app => app.MapPortiaPost<HttpGuardedAction>("/guarded"));
         using var request = new HttpRequestMessage(HttpMethod.Post, "/guarded")
         {
-            Content = JsonContent.Create(new { }),
+            Content = JsonContent.Create(new { })
         };
         request.Headers.Add("X-Debug-Permission", "http:guarded");
 
@@ -325,19 +337,20 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Closes the last named, previously-unverified gap: a nested body property whose type is a
-    /// value type (a <c>record struct</c>, no <c>TryParse</c>) rather than a reference type.
-    /// <c>JsonElement.Deserialize&lt;TValue&gt;()</c> returns <c>TValue?</c>, i.e.
-    /// <see cref="Nullable{T}" /> for a value type — this only ever verified working for
-    /// reference-type nested shapes (<see cref="HttpOrderLine" />'s <see cref="List{T}" />)
-    /// before now.
+    ///     Closes the last named, previously-unverified gap: a nested body property whose type is a
+    ///     value type (a <c>record struct</c>, no <c>TryParse</c>) rather than a reference type.
+    ///     <c>JsonElement.Deserialize&lt;TValue&gt;()</c> returns <c>TValue?</c>, i.e.
+    ///     <see cref="Nullable{T}" /> for a value type — this only ever verified working for
+    ///     reference-type nested shapes (<see cref="HttpOrderLine" />'s <see cref="List{T}" />)
+    ///     before now.
     /// </summary>
     [Fact]
     public async Task ShouldBindValueTypeNestedBodyProperty()
     {
         var client = await StartAsync(app => app.MapPortiaPost<HttpCreatePayment, Uuid>("/payments"));
 
-        var response = await client.PostAsJsonAsync("/payments", new { amount = new { currency = "USD", cents = 500 } });
+        var response =
+            await client.PostAsJsonAsync("/payments", new { amount = new { currency = "USD", cents = 500 } });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var paymentId = await response.Content.ReadFromJsonAsync<Uuid>();
@@ -345,7 +358,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Verifies streaming as an incrementally-flushed JSON array.
+    ///     Verifies streaming as an incrementally-flushed JSON array.
     /// </summary>
     [Fact]
     public async Task ShouldStreamAsJsonArray()
@@ -360,8 +373,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Verifies streaming as Server-Sent Events, driven by the exact same
-    /// <see cref="IStreamRequestHandler{TRequest,TOut}" /> as the JSON-array mapping above.
+    ///     Verifies streaming as Server-Sent Events, driven by the exact same
+    ///     <see cref="IStreamRequestHandler{TRequest,TOut}" /> as the JSON-array mapping above.
     /// </summary>
     [Fact]
     public async Task ShouldStreamAsServerSentEvents()
@@ -376,7 +389,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Contains("data: b", body, StringComparison.Ordinal);
     }
 
-    async Task<HttpClient> StartAsync(Action<IEndpointRouteBuilder> map, Action<IServiceCollection>? configureServices = null)
+    async Task<HttpClient> StartAsync(Action<IEndpointRouteBuilder> map,
+        Action<IServiceCollection>? configureServices = null)
     {
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
@@ -392,7 +406,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         {
             if (context.Request.Headers.TryGetValue("X-Debug-Permission", out var permission) && permission.Count > 0)
             {
-                var identity = new ClaimsIdentity([new Claim("permission", permission[0]!)], authenticationType: "Debug");
+                var identity = new ClaimsIdentity([new Claim("permission", permission[0]!)], "Debug");
                 context.User = new ClaimsPrincipal(identity);
             }
 
@@ -405,16 +419,10 @@ public sealed class HttpBindingTests : IAsyncDisposable
         return _app.GetTestClient();
     }
 
-    /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
-        if (_app is not null)
-            await _app.DisposeAsync();
-    }
-
     sealed class DebugHeaderPermissionEvaluator : IPermissionEvaluator
     {
-        public ValueTask<Result> EvaluateAsync(ClaimsPrincipal actor, string permission, CancellationToken ct = default) =>
+        public ValueTask<Result> EvaluateAsync(ClaimsPrincipal actor, string permission,
+            CancellationToken ct = default) =>
             ValueTask.FromResult(actor.HasClaim("permission", permission)
                 ? Result.Success
                 : Result.Failure(new RequestError(RequestErrorKind.Forbidden, $"Missing permission '{permission}'.")));
@@ -425,93 +433,13 @@ public sealed class HttpBindingTests : IAsyncDisposable
         public List<object> Enqueued { get; } = [];
         public List<string?> ActorTokens { get; } = [];
 
-        public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+        public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
+            RequestMetadata metadata, CancellationToken ct = default)
             where TRequest : IRequest, IQueuable
         {
             Enqueued.Add(request);
             ActorTokens.Add(actorToken);
             return ValueTask.CompletedTask;
         }
-    }
-}
-
-[RequestRoute(realm: "*", area: "http-binding-tests", resource: "widgets", operation: "get")]
-[Discriminator("test.http.widgets.get")]
-sealed record HttpGetWidget(Uuid WidgetId, bool IncludeArchived = false) : IRequest<string>, ICallable;
-
-sealed class HttpGetWidgetHandler : IRequestHandler<HttpGetWidget, string>
-{
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<HttpGetWidget> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result<string>.Success(
-            $"{context.Request.WidgetId} (archived: {context.Request.IncludeArchived})"));
-}
-
-sealed record HttpOrderLine(string Sku, int Quantity);
-
-readonly record struct HttpMoney(string Currency, int Cents);
-
-[RequestRoute(realm: "*", area: "http-binding-tests", resource: "payments", operation: "create")]
-[Discriminator("test.http.payments.create")]
-sealed record HttpCreatePayment(HttpMoney Amount) : IRequest<Uuid>, ICallable;
-
-sealed class HttpCreatePaymentHandler : IRequestHandler<HttpCreatePayment, Uuid>
-{
-    public ValueTask<Result<Uuid>> HandleAsync(IRequestContext<HttpCreatePayment> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result<Uuid>.Success(Uuid.CreateVersion4()));
-}
-
-[RequestRoute(realm: "*", area: "http-binding-tests", resource: "orders", operation: "create")]
-[Discriminator("test.http.orders.create")]
-sealed record HttpCreateOrder(List<HttpOrderLine> Lines) : IRequest<Uuid>, ICallable;
-
-sealed class HttpCreateOrderHandler : IRequestHandler<HttpCreateOrder, Uuid>
-{
-    public ValueTask<Result<Uuid>> HandleAsync(IRequestContext<HttpCreateOrder> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result<Uuid>.Success(Uuid.CreateVersion4()));
-}
-
-[RequestRoute(realm: "*", area: "http-binding-tests", resource: "ping", operation: "ping")]
-[Discriminator("test.http.ping")]
-sealed record HttpSendPing : IRequest, ICallable, IQueuable;
-
-sealed class HttpSendPingHandler : IRequestHandler<HttpSendPing>
-{
-    public ValueTask<Result> HandleAsync(IRequestContext<HttpSendPing> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result.Success);
-}
-
-[RequestRoute(realm: "*", area: "http-binding-tests", resource: "optional", operation: "post")]
-[Discriminator("test.http.optional")]
-sealed record HttpOptionalBody(string Value = "fallback") : IRequest<string>, ICallable;
-
-sealed class HttpOptionalBodyHandler : IRequestHandler<HttpOptionalBody, string>
-{
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<HttpOptionalBody> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result<string>.Success(context.Request.Value));
-}
-
-[RequestRoute(realm: "*", area: "http-binding-tests", resource: "guarded", operation: "run")]
-[Discriminator("test.http.guarded.run")]
-[RequiresPermission("http:guarded")]
-sealed record HttpGuardedAction : IRequest, ICallable;
-
-sealed class HttpGuardedActionHandler : IRequestHandler<HttpGuardedAction>
-{
-    public ValueTask<Result> HandleAsync(IRequestContext<HttpGuardedAction> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result.Success);
-}
-
-[RequestRoute(realm: "*", area: "http-binding-tests", resource: "widgets", operation: "list")]
-sealed record HttpListWidgets : IStreamRequest<string>, ICallable;
-
-sealed class HttpListWidgetsHandler : IStreamRequestHandler<HttpListWidgets, string>
-{
-    public async IAsyncEnumerable<string> HandleAsync(
-        IRequestContext<HttpListWidgets> context,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
-    {
-        yield return "a";
-        await Task.Yield();
-        yield return "b";
     }
 }

@@ -6,6 +6,8 @@ static class DomainEventInvariants
     {
         DomainEventValidation.Validate(ev);
         if (!eventIds.Add(ev.Metadata.EventId))
+        {
             throw new InvalidOperationException($"Event ID '{ev.Metadata.EventId}' appears more than once.");
+        }
     }
 }

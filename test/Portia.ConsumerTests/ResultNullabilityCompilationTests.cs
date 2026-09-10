@@ -24,28 +24,28 @@ public sealed class ResultNullabilityCompilationTests
     public void ShouldCompileNonNullableResultValueWithoutWarnings()
     {
         var diagnostics = GeneratorCompilation.WarningsAsErrorsDiagnostics("""
-            #nullable enable
-            using Cntryl.Portia;
+                                                                           #nullable enable
+                                                                           using Cntryl.Portia;
 
-            public static class Consumer
-            {
-                public static string Read(Result<string> result)
-                {
-                    if (!result.IsSuccess)
-                        throw new System.InvalidOperationException();
+                                                                           public static class Consumer
+                                                                           {
+                                                                               public static string Read(Result<string> result)
+                                                                               {
+                                                                                   if (!result.IsSuccess)
+                                                                                       throw new System.InvalidOperationException();
 
-                    return result.Value;
-                }
+                                                                                   return result.Value;
+                                                                               }
 
-                public static string? ReadNullable(Result<string?> result)
-                {
-                    if (!result.IsSuccess)
-                        throw new System.InvalidOperationException();
+                                                                               public static string? ReadNullable(Result<string?> result)
+                                                                               {
+                                                                                   if (!result.IsSuccess)
+                                                                                       throw new System.InvalidOperationException();
 
-                    return result.Value;
-                }
-            }
-            """);
+                                                                                   return result.Value;
+                                                                               }
+                                                                           }
+                                                                           """);
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
@@ -55,20 +55,20 @@ public sealed class ResultNullabilityCompilationTests
     public void ShouldReportNullableDereferenceForNullableResultValue()
     {
         var diagnostics = GeneratorCompilation.WarningsAsErrorsDiagnostics("""
-            #nullable enable
-            using Cntryl.Portia;
+                                                                           #nullable enable
+                                                                           using Cntryl.Portia;
 
-            public static class Consumer
-            {
-                public static int Read(Result<string?> result)
-                {
-                    if (!result.IsSuccess)
-                        throw new System.InvalidOperationException();
+                                                                           public static class Consumer
+                                                                           {
+                                                                               public static int Read(Result<string?> result)
+                                                                               {
+                                                                                   if (!result.IsSuccess)
+                                                                                       throw new System.InvalidOperationException();
 
-                    return result.Value.Length;
-                }
-            }
-            """);
+                                                                                   return result.Value.Length;
+                                                                               }
+                                                                           }
+                                                                           """);
 
         Assert.Contains(diagnostics, diagnostic =>
             diagnostic.Id == "CS8602" && diagnostic.Severity == DiagnosticSeverity.Error);

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
@@ -18,6 +19,12 @@ sealed class TestRequestBus : IDisposable
     public IRequestBus Bus { get; }
 
     public IServiceScopeFactory ScopeFactory => _provider.GetRequiredService<IServiceScopeFactory>();
+
+    public void Dispose()
+    {
+        _scope.Dispose();
+        _provider.Dispose();
+    }
 
     public static TestRequestBus Create(
         ChangeValueHandler? changeValueHandler = null,
@@ -52,74 +59,147 @@ sealed class TestRequestBus : IDisposable
         var services = new ServiceCollection();
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(actorValidator ?? new PassActorValidator());
-        var serializer = TestJson.Serializer(typeof(RpcGetValue), typeof(RpcChangeValue), typeof(UniversalAction), typeof(NoWorkerRegisteredPing));
+        var serializer = TestJson.Serializer(typeof(RpcGetValue), typeof(RpcChangeValue), typeof(UniversalAction),
+            typeof(NoWorkerRegisteredPing));
         _ = services.AddSingleton<IRequestDeserializer>(serializer);
         _ = services.AddSingleton<IRequestOutcomeSerializer>(serializer);
         _ = services.AddSingleton(permissionEvaluator ?? TestPermissionEvaluator.AllowAll());
         if (changeValueHandler is not null)
+        {
             _ = services.AddSingleton(changeValueHandler);
+        }
+
         if (getValueHandler is not null)
+        {
             _ = services.AddSingleton(getValueHandler);
+        }
+
         if (invalidChangeValueHandler is not null)
+        {
             _ = services.AddSingleton(invalidChangeValueHandler);
+        }
+
         if (guardedActionHandler is not null)
+        {
             _ = services.AddSingleton(guardedActionHandler);
+        }
+
         if (guardedQueryHandler is not null)
+        {
             _ = services.AddSingleton(guardedQueryHandler);
+        }
+
         if (getOrderHandler is not null)
+        {
             _ = services.AddSingleton(getOrderHandler);
+        }
+
         if (guardedSequenceHandler is not null)
+        {
             _ = services.AddSingleton(guardedSequenceHandler);
+        }
+
         if (authorizedActionHandler is not null)
+        {
             _ = services.AddSingleton(authorizedActionHandler);
+        }
+
         if (authorizedActionAuthorizer is not null)
+        {
             _ = services.AddSingleton(authorizedActionAuthorizer);
+        }
+
         if (rpcGetValueHandler is not null)
+        {
             _ = services.AddSingleton(rpcGetValueHandler);
+        }
+
         if (rpcChangeValueHandler is not null)
+        {
             _ = services.AddSingleton(rpcChangeValueHandler);
+        }
+
         if (universalActionHandler is not null)
+        {
             _ = services.AddSingleton(universalActionHandler);
+        }
+
         if (guardedAndAuthorizedActionHandler is not null)
+        {
             _ = services.AddSingleton(guardedAndAuthorizedActionHandler);
+        }
+
         if (guardedAndAuthorizedActionAuthorizer is not null)
+        {
             _ = services.AddSingleton(guardedAndAuthorizedActionAuthorizer);
+        }
+
         if (telemetrySuccessActionHandler is not null)
+        {
             _ = services.AddSingleton(telemetrySuccessActionHandler);
+        }
+
         if (telemetryFailureActionHandler is not null)
+        {
             _ = services.AddSingleton(telemetryFailureActionHandler);
+        }
+
         if (telemetryGuardedActionHandler is not null)
+        {
             _ = services.AddSingleton(telemetryGuardedActionHandler);
+        }
+
         if (telemetrySequenceHandler is not null)
+        {
             _ = services.AddSingleton(telemetrySequenceHandler);
+        }
+
         if (runnerFaultActionHandler is not null)
+        {
             _ = services.AddSingleton(runnerFaultActionHandler);
+        }
+
         if (httpGetWidgetHandler is not null)
+        {
             _ = services.AddSingleton(httpGetWidgetHandler);
+        }
+
         if (httpCreateOrderHandler is not null)
+        {
             _ = services.AddSingleton(httpCreateOrderHandler);
+        }
+
         if (httpCreatePaymentHandler is not null)
+        {
             _ = services.AddSingleton(httpCreatePaymentHandler);
+        }
+
         if (httpSendPingHandler is not null)
+        {
             _ = services.AddSingleton(httpSendPingHandler);
+        }
+
         if (httpGuardedActionHandler is not null)
+        {
             _ = services.AddSingleton(httpGuardedActionHandler);
+        }
+
         if (httpListWidgetsHandler is not null)
+        {
             _ = services.AddSingleton(httpListWidgetsHandler);
+        }
+
         if (noWorkerRegisteredPingHandler is not null)
+        {
             _ = services.AddSingleton(noWorkerRegisteredPingHandler);
+        }
+
         return new TestRequestBus(services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }));
     }
 
     sealed class PassActorValidator : IRequestActorValidator
     {
-        public ValueTask<Result<System.Security.Claims.ClaimsPrincipal>> ValidateAsync(string? token, CancellationToken ct = default)
-            => ValueTask.FromResult(Result<System.Security.Claims.ClaimsPrincipal>.Success(RequestActor.System));
-    }
-
-    public void Dispose()
-    {
-        _scope.Dispose();
-        _provider.Dispose();
+        public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string? token, CancellationToken ct = default)
+            => ValueTask.FromResult(Result<ClaimsPrincipal>.Success(RequestActor.System));
     }
 }

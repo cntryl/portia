@@ -25,6 +25,7 @@ static class ConsumerHost
             _ = services.AddSingleton<IConsumerScope, ConsumerScope>();
             _ = services.AddSingleton<IAccountRepository, AccountRepository>();
         }
+
         return services;
     }
 
@@ -32,7 +33,8 @@ static class ConsumerHost
         new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
 
     public static ValueTask SeedAsync(IServiceProvider provider, Uuid id, ulong position = 0)
-        => provider.GetRequiredService<IEventStore>().AppendAsync(new EventStreamAddress("consumer", "accounts", id.ToString()),
+        => provider.GetRequiredService<IEventStore>().AppendAsync(
+            new EventStreamAddress("consumer", "accounts", id.ToString()),
             position, [DomainEventSeed.Attach(new Deposited(1), id, position + 1)]);
 
     public sealed record Effect(string Component, Uuid AggregateId, int Amount, Guid ScopeId);
@@ -45,7 +47,14 @@ static class ConsumerHost
 
         public ConcurrentDictionary<Guid, bool> Scopes { get; } = new();
 
-        public IReadOnlyList<Effect> Items { get { lock (_gate) return [.. _items]; } }
+        public IReadOnlyList<Effect> Items
+        {
+            get
+            {
+                lock (_gate)
+                    return [.. _items];
+            }
+        }
 
         public void Record(string component, Uuid aggregateId, int amount, Guid scopeId)
         {
@@ -65,10 +74,16 @@ static class ConsumerHost
                 Task changed;
                 lock (_gate)
                 {
-                    if (_items.Count(item => item.Component == component && (aggregateId is null || item.AggregateId == aggregateId)) >= count)
+                    if (_items.Count(item =>
+                            item.Component == component && (aggregateId is null || item.AggregateId == aggregateId)) >=
+                        count)
+                    {
                         return;
+                    }
+
                     changed = _changed.Task;
                 }
+
                 await changed.WaitAsync(TimeSpan.FromSeconds(10));
             }
         }
@@ -97,12 +112,16 @@ static class ConsumerHost
         public int LoadAttempts { get; set; }
     }
 
-    sealed class AccountRepository(ProjectionStorage storage, IConsumerEffects effects) : IAccountRepository, IAsyncDisposable
+    sealed class AccountRepository(ProjectionStorage storage, IConsumerEffects effects)
+        : IAccountRepository, IAsyncDisposable
     {
         Batch? _batch;
-        public ValueTask DisposeAsync() => _batch?.DisposeAsync() ?? ValueTask.CompletedTask;
-        public void Add(Uuid aggregateId, int amount, Guid scopeId) => (_batch ?? throw new InvalidOperationException("No active batch")).Add(aggregateId, amount, scopeId);
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default)
+
+        public void Add(Uuid aggregateId, int amount, Guid scopeId) =>
+            (_batch ?? throw new InvalidOperationException("No active batch")).Add(aggregateId, amount, scopeId);
+
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
+            CancellationToken ct = default)
         {
             storage.LoadAttempts++;
             if (storage.FailReload)
@@ -110,7 +129,11 @@ static class ConsumerHost
                 storage.FailReload = false;
                 throw new InvalidOperationException("Checkpoint reload failed");
             }
-            return ValueTask.FromResult(storage.Checkpoints.GetValueOrDefault(identity, ProjectionCheckpoint.Start));
+            else
+            {
+                return ValueTask.FromResult(
+                    storage.Checkpoints.GetValueOrDefault(identity, ProjectionCheckpoint.Start));
+            }
         }
 
         public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
@@ -118,14 +141,14 @@ static class ConsumerHost
             _batch = new Batch(context.Identity, storage, effects, () => _batch = null);
             return ValueTask.FromResult<IProjectionBatch>(_batch);
         }
+
+        public ValueTask DisposeAsync() => _batch?.DisposeAsync() ?? ValueTask.CompletedTask;
     }
 
-    sealed class Batch(CheckpointIdentity name, ProjectionStorage storage, IConsumerEffects effects, Action release) : IProjectionBatch
+    sealed class Batch(CheckpointIdentity name, ProjectionStorage storage, IConsumerEffects effects, Action release)
+        : IProjectionBatch
     {
         readonly List<(Uuid Id, int Amount, Guid ScopeId)> _pending = [];
-
-
-        public void Add(Uuid aggregateId, int amount, Guid scopeId) => _pending.Add((aggregateId, amount, scopeId));
 
         public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
         {
@@ -138,9 +161,19 @@ static class ConsumerHost
                 storage.FailReload = true;
                 throw new InvalidOperationException("Commit completed but response failed");
             }
+            else
+            {
+                return ValueTask.CompletedTask;
+            }
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            release();
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask DisposeAsync() { release(); return ValueTask.CompletedTask; }
+
+        public void Add(Uuid aggregateId, int amount, Guid scopeId) => _pending.Add((aggregateId, amount, scopeId));
     }
 }

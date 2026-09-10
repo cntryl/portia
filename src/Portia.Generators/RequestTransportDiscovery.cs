@@ -4,10 +4,10 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Discovers every routed, transport-marked request in a compilation — shared by every generator
-/// that needs it (<see cref="PortiaServiceRegistrationGenerator" /> for the DI transport registry,
-/// generated typed RPC descriptors for RPC worker registration) so the discovery
-/// rules live in exactly one place, not duplicated per generator.
+///     Discovers every routed, transport-marked request in a compilation — shared by every generator
+///     that needs it (<see cref="PortiaServiceRegistrationGenerator" /> for the DI transport registry,
+///     generated typed RPC descriptors for RPC worker registration) so the discovery
+///     rules live in exactly one place, not duplicated per generator.
 /// </summary>
 static class RequestTransportDiscovery
 {
@@ -37,13 +37,15 @@ static class RequestTransportDiscovery
             || symbol.IsAbstract
             || IsStream(symbol)
             || !HasTransportMarker(symbol)
-            || !symbol.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == RequestRouteAttributeMetadataName))
+            || !symbol.GetAttributes().Any(attribute =>
+                attribute.AttributeClass?.ToDisplayString() == RequestRouteAttributeMetadataName))
         {
             return null;
         }
 
         var attribute = symbol.GetAttributes()
-            .FirstOrDefault(candidate => candidate.AttributeClass?.ToDisplayString() == DiscriminatorAttributeMetadataName);
+            .FirstOrDefault(candidate =>
+                candidate.AttributeClass?.ToDisplayString() == DiscriminatorAttributeMetadataName);
         var name = attribute?.ConstructorArguments.ElementAtOrDefault(0).Value as string;
         var version = attribute?.ConstructorArguments.ElementAtOrDefault(1).Value as int? ?? 0;
         return attribute is not null && !string.IsNullOrWhiteSpace(name) && version > 0
@@ -61,23 +63,34 @@ static class RequestTransportDiscovery
         {
             return null;
         }
+
         var attribute = symbol.GetAttributes()
-            .FirstOrDefault(candidate => candidate.AttributeClass?.ToDisplayString() == RequestRouteAttributeMetadataName);
+            .FirstOrDefault(candidate =>
+                candidate.AttributeClass?.ToDisplayString() == RequestRouteAttributeMetadataName);
         if (attribute is null || attribute.ConstructorArguments.Length != 4)
+        {
             return null;
+        }
+
         foreach (var argument in attribute.ConstructorArguments)
         {
             var segment = argument.Value as string;
             if (!IsValidRouteSegment(segment))
-                return new InvalidRoute(symbol.ToDisplayString(), segment ?? string.Empty, declaration.Identifier.GetLocation());
+            {
+                return new InvalidRoute(symbol.ToDisplayString(), segment ?? string.Empty,
+                    declaration.Identifier.GetLocation());
+            }
         }
+
         return null;
     }
 
     public static RequestTransportComponent? GetRequestTransportComponent(ITypeSymbol? type)
     {
         if (type is not INamedTypeSymbol symbol || symbol.IsAbstract)
+        {
             return null;
+        }
 
         // A streamed request has no RPC, queue, notice, or schedule transport at all today —
         // only MapPortiaGetStream/MapPortiaGetSse exist for it, wired directly by the HTTP
@@ -90,12 +103,15 @@ static class RequestTransportDiscovery
         }
 
         var routeAttribute = symbol.GetAttributes()
-            .FirstOrDefault(attribute => attribute.AttributeClass?.ToDisplayString() == RequestRouteAttributeMetadataName);
+            .FirstOrDefault(attribute =>
+                attribute.AttributeClass?.ToDisplayString() == RequestRouteAttributeMetadataName);
         var discriminatorAttribute = symbol.GetAttributes()
-            .FirstOrDefault(attribute => attribute.AttributeClass?.ToDisplayString() == DiscriminatorAttributeMetadataName);
+            .FirstOrDefault(attribute =>
+                attribute.AttributeClass?.ToDisplayString() == DiscriminatorAttributeMetadataName);
 
         if (routeAttribute is null || routeAttribute.ConstructorArguments.Length != 4
-            || discriminatorAttribute is null || discriminatorAttribute.ConstructorArguments.Length != 2)
+                                   || discriminatorAttribute is null ||
+                                   discriminatorAttribute.ConstructorArguments.Length != 2)
         {
             return null;
         }
@@ -103,19 +119,29 @@ static class RequestTransportDiscovery
         var transports = RequestTransports.None;
 
         if (ImplementsInterface(symbol, CallableMetadataName))
+        {
             transports |= RequestTransports.Callable;
+        }
 
         if (ImplementsInterface(symbol, QueuableMetadataName))
+        {
             transports |= RequestTransports.Queuable;
+        }
 
         if (ImplementsInterface(symbol, NotifiableMetadataName))
+        {
             transports |= RequestTransports.Notifiable;
+        }
 
         if (ImplementsInterface(symbol, SchedulableMetadataName))
+        {
             transports |= RequestTransports.Schedulable;
+        }
 
         if (transports == RequestTransports.None)
+        {
             return null;
+        }
 
         const string wildcard = "*";
 
@@ -140,16 +166,24 @@ static class RequestTransportDiscovery
         var flags = new List<string>(4);
 
         if (transports.HasFlag(RequestTransports.Callable))
+        {
             flags.Add("Callable");
+        }
 
         if (transports.HasFlag(RequestTransports.Queuable))
+        {
             flags.Add("Queuable");
+        }
 
         if (transports.HasFlag(RequestTransports.Notifiable))
+        {
             flags.Add("Notifiable");
+        }
 
         if (transports.HasFlag(RequestTransports.Schedulable))
+        {
             flags.Add("Schedulable");
+        }
 
         return string.Join(" | ", flags.Select(flag => $"global::Cntryl.Portia.RequestTransports.{flag}"));
     }
@@ -171,65 +205,12 @@ static class RequestTransportDiscovery
         || ImplementsInterface(symbol, SchedulableMetadataName);
 
     static bool IsValidRouteSegment(string? segment) => !string.IsNullOrWhiteSpace(segment)
-        && (segment == "*" || segment.All(character => char.IsLetterOrDigit(character) || character is '.' or '_' or '-' or '~'));
-}
-
-sealed class InvalidDiscriminator(string typeName, Location location)
-{
-    public string TypeName { get; } = typeName;
-
-    public Location Location { get; } = location;
-}
-
-sealed class InvalidRoute(string typeName, string segment, Location location)
-{
-    public string TypeName { get; } = typeName;
-
-    public string Segment { get; } = segment;
-
-    public Location Location { get; } = location;
+                                                        && (segment == "*" || segment.All(character =>
+                                                            char.IsLetterOrDigit(character) ||
+                                                            character is '.' or '_' or '-' or '~'));
 }
 
 // Mirrors Cntryl.Portia.RequestTransports in Portia.Abstractions for this generator's own
 // bookkeeping — Portia.Generators does not (and should not) reference Portia.Abstractions, so it
 // cannot use the real enum directly. Only the flag names matter; they are emitted as text (see
 // RequestTransportDiscovery.FormatTransports) against the real type in the consumer's compilation.
-[Flags]
-enum RequestTransports
-{
-    None = 0,
-    Callable = 1,
-    Queuable = 2,
-    Notifiable = 4,
-    Schedulable = 8,
-}
-
-sealed class RequestTransportComponent(
-    string typeName,
-    RequestTransports transports,
-    string realm,
-    string area,
-    string resource,
-    string operation,
-    int discriminatorVersion,
-    string discriminatorName,
-    string? resultType)
-{
-    public string TypeName { get; } = typeName;
-
-    public RequestTransports Transports { get; } = transports;
-
-    public string Realm { get; } = realm;
-
-    public string Area { get; } = area;
-
-    public string Resource { get; } = resource;
-
-    public string Operation { get; } = operation;
-
-    public int DiscriminatorVersion { get; } = discriminatorVersion;
-
-    public string DiscriminatorName { get; } = discriminatorName;
-
-    public string? ResultType { get; } = resultType;
-}

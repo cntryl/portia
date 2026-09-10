@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Cntryl.Portia.Consumer;
 
 public sealed class ReviewRegressionTests
@@ -21,7 +23,8 @@ public sealed class ReviewRegressionTests
             "public sealed record Binding([property: JsonConverter(typeof(HexConverter))] int Value) : IRequest<string>, ICallable;",
             "request.Value.ToString(CultureInfo.InvariantCulture)",
             "app.MapPortiaPost<Binding, string>(\"/binding\");");
-        var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding", /*lang=json,strict*/ "{\"value\":\"0x10\"}", converter: true);
+        var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding", /*lang=json,strict*/
+            "{\"value\":\"0x10\"}", converter: true);
         Assert.Equal(200, status);
         Assert.Equal("\"16\"", body);
     }
@@ -40,7 +43,8 @@ public sealed class ReviewRegressionTests
                     Modifiers = { info => { if (info.Type == typeof(Binding)) info.Properties[0].Name = "custom"; } }
                 });
             """);
-        var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding", /*lang=json,strict*/ "{\"custom\":16}");
+        var (status, body) =
+            await HttpConsumerScenario.RunAsync(assembly, "/binding", /*lang=json,strict*/ "{\"custom\":16}");
         Assert.Equal(200, status);
         Assert.Equal("\"16\"", body);
     }
@@ -53,7 +57,8 @@ public sealed class ReviewRegressionTests
             "request.Value.ToString(CultureInfo.InvariantCulture)",
             "app.MapPortiaPost<Binding, string>(\"/binding\");",
             "builder.Services.AddPortia().ConfigureJson(options => options.NumberHandling = JsonNumberHandling.Strict);");
-        var (status, _) = await HttpConsumerScenario.RunAsync(assembly, "/binding", /*lang=json,strict*/ "{\"value\":\"16\"}");
+        var (status, _) =
+            await HttpConsumerScenario.RunAsync(assembly, "/binding", /*lang=json,strict*/ "{\"value\":\"16\"}");
         Assert.Equal(400, status);
     }
 
@@ -61,16 +66,16 @@ public sealed class ReviewRegressionTests
     public void ResultBearingQueueHttpMappingHasActionableDiagnostic()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
-            using Cntryl.Portia;
-            using Cntryl.Portia.Testing;
-            using Microsoft.AspNetCore.Routing;
-            public sealed record Binding(int Value) : IRequest<string>, ICallable, IQueuable;
-            public static class Scenario
-            {
-                public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Binding, string>("/binding");
-            }
-            """, new RequestHttpBindingGenerator());
+                                                           using Cntryl.Portia;
+                                                           using Cntryl.Portia.Testing;
+                                                           using Microsoft.AspNetCore.Routing;
+                                                           public sealed record Binding(int Value) : IRequest<string>, ICallable, IQueuable;
+                                                           public static class Scenario
+                                                           {
+                                                               public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Binding, string>("/binding");
+                                                           }
+                                                           """, new RequestHttpBindingGenerator());
         var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA016");
-        Assert.Contains("no-result", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        Assert.Contains("no-result", diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
 }

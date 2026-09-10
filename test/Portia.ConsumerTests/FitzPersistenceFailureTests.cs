@@ -8,6 +8,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class FitzPersistenceFailureTests
 {
     readonly RequestDispatchContext _saveContext = new(RequestActor.System);
+
     [Theory]
     [InlineData("append", false)]
     [InlineData("commit", false)]
@@ -17,11 +18,13 @@ public sealed class FitzPersistenceFailureTests
     {
         var session = new Session(failureAt, cleanupFails);
         var streams = new Streams(session);
-        var store = new FitzEventStore(streams, ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Declined>(1, "Declined")));
+        var store = new FitzEventStore(streams,
+            ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Declined>(1, "Declined")));
         var services = new ServiceCollection();
         _ = services.AddSingleton<IEventStore>(store);
         _ = services.AddPortia();
-        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        { ValidateScopes = true, ValidateOnBuild = true });
         await using var scope = provider.CreateAsyncScope();
         var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
         var account = new Account(Uuid.CreateVersion4());
@@ -37,13 +40,16 @@ public sealed class FitzPersistenceFailureTests
         }
         else
         {
-            var error = await Assert.ThrowsAsync<IOException>(() => repository.SaveAsync(account, _saveContext).AsTask());
+            var error =
+                await Assert.ThrowsAsync<IOException>(() => repository.SaveAsync(account, _saveContext).AsTask());
             Assert.Same(session.Failure, error);
             Assert.Same(payload, Assert.Single(scenario.PendingAudits));
             Assert.Equal(1, session.Rollbacks);
         }
+
         Assert.Equal(0UL, account.CommittedStreamPosition);
-        Assert.Equal(4, Uuid.Parse(EventStreamAddress.Parse(streams.Route!).Resource, CultureInfo.InvariantCulture).Version);
+        Assert.Equal(4,
+            Uuid.Parse(EventStreamAddress.Parse(streams.Route!).Resource, CultureInfo.InvariantCulture).Version);
         Assert.True(session.Disposed);
     }
 
@@ -52,11 +58,13 @@ public sealed class FitzPersistenceFailureTests
     [InlineData("commit", 2001u, "unrelated wording", true)]
     [InlineData("append", 2002u, "concurrency conflict", false)]
     [InlineData("commit", null, "concurrency conflict", false)]
-    public async Task OnlyStructuredConflictCodeIsTranslatedDespiteCleanupFailures(string failureAt, uint? code, string message, bool conflict)
+    public async Task OnlyStructuredConflictCodeIsTranslatedDespiteCleanupFailures(string failureAt, uint? code,
+        string message, bool conflict)
     {
         var original = new StreamException(message, "APPEND_FAILED", domainCode: code);
         var session = new Session(failureAt, true) { Failure = original };
-        var store = new FitzEventStore(new Streams(session), ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Declined>(1, "Declined")));
+        var store = new FitzEventStore(new Streams(session),
+            ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Declined>(1, "Declined")));
         await using var provider = new ServiceCollection().BuildServiceProvider();
         var repository = new AggregateRepository(store);
         var account = new Account(Uuid.CreateVersion4());
@@ -64,9 +72,14 @@ public sealed class FitzPersistenceFailureTests
         account.Audit(payload);
         var error = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext).AsTask());
         if (conflict)
+        {
             Assert.Same(original, Assert.IsType<EventStreamConcurrencyException>(error).InnerException);
+        }
         else
+        {
             Assert.Same(original, error);
+        }
+
         Assert.Same(payload, Assert.Single(new AggregateScenario<Account>(account).PendingAudits));
         Assert.Equal(1, session.Rollbacks);
         Assert.True(session.Disposed);
@@ -104,7 +117,8 @@ public sealed class FitzPersistenceFailureTests
     {
         public string? Route { get; private set; }
 
-        public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null, CancellationToken ct = default)
+        public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null,
+            CancellationToken ct = default)
         {
             Route = route;
             return Task.FromResult(session);
@@ -118,10 +132,13 @@ public sealed class FitzPersistenceFailureTests
             StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
             ulong? capturedWatermark = null, CancellationToken ct = default) => throw new NotSupportedException();
 
-        public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
+            throw new NotSupportedException();
 
-        public Task<StreamMetadata> MetadataAsync(string route, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<StreamMetadata> MetadataAsync(string route, CancellationToken ct = default) =>
+            throw new NotSupportedException();
 
-        public Task<StreamSubscription> SubscribeAsync(string pattern, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<StreamSubscription> SubscribeAsync(string pattern, CancellationToken ct = default) =>
+            throw new NotSupportedException();
     }
 }

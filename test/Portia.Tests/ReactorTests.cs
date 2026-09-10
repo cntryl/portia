@@ -3,13 +3,13 @@ using System.Globalization;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies generated reactor dispatch.
+///     Verifies generated reactor dispatch.
 /// </summary>
 public sealed class ReactorTests
 {
     /// <summary>
-    /// Verifies that a reactor's async handler is invoked and can raise a command against
-    /// another aggregate through the aggregate repository.
+    ///     Verifies that a reactor's async handler is invoked and can raise a command against
+    ///     another aggregate through the aggregate repository.
     /// </summary>
     [Fact]
     public async Task ShouldDispatchAsyncHandlerAndRaiseCommandThroughRepository()
@@ -27,7 +27,7 @@ public sealed class ReactorTests
     }
 
     /// <summary>
-    /// Verifies that a reactor dispatches to the handler matching its event type.
+    ///     Verifies that a reactor dispatches to the handler matching its event type.
     /// </summary>
     [Fact]
     public async Task ShouldDispatchMatchingHandler()
@@ -43,9 +43,9 @@ public sealed class ReactorTests
     }
 
     /// <summary>
-    /// Verifies that an unhandled event type is silently skipped, not an error — a reactor's
-    /// pattern is expected to span more than it handles, and filtering by event type (its
-    /// handler interfaces) is exactly how that's supposed to work.
+    ///     Verifies that an unhandled event type is silently skipped, not an error — a reactor's
+    ///     pattern is expected to span more than it handles, and filtering by event type (its
+    ///     handler interfaces) is exactly how that's supposed to work.
     /// </summary>
     [Fact]
     public async Task ShouldSkipUnhandledEventType()
@@ -88,6 +88,7 @@ public sealed class ReactorTests
             TenantId? tenant = tenantValue is null ? null : new TenantId(tenantValue);
             reactor.BindWorkload(new WorkloadIdentity(workloadName, tenant), null);
         }
+
         var ev = new ValueChanged(42);
         ev.AttachMetadata(new DomainEventMetadata(
             Uuid.Parse("11111111-1111-4111-8111-111111111111", CultureInfo.InvariantCulture),
@@ -125,46 +126,5 @@ public sealed class ReactorTests
             aggregateVersion,
             DateTimeOffset.UtcNow));
         return ev;
-    }
-}
-
-sealed partial class TestReactor(IAggregateRepository repository, IProjectionCheckpointStore? checkpoints = null)
-    : Reactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"), "test-reactor"),
-      IReactorHandler<ValueChanged>,
-      IReactorHandler<ValueIncremented>
-{
-    public int? LastIncrementAmount { get; private set; }
-
-    public Uuid EffectId(IReactorContext context, string name) => CreateEffectId(context, name);
-
-    public async ValueTask HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
-    {
-        var target = await repository.HydrateAsync(new TestAggregate(Uuid.CreateVersion4()), ct);
-        target.ChangeValue(context.Trigger.Value);
-        await repository.SaveAsync(target, context, ct);
-    }
-
-    public ValueTask HandleAsync(IReactorContext<ValueIncremented> context, CancellationToken ct)
-    {
-        LastIncrementAmount = context.Trigger.Amount;
-        return ValueTask.CompletedTask;
-    }
-}
-
-sealed class RecordingAggregateRepository : IAggregateRepository
-{
-    public List<TestAggregate> SavedAggregates { get; } = [];
-
-    public ValueTask<TAggregate> HydrateAsync<TAggregate>(TAggregate aggregate, CancellationToken ct = default)
-        where TAggregate : Aggregate
-        => ValueTask.FromResult(aggregate);
-
-    public ValueTask SaveAsync<TAggregate>(TAggregate aggregate, IExecutionContext context, CancellationToken ct = default)
-        where TAggregate : Aggregate
-    {
-        if (aggregate is TestAggregate testAggregate)
-            SavedAggregates.Add(testAggregate);
-
-        return ValueTask.CompletedTask;
     }
 }

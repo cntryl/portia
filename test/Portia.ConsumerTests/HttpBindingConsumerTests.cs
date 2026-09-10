@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Cntryl.Portia.Consumer;
 
 public sealed class HttpBindingConsumerTests
@@ -31,7 +33,8 @@ public sealed class HttpBindingConsumerTests
     [InlineData("?required=x&limit=9&optional=2&note=", 200, "x/9/2/")]
     [InlineData("", 400, null)]
     [InlineData("?required=x&optional=bad", 400, null)]
-    public async Task QueryBindingPreservesNullableDefaultAndRequiredValues(string query, int expectedStatus, string? expected)
+    public async Task QueryBindingPreservesNullableDefaultAndRequiredValues(string query, int expectedStatus,
+        string? expected)
     {
         var assembly = HttpConsumerScenario.Compile(
             "public sealed record Binding(string Required, int Limit = 7, int? Optional = null, string? Note = null) : IRequest<string>, ICallable;",
@@ -40,20 +43,25 @@ public sealed class HttpBindingConsumerTests
         var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding" + query);
         Assert.Equal(expectedStatus, status);
         if (expected is not null)
-            Assert.Equal(System.Text.Json.JsonSerializer.Serialize(expected), body);
+        {
+            Assert.Equal(JsonSerializer.Serialize(expected), body);
+        }
     }
 
     [Theory]
-    [InlineData(false, false, /*lang=json,strict*/ "{\"displayName\":\"hello\",\"note\":null,\"memo\":\"m\"}", 200, "20/hello/7/null/m")]
+    [InlineData(false, false, /*lang=json,strict*/ "{\"displayName\":\"hello\",\"note\":null,\"memo\":\"m\"}", 200,
+        "20/hello/7/null/m")]
     [InlineData(true, false, /*lang=json,strict*/ "{\"display_name\":\"hello\"}", 200, "20/hello/7/null/null")]
-    [InlineData(false, true, /*lang=json,strict*/ "{\"displayName\":\"hello\",\"quantity\":\"0x10\"}", 200, "20/hello/16/null/null")]
+    [InlineData(false, true, /*lang=json,strict*/ "{\"displayName\":\"hello\",\"quantity\":\"0x10\"}", 200,
+        "20/hello/16/null/null")]
     [InlineData(false, false, /*lang=json,strict*/ "{\"displayName\":42}", 400, null)]
     [InlineData(false, false, /*lang=json,strict*/ "{\"displayName\":null}", 400, null)]
     [InlineData(false, false, /*lang=json,strict*/ "{\"displayName\":\"hello\",\"quantity\":null}", 400, null)]
     [InlineData(false, false, "{}", 400, null)]
     [InlineData(false, false, "[]", 400, null)]
     [InlineData(false, false, "null", 400, null)]
-    public async Task JsonBindingHonorsOptionsNamesConvertersNullsAndKinds(bool snake, bool converter, string json, int expectedStatus, string? expected)
+    public async Task JsonBindingHonorsOptionsNamesConvertersNullsAndKinds(bool snake, bool converter, string json,
+        int expectedStatus, string? expected)
     {
         var assembly = HttpConsumerScenario.Compile(
             "public sealed record Binding(int Id, string DisplayName, int Quantity = 7, string? Note = null, [property: JsonPropertyName(\"memo\")] string? Comment = null) : IRequest<string>, ICallable;",
@@ -62,6 +70,8 @@ public sealed class HttpBindingConsumerTests
         var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding/20", json, snake, converter);
         Assert.Equal(expectedStatus, status);
         if (expected is not null)
-            Assert.Equal(System.Text.Json.JsonSerializer.Serialize(expected), body);
+        {
+            Assert.Equal(JsonSerializer.Serialize(expected), body);
+        }
     }
 }

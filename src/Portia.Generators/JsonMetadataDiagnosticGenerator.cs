@@ -15,12 +15,15 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context) =>
-        context.RegisterSourceOutput(context.CompilationProvider, static (output, compilation) => Analyze(output, compilation));
+        context.RegisterSourceOutput(context.CompilationProvider,
+            static (output, compilation) => Analyze(output, compilation));
 
     static void Analyze(SourceProductionContext output, Compilation compilation)
     {
         if (compilation.GetTypeByMetadataName("Cntryl.Portia.PortiaJsonContextAttribute") is null)
+        {
             return;
+        }
 
         var covered = ContextRoots(compilation).ToImmutableHashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var required = new Dictionary<ITypeSymbol, Location>(SymbolEqualityComparer.Default);
@@ -28,12 +31,15 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         foreach (var type in Types(compilation.Assembly.GlobalNamespace))
         {
             if (IsConcreteDomainEvent(type) && HasDiscriminator(type))
+            {
                 Add(type, type.Locations.FirstOrDefault());
+            }
 
             foreach (var iface in type.AllInterfaces)
             {
                 var definition = iface.OriginalDefinition.ToDisplayString();
-                if (definition is "Cntryl.Portia.IRequestHandler<TRequest>" or "Cntryl.Portia.IRequestHandler<TRequest, TOut>"
+                if (definition is "Cntryl.Portia.IRequestHandler<TRequest>"
+                    or "Cntryl.Portia.IRequestHandler<TRequest, TOut>"
                     or "Cntryl.Portia.IStreamRequestHandler<TRequest, TOut>")
                 {
                     Add(iface.TypeArguments[0], type.Locations.FirstOrDefault());
@@ -50,16 +56,21 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
             var model = compilation.GetSemanticModel(tree);
             foreach (var invocation in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method) continue;
+                if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
+                {
+                    continue;
+                }
+
                 var name = method.Name;
                 if (name is "AddEvent" or "RegisterDynamicRequest"
                     or "MapPortiaGet" or "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch" or "MapPortiaDelete"
                     or "MapPortiaGetStream" or "MapPortiaGetSse")
                 {
-                    foreach (var argument in method.TypeArguments) Add(argument, invocation.GetLocation());
+                    foreach (var argument in method.TypeArguments)
+                        Add(argument, invocation.GetLocation());
                 }
-
-                if (name == "AddRequestHandler" && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol handler)
+                else if (name == "AddRequestHandler" &&
+                         method.TypeArguments.FirstOrDefault() is INamedTypeSymbol handler)
                 {
                     foreach (var iface in handler.AllInterfaces.Where(IsHandlerInterface))
                     {
@@ -74,26 +85,33 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                 if (IsPortiaDispatch(method))
                 {
                     var requestParameter = method.Parameters.FirstOrDefault(parameter => parameter.Name == "request");
-                    var requestArgument = requestParameter is null ? null : invocation.ArgumentList.Arguments.FirstOrDefault(argument =>
-                        argument.NameColon?.Name.Identifier.ValueText == "request")
-                        ?? invocation.ArgumentList.Arguments.ElementAtOrDefault(requestParameter.Ordinal);
-                    if (requestArgument is not null && model.GetTypeInfo(requestArgument.Expression).Type is { } dispatchedType)
+                    var requestArgument = requestParameter is null
+                        ? null
+                        : invocation.ArgumentList.Arguments.FirstOrDefault(argument =>
+                              argument.NameColon?.Name.Identifier.ValueText == "request")
+                          ?? invocation.ArgumentList.Arguments.ElementAtOrDefault(requestParameter.Ordinal);
+                    if (requestArgument is not null && model.GetTypeInfo(requestArgument.Expression).Type is
+                        { } dispatchedType)
                     {
                         Add(dispatchedType, invocation.GetLocation());
                     }
+
                     foreach (var argument in method.TypeArguments)
-                    {
                         Add(argument, invocation.GetLocation());
-                    }
                 }
 
-                if (name.StartsWith("MapPortia", StringComparison.Ordinal) && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol request)
+                if (name.StartsWith("MapPortia", StringComparison.Ordinal) &&
+                    method.TypeArguments.FirstOrDefault() is INamedTypeSymbol request)
                 {
                     var mutating = name is "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch";
                     if (mutating)
                     {
-                        var pattern = model.GetConstantValue(invocation.ArgumentList.Arguments.First().Expression).Value as string ?? string.Empty;
-                        foreach (var parameter in request.Constructors.Where(c => c.DeclaredAccessibility == Accessibility.Public).SelectMany(c => c.Parameters))
+                        var pattern =
+                            model.GetConstantValue(invocation.ArgumentList.Arguments.First().Expression)
+                                .Value as string ?? string.Empty;
+                        foreach (var parameter in request.Constructors
+                                     .Where(c => c.DeclaredAccessibility == Accessibility.Public)
+                                     .SelectMany(c => c.Parameters))
                         {
                             if (!pattern.Contains("{" + parameter.Name, StringComparison.OrdinalIgnoreCase))
                             {
@@ -109,13 +127,19 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                      .OrderBy(pair => pair.Key.ToDisplayString(), StringComparer.Ordinal))
         {
             output.ReportDiagnostic(Diagnostic.Create(MissingMetadata, pair.Value,
-                ImmutableDictionary<string, string?>.Empty.Add("TypeName", pair.Key.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                ImmutableDictionary<string, string?>.Empty.Add("TypeName",
+                    pair.Key.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
                 pair.Key.ToDisplayString()));
         }
 
         void Add(ITypeSymbol type, Location? location)
         {
-            if (type.TypeKind is TypeKind.Error or TypeKind.TypeParameter || type.SpecialType == SpecialType.System_Void) return;
+            if (type.TypeKind is TypeKind.Error or TypeKind.TypeParameter ||
+                type.SpecialType == SpecialType.System_Void)
+            {
+                return;
+            }
+
             if (!required.ContainsKey(type))
             {
                 required.Add(type, location ?? Location.None);
@@ -127,22 +151,27 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
     {
         foreach (var context in Types(compilation.Assembly.GlobalNamespace).Where(IsPortiaContext))
         {
-            foreach (var attribute in context.GetAttributes().Where(a => a.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializableAttribute"))
+            foreach (var attribute in context.GetAttributes().Where(a =>
+                         a.AttributeClass?.ToDisplayString() ==
+                         "System.Text.Json.Serialization.JsonSerializableAttribute"))
             {
-                if (attribute.ConstructorArguments.FirstOrDefault().Value is ITypeSymbol type) yield return type;
+                if (attribute.ConstructorArguments.FirstOrDefault().Value is ITypeSymbol type)
+                {
+                    yield return type;
+                }
             }
         }
     }
 
-    static bool IsPortiaContext(INamedTypeSymbol type) => type.GetAttributes().Any(
-        a => a.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonContextAttribute");
+    static bool IsPortiaContext(INamedTypeSymbol type) => type.GetAttributes().Any(a =>
+        a.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonContextAttribute");
 
     static bool IsHandlerInterface(INamedTypeSymbol type) => type.OriginalDefinition.ToDisplayString() is
         "Cntryl.Portia.IRequestHandler<TRequest>" or "Cntryl.Portia.IRequestHandler<TRequest, TOut>"
         or "Cntryl.Portia.IStreamRequestHandler<TRequest, TOut>";
 
-    static bool HasDiscriminator(INamedTypeSymbol type) => type.GetAttributes().Any(
-        a => a.AttributeClass?.ToDisplayString() == "Cntryl.Portia.DiscriminatorAttribute");
+    static bool HasDiscriminator(INamedTypeSymbol type) => type.GetAttributes()
+        .Any(a => a.AttributeClass?.ToDisplayString() == "Cntryl.Portia.DiscriminatorAttribute");
 
     static bool IsPortiaDispatch(IMethodSymbol method)
     {
@@ -151,6 +180,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         {
             return false;
         }
+
         var owner = method.ReducedFrom?.ContainingType ?? method.ContainingType;
         return owner.ToDisplayString() is "Cntryl.Portia.RequestBusExtensions" or "Cntryl.Portia.IRequestBus"
             or "Cntryl.Portia.IRemoteRequestSender" or "Cntryl.Portia.IRequestQueuePublisher"
@@ -160,24 +190,43 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 
     static bool IsConcreteDomainEvent(INamedTypeSymbol type)
     {
-        if (type.IsAbstract || type.DeclaredAccessibility is Accessibility.Private or Accessibility.Protected) return false;
+        if (type.IsAbstract || type.DeclaredAccessibility is Accessibility.Private or Accessibility.Protected)
+        {
+            return false;
+        }
+
         for (var current = type.BaseType; current is not null; current = current.BaseType)
-            if (current.ToDisplayString() == "Cntryl.Portia.DomainEvent") return true;
+        {
+            if (current.ToDisplayString() == "Cntryl.Portia.DomainEvent")
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 
-    static ITypeSymbol UnwrapNullable(ITypeSymbol type) => type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
-        ? nullable.TypeArguments[0] : type;
+    static ITypeSymbol UnwrapNullable(ITypeSymbol type) => type is INamedTypeSymbol
+    {
+        OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
+    } nullable
+        ? nullable.TypeArguments[0]
+        : type;
 
     static IEnumerable<INamedTypeSymbol> Types(INamespaceSymbol scope)
     {
         foreach (var type in scope.GetTypeMembers())
         {
             yield return type;
-            foreach (var nested in Nested(type)) yield return nested;
+            foreach (var nested in Nested(type))
+                yield return nested;
         }
+
         foreach (var child in scope.GetNamespaceMembers())
-            foreach (var type in Types(child)) yield return type;
+        {
+            foreach (var type in Types(child))
+                yield return type;
+        }
     }
 
     static IEnumerable<INamedTypeSymbol> Nested(INamedTypeSymbol owner)
@@ -185,7 +234,8 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         foreach (var type in owner.GetTypeMembers())
         {
             yield return type;
-            foreach (var nested in Nested(type)) yield return nested;
+            foreach (var nested in Nested(type))
+                yield return nested;
         }
     }
 }

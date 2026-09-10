@@ -1,12 +1,12 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies event-stream pattern construction.
+///     Verifies event-stream pattern construction.
 /// </summary>
 public sealed class EventStreamPatternTests
 {
     /// <summary>
-    /// Verifies omitted and empty area/resource segments become Fitz wildcards.
+    ///     Verifies omitted and empty area/resource segments become Fitz wildcards.
     /// </summary>
     /// <param name="realm">The required realm.</param>
     /// <param name="area">The optional area.</param>
@@ -28,8 +28,8 @@ public sealed class EventStreamPatternTests
     }
 
     /// <summary>
-    /// Verifies cross-realm patterns cannot enter the common reader contract, because not every
-    /// event-store implementation can supply a global checkpoint.
+    ///     Verifies cross-realm patterns cannot enter the common reader contract, because not every
+    ///     event-store implementation can supply a global checkpoint.
     /// </summary>
     [Theory]
     [InlineData(null)]
@@ -47,7 +47,7 @@ public sealed class EventStreamPatternTests
     public void ShouldRejectResourceWithoutArea()
     {
         var exception = Assert.Throws<ArgumentException>(() =>
-            EventStreamPattern.ForPattern("sales", area: null, resource: "orders"));
+            EventStreamPattern.ForPattern("sales", null, "orders"));
 
         Assert.Equal("resource", exception.ParamName);
     }

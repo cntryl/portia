@@ -5,27 +5,27 @@
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
   </PropertyGroup>
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Cntryl.Fitz" />
-    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit" />
-    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
-    <ProjectReference Include="../Consumer.Contracts/Consumer.Contracts.csproj" />
-    <ProjectReference Include="../Consumer.FeatureOne/Consumer.FeatureOne.csproj" />
-    <ProjectReference Include="../Consumer.FeatureTwo/Consumer.FeatureTwo.csproj" />
-    <ProjectReference Include="../../src/Portia.Testing/Portia.Testing.csproj" />
-    <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj" />
-    <ProjectReference Include="../../src/Portia.Fitz/Portia.Fitz.csproj" />
-    <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj" />
-    <ProjectReference Include="../../src/Portia.CodeFixes/Portia.CodeFixes.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    <PackageReference Include="Cntryl.Fitz"/>
+    <PackageReference Include="Microsoft.AspNetCore.TestHost"/>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp"/>
+    <PackageReference Include="Microsoft.NET.Test.Sdk"/>
+    <PackageReference Include="xunit"/>
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all"/>
+    <ProjectReference Include="../Consumer.Contracts/Consumer.Contracts.csproj"/>
+    <ProjectReference Include="../Consumer.FeatureOne/Consumer.FeatureOne.csproj"/>
+    <ProjectReference Include="../Consumer.FeatureTwo/Consumer.FeatureTwo.csproj"/>
+    <ProjectReference Include="../../src/Portia.Testing/Portia.Testing.csproj"/>
+    <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj"/>
+    <ProjectReference Include="../../src/Portia.Fitz/Portia.Fitz.csproj"/>
+    <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj"/>
+    <ProjectReference Include="../../src/Portia.CodeFixes/Portia.CodeFixes.csproj"/>
   </ItemGroup>
   <ItemGroup>
     <!-- Portia's test doubles and conformance suites are their own namespace, so a consumer never
          sees them beside the production contracts. This project is entirely tests, so it opts in
          once here rather than in every file. -->
-    <Using Include="Cntryl.Portia.Testing" />
+    <Using Include="Cntryl.Portia.Testing"/>
   </ItemGroup>
 
 </Project>

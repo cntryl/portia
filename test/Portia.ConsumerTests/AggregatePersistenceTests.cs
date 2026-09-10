@@ -5,6 +5,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class AggregatePersistenceTests
 {
     readonly RequestDispatchContext _saveContext = new(RequestActor.System);
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -37,13 +38,18 @@ public sealed class AggregatePersistenceTests
         Assert.All(events, record => Assert.False(record.Event.Metadata.IsAudit));
 
         var records = new List<DomainEventRecord>();
-        await foreach (var record in fixture.Store.ReadAsync(EventStreamPattern.ForPattern(account.Stream.Realm, account.Stream.Area)))
+        await foreach (var record in fixture.Store.ReadAsync(
+                           EventStreamPattern.ForPattern(account.Stream.Realm, account.Stream.Area)))
         {
             if (record.Event.Metadata.AggregateId == account.Id)
+            {
                 records.Add(record);
+            }
         }
+
         Assert.Equal(5, records.Count);
-        var sessions = records.Where(record => record.Event.Metadata.IsAudit).GroupBy(record => record.Stream).ToArray();
+        var sessions = records.Where(record => record.Event.Metadata.IsAudit).GroupBy(record => record.Stream)
+            .ToArray();
         Assert.Equal(2, sessions.Length);
         Assert.Equal([1, 2], sessions.Select(session => session.Count()).Order());
         Assert.All(sessions, session =>
@@ -55,7 +61,7 @@ public sealed class AggregatePersistenceTests
         });
         var multiAuditSession = sessions.Single(session => session.Count() == 2);
         var tail = new List<DomainEventRecord>();
-        await foreach (var record in fixture.Store.ReadAsync(multiAuditSession.Key, fromOffset: 1))
+        await foreach (var record in fixture.Store.ReadAsync(multiAuditSession.Key, 1))
             tail.Add(record);
         Assert.Equal(1UL, Assert.Single(tail).ResourceOffset);
     }
@@ -91,10 +97,12 @@ public sealed class AggregatePersistenceTests
         account.Deposit(2);
         await fixture.Repository.SaveAsync(account, _saveContext);
         stale.Deposit(4);
-        _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() => fixture.Repository.SaveAsync(stale, _saveContext).AsTask());
+        _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() =>
+            fixture.Repository.SaveAsync(stale, _saveContext).AsTask());
         Assert.Equal(1UL, stale.CommittedStreamPosition);
         Assert.Equal(2UL, stale.Version);
-        Assert.Equal(4, Assert.IsType<Deposited>(Assert.Single(new AggregateScenario<Account>(stale).PendingEvents)).Amount);
+        Assert.Equal(4,
+            Assert.IsType<Deposited>(Assert.Single(new AggregateScenario<Account>(stale).PendingEvents)).Amount);
         Assert.Equal(3, (await fixture.Repository.HydrateAsync(new Account(account.Id)))!.Balance);
     }
 
@@ -102,35 +110,35 @@ public sealed class AggregatePersistenceTests
     public async Task PublicRegistrationSavesAndReloadsAggregate()
     {
         var assembly = GeneratorCompilation.Compile("""
-            using System;
-            using System.Threading.Tasks;
-            using Cntryl.Portia;
-            using Cntryl.Portia.Testing;
-            using Cntryl.Portia.Consumer;
-            using Microsoft.Extensions.DependencyInjection;
-            public static class Scenario
-            {
-                public static async Task<int> Run()
-                {
-                    var services = new ServiceCollection();
-                    services.AddSingleton<IEventStore, InMemoryEventStore>();
-                    services.AddPortia();
-                    await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
-                    {
-                        ValidateScopes = true, ValidateOnBuild = true,
-                    });
-                    await using var scope = provider.CreateAsyncScope();
-                    var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
-                    var account = new Account(Uuid.CreateVersion4());
-                    if ((await repository.HydrateAsync(new Account(account.Id))).CommittedStreamPosition != 0)
-                        throw new Exception("An absent stream must leave the constructed instance unchanged.");
-                    account.Deposit(12);
-                    await repository.SaveAsync(account, new RequestDispatchContext(RequestActor.System));
-                    var loaded = await repository.HydrateAsync(new Account(account.Id));
-                    return loaded?.Balance ?? -1;
-                }
-            }
-            """);
+                                                    using System;
+                                                    using System.Threading.Tasks;
+                                                    using Cntryl.Portia;
+                                                    using Cntryl.Portia.Testing;
+                                                    using Cntryl.Portia.Consumer;
+                                                    using Microsoft.Extensions.DependencyInjection;
+                                                    public static class Scenario
+                                                    {
+                                                        public static async Task<int> Run()
+                                                        {
+                                                            var services = new ServiceCollection();
+                                                            services.AddSingleton<IEventStore, InMemoryEventStore>();
+                                                            services.AddPortia();
+                                                            await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+                                                            {
+                                                                ValidateScopes = true, ValidateOnBuild = true,
+                                                            });
+                                                            await using var scope = provider.CreateAsyncScope();
+                                                            var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
+                                                            var account = new Account(Uuid.CreateVersion4());
+                                                            if ((await repository.HydrateAsync(new Account(account.Id))).CommittedStreamPosition != 0)
+                                                                throw new Exception("An absent stream must leave the constructed instance unchanged.");
+                                                            account.Deposit(12);
+                                                            await repository.SaveAsync(account, new RequestDispatchContext(RequestActor.System));
+                                                            var loaded = await repository.HydrateAsync(new Account(account.Id));
+                                                            return loaded?.Balance ?? -1;
+                                                        }
+                                                    }
+                                                    """);
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<int>>>();
         Assert.Equal(12, await run());
     }

@@ -11,6 +11,28 @@ sealed class FitzApplicationConnection(Client client, bool owned, TimeSpan timeo
 
     internal Client Client { get; } = client;
 
+    public async ValueTask DisposeAsync()
+    {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            if (owned)
+            {
+                await Client.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _ = _gate.Release();
+        }
+    }
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -18,9 +40,16 @@ sealed class FitzApplicationConnection(Client client, bool owned, TimeSpan timeo
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (_connected)
+            {
                 return;
+            }
+
             if (owned)
-                await Client.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(Timeout: timeout), cancellationToken).ConfigureAwait(false);
+            {
+                await Client.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(timeout), cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             _connected = true;
         }
         catch
@@ -30,25 +59,15 @@ sealed class FitzApplicationConnection(Client client, bool owned, TimeSpan timeo
                 _disposed = true;
                 await Client.DisposeAsync().ConfigureAwait(false);
             }
+
             throw;
         }
-        finally { _ = _gate.Release(); }
+        finally
+        {
+            _ = _gate.Release();
+        }
     }
 
     // Disposal follows hosted-service shutdown, including concurrent StopAsync settings.
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public async ValueTask DisposeAsync()
-    {
-        await _gate.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            if (_disposed)
-                return;
-            _disposed = true;
-            if (owned)
-                await Client.DisposeAsync().ConfigureAwait(false);
-        }
-        finally { _ = _gate.Release(); }
-    }
 }

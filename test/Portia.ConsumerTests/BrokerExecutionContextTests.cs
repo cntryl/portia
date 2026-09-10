@@ -12,13 +12,15 @@ public sealed class BrokerExecutionContextTests
         var handler = new Handler();
         var services = Services(handler);
         await using var provider = services.BuildServiceProvider();
-        var server = new FitzRpcRequestServer(client.Rpc, provider.GetRequiredService<IServiceScopeFactory>(), ConsumerJson.Catalog());
+        var server = new FitzRpcRequestServer(client.Rpc, provider.GetRequiredService<IServiceScopeFactory>(),
+            ConsumerJson.Catalog());
         await using var registration = await server.RegisterAsync<Command>();
         var serializer = ConsumerJson.CreateSerializer();
         var sender = new FitzRemoteRequestSender(client.Rpc, serializer, serializer);
         var parent = new RequestContext<Command>(new Command(1), RequestActor.CreateSystem("sender"));
         var resource = Uuid.CreateVersion4().ToString();
-        Assert.True((await sender.SendAsync(new Command(2), new RequestRouteValues(Resource: resource), "credential", parent)).IsSuccess);
+        Assert.True((await sender.SendAsync(new Command(2), new RequestRouteValues(Resource: resource), "credential",
+            parent)).IsSuccess);
         var execution = Assert.Single(handler.Contexts);
         Assert.Equal(parent.CorrelationId, execution.CorrelationId);
         Assert.Equal(parent.CauseId, execution.CausationId);
@@ -38,8 +40,9 @@ public sealed class BrokerExecutionContextTests
         var resource = Uuid.CreateVersion4().ToString();
         var route = $"queue://context/work/{resource}";
         var publisher = new FitzRequestQueuePublisher(client.Queue, serializer);
-        await publisher.EnqueueAsync(new Command(2), new RequestRouteValues(Resource: resource), "credential", metadata);
-        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, visibilityTimeoutSeconds: 1);
+        await publisher.EnqueueAsync(new Command(2), new RequestRouteValues(Resource: resource), "credential",
+            metadata);
+        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, 1);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         await using var deliveries = consumer.ReadAsync(deadline.Token).GetAsyncEnumerator(deadline.Token);
         Assert.True(await deliveries.MoveNextAsync());
@@ -78,6 +81,7 @@ public sealed class BrokerExecutionContextTests
     public sealed class Handler : IRequestHandler<Command>
     {
         public List<IRequestContext<Command>> Contexts { get; } = [];
+
         public ValueTask<Result> HandleAsync(IRequestContext<Command> context, CancellationToken ct)
         {
             Contexts.Add(context);

@@ -8,7 +8,13 @@ namespace Cntryl.Portia.Consumer;
 public sealed class FleetRedistributionTests
 {
     static readonly string[] Partitions = [.. Enumerable.Range(0, 8).Select(i => $"lease://fleet/parts/{i}")];
-    static FleetRunOptions Options => new() { MembershipSelector = "lease://fleet/members/*", WorkerId = "a", ReconciliationInterval = TimeSpan.FromMilliseconds(10) };
+
+    static FleetRunOptions Options => new()
+    {
+        MembershipSelector = "lease://fleet/members/*",
+        WorkerId = "a",
+        ReconciliationInterval = TimeSpan.FromMilliseconds(10)
+    };
 
     [Fact]
     public async Task JoinMovesOnlyNewOwnersAndPreservesUnchangedScopesThenDepartureRestoresWork()
@@ -22,7 +28,8 @@ public sealed class FleetRedistributionTests
         _ = services.AddSingleton(state);
         _ = services.AddScoped<Workload>();
         _ = services.AddPortiaFleetPartitionRunner<Workload>(Partitions, Options);
-        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        { ValidateScopes = true, ValidateOnBuild = true });
         var host = Assert.Single(provider.GetServices<IHostedService>());
         try
         {
@@ -31,7 +38,8 @@ public sealed class FleetRedistributionTests
             var original = state.Active.ToDictionary();
             membership.Observer.Set("b", "a");
             await Until(() => state.Active.Count == 4);
-            Assert.Equal([Partitions[2], Partitions[3], Partitions[5], Partitions[7]], state.Active.Keys.Order(StringComparer.Ordinal));
+            Assert.Equal([Partitions[2], Partitions[3], Partitions[5], Partitions[7]],
+                state.Active.Keys.Order(StringComparer.Ordinal));
             foreach (var (route, scope) in state.Active)
                 Assert.Equal(original[route], scope);
             Assert.Equal(4, state.Disposed.Count);
@@ -50,6 +58,7 @@ public sealed class FleetRedistributionTests
             await host.StopAsync(default);
             (host as IDisposable)?.Dispose();
         }
+
         Assert.Empty(state.Active);
         Assert.Equal(state.Starts, state.Disposed.Count);
     }
@@ -61,13 +70,20 @@ public sealed class FleetRedistributionTests
         membership.Observer.Set("a");
         var active = 0;
         using var cancellation = new CancellationTokenSource();
-        var run = new FleetPartitionRunner(new InMemoryLeaseClient(), membership).RunAsync(Partitions, async (partition, ct) =>
-        {
-            _ = partition;
-            _ = Interlocked.Increment(ref active);
-            try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
-            finally { _ = Interlocked.Decrement(ref active); }
-        }, Options, cancellation.Token);
+        var run = new FleetPartitionRunner(new InMemoryLeaseClient(), membership).RunAsync(Partitions,
+            async (partition, ct) =>
+            {
+                _ = partition;
+                _ = Interlocked.Increment(ref active);
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                }
+                finally
+                {
+                    _ = Interlocked.Decrement(ref active);
+                }
+            }, Options, cancellation.Token);
         try
         {
             await Until(() => active == 8);
@@ -80,7 +96,11 @@ public sealed class FleetRedistributionTests
             membership.Observer.Set("a");
             await Until(() => active == 8);
         }
-        finally { cancellation.Cancel(); await run; }
+        finally
+        {
+            cancellation.Cancel();
+            await run;
+        }
     }
 
     [Theory]
@@ -101,14 +121,16 @@ public sealed class FleetRedistributionTests
     [Theory]
     [InlineData(1100, 2UL)]
     [InlineData(1, 1UL)]
-    public async Task MembershipFailureBackoffRetainsGeneratedWorkerIdentityAndRoundsTtlUp(int milliseconds, ulong expectedTtl)
+    public async Task MembershipFailureBackoffRetainsGeneratedWorkerIdentityAndRoundsTtlUp(int milliseconds,
+        ulong expectedTtl)
     {
         var clock = new ManualClock();
         var membership = new Membership { FailFirst = true, AutoSelf = true };
         var leases = new CapturingLeases();
         using var cancellation = new CancellationTokenSource();
         var run = new FleetPartitionRunner(leases, membership, timeProvider: clock).RunAsync([Partitions[0]],
-            (_, ct) => Task.Delay(Timeout.InfiniteTimeSpan, ct), Options with { WorkerId = null, LeaseTtl = TimeSpan.FromMilliseconds(milliseconds) }, cancellation.Token);
+            (_, ct) => Task.Delay(Timeout.InfiniteTimeSpan, ct),
+            Options with { WorkerId = null, LeaseTtl = TimeSpan.FromMilliseconds(milliseconds) }, cancellation.Token);
         try
         {
             Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
@@ -123,7 +145,11 @@ public sealed class FleetRedistributionTests
             Assert.Equal(workerIds[0], workerIds[1]);
             Assert.Equal(4, Guid.Parse(workerIds[0]!).Version);
         }
-        finally { cancellation.Cancel(); await run; }
+        finally
+        {
+            cancellation.Cancel();
+            await run;
+        }
     }
 
     [Fact]
@@ -133,13 +159,20 @@ public sealed class FleetRedistributionTests
         var membership = new Membership { AutoSelf = true };
         var active = 0;
         using var cancellation = new CancellationTokenSource();
-        var run = new FleetPartitionRunner(new InMemoryLeaseClient(), membership, timeProvider: clock).RunAsync(Partitions,
+        var run = new FleetPartitionRunner(new InMemoryLeaseClient(), membership, timeProvider: clock).RunAsync(
+            Partitions,
             async (partition, ct) =>
             {
                 _ = partition;
                 _ = Interlocked.Increment(ref active);
-                try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
-                finally { _ = Interlocked.Decrement(ref active); }
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                }
+                finally
+                {
+                    _ = Interlocked.Decrement(ref active);
+                }
             }, Options, cancellation.Token);
         try
         {
@@ -156,19 +189,13 @@ public sealed class FleetRedistributionTests
             await Until(() => active == 8);
             Assert.Equal(2, membership.Attempts.Count);
         }
-        finally { cancellation.Cancel(); await run; }
-        Assert.Equal(0, active);
-    }
-
-    sealed class CapturingLeases : IPartitionLeaseCompetitor
-    {
-        public ulong Ttl { get; private set; }
-        public async Task WithLeaseAsync(string route, ulong ttlSecs, Func<CancellationToken, ValueTask> callback,
-            LeaseExecutionOptions? options = null, CancellationToken ct = default)
+        finally
         {
-            Ttl = ttlSecs;
-            await callback(ct);
+            cancellation.Cancel();
+            await run;
         }
+
+        Assert.Equal(0, active);
     }
 
     internal static async Task Until(Func<bool> predicate)
@@ -178,53 +205,92 @@ public sealed class FleetRedistributionTests
             await Task.Delay(5, deadline.Token);
     }
 
+    sealed class CapturingLeases : IPartitionLeaseCompetitor
+    {
+        public ulong Ttl { get; private set; }
+
+        public async Task WithLeaseAsync(string route, ulong ttlSecs, Func<CancellationToken, ValueTask> callback,
+            LeaseExecutionOptions? options = null, CancellationToken ct = default)
+        {
+            Ttl = ttlSecs;
+            await callback(ct);
+        }
+    }
+
     public sealed class State
     {
+        int _starts;
         public ConcurrentDictionary<string, Guid> Active { get; } = new();
         public ConcurrentBag<Guid> Disposed { get; } = [];
-        int _starts;
         public int Starts => Volatile.Read(ref _starts);
         public void Started() => Interlocked.Increment(ref _starts);
     }
+
     public sealed class Workload(State state) : IPartitionWorkload, IDisposable
     {
         readonly Guid _id = Guid.NewGuid();
+        public void Dispose() => state.Disposed.Add(_id);
+
         public async Task RunAsync(string partition, CancellationToken ct)
         {
             state.Started();
             Assert.True(state.Active.TryAdd(partition, _id));
-            try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
-            finally { _ = state.Active.TryRemove(partition, out _); }
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
+            finally
+            {
+                _ = state.Active.TryRemove(partition, out _);
+            }
         }
-        public void Dispose() => state.Disposed.Add(_id);
     }
+
     sealed class Membership : IFleetMembership
     {
         public Observer Observer { get; } = new();
         public bool FailFirst { get; init; }
         public bool AutoSelf { get; init; }
         public ConcurrentQueue<FleetRunOptions> Attempts { get; } = new();
-        public Task RunAsync(FleetRunOptions options, Func<ILeaseInventoryObserver, CancellationToken, Task> callback, CancellationToken ct = default)
+
+        public Task RunAsync(FleetRunOptions options, Func<ILeaseInventoryObserver, CancellationToken, Task> callback,
+            CancellationToken ct = default)
         {
             Attempts.Enqueue(options);
             if (FailFirst && Attempts.Count == 1)
+            {
                 throw new IOException("Membership unavailable");
+            }
+
             if (AutoSelf)
+            {
                 Observer.Set(options.WorkerId!);
+            }
+
             return callback(Observer, ct);
         }
     }
+
     sealed class Observer : ILeaseInventoryObserver
     {
         volatile bool _ready = true;
         IReadOnlyDictionary<string, LeaseListItem> _view = new Dictionary<string, LeaseListItem>();
-        public bool IsReady { get => _ready; set => _ready = value; }
         public bool FailView { get; set; }
-        public IReadOnlyDictionary<string, LeaseListItem> View => FailView ? throw new IOException("Inventory failed") : Volatile.Read(ref _view);
+
+        public bool IsReady
+        {
+            get => _ready;
+            set => _ready = value;
+        }
+
+        public IReadOnlyDictionary<string, LeaseListItem> View =>
+            FailView ? throw new IOException("Inventory failed") : Volatile.Read(ref _view);
+
+        public IAsyncEnumerable<LeaseInventoryUpdate> Updates => throw new NotSupportedException();
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
         public void Set(params string[] workers) => Volatile.Write(ref _view, workers.ToDictionary(
             worker => "lease://fleet/members/" + worker,
             worker => new LeaseListItem("lease://fleet/members/" + worker, "owner", 1, "", 30, 0)));
-        public IAsyncEnumerable<LeaseInventoryUpdate> Updates => throw new NotSupportedException();
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

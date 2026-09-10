@@ -1,6 +1,9 @@
 namespace Cntryl.Portia.Consumer;
 
-public sealed class DepositAccountHandler(IAggregateRepository repository, IConsumerEffects effects, IConsumerScope scope)
+public sealed class DepositAccountHandler(
+    IAggregateRepository repository,
+    IConsumerEffects effects,
+    IConsumerScope scope)
     : IRequestHandler<DepositAccount>
 {
     public async ValueTask<Result> HandleAsync(IRequestContext<DepositAccount> context, CancellationToken ct)
@@ -13,6 +16,7 @@ public sealed class DepositAccountHandler(IAggregateRepository repository, ICons
             await repository.SaveAsync(account, context, ct);
             return Result.Failure(new RequestError(RequestErrorKind.Validation, "Deposit must be positive."));
         }
+
         account.Deposit(request.Amount);
         await repository.SaveAsync(account, context, ct);
         effects.Record("business", account.Id, request.Amount, scope.Id);

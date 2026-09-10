@@ -19,6 +19,21 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
     /// <summary>Gets the concrete reactor type.</summary>
     public Type ReactorType { get; }
 
+    Type IWorkloadDescriptor.ComponentType => ReactorType;
+
+    // Reaction effects are not transactional with progress, so a reactor has no separate
+    // generation to build into; a rebuild would re-fire every effect.
+    bool IWorkloadDescriptor.SupportsRebuild => false;
+    void IWorkloadDescriptor.Register(IServiceCollection services) => _ = services.AddSingleton(this);
+
+    void IWorkloadDescriptor.Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName)
+        => _resolve(services).BindWorkload(identity, componentName);
+
+    EventStreamPattern IWorkloadDescriptor.Pattern(IServiceProvider services) => _resolve(services).Pattern;
+
+    ValueTask IWorkloadDescriptor.RunPass(IServiceProvider services, ProjectionRunOptions options, CancellationToken ct)
+        => _runPass(services, options, ct);
+
     /// <summary>Resolves the reactor in the supplied application scope.</summary>
     public Reactor Resolve(IServiceProvider services) => _resolve(services);
 
@@ -35,15 +50,4 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
             _ = await services.GetRequiredService<ReactorRunner>().RunAsync(
                 reactor, checkpoint, options.MaxBatchSize, ct).ConfigureAwait(false);
         });
-
-    Type IWorkloadDescriptor.ComponentType => ReactorType;
-    // Reaction effects are not transactional with progress, so a reactor has no separate
-    // generation to build into; a rebuild would re-fire every effect.
-    bool IWorkloadDescriptor.SupportsRebuild => false;
-    void IWorkloadDescriptor.Register(IServiceCollection services) => _ = services.AddSingleton(this);
-    void IWorkloadDescriptor.Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName)
-        => _resolve(services).BindWorkload(identity, componentName);
-    EventStreamPattern IWorkloadDescriptor.Pattern(IServiceProvider services) => _resolve(services).Pattern;
-    ValueTask IWorkloadDescriptor.RunPass(IServiceProvider services, ProjectionRunOptions options, CancellationToken ct)
-        => _runPass(services, options, ct);
 }

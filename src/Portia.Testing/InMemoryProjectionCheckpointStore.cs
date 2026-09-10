@@ -3,9 +3,9 @@ using System.Collections.Concurrent;
 namespace Cntryl.Portia.Testing;
 
 /// <summary>
-/// Keeps reactor checkpoints in memory — for tests, and for any single-instance
-/// deployment that doesn't need a checkpoint to survive a restart. A real deployment that does
-/// need that needs its own <see cref="IProjectionCheckpointStore" /> backed by durable storage.
+///     Keeps reactor checkpoints in memory — for tests, and for any single-instance
+///     deployment that doesn't need a checkpoint to survive a restart. A real deployment that does
+///     need that needs its own <see cref="IProjectionCheckpointStore" /> backed by durable storage.
 /// </summary>
 public sealed class InMemoryProjectionCheckpointStore : IProjectionCheckpointStore
 {
@@ -16,7 +16,8 @@ public sealed class InMemoryProjectionCheckpointStore : IProjectionCheckpointSto
         ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity, ProjectionCheckpoint.Start));
 
     /// <inheritdoc />
-    public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+    public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
+        CancellationToken ct = default)
     {
         _checkpoints[identity] = checkpoint;
         return ValueTask.CompletedTask;

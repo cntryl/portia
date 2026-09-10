@@ -8,7 +8,9 @@ public class RequestTelemetryBenchmarks
 {
     /// <summary>Control invocation for focused helper overhead.</summary>
     [Benchmark(Baseline = true)]
-    public static void Baseline() { }
+    public static void Baseline()
+    {
+    }
 
     /// <summary>Measures the normal no-listener tracing path.</summary>
     [Benchmark]

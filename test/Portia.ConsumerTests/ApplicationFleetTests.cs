@@ -30,9 +30,16 @@ public sealed class ApplicationFleetTests
                 await Until(() => probe.Owner == "b");
                 Assert.Equal(1, probe.MaximumActive);
             }
-            finally { await second.StopAsync(); }
+            finally
+            {
+                await second.StopAsync();
+            }
         }
-        finally { await first.StopAsync(); }
+        finally
+        {
+            await first.StopAsync();
+        }
+
         Assert.Equal(0, probe.Active);
         Assert.Equal(probe.Created, probe.Disposed);
     }
@@ -51,7 +58,7 @@ public sealed class ApplicationFleetTests
                 MembershipSelector = $"lease://{realm}/members/*",
                 WorkerId = worker,
                 LeaseTtl = TimeSpan.FromSeconds(2),
-                ReconciliationInterval = TimeSpan.FromMilliseconds(50),
+                ReconciliationInterval = TimeSpan.FromMilliseconds(50)
             }))
             .AddWorkers();
         return builder.Build();
@@ -66,27 +73,31 @@ public sealed class ApplicationFleetTests
 
     sealed class Probe
     {
-        public string? Owner;
         public int Active;
-        public int MaximumActive;
         public int Created;
         public int Disposed;
+        public int MaximumActive;
+        public string? Owner;
     }
 
     sealed class ProbeReactor : Reactor, IDisposable
     {
-        readonly string _worker;
         readonly Probe _probe;
+        readonly string _worker;
 
         public ProbeReactor(string worker, Probe probe)
-            : base(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("application-fleet", "events"), "probe")
+            : base(new InMemoryProjectionCheckpointStore(),
+                EventStreamPattern.ForPattern("application-fleet", "events"), "probe")
         {
             _worker = worker;
             _probe = probe;
             _ = Interlocked.Increment(ref probe.Created);
         }
 
-        protected override async ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context, CancellationToken ct)
+        public void Dispose() => Interlocked.Increment(ref _probe.Disposed);
+
+        protected override async ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+            CancellationToken ct)
         {
             lock (_probe)
             {
@@ -94,7 +105,11 @@ public sealed class ApplicationFleetTests
                 _probe.MaximumActive = Math.Max(_probe.MaximumActive, _probe.Active);
                 _probe.Owner = _worker;
             }
-            try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
+
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
             finally
             {
                 lock (_probe)
@@ -104,7 +119,5 @@ public sealed class ApplicationFleetTests
                 }
             }
         }
-
-        public void Dispose() => Interlocked.Increment(ref _probe.Disposed);
     }
 }

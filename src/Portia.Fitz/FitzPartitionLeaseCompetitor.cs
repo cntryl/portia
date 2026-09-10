@@ -3,10 +3,10 @@ using Cntryl.Fitz.Abstractions.Domains.Lease;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Adapts a real <see cref="ILeaseClient" /> down to the one operation <see cref="FleetPartitionRunner" />
-/// needs, via <see cref="IPartitionLeaseCompetitor" />. Registered automatically by
-/// <c>AddPortiaFleetPartitionRunner</c> — an app only ever needs to register <see cref="ILeaseClient" />
-/// itself.
+///     Adapts a real <see cref="ILeaseClient" /> down to the one operation <see cref="FleetPartitionRunner" />
+///     needs, via <see cref="IPartitionLeaseCompetitor" />. Registered automatically by
+///     <c>AddPortiaFleetPartitionRunner</c> — an app only ever needs to register <see cref="ILeaseClient" />
+///     itself.
 /// </summary>
 /// <param name="client">The underlying Fitz lease client to compete through.</param>
 public sealed class FitzPartitionLeaseCompetitor(ILeaseClient client) : IPartitionLeaseCompetitor

@@ -3,25 +3,29 @@ using Microsoft.Extensions.Logging;
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Dispatches one-way request notifications (Fitz notice fanout, a fired Fitz schedule entry) to
-/// the request bus, so a command's handler is the same regardless of origin. There is no queueing
-/// or redelivery for this transport shape — a failed dispatch is simply lost, not retried.
+///     Dispatches one-way request notifications (Fitz notice fanout, a fired Fitz schedule entry) to
+///     the request bus, so a command's handler is the same regardless of origin. There is no queueing
+///     or redelivery for this transport shape — a failed dispatch is simply lost, not retried.
 /// </summary>
 /// <param name="consumer">The long-lived notification consumer.</param>
 /// <param name="scopeFactory">Creates each delivery's application dependencies.</param>
 /// <param name="logger">Reports failed deliveries.</param>
-public sealed class RequestNotificationRunner(IRequestNotificationConsumer consumer, IRequestDeliveryScopeFactory scopeFactory,
+public sealed class RequestNotificationRunner(
+    IRequestNotificationConsumer consumer,
+    IRequestDeliveryScopeFactory scopeFactory,
     ILogger<RequestNotificationRunner>? logger = null)
 {
     readonly IRequestNotificationConsumer _consumer = consumer ?? throw new ArgumentNullException(nameof(consumer));
-    readonly IRequestDeliveryScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
     readonly ILogger<RequestNotificationRunner>? _logger = logger;
 
+    readonly IRequestDeliveryScopeFactory _scopeFactory =
+        scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+
     /// <summary>
-    /// Reads and dispatches requests as they are delivered, until cancellation is requested.
-    /// A failed dispatch does not stop the run; the request is simply lost, matching this
-    /// transport's no-redelivery guarantee. Carried tokens are revalidated; scheduled requests
-    /// instead arrive with an explicitly persisted system identity.
+    ///     Reads and dispatches requests as they are delivered, until cancellation is requested.
+    ///     A failed dispatch does not stop the run; the request is simply lost, matching this
+    ///     transport's no-redelivery guarantee. Carried tokens are revalidated; scheduled requests
+    ///     instead arrive with an explicitly persisted system identity.
     /// </summary>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the run.</returns>
@@ -32,18 +36,22 @@ public sealed class RequestNotificationRunner(IRequestNotificationConsumer consu
             try
             {
                 await using var scope = await _scopeFactory.CreateAsync(ct).ConfigureAwait(false);
-                // The result's failure category can't change anything at this transport's level
-                // (no ack/redelivery). An unrecognized exception is still caught below.
-                if (delivered.Actor is { } actor)
+                if (delivered.Actor is
+                    // The result's failure category can't change anything at this transport's level
+                    // (no ack/redelivery). An unrecognized exception is still caught below.
+                    { } actor)
                 {
                     if (delivered.Invocation is not ScheduleInvocation || !RequestActor.IsSystem(actor))
+                    {
                         throw new InvalidOperationException("Only fired schedules may supply a trusted system actor.");
+                    }
+
                     // Same transport label as the token-carrying branch below, which reads it from
                     // the invocation through RequestDispatch — a fired schedule must not report a
                     // different transport depending on which authentication path delivered it.
                     var trusted = delivered.ToDelivery(scope.TimeProvider);
                     using var process = PortiaTelemetry.StartProcess(trusted.Name,
-                        trusted.Invocation.TransportName, trusted.TraceContext, linked: true);
+                        trusted.Invocation.TransportName, trusted.TraceContext, true);
                     _ = await scope.Bus.DispatchAsync(delivered.Request,
                         new RequestDispatchContext(actor, trusted.Invocation, trusted.Metadata,
                             trusted.TimeProvider), ct).ConfigureAwait(false);
@@ -53,14 +61,18 @@ public sealed class RequestNotificationRunner(IRequestNotificationConsumer consu
                     var dispatch = await RequestDispatch.SendAsync(scope.ActorValidator, scope.Bus,
                         delivered.Request, delivered.ToDelivery(scope.TimeProvider), ct).ConfigureAwait(false);
                     if (!dispatch.WasDispatched)
-                        PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), RunnerFaultStage.Validation, logger: _logger);
+                    {
+                        PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner),
+                            RunnerFaultStage.Validation, logger: _logger);
+                    }
                 }
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
                 // Nothing to abandon or redeliver at this transport's level; a failed dispatch
                 // is simply lost. Continue processing later deliveries.
-                PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), RunnerFaultStage.Execution, ex, _logger);
+                PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), RunnerFaultStage.Execution, ex,
+                    _logger);
             }
         }
     }

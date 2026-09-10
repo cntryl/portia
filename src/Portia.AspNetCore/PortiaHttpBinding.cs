@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -16,7 +17,7 @@ public static class PortiaHttpBinding
     public static RequestDispatchContext CreateDispatchContext(HttpContext context)
         => new(context.User, new HttpInvocation(context.Request.Method,
             context.Request.PathBase.Add(context.Request.Path).Value ?? "/",
-            (context.GetEndpoint() as Microsoft.AspNetCore.Routing.RouteEndpoint)?.RoutePattern.RawText,
+            (context.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText,
             context.TraceIdentifier), timeProvider: context.RequestServices.GetService<TimeProvider>());
 
     /// <summary>Gets the application's frozen Portia JSON options.</summary>
@@ -24,15 +25,21 @@ public static class PortiaHttpBinding
         => context.RequestServices.GetRequiredService<JsonSerializerOptions>();
 
     /// <summary>Reads one bounded JSON object request body.</summary>
-    public static async ValueTask<JsonDocument> ReadJsonBodyAsync(HttpContext context, bool bodyRequired, CancellationToken ct)
+    public static async ValueTask<JsonDocument> ReadJsonBodyAsync(HttpContext context, bool bodyRequired,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(context);
         var maximum = context.RequestServices.GetService<IOptions<PortiaHttpOptions>>()?.Value.MaxJsonBodyBytes
-            ?? PortiaHttpOptions.DefaultMaxJsonBodyBytes;
+                      ?? PortiaHttpOptions.DefaultMaxJsonBodyBytes;
         if (maximum <= 0)
+        {
             throw new InvalidOperationException($"{nameof(PortiaHttpOptions.MaxJsonBodyBytes)} must be positive.");
-        if (context.Request.ContentLength is > 0 && context.Request.ContentLength > maximum)
+        }
+
+        if (context.Request.ContentLength > 0 && context.Request.ContentLength > maximum)
+        {
             throw new HttpPayloadTooLargeException();
+        }
 
         await using var buffer = new MemoryStream((int)Math.Min(context.Request.ContentLength ?? 0, maximum));
         var chunk = new byte[81920];
@@ -40,24 +47,32 @@ public static class PortiaHttpBinding
         {
             var read = await context.Request.Body.ReadAsync(chunk, ct).ConfigureAwait(false);
             if (read == 0)
+            {
                 break;
+            }
+
             if (buffer.Length + read > maximum)
+            {
                 throw new HttpPayloadTooLargeException();
+            }
+
             await buffer.WriteAsync(chunk.AsMemory(0, read), ct).ConfigureAwait(false);
         }
+
         if (buffer.Length == 0)
         {
             return bodyRequired
                 ? throw new BadHttpRequestException("Missing required request body.")
                 : JsonDocument.Parse(EmptyObject.RootElement.GetRawText());
         }
+
         buffer.Position = 0;
         var json = GetJsonOptions(context);
         return await JsonDocument.ParseAsync(buffer, new JsonDocumentOptions
         {
             AllowTrailingCommas = json.AllowTrailingCommas,
             CommentHandling = json.ReadCommentHandling,
-            MaxDepth = json.MaxDepth,
+            MaxDepth = json.MaxDepth
         }, ct).ConfigureAwait(false);
     }
 
@@ -72,12 +87,21 @@ public static class PortiaHttpBinding
     {
         var values = context.Request.Headers.Authorization;
         if (values.Count == 0)
+        {
             return null;
+        }
+
         if (values.Count != 1)
+        {
             throw new BadHttpRequestException("Authorization must contain one Bearer credential.");
+        }
+
         var value = values[0];
         if (value is null || !value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
             throw new BadHttpRequestException("Authorization must contain one Bearer credential.");
+        }
+
         var credential = value.AsSpan(7).Trim();
         return credential.IsEmpty || credential.Contains(' ')
             ? throw new BadHttpRequestException("Authorization must contain one Bearer credential.")
@@ -88,7 +112,8 @@ public static class PortiaHttpBinding
     public static IResult Accepted(HttpContext context, Uuid requestId)
     {
         context.Response.Headers["Preference-Applied"] = "respond-async";
-        return new AcceptedReceiptResult(requestId, GetJsonOptions(context).PropertyNamingPolicy?.ConvertName("RequestId") ?? "RequestId");
+        return new AcceptedReceiptResult(requestId,
+            GetJsonOptions(context).PropertyNamingPolicy?.ConvertName("RequestId") ?? "RequestId");
     }
 
     /// <summary>Writes the stable Portia problem contract.</summary>
@@ -106,8 +131,10 @@ public static class PortiaHttpBinding
     public static RequestRouteValues ResolveRouteValues(HttpContext context)
     {
         var metadata = context.GetEndpoint()?.Metadata.GetMetadata<PortiaHttpRouteValues>();
-        return metadata is null ? RequestRouteValues.None
-            : metadata.Resolve(context) ?? throw new InvalidOperationException("The endpoint route-values resolver returned null.");
+        return metadata is null
+            ? RequestRouteValues.None
+            : metadata.Resolve(context) ??
+              throw new InvalidOperationException("The endpoint route-values resolver returned null.");
     }
 
     /// <summary>Reads one query value, distinguishing omission from an empty string.</summary>
@@ -115,11 +142,14 @@ public static class PortiaHttpBinding
     {
         return !context.Request.Query.TryGetValue(name, out var values)
             ? null
-            : values.Count == 1 ? values[0] : throw new BadHttpRequestException($"Expected one value for '{name}'.");
+            : values.Count == 1
+                ? values[0]
+                : throw new BadHttpRequestException($"Expected one value for '{name}'.");
     }
 
     /// <summary>Reads a constructor-bound property using the application's request JSON metadata.</summary>
-    public static TValue ReadBody<TRequest, TValue>(JsonElement body, JsonSerializerOptions options, int memberIndex, string memberName,
+    public static TValue ReadBody<TRequest, TValue>(JsonElement body, JsonSerializerOptions options, int memberIndex,
+        string memberName,
         string fallbackName, bool nullable, bool hasDefault, TValue defaultValue)
     {
         _ = memberName;
@@ -128,29 +158,40 @@ public static class PortiaHttpBinding
         {
             var properties = options.GetTypeInfo(typeof(TRequest)).Properties;
             property = properties.FirstOrDefault(candidate => candidate.Name == fallbackName)
-                ?? properties.ElementAtOrDefault(memberIndex);
+                       ?? properties.ElementAtOrDefault(memberIndex);
         }
         catch (NotSupportedException)
         {
             // Compile-time generated bindings can read scalar members without constructing the
             // request through JSON. A request-level contract is still required by transported roots.
         }
+
         if (property?.CustomConverter is not null || property?.NumberHandling is not null)
         {
             options = new JsonSerializerOptions(options);
             if (property.CustomConverter is not null)
+            {
                 options.Converters.Insert(0, property.CustomConverter);
+            }
+
             if (property.NumberHandling is { } numberHandling)
+            {
                 options.NumberHandling = numberHandling;
+            }
         }
+
         return ReadBody(body, options, property?.Name ?? fallbackName, nullable, hasDefault, defaultValue);
     }
 
     /// <summary>Reads a body property with the configured naming, converters and null contract.</summary>
-    public static T ReadBody<T>(JsonElement body, JsonSerializerOptions options, string name, bool nullable, bool hasDefault, T defaultValue)
+    public static T ReadBody<T>(JsonElement body, JsonSerializerOptions options, string name, bool nullable,
+        bool hasDefault, T defaultValue)
     {
         if (body.ValueKind != JsonValueKind.Object)
+        {
             throw new BadHttpRequestException("Expected a JSON object.");
+        }
+
         var found = body.TryGetProperty(name, out var value);
         if (!found && options.PropertyNameCaseInsensitive)
         {
@@ -163,15 +204,21 @@ public static class PortiaHttpBinding
                 }
             }
         }
+
         if (!found)
         {
-            return hasDefault || nullable ? defaultValue
+            return hasDefault || nullable
+                ? defaultValue
                 : throw new BadHttpRequestException($"Missing required property '{name}'.");
         }
+
         if (value.ValueKind == JsonValueKind.Null && !nullable)
+        {
             throw new BadHttpRequestException($"Property '{name}' cannot be null.");
+        }
+
         var typeInfo = (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
-        var result = JsonSerializer.Deserialize(value, typeInfo);
+        var result = value.Deserialize(typeInfo);
         return result is null && !nullable
             ? throw new BadHttpRequestException($"Property '{name}' cannot be null.")
             : result!;
@@ -195,20 +242,4 @@ public static class PortiaHttpBinding
     {
         public Task ExecuteAsync(HttpContext context) => PortiaProblemDetails.WriteAsync(context, statusCode, message);
     }
-}
-
-/// <summary>Controls Portia's generated HTTP boundary.</summary>
-public sealed class PortiaHttpOptions
-{
-    /// <summary>The default maximum JSON request-body size (10 MiB).</summary>
-    public const long DefaultMaxJsonBodyBytes = 10 * 1024 * 1024;
-    /// <summary>Gets or sets the maximum JSON request-body size.</summary>
-    public long MaxJsonBodyBytes { get; set; } = DefaultMaxJsonBodyBytes;
-}
-
-/// <summary>Signals that a generated endpoint's bounded JSON body exceeded its configured limit.</summary>
-public sealed class HttpPayloadTooLargeException : BadHttpRequestException
-{
-    /// <summary>Creates the boundary exception.</summary>
-    public HttpPayloadTooLargeException() : base("The request body is too large.", StatusCodes.Status413PayloadTooLarge) { }
 }

@@ -17,8 +17,8 @@ public sealed class ConsumerBaselineTests
     public void GeneratorHarnessCompilesAndExecutesConsumer()
     {
         var assembly = GeneratorCompilation.Compile("""
-            public static class Example { public static int Run() => 42; }
-            """);
+                                                    public static class Example { public static int Run() => 42; }
+                                                    """);
         var run = assembly.GetType("Example")!.GetMethod("Run")!.CreateDelegate<Func<int>>();
         Assert.Equal(42, run());
     }

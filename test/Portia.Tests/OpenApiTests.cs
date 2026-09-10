@@ -13,6 +13,15 @@ public sealed class OpenApiTests : IAsyncDisposable
 {
     WebApplication? _app;
 
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        if (_app is not null)
+        {
+            await _app.DisposeAsync();
+        }
+    }
+
     /// <summary>Both zero-configuration routes serve equivalent valid OpenAPI 3.1 documents.</summary>
     [Fact]
     public async Task ShouldServeEquivalentOpenApi31DocumentsGivenPortiaApplicationWhenJsonAndYamlAreRequested()
@@ -66,13 +75,16 @@ public sealed class OpenApiTests : IAsyncDisposable
             .GetProperty("schema").GetProperty("properties").TryGetProperty("lines", out _));
         var get = paths.GetProperty("/api/widgets/{widget_id}").GetProperty("get");
         Assert.Contains(get.GetProperty("parameters").EnumerateArray(), parameter =>
-            parameter.GetProperty("name").GetString() == "widget_id" && parameter.GetProperty("in").GetString() == "path");
+            parameter.GetProperty("name").GetString() == "widget_id" &&
+            parameter.GetProperty("in").GetString() == "path");
         Assert.Contains(get.GetProperty("parameters").EnumerateArray(), parameter =>
-            parameter.GetProperty("name").GetString() == "include_archived" && parameter.GetProperty("in").GetString() == "query");
+            parameter.GetProperty("name").GetString() == "include_archived" &&
+            parameter.GetProperty("in").GetString() == "query");
         Assert.Contains(get.GetProperty("parameters").EnumerateArray(), parameter =>
             parameter.GetProperty("name").GetString() == "include_archived"
             && parameter.GetProperty("schema").GetProperty("default").ValueKind == JsonValueKind.False);
-        Assert.True(paths.GetProperty("/api/ping").GetProperty("post").GetProperty("responses").TryGetProperty("202", out _));
+        Assert.True(paths.GetProperty("/api/ping").GetProperty("post").GetProperty("responses")
+            .TryGetProperty("202", out _));
         var responses = create.GetProperty("responses");
         var problemSchema = responses.GetProperty("400").GetProperty("content")
             .GetProperty("application/problem+json").GetProperty("schema");
@@ -98,15 +110,9 @@ public sealed class OpenApiTests : IAsyncDisposable
         _ = _app.MapGet("/ordinary", () => Results.Ok()).WithName("httpGetWidget");
         await _app.StartAsync();
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _app.GetTestClient().GetAsync("/openapi/v1.json"));
+        var exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                _app.GetTestClient().GetAsync("/openapi/v1.json"));
         Assert.Contains("operationId 'httpGetWidget' is duplicated", exception.Message, StringComparison.Ordinal);
-    }
-
-    /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
-        if (_app is not null)
-            await _app.DisposeAsync();
     }
 }

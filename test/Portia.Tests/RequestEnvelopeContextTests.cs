@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 
 namespace Cntryl.Portia;
@@ -19,10 +20,10 @@ public sealed class RequestEnvelopeContextTests
         Assert.Equal(first.Metadata, second.Metadata);
         Assert.Equal("opaque-token", first.ActorToken);
         Assert.Equal(new EnvelopeCommand(2), first.Request);
-        var json = JsonNode.Parse(bytes.Span)!.AsObject();
-        Assert.Equal(2, json["version"]!.GetValue<int>());
-        Assert.Equal("test.EnvelopeCommand", json["contract"]!.GetValue<string>());
-        Assert.Equal(1, json["contract_version"]!.GetValue<int>());
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(bytes.Span));
+        Assert.Equal(2, Assert.IsType<JsonValue>(json["version"], exactMatch: false).GetValue<int>());
+        Assert.Equal("test.EnvelopeCommand", Assert.IsType<JsonValue>(json["contract"], exactMatch: false).GetValue<string>());
+        Assert.Equal(1, Assert.IsType<JsonValue>(json["contract_version"], exactMatch: false).GetValue<int>());
         Assert.DoesNotContain("execution_id", json.ToJsonString());
         Assert.DoesNotContain("claims", json.ToJsonString());
     }
@@ -36,11 +37,11 @@ public sealed class RequestEnvelopeContextTests
 
         var bytes = serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), trace);
         var envelope = serializer.DeserializeEnvelope(bytes);
-        var json = JsonNode.Parse(bytes.Span)!.AsObject();
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(bytes.Span));
 
         Assert.Equal(trace, envelope.TraceContext);
-        Assert.Equal(trace.TraceParent, json["traceparent"]!.GetValue<string>());
-        Assert.Equal(trace.TraceState, json["tracestate"]!.GetValue<string>());
+        Assert.Equal(trace.TraceParent, Assert.IsType<JsonValue>(json["traceparent"], exactMatch: false).GetValue<string>());
+        Assert.Equal(trace.TraceState, Assert.IsType<JsonValue>(json["tracestate"], exactMatch: false).GetValue<string>());
         Assert.DoesNotContain("baggage", json.ToJsonString(), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -49,10 +50,12 @@ public sealed class RequestEnvelopeContextTests
     public void UnversionedEnvelopeIsRejected()
     {
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
-        var json = JsonNode.Parse(serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), null).Span)!.AsObject();
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(
+            serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), null).Span));
         _ = json.Remove("metadata");
         _ = json.Remove("version");
-        _ = Assert.Throws<InvalidOperationException>(() => serializer.DeserializeEnvelope(System.Text.Encoding.UTF8.GetBytes(json.ToJsonString())));
+        _ = Assert.Throws<InvalidOperationException>(() =>
+            serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes(json.ToJsonString())));
     }
 
     /// <summary>Verifies the public transport context contract.</summary>
@@ -62,12 +65,20 @@ public sealed class RequestEnvelopeContextTests
     public void InvalidIdentityOrEnvelopeVersionIsRejected(bool unsupportedVersion)
     {
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
-        var json = JsonNode.Parse(serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), null).Span)!.AsObject();
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(
+            serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), null).Span));
         if (unsupportedVersion)
+        {
             json["version"] = 99;
+        }
         else
-            json["metadata"]!["request_id"] = Uuid.Empty.ToString();
-        _ = Assert.ThrowsAny<Exception>(() => serializer.DeserializeEnvelope(System.Text.Encoding.UTF8.GetBytes(json.ToJsonString())));
+        {
+            var metadata = Assert.IsType<JsonObject>(json["metadata"]);
+            metadata["request_id"] = Uuid.Empty.ToString();
+        }
+
+        _ = Assert.ThrowsAny<Exception>(() =>
+            serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes(json.ToJsonString())));
     }
 
     /// <summary>Verifies the public transport context contract.</summary>

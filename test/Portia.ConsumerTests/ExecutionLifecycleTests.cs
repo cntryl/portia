@@ -18,7 +18,8 @@ public sealed class ExecutionLifecycleTests
         _ = services.AddSingleton(authorizer);
         _ = services.AddSingleton<TimeProvider>(clock);
         _ = services.AddSingleton<RequestHandlerRegistration>(new StreamRequestRegistration<Query, Handler, int>());
-        _ = services.AddSingleton<RequestAuthorizerRegistration>(new RequestAuthorizerRegistration<Query, Authorizer>());
+        _ = services.AddSingleton<RequestAuthorizerRegistration>(
+            new RequestAuthorizerRegistration<Query, Authorizer>());
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
         var parent = new RequestContext<Query>(new Query(), RequestActor.CreateSystem("parent"));
@@ -43,11 +44,15 @@ public sealed class ExecutionLifecycleTests
     {
         public override DateTimeOffset GetUtcNow() => new(2026, 9, 6, 12, 0, 0, TimeSpan.Zero);
     }
+
     sealed record Query : IStreamRequest<int>;
+
     sealed class Handler : IStreamRequestHandler<Query, int>
     {
         public IRequestContext<Query>? Context { get; private set; }
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<Query> context, [EnumeratorCancellation] CancellationToken ct)
+
+        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<Query> context,
+            [EnumeratorCancellation] CancellationToken ct)
         {
             Context = context;
             yield return 1;
@@ -57,9 +62,11 @@ public sealed class ExecutionLifecycleTests
             yield return 2;
         }
     }
+
     sealed class Authorizer : IRequestAuthorizer<Query>
     {
         public IRequestContext<Query>? Context { get; private set; }
+
         public ValueTask<Result> AuthorizeAsync(IRequestContext<Query> context, CancellationToken ct)
         {
             Context = context;

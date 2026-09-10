@@ -1,24 +1,26 @@
+using System.Runtime.CompilerServices;
+
 namespace Cntryl.Portia;
 
 /// <summary>
-/// Verifies that queued requests dispatch through the same request bus as any other origin.
+///     Verifies that queued requests dispatch through the same request bus as any other origin.
 /// </summary>
 public sealed class QueueRunnerTests
 {
     /// <summary>
-    /// Verifies that every queued request is dispatched to its handler and completed.
+    ///     Verifies that every queued request is dispatched to its handler and completed.
     /// </summary>
     [Fact]
     public async Task ShouldDispatchAndCompleteEveryQueuedRequest()
     {
         var handler = new ChangeValueHandler();
-        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(handler);
         var bus = busHost.Bus;
         var items = new[]
         {
             new FakeQueuedRequest(new ChangeValue(1)),
             new FakeQueuedRequest(new ChangeValue(2)),
-            new FakeQueuedRequest(new ChangeValue(3)),
+            new FakeQueuedRequest(new ChangeValue(3))
         };
         var consumer = new FakeQueueConsumer(items);
         var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator()));
@@ -31,16 +33,16 @@ public sealed class QueueRunnerTests
     }
 
     /// <summary>
-    /// Verifies that a failed dispatch abandons the request instead of stopping the run, and
-    /// still dispatches the requests that follow it.
+    ///     Verifies that a failed dispatch abandons the request instead of stopping the run, and
+    ///     still dispatches the requests that follow it.
     /// </summary>
     [Fact]
     public async Task ShouldAbandonFailedRequestAndContinue()
     {
         var handler = new ChangeValueHandler();
-        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(handler);
         var bus = busHost.Bus;
-        var failing = new FakeQueuedRequest(new ChangeValue(1), throwOnDispatch: true);
+        var failing = new FakeQueuedRequest(new ChangeValue(1), true);
         var succeeding = new FakeQueuedRequest(new ChangeValue(2));
         var consumer = new FakeQueueConsumer([failing, succeeding]);
         var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator()));
@@ -54,8 +56,8 @@ public sealed class QueueRunnerTests
     }
 
     /// <summary>
-    /// Verifies that a non-transient <see cref="RequestError" /> completes (drops) the request
-    /// instead of abandoning it for redelivery, since it would fail identically again.
+    ///     Verifies that a non-transient <see cref="RequestError" /> completes (drops) the request
+    ///     instead of abandoning it for redelivery, since it would fail identically again.
     /// </summary>
     [Fact]
     public async Task ShouldCompleteNonTransientFailureInsteadOfAbandoning()
@@ -73,21 +75,22 @@ public sealed class QueueRunnerTests
     }
 
     /// <summary>
-    /// Verifies that a request whose carried actor token fails re-validation — e.g. it expired
-    /// since it was enqueued — is dropped (completed, not redelivered) without ever reaching the
-    /// handler. Retrying would not make an expired token valid, so this must never be abandoned
-    /// for redelivery, and expiry must always be honored even though the request already made it
-    /// onto the queue.
+    ///     Verifies that a request whose carried actor token fails re-validation — e.g. it expired
+    ///     since it was enqueued — is dropped (completed, not redelivered) without ever reaching the
+    ///     handler. Retrying would not make an expired token valid, so this must never be abandoned
+    ///     for redelivery, and expiry must always be honored even though the request already made it
+    ///     onto the queue.
     /// </summary>
     [Fact]
     public async Task ShouldCompleteRequestWithoutDispatchingWhenActorTokenFailsRevalidation()
     {
         var handler = new ChangeValueHandler();
-        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(handler);
         var bus = busHost.Bus;
         var expired = new FakeQueuedRequest(new ChangeValue(1), actorToken: "expired-token");
         var consumer = new FakeQueueConsumer([expired]);
-        var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator(rejectToken: "expired-token")));
+        var runner = new QueueRunner(consumer,
+            RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator("expired-token")));
 
         await runner.RunAsync();
 
@@ -97,19 +100,20 @@ public sealed class QueueRunnerTests
     }
 
     /// <summary>
-    /// Verifies that a request whose actor token re-validation fails does not stop the run — the
-    /// requests that follow it still dispatch normally.
+    ///     Verifies that a request whose actor token re-validation fails does not stop the run — the
+    ///     requests that follow it still dispatch normally.
     /// </summary>
     [Fact]
     public async Task ShouldContinueAfterActorTokenRevalidationFailure()
     {
         var handler = new ChangeValueHandler();
-        using var busHost = TestRequestBus.Create(changeValueHandler: handler);
+        using var busHost = TestRequestBus.Create(handler);
         var bus = busHost.Bus;
         var expired = new FakeQueuedRequest(new ChangeValue(1), actorToken: "expired-token");
         var valid = new FakeQueuedRequest(new ChangeValue(2), actorToken: "valid-token");
         var consumer = new FakeQueueConsumer([expired, valid]);
-        var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator(rejectToken: "expired-token")));
+        var runner = new QueueRunner(consumer,
+            RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator("expired-token")));
 
         await runner.RunAsync();
 
@@ -123,7 +127,7 @@ public sealed class QueueRunnerTests
     public async Task ShouldInvokeTerminalHandlerAndCompleteGivenRetryableFailureAtTerminalAttempt()
     {
         using var busHost = TestRequestBus.Create();
-        var queued = new FakeQueuedRequest(new ChangeValue(1), throwOnDispatch: true, attempt: 3);
+        var queued = new FakeQueuedRequest(new ChangeValue(1), true, attempt: 3);
         var terminal = new RecordingTerminalHandler();
         var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
@@ -142,10 +146,10 @@ public sealed class QueueRunnerTests
     public async Task ShouldLeaveDeliveryUnacknowledgedGivenTerminalHandlerFailureWhenAttemptIsTerminal()
     {
         using var busHost = TestRequestBus.Create();
-        var queued = new FakeQueuedRequest(new ChangeValue(1), throwOnDispatch: true, attempt: 3);
+        var queued = new FakeQueuedRequest(new ChangeValue(1), true, attempt: 3);
         var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 },
-            new RecordingTerminalHandler(throws: true)));
+            new RecordingTerminalHandler(true)));
 
         var failure = await Assert.ThrowsAsync<TerminalHandlerFailureException>(() => runner.RunAsync());
 
@@ -159,10 +163,10 @@ public sealed class QueueRunnerTests
     public async Task ShouldFaultHostedRunnerGivenTerminalHandlerFailure()
     {
         using var busHost = TestRequestBus.Create();
-        var queued = new FakeQueuedRequest(new ChangeValue(1), throwOnDispatch: true, attempt: 3);
+        var queued = new FakeQueuedRequest(new ChangeValue(1), true, attempt: 3);
         var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 },
-            new RecordingTerminalHandler(throws: true)));
+            new RecordingTerminalHandler(true)));
         using var hosted = new QueueRunnerHostedService(runner);
 
         await hosted.StartAsync(default);
@@ -177,7 +181,7 @@ public sealed class QueueRunnerTests
     sealed class FakeQueueConsumer(IReadOnlyList<IQueuedRequest> items) : IRequestQueueConsumer
     {
         public async IAsyncEnumerable<IQueuedRequest> ReadAsync(
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+            [EnumeratorCancellation] CancellationToken ct = default)
         {
             foreach (var item in items)
             {
@@ -188,13 +192,17 @@ public sealed class QueueRunnerTests
         }
     }
 
-    sealed class FakeQueuedRequest(IRequest request, bool throwOnDispatch = false, string? actorToken = "valid-token", uint attempt = 1) : IQueuedRequest
+    sealed class FakeQueuedRequest(
+        IRequest request,
+        bool throwOnDispatch = false,
+        string? actorToken = "valid-token",
+        uint attempt = 1) : IQueuedRequest
     {
-        public RequestMetadata Metadata { get; } = RequestMetadata.Create();
-        public RequestInvocation Invocation => new QueueInvocation("queue://test/work/item", Attempt);
         public bool Completed { get; private set; }
 
         public bool Abandoned { get; private set; }
+        public RequestMetadata Metadata { get; } = RequestMetadata.Create();
+        public RequestInvocation Invocation => new QueueInvocation("queue://test/work/item", Attempt);
 
         public IRequest Request { get; } = throwOnDispatch ? new ThrowingChangeValue(0) : request;
 
@@ -218,10 +226,13 @@ public sealed class QueueRunnerTests
     sealed class RecordingTerminalHandler(bool throws = false) : IQueuedRequestTerminalHandler
     {
         public List<QueuedRequestFailureContext> Failures { get; } = [];
+
         public ValueTask HandleAsync(QueuedRequestFailureContext context, CancellationToken ct = default)
         {
             Failures.Add(context);
-            return throws ? ValueTask.FromException(new InvalidOperationException("terminal failed")) : ValueTask.CompletedTask;
+            return throws
+                ? ValueTask.FromException(new InvalidOperationException("terminal failed"))
+                : ValueTask.CompletedTask;
         }
     }
 

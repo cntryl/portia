@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Cntryl.Portia;
 
 /// <summary>Verifies ordered typed request pipeline behavior composition.</summary>
-public sealed partial class RequestPipelineBehaviorTests
+public sealed class RequestPipelineBehaviorTests
 {
     /// <summary>Request-family and concrete behaviors wrap the handler in stable order.</summary>
     [Fact]
@@ -29,13 +29,17 @@ public sealed partial class RequestPipelineBehaviorTests
     {
         var calls = new List<string>();
         var services = Services(calls);
-        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<PipelineAction, PipelineActionHandler>());
-        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(new RequestPipelineBehaviorRegistration<IBehaviorRequest, OuterBehavior>(0));
-        _ = services.AddSingleton<RequestAuthorizerRegistration>(new RequestAuthorizerRegistration<PipelineAction, DenyingAuthorizer>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineAction, PipelineActionHandler>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<IBehaviorRequest, OuterBehavior>(0));
+        _ = services.AddSingleton<RequestAuthorizerRegistration>(
+            new RequestAuthorizerRegistration<PipelineAction, DenyingAuthorizer>());
         _ = services.AddSingleton<DenyingAuthorizer>();
         using var provider = services.BuildServiceProvider();
 
-        var result = await provider.GetRequiredService<IRequestBus>().SendAsync(new PipelineAction(), RequestActor.System);
+        var result = await provider.GetRequiredService<IRequestBus>()
+            .SendAsync(new PipelineAction(), RequestActor.System);
 
         Assert.False(result.IsSuccess);
         Assert.Empty(calls);
@@ -47,16 +51,21 @@ public sealed partial class RequestPipelineBehaviorTests
     {
         var calls = new List<string>();
         var services = Services(calls);
-        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<PipelineQuery, PipelineQueryHandler, int>());
-        _ = services.AddSingleton<RequestHandlerRegistration>(new StreamRequestRegistration<PipelineStream, PipelineStreamHandler, int>());
-        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(new RequestPipelineBehaviorRegistration<PipelineQuery, QueryBehavior, int>(0));
-        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(new StreamRequestPipelineBehaviorRegistration<PipelineStream, StreamBehavior, int>(0));
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineQuery, PipelineQueryHandler, int>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new StreamRequestRegistration<PipelineStream, PipelineStreamHandler, int>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineQuery, QueryBehavior, int>(0));
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new StreamRequestPipelineBehaviorRegistration<PipelineStream, StreamBehavior, int>(0));
         using var provider = services.BuildServiceProvider();
         var bus = provider.GetRequiredService<IRequestBus>();
 
         var result = await bus.SendAsync(new PipelineQuery(), RequestActor.System);
         var items = new List<int>();
-        await foreach (var item in bus.StreamAsync(new PipelineStream(), RequestActor.System)) items.Add(item);
+        await foreach (var item in bus.StreamAsync(new PipelineStream(), RequestActor.System))
+            items.Add(item);
 
         Assert.Equal(42, result.Value);
         Assert.Equal([0, 1, 2, 3], items);
@@ -69,16 +78,19 @@ public sealed partial class RequestPipelineBehaviorTests
         using var provider = Provider([], new RequestRegistration<InvalidPipelineAction, InvalidPipelineHandler>());
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await provider.GetRequiredService<IRequestBus>().SendAsync(new InvalidPipelineAction(), RequestActor.System));
+            await provider.GetRequiredService<IRequestBus>()
+                .SendAsync(new InvalidPipelineAction(), RequestActor.System));
 
-        Assert.Contains(typeof(InvalidPipelineHandler).FullName!, error.Message, StringComparison.Ordinal);
+        var handlerName = typeof(InvalidPipelineHandler).FullName;
+        Assert.NotNull(handlerName);
+        Assert.Contains(handlerName, error.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// A behavior selected by scope but unable to serve the dispatched request's shape is
-    /// skipped. Scope matching is assignability only, so a request implementing both a no-result
-    /// family interface and <see cref="IRequest{TOut}" /> reaches a no-result behavior through a
-    /// result-bearing dispatch it cannot handle.
+    ///     A behavior selected by scope but unable to serve the dispatched request's shape is
+    ///     skipped. Scope matching is assignability only, so a request implementing both a no-result
+    ///     family interface and <see cref="IRequest{TOut}" /> reaches a no-result behavior through a
+    ///     result-bearing dispatch it cannot handle.
     /// </summary>
     [Fact]
     public async Task ShouldSkipBehaviorsThatCannotServeTheDispatchedShape()
@@ -86,8 +98,10 @@ public sealed partial class RequestPipelineBehaviorTests
         var calls = new List<string>();
         var services = Services(calls);
         _ = services.AddSingleton<MixedShapeHandler>();
-        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<MixedShape, MixedShapeHandler, int>());
-        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(new RequestPipelineBehaviorRegistration<IBehaviorRequest, OuterBehavior>(0));
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<MixedShape, MixedShapeHandler, int>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<IBehaviorRequest, OuterBehavior>(0));
         using var provider = services.BuildServiceProvider();
 
         var bus = provider.GetRequiredService<IRequestBus>();
@@ -116,7 +130,8 @@ public sealed partial class RequestPipelineBehaviorTests
     {
         var services = Services(calls);
         _ = services.AddSingleton(handler);
-        foreach (var behavior in behaviors) _ = services.AddSingleton(behavior);
+        foreach (var behavior in behaviors)
+            _ = services.AddSingleton(behavior);
         return services.BuildServiceProvider();
     }
 
@@ -139,17 +154,29 @@ public sealed partial class RequestPipelineBehaviorTests
     }
 
     internal interface IBehaviorRequest : IRequest;
+
     internal sealed record PipelineAction : IBehaviorRequest;
+
     internal sealed record PipelineQuery : IRequest<int>;
+
     internal sealed record PipelineStream : IStreamRequest<int>;
+
     internal sealed record InvalidPipelineAction : IRequest;
+
     internal sealed record MixedShape : IRequest<int>, IBehaviorRequest;
-    internal sealed record CustomInvocation : RequestInvocation { public override string TransportName => "custom"; }
+
+    internal sealed record CustomInvocation : RequestInvocation
+    {
+        public override string TransportName => "custom";
+    }
 
     internal sealed class PipelineActionHandler(List<string> calls) : IRequestHandler<PipelineAction>
     {
         public ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context, CancellationToken ct)
-        { calls.Add("handler"); return ValueTask.FromResult(Result.Success); }
+        {
+            calls.Add("handler");
+            return ValueTask.FromResult(Result.Success);
+        }
     }
 
     internal sealed class PipelineQueryHandler : IRequestHandler<PipelineQuery, int>
@@ -160,8 +187,13 @@ public sealed partial class RequestPipelineBehaviorTests
 
     internal sealed class PipelineStreamHandler : IStreamRequestHandler<PipelineStream, int>
     {
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context, [EnumeratorCancellation] CancellationToken ct)
-        { yield return 1; await Task.Yield(); yield return 2; }
+        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context,
+            [EnumeratorCancellation] CancellationToken ct)
+        {
+            yield return 1;
+            await Task.Yield();
+            yield return 2;
+        }
     }
 
     internal sealed class MixedShapeHandler : IRequestHandler<MixedShape, int>
@@ -172,32 +204,55 @@ public sealed partial class RequestPipelineBehaviorTests
 
     internal sealed class InvalidPipelineHandler : IRequestHandler<InvalidPipelineAction>
     {
-        public ValueTask<Result> HandleAsync(IRequestContext<InvalidPipelineAction> context, CancellationToken ct) => default;
+        public ValueTask<Result> HandleAsync(IRequestContext<InvalidPipelineAction> context, CancellationToken ct) =>
+            default;
     }
 
     internal sealed class OuterBehavior(List<string> calls) : IRequestPipelineBehavior<IBehaviorRequest>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<IBehaviorRequest> context, RequestPipelineNext continuation, CancellationToken ct)
-        { calls.Add("outer-before"); var result = await continuation(ct); calls.Add("outer-after"); return result; }
+        public async ValueTask<Result> HandleAsync(IRequestContext<IBehaviorRequest> context,
+            RequestPipelineNext continuation, CancellationToken ct)
+        {
+            calls.Add("outer-before");
+            var result = await continuation(ct);
+            calls.Add("outer-after");
+            return result;
+        }
     }
 
     internal sealed class InnerBehavior(List<string> calls) : IRequestPipelineBehavior<PipelineAction>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context, RequestPipelineNext continuation, CancellationToken ct)
-        { calls.Add("inner-before"); var result = await continuation(ct); calls.Add("inner-after"); return result; }
+        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation, CancellationToken ct)
+        {
+            calls.Add("inner-before");
+            var result = await continuation(ct);
+            calls.Add("inner-after");
+            return result;
+        }
     }
 
     internal sealed class QueryBehavior : IRequestPipelineBehavior<PipelineQuery, int>
     {
-        public async ValueTask<Result<int>> HandleAsync(IRequestContext<PipelineQuery> context, RequestPipelineNext<int> continuation, CancellationToken ct)
-        { var result = await continuation(ct); return Result<int>.Success(result.Value + 1); }
+        public async ValueTask<Result<int>> HandleAsync(IRequestContext<PipelineQuery> context,
+            RequestPipelineNext<int> continuation, CancellationToken ct)
+        {
+            var result = await continuation(ct);
+            return Result<int>.Success(result.Value + 1);
+        }
     }
 
     internal sealed class StreamBehavior : IStreamRequestPipelineBehavior<PipelineStream, int>
     {
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context, StreamRequestPipelineNext<int> continuation,
+        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context,
+            StreamRequestPipelineNext<int> continuation,
             [EnumeratorCancellation] CancellationToken ct)
-        { yield return 0; await foreach (var item in continuation(ct).WithCancellation(ct)) yield return item; yield return 3; }
+        {
+            yield return 0;
+            await foreach (var item in continuation(ct).WithCancellation(ct))
+                yield return item;
+            yield return 3;
+        }
     }
 
     internal sealed class DenyingAuthorizer : IRequestAuthorizer<PipelineAction>

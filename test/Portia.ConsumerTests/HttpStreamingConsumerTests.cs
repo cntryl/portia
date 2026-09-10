@@ -150,5 +150,6 @@ public sealed class HttpStreamingConsumerTests
     }
 
     static Task<(int, string, int, int, int, bool)> RunAsync(bool sse, int mode)
-        => (Task<(int, string, int, int, int, bool)>)Scenario.Value.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, [sse, mode])!;
+        => (Task<(int, string, int, int, int, bool)>)Scenario.Value.GetType("Scenario")!.GetMethod("Run")!.Invoke(null,
+            [sse, mode])!;
 }

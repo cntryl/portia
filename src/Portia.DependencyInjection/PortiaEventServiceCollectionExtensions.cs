@@ -7,6 +7,7 @@ namespace Cntryl.Portia;
 public static class PortiaEventServiceCollectionExtensions
 {
     static readonly ConditionalWeakTable<IServiceCollection, HashSet<Type>> Events = [];
+
     /// <summary>Contributes an event to the shared catalog. </summary>
     /// <typeparam name="TEvent">The event type.</typeparam>
     /// <param name="services">Application services.</param>
@@ -19,7 +20,11 @@ public static class PortiaEventServiceCollectionExtensions
         lock (services)
         {
             events = Events.GetOrCreateValue(services);
-            if (!events.Add(typeof(TEvent))) return;
+            if (!events.Add(typeof(TEvent)))
+            {
+                return;
+            }
+
             _ = services.AddSingleton(new EventMarker<TEvent>());
             _ = services.AddSingleton(new EventRegistration(catalog => _ = catalog.Register<TEvent>(version, name)));
         }

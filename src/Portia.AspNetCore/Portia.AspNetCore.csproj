@@ -4,13 +4,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
-    <PackageReference Include="Microsoft.OpenApi" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi"/>
+    <PackageReference Include="Microsoft.OpenApi"/>
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj" />
-    <ProjectReference Include="../Portia.DependencyInjection/Portia.DependencyInjection.csproj" />
+    <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj"/>
+    <ProjectReference Include="../Portia.DependencyInjection/Portia.DependencyInjection.csproj"/>
   </ItemGroup>
 </Project>

@@ -23,14 +23,20 @@ public sealed class FitzRequestQueueConsumer(
     TimeProvider? timeProvider = null,
     ILogger<FitzRequestQueueConsumer>? logger = null) : IRequestQueueConsumer
 {
-    readonly IQueueClient _queue = queue ?? throw new ArgumentNullException(nameof(queue));
-    readonly IRequestDeserializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+    readonly int _batchSize = maxItemsPerReserve > 0
+        ? maxItemsPerReserve
+        : throw new ArgumentOutOfRangeException(nameof(maxItemsPerReserve));
+
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
-    readonly TimeSpan _renewalInterval = GetRenewalInterval(visibilityTimeoutSeconds);
     readonly TimeSpan _notificationBackstop = GetNotificationBackstop(waitDuration);
-    readonly int _batchSize = maxItemsPerReserve > 0 ? maxItemsPerReserve : throw new ArgumentOutOfRangeException(nameof(maxItemsPerReserve));
+    readonly IQueueClient _queue = queue ?? throw new ArgumentNullException(nameof(queue));
+    readonly TimeSpan _renewalInterval = GetRenewalInterval(visibilityTimeoutSeconds);
+
     readonly string _route = string.IsNullOrWhiteSpace(route)
-        ? throw new ArgumentException("A queue route cannot be empty.", nameof(route)) : route;
+        ? throw new ArgumentException("A queue route cannot be empty.", nameof(route))
+        : route;
+
+    readonly IRequestDeserializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
     /// <inheritdoc />
     public async IAsyncEnumerable<IQueuedRequest> ReadAsync([EnumeratorCancellation] CancellationToken ct = default)
@@ -44,12 +50,17 @@ public sealed class FitzRequestQueueConsumer(
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
-                var items = await _queue.ReserveAsync(_route, visibilityTimeoutSeconds, _batchSize, waitSeconds: 0, ct).ConfigureAwait(false);
+                var items = await _queue.ReserveAsync(_route, visibilityTimeoutSeconds, _batchSize, 0, ct)
+                    .ConfigureAwait(false);
                 var reservations = new List<FitzQueuedRequest>(items.Length);
                 try
                 {
                     foreach (var item in items)
-                        reservations.Add(new FitzQueuedRequest(item, _serializer, visibilityTimeoutSeconds, _renewalInterval, _clock, logger, ct));
+                    {
+                        reservations.Add(new FitzQueuedRequest(item, _serializer, visibilityTimeoutSeconds,
+                            _renewalInterval, _clock, logger, ct));
+                    }
+
                     foreach (var reservation in reservations)
                         yield return reservation;
                 }
@@ -58,16 +69,23 @@ public sealed class FitzRequestQueueConsumer(
                     foreach (var reservation in reservations)
                         await reservation.DisposeAsync().ConfigureAwait(false);
                 }
+
                 if (items.Length == 0)
                 {
                     try
                     {
                         pendingNotification ??= notifications.MoveNextAsync().AsTask();
                         if (!await pendingNotification.WaitAsync(_notificationBackstop, ct).ConfigureAwait(false))
-                            throw new InvalidOperationException("The Fitz queue subscription ended without cancellation.");
+                        {
+                            throw new InvalidOperationException(
+                                "The Fitz queue subscription ended without cancellation.");
+                        }
+
                         pendingNotification = null;
                     }
-                    catch (TimeoutException) { }
+                    catch (TimeoutException)
+                    {
+                    }
                 }
             }
         }
@@ -76,8 +94,13 @@ public sealed class FitzRequestQueueConsumer(
             await notificationLifetime.CancelAsync().ConfigureAwait(false);
             if (pendingNotification is not null)
             {
-                try { _ = await pendingNotification.ConfigureAwait(false); }
-                catch (OperationCanceledException) when (notificationLifetime.IsCancellationRequested) { }
+                try
+                {
+                    _ = await pendingNotification.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (notificationLifetime.IsCancellationRequested)
+                {
+                }
             }
         }
     }
@@ -98,13 +121,14 @@ public sealed class FitzRequestQueueConsumer(
     sealed class FitzQueuedRequest : IQueuedRequest, IAsyncDisposable
     {
         readonly IQueueReservedItem _item;
-        readonly Lazy<DeserializedRequest> _payload;
-        readonly CancellationTokenSource _stop;
         readonly CancellationTokenSource _lost;
+        readonly Lazy<DeserializedRequest> _payload;
         readonly Task _renewal;
+        readonly CancellationTokenSource _stop;
         Exception? _renewalError;
 
-        public FitzQueuedRequest(IQueueReservedItem item, IRequestDeserializer serializer, ulong leaseSeconds, TimeSpan interval,
+        public FitzQueuedRequest(IQueueReservedItem item, IRequestDeserializer serializer, ulong leaseSeconds,
+            TimeSpan interval,
             TimeProvider clock, ILogger? logger, CancellationToken ct)
         {
             _item = item;
@@ -114,7 +138,22 @@ public sealed class FitzRequestQueueConsumer(
             _renewal = RenewAsync(leaseSeconds, interval, clock, logger);
         }
 
-        public IRequest Request => _payload.Value.Request as IRequest ?? throw new InvalidOperationException("Only no-result requests can be queued.");
+        public async ValueTask DisposeAsync()
+        {
+            try
+            {
+                await StopRenewalAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                _stop.Dispose();
+                _lost.Dispose();
+            }
+        }
+
+        public IRequest Request => _payload.Value.Request as IRequest ??
+                                   throw new InvalidOperationException("Only no-result requests can be queued.");
+
         public string? Name => _payload.Value.Name;
         public RequestMetadata Metadata => _payload.Value.Metadata;
         public RequestTraceContext? TraceContext => _payload.Value.TraceContext;
@@ -126,10 +165,20 @@ public sealed class FitzRequestQueueConsumer(
         public async ValueTask CompleteAsync(CancellationToken ct = default)
         {
             if (_renewalError is not null)
-                throw new InvalidOperationException("Cannot acknowledge a reservation whose renewal failed.", _renewalError);
+            {
+                throw new InvalidOperationException("Cannot acknowledge a reservation whose renewal failed.",
+                    _renewalError);
+            }
+
             _lost.Token.ThrowIfCancellationRequested();
-            try { await _item.CompleteAsync(ct).ConfigureAwait(false); }
-            finally { await StopRenewalAsync().ConfigureAwait(false); }
+            try
+            {
+                await _item.CompleteAsync(ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                await StopRenewalAsync().ConfigureAwait(false);
+            }
         }
 
         // Fitz owns expiration, redelivery and dead-letter policy. Do not acknowledge or republish.
@@ -145,15 +194,22 @@ public sealed class FitzRequestQueueConsumer(
                     await _item.ExtendAsync(leaseSeconds, _stop.Token).ConfigureAwait(false);
                 }
             }
-            catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
+            catch (OperationCanceledException) when (_stop.IsCancellationRequested)
+            {
+            }
             catch (Exception ex)
             {
                 _renewalError = ex;
-                PortiaTelemetry.RecordRunnerFault(nameof(FitzRequestQueueConsumer), RunnerFaultStage.Renewal, ex, logger);
-                try { await _lost.CancelAsync().ConfigureAwait(false); }
+                PortiaTelemetry.RecordRunnerFault(nameof(FitzRequestQueueConsumer), RunnerFaultStage.Renewal, ex,
+                    logger);
+                try
+                {
+                    await _lost.CancelAsync().ConfigureAwait(false);
+                }
                 catch (Exception callbackError)
                 {
-                    PortiaTelemetry.RecordRunnerFault(nameof(FitzRequestQueueConsumer), RunnerFaultStage.Cleanup, callbackError, logger);
+                    PortiaTelemetry.RecordRunnerFault(nameof(FitzRequestQueueConsumer), RunnerFaultStage.Cleanup,
+                        callbackError, logger);
                 }
             }
         }
@@ -162,16 +218,6 @@ public sealed class FitzRequestQueueConsumer(
         {
             await _stop.CancelAsync().ConfigureAwait(false);
             await _renewal.ConfigureAwait(false);
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            try { await StopRenewalAsync().ConfigureAwait(false); }
-            finally
-            {
-                _stop.Dispose();
-                _lost.Dispose();
-            }
         }
     }
 }
