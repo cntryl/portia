@@ -206,6 +206,64 @@ write fails. Both command handlers reached from reactors and direct effects must
 batching is not an external transaction or an exactly-once guarantee. Use the triggering
 `DomainEventMetadata.EventId` as the deduplication key when the target supports one.
 
+## Fitz KV persistence
+
+An application already running on `Portia.Fitz` has a durable store it is connected to, and
+`Portia.Fitz` bundles both halves of the storage contract against it. Neither one is a turnkey
+projection: a projection is the application's own data model, so the framework supplies the
+transaction and the checkpoint and the application supplies the reads and writes that share them.
+
+`AddFitz` publishes the shared connection's `IKvClient`. A projection repository takes it as an
+ordinary constructor dependency and derives from `FitzKvProjectionStore`, whose `Transaction`
+property is the open unit of work the repository's own operations write through:
+
+```csharp
+public sealed class AccountRepository(IKvClient kv)
+    : FitzKvProjectionStore(kv, "kv://accounts/balances/projection"), IAccountRepository
+{
+    // Key and value encoding belong to the projection, not the framework: Portia stores only its
+    // own checkpoint in this route and never interprets the application's keys.
+    public async ValueTask IncrementBalanceAsync(Uuid accountId, int amount, CancellationToken ct)
+    {
+        var key = Encoding.UTF8.GetBytes($"balance\0{accountId}");
+        var current = await Transaction.GetAsync(key, ct);
+        var balance = current.Found ? BinaryPrimitives.ReadInt64BigEndian(current.Value!.Value.Span) : 0;
+        var next = new byte[sizeof(long)];
+        BinaryPrimitives.WriteInt64BigEndian(next, balance + amount);
+        await Transaction.PutAsync(key, next, ct);
+    }
+}
+```
+
+```csharp
+services.AddScoped<AccountRepository>();
+services.AddScoped<IAccountRepository>(sp => sp.GetRequiredService<AccountRepository>());
+services.AddScoped<IProjectionStore>(sp => sp.GetRequiredService<AccountRepository>());
+services.AddPortia()
+    .AddFitz(configuration, fitz => fitz.UseKvCheckpoints("kv://accounts/progress/checkpoints"))
+    .AddProjector<AccountProjector>(WorkloadScope.PerTenant)
+    .AddReactor<WelcomeMailer>(WorkloadScope.PerTenant);
+```
+
+The two forwarding registrations are the same requirement stated above: `IAccountRepository` and
+`IProjectionStore` must resolve to one scoped instance, because that instance owns the transaction
+both the projection write and the checkpoint commit belong to. One store instance owns one open
+transaction, so a second `BeginAsync` before the first batch commits or disposes is rejected rather
+than silently retargeting the first one's writes.
+
+`UseKvCheckpoints` covers reactors instead. Their effects can never join a transaction, so their
+progress is an independent durable write, and one route holds all of it — the stored key derives
+from the complete `CheckpointIdentity`, so components, tenants, and rebuild generations already
+separate within a route. It is an explicit selection rather than a default: a reactor that silently
+fell back to an in-memory checkpoint would reissue its entire backlog of external effects after
+every restart. Applications that want per-tenant routes register their own scoped
+`FitzKvCheckpointStore` from `WorkloadContext` instead of calling this.
+
+Fitz KV locks a route at BEGIN rather than detecting the conflict at COMMIT, so a losing writer is
+rejected before staging anything. Both stores translate that into the adapter-neutral
+`ProjectionConcurrencyException` a hosted component already knows to treat as retryable, whether it
+surfaces at begin or at commit.
+
 ## Storage implementations
 
 The contract supports either a live transaction or buffered writes:
@@ -223,7 +281,8 @@ The contract supports either a live transaction or buffered writes:
   for checkpoint writes and enforce optimistic conditions for read-modify-write operations.
   See [TransactWriteItems](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html).
 
-These are implementation requirements, not bundled database adapters. The framework
+These are implementation requirements for a backend Portia does not bundle. Fitz KV is the
+exception described above; no relational or document-database adapter is bundled. The framework
 cannot predict how many backend writes an event causes. Applications must select suitable
 batch sizes and their repositories must enforce backend limits without partially committing
 an oversized projection batch. Test atomicity, conditional conflicts, cancellation,
@@ -243,8 +302,10 @@ and ambiguous commit responses against the chosen backend.
   required.
 
 The suites accept small probe implementations and throw `ConformanceViolationException`, so an
-application can invoke them from its normal test framework. Future official persistence adapters
-must pass the applicable suites, but no database adapter is bundled today.
+application can invoke them from its normal test framework. The bundled Fitz adapters run them
+too: `FitzEventStore` and `FitzKvProjectionStore` are verified against a real broker in the
+repository's own integration suite, and any future official adapter must pass the applicable
+suites before it ships.
 
 Hosted passes retain their last committed checkpoint when application handling or persistence
 fails. Retries back off exponentially from the workload's poll interval, up to

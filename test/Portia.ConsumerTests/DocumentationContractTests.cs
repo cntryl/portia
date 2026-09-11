@@ -82,6 +82,12 @@ public sealed partial class DocumentationContractTests
         Assert.DoesNotContain("Fitz 0.1.2", text, StringComparison.Ordinal);
         Assert.DoesNotContain("AOT/trim analyzers are not enabled", text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("reactors must dispatch", text, StringComparison.OrdinalIgnoreCase);
+
+        // Portia.Fitz bundles FitzEventStore, FitzKvProjectionStore, and FitzKvCheckpointStore, so
+        // documentation that still promises durable persistence as future work sends an application
+        // to build an adapter it already has.
+        Assert.DoesNotContain("until official adapters arrive", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("no database adapter is bundled today", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

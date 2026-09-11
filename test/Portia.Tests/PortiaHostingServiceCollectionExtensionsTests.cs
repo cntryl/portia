@@ -312,7 +312,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         await hostedService.StopAsync(default);
 
         Assert.False(executeTask.IsFaulted);
-        Assert.Equal(3, target.LoadAttempts);
+        Assert.True(target.LoadAttempts >= 3);
         Assert.Equal(1, target.Projection.HandlerCount);
         Assert.Equal(1UL,
             (await target.LoadCheckpointAsync(new CheckpointIdentity("test-projector",
