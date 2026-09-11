@@ -145,3 +145,11 @@ indent_size = 2
 
 [*.md]
 trim_trailing_whitespace = false
+
+[test/**/*.cs]
+# Adopt the shared test conventions without breaking the existing suite. Raise these
+# severities as files are migrated to Should/Given naming and Arrange/Act/Assert phases.
+conventions_test_naming_require_given = true
+conventions_test_naming_require_when = false
+dotnet_diagnostic.CNTRYL0001.severity = suggestion
+dotnet_diagnostic.CNTRYL0002.severity = suggestion

@@ -19,9 +19,9 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
 {
     readonly IKvClient _client = client ?? throw new ArgumentNullException(nameof(client));
 
-    readonly string _route = string.IsNullOrWhiteSpace(route)
-        ? throw new ArgumentException("A Fitz KV route cannot be empty.", nameof(route))
-        : route;
+    readonly string _route = FitzKvCheckpoints.Route(route, nameof(route));
+
+    IKvTransaction? _open;
 
     /// <summary>
     ///     Gets the transaction the current unit of work writes through. Only valid between
@@ -44,17 +44,28 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
     public async ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(context);
-        Transaction = await _client.BeginAsync(_route, KvDurability.Sync, KvMode.ReadWrite, ct).ConfigureAwait(false);
-        return new Batch(this, context.Identity);
+        if (_open is not null)
+        {
+            throw new InvalidOperationException(
+                "A projection batch is already open on this store; commit or dispose it before beginning another. "
+                + "One store instance owns one Fitz KV transaction, so a second batch would retarget the first one's writes.");
+        }
+
+        _open = await FitzKvCheckpoints
+            .BeginAsync(_client, _route, KvMode.ReadWrite, "Projection batch", context.Identity, ct)
+            .ConfigureAwait(false);
+        Transaction = _open;
+        return new Batch(this, _open, context.Identity);
     }
 
-    sealed class Batch(FitzKvProjectionStore store, CheckpointIdentity identity) : IProjectionBatch
+    sealed class Batch(FitzKvProjectionStore store, IKvTransaction transaction, CheckpointIdentity identity)
+        : IProjectionBatch
     {
         bool _done;
 
         public async ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
         {
-            var tx = store.Transaction;
+            var tx = transaction;
             try
             {
                 await tx.PutAsync(FitzKvCheckpoints.Key(identity), FitzKvCheckpoints.Encode(checkpoint.NextOffset), ct)
@@ -69,9 +80,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
 
                 if (ex is KvException { DomainCode: FitzErrorCodes.KvIsolationConflict })
                 {
-                    throw new ProjectionConcurrencyException(
-                        $"Projection batch for '{identity.ComponentName}' pattern '{identity.Pattern}' conflicted with a concurrent writer; reload the authoritative checkpoint before retrying.",
-                        ex);
+                    throw FitzKvCheckpoints.Conflict("Projection batch", identity, ex);
                 }
                 else
                 {
@@ -82,9 +91,12 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
 
         public async ValueTask DisposeAsync()
         {
-            var tx = store.Transaction;
+            var tx = transaction;
             if (!_done)
                 await FitzKvCheckpoints.RollbackAsync(tx).ConfigureAwait(false);
+
+            if (ReferenceEquals(store._open, tx))
+                store._open = null;
 
             await tx.DisposeAsync().ConfigureAwait(false);
         }

@@ -26,8 +26,7 @@ namespace Cntryl.Portia;
 /// <param name="timeProvider">Schedules reconnect and workload restart delays.</param>
 /// <param name="restartInterval">Positive delay between attempts; defaults to one second.</param>
 /// <param name="shutdownGrace">
-///     Positive total time allowed for active-tenant stop callbacks during shutdown; defaults to
-///     five seconds. Normal tenant removal remains unbounded.
+///     Positive total time allowed for active-tenant cleanup during shutdown; defaults to five seconds.
 /// </param>
 public sealed class MultiTenantRunner(
     ITenantDirectory tenantDirectory,
@@ -40,6 +39,7 @@ public sealed class MultiTenantRunner(
     readonly ILogger<MultiTenantRunner>? _logger = logger;
     readonly TimeSpan _restartInterval = GetRestartInterval(restartInterval);
     readonly TimeSpan _shutdownGrace = GetShutdownGrace(shutdownGrace);
+    readonly TimeSpan _tenantStopTimeout = TimeSpan.FromSeconds(5);
 
     readonly ITenantDirectory _tenantDirectory =
         tenantDirectory ?? throw new ArgumentNullException(nameof(tenantDirectory));
@@ -58,6 +58,32 @@ public sealed class MultiTenantRunner(
     {
     }
 
+    /// <summary>Creates a runner using explicit recovery and cleanup options.</summary>
+    /// <param name="tenantDirectory">Reports active tenants and lifecycle changes.</param>
+    /// <param name="options">Recovery, shutdown, and normal-removal durations.</param>
+    public MultiTenantRunner(ITenantDirectory tenantDirectory, MultiTenantRunnerOptions options)
+        : this(tenantDirectory, options, null, null)
+    {
+    }
+
+    /// <summary>Creates a runner using explicit recovery and cleanup options.</summary>
+    /// <param name="tenantDirectory">Reports active tenants and lifecycle changes.</param>
+    /// <param name="options">Recovery, shutdown, and normal-removal durations.</param>
+    /// <param name="logger">Reports runner faults when configured.</param>
+    /// <param name="timeProvider">Schedules delays and cleanup deadlines.</param>
+    public MultiTenantRunner(
+        ITenantDirectory tenantDirectory,
+        MultiTenantRunnerOptions options,
+        ILogger<MultiTenantRunner>? logger,
+        TimeProvider? timeProvider)
+        : this(tenantDirectory, logger, timeProvider,
+            GetPositive(options, static value => value.RestartInterval, nameof(options.RestartInterval)),
+            GetPositive(options, static value => value.ShutdownGrace, nameof(options.ShutdownGrace)))
+    {
+        _tenantStopTimeout = GetPositive(options, static value => value.TenantStopTimeout,
+            nameof(options.TenantStopTimeout));
+    }
+
     /// <summary>
     ///     Starts an instance for every currently active tenant, then keeps starting and stopping
     ///     instances as tenants are added and removed, until cancellation is requested. A tenant
@@ -72,8 +98,9 @@ public sealed class MultiTenantRunner(
     /// <param name="onTenantStopped">
     ///     Runs once for a tenant after it's removed and its
     ///     <paramref name="onTenantStarted" /> task has been cancelled and observed. Normal removal
-    ///     is allowed to finish. Host shutdown supplies a fresh token with one shared bounded grace
-    ///     interval, so cooperative cleanup can finish without allowing any callback to hang shutdown.
+    ///     receives the remainder of one per-tenant stop deadline. Host shutdown supplies a fresh
+    ///     token with one shared bounded grace interval, so cooperative cleanup can finish without
+    ///     allowing any callback to hang shutdown.
     /// </param>
     /// <param name="ct">
     ///     A token that can cancel the operation. Cancels every active tenant's
@@ -89,6 +116,9 @@ public sealed class MultiTenantRunner(
         ArgumentNullException.ThrowIfNull(onTenantStopped);
 
         var active = new ConcurrentDictionary<TenantId, TenantRun>();
+        await using var cursor = _tenantDirectory is IResumableTenantDirectory resumable
+            ? await resumable.OpenCursorAsync(ct).ConfigureAwait(false)
+            : null;
 
         try
         {
@@ -100,43 +130,38 @@ public sealed class MultiTenantRunner(
             {
                 try
                 {
-                    // Re-running the complete snapshot on every reconnect closes the gap between
-                    // watch subscriptions: newly active tenants start, tenants removed during
-                    // the outage stop, and unchanged tenants remain active.
-                    var snapshot = new HashSet<TenantId>();
-
-                    await foreach (var tenantId in _tenantDirectory.GetActiveTenantsAsync(ct).WithCancellation(ct)
-                                       .ConfigureAwait(false))
+                    if (cursor is not null)
                     {
-                        _ = snapshot.Add(tenantId);
-                        Start(tenantId, onTenantStarted, active, ct);
-                    }
-
-                    foreach (var tenantId in active.Keys.ToArray())
-                    {
-                        if (!snapshot.Contains(tenantId))
-                        {
-                            await StopAsync(tenantId, onTenantStopped, active, CancellationToken.None)
+                        await foreach (var change in cursor.ReadAsync(ct).WithCancellation(ct).ConfigureAwait(false))
+                            await ApplyChangeAsync(change, onTenantStarted, onTenantStopped, active, ct)
                                 .ConfigureAwait(false);
-                        }
                     }
-
-                    await foreach (var change in _tenantDirectory.WatchAsync(ct).WithCancellation(ct)
-                                       .ConfigureAwait(false))
+                    else
                     {
-                        if (change.Kind == TenantLifecycleChangeKind.Added)
+                        // The legacy contract has no cursor. Re-reading its complete snapshot on
+                        // reconnect closes the gap between separately opened watch streams.
+                        var snapshot = new HashSet<TenantId>();
+                        await foreach (var tenantId in _tenantDirectory.GetActiveTenantsAsync(ct).WithCancellation(ct)
+                                           .ConfigureAwait(false))
                         {
-                            Start(change.TenantId, onTenantStarted, active, ct);
+                            _ = snapshot.Add(tenantId);
+                            Start(tenantId, onTenantStarted, active, ct);
                         }
-                        else if (change.Kind == TenantLifecycleChangeKind.Removed)
+
+                        foreach (var tenantId in active.Keys.ToArray())
                         {
-                            await StopAsync(change.TenantId, onTenantStopped, active, CancellationToken.None)
+                            if (!snapshot.Contains(tenantId))
+                            {
+                                await StopRemovedTenantAsync(tenantId, onTenantStopped, active, ct)
+                                    .ConfigureAwait(false);
+                            }
+                        }
+
+                        await foreach (var change in _tenantDirectory.WatchAsync(ct).WithCancellation(ct)
+                                           .ConfigureAwait(false))
+                        {
+                            await ApplyChangeAsync(change, onTenantStarted, onTenantStopped, active, ct)
                                 .ConfigureAwait(false);
-                        }
-                        else
-                        {
-                            throw new InvalidOperationException(
-                                $"Unrecognized tenant lifecycle change kind '{change.Kind}'.");
                         }
                     }
 
@@ -153,6 +178,10 @@ public sealed class MultiTenantRunner(
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
                     break;
+                }
+                catch (TenantStopTimeoutException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -179,8 +208,41 @@ public sealed class MultiTenantRunner(
                 Cancel(run.Cancellation);
             using var shutdown = new CancellationTokenSource(_shutdownGrace);
             foreach (var tenantId in active.Keys.ToArray())
-                await StopAsync(tenantId, onTenantStopped, active, shutdown.Token).ConfigureAwait(false);
+                await StopAsync(tenantId, onTenantStopped, active, false, shutdown.Token).ConfigureAwait(false);
         }
+    }
+
+    async ValueTask ApplyChangeAsync(
+        TenantLifecycleChange change,
+        Func<TenantId, CancellationToken, Task> onTenantStarted,
+        Func<TenantId, CancellationToken, Task> onTenantStopped,
+        ConcurrentDictionary<TenantId, TenantRun> active,
+        CancellationToken ct)
+    {
+        if (change.Kind == TenantLifecycleChangeKind.Added)
+        {
+            Start(change.TenantId, onTenantStarted, active, ct);
+        }
+        else if (change.Kind == TenantLifecycleChangeKind.Removed)
+        {
+            await StopRemovedTenantAsync(change.TenantId, onTenantStopped, active, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            throw new InvalidOperationException($"Unrecognized tenant lifecycle change kind '{change.Kind}'.");
+        }
+    }
+
+    async ValueTask StopRemovedTenantAsync(
+        TenantId tenantId,
+        Func<TenantId, CancellationToken, Task> onTenantStopped,
+        ConcurrentDictionary<TenantId, TenantRun> active,
+        CancellationToken ct)
+    {
+        using var deadline = new CancellationTokenSource(_tenantStopTimeout, _clock);
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct, deadline.Token);
+        await StopAsync(tenantId, onTenantStopped, active, true, budget.Token, deadline.Token, ct)
+            .ConfigureAwait(false);
     }
 
     void Start(
@@ -251,11 +313,25 @@ public sealed class MultiTenantRunner(
         return grace;
     }
 
+    static TimeSpan GetPositive(
+        MultiTenantRunnerOptions options,
+        Func<MultiTenantRunnerOptions, TimeSpan> select,
+        string parameterName)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var value = select(options);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(value, TimeSpan.Zero, parameterName);
+        return value;
+    }
+
     async ValueTask StopAsync(
         TenantId tenantId,
         Func<TenantId, CancellationToken, Task> onTenantStopped,
         ConcurrentDictionary<TenantId, TenantRun> active,
-        CancellationToken stopToken)
+        bool throwOnTimeout,
+        CancellationToken stopToken,
+        CancellationToken timeoutToken = default,
+        CancellationToken hostToken = default)
     {
         if (!active.TryRemove(tenantId, out var run))
             return;
@@ -264,7 +340,13 @@ public sealed class MultiTenantRunner(
 
         try
         {
-            await run.Task.ConfigureAwait(false);
+            await run.Task.WaitAsync(stopToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
+        {
+            _ = ObserveLateStopAsync(run.Task);
+            if (throwOnTimeout && timeoutToken.IsCancellationRequested && !hostToken.IsCancellationRequested)
+                throw new TenantStopTimeoutException(tenantId, _tenantStopTimeout);
         }
         catch (OperationCanceledException)
         {
@@ -288,9 +370,10 @@ public sealed class MultiTenantRunner(
         }
         catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
         {
-            // Host shutdown is bounded by its token even if application cleanup ignores it.
             if (stop is not null)
                 _ = ObserveLateStopAsync(stop);
+            if (throwOnTimeout && timeoutToken.IsCancellationRequested && !hostToken.IsCancellationRequested)
+                throw new TenantStopTimeoutException(tenantId, _tenantStopTimeout);
         }
         catch (Exception ex)
         {

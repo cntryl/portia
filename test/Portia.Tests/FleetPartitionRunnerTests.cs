@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
+using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
@@ -15,7 +16,8 @@ public sealed class FleetPartitionRunnerTests
     public async Task ShouldFaultRunnerGivenPartitionCallbackIgnoresCancellation()
     {
         const string partition = "lease://portia/fleet/stuck";
-        var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
+        var logger = new CapturingLogger();
+        var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership(), logger);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var failures = 0;
@@ -29,7 +31,7 @@ public sealed class FleetPartitionRunnerTests
         };
         listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
         {
-            Assert.Equal(["runner", "error.type"], tags.ToArray().Select(tag => tag.Key));
+            Assert.Equal(["runner", "stage"], tags.ToArray().Select(tag => tag.Key));
             _ = Interlocked.Increment(ref failures);
         });
         listener.Start();
@@ -52,7 +54,18 @@ public sealed class FleetPartitionRunnerTests
         Assert.Equal([partition], exception.Partitions);
         Assert.Equal(options.PartitionStopTimeout, exception.Timeout);
         Assert.Equal(1, Volatile.Read(ref failures));
+        Assert.Equal(1, logger.EventIds.Count(id => id == 1101));
         release.SetResult();
+    }
+
+    sealed class CapturingLogger : ILogger<FleetPartitionRunner>
+    {
+        public List<int> EventIds { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => EventIds.Add(eventId.Id);
     }
 
     /// <summary>A non-positive callback termination timeout is rejected before the runner starts.</summary>
@@ -71,7 +84,7 @@ public sealed class FleetPartitionRunnerTests
 
     /// <summary>Changing tenant partitions revoke only removed work and retain global ownership.</summary>
     [Fact]
-    public async Task DynamicPartitionsPreserveRetainedOwnership()
+    public async Task ShouldPreserveRetainedOwnershipWhenPartitionsChange()
     {
         var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
         string[] snapshot = ["lease://portia/work/global", "lease://portia/work/alpha"];
@@ -300,10 +313,12 @@ public sealed class FleetPartitionRunnerTests
 
         Assert.All(failures, tags =>
         {
-            Assert.Equal(["runner", "error.type"], tags.Select(tag => tag.Key));
+            Assert.Equal(["runner", "stage"], tags.Select(tag => tag.Key));
             Assert.DoesNotContain(tags,
                 tag => (tag.Value as string)?.Contains("lease://", StringComparison.Ordinal) == true);
         });
+        Assert.Contains(failures, tags => Equals(tags[1].Value, "acquisition"));
+        Assert.Contains(failures, tags => Equals(tags[1].Value, "workload"));
     }
 
     /// <summary>

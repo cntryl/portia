@@ -17,7 +17,7 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
     Func<DomainEvent, TenantId> getTenantId,
     TimeSpan? pollInterval = null,
     TimeProvider? timeProvider = null,
-    IDomainEventNotifier? notifier = null) : ITenantDirectory
+    IDomainEventNotifier? notifier = null) : IResumableTenantDirectory
     where TStartEvent : DomainEvent
     where TStopEvent : DomainEvent
 {
@@ -30,6 +30,13 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
     readonly EventStreamPattern _pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
     readonly TimeSpan _pollInterval = GetInterval(pollInterval);
     readonly IDomainEventReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
+
+    /// <inheritdoc />
+    public ValueTask<ITenantDirectoryCursor> OpenCursorAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        return ValueTask.FromResult<ITenantDirectoryCursor>(new Cursor(this));
+    }
 
     /// <inheritdoc />
     public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync(
@@ -117,5 +124,96 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
         var interval = pollInterval ?? TimeSpan.FromSeconds(1);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(interval, TimeSpan.Zero, nameof(pollInterval));
         return interval;
+    }
+
+    sealed class Cursor(EventSourcedTenantDirectory<TStartEvent, TStopEvent> directory) : ITenantDirectoryCursor
+    {
+        const string ConcurrentReadMessage = "A tenant directory cursor supports only one active enumeration.";
+
+        readonly HashSet<TenantId> _active = [];
+        int _disposed;
+        bool _initial = true;
+        TenantLifecycleChange[]? _initialChanges;
+        int _initialIndex;
+        ulong _nextOffset;
+        int _reading;
+        IDomainEventSubscription? _subscription;
+
+        public async IAsyncEnumerable<TenantLifecycleChange> ReadAsync(
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            if (Interlocked.CompareExchange(ref _reading, 1, 0) != 0)
+                throw new InvalidOperationException(ConcurrentReadMessage);
+
+            IDomainEventSubscription? subscription = null;
+            try
+            {
+                subscription = directory._notifier is null
+                    ? null
+                    : await directory._notifier.SubscribeAsync(directory._pattern, ct).ConfigureAwait(false);
+                Volatile.Write(ref _subscription, subscription);
+
+                while (true)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    if (_initialChanges is not null)
+                    {
+                        while (_initialIndex < _initialChanges.Length)
+                            yield return _initialChanges[_initialIndex++];
+                        _initialChanges = null;
+                    }
+
+                    var sawAny = false;
+                    await foreach (var record in directory._reader.ReadAsync(directory._pattern, _nextOffset, ct)
+                                       .WithCancellation(ct).ConfigureAwait(false))
+                    {
+                        _nextOffset = EventStreamOffsets.GetNextOffset(directory._pattern, record);
+                        sawAny = true;
+                        var change = directory.Apply(_active, record.Event);
+                        if (!_initial && change is { } delta)
+                            yield return delta;
+                    }
+
+                    if (_initial)
+                    {
+                        _initial = false;
+                        _initialChanges = _active.OrderBy(tenant => tenant.Value, StringComparer.Ordinal)
+                            .Select(tenant => new TenantLifecycleChange(TenantLifecycleChangeKind.Added, tenant))
+                            .ToArray();
+                        _initialIndex = 0;
+                        continue;
+                    }
+
+                    if (subscription is not null)
+                    {
+                        await subscription.WaitAsync(ct).ConfigureAwait(false);
+                    }
+                    else if (!sawAny)
+                    {
+                        await Task.Delay(directory._pollInterval, directory._clock, ct).ConfigureAwait(false);
+                    }
+                }
+            }
+            finally
+            {
+                if (subscription is not null &&
+                    ReferenceEquals(Interlocked.CompareExchange(ref _subscription, null, subscription), subscription))
+                {
+                    await subscription.DisposeAsync().ConfigureAwait(false);
+                }
+
+                Volatile.Write(ref _reading, 0);
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return;
+            if (Interlocked.Exchange(ref _subscription, null) is { } subscription)
+                await subscription.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }

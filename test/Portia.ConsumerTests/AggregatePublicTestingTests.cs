@@ -3,7 +3,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class AggregatePublicTestingTests
 {
     [Fact]
-    public void SerializerAndBusinessTestHelpersRequireNoInternalAccess()
+    public void MetadataAndBusinessTestHelpersRequireNoInternalAccess()
     {
         var assembly = GeneratorCompilation.Compile("""
                                                     using System;

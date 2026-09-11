@@ -3,6 +3,41 @@ namespace Cntryl.Portia.Consumer;
 public sealed class TenantDirectoryConsumerTests
 {
     [Fact]
+    public void OptionalCursorAndRunnerOptionsCompileForAnExternalConsumer() =>
+        _ = GeneratorCompilation.Compile("""
+                                         using System;
+                                         using System.Collections.Generic;
+                                         using System.Runtime.CompilerServices;
+                                         using System.Threading;
+                                         using System.Threading.Tasks;
+                                         using Cntryl.Portia;
+                                         public sealed class Directory : IResumableTenantDirectory
+                                         {
+                                             public ValueTask<ITenantDirectoryCursor> OpenCursorAsync(CancellationToken ct = default) =>
+                                                 ValueTask.FromResult<ITenantDirectoryCursor>(new Cursor());
+                                             public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync([EnumeratorCancellation] CancellationToken ct = default)
+                                             { await Task.CompletedTask; yield break; }
+                                             public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync([EnumeratorCancellation] CancellationToken ct = default)
+                                             { await Task.CompletedTask; yield break; }
+                                             sealed class Cursor : ITenantDirectoryCursor
+                                             {
+                                                 public async IAsyncEnumerable<TenantLifecycleChange> ReadAsync([EnumeratorCancellation] CancellationToken ct = default)
+                                                 { await Task.CompletedTask; yield break; }
+                                                 public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+                                             }
+                                         }
+                                         public static class Scenario
+                                         {
+                                             public static MultiTenantRunner Run() => new(new Directory(), new MultiTenantRunnerOptions
+                                             {
+                                                 RestartInterval = TimeSpan.FromSeconds(1),
+                                                 ShutdownGrace = TimeSpan.FromSeconds(5),
+                                                 TenantStopTimeout = TimeSpan.FromSeconds(5)
+                                             });
+                                         }
+                                         """);
+
+    [Fact]
     public async Task StreamNotificationWakesIdleDirectoryWithoutPollingDelay()
     {
         var assembly = GeneratorCompilation.Compile("""

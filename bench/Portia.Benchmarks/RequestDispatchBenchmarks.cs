@@ -10,6 +10,7 @@ namespace Cntryl.Portia;
 public partial class RequestDispatchBenchmarks
 {
     DispatchState _fiveBehaviors = null!;
+    DispatchState _asyncBehavior = null!;
     DispatchState _oneBehavior = null!;
     DispatchState _withoutBehaviors = null!;
 
@@ -20,6 +21,8 @@ public partial class RequestDispatchBenchmarks
         _withoutBehaviors = Create(builder => builder.AddRequestHandler<BenchmarkRequestHandler>());
         _oneBehavior = Create(builder => builder.AddRequestHandler<BenchmarkRequestHandler>()
             .AddRequestPipelineBehavior<FirstBehavior>());
+        _asyncBehavior = Create(builder => builder.AddRequestHandler<BenchmarkRequestHandler>()
+            .AddRequestPipelineBehavior<YieldingBehavior>());
         _fiveBehaviors = Create(builder => builder.AddRequestHandler<BenchmarkRequestHandler>()
             .AddRequestPipelineBehavior<FirstBehavior>()
             .AddRequestPipelineBehavior<SecondBehavior>()
@@ -34,6 +37,7 @@ public partial class RequestDispatchBenchmarks
     {
         _withoutBehaviors.Dispose();
         _oneBehavior.Dispose();
+        _asyncBehavior.Dispose();
         _fiveBehaviors.Dispose();
     }
 
@@ -48,6 +52,10 @@ public partial class RequestDispatchBenchmarks
     /// <summary>Measures dispatch through five behaviors.</summary>
     [Benchmark]
     public ValueTask<Result> FiveBehaviors() => _fiveBehaviors.Dispatch();
+
+    /// <summary>Measures one pass-through behavior that yields before continuing.</summary>
+    [Benchmark]
+    public ValueTask<Result> AsyncYieldingBehavior() => _asyncBehavior.Dispatch();
 
     static DispatchState Create(Action<PortiaBuilder> configure)
     {
@@ -94,6 +102,16 @@ public partial class RequestDispatchBenchmarks
     internal sealed class ThirdBehavior : PassThroughBehavior;
     internal sealed class FourthBehavior : PassThroughBehavior;
     internal sealed class FifthBehavior : PassThroughBehavior;
+
+    internal sealed class YieldingBehavior : IRequestPipelineBehavior<BenchmarkRequest>
+    {
+        public async ValueTask<Result> HandleAsync(IRequestContext<BenchmarkRequest> context,
+            RequestPipelineNext continuation, CancellationToken ct)
+        {
+            await Task.Yield();
+            return await continuation(ct);
+        }
+    }
 }
 
 [PortiaJsonContext]

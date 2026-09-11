@@ -148,7 +148,10 @@ Implement `IRequestPipelineBehavior<TRequest>` for commands,
 request or request-family interface. Lower orders are outermost; registration order breaks ties.
 An authorization failure never enters the behavior chain. Every behavior must either return a
 fully initialized `Result` or call its typed `continuation`; Portia names the responsible behavior
-or handler when an uninitialized result crosses the framework boundary.
+or handler when an uninitialized result crosses the framework boundary. A behavior may invoke its
+continuation zero or one time and may not retain it after the behavior invocation returns. A
+second, concurrent losing, or late invocation throws `InvalidOperationException`; awaiting before
+the first call remains valid. The same rule applies to result-bearing and streaming behaviors.
 
 For a successful `Result<T>`, `Value` has exactly the nullability declared by `T`.
 `Result<string>.Value` is therefore non-nullable, while `Result<string?>.Success(null)` is valid
@@ -269,6 +272,8 @@ null requires a nullable parameter. Invalid root/value kinds return 400.
 An absent body is treated as `{}` only when every body member is optional. JSON bodies
 are bounded to 10 MiB by default; configure `PortiaHttpOptions.MaxJsonBodyBytes` through
 standard options registration. Exceeding the bound returns `413 application/problem+json`.
+Bodies are buffered completely and must be JSON objects; multipart, form, binary, and streaming
+request-body shapes are unsupported.
 Problem responses contain RFC 9457 `type`, `title`, `status`, `detail`, and `instance` members.
 Expected request failures also include a Boolean `transient` extension and matching
 `Portia-Transient` response header, preserving `RequestError.IsTransient` without inventing a
@@ -437,6 +442,9 @@ Use `[RequiresPermission("orders:{OrderId}:read")]` and register an
 `IPermissionEvaluator`. Add `IRequestAuthorizer<T>` for entity-specific decisions.
 Every direct bus call supplies its actor explicitly; HTTP supplies `HttpContext.User`.
 Transport actor validation happens inside the delivery scope.
+Hosted startup fails before serving work if guarded handlers are selected without an evaluator,
+including guarded handlers contributed by another feature assembly. A host with no guarded
+request does not require one.
 
 `MapPortiaGetStream<TRequest, TOut>` writes an incremental JSON array;
 `MapPortiaGetSse<TRequest, TOut>` writes SSE. Both enumerate once and check the first

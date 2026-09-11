@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Http;
@@ -11,6 +13,7 @@ namespace Cntryl.Portia;
 /// <summary>Binding primitives used by generated Portia HTTP endpoints.</summary>
 public static class PortiaHttpBinding
 {
+    static readonly ConditionalWeakTable<JsonSerializerOptions, OptionsBindingCache> BindingCaches = [];
     static readonly JsonDocument EmptyObject = JsonDocument.Parse("{}");
 
     /// <summary>Creates execution context from authenticated HTTP state and concrete endpoint facts.</summary>
@@ -194,34 +197,9 @@ public static class PortiaHttpBinding
         string fallbackName, bool nullable, bool hasDefault, TValue defaultValue)
     {
         _ = memberName;
-        JsonPropertyInfo? property = null;
-        try
-        {
-            var properties = options.GetTypeInfo(typeof(TRequest)).Properties;
-            property = properties.FirstOrDefault(candidate => candidate.Name == fallbackName)
-                       ?? properties.ElementAtOrDefault(memberIndex);
-        }
-        catch (NotSupportedException)
-        {
-            // Compile-time generated bindings can read scalar members without constructing the
-            // request through JSON. A request-level contract is still required by transported roots.
-        }
-
-        if (property?.CustomConverter is not null || property?.NumberHandling is not null)
-        {
-            options = new JsonSerializerOptions(options);
-            if (property.CustomConverter is not null)
-            {
-                options.Converters.Insert(0, property.CustomConverter);
-            }
-
-            if (property.NumberHandling is { } numberHandling)
-            {
-                options.NumberHandling = numberHandling;
-            }
-        }
-
-        return ReadBody(body, options, property?.Name ?? fallbackName, nullable, hasDefault, defaultValue);
+        var binding = BindingCaches.GetValue(options, static current => new OptionsBindingCache(current))
+            .Get(typeof(TRequest), typeof(TValue), memberIndex, fallbackName);
+        return ReadBody(body, binding.Options, binding.Name, nullable, hasDefault, defaultValue);
     }
 
     /// <summary>Reads a body property with the configured naming, converters and null contract.</summary>
@@ -293,5 +271,45 @@ public static class PortiaHttpBinding
     sealed class ProblemResult(int statusCode, string message) : IResult
     {
         public Task ExecuteAsync(HttpContext context) => PortiaProblemDetails.WriteAsync(context, statusCode, message);
+    }
+
+    readonly record struct BindingKey(Type RequestType, Type ValueType, int MemberIndex, string FallbackName);
+
+    sealed record BindingMetadata(string Name, JsonSerializerOptions Options);
+
+    sealed class OptionsBindingCache(JsonSerializerOptions options)
+    {
+        readonly ConcurrentDictionary<BindingKey, Lazy<BindingMetadata>> _bindings = new();
+
+        internal BindingMetadata Get(Type requestType, Type valueType, int memberIndex, string fallbackName) =>
+            _bindings.GetOrAdd(new BindingKey(requestType, valueType, memberIndex, fallbackName),
+                static (key, state) => new Lazy<BindingMetadata>(() => Resolve(state, key),
+                    LazyThreadSafetyMode.ExecutionAndPublication), options).Value;
+
+        static BindingMetadata Resolve(JsonSerializerOptions options, BindingKey key)
+        {
+            JsonPropertyInfo? property = null;
+            try
+            {
+                var properties = options.GetTypeInfo(key.RequestType).Properties;
+                property = properties.FirstOrDefault(candidate => candidate.Name == key.FallbackName)
+                           ?? properties.ElementAtOrDefault(key.MemberIndex);
+            }
+            catch (NotSupportedException)
+            {
+                // Generated bindings can read scalar members without constructing the request.
+                // A transported request-level contract is still validated separately.
+            }
+
+            if (property?.CustomConverter is null && property?.NumberHandling is null)
+                return new BindingMetadata(property?.Name ?? key.FallbackName, options);
+
+            var derived = new JsonSerializerOptions(options);
+            if (property.CustomConverter is not null)
+                derived.Converters.Insert(0, property.CustomConverter);
+            if (property.NumberHandling is { } numberHandling)
+                derived.NumberHandling = numberHandling;
+            return new BindingMetadata(property.Name, derived);
+        }
     }
 }

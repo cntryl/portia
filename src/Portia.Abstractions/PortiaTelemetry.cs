@@ -312,7 +312,7 @@ public static partial class PortiaTelemetry
         ILogger? logger = null)
     {
         WorkerFailure.Add(1, new KeyValuePair<string, object?>("runner", runnerName),
-            new KeyValuePair<string, object?>("error.type", exception?.GetType().Name ?? "unexpected_termination"));
+            new KeyValuePair<string, object?>("stage", StageName(stage)));
         if (logger is not null)
         {
             LogRunnerFault(logger, runnerName, StageName(stage), exception?.GetType().Name ?? "unexpected_termination",

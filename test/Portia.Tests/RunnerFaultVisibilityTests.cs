@@ -40,7 +40,9 @@ public sealed class RunnerFaultVisibilityTests
         Assert.Empty(activities);
         var (Value, Tags) = Assert.Single(measurements);
         Assert.Equal(1, Value);
-        Assert.Equal(["runner", "error.type"], Tags.Select(tag => tag.Key));
+        Assert.Equal(["runner", "stage"], Tags.Select(tag => tag.Key));
+        Assert.Equal("execution", Tags[1].Value);
+        Assert.DoesNotContain(Tags, tag => Equals(tag.Value, nameof(InvalidOperationException)));
         Assert.DoesNotContain(Tags, tag => Equals(tag.Value, "secret"));
     }
 

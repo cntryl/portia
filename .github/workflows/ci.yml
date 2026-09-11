@@ -55,7 +55,19 @@ jobs:
       - name: Test solution
         env:
           FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
-        run: dotnet test Portia.slnx --configuration Release --no-build
+        run: >-
+          dotnet test Portia.slnx
+          --configuration Release
+          --no-build
+          --collect:"XPlat Code Coverage"
+
+      - name: Upload coverage
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: '**/TestResults/**/coverage.cobertura.xml'
+          if-no-files-found: warn
 
       - name: Stop Fitz server
         if: ${{ always() }}

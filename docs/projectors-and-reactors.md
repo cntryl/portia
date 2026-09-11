@@ -16,8 +16,12 @@ A projector's writes and its checkpoint commit in one transaction, so anything i
 that transaction happens again on every failed commit and every rebuild. A projector reads events
 and writes its own projection; nothing else. Sending a command, calling an HTTP API, publishing a
 notice, or enqueuing work belongs in a reactor, which exists precisely because those effects
-cannot share the projection's transaction. `PORTIA100` warns when a projector takes a dependency
-that can cause one.
+cannot share the projection's transaction. `PORTIA100` warns when a projector takes a known effect
+dependency. It recognizes common Portia, HTTP, mail, Stripe, EF Core, ADO.NET, and generated gRPC
+client types through their ancestry. It is a best-effort heuristic: an application-defined gateway
+can still cause an effect without a known marker. `PORTIA101` likewise warns about known DI
+service-location dependencies and semantic `ActivatorUtilities` calls. Architecture review
+remains responsible for arbitrary application behavior.
 
 That is also why `IProjectorContext` carries checkpoint identity and rebuild metadata and nothing
 else, and why application dependencies arrive through the constructor.
@@ -121,6 +125,10 @@ Set `options.Processing.MaxBatchSize` through a new `ProjectionRunOptions` insta
 bound a batch (default 512). This counts source events, not database write actions.
 Single-event bases always commit progress per event. Batch handler interfaces require
 a batch base (`PORTIA017`), and one event type cannot select both handler modes (`PORTIA028`).
+At 512 events on the maintained benchmark machine, the single-event path measured 45.27 us and
+102,600 B, while a bounded batch measured 5.55 us and 12,864 B. See
+[performance and scaling](performance-and-scaling.md) for reproduction details and the semantic
+tradeoff; select batching for throughput only when one batch is the intended atomic boundary.
 
 Manual implementations can override `ProjectEventAsync` / `ProjectBatchAsync`, or
 `ReactToEventAsync` / `ReactBatchAsync`, instead of using generated typed handlers.

@@ -5,7 +5,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class CheckpointIdentityTests
 {
     [Fact]
-    public async Task ReactorsResumeIndependentlyAcrossTenantsAndPatterns()
+    public async Task CheckpointIdentitiesResumeIndependentlyAcrossTenantsAndPatterns()
     {
         var store = new InMemoryProjectionCheckpointStore();
         var identities = new[]

@@ -1,6 +1,3 @@
-using System.Buffers.Binary;
-using System.Security.Cryptography;
-using System.Text;
 using Cntryl.Fitz.Abstractions.Domains.Lease;
 using Microsoft.Extensions.Logging;
 
@@ -107,6 +104,7 @@ public sealed partial class FleetPartitionRunner(
         FleetRunOptions options, ILeaseInventoryObserver observer, CancellationToken ct)
     {
         var active = new Dictionary<string, PartitionRun>(StringComparer.Ordinal);
+        var assignments = new FleetAssignmentCache();
         var prefix = options.MembershipSelector[..^1];
         var unavailable = false;
         try
@@ -127,8 +125,7 @@ public sealed partial class FleetPartitionRunner(
                 var current = partitions();
                 options.Validate(current);
                 var assigned = ready
-                    ? current.Where(partition => GetOwner(partition, workers) == options.WorkerId)
-                        .ToHashSet(StringComparer.Ordinal)
+                    ? assignments.GetAssignments(current, workers, options.WorkerId!)
                     : new HashSet<string>(StringComparer.Ordinal);
                 var revoked = active.Keys.Where(partition => !assigned.Contains(partition)).ToArray();
                 foreach (var partition in revoked)
@@ -170,33 +167,6 @@ public sealed partial class FleetPartitionRunner(
             await ObserveAsync([.. active.Select(pair => (pair.Key, pair.Value))],
                 options.PartitionStopTimeout).ConfigureAwait(false);
         }
-    }
-
-    // SHA-256 of [uint32 BE byte length][UTF-8 route][uint32 BE byte length][UTF-8 worker ID].
-    // Compare unsigned digests lexicographically; greatest ordinal worker ID wins digest ties.
-    static string? GetOwner(string partition, string[] workers)
-    {
-        string? winner = null;
-        byte[]? greatest = null;
-        var route = Encoding.UTF8.GetBytes(partition);
-        foreach (var worker in workers)
-        {
-            var id = Encoding.UTF8.GetBytes(worker);
-            var input = new byte[8 + route.Length + id.Length];
-            BinaryPrimitives.WriteInt32BigEndian(input, route.Length);
-            route.CopyTo(input, 4);
-            BinaryPrimitives.WriteInt32BigEndian(input.AsSpan(4 + route.Length), id.Length);
-            id.CopyTo(input, 8 + route.Length);
-            var digest = SHA256.HashData(input);
-            var comparison = greatest is null ? 1 : digest.AsSpan().SequenceCompareTo(greatest);
-            if (comparison > 0 || (comparison == 0 && string.CompareOrdinal(worker, winner) > 0))
-            {
-                greatest = digest;
-                winner = worker;
-            }
-        }
-
-        return winner;
     }
 
     async Task CompeteAsync(string partition, Func<string, CancellationToken, Task> callback,
@@ -341,7 +311,7 @@ public sealed partial class FleetPartitionRunner(
     void Fault(RunnerFaultStage stage, Exception? exception = null) =>
         PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), stage, exception, _logger);
 
-    [LoggerMessage(EventId = 1002, Level = LogLevel.Error,
+    [LoggerMessage(EventId = 1101, Level = LogLevel.Error,
         Message =
             "Portia FleetPartitionRunner fault at cleanup (FleetPartitionTerminationTimeoutException); partitions: {Partitions}")]
     static partial void LogPartitionTerminationTimeout(ILogger logger, string partitions, Exception exception);

@@ -17,9 +17,7 @@ public sealed class FitzKvCheckpointStore(IKvClient client, string route) : IPro
 {
     readonly IKvClient _client = client ?? throw new ArgumentNullException(nameof(client));
 
-    readonly string _route = string.IsNullOrWhiteSpace(route)
-        ? throw new ArgumentException("A Fitz KV route cannot be empty.", nameof(route))
-        : route;
+    readonly string _route = FitzKvCheckpoints.Route(route, nameof(route));
 
     /// <inheritdoc />
     public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
@@ -33,7 +31,8 @@ public sealed class FitzKvCheckpointStore(IKvClient client, string route) : IPro
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(identity);
-        var tx = await _client.BeginAsync(_route, KvDurability.Sync, KvMode.ReadWrite, ct).ConfigureAwait(false);
+        var tx = await FitzKvCheckpoints
+            .BeginAsync(_client, _route, KvMode.ReadWrite, "Checkpoint", identity, ct).ConfigureAwait(false);
         var failed = false;
         try
         {
@@ -48,9 +47,7 @@ public sealed class FitzKvCheckpointStore(IKvClient client, string route) : IPro
 
             if (ex is KvException { DomainCode: FitzErrorCodes.KvIsolationConflict })
             {
-                throw new ProjectionConcurrencyException(
-                    $"Checkpoint '{identity.ComponentName}' pattern '{identity.Pattern}' conflicted with a concurrent writer; reload before retrying.",
-                    ex);
+                throw FitzKvCheckpoints.Conflict("Checkpoint", identity, ex);
             }
             else
             {

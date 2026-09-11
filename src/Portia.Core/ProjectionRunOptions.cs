@@ -15,6 +15,9 @@ public sealed record ProjectionRunOptions
     /// </summary>
     public int MaxBatchSize { get; init; } = 512;
 
+    /// <summary>Gets the maximum number of records enumerated during one processing pass.</summary>
+    public int MaxEventsPerPass { get; init; } = 4_096;
+
     /// <summary>
     ///     Gets the rebuild generation, or null for live processing. Reuse an ID to resume its data and progress.
     /// </summary>
@@ -22,7 +25,9 @@ public sealed record ProjectionRunOptions
 
     /// <summary>Rejects invalid batching and generation settings before work starts.</summary>
     /// <exception cref="ArgumentException"><see cref="RebuildId" /> is present but blank.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><see cref="MaxBatchSize" /> is not positive.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    ///     <see cref="MaxBatchSize" /> or <see cref="MaxEventsPerPass" /> is not positive.
+    /// </exception>
     public void Validate()
     {
         if (RebuildId is not null)
@@ -33,6 +38,11 @@ public sealed record ProjectionRunOptions
         if (MaxBatchSize <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(MaxBatchSize), "Batch size must be greater than zero.");
+        }
+
+        if (MaxEventsPerPass <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MaxEventsPerPass), "Events per pass must be greater than zero.");
         }
     }
 }

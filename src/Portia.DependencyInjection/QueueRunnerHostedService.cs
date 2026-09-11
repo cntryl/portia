@@ -28,7 +28,7 @@ sealed class QueueRunnerHostedService(
             {
                 break;
             }
-            catch (TerminalHandlerFailureException)
+            catch (Exception ex) when (ex is TerminalHandlerFailureException or TerminalHandlerMissingException)
             {
                 throw;
             }

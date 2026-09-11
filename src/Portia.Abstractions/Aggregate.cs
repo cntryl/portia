@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -60,16 +62,75 @@ public abstract class Aggregate(
 
     internal IReadOnlyList<DomainEvent> UncommittedAudits => _uncommittedAudits;
 
-    internal void Load(DomainEvent[] committedEvents, ulong? streamPosition = null)
+    internal void Load(IReadOnlyList<DomainEvent> committedEvents, ulong? streamPosition = null)
     {
         using var operation = BeginOperation();
         LoadDuringOperation(committedEvents, streamPosition);
     }
 
-    internal void LoadDuringOperation(DomainEvent[] committedEvents, ulong? streamPosition = null)
+    internal void LoadDuringOperation(IReadOnlyList<DomainEvent> committedEvents, ulong? streamPosition = null)
     {
         ArgumentNullException.ThrowIfNull(committedEvents);
 
+        if (committedEvents is List<DomainEvent> list)
+        {
+            LoadDuringOperation(CollectionsMarshal.AsSpan(list), streamPosition);
+            return;
+        }
+
+        if (committedEvents is DomainEvent[] array)
+        {
+            LoadDuringOperation(array.AsSpan(), streamPosition);
+            return;
+        }
+
+        if (_uncommittedEvents.Count != 0 || _uncommittedAudits.Count != 0)
+        {
+            throw new InvalidOperationException("An aggregate with uncommitted changes cannot load committed events.");
+        }
+
+        var validated = 0;
+        try
+        {
+            for (; validated < committedEvents.Count; validated++)
+            {
+                var expectedVersion = checked(Version + (ulong)validated + 1);
+                ValidateCommittedEvent(committedEvents[validated], expectedVersion);
+            }
+        }
+        catch
+        {
+            for (var index = 0; index < validated; index++)
+                _ = _issuedEventIds.Remove(committedEvents[index].Metadata.EventId);
+            throw;
+        }
+
+        for (var index = 0; index < committedEvents.Count; index++)
+        {
+            var ev = committedEvents[index];
+            try
+            {
+                Apply(ev);
+            }
+            catch
+            {
+                // Validation reserves the whole batch in the permanent set. Match the historical
+                // partial-apply behavior by releasing the failed event and everything after it;
+                // successfully applied events stay committed and keep their IDs reserved.
+                for (; index < committedEvents.Count; index++)
+                    _ = _issuedEventIds.Remove(committedEvents[index].Metadata.EventId);
+                throw;
+            }
+
+            _committedEvents.Add(ev);
+            Version++;
+        }
+
+        CommittedStreamPosition = streamPosition ?? checked(CommittedStreamPosition + (ulong)committedEvents.Count);
+    }
+
+    void LoadDuringOperation(ReadOnlySpan<DomainEvent> committedEvents, ulong? streamPosition)
+    {
         if (_uncommittedEvents.Count != 0 || _uncommittedAudits.Count != 0)
         {
             throw new InvalidOperationException("An aggregate with uncommitted changes cannot load committed events.");
@@ -100,9 +161,6 @@ public abstract class Aggregate(
             }
             catch
             {
-                // Validation reserves the whole batch in the permanent set. Match the historical
-                // partial-apply behavior by releasing the failed event and everything after it;
-                // successfully applied events stay committed and keep their IDs reserved.
                 for (; index < committedEvents.Length; index++)
                     _ = _issuedEventIds.Remove(committedEvents[index].Metadata.EventId);
                 throw;

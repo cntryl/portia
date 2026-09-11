@@ -10,9 +10,13 @@ namespace Cntryl.Portia;
 /// <summary>Exercises request context at transport boundaries.</summary>
 public sealed class TransportExecutionContextTests
 {
-    /// <summary>Verifies the public transport context contract.</summary>
+    /// <summary>
+    ///     Verifies that an HTTP dispatch reports its concrete ingress — method, resolved path, route
+    ///     pattern, and the server's request identifier — while leaving the query string out of the
+    ///     invocation entirely, since a query string can carry credentials that must not reach telemetry.
+    /// </summary>
     [Fact]
-    public async Task HttpHandlerReceivesConcreteIngressWithoutQuerySecrets()
+    public async Task ShouldReportConcreteHttpIngressWithoutQueryString()
     {
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
@@ -35,9 +39,13 @@ public sealed class TransportExecutionContextTests
         await app.StopAsync();
     }
 
-    /// <summary>Verifies the public transport context contract.</summary>
+    /// <summary>
+    ///     Verifies that a redelivered queue message keeps the request identity it was enqueued with while
+    ///     each delivery attempt starts its own execution, so retries stay correlated without two attempts
+    ///     ever sharing one execution id.
+    /// </summary>
     [Fact]
-    public async Task QueueRedeliveryKeepsRequestIdentityButStartsNewExecution()
+    public async Task ShouldKeepRequestIdentityButStartNewExecutionOnQueueRedelivery()
     {
         var metadata = RequestMetadata.Create();
         var first = new Queued(metadata, 1);
@@ -52,7 +60,8 @@ public sealed class TransportExecutionContextTests
         Assert.All(bus.Contexts, ctx => Assert.True(RequestActor.IsSystem(ctx.Actor)));
     }
 
-    /// <summary>Verifies the public transport context contract.</summary>
+    /// <summary>A routed request used only by these transport tests.</summary>
+    /// <param name="Amount">An arbitrary payload value bound from the route.</param>
     public sealed record TransportCommand(int Amount) : IRequest, ICallable;
 
     sealed class RecordingBus : IRequestBus

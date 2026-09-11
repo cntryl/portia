@@ -1,6 +1,9 @@
 namespace Cntryl.Portia;
 
-/// <summary>Describes a retryable queued failure that reached the application terminal threshold.</summary>
+/// <summary>
+///     Describes a queued delivery that became terminal because it reached the retry threshold or
+///     because actor validation or request handling failed permanently.
+/// </summary>
 /// <param name="Request">
 ///     The failed request, or <see langword="null" /> when the delivery could not
 ///     be deserialized into one.
@@ -25,4 +28,12 @@ public sealed record QueuedRequestFailureContext(
     RequestInvocation Invocation,
     uint Attempt,
     RequestError? Error,
-    Exception? Exception);
+    Exception? Exception)
+{
+    /// <summary>Gets why the delivery became terminal.</summary>
+    /// <remarks>
+    ///     The default preserves the meaning of contexts constructed by applications compiled
+    ///     against versions that predate this property.
+    /// </remarks>
+    public QueuedRequestTerminalReason Reason { get; init; }
+}

@@ -94,6 +94,7 @@ public sealed class QueueConsumerContractTests
             Assert.Equal(6U, failed.Attempt);
             Assert.Equal(0, queue.Enqueues);
             Assert.All(provider.GetRequiredService<ConsumerHost.Effects>().Scopes.Values, Assert.True);
+            Assert.All(provider.GetRequiredService<ConsumerHost.Effects>().Scopes.Values, Assert.True);
         }
         finally
         {
@@ -153,7 +154,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task MalformedAndUnexpectedFailuresLeaveReservationsForFitzAndLaterWorkRuns()
+    public async Task MalformedUnexpectedAndTerminalFailuresKeepTheirTransportOwnershipRules()
     {
         var serializer = ConsumerJson.CreateSerializer();
         var malformed = new Reserved("{"u8.ToArray(), 4);
@@ -161,11 +162,13 @@ public sealed class QueueConsumerContractTests
         var terminal = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4(), 3)), 1);
         var success = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
         var queue = new QueueClient([malformed, failed, terminal, success]);
+        var terminalHandler = new TerminalHandler();
         var services = ConsumerHost.CreateServices();
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
         _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(queue, serializer,
             "queue://consumer/scopes/delivery"));
+        _ = services.AddSingleton<IQueuedRequestTerminalHandler>(terminalHandler);
         _ = services.AddPortiaQueueRunner();
         await using var provider = ConsumerHost.Build(services);
         using var cancellation = new CancellationTokenSource();
@@ -179,6 +182,9 @@ public sealed class QueueConsumerContractTests
             Assert.Equal(0, failed.Completions);
             Assert.Equal(1, terminal.Completions);
             Assert.Equal(1, success.Completions);
+            var terminalContext = Assert.Single(terminalHandler.Contexts);
+            Assert.Equal(QueuedRequestTerminalReason.PermanentFailure, terminalContext.Reason);
+            Assert.Equal("Terminal rejection", terminalContext.Error?.Message);
             Assert.Equal(4U, malformed.Attempt);
             Assert.Equal(6U, failed.Attempt);
             Assert.Equal(0, queue.Enqueues);
@@ -193,6 +199,17 @@ public sealed class QueueConsumerContractTests
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
             }
+        }
+    }
+
+    sealed class TerminalHandler : IQueuedRequestTerminalHandler
+    {
+        public List<QueuedRequestFailureContext> Contexts { get; } = [];
+
+        public ValueTask HandleAsync(QueuedRequestFailureContext context, CancellationToken ct = default)
+        {
+            Contexts.Add(context);
+            return ValueTask.CompletedTask;
         }
     }
 

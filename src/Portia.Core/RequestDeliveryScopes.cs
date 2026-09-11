@@ -19,8 +19,8 @@ public static class RequestDeliveryScopes
     /// <param name="actorValidator">The transport-boundary actor-token validator.</param>
     /// <param name="options">The queue runner settings, or <see langword="null" /> for the defaults.</param>
     /// <param name="terminalHandler">
-    ///     Runs before a terminal delivery is acknowledged, or
-    ///     <see langword="null" /> to acknowledge without one.
+    ///     Runs before a terminal delivery is acknowledged. When <see langword="null" />, a
+    ///     terminal delivery faults the runner and remains transport-owned.
     /// </param>
     /// <param name="timeProvider">
     ///     The clock request contexts are stamped with, or

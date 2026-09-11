@@ -17,9 +17,17 @@ public sealed class RequestRegistration<TRequest,
     where THandler : class, IRequestHandler<TRequest>
 {
     ValueTask<Result> IRequestInvocation.InvokeAsync(IServiceProvider services, IRequest request,
+        IRequestContext context, CancellationToken ct)
+        => services.GetRequiredService<THandler>()
+            .HandleAsync((IRequestContext<TRequest>)context, ct);
+
+    ValueTask<Result> IRequestInvocation.InvokeUnsharedAsync(IServiceProvider services, IRequest request,
         RequestDispatchContext context, CancellationToken ct)
         => services.GetRequiredService<THandler>()
             .HandleAsync(new RequestContext<TRequest>((TRequest)request, context), ct);
+
+    internal override IRequestContext CreateContext(IRequestBase request, RequestDispatchContext context) =>
+        new RequestContext<TRequest>((TRequest)request, context);
 
     internal override void Register(IServiceCollection services) => services.TryAddScoped<THandler>();
 }

@@ -46,59 +46,89 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var telemetryStarted = PortiaTelemetry.StartTimestamp();
-        var telemetryOutcome = "fault";
+        var telemetryOutcome = "success";
         var telemetryCount = 0;
         try
         {
-            ArgumentNullException.ThrowIfNull(stream);
+            if (stream is null)
+            {
+                telemetryOutcome = "fault";
+                throw new ArgumentNullException(nameof(stream));
+            }
             var route = stream.ToString();
             var startOffset = fromOffset;
             var nextOffset = fromOffset;
-            var eventIds = new HashSet<Uuid>();
-
             while (true)
             {
-                var page = await _streams.ReadPageAsync(
-                    route,
-                    startOffset,
-                    ReadPageSize,
-                    ct: ct).ConfigureAwait(false);
+                StreamReadPage page;
+                try
+                {
+                    page = await _streams.ReadPageAsync(route, startOffset, ReadPageSize, ct: ct)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    telemetryOutcome = "canceled";
+                    throw;
+                }
+                catch
+                {
+                    telemetryOutcome = "fault";
+                    throw;
+                }
 
                 foreach (var item in page.Items)
                 {
-                    var record = item.Record ?? throw new InvalidOperationException(
-                        $"Fitz stream '{route}' contains a gap at offset '{item.Offset}'.");
-                    var expectedOffset = nextOffset;
-
-                    if (record.Offset != expectedOffset)
+                    DomainEventRecord result;
+                    try
                     {
-                        throw new InvalidOperationException(
-                            $"Fitz stream offset '{record.Offset}' does not match expected offset '{expectedOffset}'.");
+                        var record = item.Record ?? throw new InvalidOperationException(
+                            $"Fitz stream '{route}' contains a gap at offset '{item.Offset}'.");
+                        var expectedOffset = nextOffset;
+                        if (record.Offset != expectedOffset)
+                            throw new InvalidOperationException(
+                                $"Fitz stream offset '{record.Offset}' does not match expected offset '{expectedOffset}'.");
+                        var ev = _serializer.Deserialize(record.Body);
+                        DomainEventValidation.Validate(ev);
+                        result = new DomainEventRecord(stream, ev, record.Offset, record.AreaOffset, record.RealmOffset);
                     }
-
-                    var ev = _serializer.Deserialize(record.Body);
-                    DomainEventInvariants.ValidateEvent(ev, eventIds);
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        telemetryOutcome = "canceled";
+                        throw;
+                    }
+                    catch
+                    {
+                        telemetryOutcome = "fault";
+                        throw;
+                    }
                     telemetryCount++;
-                    yield return new DomainEventRecord(stream, ev, record.Offset,
-                        record.AreaOffset, record.RealmOffset);
+                    yield return result;
                     nextOffset++;
                 }
 
                 if (!page.Cursor.HasMore)
                 {
-                    telemetryOutcome = "success";
                     yield break;
                 }
                 else
                 {
-                    startOffset = checked(page.Cursor.LastResourceOffset + 1);
+                    try
+                    {
+                        startOffset = checked(page.Cursor.LastResourceOffset + 1);
+                    }
+                    catch
+                    {
+                        telemetryOutcome = "fault";
+                        throw;
+                    }
                 }
             }
         }
         finally
         {
             PortiaTelemetry.EventStoreFinished(telemetryStarted, "read", "stream",
-                ct.IsCancellationRequested ? "canceled" : telemetryOutcome, telemetryCount);
+                telemetryOutcome, telemetryCount);
         }
     }
 
@@ -109,67 +139,98 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var telemetryStarted = PortiaTelemetry.StartTimestamp();
-        var telemetryOutcome = "fault";
+        var telemetryOutcome = "success";
         var telemetryCount = 0;
         try
         {
-            ArgumentNullException.ThrowIfNull(pattern);
+            if (pattern is null)
+            {
+                telemetryOutcome = "fault";
+                throw new ArgumentNullException(nameof(pattern));
+            }
             var route = pattern.ToString();
             var startOffset = fromOffset;
             var nextOffset = fromOffset;
 
             while (true)
             {
-                var page = await _streams.ReadPageAsync(
-                    route,
-                    startOffset,
-                    ReadPageSize,
-                    ct: ct).ConfigureAwait(false);
+                StreamReadPage page;
+                try
+                {
+                    page = await _streams.ReadPageAsync(route, startOffset, ReadPageSize, ct: ct)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    telemetryOutcome = "canceled";
+                    throw;
+                }
+                catch
+                {
+                    telemetryOutcome = "fault";
+                    throw;
+                }
 
                 foreach (var item in page.Items)
                 {
-                    var record = item.Record ?? throw new InvalidOperationException(
-                        $"Fitz stream pattern '{route}' contains a gap at offset '{item.Offset}'.");
-                    var metadata = record.Metadata ?? throw new InvalidOperationException(
-                        "A Portia Fitz record does not contain its concrete stream route.");
-                    var stream = EventStreamAddress.Parse(Encoding.UTF8.GetString(metadata));
-
-                    if (!FitzEventStreamPatternOffsets.Matches(stream, pattern))
-                        throw new InvalidOperationException($"Stream '{stream}' does not match pattern '{pattern}'.");
-
-                    var areaOffset = record.AreaOffset;
-                    var realmOffset = record.RealmOffset;
-                    var scopeOffset =
-                        FitzEventStreamPatternOffsets.GetPatternOffset(pattern, record.Offset, areaOffset, realmOffset);
-
-                    if (scopeOffset != nextOffset)
+                    DomainEventRecord result;
+                    try
                     {
-                        throw new InvalidOperationException(
-                            $"Fitz pattern offset '{scopeOffset}' does not match expected offset '{nextOffset}'.");
+                        var record = item.Record ?? throw new InvalidOperationException(
+                            $"Fitz stream pattern '{route}' contains a gap at offset '{item.Offset}'.");
+                        var metadata = record.Metadata ?? throw new InvalidOperationException(
+                            "A Portia Fitz record does not contain its concrete stream route.");
+                        var stream = EventStreamAddress.Parse(Encoding.UTF8.GetString(metadata));
+                        if (!FitzEventStreamPatternOffsets.Matches(stream, pattern))
+                            throw new InvalidOperationException($"Stream '{stream}' does not match pattern '{pattern}'.");
+                        var areaOffset = record.AreaOffset;
+                        var realmOffset = record.RealmOffset;
+                        var scopeOffset = FitzEventStreamPatternOffsets.GetPatternOffset(
+                            pattern, record.Offset, areaOffset, realmOffset);
+                        if (scopeOffset != nextOffset)
+                            throw new InvalidOperationException(
+                                $"Fitz pattern offset '{scopeOffset}' does not match expected offset '{nextOffset}'.");
+                        var ev = _serializer.Deserialize(record.Body);
+                        DomainEventValidation.Validate(ev);
+                        result = new DomainEventRecord(stream, ev, record.Offset, areaOffset, realmOffset);
                     }
-
-                    var ev = _serializer.Deserialize(record.Body);
-                    DomainEventValidation.Validate(ev);
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        telemetryOutcome = "canceled";
+                        throw;
+                    }
+                    catch
+                    {
+                        telemetryOutcome = "fault";
+                        throw;
+                    }
                     telemetryCount++;
-                    yield return new DomainEventRecord(stream, ev, record.Offset, areaOffset, realmOffset);
+                    yield return result;
                     nextOffset++;
                 }
 
                 if (!page.Cursor.HasMore)
                 {
-                    telemetryOutcome = "success";
                     yield break;
                 }
                 else
                 {
-                    startOffset = FitzEventStreamPatternOffsets.GetNextOffset(pattern, page.Cursor);
+                    try
+                    {
+                        startOffset = FitzEventStreamPatternOffsets.GetNextOffset(pattern, page.Cursor);
+                    }
+                    catch
+                    {
+                        telemetryOutcome = "fault";
+                        throw;
+                    }
                 }
             }
         }
         finally
         {
             PortiaTelemetry.EventStoreFinished(telemetryStarted, "read", "pattern",
-                ct.IsCancellationRequested ? "canceled" : telemetryOutcome, telemetryCount);
+                telemetryOutcome, telemetryCount);
         }
     }
 

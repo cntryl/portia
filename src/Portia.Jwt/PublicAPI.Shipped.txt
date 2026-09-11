@@ -1,0 +1,4 @@
+#nullable enable
+Cntryl.Portia.JwtRequestActorValidator
+Cntryl.Portia.JwtRequestActorValidator.JwtRequestActorValidator(Microsoft.IdentityModel.Tokens.TokenValidationParameters! validationParameters) -> void
+Cntryl.Portia.JwtRequestActorValidator.ValidateAsync(string? token, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result<System.Security.Claims.ClaimsPrincipal!>>

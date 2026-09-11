@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using Cntryl.Fitz.Abstractions.Domains.Notice;
 using Cntryl.Fitz.Abstractions.Domains.Schedule;
 using Microsoft.Extensions.DependencyInjection;
@@ -100,6 +101,28 @@ public sealed class NotificationExecutionTests
         Assert.Equal("consumer.context.command", enumerator.Current.Name);
     }
 
+    [Theory]
+    [InlineData(2, "scheduler", "portia")]
+    [InlineData(1, "", "portia")]
+    [InlineData(1, "   ", "portia")]
+    [InlineData(1, "scheduler", "")]
+    [InlineData(1, "scheduler", "   ")]
+    public async Task FiredScheduleWithoutACompleteSystemIdentityIsRejected(int version, string subject, string issuer)
+    {
+        var serializer = ConsumerJson.CreateSerializer();
+        var wire = new Wire();
+        var request = serializer.Serialize(new BrokerExecutionContextTests.Command(2), null,
+            RequestMetadata.Create(), null);
+        await wire.PublishAsync("schedule://context/work/actual/execute", JsonSerializer.SerializeToUtf8Bytes(
+            new { version, system_subject = subject, system_issuer = issuer, request_envelope = request.ToArray() }));
+        var consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute");
+        await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => enumerator.MoveNextAsync().AsTask());
+
+        Assert.Contains("invalid system identity envelope", error.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task LegacyBearerTokenScheduleRequiresDrainAndRecreation()
     {
@@ -118,10 +141,91 @@ public sealed class NotificationExecutionTests
         Assert.Contains(wire.Route, exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(RequestScheduleDeliveryMode.One, ScheduleDeliveryMode.Single)]
+    [InlineData(RequestScheduleDeliveryMode.Broadcast, ScheduleDeliveryMode.Broadcast)]
+    public async Task DeliveryModeIsCarriedToTheBrokerUntranslated(RequestScheduleDeliveryMode requested,
+        ScheduleDeliveryMode expected)
+    {
+        var wire = new Wire();
+
+        var id = await new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).ScheduleAsync(
+            new BrokerExecutionContextTests.Command(2),
+            new RequestScheduleSpec("0 0 * * *", requested),
+            new RequestRouteValues(Resource: "actual"),
+            RequestActor.CreateSystem("scheduler"));
+
+        Assert.Equal(expected, wire.Mode);
+        Assert.Equal("schedule", id);
+    }
+
+    [Fact]
+    public async Task UndefinedDeliveryModeIsRejectedBeforePersistingAnything()
+    {
+        var wire = new Wire();
+
+        _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).ScheduleAsync(
+                new BrokerExecutionContextTests.Command(2),
+                new RequestScheduleSpec("0 0 * * *", (RequestScheduleDeliveryMode)42),
+                new RequestRouteValues(Resource: "actual"),
+                RequestActor.CreateSystem("scheduler")).AsTask());
+
+        Assert.True(wire.Body.IsEmpty);
+    }
+
+    [Fact]
+    public async Task ScheduleWithoutABrokerIdentityFailsInsteadOfReturningNothingToCancelWith()
+    {
+        var wire = new Wire { ReturnNoIdentity = true };
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).ScheduleAsync(
+                new BrokerExecutionContextTests.Command(2),
+                new RequestScheduleSpec("0 0 * * *"),
+                new RequestRouteValues(Resource: "actual"),
+                RequestActor.CreateSystem("scheduler")).AsTask());
+
+        Assert.Contains("did not return an identity", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CancellingAScheduleForwardsTheBrokerIdentityItWasCreatedWith()
+    {
+        var wire = new Wire();
+        var scheduler = new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer());
+        var id = await scheduler.ScheduleAsync(
+            new BrokerExecutionContextTests.Command(2),
+            new RequestScheduleSpec("0 0 * * *"),
+            new RequestRouteValues(Resource: "actual"),
+            RequestActor.CreateSystem("scheduler"));
+
+        await scheduler.CancelAsync(id);
+
+        Assert.Equal(id, Assert.Single(wire.Cancellations));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CancellingWithoutAScheduleIdentityIsRejectedBeforeReachingTheBroker(string? scheduleId)
+    {
+        var wire = new Wire();
+
+        _ = await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+            new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).CancelAsync(scheduleId!).AsTask());
+
+        Assert.Empty(wire.Cancellations);
+    }
+
     sealed class Wire : INoticeClient, IScheduleClient
     {
         public ReadOnlyMemory<byte> Body { get; private set; }
         public string Route { get; private set; } = "";
+        public ScheduleDeliveryMode? Mode { get; private set; }
+        public List<string> Cancellations { get; } = [];
+        public bool ReturnNoIdentity { get; init; }
 
         public Task PublishAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default)
         {
@@ -137,15 +241,20 @@ public sealed class NotificationExecutionTests
         public async Task<string?> CreateAsync(string route, string cron, ScheduleDeliveryMode mode,
             ReadOnlyMemory<byte> payload, CancellationToken ct = default)
         {
+            Mode = mode;
             await PublishAsync(route, payload, ct);
-            return "schedule";
+            return ReturnNoIdentity ? null : "schedule";
         }
 
         Task<ScheduleSubscription> IScheduleClient.SubscribeAsync(string selector, CancellationToken ct)
             => Task.FromResult(new ScheduleSubscription(selector, Repeat(new ScheduleNotification(Route, Body), ct),
                 _ => ValueTask.CompletedTask, Task.CompletedTask));
 
-        public Task CancelAsync(string id, CancellationToken ct = default) => Task.CompletedTask;
+        public Task CancelAsync(string id, CancellationToken ct = default)
+        {
+            Cancellations.Add(id);
+            return Task.CompletedTask;
+        }
 
         public Task<ScheduleListPage> ListAsync(ulong? offset, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();

@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace Cntryl.Portia.Consumer;
 
-public sealed class ReviewRegressionTests
+public sealed class GeneratedHttpMappingContractTests
 {
     [Fact]
     public async Task QualifiedStaticHttpMappingPreservesGeneratedBinding()

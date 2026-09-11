@@ -13,10 +13,10 @@ public sealed class StreamRequestPipelineBehaviorRegistration<TRequest,
     where TBehavior : class, IStreamRequestPipelineBehavior<TRequest, TOut>
 {
     IAsyncEnumerable<TOut> IStreamRequestBehaviorInvocation<TOut>.Invoke(IServiceProvider services,
-        IStreamRequest<TOut> request, RequestDispatchContext context, StreamRequestPipelineNext<TOut> continuation,
+        IStreamRequest<TOut> request, IRequestContext context, StreamRequestPipelineNext<TOut> continuation,
         CancellationToken ct)
         => services.GetRequiredService<TBehavior>()
-            .HandleAsync(new RequestContext<TRequest>((TRequest)request, context), continuation, ct);
+            .HandleAsync((IRequestContext<TRequest>)context, continuation, ct);
 
     internal override void Register(IServiceCollection services) => services.TryAddScoped<TBehavior>();
 }

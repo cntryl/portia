@@ -1,0 +1,63 @@
+#nullable enable
+Cntryl.Portia.ITenantWorkload
+Cntryl.Portia.ITenantWorkload.RunAsync(Cntryl.Portia.TenantId tenantId, System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task!
+Cntryl.Portia.PortiaApplicationServiceCollectionExtensions
+Cntryl.Portia.PortiaBuilder
+Cntryl.Portia.PortiaBuilder.AddEvent<TEvent>() -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddGeneratedAuthorizer(Cntryl.Portia.RequestAuthorizerRegistration! registration) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddGeneratedBehavior(Cntryl.Portia.RequestPipelineBehaviorRegistration! registration) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddGeneratedEvent<TEvent>(int version, string! name) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddGeneratedHandler(Cntryl.Portia.RequestHandlerRegistration! registration) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddGeneratedJsonContext(System.Func<System.Text.Json.JsonSerializerOptions!, System.Text.Json.Serialization.JsonSerializerContext!>! factory) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddGeneratedRequest(Cntryl.Portia.RequestTransportRegistration! registration) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddProjector<TProjector>(Cntryl.Portia.WorkloadScope scope, System.Action<Cntryl.Portia.WorkloadOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddReactor<TReactor>(Cntryl.Portia.WorkloadScope scope, System.Action<Cntryl.Portia.WorkloadOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddRequestAuthorizer<TAuthorizer>(Cntryl.Portia.AuthorizationStage stage = Cntryl.Portia.AuthorizationStage.ResourceAccess) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddRequestHandler<THandler>() -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddRequestPipelineBehavior<TBehavior>(int order = 0) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddWorkers() -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.ConfigureJson(System.Action<System.Text.Json.JsonSerializerOptions!>! configure) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.ConfigureWorker(string! name, System.Action<Microsoft.Extensions.DependencyInjection.IServiceCollection!>! configure) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.RegisterDynamicRequest<TRequest>() -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.Services.get -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Cntryl.Portia.PortiaEventServiceCollectionExtensions
+Cntryl.Portia.PortiaHostingServiceCollectionExtensions
+Cntryl.Portia.WorkloadFailureException
+Cntryl.Portia.WorkloadFailureException.Attempts.get -> int
+Cntryl.Portia.WorkloadFailureException.Identity.get -> Cntryl.Portia.WorkloadIdentity!
+Cntryl.Portia.WorkloadFailureException.WorkloadFailureException(Cntryl.Portia.WorkloadIdentity! identity, int attempts, System.Exception! innerException) -> void
+Cntryl.Portia.WorkloadOptions
+Cntryl.Portia.WorkloadOptions.FailureAttemptLimit.get -> int
+Cntryl.Portia.WorkloadOptions.FailureAttemptLimit.set -> void
+Cntryl.Portia.WorkloadOptions.MaximumFailureDelay.get -> System.TimeSpan
+Cntryl.Portia.WorkloadOptions.MaximumFailureDelay.set -> void
+Cntryl.Portia.WorkloadOptions.Name.get -> string?
+Cntryl.Portia.WorkloadOptions.Name.set -> void
+Cntryl.Portia.WorkloadOptions.PollInterval.get -> System.TimeSpan
+Cntryl.Portia.WorkloadOptions.PollInterval.set -> void
+Cntryl.Portia.WorkloadOptions.Processing.get -> Cntryl.Portia.ProjectionRunOptions!
+Cntryl.Portia.WorkloadOptions.Processing.set -> void
+Cntryl.Portia.WorkloadOptions.WorkloadOptions() -> void
+Cntryl.Portia.WorkloadRegistration
+Cntryl.Portia.WorkloadRegistration.<Clone>$() -> Cntryl.Portia.WorkloadRegistration!
+Cntryl.Portia.WorkloadRegistration.ComponentType.get -> System.Type!
+Cntryl.Portia.WorkloadRegistration.Equals(Cntryl.Portia.WorkloadRegistration? other) -> bool
+Cntryl.Portia.WorkloadRegistration.FailureAttemptLimit.get -> int
+Cntryl.Portia.WorkloadRegistration.MaximumFailureDelay.get -> System.TimeSpan
+Cntryl.Portia.WorkloadRegistration.Name.get -> string!
+Cntryl.Portia.WorkloadRegistration.PollInterval.get -> System.TimeSpan
+Cntryl.Portia.WorkloadRegistration.Processing.get -> Cntryl.Portia.ProjectionRunOptions!
+Cntryl.Portia.WorkloadRegistration.Scope.get -> Cntryl.Portia.WorkloadScope
+Cntryl.Portia.WorkloadScope
+Cntryl.Portia.WorkloadScope.Global = 0 -> Cntryl.Portia.WorkloadScope
+Cntryl.Portia.WorkloadScope.PerTenant = 1 -> Cntryl.Portia.WorkloadScope
+override Cntryl.Portia.WorkloadRegistration.Equals(object? obj) -> bool
+override Cntryl.Portia.WorkloadRegistration.GetHashCode() -> int
+override Cntryl.Portia.WorkloadRegistration.ToString() -> string!
+static Cntryl.Portia.PortiaApplicationServiceCollectionExtensions.AddPortia(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Cntryl.Portia.PortiaBuilder!
+static Cntryl.Portia.PortiaEventServiceCollectionExtensions.AddPortiaEvent<TEvent>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, int version, string! name) -> void
+static Cntryl.Portia.PortiaHostingServiceCollectionExtensions.AddPortiaMultiTenantRunner<TWorkload>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Cntryl.Portia.PortiaHostingServiceCollectionExtensions.AddPortiaQueueRunner(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Cntryl.Portia.PortiaHostingServiceCollectionExtensions.AddPortiaRequestNotificationRunner(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Cntryl.Portia.WorkloadRegistration.operator !=(Cntryl.Portia.WorkloadRegistration? left, Cntryl.Portia.WorkloadRegistration? right) -> bool
+static Cntryl.Portia.WorkloadRegistration.operator ==(Cntryl.Portia.WorkloadRegistration? left, Cntryl.Portia.WorkloadRegistration? right) -> bool

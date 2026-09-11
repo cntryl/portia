@@ -1,0 +1,19 @@
+#nullable enable
+Cntryl.Portia.IResumableTenantDirectory
+Cntryl.Portia.IResumableTenantDirectory.OpenCursorAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ITenantDirectoryCursor!>
+Cntryl.Portia.ITenantDirectoryCursor
+Cntryl.Portia.ITenantDirectoryCursor.ReadAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.TenantLifecycleChange>!
+Cntryl.Portia.MultiTenantRunnerOptions
+Cntryl.Portia.MultiTenantRunnerOptions.MultiTenantRunnerOptions() -> void
+Cntryl.Portia.MultiTenantRunnerOptions.RestartInterval.get -> System.TimeSpan
+Cntryl.Portia.MultiTenantRunnerOptions.RestartInterval.set -> void
+Cntryl.Portia.MultiTenantRunnerOptions.ShutdownGrace.get -> System.TimeSpan
+Cntryl.Portia.MultiTenantRunnerOptions.ShutdownGrace.set -> void
+Cntryl.Portia.MultiTenantRunnerOptions.TenantStopTimeout.get -> System.TimeSpan
+Cntryl.Portia.MultiTenantRunnerOptions.TenantStopTimeout.set -> void
+Cntryl.Portia.QueuedRequestFailureContext.Reason.get -> Cntryl.Portia.QueuedRequestTerminalReason
+Cntryl.Portia.QueuedRequestFailureContext.Reason.init -> void
+Cntryl.Portia.QueuedRequestTerminalReason
+Cntryl.Portia.QueuedRequestTerminalReason.ActorValidationFailure = 2 -> Cntryl.Portia.QueuedRequestTerminalReason
+Cntryl.Portia.QueuedRequestTerminalReason.PermanentFailure = 1 -> Cntryl.Portia.QueuedRequestTerminalReason
+Cntryl.Portia.QueuedRequestTerminalReason.RetryLimitReached = 0 -> Cntryl.Portia.QueuedRequestTerminalReason

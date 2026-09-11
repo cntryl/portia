@@ -7,7 +7,7 @@ public sealed class ProcessorBaseTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ConstructorRepositoryCommitsDataAndProgressAtTheSelectedBoundary(bool batch)
+    public async Task InjectedRepositoryCommitsDataAndProgressAtTheSelectedBoundary(bool batch)
     {
         var events = await Seed();
         var repository = new Repository();

@@ -60,7 +60,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             foreach (var call in calls)
             {
                 if (call.Diagnostic is { } diagnostic)
-                    sourceContext.ReportDiagnostic(diagnostic);
+                    sourceContext.ReportDiagnostic(diagnostic.ToDiagnostic());
             }
 
             foreach (var duplicate in calls.Where(call => call.Model is not null).Select(call => call.Model!)
@@ -74,8 +74,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             {
                 foreach (var call in duplicate)
                 {
-                    sourceContext.ReportDiagnostic(Diagnostic.Create(DuplicateOperationId, call.DiagnosticLocation,
-                        duplicate.Key));
+                    sourceContext.ReportDiagnostic(Diagnostic.Create(DuplicateOperationId,
+                        call.DiagnosticLocation.ToLocation(), duplicate.Key));
                 }
             }
 
@@ -117,7 +117,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         if (optionalToken is not null)
         {
             return new CallAnalysis(null,
-                Diagnostic.Create(OptionalRoute, invocation.GetLocation(), pattern, optionalToken.Groups[1].Value));
+                new HttpBindingDiagnostic(HttpBindingDiagnosticKind.OptionalRoute,
+                    DiagnosticLocation.From(invocation.GetLocation()), pattern, optionalToken.Groups[1].Value));
         }
 
         var verb = method.Name switch
@@ -249,14 +250,15 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 kind,
                 verb,
                 parameters,
-                location,
-                invocation.GetLocation(),
+                InterceptableLocationModel.From(location),
+                DiagnosticLocation.From(invocation.GetLocation()),
                 ContainingScope(invocation),
                 IsExcludedFromDescription(invocation)), null);
     }
 
-    static CallAnalysis Invalid(InvocationExpressionSyntax invocation, string reason)
-        => new(null, Diagnostic.Create(UnsupportedBinding, invocation.GetLocation(), reason));
+    static CallAnalysis Invalid(InvocationExpressionSyntax invocation, string reason) =>
+        new(null, new HttpBindingDiagnostic(HttpBindingDiagnosticKind.UnsupportedBinding,
+            DiagnosticLocation.From(invocation.GetLocation()), reason));
 
     static string Normalize(string name) => name.Replace("_", string.Empty).ToLowerInvariant();
 
@@ -597,10 +599,28 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     static bool IsString(string type) =>
         type is "string" or "string?" or "global::System.String" or "global::System.String?";
 
-    sealed class CallAnalysis(CallModel? model, Diagnostic? diagnostic)
+    sealed record CallAnalysis(CallModel? Model, HttpBindingDiagnostic? Diagnostic);
+
+    enum HttpBindingDiagnosticKind
     {
-        public CallModel? Model { get; } = model;
-        public Diagnostic? Diagnostic { get; } = diagnostic;
+        OptionalRoute,
+        UnsupportedBinding
+    }
+
+    sealed record HttpBindingDiagnostic(
+        HttpBindingDiagnosticKind Kind,
+        DiagnosticLocation Location,
+        string FirstArgument,
+        string? SecondArgument = null)
+    {
+        public Diagnostic ToDiagnostic() => Kind switch
+        {
+            HttpBindingDiagnosticKind.OptionalRoute =>
+                Diagnostic.Create(OptionalRoute, Location.ToLocation(), FirstArgument, SecondArgument),
+            HttpBindingDiagnosticKind.UnsupportedBinding =>
+                Diagnostic.Create(UnsupportedBinding, Location.ToLocation(), FirstArgument),
+            _ => throw new ArgumentOutOfRangeException(nameof(Kind))
+        };
     }
 
     enum ParameterSource
@@ -618,29 +638,17 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         Sse
     }
 
-    sealed class ParameterModel(
-        string name,
-        string type,
-        string underlyingType,
-        ParameterSource source,
-        string? routeToken,
-        bool nullable,
-        string? defaultValue,
-        string? jsonName,
-        bool isEnum,
-        bool hasProviderParse)
-    {
-        public string Name { get; } = name;
-        public string Type { get; } = type;
-        public string UnderlyingType { get; } = underlyingType;
-        public ParameterSource Source { get; } = source;
-        public string? RouteToken { get; } = routeToken;
-        public bool Nullable { get; } = nullable;
-        public string? Default { get; } = defaultValue;
-        public string? JsonName { get; } = jsonName;
-        public bool IsEnum { get; } = isEnum;
-        public bool HasProviderParse { get; } = hasProviderParse;
-    }
+    sealed record ParameterModel(
+        string Name,
+        string Type,
+        string UnderlyingType,
+        ParameterSource Source,
+        string? RouteToken,
+        bool Nullable,
+        string? Default,
+        string? JsonName,
+        bool IsEnum,
+        bool HasProviderParse);
 
     sealed class CallModel(
         string requestTypeFullName,
@@ -649,8 +657,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         CallKind kind,
         string verb,
         ParameterModel[] parameters,
-        InterceptableLocation location,
-        Location diagnosticLocation,
+        InterceptableLocationModel location,
+        DiagnosticLocation diagnosticLocation,
         string containingSymbol,
         bool excludedFromDescription)
     {
@@ -668,13 +676,45 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
         public ParameterModel[] Parameters { get; } = parameters;
 
-        public InterceptableLocation Location { get; } = location;
+        public InterceptableLocationModel Location { get; } = location;
 
-        public Location DiagnosticLocation { get; } = diagnosticLocation;
+        public DiagnosticLocation DiagnosticLocation { get; } = diagnosticLocation;
 
         public string ContainingSymbol { get; } = containingSymbol;
 
         public bool ExcludedFromDescription { get; } = excludedFromDescription;
+
+        public override bool Equals(object? obj) => obj is CallModel other && Equals(other);
+
+        bool Equals(CallModel other) =>
+            string.Equals(RequestTypeFullName, other.RequestTypeFullName, StringComparison.Ordinal)
+            && string.Equals(RequestTypeName, other.RequestTypeName, StringComparison.Ordinal)
+            && string.Equals(ResultType, other.ResultType, StringComparison.Ordinal)
+            && Kind == other.Kind
+            && string.Equals(Verb, other.Verb, StringComparison.Ordinal)
+            && Parameters.SequenceEqual(other.Parameters)
+            && Location == other.Location
+            && DiagnosticLocation == other.DiagnosticLocation
+            && string.Equals(ContainingSymbol, other.ContainingSymbol, StringComparison.Ordinal)
+            && ExcludedFromDescription == other.ExcludedFromDescription;
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var hash = StringComparer.Ordinal.GetHashCode(RequestTypeFullName);
+                hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(RequestTypeName);
+                hash = (hash * 397) ^ (ResultType is null ? 0 : StringComparer.Ordinal.GetHashCode(ResultType));
+                hash = (hash * 397) ^ (int)Kind;
+                hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(Verb);
+                foreach (var parameter in Parameters)
+                    hash = (hash * 397) ^ parameter.GetHashCode();
+                hash = (hash * 397) ^ Location.GetHashCode();
+                hash = (hash * 397) ^ DiagnosticLocation.GetHashCode();
+                hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(ContainingSymbol);
+                return (hash * 397) ^ ExcludedFromDescription.GetHashCode();
+            }
+        }
     }
 
     sealed class StringTupleComparer : IEqualityComparer<(string RequestTypeFullName, string ContainingSymbol)>

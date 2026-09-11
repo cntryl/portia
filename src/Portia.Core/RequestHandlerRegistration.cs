@@ -24,5 +24,7 @@ public abstract class RequestHandlerRegistration(
 
     internal Func<IRequestBase, string>? Permission { get; } = permission;
 
+    internal abstract IRequestContext CreateContext(IRequestBase request, RequestDispatchContext context);
+
     internal abstract void Register(IServiceCollection services);
 }

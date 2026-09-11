@@ -1,0 +1,93 @@
+#nullable enable
+Cntryl.Portia.HttpPayloadTooLargeException
+Cntryl.Portia.HttpPayloadTooLargeException.HttpPayloadTooLargeException() -> void
+Cntryl.Portia.PortiaEndpointRouteBuilderExtensions
+Cntryl.Portia.PortiaHttpBinding
+Cntryl.Portia.PortiaHttpOptions
+Cntryl.Portia.PortiaHttpOptions.MaxJsonBodyBytes.get -> long
+Cntryl.Portia.PortiaHttpOptions.MaxJsonBodyBytes.set -> void
+Cntryl.Portia.PortiaHttpOptions.PortiaHttpOptions() -> void
+Cntryl.Portia.PortiaOpenApi
+Cntryl.Portia.PortiaOpenApiOperation
+Cntryl.Portia.PortiaOpenApiOperation.<Clone>$() -> Cntryl.Portia.PortiaOpenApiOperation!
+Cntryl.Portia.PortiaOpenApiOperation.Deconstruct(out string! OperationId, out System.Type? ResultType, out bool NoContent, out bool JsonStream, out bool ServerSentEvents, out bool QueueCapable, out System.Collections.Generic.IReadOnlyList<Cntryl.Portia.PortiaOpenApiParameter!>! Parameters) -> void
+Cntryl.Portia.PortiaOpenApiOperation.Equals(Cntryl.Portia.PortiaOpenApiOperation? other) -> bool
+Cntryl.Portia.PortiaOpenApiOperation.JsonStream.get -> bool
+Cntryl.Portia.PortiaOpenApiOperation.JsonStream.init -> void
+Cntryl.Portia.PortiaOpenApiOperation.NoContent.get -> bool
+Cntryl.Portia.PortiaOpenApiOperation.NoContent.init -> void
+Cntryl.Portia.PortiaOpenApiOperation.OperationId.get -> string!
+Cntryl.Portia.PortiaOpenApiOperation.OperationId.init -> void
+Cntryl.Portia.PortiaOpenApiOperation.Parameters.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.PortiaOpenApiParameter!>!
+Cntryl.Portia.PortiaOpenApiOperation.Parameters.init -> void
+Cntryl.Portia.PortiaOpenApiOperation.PortiaOpenApiOperation(string! OperationId, System.Type? ResultType, bool NoContent, bool JsonStream, bool ServerSentEvents, bool QueueCapable, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.PortiaOpenApiParameter!>! Parameters) -> void
+Cntryl.Portia.PortiaOpenApiOperation.QueueCapable.get -> bool
+Cntryl.Portia.PortiaOpenApiOperation.QueueCapable.init -> void
+Cntryl.Portia.PortiaOpenApiOperation.ResultType.get -> System.Type?
+Cntryl.Portia.PortiaOpenApiOperation.ResultType.init -> void
+Cntryl.Portia.PortiaOpenApiOperation.ServerSentEvents.get -> bool
+Cntryl.Portia.PortiaOpenApiOperation.ServerSentEvents.init -> void
+Cntryl.Portia.PortiaOpenApiParameter
+Cntryl.Portia.PortiaOpenApiParameter.<Clone>$() -> Cntryl.Portia.PortiaOpenApiParameter!
+Cntryl.Portia.PortiaOpenApiParameter.ClrName.get -> string!
+Cntryl.Portia.PortiaOpenApiParameter.ClrName.init -> void
+Cntryl.Portia.PortiaOpenApiParameter.Deconstruct(out string! ClrName, out System.Type! Type, out string! Source, out bool Required, out bool HasDefault, out object? DefaultValue, out string? WireName) -> void
+Cntryl.Portia.PortiaOpenApiParameter.DefaultValue.get -> object?
+Cntryl.Portia.PortiaOpenApiParameter.DefaultValue.init -> void
+Cntryl.Portia.PortiaOpenApiParameter.Equals(Cntryl.Portia.PortiaOpenApiParameter? other) -> bool
+Cntryl.Portia.PortiaOpenApiParameter.HasDefault.get -> bool
+Cntryl.Portia.PortiaOpenApiParameter.HasDefault.init -> void
+Cntryl.Portia.PortiaOpenApiParameter.PortiaOpenApiParameter(string! ClrName, System.Type! Type, string! Source, bool Required, bool HasDefault, object? DefaultValue, string? WireName) -> void
+Cntryl.Portia.PortiaOpenApiParameter.Required.get -> bool
+Cntryl.Portia.PortiaOpenApiParameter.Required.init -> void
+Cntryl.Portia.PortiaOpenApiParameter.Source.get -> string!
+Cntryl.Portia.PortiaOpenApiParameter.Source.init -> void
+Cntryl.Portia.PortiaOpenApiParameter.Type.get -> System.Type!
+Cntryl.Portia.PortiaOpenApiParameter.Type.init -> void
+Cntryl.Portia.PortiaOpenApiParameter.WireName.get -> string?
+Cntryl.Portia.PortiaOpenApiParameter.WireName.init -> void
+Cntryl.Portia.PortiaStreamResults
+Cntryl.Portia.ResultHttpExtensions
+const Cntryl.Portia.PortiaHttpOptions.DefaultMaxJsonBodyBytes = 10485760 -> long
+const Cntryl.Portia.ResultHttpExtensions.TransientHeaderName = "Portia-Transient" -> string!
+override Cntryl.Portia.PortiaOpenApiOperation.Equals(object? obj) -> bool
+override Cntryl.Portia.PortiaOpenApiOperation.GetHashCode() -> int
+override Cntryl.Portia.PortiaOpenApiOperation.ToString() -> string!
+override Cntryl.Portia.PortiaOpenApiParameter.Equals(object? obj) -> bool
+override Cntryl.Portia.PortiaOpenApiParameter.GetHashCode() -> int
+override Cntryl.Portia.PortiaOpenApiParameter.ToString() -> string!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaDelete<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaDelete<TRequest>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaGet<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaGet<TRequest>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaGetSse<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaGetStream<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPatch<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPatch<TRequest>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPost<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPost<TRequest>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPut<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPut<TRequest>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.WithPortiaRouteValues(this Microsoft.AspNetCore.Builder.IEndpointConventionBuilder! builder, System.Func<Microsoft.AspNetCore.Http.HttpContext!, Cntryl.Portia.RequestRouteValues!>! resolver) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaHttpBinding.Accepted(Microsoft.AspNetCore.Http.HttpContext! context, Cntryl.Portia.Uuid requestId) -> Microsoft.AspNetCore.Http.IResult!
+static Cntryl.Portia.PortiaHttpBinding.CreateDispatchContext(Microsoft.AspNetCore.Http.HttpContext! context) -> Cntryl.Portia.RequestDispatchContext!
+static Cntryl.Portia.PortiaHttpBinding.GetJsonOptions(Microsoft.AspNetCore.Http.HttpContext! context) -> System.Text.Json.JsonSerializerOptions!
+static Cntryl.Portia.PortiaHttpBinding.PrefersRespondAsync(Microsoft.AspNetCore.Http.HttpContext! context) -> bool
+static Cntryl.Portia.PortiaHttpBinding.Problem(int statusCode, string! message) -> Microsoft.AspNetCore.Http.IResult!
+static Cntryl.Portia.PortiaHttpBinding.ReadBearerCredential(Microsoft.AspNetCore.Http.HttpContext! context) -> string?
+static Cntryl.Portia.PortiaHttpBinding.ReadBody<T>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, string! name, bool nullable, bool hasDefault, T defaultValue) -> T
+static Cntryl.Portia.PortiaHttpBinding.ReadBody<TRequest, TValue>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, int memberIndex, string! memberName, string! fallbackName, bool nullable, bool hasDefault, TValue defaultValue) -> TValue
+static Cntryl.Portia.PortiaHttpBinding.ReadJsonBodyAsync(Microsoft.AspNetCore.Http.HttpContext! context, bool bodyRequired, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask<System.Text.Json.JsonDocument!>
+static Cntryl.Portia.PortiaHttpBinding.ReadQuery(Microsoft.AspNetCore.Http.HttpContext! context, string! name) -> string?
+static Cntryl.Portia.PortiaHttpBinding.ResolveRouteValues(Microsoft.AspNetCore.Http.HttpContext! context) -> Cntryl.Portia.RequestRouteValues!
+static Cntryl.Portia.PortiaHttpBinding.Unexpected(Microsoft.AspNetCore.Http.HttpContext! context, System.Exception! exception) -> Microsoft.AspNetCore.Http.IResult!
+static Cntryl.Portia.PortiaOpenApi.Build(Microsoft.AspNetCore.Builder.WebApplicationBuilder! builder) -> Microsoft.AspNetCore.Builder.WebApplication!
+static Cntryl.Portia.PortiaOpenApi.Create(string![]? args) -> Microsoft.AspNetCore.Builder.WebApplication!
+static Cntryl.Portia.PortiaOpenApiOperation.operator !=(Cntryl.Portia.PortiaOpenApiOperation? left, Cntryl.Portia.PortiaOpenApiOperation? right) -> bool
+static Cntryl.Portia.PortiaOpenApiOperation.operator ==(Cntryl.Portia.PortiaOpenApiOperation? left, Cntryl.Portia.PortiaOpenApiOperation? right) -> bool
+static Cntryl.Portia.PortiaOpenApiParameter.operator !=(Cntryl.Portia.PortiaOpenApiParameter? left, Cntryl.Portia.PortiaOpenApiParameter? right) -> bool
+static Cntryl.Portia.PortiaOpenApiParameter.operator ==(Cntryl.Portia.PortiaOpenApiParameter? left, Cntryl.Portia.PortiaOpenApiParameter? right) -> bool
+static Cntryl.Portia.PortiaStreamResults.Json<T>(System.Collections.Generic.IAsyncEnumerable<T>! source) -> Microsoft.AspNetCore.Http.IResult!
+static Cntryl.Portia.PortiaStreamResults.Sse<T>(System.Collections.Generic.IAsyncEnumerable<T>! source) -> Microsoft.AspNetCore.Http.IResult!
+static Cntryl.Portia.ResultHttpExtensions.ToHttpResult(this Cntryl.Portia.Result result) -> Microsoft.AspNetCore.Http.IResult!
+static Cntryl.Portia.ResultHttpExtensions.ToHttpResult<T>(this Cntryl.Portia.Result<T> result, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>! typeInfo) -> Microsoft.AspNetCore.Http.IResult!

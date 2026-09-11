@@ -361,6 +361,251 @@ public sealed class MultiTenancyTests
         Assert.Equal(1, directory.WatchAttempts);
     }
 
+    /// <summary>The runner uses one optional cursor and never mixes it with the legacy contract.</summary>
+    [Fact]
+    public async Task ShouldPreferOneResumableCursorForTheRunnerLifetime()
+    {
+        var directory = new ResumableProbeDirectory();
+        var clock = new WaitingClock();
+        var runner = new MultiTenantRunner(directory, timeProvider: clock);
+        var started = new TaskCompletionSource<TenantId>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cancellation = new CancellationTokenSource();
+        var run = runner.RunAsync((tenant, token) =>
+        {
+            _ = started.TrySetResult(tenant);
+            return WaitForCancellationAsync(token);
+        }, (_, _) => Task.CompletedTask, cancellation.Token);
+
+        Assert.Equal(new TenantId("cursor"), await started.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, directory.OpenCount);
+        Assert.Equal(1, directory.Cursor.ReadCount);
+        Assert.Equal(0, directory.SnapshotCount);
+        Assert.Equal(0, directory.WatchCount);
+
+        cancellation.Cancel();
+        await AwaitRunAsync(run);
+    }
+
+    /// <summary>A removal recorded during a cursor outage is applied after the same cursor reconnects.</summary>
+    [Fact]
+    public async Task ShouldStopTenantRemovedWhileResumableCursorIsDisconnected()
+    {
+        var directory = new DisconnectingCursorDirectory();
+        var clock = new ManualTenantClock();
+        var runner = new MultiTenantRunner(directory, timeProvider: clock);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopped = new TaskCompletionSource<TenantId>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cancellation = new CancellationTokenSource();
+        var run = runner.RunAsync(async (tenant, token) =>
+        {
+            _ = tenant;
+            _ = started.TrySetResult();
+            await WaitForCancellationAsync(token);
+        }, (tenant, stopToken) =>
+        {
+            _ = stopToken;
+            _ = stopped.TrySetResult(tenant);
+            return Task.CompletedTask;
+        }, cancellation.Token);
+
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+        directory.RemovedWhileDisconnected = true;
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(new TenantId("acme"), await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, directory.OpenCount);
+        Assert.Equal(2, directory.Cursor.ReadCount);
+
+        cancellation.Cancel();
+        await AwaitRunAsync(run);
+    }
+
+    /// <summary>A cursor resumes its own offset while a separately opened cursor starts independently.</summary>
+    [Fact]
+    public async Task ShouldResumeCursorAtNextOffsetAndKeepSeparateCursorsIndependent()
+    {
+        var store = new InMemoryEventStore();
+        await RegisterTenantAsync(store, "acme");
+        var directory = CreateDirectory(store);
+        await using var first = await directory.OpenCursorAsync();
+        await using var second = await directory.OpenCursorAsync();
+
+        Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")),
+            await ReadOneAsync(first));
+        Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")),
+            await ReadOneAsync(second));
+
+        await DeregisterTenantAsync(store, "acme");
+        Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Removed, new TenantId("acme")),
+            await ReadOneAsync(first));
+        Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Removed, new TenantId("acme")),
+            await ReadOneAsync(second));
+    }
+
+    /// <summary>One cursor cannot be enumerated by two consumers at the same time.</summary>
+    [Fact]
+    public async Task ShouldRejectConcurrentEnumerationOfOneResumableCursor()
+    {
+        var clock = new WaitingClock();
+        var store = new InMemoryEventStore();
+        var directory = new EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(store,
+            TenantRegistryPattern, GetTenantId, timeProvider: clock);
+        await using var cursor = await directory.OpenCursorAsync();
+        using var cancellation = new CancellationTokenSource();
+        await using var first = cursor.ReadAsync(cancellation.Token).GetAsyncEnumerator();
+        var pending = first.MoveNextAsync().AsTask();
+        _ = await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await using var second = cursor.ReadAsync(cancellation.Token).GetAsyncEnumerator();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => second.MoveNextAsync().AsTask());
+
+        Assert.Equal("A tenant directory cursor supports only one active enumeration.", error.Message);
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+    }
+
+    /// <summary>A broken cursor read disposes its subscription and resumes after its last durable offset.</summary>
+    [Fact]
+    public async Task ShouldSubscribeBeforeReadingAndRecreateResumableCursorAfterFailure()
+    {
+        var source = new CursorSource();
+        source.Add(new TenantRegistered("acme"));
+        var directory = new EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(source,
+            TenantRegistryPattern, GetTenantId, notifier: source);
+        await using var cursor = await directory.OpenCursorAsync();
+        await using (var first = cursor.ReadAsync().GetAsyncEnumerator())
+        {
+            Assert.True(await first.MoveNextAsync());
+            Assert.Equal(TenantLifecycleChangeKind.Added, first.Current.Kind);
+            _ = await Assert.ThrowsAsync<IOException>(() => first.MoveNextAsync().AsTask());
+        }
+
+        Assert.Equal(1, source.DisposalCount);
+        source.Add(new TenantDeregistered("acme"));
+        await using (var resumed = cursor.ReadAsync().GetAsyncEnumerator())
+        {
+            Assert.True(await resumed.MoveNextAsync());
+            Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Removed, new TenantId("acme")),
+                resumed.Current);
+        }
+
+        Assert.Equal([0UL, 1UL, 1UL], source.RequestedOffsets);
+        Assert.Equal(2, source.SubscriptionCount);
+        Assert.Equal(2, source.DisposalCount);
+        Assert.True(source.AllReadsHadSubscription);
+    }
+
+    /// <summary>A tenant workload that ignores removal cancellation faults after the configured deadline.</summary>
+    [Fact]
+    public async Task ShouldFaultNormalRemovalWhenWorkloadIgnoresCancellation()
+    {
+        var directory = new RemovalDirectory();
+        var clock = new ManualTenantClock();
+        var timeout = TimeSpan.FromSeconds(5);
+        var runner = new MultiTenantRunner(directory, new MultiTenantRunnerOptions
+        {
+            TenantStopTimeout = timeout
+        }, null, clock);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var run = runner.RunAsync((_, _) =>
+        {
+            _ = started.TrySetResult();
+            return Task.Delay(Timeout.InfiniteTimeSpan, CancellationToken.None);
+        }, (_, _) => Task.CompletedTask);
+
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        directory.Remove();
+        Assert.Equal(timeout, await clock.WaitForDelayAsync());
+        clock.Advance(timeout);
+        var error = await Assert.ThrowsAsync<TenantStopTimeoutException>(() => run);
+
+        Assert.Equal(new TenantId("acme"), error.TenantId);
+        Assert.Equal(timeout, error.Timeout);
+    }
+
+    /// <summary>Workload cancellation and its stop callback consume one shared removal budget.</summary>
+    [Fact]
+    public async Task ShouldShareOneNormalRemovalDeadlineBetweenWorkloadAndStopCallback()
+    {
+        var directory = new RemovalDirectory();
+        var clock = new ManualTenantClock();
+        var options = new MultiTenantRunnerOptions { TenantStopTimeout = TimeSpan.FromSeconds(5) };
+        var runner = new MultiTenantRunner(directory, options, null, clock);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopEntered = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var run = runner.RunAsync(async (tenant, token) =>
+        {
+            _ = tenant;
+            _ = started.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(3), clock, CancellationToken.None);
+            }
+        }, (tenant, token) =>
+        {
+            _ = tenant;
+            _ = stopEntered.TrySetResult(token);
+            return Task.Delay(Timeout.InfiniteTimeSpan, CancellationToken.None);
+        });
+
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        directory.Remove();
+        Assert.Equal(TimeSpan.FromSeconds(5), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(3), await clock.WaitForDelayAsync());
+        clock.Advance(TimeSpan.FromSeconds(3));
+        var stopToken = await stopEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(stopToken.IsCancellationRequested);
+        clock.Advance(TimeSpan.FromSeconds(2));
+        _ = await Assert.ThrowsAsync<TenantStopTimeoutException>(() => run);
+        Assert.True(stopToken.IsCancellationRequested);
+    }
+
+    /// <summary>Host cancellation during normal removal is not reported as a tenant timeout.</summary>
+    [Fact]
+    public async Task ShouldNotReportHostCancellationDuringRemovalAsTenantTimeout()
+    {
+        var directory = new RemovalDirectory();
+        var clock = new ManualTenantClock();
+        var runner = new MultiTenantRunner(directory, new MultiTenantRunnerOptions(), null, clock);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cancellation = new CancellationTokenSource();
+        var run = runner.RunAsync((_, _) =>
+        {
+            _ = started.TrySetResult();
+            return Task.Delay(Timeout.InfiniteTimeSpan, CancellationToken.None);
+        }, (_, _) => Task.CompletedTask, cancellation.Token);
+
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        directory.Remove();
+        Assert.Equal(TimeSpan.FromSeconds(5), await clock.WaitForDelayAsync());
+        cancellation.Cancel();
+
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    /// <summary>Every configurable runner duration must be strictly positive.</summary>
+    [Fact]
+    public void ShouldRejectNonPositiveRunnerOptionDurations()
+    {
+        var directory = new RemovalDirectory();
+        foreach (var configure in new Action<MultiTenantRunnerOptions>[]
+                 {
+                     options => options.RestartInterval = TimeSpan.Zero,
+                     options => options.ShutdownGrace = TimeSpan.Zero,
+                     options => options.TenantStopTimeout = TimeSpan.Zero
+                 })
+        {
+            var options = new MultiTenantRunnerOptions();
+            configure(options);
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => new MultiTenantRunner(directory, options));
+        }
+    }
+
     static EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>
         CreateDirectory(InMemoryEventStore store) =>
         new(store, TenantRegistryPattern, GetTenantId, TimeSpan.FromMilliseconds(10));
@@ -403,6 +648,13 @@ public sealed class MultiTenancyTests
             tenants.Add(tenantId);
 
         return tenants;
+    }
+
+    static async Task<TenantLifecycleChange> ReadOneAsync(ITenantDirectoryCursor cursor)
+    {
+        await using var reader = cursor.ReadAsync().GetAsyncEnumerator();
+        Assert.True(await reader.MoveNextAsync());
+        return reader.Current;
     }
 
     static async Task WaitUntilAsync(Func<bool> condition)
@@ -452,6 +704,288 @@ public sealed class MultiTenancyTests
             }
 
             public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
+    sealed class ResumableProbeDirectory : IResumableTenantDirectory
+    {
+        public ProbeCursor Cursor { get; } = new();
+        public int OpenCount { get; private set; }
+        public int SnapshotCount { get; private set; }
+        public int WatchCount { get; private set; }
+
+        public ValueTask<ITenantDirectoryCursor> OpenCursorAsync(CancellationToken ct = default)
+        {
+            OpenCount++;
+            return ValueTask.FromResult<ITenantDirectoryCursor>(Cursor);
+        }
+
+        public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync(
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            SnapshotCount++;
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync(
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            WatchCount++;
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public sealed class ProbeCursor : ITenantDirectoryCursor
+        {
+            public int ReadCount { get; private set; }
+
+            public async IAsyncEnumerable<TenantLifecycleChange> ReadAsync(
+                [EnumeratorCancellation] CancellationToken ct = default)
+            {
+                ReadCount++;
+                if (ReadCount == 1)
+                    yield return new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("cursor"));
+                await Task.CompletedTask;
+            }
+
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
+    sealed class RemovalDirectory : IResumableTenantDirectory
+    {
+        readonly System.Threading.Channels.Channel<TenantLifecycleChange> _changes =
+            System.Threading.Channels.Channel.CreateUnbounded<TenantLifecycleChange>();
+
+        public void Remove() => _ = _changes.Writer.TryWrite(
+            new TenantLifecycleChange(TenantLifecycleChangeKind.Removed, new TenantId("acme")));
+
+        public ValueTask<ITenantDirectoryCursor> OpenCursorAsync(CancellationToken ct = default) =>
+            ValueTask.FromResult<ITenantDirectoryCursor>(new Cursor(_changes.Reader));
+
+        public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync(
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync(
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        sealed class Cursor(System.Threading.Channels.ChannelReader<TenantLifecycleChange> changes)
+            : ITenantDirectoryCursor
+        {
+            public async IAsyncEnumerable<TenantLifecycleChange> ReadAsync(
+                [EnumeratorCancellation] CancellationToken ct = default)
+            {
+                yield return new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme"));
+                await foreach (var change in changes.ReadAllAsync(ct))
+                    yield return change;
+            }
+
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
+    sealed class DisconnectingCursorDirectory : IResumableTenantDirectory
+    {
+        public ProbeCursor Cursor { get; } = new();
+        public int OpenCount { get; private set; }
+        public bool RemovedWhileDisconnected { set => Cursor.RemovedWhileDisconnected = value; }
+
+        public ValueTask<ITenantDirectoryCursor> OpenCursorAsync(CancellationToken ct = default)
+        {
+            OpenCount++;
+            return ValueTask.FromResult<ITenantDirectoryCursor>(Cursor);
+        }
+
+        public IAsyncEnumerable<TenantId> GetActiveTenantsAsync(CancellationToken ct = default) =>
+            throw new InvalidOperationException("Legacy snapshot must not be used.");
+
+        public IAsyncEnumerable<TenantLifecycleChange> WatchAsync(CancellationToken ct = default) =>
+            throw new InvalidOperationException("Legacy watch must not be used.");
+
+        public sealed class ProbeCursor : ITenantDirectoryCursor
+        {
+            public int ReadCount { get; private set; }
+            public bool RemovedWhileDisconnected { get; set; }
+
+            public async IAsyncEnumerable<TenantLifecycleChange> ReadAsync(
+                [EnumeratorCancellation] CancellationToken ct = default)
+            {
+                ReadCount++;
+                if (ReadCount == 1)
+                {
+                    yield return new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme"));
+                    throw new IOException("Directory disconnected.");
+                }
+
+                if (RemovedWhileDisconnected)
+                {
+                    yield return new TenantLifecycleChange(TenantLifecycleChangeKind.Removed, new TenantId("acme"));
+                    RemovedWhileDisconnected = false;
+                }
+
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
+
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
+    sealed class ManualTenantClock : TimeProvider
+    {
+        readonly Lock _gate = new();
+        readonly global::System.Threading.Channels.Channel<TimeSpan> _scheduled =
+            global::System.Threading.Channels.Channel.CreateUnbounded<TimeSpan>();
+        readonly List<ClockTimer> _timers = [];
+        DateTimeOffset _now = DateTimeOffset.UnixEpoch;
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            lock (_gate)
+                return _now;
+        }
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new ClockTimer(this, callback, state);
+            lock (_gate)
+                _timers.Add(timer);
+            _ = timer.Change(dueTime, period);
+            return timer;
+        }
+
+        public async Task<TimeSpan> WaitForDelayAsync(CancellationToken ct = default) =>
+            await _scheduled.Reader.ReadAsync(ct).AsTask().WaitAsync(TimeSpan.FromSeconds(5), ct);
+
+        public void Advance(TimeSpan duration)
+        {
+            List<ClockTimer> ready;
+            lock (_gate)
+            {
+                _now += duration;
+                ready = [.. _timers.Where(timer => timer.Due <= _now)];
+                foreach (var timer in ready)
+                    timer.Due = timer.Period > TimeSpan.Zero ? _now + timer.Period : DateTimeOffset.MaxValue;
+            }
+
+            foreach (var timer in ready)
+                timer.Callback(timer.State);
+        }
+
+        sealed class ClockTimer(ManualTenantClock clock, TimerCallback callback, object? state) : ITimer
+        {
+            bool _disposed;
+            public TimerCallback Callback => callback;
+            public object? State => state;
+            public DateTimeOffset Due { get; set; } = DateTimeOffset.MaxValue;
+            public TimeSpan Period { get; private set; }
+
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+            {
+                lock (clock._gate)
+                {
+                    if (_disposed)
+                        return false;
+                    Due = dueTime < TimeSpan.Zero ? DateTimeOffset.MaxValue : clock._now + dueTime;
+                    Period = period;
+                    if (dueTime >= TimeSpan.Zero)
+                        _ = clock._scheduled.Writer.TryWrite(dueTime);
+                    return true;
+                }
+            }
+
+            public void Dispose()
+            {
+                lock (clock._gate)
+                {
+                    _disposed = true;
+                    _ = clock._timers.Remove(this);
+                }
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                Dispose();
+                return ValueTask.CompletedTask;
+            }
+        }
+    }
+
+    sealed class CursorSource : IDomainEventReader, IDomainEventNotifier
+    {
+        readonly List<DomainEventRecord> _records = [];
+        int _activeSubscriptions;
+        int _disposalCount;
+        int _failFirstWait = 1;
+        int _subscriptionCount;
+
+        public bool AllReadsHadSubscription { get; private set; } = true;
+        public int DisposalCount => Volatile.Read(ref _disposalCount);
+        public List<ulong> RequestedOffsets { get; } = [];
+        public int SubscriptionCount => Volatile.Read(ref _subscriptionCount);
+
+        public void Add(DomainEvent ev)
+        {
+            var offset = (ulong)_records.Count;
+            ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), offset + 1,
+                DateTimeOffset.UtcNow));
+            _records.Add(new DomainEventRecord(RegistryStream, ev, offset, offset, offset));
+        }
+
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
+            CancellationToken ct = default) => throw new NotSupportedException();
+
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            RequestedOffsets.Add(fromOffset);
+            AllReadsHadSubscription &= Volatile.Read(ref _activeSubscriptions) > 0;
+            foreach (var record in _records.Where(record => record.ResourceOffset >= fromOffset).ToArray())
+            {
+                ct.ThrowIfCancellationRequested();
+                yield return record;
+            }
+
+            await Task.CompletedTask;
+        }
+
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
+            CancellationToken ct = default)
+        {
+            _ = Interlocked.Increment(ref _subscriptionCount);
+            _ = Interlocked.Increment(ref _activeSubscriptions);
+            return ValueTask.FromResult<IDomainEventSubscription>(new CursorSubscription(this));
+        }
+
+        sealed class CursorSubscription(CursorSource owner) : IDomainEventSubscription
+        {
+            int _disposed;
+
+            public ValueTask WaitAsync(CancellationToken ct = default)
+            {
+                if (Interlocked.Exchange(ref owner._failFirstWait, 0) != 0)
+                    throw new IOException("Cursor watch failed.");
+                return new ValueTask(Task.Delay(Timeout.InfiniteTimeSpan, ct));
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                {
+                    _ = Interlocked.Decrement(ref owner._activeSubscriptions);
+                    _ = Interlocked.Increment(ref owner._disposalCount);
+                }
+
+                return ValueTask.CompletedTask;
+            }
         }
     }
 }

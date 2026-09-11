@@ -42,7 +42,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(invalidDiscriminators, static (sourceContext, invalid) =>
         {
             foreach (var model in invalid)
-                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidDiscriminator, model.Location, model.TypeName));
+                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidDiscriminator, model.Location.ToLocation(), model.TypeName));
         });
         var invalidRoutes = context.SyntaxProvider
             .CreateSyntaxProvider(
@@ -55,7 +55,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         {
             foreach (var model in invalid)
             {
-                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidRoute, model.Location, model.TypeName,
+                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidRoute, model.Location.ToLocation(), model.TypeName,
                     model.Segment));
             }
         });
@@ -66,17 +66,16 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
             .Where(static component => component is not null)
             .Select(static (component, _) => component!)
             .Collect();
-        context.RegisterSourceOutput(requests.Combine(components).Combine(context.CompilationProvider),
-            static (sourceContext, pair) => Generate(sourceContext, pair.Left.Left, pair.Left.Right, pair.Right));
+        context.RegisterSourceOutput(requests.Combine(components),
+            static (sourceContext, pair) => Generate(sourceContext, pair.Left, pair.Right));
     }
 
     static void Generate(
         SourceProductionContext context,
         ImmutableArray<RequestTransportComponent> requests,
-        ImmutableArray<string> components,
-        Compilation compilation)
+        ImmutableArray<string> components)
     {
-        if (requests.IsDefaultOrEmpty || compilation.GetTypeByMetadataName("Cntryl.Portia.PortiaBuilder") is null)
+        if (requests.IsDefaultOrEmpty)
         {
             return;
         }

@@ -16,7 +16,8 @@ interface IWorkloadDescriptor
 
     void Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName);
     EventStreamPattern Pattern(IServiceProvider services);
-    ValueTask RunPass(IServiceProvider services, ProjectionRunOptions options, CancellationToken ct);
+    ValueTask<ProjectionPassResult> RunPass(IServiceProvider services, ProjectionRunOptions options,
+        CancellationToken ct);
 
     /// <summary>Registers this descriptor under its own concrete type for the container.</summary>
     /// <param name="services">The application's service collection.</param>

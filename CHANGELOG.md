@@ -6,7 +6,77 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+- Track the nullability-aware public API of every shipped assembly during ordinary builds, and add
+  real-Fitz distributed workload-coordinator conformance coverage for exclusive ownership, stable
+  reconciliation, revocation, and shutdown. Publishing now requires Unshipped APIs to be promoted.
+- Make domain-event catalog incremental cache models structurally comparable without retaining
+  Roslyn locations, while preserving diagnostic spans and partial-declaration deduplication.
+- Make manual publishing rebuild, run the packed ASP.NET Core consumer, and pass the complete
+  Compose-backed suite for the exact release checkout before any package is pushed. CI now uploads
+  its Cobertura coverage output for inspection.
+- Bound projector and reactor passes to 4,096 events by default, while immediately continuing
+  progressing durable backlogs in fresh dependency-injection scopes.
+- Make `portia.worker.failure` use the stable `runner` and `stage` dimensions; Fitz partition-stop
+  timeouts now use structured log event ID 1101.
+- Treat clean early Fitz read disposal as success and keep cross-record event-ID uniqueness at the
+  aggregate hydration boundary instead of retaining full-stream reader state.
+- Cache rendezvous owners across unchanged fleet reconciliation and read coordinator workload
+  snapshots directly from the concurrent active registry so tenant churn cannot publish stale work.
+
+### Added
+
+- Queue terminal callbacks now receive `QueuedRequestTerminalReason`, distinguishing retry-limit,
+  permanent-result, and actor-validation outcomes. `TerminalHandlerMissingException` faults a
+  hosted runner before transport disposition when a terminal callback is unavailable.
+
+- `IResumableTenantDirectory` and `ITenantDirectoryCursor` provide independent, in-process cursor
+  progress across watch reconnects. `MultiTenantRunnerOptions` configures restart, shutdown, and
+  per-tenant stop deadlines; `TenantStopTimeoutException` identifies cleanup that exceeds its
+  shared deadline. The existing `MultiTenantRunner` constructor remains unchanged.
+
+- Benchmarks now cover asynchronously yielding request behaviors, 10,000- and 100,000-event
+  aggregate histories, and cold and warm HTTP member binding. The maintained performance and
+  scaling guide records the machine, commands, results, supported capabilities, and operational
+  boundaries.
+
 ### Changed
+
+- Permanent handler results and actor-validation failures now take the queue terminal callback
+  path regardless of the configured retry threshold. Retryable errors and unexpected exceptions
+  still abandon below the threshold. Every terminal callback completes before the single
+  acknowledgment, and both terminal setup and callback failures cross generic and Fitz hosted
+  worker restart boundaries.
+
+- Request pipeline continuations are single-use during their behavior invocation. Skipping one is
+  valid; a second, concurrent losing, or retained late invocation throws `InvalidOperationException`.
+  Dispatch shares one typed context across matching policies, behaviors, and the handler and uses
+  cached shape-specific pipeline plans. Five-behavior allocation fell from 992 B to 216 B in the
+  maintained same-session benchmark.
+
+- `MultiTenantRunner` prefers a resumable directory cursor when available and bounds ordinary
+  removal with one deadline shared by workload cancellation and the stop callback. Legacy tenant
+  directories keep complete-snapshot plus watch behavior, and host shutdown retains its shared
+  grace period.
+
+- Hosted startup now rejects selected `[RequiresPermission]` handlers when the composed service
+  graph has no `IPermissionEvaluator`, listing guarded request CLR types in stable order without
+  instantiating a scoped evaluator. Direct non-host composition is unchanged.
+
+- `PORTIA100` now recognizes known effect dependencies through canonical type, base-type, and
+  interface metadata names. `PORTIA101` recognizes service-provider/scope dependencies and
+  semantic `ActivatorUtilities` calls. Both warnings explicitly remain best-effort architecture
+  heuristics rather than proofs of arbitrary application behavior.
+
+- Aggregate hydration passes its populated event list directly into a span-backed validation and
+  replay path, removing a redundant reference array while retaining whole-batch validation before
+  application. HTTP binding weakly caches immutable member metadata and only the derived JSON
+  options needed for property converter or number-handling overrides, isolated by application
+  options identity.
+
+- Hosted component workloads retain a healthy event notification subscription across successful
+  passes while still creating a fresh dependency-injection scope for each pass. Notification
+  failure recreates the subscription; a processor failure does not. A pattern that changes across
+  scopes now faults as an invariant violation.
 
 - Unary request dispatch with no pipeline behaviors skips construction of an unused delegate chain.
   Aggregate hydration validates event IDs in the aggregate's existing set instead of allocating a

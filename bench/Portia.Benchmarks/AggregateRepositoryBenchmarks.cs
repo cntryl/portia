@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Jobs;
 using Cntryl.Portia.Testing;
 
 namespace Cntryl.Portia;
@@ -40,7 +41,7 @@ public class AggregateRepositoryBenchmarks
     public ValueTask<BenchmarkAggregate> Hydrate() =>
         _repository.HydrateAsync(new BenchmarkAggregate(_aggregateId, _stream));
 
-    sealed class BenchmarkEventStore : IEventStore
+    internal sealed class BenchmarkEventStore : IEventStore
     {
         public DomainEventRecord[] Records { get; set; } = [];
 
@@ -74,4 +75,41 @@ public class AggregateRepositoryBenchmarks
         public BenchmarkAggregate(Uuid id, EventStreamAddress stream) : base(id, stream) =>
             On<ProcessorBenchmarkEvent>(_ => { });
     }
+}
+
+/// <summary>Measures bounded, one-invocation aggregate hydration for large histories.</summary>
+[MemoryDiagnoser]
+[SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 1, iterationCount: 3, invocationCount: 1)]
+public class LargeAggregateRepositoryBenchmarks
+{
+    Uuid _aggregateId;
+    AggregateRepository _repository = null!;
+    EventStreamAddress _stream = null!;
+
+    /// <summary>Gets or sets the large aggregate history length.</summary>
+    [Params(10_000, 100_000)]
+    public int EventCount { get; set; }
+
+    /// <summary>Creates the complete history once, outside the measured invocation.</summary>
+    [GlobalSetup]
+    public void Setup()
+    {
+        _aggregateId = Uuid.CreateVersion4();
+        _stream = new EventStreamAddress("bench", "large-aggregates", _aggregateId.ToString());
+        var store = new AggregateRepositoryBenchmarks.BenchmarkEventStore
+        {
+            Records = Enumerable.Range(0, EventCount).Select(index =>
+            {
+                var ev = DomainEventSeed.Attach(new ProcessorBenchmarkEvent(index), _aggregateId,
+                    (ulong)index + 1, occurredOn: DateTimeOffset.UnixEpoch);
+                return new DomainEventRecord(_stream, ev, (ulong)index, null, null);
+            }).ToArray()
+        };
+        _repository = new AggregateRepository(store);
+    }
+
+    /// <summary>Constructs and hydrates one aggregate from the configured large history.</summary>
+    [Benchmark]
+    public ValueTask<AggregateRepositoryBenchmarks.BenchmarkAggregate> Hydrate() =>
+        _repository.HydrateAsync(new AggregateRepositoryBenchmarks.BenchmarkAggregate(_aggregateId, _stream));
 }

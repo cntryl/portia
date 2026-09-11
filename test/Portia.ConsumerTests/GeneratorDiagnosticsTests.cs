@@ -3,6 +3,88 @@ namespace Cntryl.Portia.Consumer;
 public sealed class GeneratorDiagnosticsTests
 {
     [Fact]
+    public void Portia100RecognizesKnownEffectDependenciesThroughTypeAncestry()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              using System.Data.Common;
+                              using System.Net.Http;
+                              using System.Net.Mail;
+                              namespace Microsoft.EntityFrameworkCore { public class DbContext {} }
+                              namespace Grpc.Core { public abstract class ClientBase<T> {} }
+                              namespace Stripe { public interface IStripeClient {} }
+                              public sealed class AppDb : Microsoft.EntityFrameworkCore.DbContext;
+                              public abstract class AppConnection : DbConnection;
+                              public sealed class RpcClient : Grpc.Core.ClientBase<RpcClient>;
+                              public sealed class Projection(
+                                  IRequestBus bus, HttpClient http, IHttpClientFactory factory, SmtpClient smtp,
+                                  Stripe.IStripeClient stripe, AppDb db, AppConnection connection, RpcClient rpc)
+                                  : Projector(null!, EventStreamPattern.ForPattern("events"));
+                              """;
+
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator())
+            .Where(diagnostic => diagnostic.Id == "PORTIA100").ToArray();
+
+        Assert.Equal(8, diagnostics.Length);
+        Assert.All(diagnostics, diagnostic =>
+        {
+            Assert.StartsWith("Projector 'Projection' takes known effect dependency '",
+                diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+            var location = source.Substring(diagnostic.Location.SourceSpan.Start,
+                diagnostic.Location.SourceSpan.Length);
+            Assert.True(location is "bus" or "http" or "factory" or "smtp" or "stripe" or "db" or "connection"
+                or "rpc", $"Unexpected diagnostic location '{location}'.");
+        });
+    }
+
+    [Fact]
+    public void Portia101ReportsConstructorAndActivatorUtilitiesServiceLocationAtUse()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              using Microsoft.Extensions.DependencyInjection;
+                              using System;
+                              public sealed class Projection(IServiceProvider provider, IServiceScopeFactory scopes,
+                                  IServiceScope scope) : Projector(null!, EventStreamPattern.ForPattern("events"))
+                              {
+                                  public object Locate() => ActivatorUtilities.CreateInstance<object>(provider);
+                              }
+                              """;
+
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator())
+            .Where(diagnostic => diagnostic.Id == "PORTIA101").ToArray();
+
+        Assert.Equal(4, diagnostics.Length);
+        var invocation = Assert.Single(diagnostics, diagnostic => diagnostic
+            .GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .Contains("ActivatorUtilities.CreateInstance", StringComparison.Ordinal));
+        Assert.Equal("ActivatorUtilities.CreateInstance<object>(provider)",
+            source.Substring(invocation.Location.SourceSpan.Start, invocation.Location.SourceSpan.Length));
+        Assert.All(diagnostics, diagnostic => Assert.StartsWith("'Projection' uses service location through '",
+            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PracticeDiagnosticsRemainBestEffortAndIgnoreUnrecognizedGatewaysAndLookalikes()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using Cntryl.Portia;
+                                                           public sealed class ApplicationGateway;
+                                                           public static class ActivatorUtilities
+                                                           {
+                                                               public static object CreateInstance() => new();
+                                                           }
+                                                           public sealed class Projection(ApplicationGateway gateway)
+                                                               : Projector(null!, EventStreamPattern.ForPattern("events"))
+                                                           {
+                                                               public object Call() => ActivatorUtilities.CreateInstance();
+                                                           }
+                                                           """, new ComponentPracticeGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "PORTIA100" or "PORTIA101");
+    }
+
+    [Fact]
     public void BatchHandlerWithoutBatchBaseNamesProcessorAndHandlerAtProcessorDeclaration()
     {
         const string source = """
@@ -63,7 +145,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void GenericHandlerHasActionableDiagnostic()
+    public void Portia015ReportsGenericHandler()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
@@ -80,7 +162,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void TransportedRequestWithoutDiscriminatorHasActionableDiagnostic()
+    public void Portia020ReportsTransportedRequestWithoutDiscriminator()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
@@ -93,7 +175,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void DomainEventWithoutDiscriminatorHasActionableDiagnostic()
+    public void Portia021ReportsDomainEventWithoutDiscriminator()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
@@ -105,7 +187,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void UnsafeRequestRouteSegmentHasActionableDiagnostic()
+    public void Portia024ReportsUnsafeRequestRouteSegment()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
@@ -119,7 +201,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void HandlerCatchAllReturningFailedResultHasActionableDiagnostic()
+    public void Portia104ReportsHandlerCatchAllReturningFailedResult()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;

@@ -7,6 +7,9 @@ namespace Cntryl.Portia;
 interface IRequestInvocation<TOut>
 {
     ValueTask<Result<TOut>> InvokeAsync(IServiceProvider services, IRequest<TOut> request,
+        IRequestContext context, CancellationToken ct);
+
+    ValueTask<Result<TOut>> InvokeUnsharedAsync(IServiceProvider services, IRequest<TOut> request,
         RequestDispatchContext context, CancellationToken ct);
 }
 
@@ -24,9 +27,17 @@ public sealed class RequestRegistration<TRequest,
     where THandler : class, IRequestHandler<TRequest, TOut>
 {
     ValueTask<Result<TOut>> IRequestInvocation<TOut>.InvokeAsync(IServiceProvider services, IRequest<TOut> request,
-        RequestDispatchContext context, CancellationToken ct)
+        IRequestContext context, CancellationToken ct)
+        => services.GetRequiredService<THandler>()
+            .HandleAsync((IRequestContext<TRequest>)context, ct);
+
+    ValueTask<Result<TOut>> IRequestInvocation<TOut>.InvokeUnsharedAsync(IServiceProvider services,
+        IRequest<TOut> request, RequestDispatchContext context, CancellationToken ct)
         => services.GetRequiredService<THandler>()
             .HandleAsync(new RequestContext<TRequest>((TRequest)request, context), ct);
+
+    internal override IRequestContext CreateContext(IRequestBase request, RequestDispatchContext context) =>
+        new RequestContext<TRequest>((TRequest)request, context);
 
     internal override void Register(IServiceCollection services) => services.TryAddScoped<THandler>();
 }
@@ -44,15 +55,15 @@ public sealed class RequestAuthorizerRegistration<TRequest,
     internal override void Register(IServiceCollection services) => services.TryAddScoped<TAuthorizer>();
 
     internal override ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request,
-        RequestDispatchContext context, CancellationToken ct)
+        IRequestContext context, CancellationToken ct)
         => services.GetRequiredService<TAuthorizer>()
-            .AuthorizeAsync(new RequestContext<TRequest>((TRequest)request, context), ct);
+            .AuthorizeAsync((IRequestContext<TRequest>)context, ct);
 }
 
 interface IRequestBehaviorInvocation<TOut>
 {
     ValueTask<Result<TOut>> InvokeAsync(IServiceProvider services, IRequest<TOut> request,
-        RequestDispatchContext context, RequestPipelineNext<TOut> continuation, CancellationToken ct);
+        IRequestContext context, RequestPipelineNext<TOut> continuation, CancellationToken ct);
 }
 
 /// <summary>Invokes one generated no-result pipeline behavior registration.</summary>
@@ -63,9 +74,9 @@ public sealed class RequestPipelineBehaviorRegistration<TRequest,
     where TBehavior : class, IRequestPipelineBehavior<TRequest>
 {
     ValueTask<Result> IRequestBehaviorInvocation.InvokeAsync(IServiceProvider services, IRequest request,
-        RequestDispatchContext context, RequestPipelineNext continuation, CancellationToken ct)
+        IRequestContext context, RequestPipelineNext continuation, CancellationToken ct)
         => services.GetRequiredService<TBehavior>()
-            .HandleAsync(new RequestContext<TRequest>((TRequest)request, context), continuation, ct);
+            .HandleAsync((IRequestContext<TRequest>)context, continuation, ct);
 
     internal override void Register(IServiceCollection services) => services.TryAddScoped<TBehavior>();
 }
@@ -78,10 +89,10 @@ public sealed class RequestPipelineBehaviorRegistration<TRequest,
     where TBehavior : class, IRequestPipelineBehavior<TRequest, TOut>
 {
     ValueTask<Result<TOut>> IRequestBehaviorInvocation<TOut>.InvokeAsync(IServiceProvider services,
-        IRequest<TOut> request, RequestDispatchContext context, RequestPipelineNext<TOut> continuation,
+        IRequest<TOut> request, IRequestContext context, RequestPipelineNext<TOut> continuation,
         CancellationToken ct)
         => services.GetRequiredService<TBehavior>()
-            .HandleAsync(new RequestContext<TRequest>((TRequest)request, context), continuation, ct);
+            .HandleAsync((IRequestContext<TRequest>)context, continuation, ct);
 
     internal override void Register(IServiceCollection services) => services.TryAddScoped<TBehavior>();
 }

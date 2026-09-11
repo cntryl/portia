@@ -1,0 +1,14 @@
+#nullable enable
+Cntryl.Portia.EventSourcedTenantDirectory<TStartEvent, TStopEvent>.OpenCursorAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ITenantDirectoryCursor!>
+Cntryl.Portia.MultiTenantRunner.MultiTenantRunner(Cntryl.Portia.ITenantDirectory! tenantDirectory, Cntryl.Portia.MultiTenantRunnerOptions! options) -> void
+Cntryl.Portia.MultiTenantRunner.MultiTenantRunner(Cntryl.Portia.ITenantDirectory! tenantDirectory, Cntryl.Portia.MultiTenantRunnerOptions! options, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.MultiTenantRunner!>? logger, System.TimeProvider? timeProvider) -> void
+Cntryl.Portia.ProjectionRunOptions.MaxEventsPerPass.get -> int
+Cntryl.Portia.ProjectionRunOptions.MaxEventsPerPass.init -> void
+Cntryl.Portia.ReactorRunner.RunPassAsync(Cntryl.Portia.Reactor! reactor, Cntryl.Portia.ProjectionCheckpoint checkpoint, Cntryl.Portia.ProjectionRunOptions! options, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>
+Cntryl.Portia.TenantStopTimeoutException
+Cntryl.Portia.TenantStopTimeoutException.TenantId.get -> Cntryl.Portia.TenantId
+Cntryl.Portia.TenantStopTimeoutException.TenantStopTimeoutException(Cntryl.Portia.TenantId tenantId, System.TimeSpan timeout) -> void
+Cntryl.Portia.TenantStopTimeoutException.Timeout.get -> System.TimeSpan
+Cntryl.Portia.TerminalHandlerMissingException
+Cntryl.Portia.TerminalHandlerMissingException.Reason.get -> Cntryl.Portia.QueuedRequestTerminalReason
+Cntryl.Portia.TerminalHandlerMissingException.TerminalHandlerMissingException(Cntryl.Portia.QueuedRequestTerminalReason reason) -> void

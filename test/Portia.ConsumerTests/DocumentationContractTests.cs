@@ -73,7 +73,7 @@ public sealed partial class DocumentationContractTests
     }
 
     [Fact]
-    public void MaintainedDocumentationRejectsLegacyContractsAndProductXmlExists()
+    public void MaintainedDocumentationRejectsLegacyContracts()
     {
         var text = string.Join('\n', Maintained.Select(path => File.ReadAllText(Path.Combine(Root, path))));
         Assert.DoesNotContain(".AddWorker()", text, StringComparison.Ordinal);
@@ -82,6 +82,11 @@ public sealed partial class DocumentationContractTests
         Assert.DoesNotContain("Fitz 0.1.2", text, StringComparison.Ordinal);
         Assert.DoesNotContain("AOT/trim analyzers are not enabled", text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("reactors must dispatch", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EveryProductProjectGeneratesXmlDocumentation()
+    {
         foreach (var project in Directory.EnumerateDirectories(Path.Combine(Root, "src"), "Portia.*")
                      .Where(path => !path.EndsWith("Portia.Generators", StringComparison.Ordinal)
                                     && !path.EndsWith("Portia.Analyzers", StringComparison.Ordinal)
@@ -104,7 +109,10 @@ public sealed partial class DocumentationContractTests
         AssertXmlMembers("Portia.Testing",
             "T:Cntryl.Portia.Testing.ProjectionStoreConformance",
             "T:Cntryl.Portia.Testing.ReactionDeduplicationConformance",
-            "T:Cntryl.Portia.Testing.ConformanceViolationException");
+            "T:Cntryl.Portia.Testing.ConformanceViolationException",
+            "T:Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe",
+            "T:Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceWorker",
+            "T:Cntryl.Portia.Testing.WorkloadCoordinatorConformance");
     }
 
     static void AssertXmlMembers(string project, params string[] expected)

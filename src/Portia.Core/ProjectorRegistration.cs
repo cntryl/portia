@@ -45,8 +45,17 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
 
     EventStreamPattern IWorkloadDescriptor.Pattern(IServiceProvider services) => _resolve(services).Pattern;
 
-    ValueTask IWorkloadDescriptor.RunPass(IServiceProvider services, ProjectionRunOptions options, CancellationToken ct)
-        => RunPass(services, options, ct);
+    async ValueTask<ProjectionPassResult> IWorkloadDescriptor.RunPass(IServiceProvider services,
+        ProjectionRunOptions options, CancellationToken ct)
+    {
+        options.Validate();
+        var projector = _resolve(services);
+        WorkloadBinding.Apply(services, projector.BindWorkload);
+        var checkpoint = await projector.Store.LoadCheckpointAsync(
+            new CheckpointIdentity(projector.Name, projector.Pattern, options.RebuildId), ct).ConfigureAwait(false);
+        return await services.GetRequiredService<ProjectorRunner>()
+            .RunPassAsync(projector, checkpoint, options, ct).ConfigureAwait(false);
+    }
 
     /// <summary>Resolves the projector in the supplied application scope.</summary>
     /// <param name="services">The scope the projector is resolved from.</param>

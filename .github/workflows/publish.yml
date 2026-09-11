@@ -16,16 +16,18 @@ jobs:
       contents: read
 
   publish:
-    name: Publish and tag
+    name: Verify, publish, and tag
     needs: version
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: write
       packages: write
     env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PACKAGE_VERSION: ${{ needs.version.outputs.semver }}
       PACKAGE_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+      FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
 
     steps:
       - name: Require main
@@ -62,13 +64,47 @@ jobs:
       - name: Restore locked dependencies
         run: dotnet restore Portia.slnx --locked-mode
 
+      - name: Check formatting
+        run: dotnet format Portia.slnx --verify-no-changes --no-restore
+
+      - name: Require promoted public API baselines
+        shell: bash
+        run: |
+          if grep --recursive --with-filename --extended-regexp --invert-match \
+            '^([[:space:]]*|#nullable (enable|disable))$' \
+            --include='PublicAPI.Unshipped.txt' src; then
+            echo "::error title=Unshipped public API::Promote every public API entry to Shipped before publishing."
+            exit 1
+          fi
+
+      - name: Start Fitz server
+        run: docker compose up -d
+
+      - name: Build solution
+        run: dotnet build Portia.slnx --configuration Release --no-restore
+
       - name: Pack NuGet packages
         run: |
           dotnet pack Portia.slnx \
             --configuration Release \
+            --no-build \
             --no-restore \
             --output artifacts/packages \
             -p:PackageVersion="$PACKAGE_VERSION"
+
+      - name: Run ASP.NET Core package consumer
+        run: >-
+          dotnet run
+          --project smoke/Portia.AspNetCore.PackageConsumer/Portia.AspNetCore.PackageConsumer.csproj
+          --configuration Release
+          -p:PortiaSmokePackageVersion="$PACKAGE_VERSION"
+
+      - name: Test solution
+        run: dotnet test Portia.slnx --configuration Release --no-build --no-restore
+
+      - name: Stop Fitz server
+        if: ${{ always() }}
+        run: docker compose down --volumes
 
       - name: Publish to GitHub Packages
         env:

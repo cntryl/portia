@@ -6,9 +6,13 @@ namespace Cntryl.Portia;
 /// <summary>Exercises request context at transport boundaries.</summary>
 public sealed class RequestEnvelopeContextTests
 {
-    /// <summary>Verifies the public transport context contract.</summary>
+    /// <summary>
+    ///     Verifies that an envelope carries the request's logical identity — metadata, actor token,
+    ///     contract name and version — identically on every deserialization, while receiver-only state
+    ///     (the execution id and the resolved principal's claims) never crosses the wire at all.
+    /// </summary>
     [Fact]
-    public void EnvelopePreservesLogicalIdentityWithoutReceiverState()
+    public void ShouldPreserveLogicalIdentityWithoutReceiverStateWhenDeserializingEnvelope()
     {
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
         var parent = new RequestContext<EnvelopeCommand>(new EnvelopeCommand(1), RequestActor.System);
@@ -45,9 +49,12 @@ public sealed class RequestEnvelopeContextTests
         Assert.DoesNotContain("baggage", json.ToJsonString(), StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Verifies the public transport context contract.</summary>
+    /// <summary>
+    ///     Verifies that an envelope with no version and no metadata — the pre-envelope wire shape — is
+    ///     rejected outright rather than deserialized into a request with a default-constructed identity.
+    /// </summary>
     [Fact]
-    public void UnversionedEnvelopeIsRejected()
+    public void ShouldRejectEnvelopeWithoutVersionOrMetadata()
     {
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(
@@ -58,11 +65,17 @@ public sealed class RequestEnvelopeContextTests
             serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes(json.ToJsonString())));
     }
 
-    /// <summary>Verifies the public transport context contract.</summary>
+    /// <summary>
+    ///     Verifies that an envelope version this receiver does not understand, and an empty request id,
+    ///     both fail deserialization instead of being accepted with whatever the sender happened to send.
+    /// </summary>
+    /// <param name="unsupportedVersion">
+    ///     <see langword="true" /> to corrupt the envelope version; otherwise the request identity.
+    /// </param>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void InvalidIdentityOrEnvelopeVersionIsRejected(bool unsupportedVersion)
+    public void ShouldRejectUnsupportedEnvelopeVersionOrEmptyRequestIdentity(bool unsupportedVersion)
     {
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(
@@ -81,6 +94,7 @@ public sealed class RequestEnvelopeContextTests
             serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes(json.ToJsonString())));
     }
 
-    /// <summary>Verifies the public transport context contract.</summary>
+    /// <summary>A request used only by these envelope tests.</summary>
+    /// <param name="Amount">An arbitrary payload value, so two instances can be told apart.</param>
     public sealed record EnvelopeCommand(int Amount) : IRequest;
 }
