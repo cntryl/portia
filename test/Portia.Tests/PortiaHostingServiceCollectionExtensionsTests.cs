@@ -16,7 +16,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 {
     /// <summary>Hosted composition fails before serving when guarded requests have no evaluator.</summary>
     [Fact]
-    public async Task StartupValidatorRequiresPermissionEvaluatorForGuardedRequests()
+    public async Task ShouldRequirePermissionEvaluatorForGuardedRequestsAtStartup()
     {
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddFrameworkTests();
@@ -37,7 +37,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>A registered evaluator satisfies hosted startup without constructing it eagerly.</summary>
     [Fact]
-    public async Task StartupValidatorAcceptsGuardedRequestsGivenPermissionEvaluator()
+    public async Task ShouldAcceptGuardedRequestsGivenPermissionEvaluatorAtStartup()
     {
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddFrameworkTests();
@@ -51,7 +51,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>An unguarded composition has no permission-evaluator requirement.</summary>
     [Fact]
-    public async Task StartupValidatorDoesNotRequireEvaluatorWithoutGuardedRequests()
+    public async Task ShouldNotRequirePermissionEvaluatorWithoutGuardedRequests()
     {
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia();
@@ -85,7 +85,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>A replacement serializer remains outside Portia's JSON-upcaster policy.</summary>
     [Fact]
-    public async Task StartupValidatorSkipsJsonUpcasterPolicyForCustomSerializer()
+    public async Task ShouldSkipJsonUpcasterPolicyForCustomSerializer()
     {
         var services = new ServiceCollection();
         _ = services.AddPortia().AddWorkers();
@@ -102,7 +102,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>API-only hosts validate the default serializer before serving requests.</summary>
     [Fact]
-    public async Task StartupValidatorRejectsInvalidUpcastersWithoutWorkers()
+    public async Task ShouldRejectInvalidUpcastersWithoutWorkers()
     {
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia();

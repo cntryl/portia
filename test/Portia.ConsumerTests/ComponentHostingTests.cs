@@ -213,7 +213,7 @@ public sealed partial class ComponentHostingTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task PassesDisposeScopesAndReloadDurableProgress(bool projector)
+    public async Task EachPassDisposesItsScopeAndReloadsDurableProgress(bool projector)
     {
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();

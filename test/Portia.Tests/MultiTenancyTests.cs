@@ -423,7 +423,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>A cursor resumes its own offset while a separately opened cursor starts independently.</summary>
     [Fact]
-    public async Task ResumableCursorContinuesAtNextOffsetAndSeparateCursorsRemainIndependent()
+    public async Task ShouldResumeCursorAtNextOffsetAndKeepSeparateCursorsIndependent()
     {
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "acme");
@@ -445,7 +445,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>One cursor cannot be enumerated by two consumers at the same time.</summary>
     [Fact]
-    public async Task ResumableCursorRejectsConcurrentEnumeration()
+    public async Task ShouldRejectConcurrentEnumerationOfOneResumableCursor()
     {
         var clock = new WaitingClock();
         var store = new InMemoryEventStore();
@@ -467,7 +467,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>A broken cursor read disposes its subscription and resumes after its last durable offset.</summary>
     [Fact]
-    public async Task ResumableCursorSubscribesBeforeReadingAndRecreatesAfterFailure()
+    public async Task ShouldSubscribeBeforeReadingAndRecreateResumableCursorAfterFailure()
     {
         var source = new CursorSource();
         source.Add(new TenantRegistered("acme"));
@@ -498,7 +498,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>A tenant workload that ignores removal cancellation faults after the configured deadline.</summary>
     [Fact]
-    public async Task NormalRemovalFaultsWhenWorkloadIgnoresCancellation()
+    public async Task ShouldFaultNormalRemovalWhenWorkloadIgnoresCancellation()
     {
         var directory = new RemovalDirectory();
         var clock = new ManualTenantClock();
@@ -526,7 +526,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>Workload cancellation and its stop callback consume one shared removal budget.</summary>
     [Fact]
-    public async Task WorkloadAndStopCallbackShareOneNormalRemovalDeadline()
+    public async Task ShouldShareOneNormalRemovalDeadlineBetweenWorkloadAndStopCallback()
     {
         var directory = new RemovalDirectory();
         var clock = new ManualTenantClock();
@@ -567,7 +567,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>Host cancellation during normal removal is not reported as a tenant timeout.</summary>
     [Fact]
-    public async Task HostCancellationDuringRemovalDoesNotBecomeTenantTimeout()
+    public async Task ShouldNotReportHostCancellationDuringRemovalAsTenantTimeout()
     {
         var directory = new RemovalDirectory();
         var clock = new ManualTenantClock();
@@ -590,7 +590,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>Every configurable runner duration must be strictly positive.</summary>
     [Fact]
-    public void RunnerOptionsRequireStrictlyPositiveDurations()
+    public void ShouldRejectNonPositiveRunnerOptionDurations()
     {
         var directory = new RemovalDirectory();
         foreach (var configure in new Action<MultiTenantRunnerOptions>[]

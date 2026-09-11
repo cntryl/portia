@@ -243,6 +243,51 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
+    ///     Verifies that a body limit misconfigured to zero or below fails every request visibly as a
+    ///     500 rather than silently lifting the limit, and that the response discloses nothing about the
+    ///     cause — the same non-disclosing shape any unexpected failure at this boundary takes.
+    /// </summary>
+    /// <param name="maximum">The misconfigured body limit.</param>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task ShouldFailVisiblyWithoutDisclosureWhenBodyLimitIsMisconfigured(long maximum)
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/optional"),
+            services => services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = maximum));
+
+        var response = await client.PostAsync("/optional", new StringContent(
+            /*lang=json,strict*/ """{"value":"x"}""", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("An unexpected error occurred.", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(nameof(PortiaHttpOptions.MaxJsonBodyBytes), body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     Verifies that a body property whose casing differs from the configured naming policy still
+    ///     binds. The generated binder looks for the exact name first and falls back to a case-insensitive
+    ///     match, which is what lets a hand-written client that sends <c>Value</c> work against an
+    ///     endpoint whose policy produced <c>value</c>.
+    /// </summary>
+    /// <param name="json">The request body, spelling the property some other way.</param>
+    [Theory]
+    [InlineData(/*lang=json,strict*/ """{"Value":"bound"}""")]
+    [InlineData(/*lang=json,strict*/ """{"VALUE":"bound"}""")]
+    public async Task ShouldBindBodyPropertyWhoseCasingDiffersFromTheNamingPolicy(string json)
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/optional"));
+
+        var response = await client.PostAsync("/optional",
+            new StringContent(json, Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("\"bound\"", await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
     ///     Verifies that the same endpoint dispatches synchronously — never touching the queue —
     ///     when the caller doesn't send the <c>Prefer: respond-async</c> header.
     /// </summary>

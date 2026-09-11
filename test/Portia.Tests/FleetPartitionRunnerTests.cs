@@ -84,7 +84,7 @@ public sealed class FleetPartitionRunnerTests
 
     /// <summary>Changing tenant partitions revoke only removed work and retain global ownership.</summary>
     [Fact]
-    public async Task DynamicPartitionsPreserveRetainedOwnership()
+    public async Task ShouldPreserveRetainedOwnershipWhenPartitionsChange()
     {
         var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
         string[] snapshot = ["lease://portia/work/global", "lease://portia/work/alpha"];

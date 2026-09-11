@@ -6,6 +6,7 @@ namespace Cntryl.Portia;
 [PortiaJsonContext]
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(UniversalAction))]
+[JsonSerializable(typeof(DomainEventValidationTests.ValidationEvent))]
 [JsonSerializable(typeof(GadgetRenamed))]
 [JsonSerializable(typeof(OrderPlacedV1))]
 [JsonSerializable(typeof(OrderPlacedV2))]

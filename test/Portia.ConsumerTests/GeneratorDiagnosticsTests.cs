@@ -145,7 +145,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void GenericHandlerHasActionableDiagnostic()
+    public void Portia015ReportsGenericHandler()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
@@ -162,7 +162,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void TransportedRequestWithoutDiscriminatorHasActionableDiagnostic()
+    public void Portia020ReportsTransportedRequestWithoutDiscriminator()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
@@ -175,7 +175,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void DomainEventWithoutDiscriminatorHasActionableDiagnostic()
+    public void Portia021ReportsDomainEventWithoutDiscriminator()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
@@ -187,7 +187,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void UnsafeRequestRouteSegmentHasActionableDiagnostic()
+    public void Portia024ReportsUnsafeRequestRouteSegment()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
@@ -201,7 +201,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void HandlerCatchAllReturningFailedResultHasActionableDiagnostic()
+    public void Portia104ReportsHandlerCatchAllReturningFailedResult()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;

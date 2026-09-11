@@ -79,15 +79,32 @@ public static class ProjectionStoreConformance
         await using var firstBatch = await first.Store
             .BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, checkpoint), ct)
             .ConfigureAwait(false);
-        await using var staleBatch = await stale.Store
-            .BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, staleCheckpoint), ct)
-            .ConfigureAwait(false);
         await first.StageValueAsync("winner", ct).ConfigureAwait(false);
-        await stale.StageValueAsync("stale", ct).ConfigureAwait(false);
-        await firstBatch.CommitAsync(new ProjectionCheckpoint(2), ct).ConfigureAwait(false);
-        await RequireConcurrencyFailureAsync(
-            () => staleBatch.CommitAsync(new ProjectionCheckpoint(2), ct),
-            "A stale projection checkpoint was allowed to commit.").ConfigureAwait(false);
+
+        // A losing writer may be refused when it opens its batch — a store that locks the resource,
+        // as Fitz KV does at BEGIN — or when it commits, for a store that compares the checkpoint it
+        // read. Both are conformant, so the conflict is allowed to surface anywhere in the losing
+        // sequence; what it must never do is succeed, or fail as anything but the shared exception.
+        var winnerCommitted = false;
+        var conflict = await CaptureAsync(async () =>
+        {
+            await using var staleBatch = await stale.Store
+                .BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, staleCheckpoint), ct)
+                .ConfigureAwait(false);
+            await stale.StageValueAsync("stale", ct).ConfigureAwait(false);
+            await firstBatch.CommitAsync(new ProjectionCheckpoint(2), ct).ConfigureAwait(false);
+            winnerCommitted = true;
+            await staleBatch.CommitAsync(new ProjectionCheckpoint(2), ct).ConfigureAwait(false);
+        }).ConfigureAwait(false);
+
+        // The winner commits whether or not the loser ever opened its batch, so the state check below
+        // means the same thing for a locking store and an optimistic one.
+        if (!winnerCommitted)
+        {
+            await firstBatch.CommitAsync(new ProjectionCheckpoint(2), ct).ConfigureAwait(false);
+        }
+
+        RequireConcurrency(conflict, "A stale projection checkpoint was allowed to commit.");
         await RequireStateAsync(probe, probe.LiveIdentity, "winner", new ProjectionCheckpoint(2),
             "a stale checkpoint conflict", ct).ConfigureAwait(false);
     }
@@ -141,27 +158,35 @@ public static class ProjectionStoreConformance
         throw new ConformanceViolationException(message);
     }
 
-    static async ValueTask RequireConcurrencyFailureAsync(Func<ValueTask> action, string message)
+    static async ValueTask<Exception?> CaptureAsync(Func<ValueTask> action)
     {
         try
         {
             await action().ConfigureAwait(false);
+            return null;
         }
         catch (OperationCanceledException)
         {
             throw;
         }
-        catch (ProjectionConcurrencyException)
-        {
-            return;
-        }
         catch (Exception ex)
         {
-            throw new ConformanceViolationException(
-                $"A stale projection commit threw '{ex.GetType().FullName}'; it must throw {nameof(ProjectionConcurrencyException)} so one catch covers every adapter.");
+            return ex;
+        }
+    }
+
+    static void RequireConcurrency(Exception? conflict, string message)
+    {
+        if (conflict is null)
+        {
+            throw new ConformanceViolationException(message);
         }
 
-        throw new ConformanceViolationException(message);
+        if (conflict is not ProjectionConcurrencyException)
+        {
+            throw new ConformanceViolationException(
+                $"A stale projection commit threw '{conflict.GetType().FullName}'; it must throw {nameof(ProjectionConcurrencyException)} so one catch covers every adapter.");
+        }
     }
 
     static void ValidateIdentities(CheckpointIdentity live, CheckpointIdentity rebuild)

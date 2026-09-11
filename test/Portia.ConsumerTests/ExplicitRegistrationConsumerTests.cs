@@ -6,7 +6,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ExplicitRegistrationConsumerTests
 {
     [Fact]
-    public async Task HostedStartupIncludesGuardedHandlerContributedByAFeatureAssembly()
+    public async Task HostedStartupFailsWhenFeatureAssemblyGuardedHandlerHasNoPermissionEvaluator()
     {
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia();

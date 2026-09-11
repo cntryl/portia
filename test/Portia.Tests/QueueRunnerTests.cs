@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 
 namespace Cntryl.Portia;
@@ -190,6 +191,43 @@ public sealed class QueueRunnerTests
         Assert.Equal(0, queued.AbandonmentCount);
     }
 
+    /// <summary>
+    ///     Verifies that a broker which refuses the acknowledgment after a terminal delivery has already
+    ///     been handled does not fault the runner. The application's terminal handler has run and its
+    ///     side effects are done; killing the run would only stop every later delivery over a failure
+    ///     that redelivery already covers, so the fault is recorded and the run continues.
+    /// </summary>
+    [Fact]
+    public async Task ShouldContinueAndRecordAFaultWhenTheBrokerRefusesATerminalAcknowledgment()
+    {
+        using var busHost = TestRequestBus.Create();
+        var faults = new List<KeyValuePair<string, object?>[]>();
+        using var meterListener = new MeterListener();
+        meterListener.InstrumentPublished = (instrument, listener) =>
+        {
+            if (instrument.Meter.Name == PortiaTelemetry.SourceName && instrument.Name == "portia.worker.failure")
+            {
+                listener.EnableMeasurementEvents(instrument);
+            }
+        };
+        meterListener.SetMeasurementEventCallback<long>((_, _, tags, _) => faults.Add(tags.ToArray()));
+        meterListener.Start();
+        var refused = new FakeQueuedRequest(new InvalidChangeValue(1), throwOnAcknowledge: true);
+        var later = new FakeQueuedRequest(new ChangeValue(7));
+        var terminal = new RecordingTerminalHandler();
+        var runner = new QueueRunner(new FakeQueueConsumer([refused, later]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), terminalHandler: terminal));
+
+        await runner.RunAsync();
+
+        _ = Assert.Single(terminal.Failures);
+        Assert.Equal(1, refused.CompletionCount);
+        Assert.True(later.Completed);
+        meterListener.Dispose();
+        Assert.Contains(faults, tags => tags.Any(tag => Equals(tag.Value, nameof(QueueRunner)))
+                                        && tags.Any(tag => Equals(tag.Value, "cleanup")));
+    }
+
     /// <summary>A retryable handler result at the configured threshold becomes terminal.</summary>
     [Fact]
     public async Task ShouldInvokeTerminalHandlerGivenRetryableResultAtTerminalAttempt()
@@ -378,7 +416,8 @@ public sealed class QueueRunnerTests
         bool throwOnDispatch = false,
         string? actorToken = "valid-token",
         uint attempt = 1,
-        List<string>? operations = null) : IQueuedRequest
+        List<string>? operations = null,
+        bool throwOnAcknowledge = false) : IQueuedRequest
     {
         public int CompletionCount { get; private set; }
 
@@ -401,7 +440,9 @@ public sealed class QueueRunnerTests
             CompletionCount++;
             Completed = true;
             operations?.Add("complete");
-            return ValueTask.CompletedTask;
+            return throwOnAcknowledge
+                ? ValueTask.FromException(new IOException("The broker refused the acknowledgment."))
+                : ValueTask.CompletedTask;
         }
 
         public ValueTask AbandonAsync(CancellationToken ct = default)

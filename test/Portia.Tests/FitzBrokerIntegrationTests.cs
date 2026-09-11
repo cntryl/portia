@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Security.Claims;
+using System.Text;
 using Cntryl.Fitz;
+using Cntryl.Fitz.Abstractions.Domains.Kv;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
@@ -30,6 +32,17 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldSatisfyWorkloadCoordinatorConformanceAgainstRealFitzBroker() =>
         await WorkloadCoordinatorConformance.VerifyAsync(new FitzWorkloadCoordinatorProbe(_broker));
+
+    /// <summary>
+    ///     Runs the public projection-store conformance suite against <see cref="FitzKvProjectionStore" />
+    ///     and a real broker, so the adapter consumers actually deploy is held to the same atomicity,
+    ///     stale-checkpoint, and generation-isolation contract as the in-memory fake — in particular that
+    ///     two concurrent writers of one checkpoint really do conflict in Fitz KV rather than silently
+    ///     letting the loser's stale commit through and replaying the projection.
+    /// </summary>
+    [Fact]
+    public async Task ShouldSatisfyProjectionStoreConformanceAgainstRealFitzKv() =>
+        await ProjectionStoreConformance.VerifyAsync(new FitzKvProjectionProbe(_broker));
 
     /// <summary>
     ///     Verifies that a Portia domain event survives an append/read round trip through Fitz.
@@ -248,6 +261,121 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             await connection.DisposeAsync();
             await client.DisposeAsync();
         }
+    }
+
+    sealed class FitzKvProjectionProbe(FitzBrokerFixture broker) : IProjectionStoreConformanceProbe
+    {
+        readonly string _route = "kv://portia-integration/conformance/" + Uuid.CreateVersion4();
+
+        public CheckpointIdentity LiveIdentity { get; } = new(
+            "conformance", EventStreamPattern.ForPattern("portia-integration", "projection"));
+
+        public CheckpointIdentity RebuildIdentity { get; } = new(
+            "conformance", EventStreamPattern.ForPattern("portia-integration", "projection"), "rebuild-1");
+
+        // Every run gets its own route, so the suite starts empty without deleting a shared one.
+        public ValueTask ResetAsync(CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return ValueTask.CompletedTask;
+        }
+
+        // Each session gets its own Fitz client: the suite's stale-checkpoint check needs two
+        // genuinely independent writers, and Fitz KV allows one read-write transaction per resource
+        // per session — two stores sharing one connection fail at BEGIN instead of racing, which is
+        // the deployment shape a workload coordinator already prevents.
+        public async ValueTask<IProjectionStoreConformanceSession> OpenSessionAsync(CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            var client = await broker.CreateClientAsync();
+            try
+            {
+                return new FitzKvProjectionSession(client, new FitzKvValueRepository(client.Kv, _route));
+            }
+            catch
+            {
+                await client.DisposeAsync();
+                throw;
+            }
+        }
+    }
+
+    // One independent repository session: its own FitzKvProjectionStore instance, so each session owns
+    // one Fitz KV transaction exactly as a scoped application repository would. Begin, commit, and
+    // rollback all run through the real store; this only arms the suite's single injected failure.
+    sealed class FitzKvProjectionSession(Client client, FitzKvValueRepository repository)
+        : IProjectionStoreConformanceSession, IProjectionStore
+    {
+        CheckpointIdentity? _identity;
+        bool _failNextCommit;
+
+        public IProjectionStore Store => this;
+
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
+            CancellationToken ct = default) => repository.LoadCheckpointAsync(identity, ct);
+
+        public async ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context,
+            CancellationToken ct = default)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+            _identity = context.Identity;
+            return new FailableBatch(this, await repository.BeginAsync(context, ct));
+        }
+
+        public ValueTask StageValueAsync(string value, CancellationToken ct = default) =>
+            new(repository.StageAsync(_identity!, value, ct));
+
+        public ValueTask<string?> ReadValueAsync(CheckpointIdentity identity, CancellationToken ct = default) =>
+            repository.ReadAsync(identity, ct);
+
+        public ValueTask FailNextCommitAsync(CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            _failNextCommit = true;
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync() => client.DisposeAsync();
+
+        // Injects the suite's one commit failure at the Portia boundary; the real store's rollback
+        // still runs when the suite disposes the batch, which is the behavior under test.
+        sealed class FailableBatch(FitzKvProjectionSession session, IProjectionBatch inner) : IProjectionBatch
+        {
+            public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+            {
+                if (session._failNextCommit)
+                {
+                    session._failNextCommit = false;
+                    throw new IOException("Injected projection commit failure.");
+                }
+
+                return inner.CommitAsync(checkpoint, ct);
+            }
+
+            public ValueTask DisposeAsync() => inner.DisposeAsync();
+        }
+    }
+
+    // A real FitzKvProjectionStore subclass that writes one application value through the shared
+    // transaction, so the suite's atomicity checks cover domain data and checkpoint together.
+    sealed class FitzKvValueRepository(IKvClient kv, string route) : FitzKvProjectionStore(kv, route)
+    {
+        readonly IKvClient _kv = kv;
+        readonly string _route = route;
+
+        public Task StageAsync(CheckpointIdentity identity, string value, CancellationToken ct) =>
+            Transaction.PutAsync(ValueKey(identity), Encoding.UTF8.GetBytes(value), ct);
+
+        public async ValueTask<string?> ReadAsync(CheckpointIdentity identity, CancellationToken ct)
+        {
+            await using var tx = await _kv.BeginAsync(_route, KvDurability.Sync, KvMode.ReadOnly, ct);
+            var result = await tx.GetAsync(ValueKey(identity), ct);
+            return result.Found ? Encoding.UTF8.GetString(result.Value!.Value.Span) : null;
+        }
+
+        static ReadOnlyMemory<byte> ValueKey(CheckpointIdentity identity) =>
+            Encoding.UTF8.GetBytes(string.Join('\0', "value", identity.ComponentName, identity.Pattern,
+                identity.RebuildId ?? string.Empty));
     }
 
     sealed class AlwaysValidActorValidator : IRequestActorValidator

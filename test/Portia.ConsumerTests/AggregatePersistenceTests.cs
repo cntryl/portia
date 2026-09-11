@@ -9,7 +9,7 @@ public sealed class AggregatePersistenceTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task AuditBatchesUseDistinctVersionFourSessionStreamsWithoutChangingAggregateOcc(bool fitz)
+    public async Task AuditBatchesUseDistinctVersionFourSessionStreamsWithoutChangingAggregateVersion(bool fitz)
     {
         await using var fixture = await StoreFixture.CreateAsync(fitz);
         var repository = fixture.Repository;
