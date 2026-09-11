@@ -296,12 +296,19 @@ public sealed class ConformanceRejectionTests
     sealed class DefectiveDeduplicationProbe(DeduplicationDefect defect) : IReactionDeduplicationProbe
     {
         readonly ConcurrentDictionary<Uuid, byte> _durable = new();
+        TaskCompletionSource _concurrentReaders =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int _concurrentReaderCount;
+        Uuid? _sequentialEventId;
         ConcurrentDictionary<Uuid, byte> _session = new();
 
         public ValueTask ResetAsync(CancellationToken ct = default)
         {
             _durable.Clear();
             _session = new ConcurrentDictionary<Uuid, byte>();
+            _sequentialEventId = null;
+            _concurrentReaderCount = 0;
+            _concurrentReaders = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             return ValueTask.CompletedTask;
         }
 
@@ -324,10 +331,16 @@ public sealed class ConformanceRejectionTests
             bool first;
             if (defect == DeduplicationDefect.LosesConcurrentRace)
             {
-                // Check-then-act with a suspension in between, so every attempt started before any of
-                // them finishes observes an empty slot — the classic non-atomic guard.
+                _sequentialEventId ??= eventId;
                 var already = seen.ContainsKey(eventId);
-                await Task.Yield();
+                if (eventId != _sequentialEventId)
+                {
+                    // Hold the first two concurrent readers until both have observed the empty slot.
+                    // This injects the check-then-act defect deterministically even on a saturated runner.
+                    if (Interlocked.Increment(ref _concurrentReaderCount) == 2)
+                        _concurrentReaders.TrySetResult();
+                    await _concurrentReaders.Task.WaitAsync(ct);
+                }
                 first = !already;
                 seen[eventId] = 0;
             }

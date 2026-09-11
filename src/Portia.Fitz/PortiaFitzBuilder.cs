@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Cntryl.Fitz.Abstractions.Domains.Kv;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -15,6 +16,7 @@ public sealed class PortiaFitzBuilder
     readonly PortiaBuilder _application;
     readonly HashSet<string> _capabilities = new(StringComparer.Ordinal);
     readonly Lazy<IReadOnlyList<FitzWorkerDefinition>> _workers;
+    string? _checkpointRoute;
     RequestTransports _requiredWorkerTransports;
     bool _workerSelectionExplicit;
     RequestTransports _workerTransports = AllRequestTransports;
@@ -47,6 +49,20 @@ public sealed class PortiaFitzBuilder
         services.TryAddSingleton<IDomainEventWriter>(provider => provider.GetRequiredService<IEventStore>());
         services.TryAddSingleton(provider =>
             (provider.GetRequiredService<IEventStore>() as IDomainEventNotifier)!);
+        return this;
+    }
+
+    /// <summary>
+    ///     Publishes the shared connection's KV client, so an application repository that derives from
+    ///     <see cref="FitzKvProjectionStore" /> takes <see cref="IKvClient" /> as an ordinary constructor
+    ///     dependency instead of owning a second connection to the same broker.
+    /// </summary>
+    internal PortiaFitzBuilder AddKvClient()
+    {
+        if (!_capabilities.Add("kv"))
+            return this;
+        _application.Services.TryAddSingleton<IKvClient>(provider =>
+            provider.GetRequiredService<FitzApplicationConnection>().Client.Kv);
         return this;
     }
 
@@ -118,6 +134,38 @@ public sealed class PortiaFitzBuilder
         if (Fleet is not null && Fleet != options)
             throw new InvalidOperationException("This application has conflicting Fitz fleet configurations.");
         Fleet = options;
+        return this;
+    }
+
+    /// <summary>
+    ///     Persists reactor progress in Fitz KV instead of requiring a second persistence technology.
+    ///     One route holds every reactor's checkpoint: the stored key is derived from the complete
+    ///     <see cref="CheckpointIdentity" />, so components, tenants, and rebuild generations already
+    ///     separate within it. Projector progress is not registered here — a projector commits its
+    ///     checkpoint inside its own repository's transaction, which is what
+    ///     <see cref="FitzKvProjectionStore" /> exists to share.
+    /// </summary>
+    /// <param name="route">The <c>kv://{realm}/{area}/{resource}</c> route checkpoints are written to.</param>
+    /// <returns>This builder, for chaining.</returns>
+    /// <exception cref="ArgumentException">The route is not an exact three-segment Fitz KV route.</exception>
+    /// <exception cref="InvalidOperationException">The application already selected a different route.</exception>
+    public PortiaFitzBuilder UseKvCheckpoints(string route)
+    {
+        var validated = FitzKvCheckpoints.Route(route, nameof(route));
+        if (_checkpointRoute is not null)
+        {
+            return string.Equals(_checkpointRoute, validated, StringComparison.Ordinal)
+                ? this
+                : throw new InvalidOperationException(
+                    $"This application has conflicting Fitz KV checkpoint routes ('{_checkpointRoute}' and "
+                    + $"'{validated}'). Reactor progress must resolve to one route, or a restart reads its "
+                    + "checkpoints from a route that never received them and every reaction replays from zero.");
+        }
+
+        _checkpointRoute = validated;
+        _ = AddKvClient();
+        _application.Services.TryAddSingleton<IProjectionCheckpointStore>(provider =>
+            new FitzKvCheckpointStore(provider.GetRequiredService<IKvClient>(), validated));
         return this;
     }
 

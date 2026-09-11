@@ -1,1 +1,2 @@
 #nullable enable
+Cntryl.Portia.PortiaFitzBuilder.UseKvCheckpoints(string! route) -> Cntryl.Portia.PortiaFitzBuilder!

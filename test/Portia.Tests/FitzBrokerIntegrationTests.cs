@@ -45,6 +45,35 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         await ProjectionStoreConformance.VerifyAsync(new FitzKvProjectionProbe(_broker));
 
     /// <summary>
+    ///     Verifies durable reactor progress against the real broker. A reactor's checkpoint is the only
+    ///     thing standing between a restart and reissuing every external effect it has already caused,
+    ///     and unlike the projection store it has no conformance suite behind it — so the round trip, the
+    ///     unwritten-identity default, and separation by identity are asserted directly here.
+    /// </summary>
+    [Fact]
+    public async Task ShouldPersistReactorCheckpointsThroughRealFitzKv()
+    {
+        await using var client = await _broker.CreateClientAsync();
+        var route = "kv://portia-integration/conformance/" + Uuid.CreateVersion4();
+        var store = new FitzKvCheckpointStore(client.Kv, route);
+        var pattern = EventStreamPattern.ForPattern("portia-integration", "reactions");
+        var live = new CheckpointIdentity("reactor", pattern);
+        var rebuild = new CheckpointIdentity("reactor", pattern, "rebuild-1");
+
+        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(live));
+
+        await store.SaveAsync(live, new ProjectionCheckpoint(42));
+
+        Assert.Equal(42ul, (await store.LoadAsync(live)).NextOffset);
+        // A rebuild generation shares the route and must not inherit the live generation's progress.
+        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(rebuild));
+
+        await store.SaveAsync(live, new ProjectionCheckpoint(43));
+
+        Assert.Equal(43ul, (await store.LoadAsync(live)).NextOffset);
+    }
+
+    /// <summary>
     ///     Verifies that a Portia domain event survives an append/read round trip through Fitz.
     /// </summary>
     [Fact]

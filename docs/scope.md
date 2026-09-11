@@ -26,10 +26,15 @@ current, deliberate boundary.
   form, binary, and streaming-body inputs are not supported.
 - Portia never skips a poison projection or reaction event. Hosted passes retry with bounded
   exponential backoff and then fault the worker, leaving the last successful checkpoint intact.
-- Portia does not currently ship Postgres, SQL Server, Redis, or other durable persistence
-  adapters. `Portia.Testing` supplies backend-neutral projection and optional reaction
-  deduplication conformance suites so application implementations can prove the required
-  invariants until official adapters arrive.
+- Durable persistence is bundled for Fitz only. `Portia.Fitz` supplies `FitzEventStore`,
+  `FitzKvProjectionStore` — an abstract base the application's own repository derives from, so its
+  projection writes share the transaction Portia commits the checkpoint in — and
+  `FitzKvCheckpointStore` for reactor progress, selected with `UseKvCheckpoints`. See
+  [projectors and reactors](projectors-and-reactors.md) for the wiring.
+- Portia does not ship Postgres, SQL Server, Redis, or other durable persistence adapters.
+  `Portia.Testing` supplies backend-neutral projection and optional reaction deduplication
+  conformance suites so application implementations can prove the required invariants for any
+  other backend.
 
 See [design decisions](design-decisions.md) for the reasoning and enforcement behind these
 boundaries. See [performance and scaling](performance-and-scaling.md) for measured hot paths,

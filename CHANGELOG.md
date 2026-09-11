@@ -25,6 +25,13 @@ alerts are as breaking to change as an API.
 
 ### Added
 
+- `PortiaFitzBuilder.UseKvCheckpoints(route)` registers `FitzKvCheckpointStore` as the application's
+  durable `IProjectionCheckpointStore`, and `AddFitz` now publishes the shared connection's
+  `IKvClient` so a repository deriving from `FitzKvProjectionStore` takes it as an ordinary
+  constructor dependency instead of opening a second connection to the same broker. Reactor
+  checkpoints remain an explicit selection rather than a default, and a second call naming a
+  different route is rejected. See [projectors and reactors](docs/projectors-and-reactors.md).
+
 - Queue terminal callbacks now receive `QueuedRequestTerminalReason`, distinguishing retry-limit,
   permanent-result, and actor-validation outcomes. `TerminalHandlerMissingException` faults a
   hosted runner before transport disposition when a terminal callback is unavailable.
