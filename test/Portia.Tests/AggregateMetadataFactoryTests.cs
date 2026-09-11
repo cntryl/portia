@@ -124,7 +124,7 @@ public sealed class AggregateMetadataFactoryTests
 
         Assert.Equal(42, aggregate.Value);
         Assert.Equal(2UL, aggregate.Version);
-        Assert.Equal(2, aggregate.CommittedEvents.Count);
+        Assert.Equal(2UL, aggregate.CommittedStreamPosition);
     }
 
     /// <summary>
@@ -178,7 +178,7 @@ public sealed class AggregateMetadataFactoryTests
             aggregate.Load(ReadOnly(Committed(new ValueChanged(40), id, 1), Committed(new ValueIncremented(2), id, 3))));
 
         Assert.Equal(0UL, aggregate.Version);
-        Assert.Empty(aggregate.CommittedEvents);
+        Assert.Equal(0UL, aggregate.CommittedStreamPosition);
     }
 
     // Deliberately neither a list nor an array: that is the only way to reach the aggregate's

@@ -9,6 +9,12 @@ namespace Cntryl.Portia;
 /// </summary>
 static class FitzRouting
 {
+    // A wildcard segment is usually the caller's tenant, so the rule has to do more than keep the
+    // route parseable. char.IsLetterOrDigit is Unicode-aware and accepts confusables: a Cyrillic
+    // "\u0430" would make tenant-a and tenant-\u0430 distinct routes that no reader can tell apart.
+    // Segments are ASCII, and bounded, so a route stays both unambiguous and addressable.
+    const int MaximumSegmentLength = 255;
+
     /// <summary>
     ///     Builds a 4-segment Fitz RPC route: <c>rpc://{realm}/{area}/{resource}/{operation}</c>.
     /// </summary>
@@ -72,9 +78,15 @@ static class FitzRouting
             ? declared
             : suppliedValue ?? throw new InvalidOperationException(
                 $"Route segment '{segmentName}' is wildcarded and was not supplied in {nameof(RequestRouteValues)}.");
-        return !string.IsNullOrWhiteSpace(value)
-               && value.All(character => char.IsLetterOrDigit(character) || character is '.' or '_' or '-' or '~')
+        if (string.IsNullOrWhiteSpace(value) || !value.All(IsSegmentCharacter))
+            throw new InvalidOperationException($"Route segment '{segmentName}' contains unsupported characters.");
+        return value.Length <= MaximumSegmentLength
             ? value
-            : throw new InvalidOperationException($"Route segment '{segmentName}' contains unsupported characters.");
+            : throw new InvalidOperationException(
+                $"Route segment '{segmentName}' is too long; the supported maximum is {MaximumSegmentLength} characters.");
     }
+
+    static bool IsSegmentCharacter(char character) =>
+        character is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9'
+            or '.' or '_' or '-' or '~';
 }

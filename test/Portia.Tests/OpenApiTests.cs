@@ -100,6 +100,63 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.False(paths.TryGetProperty("/api/widget-events", out _));
     }
 
+    /// <summary>
+    ///     Portia maps the document by intercepting <c>Build()</c>, so without a switch an
+    ///     application had no way to decide whether its own schema is publicly reachable. Turning
+    ///     serving off leaves the routes unmapped.
+    /// </summary>
+    [Fact]
+    public async Task ShouldNotMapOpenApiEndpointsGivenServingIsDisabled()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddFrameworkTests();
+        _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
+        _ = builder.Services.Configure<PortiaHttpOptions>(options => options.ServeOpenApi = false);
+        _app = builder.Build();
+        _ = _app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");
+        await _app.StartAsync();
+
+        using var client = _app.GetTestClient();
+        var json = await client.GetAsync("/openapi/v1.json");
+        var yaml = await client.GetAsync("/openapi/v1.yml");
+        var widget = await client.GetAsync($"/widgets/{Uuid.CreateVersion4()}");
+
+        Assert.Equal(HttpStatusCode.NotFound, json.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, yaml.StatusCode);
+        // Turning the document off is about who can reach it, not about whether the application runs.
+        Assert.Equal(HttpStatusCode.OK, widget.StatusCode);
+    }
+
+    /// <summary>
+    ///     Disabling Portia's own mapping leaves the document itself composed, so an application can
+    ///     map it where and how it wants — behind authorization, on an internal path, or on a
+    ///     separate port — and still get Portia's operation IDs, parameters and responses.
+    /// </summary>
+    [Fact]
+    public async Task ShouldLetApplicationMapTheDocumentItselfGivenServingIsDisabled()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddFrameworkTests();
+        _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
+        _ = builder.Services.Configure<PortiaHttpOptions>(options => options.ServeOpenApi = false);
+        _app = builder.Build();
+        _ = _app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");
+        _ = _app.MapOpenApi("/internal/openapi/{documentName}.json");
+        await _app.StartAsync();
+
+        using var client = _app.GetTestClient();
+        var response = await client.GetAsync("/internal/openapi/v1.json");
+        var document = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var raw = JsonDocument.Parse(document);
+        Assert.Equal("3.1.1", raw.RootElement.GetProperty("openapi").GetString());
+        Assert.Equal("httpGetWidget", raw.RootElement.GetProperty("paths")
+            .GetProperty("/widgets/{widget_id}").GetProperty("get").GetProperty("operationId").GetString());
+    }
+
     /// <summary>Cross-generator operation ID collisions fail document generation deterministically.</summary>
     [Fact]
     public async Task ShouldKeepApplicationRunningGivenCollisionWhenOpenApiDocumentFails()

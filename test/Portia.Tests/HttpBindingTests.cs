@@ -434,6 +434,55 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Contains("data: b", body, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    ///     Verifies that the <c>Prefer: respond-async</c> pivot authorizes before it accepts. The
+    ///     queue write is durable and the 202 is final, so a caller who could not run the request
+    ///     synchronously must not be able to place it on the queue either — otherwise an
+    ///     unauthenticated caller can fill a durable queue with work that only fails much later,
+    ///     at the worker, as a dead letter.
+    /// </summary>
+    [Fact]
+    public async Task ShouldReturnForbiddenWithoutEnqueueingWhenCallerLacksPermissionAndPrefersRespondAsync()
+    {
+        var publisher = new RecordingRequestQueuePublisher();
+        var client = await StartAsync(app => app.MapPortiaPost<HttpGuardedQueueAction>("/guarded-queue"),
+            services => services.AddSingleton<IRequestQueuePublisher>(publisher));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/guarded-queue")
+        {
+            Content = JsonContent.Create(new { })
+        };
+        request.Headers.Add("Prefer", "respond-async");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(publisher.Enqueued);
+        Assert.False(response.Headers.Contains("Preference-Applied"));
+    }
+
+    /// <summary>
+    ///     Verifies the other half of that contract: an authorized caller still pivots to the queue,
+    ///     so authorizing before accepting does not cost the asynchronous path.
+    /// </summary>
+    [Fact]
+    public async Task ShouldEnqueueWhenCallerHasPermissionAndPrefersRespondAsync()
+    {
+        var publisher = new RecordingRequestQueuePublisher();
+        var client = await StartAsync(app => app.MapPortiaPost<HttpGuardedQueueAction>("/guarded-queue"),
+            services => services.AddSingleton<IRequestQueuePublisher>(publisher));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/guarded-queue")
+        {
+            Content = JsonContent.Create(new { })
+        };
+        request.Headers.Add("Prefer", "respond-async");
+        request.Headers.Add("X-Debug-Permission", "http:guarded-queue");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        _ = Assert.Single(publisher.Enqueued);
+    }
+
     async Task<HttpClient> StartAsync(Action<IEndpointRouteBuilder> map,
         Action<IServiceCollection>? configureServices = null)
     {

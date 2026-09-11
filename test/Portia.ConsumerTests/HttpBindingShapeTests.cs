@@ -92,6 +92,35 @@ public sealed class HttpBindingShapeTests
             diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData(".ExcludeFromDescription()")]
+    [InlineData(".ExcludeFromDescription().WithTags(\"internal\")")]
+    [InlineData(".WithTags(\"internal\").ExcludeFromDescription()")]
+    [InlineData(".WithTags(\"internal\").WithSummary(\"s\").ExcludeFromDescription()")]
+    public void ShouldNotReportCollisionGivenOneMappingIsExcludedFromDescription(string conventions)
+    {
+        // Whether an endpoint is described is a property of the endpoint, not of the order its
+        // conventions happen to be written in. Detecting the exclusion only when it sits directly
+        // on the mapping made a hard compile error depend on formatting.
+        var diagnostics = GeneratorCompilation.Diagnostics($$"""
+                                                           using Cntryl.Portia;
+                                                           using Cntryl.Portia.Testing;
+                                                           using Microsoft.AspNetCore.Builder;
+                                                           using Microsoft.AspNetCore.Routing;
+                                                           public sealed record RefreshOrder : IRequest, ICallable;
+                                                           public static class Scenario
+                                                           {
+                                                               public static void Map(IEndpointRouteBuilder app)
+                                                               {
+                                                                   app.MapPortiaGet<RefreshOrder>("/orders/refresh");
+                                                                   app.MapPortiaPost<RefreshOrder>("/orders/refresh"){{conventions}};
+                                                               }
+                                                           }
+                                                           """, new RequestHttpBindingGenerator());
+
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA027");
+    }
+
     [Fact]
     public void UnrelatedMappingMethodIsNeverIntercepted()
     {

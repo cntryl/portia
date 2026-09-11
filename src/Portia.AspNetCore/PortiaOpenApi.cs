@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -14,6 +15,8 @@ namespace Cntryl.Portia;
 public static class PortiaOpenApi
 {
     const string DocumentName = "v1";
+
+    static readonly string[] Get = ["GET"];
 
     /// <summary>Registers Portia's OpenAPI document and builds the application.</summary>
     /// <param name="builder">The host builder to register the document on.</param>
@@ -43,6 +46,7 @@ public static class PortiaOpenApi
         }
 
         _ = services.AddSingleton<PortiaOpenApiMarker>();
+        _ = services.AddSingleton(provider => new PortiaOpenApiDocumentCache(provider, DocumentName));
         _ = services.AddOptions<PortiaHttpOptions>();
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IConfigureOptions<JsonOptions>, PortiaOpenApiJsonOptions>());
@@ -71,10 +75,22 @@ public static class PortiaOpenApi
         });
     }
 
+    // The document is registered either way: turning serving off withdraws Portia's own two routes
+    // and leaves the composed document for the application to map where it wants.
     static WebApplication Map(WebApplication app)
     {
-        _ = app.MapOpenApi();
-        _ = app.MapOpenApi("/openapi/{documentName}.yml");
+        if (!app.Services.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.ServeOpenApi)
+        {
+            return app;
+        }
+
+        // Mapped as request delegates, which keeps RequestDelegateFactory out of an AOT build and
+        // leaves these two routes out of the very document they serve.
+        var cache = app.Services.GetRequiredService<PortiaOpenApiDocumentCache>();
+        _ = app.MapMethods($"/openapi/{DocumentName}.json", Get,
+            (RequestDelegate)(context => cache.WriteAsync(context, false)));
+        _ = app.MapMethods($"/openapi/{DocumentName}.yml", Get,
+            (RequestDelegate)(context => cache.WriteAsync(context, true)));
         return app;
     }
 

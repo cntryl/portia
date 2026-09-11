@@ -268,14 +268,22 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
     static string Literal(string value) => SymbolDisplay.FormatLiteral(value, true);
 
-    static bool IsExcludedFromDescription(InvocationExpressionSyntax invocation) =>
-        invocation.Parent is MemberAccessExpressionSyntax
+    // Whether an endpoint is described is a property of the endpoint, not of the order its
+    // conventions were written in, so the whole builder chain is walked rather than only the call
+    // directly attached to the mapping. A chain is still all this can see: an exclusion applied to
+    // a variable later is not detected, and the runtime document check remains the backstop.
+    static bool IsExcludedFromDescription(InvocationExpressionSyntax invocation)
+    {
+        for (SyntaxNode current = invocation;
+             current.Parent is MemberAccessExpressionSyntax { Parent: InvocationExpressionSyntax next } access;
+             current = next)
         {
-            Parent: InvocationExpressionSyntax
-            {
-                Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "ExcludeFromDescription" }
-            }
-        };
+            if (access.Name.Identifier.ValueText == "ExcludeFromDescription")
+                return true;
+        }
+
+        return false;
+    }
 
     static string ContainingScope(InvocationExpressionSyntax invocation)
     {
@@ -360,11 +368,15 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .Append(index)
             .AppendLine("(this global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder app, string pattern)")
             .AppendLine("    {")
+            // Mapping the handler as a RequestDelegate keeps RequestDelegateFactory — and the
+            // reflection it needs to bind parameters — out of the consumer's AOT build. That
+            // overload adds no MethodInfo, and ApiExplorer describes only endpoints that carry
+            // one, so the handler's own metadata is supplied explicitly beside Portia's.
+            .AppendLine("        global::Microsoft.AspNetCore.Http.RequestDelegate handler = Dispatch;")
             .Append("        return app.MapMethods(pattern, new[] { \"").Append(call.Verb.ToUpperInvariant())
-            .Append(
-                "\" }, (global::Microsoft.AspNetCore.Http.RequestDelegate)Dispatch)")
+            .Append("\" }, handler)")
             .AppendLine()
-            .Append("            .WithMetadata(new global::Cntryl.Portia.PortiaOpenApiOperation(")
+            .Append("            .WithMetadata(handler.Method, new global::Cntryl.Portia.PortiaOpenApiOperation(")
             .Append(Literal(call.OperationId)).Append(", ")
             .Append(call.ResultType is null ? "null" : $"typeof({call.ResultType.TrimEnd('?')})").Append(", ")
             .Append(call.ResultType is null && call.Kind is CallKind.Send or CallKind.Queue ? "true" : "false")
@@ -558,9 +570,20 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
         if (call.Kind == CallKind.Queue)
         {
+            // Accepting onto a durable queue is as consequential as running the request, so the
+            // caller's authorization is settled here rather than at the worker: a 202 is final,
+            // and deferring the refusal would turn an unauthorized call into a dead letter that
+            // the caller never learns about.
             _ = source
                 .AppendLine("            if (global::Cntryl.Portia.PortiaHttpBinding.PrefersRespondAsync(httpContext))")
                 .AppendLine("            {")
+                .AppendLine(
+                    "                var authorization = await bus.AuthorizeAsync(request, context, ct).ConfigureAwait(false);")
+                .AppendLine("                if (!authorization.IsSuccess)")
+                .AppendLine("                {")
+                .AppendLine("                    return authorization.ToHttpResult();")
+                .AppendLine("                }")
+                .AppendLine()
                 .AppendLine(
                     "                var actorToken = global::Cntryl.Portia.PortiaHttpBinding.ReadBearerCredential(httpContext);")
                 .AppendLine(

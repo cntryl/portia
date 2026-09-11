@@ -120,8 +120,8 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var guarded = new[]
         {
             typeof(GetOrder), typeof(GuardedAction), typeof(GuardedAndAuthorizedAction), typeof(GuardedQuery),
-            typeof(GuardedSequence), typeof(HttpGuardedAction), typeof(TelemetryGuardedAction),
-            typeof(TelemetryGuardedSequence)
+            typeof(GuardedSequence), typeof(HttpGuardedAction), typeof(HttpGuardedQueueAction),
+            typeof(TelemetryGuardedAction), typeof(TelemetryGuardedSequence)
         }.Select(type => type.FullName!).Order(StringComparer.Ordinal).ToArray();
         Assert.Equal(guarded, failure.Message[(failure.Message.IndexOf(':') + 1)..].TrimEnd('.').Trim()
             .Split(", ", StringSplitOptions.None));

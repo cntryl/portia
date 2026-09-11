@@ -20,7 +20,7 @@ public sealed class AuditStorageContractTests
         await fixture.Repository.SaveAsync(account, _saveContext);
         var scenario = new AggregateScenario<Account>(account);
         Assert.Empty(scenario.PendingAudits);
-        Assert.Empty(scenario.CommittedEvents);
+        Assert.Equal(0UL, scenario.CommittedEventCount);
         Assert.Equal(0UL, account.CommittedStreamPosition);
         EventStreamAddress? session = null;
         await foreach (var record in fixture.Store.ReadAsync(

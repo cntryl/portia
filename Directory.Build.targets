@@ -15,10 +15,13 @@
              Condition="'@(_ProjectReferencedAnalyzer)' != ''"/>
   </Target>
 
+  <!-- PackageId is not checked: the SDK defaults it to AssemblyName before Pack runs, so the
+       condition can never hold. The properties below are genuinely per-project. -->
   <Target Name="ValidatePackageMetadata" BeforeTargets="Pack" Condition="'$(IsPackable)' == 'true'">
-    <Error Condition="'$(PackageId)' == ''" Text="Packable projects must define PackageId."/>
     <Error Condition="'$(Description)' == ''" Text="Packable projects must define Description."/>
     <Error Condition="'$(Authors)' == ''" Text="Packable projects must define Authors."/>
     <Error Condition="'$(RepositoryUrl)' == ''" Text="Packable projects must define RepositoryUrl."/>
+    <Error Condition="'$(PackageLicenseExpression)' == '' and '$(PackageLicenseFile)' == ''"
+           Text="Packable projects must declare a license."/>
   </Target>
 </Project>

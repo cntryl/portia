@@ -1,4 +1,4 @@
-using System.Globalization;
+using System.Buffers;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
@@ -8,7 +8,9 @@ namespace Cntryl.Portia;
 public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserializer, IRequestOutcomeSerializer,
     IRequestOutcomeDeserializer
 {
-    readonly Dictionary<string, Contract> _byName = new(StringComparer.Ordinal);
+    const int DefaultEnvelopeBytes = 512;
+
+    readonly Dictionary<(string Name, int Version), Contract> _byName = [];
     readonly Dictionary<Type, Contract> _byType = [];
     readonly JsonSerializerOptions _options;
 
@@ -42,7 +44,7 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
 
         var name = RequiredString(root, "contract");
         var contractVersion = root.GetProperty("contract_version").GetInt32();
-        if (!_byName.TryGetValue(Key(name, contractVersion), out var descriptor))
+        if (!_byName.TryGetValue((name, contractVersion), out var descriptor))
         {
             throw new InvalidOperationException($"Unknown request contract '{name}' version {contractVersion}.");
         }
@@ -89,15 +91,43 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
     }
 
     /// <inheritdoc />
-    public ReadOnlyMemory<byte> SerializeOutcome(Result outcome) =>
-        WriteOutcome(outcome.IsSuccess, null, outcome.Error);
+    public ReadOnlyMemory<byte> SerializeOutcome(Result outcome) => Write(writer =>
+    {
+        writer.WriteStartObject();
+        writer.WriteBoolean("is_success", outcome.IsSuccess);
+        if (!outcome.IsSuccess)
+        {
+            writer.WritePropertyName("error");
+            JsonSerializer.Serialize(writer, outcome.Error, FitzJsonContext.Default.RequestError);
+        }
+
+        writer.WriteEndObject();
+    });
 
     /// <inheritdoc />
     public ReadOnlyMemory<byte> SerializeResult<TOut>(Result<TOut> result)
-        => WriteOutcome(result.IsSuccess, result.IsSuccess
-            ? JsonSerializer.SerializeToElement(
-                result.Value, _options.GetTypeInfo(typeof(TOut)))
-            : null, result.Error);
+    {
+        // The value is written straight into the envelope. Serializing it to a JsonElement first
+        // built a second, complete copy of the payload only to copy it out again.
+        var typeInfo = (JsonTypeInfo<TOut>)_options.GetTypeInfo(typeof(TOut));
+        return Write(writer =>
+        {
+            writer.WriteStartObject();
+            writer.WriteBoolean("is_success", result.IsSuccess);
+            if (result.IsSuccess)
+            {
+                writer.WritePropertyName("value");
+                JsonSerializer.Serialize(writer, result.Value, typeInfo);
+            }
+            else
+            {
+                writer.WritePropertyName("error");
+                JsonSerializer.Serialize(writer, result.Error, FitzJsonContext.Default.RequestError);
+            }
+
+            writer.WriteEndObject();
+        });
+    }
 
     /// <inheritdoc />
     public ReadOnlyMemory<byte> Serialize(IRequestBase request, string? actorToken, RequestMetadata metadata,
@@ -142,40 +172,25 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
 
     void Add(Contract descriptor)
     {
-        var key = Key(descriptor.Name, descriptor.Version);
+        var key = (descriptor.Name, descriptor.Version);
         if (_byName.TryGetValue(key, out var existing) && existing.Type != descriptor.Type)
         {
             throw new InvalidOperationException(
                 $"Duplicate request contract '{descriptor.Name}' version {descriptor.Version}.");
         }
 
+        // One type serializes under one discriminator: letting a second registration silently
+        // replace the first would make the same request leave on two different contracts.
+        if (_byType.TryGetValue(descriptor.Type, out var registered) &&
+            (registered.Name != descriptor.Name || registered.Version != descriptor.Version))
+        {
+            throw new InvalidOperationException(
+                $"Request type '{descriptor.Type}' is registered under more than one discriminator.");
+        }
+
         _byType[descriptor.Type] = descriptor;
         _byName[key] = descriptor;
     }
-
-    static ReadOnlyMemory<byte> WriteOutcome(bool success, JsonElement? value, RequestError? error) => Write(writer =>
-    {
-        if (success == (error is not null))
-        {
-            throw new InvalidOperationException("An outcome must be either success or failure.");
-        }
-
-        writer.WriteStartObject();
-        writer.WriteBoolean("is_success", success);
-        if (value is { } element)
-        {
-            writer.WritePropertyName("value");
-            element.WriteTo(writer);
-        }
-
-        if (error is not null)
-        {
-            writer.WritePropertyName("error");
-            JsonSerializer.Serialize(writer, error, FitzJsonContext.Default.RequestError);
-        }
-
-        writer.WriteEndObject();
-    });
 
     static (bool Success, RequestError? Error) ReadOutcome(JsonElement root)
     {
@@ -188,12 +203,14 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
             : throw new InvalidOperationException("Malformed outcome envelope.");
     }
 
+    // Writing through a buffer writer hands back the bytes that were written. A MemoryStream plus
+    // ToArray built the envelope once and then copied the whole thing again for every message.
     static ReadOnlyMemory<byte> Write(Action<Utf8JsonWriter> action)
     {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
+        var buffer = new ArrayBufferWriter<byte>(DefaultEnvelopeBytes);
+        using (var writer = new Utf8JsonWriter(buffer))
             action(writer);
-        return stream.ToArray();
+        return buffer.WrittenMemory;
     }
 
     static string RequiredString(JsonElement root, string name)
@@ -202,9 +219,6 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
 
     static string? OptionalString(JsonElement root, string name)
         => root.TryGetProperty(name, out var value) && value.ValueKind != JsonValueKind.Null ? value.GetString() : null;
-
-    static string Key(string name, int version) =>
-        string.Concat(name, "\0", version.ToString(CultureInfo.InvariantCulture));
 
     sealed record Contract(string Name, int Version, Type Type, JsonTypeInfo JsonTypeInfo);
 }

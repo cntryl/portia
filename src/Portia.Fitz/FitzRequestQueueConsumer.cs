@@ -72,10 +72,17 @@ public sealed class FitzRequestQueueConsumer(
 
                 if (items.Length == 0)
                 {
-                    try
+                    // An idle queue is the ordinary state, so the backstop elapsing is ordinary
+                    // too. Waiting on it by catching a TimeoutException threw once per idle poll,
+                    // per consumer, forever — noise in any first-chance exception view and a cost
+                    // paid for a condition that is not exceptional. The pending move is held
+                    // across the wait; an enumerator cannot be advanced twice concurrently.
+                    pendingNotification ??= notifications.MoveNextAsync().AsTask();
+                    using var backstop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    var elapsed = Task.Delay(_notificationBackstop, _clock, backstop.Token);
+                    if (await Task.WhenAny(pendingNotification, elapsed).ConfigureAwait(false) == pendingNotification)
                     {
-                        pendingNotification ??= notifications.MoveNextAsync().AsTask();
-                        if (!await pendingNotification.WaitAsync(_notificationBackstop, ct).ConfigureAwait(false))
+                        if (!await pendingNotification.ConfigureAwait(false))
                         {
                             throw new InvalidOperationException(
                                 "The Fitz queue subscription ended without cancellation.");
@@ -83,9 +90,9 @@ public sealed class FitzRequestQueueConsumer(
 
                         pendingNotification = null;
                     }
-                    catch (TimeoutException)
-                    {
-                    }
+
+                    // Whichever lost is cancelled rather than left to fire later.
+                    await backstop.CancelAsync().ConfigureAwait(false);
                 }
             }
         }
@@ -164,10 +171,13 @@ public sealed class FitzRequestQueueConsumer(
 
         public async ValueTask CompleteAsync(CancellationToken ct = default)
         {
-            if (_renewalError is not null)
+            // Written by the renewal loop and read here on the consuming thread, so the read has
+            // to be ordered: acknowledging a reservation whose lease was already lost is exactly
+            // the outcome this check exists to prevent.
+            if (Volatile.Read(ref _renewalError) is not null)
             {
                 throw new InvalidOperationException("Cannot acknowledge a reservation whose renewal failed.",
-                    _renewalError);
+                    Volatile.Read(ref _renewalError));
             }
 
             _lost.Token.ThrowIfCancellationRequested();
@@ -199,7 +209,7 @@ public sealed class FitzRequestQueueConsumer(
             }
             catch (Exception ex)
             {
-                _renewalError = ex;
+                Volatile.Write(ref _renewalError, ex);
                 PortiaTelemetry.RecordRunnerFault(nameof(FitzRequestQueueConsumer), RunnerFaultStage.Renewal, ex,
                     logger);
                 try

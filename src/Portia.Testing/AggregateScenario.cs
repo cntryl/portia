@@ -15,8 +15,12 @@ public sealed class AggregateScenario<TAggregate>(TAggregate aggregate)
     /// <summary>Gets a snapshot of the pending audits.</summary>
     public IReadOnlyList<DomainEvent> PendingAudits => [.. Aggregate.UncommittedAudits];
 
-    /// <summary>Gets a snapshot of committed state-changing history.</summary>
-    public IReadOnlyList<DomainEvent> CommittedEvents => [.. Aggregate.CommittedEvents];
+    /// <summary>
+    ///     Gets the number of state-changing events in committed history. The events themselves are
+    ///     not retained: an aggregate replays its stream and is caught up in place, so keeping every
+    ///     event it has seen would grow the instance without bound.
+    /// </summary>
+    public ulong CommittedEventCount => Aggregate.CommittedStreamPosition;
 
     /// <summary>Replays seeded state-changing history through the aggregate's normal validation.</summary>
     /// <param name="events">Already classified and identified state-changing events, in version order.</param>

@@ -47,6 +47,9 @@ public sealed class ReactorEffectPatternsTests
 
     sealed class OutcomeBus(Result outcome) : IRequestBus
     {
+
+        public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
+            CancellationToken ct = default) => ValueTask.FromResult(Result.Success);
         public Result Outcome { get; set; } = outcome;
 
         public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>

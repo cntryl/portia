@@ -1,4 +1,5 @@
 #nullable enable
+Cntryl.Portia.IRequestBus.AuthorizeAsync(Cntryl.Portia.IRequestBase! request, Cntryl.Portia.RequestDispatchContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
 Cntryl.Portia.IRequestScheduler.EnsureAsync<TRequest>(TRequest request, Cntryl.Portia.RequestScheduleSpec! spec, Cntryl.Portia.RequestRouteValues! routeValues, System.Security.Claims.ClaimsPrincipal! actor, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<string!>
 Cntryl.Portia.IResumableTenantDirectory
 Cntryl.Portia.IResumableTenantDirectory.OpenCursorAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ITenantDirectoryCursor!>

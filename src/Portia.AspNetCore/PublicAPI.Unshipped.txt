@@ -1,1 +1,6 @@
 #nullable enable
+Cntryl.Portia.PortiaHttpOptions.ServeOpenApi.get -> bool
+Cntryl.Portia.PortiaHttpOptions.ServeOpenApi.set -> void
+Cntryl.Portia.PortiaHttpOptions.ServerSentEventKeepAlive.get -> System.TimeSpan?
+Cntryl.Portia.PortiaHttpOptions.ServerSentEventKeepAlive.set -> void
+static readonly Cntryl.Portia.PortiaHttpOptions.DefaultServerSentEventKeepAlive -> System.TimeSpan

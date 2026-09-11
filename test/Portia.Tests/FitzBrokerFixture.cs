@@ -38,10 +38,18 @@ public sealed class FitzBrokerFixture
                 .ConfigureAwait(false);
             return client;
         }
-        catch
+        catch (Exception ex)
         {
             await client.DisposeAsync().ConfigureAwait(false);
-            throw;
+            throw Unreachable(_endpoint, ex);
         }
     }
+
+    // A suite that needs the Compose-managed broker should say so. Without this the failure is a
+    // WebSocket EOF or an authentication error from deep inside the client, which says nothing
+    // about the broker being absent, misconfigured, or listening on a different port.
+    static InvalidOperationException Unreachable(Uri endpoint, Exception cause) => new(
+        $"No Fitz broker answered at '{endpoint}'. Start it with 'docker compose up -d' from the repository "
+        + "root, or point FITZ_TEST_ENDPOINT at a running broker. The Compose broker runs with "
+        + "authentication disabled; a broker that requires credentials fails here the same way.", cause);
 }

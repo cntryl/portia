@@ -91,15 +91,22 @@ and authorization using the application's normal ASP.NET setup.
 
 Generated interception of `WebApplicationBuilder.Build()` (and `WebApplication.Create()`)
 registers Microsoft's `v1` OpenAPI 3.1 document before the provider is built and maps
-`/openapi/v1.json` and `/openapi/v1.yml` afterward. Registration and mapping are idempotent across
+`/openapi/v1.json` and `/openapi/v1.yml` afterward. Set
+`PortiaHttpOptions.ServeOpenApi` to `false` to withdraw those two routes; the document stays
+registered, so the application can map it itself — on another path, behind authorization, or on a
+separate port — and receives the same composed document. See
+[getting started](getting-started.md#choosing-where-the-document-is-served).
+Registration and mapping are idempotent across
 route groups and multiple Portia endpoints and add no hosted service. `AddPortia()` itself adds
 only the host-neutral startup validator described below; it does not activate transport or
 component workloads. Security schemes are application-owned and are not inferred from
 authorization metadata.
-Each asynchronous document request materializes the complete endpoint composition. This catches
+The first document request materializes the complete endpoint composition, and the rendered bytes
+are reused for the life of the process; endpoints are fixed once the host starts. This catches
 operation-ID collisions across route groups, feature assemblies, ordinary endpoints, and document
 transformers without making an unavailable specification fatal to application boot; excluded
-endpoints do not participate.
+endpoints do not participate. A composition that fails is not cached, so the collision is reported
+on every request until it is resolved.
 
 ## Worker deployment
 

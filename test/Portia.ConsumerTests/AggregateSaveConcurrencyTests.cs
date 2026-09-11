@@ -71,7 +71,7 @@ public sealed class AggregateSaveConcurrencyTests
             ExecutionId = null,
             Actor = null
         });
-        Assert.Empty(scenario.CommittedEvents);
+        Assert.Equal(0UL, scenario.CommittedEventCount);
         Assert.Equal(0UL, aggregate.CommittedStreamPosition);
         Assert.Equal(audit ? 0UL : 1UL, aggregate.Version);
         _ = audit
@@ -82,7 +82,7 @@ public sealed class AggregateSaveConcurrencyTests
         await repository.SaveAsync(aggregate, _saveContext);
         Assert.Empty(scenario.PendingAudits);
         Assert.Empty(scenario.PendingEvents);
-        Assert.Equal(audit ? 0 : 1, scenario.CommittedEvents.Count);
+        Assert.Equal(audit ? 0UL : 1UL, scenario.CommittedEventCount);
         Assert.Equal(audit ? 0UL : 1UL, aggregate.CommittedStreamPosition);
         Assert.Equal(store.Routes[0], store.Routes[1]);
         if (audit)

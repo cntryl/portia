@@ -9,10 +9,11 @@ namespace Cntryl.Portia;
 ///     <see cref="IRequestAuthorizer{TRequest}" />) against the given actor before its handler runs
 ///     — since every transport funnels through here, that check is implemented exactly once and
 ///     applies uniformly everywhere, not per-transport.
-///     The interface is deliberately small: three dispatch primitives plus the context factory they
-///     need. The ergonomic <c>SendAsync</c>/<c>StreamAsync</c> overloads most callers use live in
-///     <see cref="RequestBusExtensions" />, so an alternative implementation has four members to
-///     write rather than nine, and cannot accidentally diverge from them.
+///     The interface is deliberately small: three dispatch primitives, the authorization check they
+///     share, and the context factory they need. The ergonomic <c>SendAsync</c>/<c>StreamAsync</c>
+///     overloads most callers use live in <see cref="RequestBusExtensions" />, so an alternative
+///     implementation has five members to write rather than ten, and cannot accidentally diverge
+///     from them.
 /// </summary>
 public interface IRequestBus
 {
@@ -29,6 +30,20 @@ public interface IRequestBus
     /// <param name="metadata">Logical identity to propagate, or null to start a new request.</param>
     /// <returns>Receiver-created execution state.</returns>
     RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null);
+
+    /// <summary>
+    ///     Runs a request's declared authorization without invoking its handler, so a transport that
+    ///     accepts a request now and runs it later can refuse an unauthorized caller at the point of
+    ///     acceptance. Dispatch already performs this check; this exists for the accept-now-run-later
+    ///     boundary, where the acceptance is durable and the refusal would otherwise arrive only as a
+    ///     dead letter.
+    /// </summary>
+    /// <param name="request">The request whose authorization is evaluated.</param>
+    /// <param name="context">Execution state from <see cref="CreateContext" />.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>Success when every authorizer and declared permission allows the actor.</returns>
+    ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
+        CancellationToken ct = default);
 
     /// <summary>Dispatches a no-result request using receiver-created execution state.</summary>
     /// <param name="request">The request to dispatch.</param>

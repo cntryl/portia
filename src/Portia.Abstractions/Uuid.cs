@@ -230,10 +230,17 @@ public readonly record struct Uuid : ISpanParsable<Uuid>, ISpanFormattable, ICom
         Justification = "RFC 9562 requires SHA-1 for UUID version 5 generation.")]
     static Uuid CreateVersion5(Uuid namespaceId, Span<byte> input, int nameByteLength)
     {
-        _ = namespaceId._value.TryWriteBytes(input, true, out var bytesWritten);
-        var inputByteLength = bytesWritten + nameByteLength;
+        // Both buffers are sized by this type, so a failure here means the sizing is wrong rather
+        // than the input. Discarding the results would have hashed uninitialized stack memory into
+        // a UUID that still looks well-formed, so the failure is raised instead of absorbed.
+        if (!namespaceId._value.TryWriteBytes(input, true, out var bytesWritten))
+            throw new InvalidOperationException("The UUID namespace did not fit its own buffer.");
+
         Span<byte> hash = stackalloc byte[HashByteLength];
-        _ = SHA1.TryHashData(input[..inputByteLength], hash, out _);
+        var hashed = SHA1.HashData(input[..(bytesWritten + nameByteLength)], hash);
+        if (hashed != HashByteLength)
+            throw new InvalidOperationException("The UUID name hash was not the expected length.");
+
         hash[6] = (byte)((hash[6] & 0x0f) | 0x50);
         hash[8] = (byte)((hash[8] & 0x3f) | 0x80);
         return new Uuid(new Guid(hash[..NamespaceByteLength], true));

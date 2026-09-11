@@ -243,11 +243,62 @@ Do not emit or save concurrently on one aggregate instance. An OCC conflict thro
 The HTTP application automatically exposes OpenAPI 3.1 at `/openapi/v1.json` and
 `/openapi/v1.yml`; no `AddOpenApi()`, `MapOpenApi()`, or endpoint annotations are required.
 Portia describes generated bindings while ordinary minimal-API endpoints remain governed by
-Microsoft's standard generator. The routes are served in every environment. To download YAML:
+Microsoft's standard generator. To download YAML:
 
 ```sh
 curl http://localhost:5000/openapi/v1.yml --output openapi.yml
 ```
+
+### Server-sent event streams
+
+`MapPortiaGetSse` frames each item as one event. A `string` item is written as-is, since the body is
+text and the document declares the item's own schema for it; anything else is written as JSON. A
+payload containing line breaks becomes one `data:` field per line.
+
+An idle stream emits a comment every `PortiaHttpOptions.ServerSentEventKeepAlive` (15 seconds by
+default), which every client ignores and every intermediary counts as traffic. Set it to `null` to
+send none:
+
+```csharp
+builder.Services.Configure<PortiaHttpOptions>(options => options.ServerSentEventKeepAlive = null);
+```
+
+Portia does not emit `id:` or `retry:`, so a client reconnecting after a drop resumes from wherever
+the request's own parameters place it, not from a `Last-Event-ID`.
+
+### Choosing where the document is served
+
+Both routes are served in every environment by default, and neither requires authorization.
+Publishing a schema is not itself a disclosure — every mapped endpoint is one the application opted
+into with `ICallable` — but whether it should be publicly reachable is a deployment decision, so
+`PortiaHttpOptions.ServeOpenApi` withdraws Portia's two routes:
+
+```csharp
+builder.Services.Configure<PortiaHttpOptions>(options => options.ServeOpenApi = false);
+```
+
+Turning serving off does not stop the document from being composed. The application can map it
+wherever it wants, and gets the same document — Portia's operation IDs, parameters, and responses
+included. An application that maps the document itself is calling ASP.NET Core's own `MapOpenApi`,
+which composes it per request; the caching described below applies to Portia's routes:
+
+```csharp
+// Development only, matching the ASP.NET Core template's own default.
+builder.Services.Configure<PortiaHttpOptions>(options =>
+    options.ServeOpenApi = builder.Environment.IsDevelopment());
+
+// Or serve it yourself, behind whatever the rest of the application uses.
+builder.Services.Configure<PortiaHttpOptions>(options => options.ServeOpenApi = false);
+...
+app.MapOpenApi("/internal/openapi/{documentName}.json").RequireAuthorization("ops");
+```
+
+Composing the document is not cheap: it walks every described endpoint and resolves a schema for
+each parameter and response. Because endpoints are fixed once the host starts, Portia composes it
+on the first request and serves the rendered bytes from then on, so later requests only copy them.
+Composition happens on first use rather than during startup, which keeps the cost off the critical
+path of a host that never serves the document. A document that cannot be composed — a duplicated
+operation ID, say — fails every request rather than being cached as a failure.
 
 `Portia.AspNetCore` depends directly on `Portia.DependencyInjection`, which supplies the generator
 and interceptor namespace to the HTTP host. A host referencing only the HTTP package therefore
@@ -296,7 +347,9 @@ remain independent of ASP.NET attributes.
 
 For a no-result `IQueuable` request, the exact `Prefer: respond-async` token selects queue
 publishing and returns 202 with `Preference-Applied: respond-async` and a JSON request-ID
-receipt. The ID is correlation identity, not completion tracking. Portia has no status
+receipt. The request's declared authorization runs before it is accepted, so a caller who would
+receive 403 synchronously receives 403 here too and nothing reaches the queue. The worker
+re-validates the carried actor token and authorizes again when it runs the request. The ID is correlation identity, not completion tracking. Portia has no status
 resource and therefore emits no `Location` header. Register `IRequestQueuePublisher`; supply wildcard route values
 explicitly on the endpoint:
 

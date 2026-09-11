@@ -2,7 +2,6 @@
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.Aggregate.get -> TAggregate!
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.AggregateScenario(TAggregate! aggregate) -> void
-Cntryl.Portia.Testing.AggregateScenario<TAggregate>.CommittedEvents.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>!
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.Given(params Cntryl.Portia.DomainEvent![]! events) -> Cntryl.Portia.Testing.AggregateScenario<TAggregate!>!
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.PendingAudits.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>!
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.PendingEvents.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>!

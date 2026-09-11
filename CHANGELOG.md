@@ -6,6 +6,96 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+### Added
+
+- `PortiaHttpOptions.ServeOpenApi` controls whether Portia maps `/openapi/v1.json` and
+  `/openapi/v1.yml`, defaulting to `true`. Portia previously mapped them by intercepting `Build()`
+  with no way to opt out, which took a deployment decision — whether a schema is publicly reachable
+  — away from the application. Setting it to `false` withdraws Portia's routes and leaves the
+  document registered, so the application can map it on another path, behind authorization, or on a
+  separate port and receive the same composed document.
+- The package smoke consumers map the local package folder in their own `packageSourceMapping`.
+  The repository root maps every package to nuget.org and a nearer mapping replaces rather than
+  extends it, so a cold restore could not see the freshly packed smoke packages and resolved a stale
+  version or failed outright; the step only passed against a warm global package cache.
+- Every package declares `PackageTags`.
+- Portia is licensed under the Apache License, Version 2.0. Every packable project declares the
+  `Apache-2.0` SPDX expression, so a consumer's license scanner resolves the terms from the package
+  itself, and packing now fails if a packable project declares no license at all.
+
+### Fixed
+
+- An idle server-sent-event stream emits keep-alive comments. A quiet stream is the normal state of
+  an event source, and an idle connection is what proxies, load balancers and browsers reclaim, so a
+  `text/event-stream` response that said nothing between events was being closed underneath the
+  caller. `PortiaHttpOptions.ServerSentEventKeepAlive` sets the interval, or `null` disables it.
+  Event framing no longer rewrites and splits the whole payload per item; a payload with no line
+  break — the usual case — is written once.
+- `PORTIA027` no longer depends on the order endpoint conventions are written in.
+  `.WithTags("x").ExcludeFromDescription()` reported a duplicate operation ID that
+  `.ExcludeFromDescription().WithTags("x")` did not, because only the call directly attached to the
+  mapping was examined. The whole builder chain is now walked. An exclusion applied to a variable
+  later is still not detected; the runtime document check remains the backstop.
+- An idle Fitz queue consumer no longer throws a `TimeoutException` per poll. The notification
+  backstop elapsing is the ordinary state of an idle queue, and waiting on it by catching a timeout
+  meant one thrown exception every few seconds per consumer, forever.
+- The test fixtures that need the Compose-managed Fitz broker say so when it is absent, instead of
+  failing with a WebSocket EOF or an authentication error from inside the client. `CONTRIBUTING.md`
+  now states the dependency and the broker's configuration.
+- CI cancels superseded runs on a ref, bounds the job with a timeout, caches NuGet by lock file, and
+  waits for the Fitz container instead of racing the first test against a broker that is still
+  starting.
+
+- Generated HTTP endpoints are described again. Mapping the handler as a `RequestDelegate` keeps
+  `RequestDelegateFactory` out of a consumer's AOT build but adds no `MethodInfo`, and ApiExplorer
+  describes only endpoints that carry one, so every Portia route had silently disappeared from
+  `/openapi/v1.json`. The handler's metadata is now supplied explicitly, and both package smoke
+  consumers assert the document names their mapping.
+- `Prefer: respond-async` authorizes before it accepts. The queue pivot previously enqueued without
+  consulting authorizers or `[RequiresPermission]`, so an unauthenticated caller received 202 and a
+  durable queue write for any `ICallable`+`IQueuable` request, with the refusal arriving later as a
+  dead letter. `IRequestBus.AuthorizeAsync` is the shared check; the worker still re-validates the
+  carried actor token and authorizes again when it runs the request.
+- Fitz route segments are ASCII and bounded. `char.IsLetterOrDigit` is Unicode-aware, so a Cyrillic
+  "а" produced a route indistinguishable to a reader from its Latin counterpart while addressing
+  something else — a confusable tenant realm.
+- `JwtRequestActorValidator` no longer returns Microsoft.IdentityModel's own diagnostics to the
+  caller; those name the configured issuer, audience, signing key and server clock, and the message
+  travels into wire outcomes and logs. It also observes its cancellation token.
+- A JSON request body no longer reserves memory for a `Content-Length` the caller never sends. The
+  buffer hint is capped, and the read chunk is pooled rather than allocated per request.
+- Partition and membership retries back off exponentially with jitter to a 30-second ceiling.
+  A flat one-second delay retried an entire fleet in lockstep against a broker that had just failed.
+- A queue reservation's renewal failure is published and read through `Volatile`, so acknowledging a
+  reservation whose lease was already lost cannot miss it.
+
+### Changed
+
+- The OpenAPI document is composed once and served as rendered bytes. It was recomposed on every
+  request — measured at 1.9 ms and 573 KiB of allocation per request for a five-endpoint
+  application — on a route that needs no authorization, which made it an amplification anyone could
+  reach. The same measurement after the change is 0.07 ms and 61 KiB, which is the cost of writing
+  the response. Endpoints are fixed once the host starts, so the rendering is reused for the life of
+  the process; it happens on first use rather than during startup, keeping the cost off the critical
+  path of a host that never serves the document. A document that cannot be composed still fails
+  every request. Media types and the 404 for an unknown document name are unchanged.
+- **Telemetry:** every Portia duration histogram now advises explicit bucket boundaries. Without
+  advice a collector applies its own defaults, which run from 5 to 10,000 and suit milliseconds;
+  these instruments record seconds, so all ordinary measurements fell into the first bucket and no
+  percentile was recoverable. Latency instruments use the seconds-valued boundaries OpenTelemetry's
+  semantic conventions recommend, and `portia.processor.lag` uses a wider backlog scale. Existing
+  dashboards built on the previous (unusable) distribution will change.
+- Aggregates no longer retain committed history. An aggregate replays its whole stream and may be
+  caught up in place for the life of the process, so holding every event it had seen grew the
+  instance without bound; `Version` and `CommittedStreamPosition` already carry what the framework
+  needs. `AggregateScenario.CommittedEvents` is replaced by `AggregateScenario.CommittedEventCount`.
+- Dispatching a result-bearing request no longer allocates a closure per call to look up its cached
+  pipeline plan, and Fitz envelopes are written through a buffer writer instead of being built and
+  then copied. A request result is written straight into its envelope rather than through an
+  intermediate `JsonElement` copy.
+- `JsonRequestSerializer` rejects one request type registered under two discriminators instead of
+  silently keeping whichever arrived last.
+
 - Track the nullability-aware public API of every shipped assembly during ordinary builds, and add
   real-Fitz distributed workload-coordinator conformance coverage for exclusive ownership, stable
   reconciliation, revocation, and shutdown. Publishing now requires Unshipped APIs to be promoted.

@@ -39,11 +39,14 @@ sealed class RequestPolicies(
     internal bool HasAuthorizers => PrincipalAuthorizers.Length != 0 || ResourceAuthorizers.Length != 0;
     internal UnaryRequestPipelinePlan Unary => _unary.Value;
 
+    // Dispatch asks for the plan on every call, so the lookup has to be free once the plan is
+    // cached. A factory that captures this allocates a closure per call even on a hit; passing the
+    // behaviors as the factory argument keeps the lambda static, and therefore cached.
     internal ResultRequestPipelinePlan<TOut> Result<TOut>() =>
-        (ResultRequestPipelinePlan<TOut>)_results.GetOrAdd(typeof(TOut), _ =>
-            new ResultRequestPipelinePlan<TOut>(_behaviors));
+        (ResultRequestPipelinePlan<TOut>)_results.GetOrAdd(typeof(TOut),
+            static (_, behaviors) => new ResultRequestPipelinePlan<TOut>(behaviors), _behaviors);
 
     internal StreamRequestPipelinePlan<TOut> Stream<TOut>() =>
-        (StreamRequestPipelinePlan<TOut>)_streams.GetOrAdd(typeof(TOut), _ =>
-            new StreamRequestPipelinePlan<TOut>(_behaviors));
+        (StreamRequestPipelinePlan<TOut>)_streams.GetOrAdd(typeof(TOut),
+            static (_, behaviors) => new StreamRequestPipelinePlan<TOut>(behaviors), _behaviors);
 }

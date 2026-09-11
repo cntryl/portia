@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -14,7 +15,14 @@ namespace Cntryl.Portia;
 public static class PortiaHttpBinding
 {
     static readonly ConditionalWeakTable<JsonSerializerOptions, OptionsBindingCache> BindingCaches = [];
-    static readonly JsonDocument EmptyObject = JsonDocument.Parse("{}");
+
+    // Content-Length is the caller's claim, not a measurement. Sizing the buffer from it lets one
+    // small request reserve the whole configured maximum, so the hint is capped: an ordinary body
+    // still lands in a single allocation, and a dishonest header cannot reserve more than this.
+    const int MaximumInitialBodyBytes = 64 * 1024;
+    const int BodyChunkBytes = 16 * 1024;
+
+    static readonly ReadOnlyMemory<byte> EmptyObjectUtf8 = "{}"u8.ToArray();
 
     /// <summary>Creates execution context from authenticated HTTP state and concrete endpoint facts.</summary>
     /// <param name="context">The current HTTP request.</param>
@@ -49,29 +57,37 @@ public static class PortiaHttpBinding
         if (context.Request.ContentLength > 0 && context.Request.ContentLength > maximum)
             throw new HttpPayloadTooLargeException();
 
-        await using var buffer = new MemoryStream((int)Math.Min(context.Request.ContentLength ?? 0, maximum));
-        var chunk = new byte[81920];
-        while (true)
+        var hint = Math.Min(Math.Min(context.Request.ContentLength ?? 0, maximum), MaximumInitialBodyBytes);
+        await using var buffer = new MemoryStream((int)hint);
+        var chunk = ArrayPool<byte>.Shared.Rent(BodyChunkBytes);
+        try
         {
-            var read = await context.Request.Body.ReadAsync(chunk, ct).ConfigureAwait(false);
-            if (read == 0)
+            while (true)
             {
-                break;
-            }
+                var read = await context.Request.Body.ReadAsync(chunk, ct).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    break;
+                }
 
-            if (buffer.Length + read > maximum)
-            {
-                throw new HttpPayloadTooLargeException();
-            }
+                if (buffer.Length + read > maximum)
+                {
+                    throw new HttpPayloadTooLargeException();
+                }
 
-            await buffer.WriteAsync(chunk.AsMemory(0, read), ct).ConfigureAwait(false);
+                await buffer.WriteAsync(chunk.AsMemory(0, read), ct).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(chunk);
         }
 
         if (buffer.Length == 0)
         {
             return bodyRequired
                 ? throw new BadHttpRequestException("Missing required request body.")
-                : JsonDocument.Parse(EmptyObject.RootElement.GetRawText());
+                : JsonDocument.Parse(EmptyObjectUtf8);
         }
 
         buffer.Position = 0;
@@ -87,10 +103,27 @@ public static class PortiaHttpBinding
     /// <summary>Reports whether an exact RFC 7240 preference token requests asynchronous handling.</summary>
     /// <param name="context">The current HTTP request.</param>
     /// <returns><see langword="true" /> when the caller sent <c>Prefer: respond-async</c>.</returns>
-    public static bool PrefersRespondAsync(HttpContext context) => context.Request.Headers["Prefer"]
-        .SelectMany(value => (value ?? string.Empty).Split(','))
-        .Select(value => value.Trim().Split(';', 2)[0].Trim())
-        .Any(value => string.Equals(value, "respond-async", StringComparison.OrdinalIgnoreCase));
+    public static bool PrefersRespondAsync(HttpContext context)
+    {
+        // Every mutating request asks this, so the header is matched over spans: splitting it
+        // allocated an array per value and a string per token to answer one boolean.
+        foreach (var header in context.Request.Headers["Prefer"])
+        {
+            for (var remaining = header.AsSpan(); !remaining.IsEmpty;)
+            {
+                var separator = remaining.IndexOf(',');
+                var preference = separator < 0 ? remaining : remaining[..separator];
+                remaining = separator < 0 ? default : remaining[(separator + 1)..];
+                var parameters = preference.IndexOf(';');
+                if (parameters >= 0)
+                    preference = preference[..parameters];
+                if (preference.Trim().Equals("respond-async", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>Reads exactly one nonempty Bearer credential, or null when authorization is absent.</summary>
     /// <param name="context">The current HTTP request.</param>

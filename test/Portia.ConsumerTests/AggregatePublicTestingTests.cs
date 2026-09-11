@@ -23,7 +23,7 @@ public sealed class AggregatePublicTestingTests
                                                             var scenario = new AggregateScenario<Account>(new Account(id));
                                                             scenario.Given(ev, DomainEventSeed.Attach(new Deposited(5), id, 2));
                                                             scenario.Aggregate.Deposit(3);
-                                                            return scenario.Aggregate.Balance + scenario.PendingEvents.Count + scenario.CommittedEvents.Count;
+                                                            return scenario.Aggregate.Balance + scenario.PendingEvents.Count + (int)scenario.CommittedEventCount;
                                                         }
                                                     }
                                                     """);

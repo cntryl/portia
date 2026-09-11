@@ -16,8 +16,6 @@ public abstract class Aggregate(
     EventStreamAddress stream,
     IDomainEventMetadataFactory? metadataFactory = null)
 {
-    readonly List<DomainEvent> _committedEvents = [];
-
     readonly Dictionary<Type, Action<DomainEvent>> _handlers = [];
 
     // Every event ID this aggregate has attached or replayed, committed or still pending. One
@@ -56,8 +54,6 @@ public abstract class Aggregate(
     /// <summary>Gets the next physical offset in the raised-event stream. Audit sessions never advance this OCC position.</summary>
     public ulong CommittedStreamPosition { get; private set; }
 
-    internal IReadOnlyList<DomainEvent> CommittedEvents => _committedEvents;
-
     internal IReadOnlyList<DomainEvent> UncommittedEvents => _uncommittedEvents;
 
     internal IReadOnlyList<DomainEvent> UncommittedAudits => _uncommittedAudits;
@@ -72,61 +68,17 @@ public abstract class Aggregate(
     {
         ArgumentNullException.ThrowIfNull(committedEvents);
 
+        // A repository hands over its own populated list, and a caller most often hands over an
+        // array, so both replay straight from their existing storage. Any other collection is
+        // copied once rather than teaching replay a second way to walk its input.
         if (committedEvents is List<DomainEvent> list)
         {
             LoadDuringOperation(CollectionsMarshal.AsSpan(list), streamPosition);
             return;
         }
 
-        if (committedEvents is DomainEvent[] array)
-        {
-            LoadDuringOperation(array.AsSpan(), streamPosition);
-            return;
-        }
-
-        if (_uncommittedEvents.Count != 0 || _uncommittedAudits.Count != 0)
-        {
-            throw new InvalidOperationException("An aggregate with uncommitted changes cannot load committed events.");
-        }
-
-        var validated = 0;
-        try
-        {
-            for (; validated < committedEvents.Count; validated++)
-            {
-                var expectedVersion = checked(Version + (ulong)validated + 1);
-                ValidateCommittedEvent(committedEvents[validated], expectedVersion);
-            }
-        }
-        catch
-        {
-            for (var index = 0; index < validated; index++)
-                _ = _issuedEventIds.Remove(committedEvents[index].Metadata.EventId);
-            throw;
-        }
-
-        for (var index = 0; index < committedEvents.Count; index++)
-        {
-            var ev = committedEvents[index];
-            try
-            {
-                Apply(ev);
-            }
-            catch
-            {
-                // Validation reserves the whole batch in the permanent set. Match the historical
-                // partial-apply behavior by releasing the failed event and everything after it;
-                // successfully applied events stay committed and keep their IDs reserved.
-                for (; index < committedEvents.Count; index++)
-                    _ = _issuedEventIds.Remove(committedEvents[index].Metadata.EventId);
-                throw;
-            }
-
-            _committedEvents.Add(ev);
-            Version++;
-        }
-
-        CommittedStreamPosition = streamPosition ?? checked(CommittedStreamPosition + (ulong)committedEvents.Count);
+        LoadDuringOperation(
+            committedEvents as DomainEvent[] ?? [.. committedEvents], streamPosition);
     }
 
     void LoadDuringOperation(ReadOnlySpan<DomainEvent> committedEvents, ulong? streamPosition)
@@ -154,19 +106,20 @@ public abstract class Aggregate(
 
         for (var index = 0; index < committedEvents.Length; index++)
         {
-            var ev = committedEvents[index];
             try
             {
-                Apply(ev);
+                Apply(committedEvents[index]);
             }
             catch
             {
+                // Validation reserves the whole batch in the permanent set. Release the failed
+                // event and everything after it; events already applied stay committed and keep
+                // their IDs reserved.
                 for (; index < committedEvents.Length; index++)
                     _ = _issuedEventIds.Remove(committedEvents[index].Metadata.EventId);
                 throw;
             }
 
-            _committedEvents.Add(ev);
             Version++;
         }
 
@@ -287,9 +240,10 @@ public abstract class Aggregate(
     internal void Save()
     {
         CommittedStreamPosition = checked(CommittedStreamPosition + (ulong)_uncommittedEvents.Count);
-        _committedEvents.AddRange(_uncommittedEvents);
-        // Both lists' IDs entered the set when their metadata was attached, so committing them
-        // adds nothing new.
+        // Committed history is not retained: an aggregate may replay a whole stream and be caught
+        // up in place for the life of the process, and Version and CommittedStreamPosition already
+        // carry everything the framework needs from it. Both lists' IDs entered the issued set when
+        // their metadata was attached, so committing them adds nothing there either.
         _uncommittedEvents.Clear();
         _uncommittedAudits.Clear();
         _auditSessionStream = null;

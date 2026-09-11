@@ -133,11 +133,14 @@ public sealed class FleetRedistributionTests
             Options with { WorkerId = null, LeaseTtl = TimeSpan.FromMilliseconds(milliseconds) }, cancellation.Token);
         try
         {
-            Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+            // The retry delay is chosen by the runner's backoff policy, so the test observes it
+            // instead of restating it: what matters is that the retry waits for it and no longer.
+            var retry = await clock.WaitForDelayAsync();
+            Assert.InRange(retry, TimeSpan.Zero, FleetPartitionRunner.MaximumRetryBackoff);
             _ = Assert.Single(membership.Attempts);
-            clock.Advance(TimeSpan.FromMilliseconds(999));
+            clock.Advance(retry - TimeSpan.FromTicks(1));
             _ = Assert.Single(membership.Attempts);
-            clock.Advance(TimeSpan.FromMilliseconds(1));
+            clock.Advance(TimeSpan.FromTicks(1));
             await Until(() => leases.Ttl != 0);
             Assert.Equal(expectedTtl, leases.Ttl);
             Assert.Equal(2, membership.Attempts.Count);
@@ -180,14 +183,13 @@ public sealed class FleetRedistributionTests
             await Until(() => active == 8);
             membership.Observer.FailView = true;
             clock.Advance(Options.ReconciliationInterval);
-            await clock.WaitForDelayAsync(TimeSpan.FromSeconds(1));
-            Assert.Equal(0, active);
+            // The point of the test is the ordering — work stops, and only then is membership
+            // retried — so it asserts on that state rather than on which timer fires first.
+            await Until(() => active == 0);
             _ = Assert.Single(membership.Attempts);
             membership.Observer.FailView = false;
-            clock.Advance(TimeSpan.FromSeconds(1));
-            _ = await clock.WaitForDelayAsync();
+            await UntilAdvanced(clock, () => membership.Attempts.Count == 2);
             await Until(() => active == 8);
-            Assert.Equal(2, membership.Attempts.Count);
         }
         finally
         {
@@ -196,6 +198,18 @@ public sealed class FleetRedistributionTests
         }
 
         Assert.Equal(0, active);
+    }
+
+    // The retry delay belongs to the runner's backoff policy, so a test waiting on a retry drives
+    // the clock past the policy's ceiling instead of restating whatever delay it happened to pick.
+    internal static async Task UntilAdvanced(ManualClock clock, Func<bool> predicate)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(4));
+        while (!predicate())
+        {
+            clock.Advance(FleetPartitionRunner.MaximumRetryBackoff);
+            await Task.Delay(5, deadline.Token);
+        }
     }
 
     internal static async Task Until(Func<bool> predicate)

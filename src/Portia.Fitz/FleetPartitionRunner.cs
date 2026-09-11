@@ -17,6 +17,14 @@ public sealed partial class FleetPartitionRunner(
     ILogger<FleetPartitionRunner>? logger = null,
     TimeProvider? timeProvider = null)
 {
+    /// <summary>Gets the ceiling a retry delay grows to after repeated failures.</summary>
+    public static readonly TimeSpan MaximumRetryBackoff = TimeSpan.FromSeconds(30);
+
+    static readonly TimeSpan InitialRetryBackoff = TimeSpan.FromSeconds(1);
+
+    // Doubling from one second reaches the ceiling well inside this many attempts.
+    const int MaximumBackoffAttempt = 16;
+
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly IPartitionLeaseCompetitor _leases = leases ?? throw new ArgumentNullException(nameof(leases));
     readonly ILogger<FleetPartitionRunner>? _logger = logger;
@@ -64,6 +72,7 @@ public sealed partial class FleetPartitionRunner(
         Func<string, CancellationToken, Task> callback,
         FleetRunOptions options, CancellationToken ct)
     {
+        var attempt = 0;
         while (!ct.IsCancellationRequested)
         {
             try
@@ -92,7 +101,8 @@ public sealed partial class FleetPartitionRunner(
                 Fault(RunnerFaultStage.Acquisition, ex);
             }
 
-            if (!await BackoffAsync(ct).ConfigureAwait(false))
+            attempt = NextAttempt(attempt);
+            if (!await BackoffAsync(attempt, ct).ConfigureAwait(false))
             {
                 break;
             }
@@ -172,6 +182,7 @@ public sealed partial class FleetPartitionRunner(
     async Task CompeteAsync(string partition, Func<string, CancellationToken, Task> callback,
         ulong ttl, CancellationToken ct)
     {
+        var attempt = 0;
         while (!ct.IsCancellationRequested)
         {
             var acquired = false;
@@ -196,18 +207,32 @@ public sealed partial class FleetPartitionRunner(
                 Fault(acquired ? RunnerFaultStage.Workload : RunnerFaultStage.Acquisition, ex);
             }
 
-            if (!await BackoffAsync(ct).ConfigureAwait(false))
+            // Holding the lease means the cycle made progress, so the next retry starts short
+            // again rather than inheriting the backoff an earlier outage had grown.
+            attempt = acquired ? 1 : NextAttempt(attempt);
+            if (!await BackoffAsync(attempt, ct).ConfigureAwait(false))
             {
                 break;
             }
         }
     }
 
-    async Task<bool> BackoffAsync(CancellationToken ct)
+    // A flat delay retried the whole fleet in lockstep, so a broker that had just failed was hit
+    // again by every worker at once. The delay doubles to a ceiling, and half of it is randomized
+    // so recovering workers spread out instead of rebuilding the burst that caused the outage.
+    // Past the ceiling the count no longer changes the delay, so it stops growing rather than
+    // running to overflow in a process that retries for a very long time.
+    static int NextAttempt(int attempt) => attempt >= MaximumBackoffAttempt ? attempt : attempt + 1;
+
+    async Task<bool> BackoffAsync(int attempt, CancellationToken ct)
     {
+        // The caller's counter is clamped as it grows, so a runner that retries for long enough to
+        // overflow it cannot end up shifting by a negative exponent and computing a negative delay.
+        var ceiling = Math.Min(InitialRetryBackoff.Ticks * (1L << (attempt - 1)), MaximumRetryBackoff.Ticks);
+        var delay = TimeSpan.FromTicks((ceiling / 2) + Random.Shared.NextInt64(ceiling / 2));
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(1), _clock, ct).ConfigureAwait(false);
+            await Task.Delay(delay, _clock, ct).ConfigureAwait(false);
             return true;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

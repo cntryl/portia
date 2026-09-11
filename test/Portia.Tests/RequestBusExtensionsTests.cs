@@ -89,6 +89,9 @@ public sealed class RequestBusExtensionsTests
 
     sealed class RecordingRequestBus(Result outcome) : IRequestBus
     {
+
+        public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
+            CancellationToken ct = default) => ValueTask.FromResult(Result.Success);
         public RequestDispatchContext? Context { get; private set; }
 
         public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>

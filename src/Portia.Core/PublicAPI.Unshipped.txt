@@ -5,6 +5,7 @@ Cntryl.Portia.MultiTenantRunner.MultiTenantRunner(Cntryl.Portia.ITenantDirectory
 Cntryl.Portia.ProjectionRunOptions.MaxEventsPerPass.get -> int
 Cntryl.Portia.ProjectionRunOptions.MaxEventsPerPass.init -> void
 Cntryl.Portia.ReactorRunner.RunPassAsync(Cntryl.Portia.Reactor! reactor, Cntryl.Portia.ProjectionCheckpoint checkpoint, Cntryl.Portia.ProjectionRunOptions! options, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>
+Cntryl.Portia.RequestBus.AuthorizeAsync(Cntryl.Portia.IRequestBase! request, Cntryl.Portia.RequestDispatchContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
 Cntryl.Portia.TenantStopTimeoutException
 Cntryl.Portia.TenantStopTimeoutException.TenantId.get -> Cntryl.Portia.TenantId
 Cntryl.Portia.TenantStopTimeoutException.TenantStopTimeoutException(Cntryl.Portia.TenantId tenantId, System.TimeSpan timeout) -> void

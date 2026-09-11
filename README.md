@@ -57,6 +57,10 @@ Portia automatically registers Microsoft's OpenAPI generator before `Build()` an
 an external artifact is needed:
 `curl http://localhost:5000/openapi/v1.yml --output openapi.yml`.
 
+Both routes are served in every environment, unauthenticated. Set `PortiaHttpOptions.ServeOpenApi`
+to `false` to withdraw them and map the document yourself instead — see
+[choosing where the document is served](docs/getting-started.md#choosing-where-the-document-is-served).
+
 Call it:
 
 ```console
@@ -242,3 +246,7 @@ less-obvious boundaries.
 
 [Projectors and reactors](docs/projectors-and-reactors.md) shows constructor-injected repositories, batch handling, and
 storage contracts.
+
+## License
+
+Portia is licensed under the [Apache License, Version 2.0](LICENSE).

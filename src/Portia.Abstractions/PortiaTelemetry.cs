@@ -32,39 +32,57 @@ public static partial class PortiaTelemetry
     /// <summary>Gets the meter applications subscribe to with <see cref="SourceName" />.</summary>
     public static Meter Meter { get; } = new(SourceName, Version);
 
-    static readonly Histogram<double> RequestDuration = Meter.CreateHistogram<double>("portia.request.duration", "s");
+    // A collector given no advice uses its own default boundaries, which run from 5 to 10,000 —
+    // built for milliseconds. These instruments record seconds, so without advice every ordinary
+    // measurement falls in the first bucket and no percentile survives. The latency boundaries are
+    // the ones OpenTelemetry's own semantic conventions recommend for a seconds-valued duration.
+    static readonly InstrumentAdvice<double> LatencyBuckets = new()
+    {
+        HistogramBucketBoundaries = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]
+    };
+
+    // Processing lag is a backlog, not a request latency: it is routinely minutes behind and the
+    // interesting question is which order of magnitude, so it gets its own, much wider, scale.
+    static readonly InstrumentAdvice<double> LagBuckets = new()
+    {
+        HistogramBucketBoundaries = [0.1, 0.5, 1, 5, 10, 30, 60, 300, 600, 1800, 3600]
+    };
+
+    static readonly Histogram<double> RequestDuration =
+        Meter.CreateHistogram<double>("portia.request.duration", "s", null, null, LatencyBuckets);
 
     static readonly UpDownCounter<long> RequestActive =
         Meter.CreateUpDownCounter<long>("portia.request.active", "{request}");
 
     static readonly Histogram<double> AuthorizationDuration =
-        Meter.CreateHistogram<double>("portia.authorization.duration", "s");
+        Meter.CreateHistogram<double>("portia.authorization.duration", "s", null, null, LatencyBuckets);
 
     static readonly Histogram<double> TransportDuration =
-        Meter.CreateHistogram<double>("portia.transport.operation.duration", "s");
+        Meter.CreateHistogram<double>("portia.transport.operation.duration", "s", null, null, LatencyBuckets);
 
     static readonly Counter<long> InvalidTraceContext =
         Meter.CreateCounter<long>("portia.transport.trace_context.invalid", "{request}");
 
     static readonly Histogram<double> AggregateDuration =
-        Meter.CreateHistogram<double>("portia.aggregate.operation.duration", "s");
+        Meter.CreateHistogram<double>("portia.aggregate.operation.duration", "s", null, null, LatencyBuckets);
 
     static readonly Counter<long>
         AggregateEvents = Meter.CreateCounter<long>("portia.aggregate.event.count", "{event}");
 
     static readonly Histogram<double> EventStoreDuration =
-        Meter.CreateHistogram<double>("portia.event_store.operation.duration", "s");
+        Meter.CreateHistogram<double>("portia.event_store.operation.duration", "s", null, null, LatencyBuckets);
 
     static readonly Counter<long> EventStoreEvents =
         Meter.CreateCounter<long>("portia.event_store.event.count", "{event}");
 
     static readonly Histogram<double> ProcessorDuration =
-        Meter.CreateHistogram<double>("portia.processor.batch.duration", "s");
+        Meter.CreateHistogram<double>("portia.processor.batch.duration", "s", null, null, LatencyBuckets);
 
     static readonly Counter<long>
         ProcessorEvents = Meter.CreateCounter<long>("portia.processor.event.count", "{event}");
 
-    static readonly Histogram<double> ProcessorLag = Meter.CreateHistogram<double>("portia.processor.lag", "s");
+    static readonly Histogram<double> ProcessorLag =
+        Meter.CreateHistogram<double>("portia.processor.lag", "s", null, null, LagBuckets);
 
     static readonly UpDownCounter<long> WorkloadActive =
         Meter.CreateUpDownCounter<long>("portia.workload.active", "{workload}");

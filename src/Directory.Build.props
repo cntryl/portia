@@ -6,6 +6,13 @@
     <Authors>cntryl</Authors>
     <RepositoryUrl>https://github.com/cntryl/portia</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/cntryl/portia</PackageProjectUrl>
+    <PackageTags>cqrs;event-sourcing;mediator;aot;source-generator;aspnetcore</PackageTags>
+    <!-- The SPDX expression is machine-readable, so a consumer's license scanner resolves it
+         without the package carrying a copy of the text. LICENSE at the repository root is the
+         unmodified license itself. -->
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <Copyright>Copyright 2026 cntryl</Copyright>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageOutputPath>$(MSBuildThisFileDirectory)../artifacts/packages</PackageOutputPath>

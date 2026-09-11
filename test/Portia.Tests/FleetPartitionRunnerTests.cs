@@ -11,6 +11,46 @@ namespace Cntryl.Portia;
 [Collection(TelemetryTestGroup.Name)]
 public sealed class FleetPartitionRunnerTests
 {
+    /// <summary>
+    ///     A flat retry delay makes every worker in a fleet retry in lockstep, so a broker that just
+    ///     failed is hit by the whole fleet again one second later. Successive acquisition failures
+    ///     have to back off, and the delays carry jitter so recovery spreads the fleet out instead of
+    ///     reproducing the burst that caused the outage.
+    /// </summary>
+    [Fact]
+    public async Task ShouldBackOffProgressivelyWhenPartitionAcquisitionKeepsFailing()
+    {
+        const string partition = "lease://portia/fleet/unreachable";
+        var clock = new ManualTestClock();
+        var runner = new FleetPartitionRunner(new AlwaysFailingLeaseCompetitor(), new SingleWorkerMembership(),
+            timeProvider: clock);
+        // Reconciliation schedules on the same clock, so it is pushed far enough out that every
+        // delay observed below is a retry delay and nothing has to be told apart by its value.
+        var options = SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
+        {
+            ReconciliationInterval = TimeSpan.FromMinutes(5)
+        };
+        using var lifetime = new CancellationTokenSource();
+        var run = runner.RunAsync([partition], (_, _) => Task.CompletedTask, options, lifetime.Token);
+
+        var delays = new List<TimeSpan>();
+        while (delays.Count < 4)
+        {
+            var delay = await clock.WaitForDelayAsync(lifetime.Token);
+            if (delay == options.ReconciliationInterval)
+                continue;
+            delays.Add(delay);
+            clock.Advance(delay);
+        }
+
+        await lifetime.CancelAsync();
+        _ = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(2)));
+
+        Assert.All(delays, delay => Assert.InRange(delay, TimeSpan.Zero, FleetPartitionRunner.MaximumRetryBackoff));
+        Assert.True(delays[3] > delays[0],
+            $"Retry delays did not grow: {string.Join(", ", delays.Select(delay => delay.TotalSeconds))}");
+    }
+
     /// <summary>A callback that ignores revocation faults the runner within the configured bound.</summary>
     [Fact]
     public async Task ShouldFaultRunnerGivenPartitionCallbackIgnoresCancellation()

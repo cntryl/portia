@@ -9,6 +9,12 @@ permissions:
   contents: read
   packages: read
 
+# A superseded run on the same ref has nothing left to prove, and the Fitz container binds a fixed
+# port, so overlapping runs on one runner would contend for it.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   PORTIA_SMOKE_PACKAGE_VERSION: 1.0.0-ci.${{ github.run_id }}.${{ github.run_attempt }}
@@ -17,6 +23,7 @@ jobs:
   ci:
     name: Build and test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -26,12 +33,16 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
 
       - name: Check formatting
         run: dotnet format Portia.slnx --verify-no-changes
 
+      # --wait holds until the container is up rather than racing the first test against a broker
+      # that is still starting.
       - name: Start Fitz server
-        run: docker compose up -d
+        run: docker compose up -d --wait
 
       - name: Build solution
         run: dotnet build Portia.slnx --configuration Release

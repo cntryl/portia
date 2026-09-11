@@ -15,6 +15,19 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         => new(actor, metadata: metadata, timeProvider: services.GetService<TimeProvider>());
 
     /// <inheritdoc />
+    public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        Validate(request, context, ct);
+        var registration = registry.Handler(request.GetType());
+        var policies = registry.Policies(registration.RequestType);
+        return policies.HasAuthorizers || registration.Permission is not null
+            ? AuthorizeAsync(registration, policies, request, registration.CreateContext(request, context), ct)
+            : ValueTask.FromResult(Result.Success);
+    }
+
+    /// <inheritdoc />
     public async ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
         CancellationToken ct = default)
     {

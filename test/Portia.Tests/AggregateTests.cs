@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -34,7 +36,7 @@ public sealed class AggregateTests
         Assert.Equal(42, valueChanged.Value);
         Assert.Equal(42, aggregate.Value);
         Assert.Equal(1UL, aggregate.Version);
-        Assert.Empty(aggregate.CommittedEvents);
+        Assert.Equal(0UL, aggregate.CommittedStreamPosition);
     }
 
     /// <summary>
@@ -99,7 +101,7 @@ public sealed class AggregateTests
         Assert.Contains(eventId.ToString(), exception.Message, StringComparison.Ordinal);
         Assert.Equal(40, aggregate.Value);
         Assert.Equal(1UL, aggregate.Version);
-        _ = Assert.Single(aggregate.CommittedEvents);
+        Assert.Equal(1UL, aggregate.CommittedStreamPosition);
         Assert.Empty(aggregate.UncommittedEvents);
     }
 
@@ -117,7 +119,7 @@ public sealed class AggregateTests
 
         Assert.Equal(42, aggregate.Value);
         Assert.Equal(1UL, aggregate.Version);
-        Assert.Same(ev, Assert.Single(aggregate.CommittedEvents));
+        Assert.Equal(1UL, aggregate.CommittedStreamPosition);
         Assert.Empty(aggregate.UncommittedEvents);
     }
 
@@ -137,7 +139,7 @@ public sealed class AggregateTests
 
         Assert.Equal(42, aggregate.Value);
         Assert.Equal(2UL, aggregate.Version);
-        Assert.Equal(2, aggregate.CommittedEvents.Count);
+        Assert.Equal(2UL, aggregate.CommittedStreamPosition);
     }
 
     /// <summary>
@@ -157,7 +159,7 @@ public sealed class AggregateTests
 
         Assert.Equal(42, aggregate.Value);
         Assert.Equal(3UL, aggregate.Version);
-        Assert.Equal(3, aggregate.CommittedEvents.Count);
+        Assert.Equal(3UL, aggregate.CommittedStreamPosition);
         Assert.Empty(aggregate.UncommittedEvents);
     }
 
@@ -177,7 +179,7 @@ public sealed class AggregateTests
 
         Assert.Equal(40, aggregate.Value);
         Assert.Equal(1UL, aggregate.Version);
-        _ = Assert.Single(aggregate.CommittedEvents);
+        Assert.Equal(1UL, aggregate.CommittedStreamPosition);
     }
 
     /// <summary>
@@ -197,7 +199,7 @@ public sealed class AggregateTests
 
         Assert.Equal(40, aggregate.Value);
         Assert.Equal(1UL, aggregate.Version);
-        _ = Assert.Single(aggregate.CommittedEvents);
+        Assert.Equal(1UL, aggregate.CommittedStreamPosition);
     }
 
     /// <summary>
@@ -217,7 +219,7 @@ public sealed class AggregateTests
         Assert.Equal(40, aggregate.Value);
         Assert.Equal(1UL, aggregate.Version);
         _ = Assert.Single(aggregate.UncommittedEvents);
-        Assert.Empty(aggregate.CommittedEvents);
+        Assert.Equal(0UL, aggregate.CommittedStreamPosition);
     }
 
     /// <summary>
@@ -236,7 +238,7 @@ public sealed class AggregateTests
         Assert.Equal(0UL, audit.Metadata.AggregateVersion);
         Assert.Equal(0, aggregate.Value);
         Assert.Equal(0UL, aggregate.Version);
-        Assert.Empty(aggregate.CommittedEvents);
+        Assert.Equal(0UL, aggregate.CommittedStreamPosition);
         Assert.Empty(aggregate.UncommittedEvents);
     }
 
@@ -252,7 +254,7 @@ public sealed class AggregateTests
 
         aggregate.Save();
 
-        Assert.Same(ev, Assert.Single(aggregate.CommittedEvents));
+        Assert.Equal(1UL, aggregate.CommittedStreamPosition);
         Assert.Empty(aggregate.UncommittedEvents);
         Assert.Empty(aggregate.UncommittedAudits);
         Assert.Equal(42, aggregate.Value);
@@ -262,7 +264,7 @@ public sealed class AggregateTests
         aggregate.Audit("value inspected");
         Assert.Equal(2, aggregate.UncommittedAudits.Count);
         aggregate.Save();
-        Assert.Same(ev, Assert.Single(aggregate.CommittedEvents));
+        Assert.Equal(1UL, aggregate.CommittedStreamPosition);
         Assert.Empty(aggregate.UncommittedAudits);
         aggregate.ChangeValue(43);
         _ = Assert.Single(aggregate.UncommittedEvents);
@@ -280,7 +282,7 @@ public sealed class AggregateTests
         _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([ev]));
         Assert.Equal(0, aggregate.Value);
         Assert.Equal(0UL, aggregate.Version);
-        Assert.Empty(aggregate.CommittedEvents);
+        Assert.Equal(0UL, aggregate.CommittedStreamPosition);
         Assert.Empty(aggregate.UncommittedEvents);
     }
 
@@ -319,7 +321,7 @@ public sealed class AggregateTests
 
         Assert.Equal(42, aggregate.Value);
         Assert.Equal(1UL, aggregate.Version);
-        _ = Assert.Single(aggregate.CommittedEvents);
+        Assert.Equal(1UL, aggregate.CommittedStreamPosition);
     }
 
     /// <summary>
@@ -330,6 +332,45 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldThrowWhenRegisteringDuplicateHandlerForSameEventType() =>
         Assert.Throws<InvalidOperationException>(() => new DuplicateHandlerAggregate(Uuid.CreateVersion4()));
+
+    /// <summary>
+    ///     Verifies that replayed history is applied and then released. An aggregate is expected to
+    ///     rehydrate from its whole stream and may be kept across requests and caught up in place,
+    ///     so holding every event it has ever seen would make the instance grow without bound for
+    ///     the life of the process. Weak references state that exactly, rather than inferring it
+    ///     from a memory measurement.
+    /// </summary>
+    [Fact]
+    public void ShouldReleaseReplayedEventsOnceHistoryIsApplied()
+    {
+        var id = Uuid.CreateVersion4();
+        var aggregate = new TestAggregate(id);
+
+        var replayed = LoadWithoutRetaining(aggregate, id);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Assert.All(replayed, reference => Assert.False(reference.IsAlive));
+        Assert.Equal(3UL, aggregate.Version);
+        Assert.Equal(3UL, aggregate.CommittedStreamPosition);
+        Assert.Equal(44, aggregate.Value);
+    }
+
+    // The replayed events must have no strong reference left on the test's own stack, so they are
+    // created, replayed and dropped inside a frame that has returned before the collection.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static WeakReference[] LoadWithoutRetaining(TestAggregate aggregate, Uuid id)
+    {
+        DomainEvent[] history =
+        [
+            Committed(new ValueChanged(42), id, 1),
+            Committed(new ValueIncremented(1), id, 2),
+            Committed(new ValueIncremented(1), id, 3)
+        ];
+        aggregate.Load(history);
+        return [.. history.Select(ev => new WeakReference(ev))];
+    }
 
     static T Committed<T>(T ev, Uuid aggregateId, ulong aggregateVersion)
         where T : DomainEvent

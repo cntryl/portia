@@ -1,4 +1,5 @@
 #nullable enable
+Cntryl.Portia.Testing.AggregateScenario<TAggregate>.CommittedEventCount.get -> ulong
 Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe
 Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe.ConvergenceTimeout.get -> System.TimeSpan
 Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe.OpenWorkerAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceWorker!>

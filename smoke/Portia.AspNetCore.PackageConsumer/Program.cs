@@ -11,6 +11,20 @@ var app = builder.Build();
 _ = app.MapPortiaGet<SmokeRequest, string>("/smoke");
 
 await app.StartAsync();
+using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
+{
+    var response = await client.GetStringAsync("/smoke?name=package");
+    if (response != "\"package\"")
+        throw new InvalidOperationException($"Unexpected response: {response}");
+
+    // The packaged generator must still describe its endpoints: a mapping that dispatches
+    // correctly but never reaches the document is the shape of a regression this smoke run
+    // exists to catch.
+    var document = await client.GetStringAsync("/openapi/v1.json");
+    if (!document.Contains("\"operationId\": \"smokeRequest\"", StringComparison.Ordinal))
+        throw new InvalidOperationException($"Portia endpoint missing from OpenAPI document: {document}");
+}
+
 await app.StopAsync();
 
 [Discriminator("portia.smoke.request")]

@@ -30,7 +30,11 @@ static class FrameworkTestRegistration
         _ = portia.AddRequestHandler<HttpSendPingHandler>();
         _ = portia.AddRequestHandler<HttpOptionalBodyHandler>();
         _ = portia.AddRequestHandler<HttpGuardedActionHandler>();
+        _ = portia.AddRequestHandler<HttpGuardedQueueActionHandler>();
+        _ = portia.AddRequestHandler<AllocationProbeActionHandler>();
+        _ = portia.AddRequestHandler<AllocationProbeQueryHandler>();
         _ = portia.AddRequestHandler<HttpListWidgetsHandler>();
+        _ = portia.AddRequestHandler<HttpStallingStreamHandler>();
         _ = portia.AddRequestHandler<UniversalActionHandler>();
         _ = portia.AddRequestHandler<RunnerFaultVisibilityTests.RunnerFaultActionHandler>();
         _ = portia.AddRequestHandler<QueueRunnerTests.InvalidChangeValueHandler>();

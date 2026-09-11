@@ -174,6 +174,38 @@ public sealed class JwtRequestActorValidatorTests
         Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
 
+    /// <summary>
+    ///     A rejected token must not carry the library's own diagnostics back to the caller. Those
+    ///     strings name the configured issuer, audience, key identifiers, and the exact server clock,
+    ///     and this message crosses transports into wire outcomes and logs.
+    /// </summary>
+    [Fact]
+    public async Task ShouldNotDiscloseTokenValidationDiagnosticsToTheCaller()
+    {
+        var validator = new JwtRequestActorValidator(ValidationParameters);
+        var token = CreateToken(DateTime.UtcNow.AddMinutes(-5), "user-1");
+
+        var result = await validator.ValidateAsync(token);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
+        Assert.DoesNotContain("IDX", result.Error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("portia-tests", result.Error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>Validation observes cancellation rather than accepting a token after the caller gave up.</summary>
+    [Fact]
+    public async Task ShouldObserveCancellation()
+    {
+        var validator = new JwtRequestActorValidator(ValidationParameters);
+        var token = CreateToken(DateTime.UtcNow.AddMinutes(5), "user-1");
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        _ = await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            await validator.ValidateAsync(token, cancellation.Token));
+    }
+
     static string CreateToken(DateTime expires, string subject, SymmetricSecurityKey? signingKey = null,
         DateTime? notBefore = null)
     {

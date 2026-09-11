@@ -38,6 +38,8 @@ public sealed class JwtRequestActorValidator(TokenValidationParameters validatio
     /// <inheritdoc />
     public async ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string? token, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(token))
         {
             return Result<ClaimsPrincipal>.Failure(new RequestError(RequestErrorKind.Unauthorized,
@@ -48,12 +50,14 @@ public sealed class JwtRequestActorValidator(TokenValidationParameters validatio
 
         if (!validationResult.IsValid)
         {
-            // Every failure here — bad signature, wrong issuer/audience, or an expired token —
-            // is the same outcome from the caller's perspective: this token no longer grants
-            // authority, whether it never did or it simply doesn't any more.
+            // Every failure here — bad signature, wrong issuer/audience, or an expired token — is
+            // the same outcome from the caller's perspective: this token no longer grants
+            // authority, whether it never did or it simply doesn't any more. The library's own
+            // message names the configured issuer, audience, signing key and server clock, and
+            // this error travels into wire outcomes and logs, so it stays out of the result. The
+            // detail belongs to whoever is diagnosing the deployment, not to the caller.
             return Result<ClaimsPrincipal>.Failure(new RequestError(
-                RequestErrorKind.Unauthorized,
-                $"Actor token failed validation: {validationResult.Exception?.Message ?? "invalid token."}"));
+                RequestErrorKind.Unauthorized, "The actor token is not valid."));
         }
         else
         {
