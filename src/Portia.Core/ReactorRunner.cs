@@ -31,15 +31,18 @@ public sealed class ReactorRunner(
     /// <exception cref="InvalidOperationException">The principal provider returned a non-system principal.</exception>
     public async ValueTask<ProjectionCheckpoint> RunAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
         int maxBatchSize = 512, CancellationToken ct = default)
-        => await RunAsync(reactor, checkpoint,
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBatchSize);
+        return await RunPassAsync(reactor, checkpoint,
             ProjectionRunOptions.Default with { MaxBatchSize = maxBatchSize }, ct).ConfigureAwait(false);
+    }
 
     /// <summary>Processes a bounded pass using the supplied batch and pass limits.</summary>
-    public async ValueTask<ProjectionCheckpoint> RunAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
+    public async ValueTask<ProjectionCheckpoint> RunPassAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
         ProjectionRunOptions options, CancellationToken ct = default)
-        => (await RunPassAsync(reactor, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
+        => (await ExecutePassAsync(reactor, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
 
-    internal async ValueTask<ProjectionPassResult> RunPassAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
+    internal async ValueTask<ProjectionPassResult> ExecutePassAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
         ProjectionRunOptions options, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(reactor);
@@ -51,6 +54,7 @@ public sealed class ReactorRunner(
             throw new InvalidOperationException("A reactor principal provider must return a system principal.");
         }
 
+        var startingCheckpoint = checkpoint;
         var batchSize = reactor.IsBatch ? options.MaxBatchSize : 1;
         var contexts = new List<IReactorContext>(batchSize);
         var processed = 0;
@@ -77,7 +81,7 @@ public sealed class ReactorRunner(
             checkpoint = await CommitAsync().ConfigureAwait(false);
         }
 
-        return new ProjectionPassResult(checkpoint, budgetExhausted);
+        return new ProjectionPassResult(checkpoint, budgetExhausted && checkpoint != startingCheckpoint);
 
         async ValueTask<ProjectionCheckpoint> CommitAsync()
         {

@@ -506,7 +506,7 @@ public sealed class MultiTenancyTests
         var runner = new MultiTenantRunner(directory, new MultiTenantRunnerOptions
         {
             TenantStopTimeout = timeout
-        }, timeProvider: clock);
+        }, null, clock);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var run = runner.RunAsync((_, _) =>
         {
@@ -531,7 +531,7 @@ public sealed class MultiTenancyTests
         var directory = new RemovalDirectory();
         var clock = new ManualTenantClock();
         var options = new MultiTenantRunnerOptions { TenantStopTimeout = TimeSpan.FromSeconds(5) };
-        var runner = new MultiTenantRunner(directory, options, timeProvider: clock);
+        var runner = new MultiTenantRunner(directory, options, null, clock);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stopEntered = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
         var run = runner.RunAsync(async (tenant, token) =>
@@ -571,7 +571,7 @@ public sealed class MultiTenancyTests
     {
         var directory = new RemovalDirectory();
         var clock = new ManualTenantClock();
-        var runner = new MultiTenantRunner(directory, new MultiTenantRunnerOptions(), timeProvider: clock);
+        var runner = new MultiTenantRunner(directory, new MultiTenantRunnerOptions(), null, clock);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cancellation = new CancellationTokenSource();
         var run = runner.RunAsync((_, _) =>

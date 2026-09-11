@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Claims;
 using Cntryl.Fitz;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
 
@@ -24,6 +25,11 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         await using var client = await _broker.CreateClientAsync();
         await EventStoreConformance.VerifyAsync(new FitzEventStoreProbe(client));
     }
+
+    /// <summary>Runs the distributed ownership contract against two real Fitz client sessions.</summary>
+    [Fact]
+    public async Task ShouldSatisfyWorkloadCoordinatorConformanceAgainstRealFitzBroker() =>
+        await WorkloadCoordinatorConformance.VerifyAsync(new FitzWorkloadCoordinatorProbe(_broker));
 
     /// <summary>
     ///     Verifies that a Portia domain event survives an append/read round trip through Fitz.
@@ -183,6 +189,65 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         public ValueTask<IEventStore> OpenAsync(CancellationToken ct = default) => ValueTask.FromResult<IEventStore>(
             new FitzEventStore(client.Stream, TestJson.DomainSerializer(
                 new DomainEventTypeCatalog().Register<ConformanceEvent>(1, "portia.conformance.event"))));
+    }
+
+    sealed class FitzWorkloadCoordinatorProbe(FitzBrokerFixture broker)
+        : IWorkloadCoordinatorConformanceProbe
+    {
+        string _membershipSelector = string.Empty;
+
+        public TimeSpan ConvergenceTimeout => TimeSpan.FromSeconds(10);
+
+        public TimeSpan StabilityWindow => TimeSpan.FromMilliseconds(500);
+
+        public ValueTask ResetAsync(CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            _membershipSelector = $"lease://portia-integration/conformance-{Uuid.CreateVersion4()}/*";
+            return ValueTask.CompletedTask;
+        }
+
+        public async ValueTask<IWorkloadCoordinatorConformanceWorker> OpenWorkerAsync(
+            CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            var client = await broker.CreateClientAsync();
+            try
+            {
+                var connection = new FitzApplicationConnection(client, false, TimeSpan.Zero);
+                var configuration = new PortiaFitzBuilder(new ServiceCollection().AddPortia());
+                _ = configuration.UseFleet(new FleetRunOptions
+                {
+                    MembershipSelector = _membershipSelector,
+                    LeaseTtl = TimeSpan.FromSeconds(3),
+                    ReconciliationInterval = TimeSpan.FromMilliseconds(100),
+                    PartitionStopTimeout = TimeSpan.FromSeconds(2)
+                });
+                return new FitzWorkloadCoordinatorWorker(
+                    client,
+                    connection,
+                    new FitzWorkloadCoordinator(connection, configuration, null, null));
+            }
+            catch
+            {
+                await client.DisposeAsync();
+                throw;
+            }
+        }
+    }
+
+    sealed class FitzWorkloadCoordinatorWorker(
+        Client client,
+        FitzApplicationConnection connection,
+        IWorkloadCoordinator coordinator) : IWorkloadCoordinatorConformanceWorker
+    {
+        public IWorkloadCoordinator Coordinator { get; } = coordinator;
+
+        public async ValueTask DisposeAsync()
+        {
+            await connection.DisposeAsync();
+            await client.DisposeAsync();
+        }
     }
 
     sealed class AlwaysValidActorValidator : IRequestActorValidator

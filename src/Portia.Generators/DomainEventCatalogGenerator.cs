@@ -45,8 +45,12 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
                 static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
                 static (syntaxContext, _) => GetEventModel(syntaxContext))
             .Where(static model => model is not null)
-            .Select(static (model, _) => model!)
-            .Collect();
+            .Select(static (model, _) => model!);
+        var eventModels = events.Collect();
+        var eventRegistrations = events
+            .Select(static (model, _) => new EventRegistration(model.TypeName, model.Name, model.Version))
+            .Collect()
+            .WithTrackingName("DomainEventCatalogRegistrations");
         var invalidDiscriminators = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
@@ -57,7 +61,7 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(invalidDiscriminators, static (sourceContext, invalid) =>
         {
             foreach (var model in invalid)
-                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidDiscriminator, model.Location, model.TypeName));
+                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidDiscriminator, model.Location.ToLocation(), model.TypeName));
         });
 
         var upcasters = context.SyntaxProvider
@@ -69,11 +73,13 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             .Collect();
 
         context.RegisterSourceOutput(
-            events.Combine(upcasters),
-            static (sourceContext, pair) => Generate(sourceContext, pair.Left, pair.Right));
+            eventModels.Combine(upcasters),
+            static (sourceContext, pair) => GenerateDiagnostics(sourceContext, pair.Left, pair.Right));
+        context.RegisterSourceOutput(eventRegistrations, static (sourceContext, registrations) =>
+            GenerateCatalog(sourceContext, registrations));
     }
 
-    static void Generate(
+    static void GenerateDiagnostics(
         SourceProductionContext context,
         ImmutableArray<EventModel> events,
         ImmutableArray<UpcasterModel> upcasters)
@@ -84,7 +90,7 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     UnknownUpcasterEventName,
-                    upcaster.Location,
+                    upcaster.Location.ToLocation(),
                     upcaster.TypeName,
                     upcaster.EventName));
             }
@@ -96,10 +102,16 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             var declarations = group.GroupBy(ev => ev.TypeName).Select(types => types.First()).ToArray();
             var original = declarations[0];
             foreach (var duplicate in declarations.Skip(1))
-                context.ReportDiagnostic(Diagnostic.Create(DuplicateDiscriminator, duplicate.Location,
+                context.ReportDiagnostic(Diagnostic.Create(DuplicateDiscriminator, duplicate.Location.ToLocation(),
                     original.TypeName, duplicate.TypeName, group.Key.Name, group.Key.Version));
         }
 
+    }
+
+    static void GenerateCatalog(
+        SourceProductionContext context,
+        ImmutableArray<EventRegistration> events)
+    {
         if (events.IsDefaultOrEmpty)
             return;
 
@@ -143,7 +155,8 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         var (name, version) = GetSchemaIdentity(symbol);
         return name is null
             ? null
-            : new EventModel(symbol.ToDisplayString(), name, version, declaration.Identifier.GetLocation());
+            : new EventModel(symbol.ToDisplayString(), name, version,
+                DiagnosticLocation.From(declaration.Identifier.GetLocation()));
     }
 
     static InvalidEventDiscriminator? GetInvalidEventDiscriminator(GeneratorSyntaxContext context)
@@ -160,7 +173,8 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         var (name, version) = GetSchemaIdentity(symbol);
         return !string.IsNullOrWhiteSpace(name) && version > 0
             ? null
-            : new InvalidEventDiscriminator(symbol.ToDisplayString(), declaration.Identifier.GetLocation());
+            : new InvalidEventDiscriminator(symbol.ToDisplayString(),
+                DiagnosticLocation.From(declaration.Identifier.GetLocation()));
     }
 
     static UpcasterModel? GetUpcasterEventName(GeneratorSyntaxContext context)
@@ -181,7 +195,8 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
                || propertySyntax.ExpressionBody?.Expression is not LiteralExpressionSyntax literal
                || context.SemanticModel.GetConstantValue(literal) is not { HasValue: true, Value: string eventName }
             ? null
-            : new UpcasterModel(symbol.ToDisplayString(), eventName, declaration.Identifier.GetLocation());
+            : new UpcasterModel(symbol.ToDisplayString(), eventName,
+                DiagnosticLocation.From(declaration.Identifier.GetLocation()));
     }
 
     static (string? Name, int Version) GetSchemaIdentity(INamedTypeSymbol symbol)
@@ -229,37 +244,11 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         return true;
     }
 
-    sealed class EventModel(string typeName, string name, int version, Location location) : IEquatable<EventModel>
-    {
-        public string TypeName { get; } = typeName;
+    sealed record EventModel(string TypeName, string Name, int Version, DiagnosticLocation Location);
 
-        public string Name { get; } = name;
+    sealed record EventRegistration(string TypeName, string Name, int Version);
 
-        public int Version { get; } = version;
+    sealed record UpcasterModel(string TypeName, string EventName, DiagnosticLocation Location);
 
-        public Location Location { get; } = location;
-
-        public bool Equals(EventModel? other) =>
-            other is not null && TypeName == other.TypeName && Name == other.Name && Version == other.Version;
-
-        public override bool Equals(object? obj) => Equals(obj as EventModel);
-
-        public override int GetHashCode() => (TypeName, Name, Version).GetHashCode();
-    }
-
-    sealed class UpcasterModel(string typeName, string eventName, Location location)
-    {
-        public string TypeName { get; } = typeName;
-
-        public string EventName { get; } = eventName;
-
-        public Location Location { get; } = location;
-    }
-
-    sealed class InvalidEventDiscriminator(string typeName, Location location)
-    {
-        public string TypeName { get; } = typeName;
-
-        public Location Location { get; } = location;
-    }
+    sealed record InvalidEventDiscriminator(string TypeName, DiagnosticLocation Location);
 }

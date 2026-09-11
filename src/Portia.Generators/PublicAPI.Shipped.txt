@@ -1,0 +1,25 @@
+#nullable enable
+Cntryl.Portia.DomainEventCatalogGenerator
+Cntryl.Portia.DomainEventCatalogGenerator.DomainEventCatalogGenerator() -> void
+Cntryl.Portia.DomainEventCatalogGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Cntryl.Portia.JsonMetadataDiagnosticGenerator
+Cntryl.Portia.JsonMetadataDiagnosticGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Cntryl.Portia.JsonMetadataDiagnosticGenerator.JsonMetadataDiagnosticGenerator() -> void
+Cntryl.Portia.PortiaServiceRegistrationGenerator
+Cntryl.Portia.PortiaServiceRegistrationGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Cntryl.Portia.PortiaServiceRegistrationGenerator.PortiaServiceRegistrationGenerator() -> void
+Cntryl.Portia.ProjectorReactorEventDispatcherGenerator
+Cntryl.Portia.ProjectorReactorEventDispatcherGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Cntryl.Portia.ProjectorReactorEventDispatcherGenerator.ProjectorReactorEventDispatcherGenerator() -> void
+Cntryl.Portia.RegistrationCallInterceptorGenerator
+Cntryl.Portia.RegistrationCallInterceptorGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Cntryl.Portia.RegistrationCallInterceptorGenerator.RegistrationCallInterceptorGenerator() -> void
+Cntryl.Portia.RequestHttpBindingGenerator
+Cntryl.Portia.RequestHttpBindingGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Cntryl.Portia.RequestHttpBindingGenerator.RequestHttpBindingGenerator() -> void
+Cntryl.Portia.RequestShapeDiagnosticsGenerator
+Cntryl.Portia.RequestShapeDiagnosticsGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Cntryl.Portia.RequestShapeDiagnosticsGenerator.RequestShapeDiagnosticsGenerator() -> void
+Cntryl.Portia.WebApplicationOpenApiGenerator
+Cntryl.Portia.WebApplicationOpenApiGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Cntryl.Portia.WebApplicationOpenApiGenerator.WebApplicationOpenApiGenerator() -> void

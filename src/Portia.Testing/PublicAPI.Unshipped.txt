@@ -1,0 +1,10 @@
+#nullable enable
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe.ConvergenceTimeout.get -> System.TimeSpan
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe.OpenWorkerAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceWorker!>
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe.ResetAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe.StabilityWindow.get -> System.TimeSpan
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceWorker
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceWorker.Coordinator.get -> Cntryl.Portia.IWorkloadCoordinator!
+Cntryl.Portia.Testing.WorkloadCoordinatorConformance
+static Cntryl.Portia.Testing.WorkloadCoordinatorConformance.VerifyAsync(Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe! probe, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask

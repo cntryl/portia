@@ -1,0 +1,115 @@
+#nullable enable
+Cntryl.Portia.AggregateRepository
+Cntryl.Portia.AggregateRepository.AggregateRepository(Cntryl.Portia.IEventStore! store) -> void
+Cntryl.Portia.AggregateRepository.HydrateAsync<TAggregate>(TAggregate! aggregate, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TAggregate!>
+Cntryl.Portia.AggregateRepository.SaveAsync<TAggregate>(TAggregate! aggregate, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.EventSourcedTenantDirectory<TStartEvent, TStopEvent>
+Cntryl.Portia.EventSourcedTenantDirectory<TStartEvent, TStopEvent>.EventSourcedTenantDirectory(Cntryl.Portia.IDomainEventReader! reader, Cntryl.Portia.EventStreamPattern! pattern, System.Func<Cntryl.Portia.DomainEvent!, Cntryl.Portia.TenantId>! getTenantId, System.TimeSpan? pollInterval = null, System.TimeProvider? timeProvider = null, Cntryl.Portia.IDomainEventNotifier? notifier = null) -> void
+Cntryl.Portia.EventSourcedTenantDirectory<TStartEvent, TStopEvent>.GetActiveTenantsAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.TenantId>!
+Cntryl.Portia.EventSourcedTenantDirectory<TStartEvent, TStopEvent>.WatchAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.TenantLifecycleChange>!
+Cntryl.Portia.IJsonDomainEventUpcaster
+Cntryl.Portia.IJsonDomainEventUpcaster.EventName.get -> string!
+Cntryl.Portia.IJsonDomainEventUpcaster.FromVersion.get -> int
+Cntryl.Portia.IJsonDomainEventUpcaster.Upcast(System.Text.Json.Nodes.JsonObject! payload) -> System.Text.Json.Nodes.JsonObject!
+Cntryl.Portia.IQueueDeliveryScope
+Cntryl.Portia.IQueueDeliveryScope.Options.get -> Cntryl.Portia.QueueRunnerOptions!
+Cntryl.Portia.IQueueDeliveryScope.TerminalHandler.get -> Cntryl.Portia.IQueuedRequestTerminalHandler?
+Cntryl.Portia.IQueueDeliveryScopeFactory
+Cntryl.Portia.IQueueDeliveryScopeFactory.CreateAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.IQueueDeliveryScope!>
+Cntryl.Portia.IRequestDeliveryScope
+Cntryl.Portia.IRequestDeliveryScope.ActorValidator.get -> Cntryl.Portia.IRequestActorValidator!
+Cntryl.Portia.IRequestDeliveryScope.Bus.get -> Cntryl.Portia.IRequestBus!
+Cntryl.Portia.IRequestDeliveryScope.TimeProvider.get -> System.TimeProvider?
+Cntryl.Portia.IRequestDeliveryScopeFactory
+Cntryl.Portia.IRequestDeliveryScopeFactory.CreateAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.IRequestDeliveryScope!>
+Cntryl.Portia.JsonDomainEventSerializer
+Cntryl.Portia.JsonDomainEventSerializer.Deserialize(System.ReadOnlyMemory<byte> data) -> Cntryl.Portia.DomainEvent!
+Cntryl.Portia.JsonDomainEventSerializer.JsonDomainEventSerializer(Cntryl.Portia.DomainEventTypeCatalog! catalog, System.Collections.Generic.IEnumerable<Cntryl.Portia.IJsonDomainEventUpcaster!>? upcasters, System.Text.Json.JsonSerializerOptions! options) -> void
+Cntryl.Portia.JsonDomainEventSerializer.Serialize(Cntryl.Portia.DomainEvent! ev) -> System.ReadOnlyMemory<byte>
+Cntryl.Portia.MultiTenantRunner
+Cntryl.Portia.MultiTenantRunner.MultiTenantRunner(Cntryl.Portia.ITenantDirectory! tenantDirectory, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.MultiTenantRunner!>? logger = null, System.TimeProvider? timeProvider = null, System.TimeSpan? restartInterval = null, System.TimeSpan? shutdownGrace = null) -> void
+Cntryl.Portia.MultiTenantRunner.MultiTenantRunner(Cntryl.Portia.ITenantDirectory! tenantDirectory, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.MultiTenantRunner!>? logger, System.TimeProvider? timeProvider, System.TimeSpan? restartInterval) -> void
+Cntryl.Portia.MultiTenantRunner.RunAsync(System.Func<Cntryl.Portia.TenantId, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! onTenantStarted, System.Func<Cntryl.Portia.TenantId, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! onTenantStopped, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Cntryl.Portia.ProjectionRunOptions
+Cntryl.Portia.ProjectionRunOptions.<Clone>$() -> Cntryl.Portia.ProjectionRunOptions!
+Cntryl.Portia.ProjectionRunOptions.Equals(Cntryl.Portia.ProjectionRunOptions? other) -> bool
+Cntryl.Portia.ProjectionRunOptions.MaxBatchSize.get -> int
+Cntryl.Portia.ProjectionRunOptions.MaxBatchSize.init -> void
+Cntryl.Portia.ProjectionRunOptions.ProjectionRunOptions() -> void
+Cntryl.Portia.ProjectionRunOptions.RebuildId.get -> string?
+Cntryl.Portia.ProjectionRunOptions.RebuildId.init -> void
+Cntryl.Portia.ProjectionRunOptions.Validate() -> void
+Cntryl.Portia.ProjectorRegistration
+Cntryl.Portia.ProjectorRegistration.ProjectorType.get -> System.Type!
+Cntryl.Portia.ProjectorRegistration.Resolve(System.IServiceProvider! services) -> Cntryl.Portia.Projector!
+Cntryl.Portia.ProjectorRegistration.Run.get -> System.Func<Cntryl.Portia.ProjectorRunner!, System.IServiceProvider!, Cntryl.Portia.ProjectionCheckpoint, Cntryl.Portia.ProjectionRunOptions?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>>!
+Cntryl.Portia.ProjectorRegistration.RunPass.get -> System.Func<System.IServiceProvider!, Cntryl.Portia.ProjectionRunOptions?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>!
+Cntryl.Portia.ProjectorRunner
+Cntryl.Portia.ProjectorRunner.ProjectorRunner(Cntryl.Portia.IDomainEventReader! reader) -> void
+Cntryl.Portia.ProjectorRunner.RunAsync(Cntryl.Portia.Projector! projector, Cntryl.Portia.ProjectionCheckpoint checkpoint, Cntryl.Portia.ProjectionRunOptions? options = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>
+Cntryl.Portia.QueueRunner
+Cntryl.Portia.QueueRunner.QueueRunner(Cntryl.Portia.IRequestQueueConsumer! consumer, Cntryl.Portia.IQueueDeliveryScopeFactory! scopeFactory, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.QueueRunner!>? logger = null) -> void
+Cntryl.Portia.QueueRunner.RunAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Cntryl.Portia.ReactorRegistration
+Cntryl.Portia.ReactorRegistration.ReactorType.get -> System.Type!
+Cntryl.Portia.ReactorRegistration.Resolve(System.IServiceProvider! services) -> Cntryl.Portia.Reactor!
+Cntryl.Portia.ReactorRunner
+Cntryl.Portia.ReactorRunner.ReactorRunner(Cntryl.Portia.IDomainEventReader! reader, Cntryl.Portia.IReactorPrincipalProvider? principals = null, System.TimeProvider? timeProvider = null) -> void
+Cntryl.Portia.ReactorRunner.RunAsync(Cntryl.Portia.Reactor! reactor, Cntryl.Portia.ProjectionCheckpoint checkpoint, int maxBatchSize = 512, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>
+Cntryl.Portia.RequestAuthorizerRegistration
+Cntryl.Portia.RequestAuthorizerRegistration.AuthorizerType.get -> System.Type!
+Cntryl.Portia.RequestAuthorizerRegistration.RequestAuthorizerRegistration(System.Type! requestType, System.Type! authorizerType, Cntryl.Portia.AuthorizationStage stage = Cntryl.Portia.AuthorizationStage.ResourceAccess) -> void
+Cntryl.Portia.RequestAuthorizerRegistration.RequestType.get -> System.Type!
+Cntryl.Portia.RequestAuthorizerRegistration.ScopeType.get -> System.Type!
+Cntryl.Portia.RequestAuthorizerRegistration.Stage.get -> Cntryl.Portia.AuthorizationStage
+Cntryl.Portia.RequestAuthorizerRegistration<TRequest, TAuthorizer>
+Cntryl.Portia.RequestAuthorizerRegistration<TRequest, TAuthorizer>.RequestAuthorizerRegistration(Cntryl.Portia.AuthorizationStage stage = Cntryl.Portia.AuthorizationStage.ResourceAccess) -> void
+Cntryl.Portia.RequestBus
+Cntryl.Portia.RequestBus.CreateContext(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.RequestMetadata? metadata = null) -> Cntryl.Portia.RequestDispatchContext!
+Cntryl.Portia.RequestBus.DispatchAsync(Cntryl.Portia.IRequest! request, Cntryl.Portia.RequestDispatchContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
+Cntryl.Portia.RequestBus.DispatchAsync<TOut>(Cntryl.Portia.IRequest<TOut>! request, Cntryl.Portia.RequestDispatchContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result<TOut>>
+Cntryl.Portia.RequestBus.DispatchStreamAsync<TOut>(Cntryl.Portia.IStreamRequest<TOut>! request, Cntryl.Portia.RequestDispatchContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TOut>!
+Cntryl.Portia.RequestBus.RequestBus(System.IServiceProvider! services, Cntryl.Portia.RequestRegistry! registry) -> void
+Cntryl.Portia.RequestDeliveryScopes
+Cntryl.Portia.RequestHandlerRegistration
+Cntryl.Portia.RequestHandlerRegistration.HandlerType.get -> System.Type!
+Cntryl.Portia.RequestHandlerRegistration.RequestHandlerRegistration(System.Type! requestType, System.Type! handlerType, System.Type? resultType, System.Func<Cntryl.Portia.IRequestBase!, string!>? permission) -> void
+Cntryl.Portia.RequestHandlerRegistration.RequestType.get -> System.Type!
+Cntryl.Portia.RequestHandlerRegistration.ResultType.get -> System.Type?
+Cntryl.Portia.RequestNotificationRunner
+Cntryl.Portia.RequestNotificationRunner.RequestNotificationRunner(Cntryl.Portia.IRequestNotificationConsumer! consumer, Cntryl.Portia.IRequestDeliveryScopeFactory! scopeFactory, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.RequestNotificationRunner!>? logger = null) -> void
+Cntryl.Portia.RequestNotificationRunner.RunAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Cntryl.Portia.RequestPipelineBehaviorRegistration
+Cntryl.Portia.RequestPipelineBehaviorRegistration.BehaviorType.get -> System.Type!
+Cntryl.Portia.RequestPipelineBehaviorRegistration.Order.get -> int
+Cntryl.Portia.RequestPipelineBehaviorRegistration.RequestPipelineBehaviorRegistration(System.Type! scopeType, System.Type! behaviorType, int order) -> void
+Cntryl.Portia.RequestPipelineBehaviorRegistration.ScopeType.get -> System.Type!
+Cntryl.Portia.RequestPipelineBehaviorRegistration<TRequest, TBehavior, TOut>
+Cntryl.Portia.RequestPipelineBehaviorRegistration<TRequest, TBehavior, TOut>.RequestPipelineBehaviorRegistration(int order) -> void
+Cntryl.Portia.RequestPipelineBehaviorRegistration<TRequest, TBehavior>
+Cntryl.Portia.RequestPipelineBehaviorRegistration<TRequest, TBehavior>.RequestPipelineBehaviorRegistration(int order) -> void
+Cntryl.Portia.RequestRegistration<TRequest, THandler, TOut>
+Cntryl.Portia.RequestRegistration<TRequest, THandler, TOut>.RequestRegistration(System.Func<TRequest, string!>? permission = null) -> void
+Cntryl.Portia.RequestRegistration<TRequest, THandler>
+Cntryl.Portia.RequestRegistration<TRequest, THandler>.RequestRegistration(System.Func<TRequest, string!>? permission = null) -> void
+Cntryl.Portia.RequestRegistry
+Cntryl.Portia.RequestRegistry.RequestRegistry(System.Collections.Generic.IEnumerable<Cntryl.Portia.RequestHandlerRegistration!>! handlers, System.Collections.Generic.IEnumerable<Cntryl.Portia.RequestAuthorizerRegistration!>! authorizers, System.Collections.Generic.IEnumerable<Cntryl.Portia.RequestPipelineBehaviorRegistration!>! behaviors, System.Collections.Generic.IEnumerable<Cntryl.Portia.RequestTransportRegistration!>! requests) -> void
+Cntryl.Portia.SingleProcessWorkloadCoordinator
+Cntryl.Portia.SingleProcessWorkloadCoordinator.RunAsync(System.Func<System.Collections.Generic.IReadOnlyCollection<Cntryl.Portia.WorkloadIdentity!>!>! workloads, System.Func<Cntryl.Portia.WorkloadIdentity!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! run, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Cntryl.Portia.SingleProcessWorkloadCoordinator.SingleProcessWorkloadCoordinator(System.TimeSpan? reconcileInterval = null, System.TimeProvider? timeProvider = null) -> void
+Cntryl.Portia.StreamRequestPipelineBehaviorRegistration<TRequest, TBehavior, TOut>
+Cntryl.Portia.StreamRequestPipelineBehaviorRegistration<TRequest, TBehavior, TOut>.StreamRequestPipelineBehaviorRegistration(int order) -> void
+Cntryl.Portia.StreamRequestRegistration<TRequest, THandler, TOut>
+Cntryl.Portia.StreamRequestRegistration<TRequest, THandler, TOut>.StreamRequestRegistration(System.Func<TRequest, string!>? permission = null) -> void
+Cntryl.Portia.TerminalHandlerFailureException
+Cntryl.Portia.TerminalHandlerFailureException.TerminalHandlerFailureException(System.Exception! innerException) -> void
+override Cntryl.Portia.ProjectionRunOptions.Equals(object? obj) -> bool
+override Cntryl.Portia.ProjectionRunOptions.GetHashCode() -> int
+override Cntryl.Portia.ProjectionRunOptions.ToString() -> string!
+static Cntryl.Portia.ProjectionRunOptions.Default.get -> Cntryl.Portia.ProjectionRunOptions!
+static Cntryl.Portia.ProjectionRunOptions.operator !=(Cntryl.Portia.ProjectionRunOptions? left, Cntryl.Portia.ProjectionRunOptions? right) -> bool
+static Cntryl.Portia.ProjectionRunOptions.operator ==(Cntryl.Portia.ProjectionRunOptions? left, Cntryl.Portia.ProjectionRunOptions? right) -> bool
+static Cntryl.Portia.ProjectorRegistration.Create<TProjector>() -> Cntryl.Portia.ProjectorRegistration!
+static Cntryl.Portia.ReactorRegistration.Create<TReactor>() -> Cntryl.Portia.ReactorRegistration!
+static Cntryl.Portia.RequestDeliveryScopes.Fixed(Cntryl.Portia.IRequestBus! bus, Cntryl.Portia.IRequestActorValidator! actorValidator, System.TimeProvider? timeProvider = null) -> Cntryl.Portia.IRequestDeliveryScopeFactory!
+static Cntryl.Portia.RequestDeliveryScopes.FixedQueue(Cntryl.Portia.IRequestBus! bus, Cntryl.Portia.IRequestActorValidator! actorValidator, Cntryl.Portia.QueueRunnerOptions? options = null, Cntryl.Portia.IQueuedRequestTerminalHandler? terminalHandler = null, System.TimeProvider? timeProvider = null) -> Cntryl.Portia.IQueueDeliveryScopeFactory!

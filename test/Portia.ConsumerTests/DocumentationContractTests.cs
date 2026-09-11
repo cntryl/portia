@@ -104,7 +104,10 @@ public sealed partial class DocumentationContractTests
         AssertXmlMembers("Portia.Testing",
             "T:Cntryl.Portia.Testing.ProjectionStoreConformance",
             "T:Cntryl.Portia.Testing.ReactionDeduplicationConformance",
-            "T:Cntryl.Portia.Testing.ConformanceViolationException");
+            "T:Cntryl.Portia.Testing.ConformanceViolationException",
+            "T:Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe",
+            "T:Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceWorker",
+            "T:Cntryl.Portia.Testing.WorkloadCoordinatorConformance");
     }
 
     static void AssertXmlMembers(string project, params string[] expected)

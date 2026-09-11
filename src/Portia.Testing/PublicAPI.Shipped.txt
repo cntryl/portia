@@ -1,0 +1,68 @@
+#nullable enable
+Cntryl.Portia.Testing.AggregateScenario<TAggregate>
+Cntryl.Portia.Testing.AggregateScenario<TAggregate>.Aggregate.get -> TAggregate!
+Cntryl.Portia.Testing.AggregateScenario<TAggregate>.AggregateScenario(TAggregate! aggregate) -> void
+Cntryl.Portia.Testing.AggregateScenario<TAggregate>.CommittedEvents.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>!
+Cntryl.Portia.Testing.AggregateScenario<TAggregate>.Given(params Cntryl.Portia.DomainEvent![]! events) -> Cntryl.Portia.Testing.AggregateScenario<TAggregate!>!
+Cntryl.Portia.Testing.AggregateScenario<TAggregate>.PendingAudits.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>!
+Cntryl.Portia.Testing.AggregateScenario<TAggregate>.PendingEvents.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>!
+Cntryl.Portia.Testing.ConformanceEvent
+Cntryl.Portia.Testing.ConformanceEvent.ConformanceEvent(ulong Sequence) -> void
+Cntryl.Portia.Testing.ConformanceEvent.Deconstruct(out ulong Sequence) -> void
+Cntryl.Portia.Testing.ConformanceEvent.Equals(Cntryl.Portia.Testing.ConformanceEvent? other) -> bool
+Cntryl.Portia.Testing.ConformanceEvent.Sequence.get -> ulong
+Cntryl.Portia.Testing.ConformanceEvent.Sequence.init -> void
+Cntryl.Portia.Testing.ConformanceViolationException
+Cntryl.Portia.Testing.ConformanceViolationException.ConformanceViolationException(string! message) -> void
+Cntryl.Portia.Testing.DomainEventSeed
+Cntryl.Portia.Testing.EventStoreConformance
+Cntryl.Portia.Testing.IEventStoreConformanceProbe
+Cntryl.Portia.Testing.IEventStoreConformanceProbe.Area.get -> string!
+Cntryl.Portia.Testing.IEventStoreConformanceProbe.OpenAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.IEventStore!>
+Cntryl.Portia.Testing.IEventStoreConformanceProbe.Realm.get -> string!
+Cntryl.Portia.Testing.IEventStoreConformanceProbe.ResetAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.InMemoryEventStore
+Cntryl.Portia.Testing.InMemoryEventStore.AppendAsync(Cntryl.Portia.EventStreamAddress! stream, ulong expectedStreamPosition, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>! events, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.InMemoryEventStore.InMemoryEventStore() -> void
+Cntryl.Portia.Testing.InMemoryEventStore.ReadAsync(Cntryl.Portia.EventStreamAddress! stream, ulong fromOffset = 0, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.DomainEventRecord!>!
+Cntryl.Portia.Testing.InMemoryEventStore.ReadAsync(Cntryl.Portia.EventStreamPattern! pattern, ulong fromOffset = 0, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.DomainEventRecord!>!
+Cntryl.Portia.Testing.InMemoryProjectionCheckpointStore
+Cntryl.Portia.Testing.InMemoryProjectionCheckpointStore.InMemoryProjectionCheckpointStore() -> void
+Cntryl.Portia.Testing.InMemoryProjectionCheckpointStore.LoadAsync(Cntryl.Portia.CheckpointIdentity! identity, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>
+Cntryl.Portia.Testing.InMemoryProjectionCheckpointStore.SaveAsync(Cntryl.Portia.CheckpointIdentity! identity, Cntryl.Portia.ProjectionCheckpoint checkpoint, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.IProjectionStoreConformanceProbe
+Cntryl.Portia.Testing.IProjectionStoreConformanceProbe.LiveIdentity.get -> Cntryl.Portia.CheckpointIdentity!
+Cntryl.Portia.Testing.IProjectionStoreConformanceProbe.OpenSessionAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Testing.IProjectionStoreConformanceSession!>
+Cntryl.Portia.Testing.IProjectionStoreConformanceProbe.RebuildIdentity.get -> Cntryl.Portia.CheckpointIdentity!
+Cntryl.Portia.Testing.IProjectionStoreConformanceProbe.ResetAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.IProjectionStoreConformanceSession
+Cntryl.Portia.Testing.IProjectionStoreConformanceSession.FailNextCommitAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.IProjectionStoreConformanceSession.ReadValueAsync(Cntryl.Portia.CheckpointIdentity! identity, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<string?>
+Cntryl.Portia.Testing.IProjectionStoreConformanceSession.StageValueAsync(string! value, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.IProjectionStoreConformanceSession.Store.get -> Cntryl.Portia.IProjectionStore!
+Cntryl.Portia.Testing.IReactionDeduplicationProbe
+Cntryl.Portia.Testing.IReactionDeduplicationProbe.ExecuteAsync(Cntryl.Portia.Uuid eventId, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! effect, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.Testing.IReactionDeduplicationProbe.ReopenAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.IReactionDeduplicationProbe.ResetAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.ProjectionStoreConformance
+Cntryl.Portia.Testing.ReactionDeduplicationConformance
+Cntryl.Portia.Testing.TestPermissionEvaluator
+Cntryl.Portia.Testing.TestPermissionEvaluator.EvaluateAsync(System.Security.Claims.ClaimsPrincipal! actor, string! permission, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
+Cntryl.Portia.Testing.TestPermissionEvaluator.EvaluatedPermissions.get -> System.Collections.Generic.List<string!>!
+Cntryl.Portia.Testing.TestPermissionEvaluator.TestPermissionEvaluator(bool grantsEveryPermission) -> void
+Cntryl.Portia.Testing.TestRequestActorValidator
+Cntryl.Portia.Testing.TestRequestActorValidator.TestRequestActorValidator(string? rejectToken = null) -> void
+Cntryl.Portia.Testing.TestRequestActorValidator.ValidateAsync(string? token, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result<System.Security.Claims.ClaimsPrincipal!>>
+override Cntryl.Portia.Testing.ConformanceEvent.<Clone>$() -> Cntryl.Portia.Testing.ConformanceEvent!
+override Cntryl.Portia.Testing.ConformanceEvent.Equals(object? obj) -> bool
+override Cntryl.Portia.Testing.ConformanceEvent.GetHashCode() -> int
+override Cntryl.Portia.Testing.ConformanceEvent.ToString() -> string!
+override sealed Cntryl.Portia.Testing.ConformanceEvent.Equals(Cntryl.Portia.DomainEvent? other) -> bool
+static Cntryl.Portia.Testing.ConformanceEvent.operator !=(Cntryl.Portia.Testing.ConformanceEvent? left, Cntryl.Portia.Testing.ConformanceEvent? right) -> bool
+static Cntryl.Portia.Testing.ConformanceEvent.operator ==(Cntryl.Portia.Testing.ConformanceEvent? left, Cntryl.Portia.Testing.ConformanceEvent? right) -> bool
+static Cntryl.Portia.Testing.DomainEventSeed.Attach<TEvent>(TEvent! ev, Cntryl.Portia.Uuid aggregateId, ulong aggregateVersion, bool isAudit = false, Cntryl.Portia.Uuid? eventId = null, System.DateTimeOffset? occurredOn = null) -> TEvent!
+static Cntryl.Portia.Testing.EventStoreConformance.VerifyAsync(Cntryl.Portia.Testing.IEventStoreConformanceProbe! probe, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+static Cntryl.Portia.Testing.ProjectionStoreConformance.VerifyAsync(Cntryl.Portia.Testing.IProjectionStoreConformanceProbe! probe, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+static Cntryl.Portia.Testing.ReactionDeduplicationConformance.VerifyAsync(Cntryl.Portia.Testing.IReactionDeduplicationProbe! probe, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+static Cntryl.Portia.Testing.TestPermissionEvaluator.AllowAll() -> Cntryl.Portia.Testing.TestPermissionEvaluator!
+static Cntryl.Portia.Testing.TestPermissionEvaluator.DenyAll() -> Cntryl.Portia.Testing.TestPermissionEvaluator!

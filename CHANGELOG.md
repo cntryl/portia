@@ -6,14 +6,22 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
-- Bound projector and reactor passes to 4,096 events by default, while immediately continuing durable
-  backlogs in fresh dependency-injection scopes.
+- Track the nullability-aware public API of every shipped assembly during ordinary builds, and add
+  real-Fitz distributed workload-coordinator conformance coverage for exclusive ownership, stable
+  reconciliation, revocation, and shutdown. Publishing now requires Unshipped APIs to be promoted.
+- Make domain-event catalog incremental cache models structurally comparable without retaining
+  Roslyn locations, while preserving diagnostic spans and partial-declaration deduplication.
+- Make manual publishing rebuild, run the packed ASP.NET Core consumer, and pass the complete
+  Compose-backed suite for the exact release checkout before any package is pushed. CI now uploads
+  its Cobertura coverage output for inspection.
+- Bound projector and reactor passes to 4,096 events by default, while immediately continuing
+  progressing durable backlogs in fresh dependency-injection scopes.
 - Make `portia.worker.failure` use the stable `runner` and `stage` dimensions; Fitz partition-stop
   timeouts now use structured log event ID 1101.
 - Treat clean early Fitz read disposal as success and keep cross-record event-ID uniqueness at the
   aggregate hydration boundary instead of retaining full-stream reader state.
-- Cache rendezvous owners across unchanged fleet reconciliation and rebuild workload snapshots only
-  when membership changes.
+- Cache rendezvous owners across unchanged fleet reconciliation and read coordinator workload
+  snapshots directly from the concurrent active registry so tenant churn cannot publish stale work.
 
 ### Added
 

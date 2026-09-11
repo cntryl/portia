@@ -23,6 +23,25 @@ public sealed class RequestPipelineBehaviorTests
         Assert.Equal(["outer-before", "inner-before", "handler", "inner-after", "outer-after"], calls);
     }
 
+    /// <summary>The extended-state boundary enforces use-after-close and use-after-completion.</summary>
+    [Fact]
+    public void ShouldEnforceSingleUseAtExtendedStateBoundary()
+    {
+        var closed = new RequestPipelineFrame<PipelineAction>(
+            new object(), null!, null!, new PipelineAction(), null!, 32);
+        closed.Use(31);
+        closed.Close(31);
+
+        var closedFailure = Assert.Throws<InvalidOperationException>(() => closed.Use(31));
+
+        var completed = new RequestPipelineFrame<PipelineAction>(
+            new object(), null!, null!, new PipelineAction(), null!, 32);
+        completed.Complete();
+        var completedFailure = Assert.Throws<InvalidOperationException>(() => completed.Use(31));
+        Assert.Equal(SingleUseMessage, closedFailure.Message);
+        Assert.Equal(SingleUseMessage, completedFailure.Message);
+    }
+
     /// <summary>Authorization denial prevents all behavior execution.</summary>
     [Fact]
     public async Task ShouldAuthorizeBeforeEnteringBehaviorChain()

@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -81,6 +83,22 @@ public sealed class ProjectorTests
         Assert.Equal([2UL, 3UL], target.CommittedOffsets);
     }
 
+    /// <summary>A full pass that cannot advance its checkpoint must not request a hot retry.</summary>
+    [Fact]
+    public async Task ShouldNotContinueImmediatelyWhenBudgetExhaustionMakesNoProgress()
+    {
+        var stream = new EventStreamAddress("test", "projectors", "stale");
+        var record = new DomainEventRecord(stream, Committed(new ValueChanged(40), 1), 0, 0, 0);
+        var runner = new ProjectorRunner(new StaleOffsetEventReader(record));
+        var projector = new TestProjector(new RecordingProjectionTarget());
+
+        var result = await runner.RunPassAsync(projector, new ProjectionCheckpoint(1),
+            new ProjectionRunOptions { MaxEventsPerPass = 1 });
+
+        Assert.False(result.ContinueImmediately);
+        Assert.Equal(1UL, result.Checkpoint.NextOffset);
+    }
+
     /// <summary>Non-positive pass budgets are rejected before enumeration.</summary>
     [Fact]
     public async Task ShouldRejectNonPositivePassBudget()
@@ -124,5 +142,19 @@ public sealed class ProjectorTests
             aggregateVersion,
             DateTimeOffset.UtcNow));
         return ev;
+    }
+
+    sealed class StaleOffsetEventReader(DomainEventRecord record) : IDomainEventReader
+    {
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
+            CancellationToken ct = default) => throw new NotSupportedException();
+
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            await Task.Yield();
+            yield return record;
+        }
     }
 }

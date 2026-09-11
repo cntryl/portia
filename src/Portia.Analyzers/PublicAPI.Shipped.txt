@@ -1,0 +1,4 @@
+#nullable enable
+Cntryl.Portia.ComponentPracticeGenerator
+Cntryl.Portia.ComponentPracticeGenerator.ComponentPracticeGenerator() -> void
+Cntryl.Portia.ComponentPracticeGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void

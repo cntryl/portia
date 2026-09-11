@@ -138,6 +138,7 @@ shapes.
 | `IEventStore` | `FitzEventStore` | `InMemoryEventStore`, `EventStoreConformance` | Implement and run conformance for another backend |
 | `IProjectionStore` | `FitzKvProjectionStore` is an abstract Fitz-KV base | `ProjectionStoreConformance` | Supply the projection data operations and atomic checkpoint commit |
 | `IProjectionCheckpointStore` | `FitzKvCheckpointStore` | `InMemoryProjectionCheckpointStore` | Supply durable reactor progress without Fitz |
+| `IWorkloadCoordinator` | Fitz fleet coordination; `SingleProcessWorkloadCoordinator` for one replica only | `WorkloadCoordinatorConformance` | Run distributed conformance before scaling a custom coordinator beyond one replica |
 | `IPermissionEvaluator` | None | `TestPermissionEvaluator` | Register the application's permission policy when any guarded request is selected |
 | `ITenantDirectory` | `EventSourcedTenantDirectory<TStartEvent,TStopEvent>`; also supports resumable cursors | In-process fakes in the test suites | Define authoritative membership events, mapping, and registration |
 
@@ -157,5 +158,6 @@ markers remains intentionally unreported and still needs architectural review.
 
 Projector and reactor workers enumerate at most `ProjectionRunOptions.MaxEventsPerPass` records per
 dependency-injection scope (4,096 by default). A budget-exhausted backlog continues immediately in a
-fresh scope from the durable checkpoint; caught-up workloads retain notification and polling waits.
+fresh scope only when the durable checkpoint advanced; a non-progressing pass falls back to the
+normal notification or polling wait. Caught-up workloads retain notification and polling waits.
 `MaxBatchSize` continues to control transactional batch size independently.

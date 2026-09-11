@@ -48,9 +48,24 @@ public sealed class ReactorRunnerTests
         Assert.Equal(checkpoint, nextCheckpoint);
     }
 
-    /// <summary>The options overload bounds a pass and resumes from durable progress.</summary>
+    /// <summary>The legacy integer overload preserves its public parameter name on validation.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task ShouldNameLegacyBatchSizeParameterWhenRejected(int maxBatchSize)
+    {
+        var runner = new ReactorRunner(new InMemoryEventStore());
+        var reactor = new TestReactor(new RecordingAggregateRepository());
+
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            runner.RunAsync(reactor, ProjectionCheckpoint.Start, maxBatchSize).AsTask());
+
+        Assert.Equal(nameof(maxBatchSize), exception.ParamName);
+    }
+
+    /// <summary>The options entry point bounds a pass and resumes from durable progress.</summary>
     [Fact]
-    public async Task ShouldBoundPassAndResumeWithOptionsOverload()
+    public async Task ShouldBoundPassAndResumeWithOptionsEntryPoint()
     {
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "reactors", id.ToString());
@@ -64,8 +79,8 @@ public sealed class ReactorRunnerTests
         var runner = new ReactorRunner(store);
         var options = new ProjectionRunOptions { MaxEventsPerPass = 2 };
 
-        var first = await runner.RunAsync(reactor, ProjectionCheckpoint.Start, options);
-        var second = await runner.RunAsync(reactor, first, options);
+        var first = await runner.RunPassAsync(reactor, ProjectionCheckpoint.Start, options);
+        var second = await runner.RunPassAsync(reactor, first, options);
 
         Assert.Equal(2UL, first.NextOffset);
         Assert.Equal(3UL, second.NextOffset);

@@ -61,13 +61,21 @@ public sealed class MultiTenantRunner(
     /// <summary>Creates a runner using explicit recovery and cleanup options.</summary>
     /// <param name="tenantDirectory">Reports active tenants and lifecycle changes.</param>
     /// <param name="options">Recovery, shutdown, and normal-removal durations.</param>
+    public MultiTenantRunner(ITenantDirectory tenantDirectory, MultiTenantRunnerOptions options)
+        : this(tenantDirectory, options, null, null)
+    {
+    }
+
+    /// <summary>Creates a runner using explicit recovery and cleanup options.</summary>
+    /// <param name="tenantDirectory">Reports active tenants and lifecycle changes.</param>
+    /// <param name="options">Recovery, shutdown, and normal-removal durations.</param>
     /// <param name="logger">Reports runner faults when configured.</param>
     /// <param name="timeProvider">Schedules delays and cleanup deadlines.</param>
     public MultiTenantRunner(
         ITenantDirectory tenantDirectory,
         MultiTenantRunnerOptions options,
-        ILogger<MultiTenantRunner>? logger = null,
-        TimeProvider? timeProvider = null)
+        ILogger<MultiTenantRunner>? logger,
+        TimeProvider? timeProvider)
         : this(tenantDirectory, logger, timeProvider,
             GetPositive(options, static value => value.RestartInterval, nameof(options.RestartInterval)),
             GetPositive(options, static value => value.ShutdownGrace, nameof(options.ShutdownGrace)))

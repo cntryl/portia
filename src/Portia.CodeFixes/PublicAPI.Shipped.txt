@@ -1,0 +1,11 @@
+#nullable enable
+Cntryl.Portia.JsonMetadataCodeFixProvider
+Cntryl.Portia.JsonMetadataCodeFixProvider.JsonMetadataCodeFixProvider() -> void
+Cntryl.Portia.PartialProcessorCodeFixProvider
+Cntryl.Portia.PartialProcessorCodeFixProvider.PartialProcessorCodeFixProvider() -> void
+override Cntryl.Portia.JsonMetadataCodeFixProvider.FixableDiagnosticIds.get -> System.Collections.Immutable.ImmutableArray<string!>
+override Cntryl.Portia.JsonMetadataCodeFixProvider.GetFixAllProvider() -> Microsoft.CodeAnalysis.CodeFixes.FixAllProvider!
+override Cntryl.Portia.JsonMetadataCodeFixProvider.RegisterCodeFixesAsync(Microsoft.CodeAnalysis.CodeFixes.CodeFixContext context) -> System.Threading.Tasks.Task!
+override Cntryl.Portia.PartialProcessorCodeFixProvider.FixableDiagnosticIds.get -> System.Collections.Immutable.ImmutableArray<string!>
+override Cntryl.Portia.PartialProcessorCodeFixProvider.GetFixAllProvider() -> Microsoft.CodeAnalysis.CodeFixes.FixAllProvider!
+override Cntryl.Portia.PartialProcessorCodeFixProvider.RegisterCodeFixesAsync(Microsoft.CodeAnalysis.CodeFixes.CodeFixContext context) -> System.Threading.Tasks.Task!

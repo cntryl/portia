@@ -98,25 +98,29 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
         if (syntax is not InvocationExpressionSyntax invocation)
         {
-            return new Call(null, role, null, null, syntax.GetLocation(),
-                Diagnostic.Create(UnsupportedRegistrationCallSite, syntax.GetLocation(), role));
+            var diagnosticLocation = DiagnosticLocation.From(syntax.GetLocation());
+            return new Call(null, role, null, null, diagnosticLocation,
+                new RegistrationDiagnostic(RegistrationDiagnosticKind.UnsupportedCallSite, diagnosticLocation, role));
         }
 
         if (context.SemanticModel.GetInterceptableLocation(invocation) is not { } location)
         {
-            return new Call(null, role, null, null, invocation.GetLocation(),
-                Diagnostic.Create(UnsupportedRegistrationCallSite, invocation.GetLocation(), role));
+            var diagnosticLocation = DiagnosticLocation.From(invocation.GetLocation());
+            return new Call(null, role, null, null, diagnosticLocation,
+                new RegistrationDiagnostic(RegistrationDiagnosticKind.UnsupportedCallSite, diagnosticLocation, role));
         }
 
         if (role == "application")
         {
-            return new Call(location, "application", JsonContextRegistrations(context.SemanticModel.Compilation)
+            return new Call(InterceptableLocationModel.From(location), "application",
+                JsonContextRegistrations(context.SemanticModel.Compilation)
                                                      + EventRegistrations(context.SemanticModel.Compilation), null,
-                invocation.GetLocation());
+                DiagnosticLocation.From(invocation.GetLocation()));
         }
 
         if (method.TypeArguments[0] is not INamedTypeSymbol type)
-            return new Call(location, role, null, "use a concrete named type", invocation.GetLocation());
+            return new Call(InterceptableLocationModel.From(location), role, null, "use a concrete named type",
+                DiagnosticLocation.From(invocation.GetLocation()));
 
         if (role == "domain event")
         {
@@ -125,11 +129,12 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             return attribute is not null && attribute.ConstructorArguments.Length == 2
                                          && attribute.ConstructorArguments[0].Value is string name
                                          && attribute.ConstructorArguments[1].Value is int version
-                ? new Call(location, role,
+                ? new Call(InterceptableLocationModel.From(location), role,
                     $"_ = builder.AddGeneratedEvent<{Type(type)}>({version}, {RequestTransportDiscovery.FormatStringLiteral(name)});",
-                    null, invocation.GetLocation())
-                : new Call(location, role, null, "the event needs a valid Discriminator attribute",
-                    invocation.GetLocation());
+                    null, DiagnosticLocation.From(invocation.GetLocation()))
+                : new Call(InterceptableLocationModel.From(location), role, null,
+                    "the event needs a valid Discriminator attribute",
+                    DiagnosticLocation.From(invocation.GetLocation()));
         }
 
         var interfaces = type.AllInterfaces.Where(i =>
@@ -146,17 +151,19 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         {
             var transport = RequestTransportDiscovery.GetRequestTransportComponent(type);
             return transport is null
-                ? new Call(location, role, null, "the request needs RequestRoute and at least one transport marker",
-                    invocation.GetLocation())
-                : new Call(location, role,
+                ? new Call(InterceptableLocationModel.From(location), role, null,
+                    "the request needs RequestRoute and at least one transport marker",
+                    DiagnosticLocation.From(invocation.GetLocation()))
+                : new Call(InterceptableLocationModel.From(location), role,
                     RequestExpression(transport) + ";\n" + EventRegistrations(context.SemanticModel.Compilation), null,
-                    invocation.GetLocation());
+                    DiagnosticLocation.From(invocation.GetLocation()));
         }
 
         if (selected.Length == 0)
         {
-            return new Call(location, role, null, $"the type does not implement a Portia {role} interface",
-                invocation.GetLocation());
+            return new Call(InterceptableLocationModel.From(location), role, null,
+                $"the type does not implement a Portia {role} interface",
+                DiagnosticLocation.From(invocation.GetLocation()));
         }
 
         var body = new StringBuilder();
@@ -167,7 +174,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         if (permissionDiagnostic is not null)
         {
             _ = body.Append("throw new global::System.InvalidOperationException(\"")
-                .Append(EscapeLiteral(permissionDiagnostic.GetMessage(CultureInfo.InvariantCulture)))
+                .Append(EscapeLiteral(permissionDiagnostic.ToDiagnostic().GetMessage(CultureInfo.InvariantCulture)))
                 .AppendLine("\");");
         }
 
@@ -214,7 +221,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         }
 
         _ = body.Append(EventRegistrations(context.SemanticModel.Compilation));
-        return new Call(location, role, body.ToString(), null, invocation.GetLocation(), permissionDiagnostic);
+        return new Call(InterceptableLocationModel.From(location), role, body.ToString(), null,
+            DiagnosticLocation.From(invocation.GetLocation()), permissionDiagnostic);
     }
 
     static string? RegistrationRole(IMethodSymbol method)
@@ -388,7 +396,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         return source.ToString();
     }
 
-    static string Permission(ITypeSymbol request, Diagnostic? diagnostic)
+    static string Permission(ITypeSymbol request, RegistrationDiagnostic? diagnostic)
     {
         if (request.GetAttributes()
                 .FirstOrDefault(attribute =>
@@ -423,7 +431,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         return expression.Append(Escape(value.Substring(offset))).Append('"').ToString();
     }
 
-    static Diagnostic? PermissionDiagnostic(ITypeSymbol request, Location location)
+    static RegistrationDiagnostic? PermissionDiagnostic(ITypeSymbol request, Location location)
     {
         if (request.GetAttributes()
                 .FirstOrDefault(attribute =>
@@ -440,12 +448,16 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             var property = properties.FirstOrDefault(candidate =>
                 string.Equals(candidate.Name, token, StringComparison.OrdinalIgnoreCase));
             if (property == null)
-                return Diagnostic.Create(UnknownPermissionToken, location, Type(request), token);
+            {
+                return new RegistrationDiagnostic(RegistrationDiagnosticKind.UnknownPermissionToken,
+                    DiagnosticLocation.From(location), Type(request), token);
+            }
 
             if (property.NullableAnnotation == NullableAnnotation.Annotated
                 || property.Type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
             {
-                return Diagnostic.Create(NullablePermissionToken, location, Type(request), token);
+                return new RegistrationDiagnostic(RegistrationDiagnosticKind.NullablePermissionToken,
+                    DiagnosticLocation.From(location), Type(request), token);
             }
         }
 
@@ -474,11 +486,11 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         foreach (var call in calls)
         {
             if (call.Diagnostic is not null)
-                context.ReportDiagnostic(call.Diagnostic);
+                context.ReportDiagnostic(call.Diagnostic.ToDiagnostic());
             if (call.Error is not null)
             {
-                context.ReportDiagnostic(Diagnostic.Create(InvalidRegistration, call.DiagnosticLocation, call.Role,
-                    call.Role, call.Error));
+                context.ReportDiagnostic(Diagnostic.Create(InvalidRegistration, call.DiagnosticLocation.ToLocation(),
+                    call.Role, call.Role, call.Error));
             }
         }
 
@@ -501,7 +513,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         {
             var call = valid[i];
             _ = source.Append("[global::System.Runtime.CompilerServices.InterceptsLocation(")
-                .Append(call.Location!.Version).Append(", \"").Append(call.Location.Data).AppendLine("\")]");
+                .Append(call.Location!.Value.Version).Append(", \"").Append(call.Location.Value.Data)
+                .AppendLine("\")]");
             _ = call.Role == "application"
                 ? source.Append("public static global::Cntryl.Portia.PortiaBuilder Register").Append(i)
                     .AppendLine("(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services) {")
@@ -526,19 +539,36 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             SourceText.From(source.ToString(), Encoding.UTF8));
     }
 
-    sealed class Call(
-        InterceptableLocation? location,
-        string role,
-        string? body,
-        string? error,
-        Location diagnosticLocation,
-        Diagnostic? diagnostic = null)
+    sealed record Call(
+        InterceptableLocationModel? Location,
+        string Role,
+        string? Body,
+        string? Error,
+        DiagnosticLocation DiagnosticLocation,
+        RegistrationDiagnostic? Diagnostic = null);
+
+    enum RegistrationDiagnosticKind
     {
-        public InterceptableLocation? Location { get; } = location;
-        public string Role { get; } = role;
-        public string? Body { get; } = body;
-        public string? Error { get; } = error;
-        public Location DiagnosticLocation { get; } = diagnosticLocation;
-        public Diagnostic? Diagnostic { get; } = diagnostic;
+        UnsupportedCallSite,
+        UnknownPermissionToken,
+        NullablePermissionToken
+    }
+
+    sealed record RegistrationDiagnostic(
+        RegistrationDiagnosticKind Kind,
+        DiagnosticLocation Location,
+        string FirstArgument,
+        string? SecondArgument = null)
+    {
+        public Diagnostic ToDiagnostic() => Kind switch
+        {
+            RegistrationDiagnosticKind.UnsupportedCallSite =>
+                Diagnostic.Create(UnsupportedRegistrationCallSite, Location.ToLocation(), FirstArgument),
+            RegistrationDiagnosticKind.UnknownPermissionToken =>
+                Diagnostic.Create(UnknownPermissionToken, Location.ToLocation(), FirstArgument, SecondArgument),
+            RegistrationDiagnosticKind.NullablePermissionToken =>
+                Diagnostic.Create(NullablePermissionToken, Location.ToLocation(), FirstArgument, SecondArgument),
+            _ => throw new ArgumentOutOfRangeException(nameof(Kind))
+        };
     }
 }

@@ -33,6 +33,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         options ??= ProjectionRunOptions.Default;
         options.Validate();
 
+        var startingCheckpoint = checkpoint;
         var batchSize = projector.IsBatch ? options.MaxBatchSize : 1;
         var records = new List<DomainEventRecord>(batchSize);
         var processed = 0;
@@ -64,7 +65,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
                 .ConfigureAwait(false);
         }
 
-        return new ProjectionPassResult(checkpoint, budgetExhausted);
+        return new ProjectionPassResult(checkpoint, budgetExhausted && checkpoint != startingCheckpoint);
     }
 
     static async ValueTask<ProjectionCheckpoint> CommitAsync(

@@ -40,7 +40,7 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
         var checkpoint = await reactor.Checkpoints.LoadAsync(
             new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
         return await services.GetRequiredService<ReactorRunner>()
-            .RunPassAsync(reactor, checkpoint, options, ct).ConfigureAwait(false);
+            .ExecutePassAsync(reactor, checkpoint, options, ct).ConfigureAwait(false);
     }
 
     /// <summary>Resolves the reactor in the supplied application scope.</summary>
@@ -65,7 +65,7 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
             WorkloadBinding.Apply(services, reactor.BindWorkload);
             var checkpoint = await reactor.Checkpoints.LoadAsync(
                 new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
-            _ = await services.GetRequiredService<ReactorRunner>().RunAsync(
+            _ = await services.GetRequiredService<ReactorRunner>().RunPassAsync(
                 reactor, checkpoint, options, ct).ConfigureAwait(false);
         });
 }
