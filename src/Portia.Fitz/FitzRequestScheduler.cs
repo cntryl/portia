@@ -22,6 +22,20 @@ public sealed class FitzRequestScheduler(
     readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
     /// <inheritdoc />
+    public ValueTask<string> EnsureAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
+        RequestRouteValues routeValues, ClaimsPrincipal actor, CancellationToken ct = default)
+        where TRequest : IRequest, ISchedulable
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(spec);
+        ArgumentNullException.ThrowIfNull(routeValues);
+        ArgumentNullException.ThrowIfNull(actor);
+        var route = FitzRouting.ResolveScheduleRoute(_catalog, request, routeValues);
+        var id = Uuid.CreateVersion5(Uuid.UrlNamespace, "portia:schedule:" + route);
+        return CreateAsync(request, spec, actor, new RequestMetadata(id, id), route, null, ct);
+    }
+
+    /// <inheritdoc />
     public ValueTask<string> ScheduleAsync<TRequest>(
         TRequest request,
         RequestScheduleSpec spec,
@@ -45,6 +59,15 @@ public sealed class FitzRequestScheduler(
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(routeValues);
         ArgumentNullException.ThrowIfNull(actor);
+        var route = FitzRouting.ResolveScheduleRoute(_catalog, request, routeValues);
+        return await CreateAsync(request, spec, actor, metadata, route, PortiaTelemetry.CaptureTraceContext(), ct)
+            .ConfigureAwait(false);
+    }
+
+    async ValueTask<string> CreateAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
+        ClaimsPrincipal actor, RequestMetadata metadata, string route, RequestTraceContext? traceContext,
+        CancellationToken ct) where TRequest : IRequest, ISchedulable
+    {
         if (!RequestActor.IsSystem(actor))
         {
             throw new ArgumentException("Scheduled requests must execute as an explicit Portia system identity.",
@@ -59,8 +82,7 @@ public sealed class FitzRequestScheduler(
         var outcome = "success";
         try
         {
-            var route = FitzRouting.ResolveScheduleRoute(_catalog, request, routeValues);
-            var requestEnvelope = _serializer.Serialize(request, null, metadata, PortiaTelemetry.CaptureTraceContext());
+            var requestEnvelope = _serializer.Serialize(request, null, metadata, traceContext);
             var body = JsonSerializer.SerializeToUtf8Bytes(
                 new FitzScheduledRequestEnvelope(1, subject.Value, subject.Issuer, requestEnvelope.ToArray()),
                 FitzJsonContext.Default.FitzScheduledRequestEnvelope);

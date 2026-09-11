@@ -14,6 +14,98 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class PortiaHostingServiceCollectionExtensionsTests
 {
+    /// <summary>Schedule declarations do not add startup work to API-only hosts.</summary>
+    [Fact]
+    public void ShouldLeaveStartupSchedulesDormantWithoutWorkers()
+    {
+        var scheduler = new RecordingStartupScheduler();
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IRequestScheduler>(scheduler);
+        _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
+            new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), RequestActor.System);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.DoesNotContain(provider.GetServices<IHostedService>(), service => service is RequestScheduleStartupService);
+        Assert.Empty(scheduler.Requests);
+    }
+
+    /// <summary>Worker startup ensures declarations once and in registration order.</summary>
+    [Fact]
+    public async Task ShouldEnsureStartupSchedulesSequentiallyWhenWorkersStart()
+    {
+        var scheduler = new RecordingStartupScheduler();
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IRequestScheduler>(scheduler);
+        _ = services.AddPortia()
+            .AddRequestSchedule(new FitzHostedRequest(), new RequestScheduleSpec("0 0 * * *"),
+                new RequestRouteValues("first"), RequestActor.System)
+            .AddRequestSchedule(new FitzHostedRequest(), new RequestScheduleSpec("0 1 * * *"),
+                new RequestRouteValues("second"), RequestActor.System)
+            .AddWorkers();
+        using var provider = services.BuildServiceProvider();
+        var hosted = Assert.Single(provider.GetServices<IHostedService>(),
+            service => service is RequestScheduleStartupService);
+
+        await hosted.StartAsync(default);
+
+        Assert.Equal(["first", "second"], scheduler.Requests);
+    }
+
+    /// <summary>A declared schedule fails startup clearly when no provider was composed.</summary>
+    [Fact]
+    public async Task ShouldFailWorkerStartupWhenScheduleProviderIsMissing()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
+            new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), RequestActor.System)
+            .AddWorkers();
+        using var provider = services.BuildServiceProvider();
+        var hosted = Assert.Single(provider.GetServices<IHostedService>(),
+            service => service is RequestScheduleStartupService);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => hosted.StartAsync(default));
+
+        Assert.Contains(nameof(IRequestScheduler), error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>Invalid declarative identities fail startup before reaching the provider.</summary>
+    [Fact]
+    public async Task ShouldFailWorkerStartupGivenNonSystemScheduleActor()
+    {
+        var scheduler = new RecordingStartupScheduler();
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IRequestScheduler>(scheduler);
+        _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
+            new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), new())
+            .AddWorkers();
+        using var provider = services.BuildServiceProvider();
+        var hosted = Assert.Single(provider.GetServices<IHostedService>(),
+            service => service is RequestScheduleStartupService);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => hosted.StartAsync(default));
+
+        Assert.Contains("system actor", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(scheduler.Requests);
+    }
+
+    /// <summary>Provider persistence failures propagate and stop worker startup.</summary>
+    [Fact]
+    public async Task ShouldFailWorkerStartupWhenSchedulePersistenceFails()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IRequestScheduler>(new RecordingStartupScheduler { Failure = new IOException("broker unavailable") });
+        _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
+            new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), RequestActor.System)
+            .AddWorkers();
+        using var provider = services.BuildServiceProvider();
+        var hosted = Assert.Single(provider.GetServices<IHostedService>(),
+            service => service is RequestScheduleStartupService);
+
+        var error = await Assert.ThrowsAsync<IOException>(() => hosted.StartAsync(default));
+
+        Assert.Equal("broker unavailable", error.Message);
+    }
+
     /// <summary>Hosted composition fails before serving when guarded requests have no evaluator.</summary>
     [Fact]
     public async Task ShouldRequirePermissionEvaluatorForGuardedRequestsAtStartup()
@@ -423,4 +515,27 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
             yield break;
         }
     }
+}
+
+sealed class RecordingStartupScheduler : IRequestScheduler
+{
+    public List<string> Requests { get; } = [];
+    public Exception? Failure { get; init; }
+
+    public ValueTask<string> EnsureAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
+        RequestRouteValues routeValues, System.Security.Claims.ClaimsPrincipal actor,
+        CancellationToken ct = default) where TRequest : IRequest, ISchedulable
+    {
+        if (Failure is not null)
+            return ValueTask.FromException<string>(Failure);
+        Requests.Add(routeValues.Realm!);
+        return ValueTask.FromResult(routeValues.Realm!);
+    }
+
+    public ValueTask<string> ScheduleAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
+        RequestRouteValues routeValues, System.Security.Claims.ClaimsPrincipal actor, RequestMetadata metadata,
+        CancellationToken ct = default) where TRequest : IRequest, ISchedulable =>
+        throw new NotSupportedException();
+
+    public ValueTask CancelAsync(string scheduleId, CancellationToken ct = default) => ValueTask.CompletedTask;
 }

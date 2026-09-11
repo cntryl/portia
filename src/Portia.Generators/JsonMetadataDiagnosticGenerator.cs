@@ -176,7 +176,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
     static bool IsPortiaDispatch(IMethodSymbol method)
     {
         if (method.Name is not ("SendAsync" or "StreamAsync" or "DispatchAsync" or "DispatchStreamAsync"
-            or "EnqueueAsync" or "PublishAsync" or "ScheduleAsync"))
+            or "EnqueueAsync" or "PublishAsync" or "ScheduleAsync" or "EnsureAsync" or "AddRequestSchedule"))
         {
             return false;
         }
@@ -185,7 +185,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         return owner.ToDisplayString() is "Cntryl.Portia.RequestBusExtensions" or "Cntryl.Portia.IRequestBus"
             or "Cntryl.Portia.IRemoteRequestSender" or "Cntryl.Portia.IRequestQueuePublisher"
             or "Cntryl.Portia.INoticeRequestSender" or "Cntryl.Portia.IRequestScheduler"
-            or "Cntryl.Portia.RequestSenderContextExtensions";
+            or "Cntryl.Portia.RequestSenderContextExtensions" or "Cntryl.Portia.PortiaBuilder";
     }
 
     static bool IsConcreteDomainEvent(INamedTypeSymbol type)

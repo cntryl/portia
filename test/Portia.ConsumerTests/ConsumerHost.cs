@@ -34,7 +34,7 @@ static class ConsumerHost
 
     public static ValueTask SeedAsync(IServiceProvider provider, Uuid id, ulong position = 0)
         => provider.GetRequiredService<IEventStore>().AppendAsync(
-            new EventStreamAddress("consumer", "accounts", id.ToString()),
+            ConsumerStreams.AccountStream(id),
             position, [DomainEventSeed.Attach(new Deposited(1), id, position + 1)]);
 
     public sealed record Effect(string Component, Uuid AggregateId, int Amount, Guid ScopeId);

@@ -50,7 +50,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 static (ctx, _) => Analyze(ctx))
             .Where(static call => call is not null)
             .Select(static (call, _) => call!)
-            .Collect();
+            .Collect()
+            .WithTrackingName("PortiaRegistrationCalls");
         var dispatchedRequests = context.SyntaxProvider.CreateSyntaxProvider(
                 static (node, _) => node is InvocationExpressionSyntax
                 {
@@ -58,15 +59,41 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                     {
                         Name.Identifier.ValueText: "SendAsync" or "StreamAsync" or "DispatchAsync"
                         or "DispatchStreamAsync"
-                        or "EnqueueAsync" or "PublishAsync" or "ScheduleAsync"
+                        or "EnqueueAsync" or "PublishAsync" or "ScheduleAsync" or "EnsureAsync"
+                        or "AddRequestSchedule"
                     }
                 },
                 static (ctx, _) => DispatchedRequest(ctx))
             .Where(static request => request is not null)
             .Select(static (request, _) => request!)
             .Collect();
-        context.RegisterSourceOutput(calls.Combine(dispatchedRequests),
-            static (ctx, pair) => Generate(ctx, pair.Left, pair.Right));
+        // Events and JSON contexts are properties of the whole compilation, not of any one call
+        // site. Reading them inside the per-call-site transform made every registration re-derive
+        // the compilation and invalidated every call site whenever any event changed, so they get
+        // their own per-node pipelines and are combined once, here.
+        var jsonContexts = context.SyntaxProvider.CreateSyntaxProvider(
+                static (node, _) => node is TypeDeclarationSyntax,
+                static (ctx, _) => JsonContextModel(ctx))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!)
+            .Collect();
+        var declaredEvents = context.SyntaxProvider.CreateSyntaxProvider(
+                static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
+                static (ctx, _) => DeclaredEventModel(ctx))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!)
+            .Collect();
+        var referencedEvents = context.SyntaxProvider.CreateSyntaxProvider(
+                static (node, _) => node is TypeSyntax,
+                static (ctx, _) => ReferencedEventModel(ctx))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!)
+            .Collect();
+        var shared = jsonContexts.Combine(declaredEvents).Combine(referencedEvents)
+            .Select(static (input, _) => SharedRegistrations(input.Left.Left, input.Left.Right, input.Right))
+            .WithTrackingName("PortiaSharedRegistrations");
+        context.RegisterSourceOutput(calls.Combine(dispatchedRequests).Combine(shared),
+            static (ctx, pair) => Generate(ctx, pair.Left.Left, pair.Left.Right, pair.Right));
     }
 
     static bool IsRegistrationSyntax(SyntaxNode node) => node switch
@@ -112,9 +139,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
         if (role == "application")
         {
-            return new Call(InterceptableLocationModel.From(location), "application",
-                JsonContextRegistrations(context.SemanticModel.Compilation)
-                                                     + EventRegistrations(context.SemanticModel.Compilation), null,
+            return new Call(InterceptableLocationModel.From(location), "application", string.Empty, null,
                 DiagnosticLocation.From(invocation.GetLocation()));
         }
 
@@ -154,8 +179,11 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 ? new Call(InterceptableLocationModel.From(location), role, null,
                     "the request needs RequestRoute and at least one transport marker",
                     DiagnosticLocation.From(invocation.GetLocation()))
+                // Constructing the descriptor is not registering it: without this the escape
+                // hatch built a RequestTransportRegistration and discarded it, leaving the
+                // request absent from the transport catalog it exists to put it in.
                 : new Call(InterceptableLocationModel.From(location), role,
-                    RequestExpression(transport) + ";\n" + EventRegistrations(context.SemanticModel.Compilation), null,
+                    "_ = builder.AddGeneratedRequest(" + RequestExpression(transport) + ");\n", null,
                     DiagnosticLocation.From(invocation.GetLocation()));
         }
 
@@ -220,7 +248,6 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             }
         }
 
-        _ = body.Append(EventRegistrations(context.SemanticModel.Compilation));
         return new Call(InterceptableLocationModel.From(location), role, body.ToString(), null,
             DiagnosticLocation.From(invocation.GetLocation()), permissionDiagnostic);
     }
@@ -261,7 +288,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             or "Cntryl.Portia.IRequestQueuePublisher"
             or "Cntryl.Portia.INoticeRequestSender"
             or "Cntryl.Portia.IRequestScheduler"
-            or "Cntryl.Portia.RequestSenderContextExtensions"))
+            or "Cntryl.Portia.RequestSenderContextExtensions"
+            or "Cntryl.Portia.PortiaBuilder"))
         {
             return null;
         }
@@ -286,91 +314,83 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         }
     }
 
-    static string EventRegistrations(Compilation compilation)
+    static JsonContextModelRecord? JsonContextModel(GeneratorSyntaxContext context)
     {
-        var source = new StringBuilder();
-        var events = Types(compilation.Assembly.GlobalNamespace)
-            .Where(type => IsDomainEvent(type, true))
-            .Concat(ReferencedEventsUsedByCompilation(compilation))
-            .Distinct<INamedTypeSymbol>(SymbolEqualityComparer.Default)
-            .OrderBy(type => type.ToDisplayString(), StringComparer.Ordinal);
-        foreach (var type in events)
-        {
-            var attribute = type.GetAttributes().FirstOrDefault(candidate =>
-                candidate.AttributeClass?.ToDisplayString() == "Cntryl.Portia.DiscriminatorAttribute");
-            if (attribute is null || attribute.ConstructorArguments.Length != 2)
-                continue;
-            var name = attribute.ConstructorArguments[0].Value as string ?? string.Empty;
-            var version = attribute.ConstructorArguments[1].Value as int? ?? 0;
-            _ = source.Append("_ = builder.AddGeneratedEvent<").Append(Type(type)).Append(">(")
-                .Append(version).Append(", ").Append(RequestTransportDiscovery.FormatStringLiteral(name))
-                .AppendLine(");");
-        }
-
-        return source.ToString();
+        var declaration = (TypeDeclarationSyntax)context.Node;
+        return context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol symbol
+               && symbol.GetAttributes().Any(attribute =>
+                   attribute.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonContextAttribute")
+            ? new JsonContextModelRecord(symbol.ToDisplayString(), Type(symbol))
+            : null;
     }
 
-    static string JsonContextRegistrations(Compilation compilation)
+    static EventModelRecord? DeclaredEventModel(GeneratorSyntaxContext context)
     {
-        var source = new StringBuilder();
-        foreach (var type in Types(compilation.Assembly.GlobalNamespace)
-                     .Where(type => type.GetAttributes().Any(attribute =>
-                         attribute.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonContextAttribute"))
-                     .OrderBy(type => type.ToDisplayString(), StringComparer.Ordinal))
-        {
-            _ = source.Append("_ = builder.AddGeneratedJsonContext(static options => new ")
-                .Append(Type(type)).AppendLine("(options));");
-        }
-
-        return source.ToString();
+        var declaration = (TypeDeclarationSyntax)context.Node;
+        return context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol symbol
+               && IsRegistrableEvent(symbol, true)
+            ? EventModel(symbol)
+            : null;
     }
 
-    static IEnumerable<INamedTypeSymbol> ReferencedEventsUsedByCompilation(Compilation compilation)
+    // Type syntax covers the semantic edges that make an external event part of this application:
+    // handler interfaces, aggregate On<TEvent> calls, method signatures, construction, casts, and
+    // explicit generic dispatch. A project reference by itself is deliberately not such an edge.
+    static EventModelRecord? ReferencedEventModel(GeneratorSyntaxContext context)
     {
-        // Type syntax covers the semantic edges that make an external event part of this
-        // application: handler interfaces, aggregate On<TEvent> calls, method signatures,
-        // construction, casts, and explicit generic dispatch. A project reference by itself is
-        // deliberately not such an edge.
-        foreach (var tree in compilation.SyntaxTrees)
-        {
-            var semanticModel = compilation.GetSemanticModel(tree);
-            foreach (var typeSyntax in tree.GetRoot().DescendantNodes().OfType<TypeSyntax>())
-            {
-                if (semanticModel.GetTypeInfo(typeSyntax).Type is INamedTypeSymbol type
-                    && !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly)
-                    && IsDomainEvent(type, false))
-                {
-                    yield return type;
-                }
-            }
-        }
+        return context.SemanticModel.GetTypeInfo((TypeSyntax)context.Node).Type is INamedTypeSymbol type
+               && !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly,
+                   context.SemanticModel.Compilation.Assembly)
+               && IsRegistrableEvent(type, false)
+            ? EventModel(type)
+            : null;
     }
 
-    static IEnumerable<INamedTypeSymbol> Types(INamespaceSymbol scope)
-    {
-        foreach (var type in scope.GetTypeMembers())
-        {
-            yield return type;
-            foreach (var nested in NestedTypes(type))
-                yield return nested;
-        }
+    // One discriminator cannot describe every constructed form of a generic event. This also
+    // keeps open type parameters out of the generated, non-generic AddPortia interceptor.
+    static bool IsRegistrableEvent(INamedTypeSymbol symbol, bool requireSameAssembly) =>
+        !symbol.IsGenericType && IsDomainEvent(symbol, requireSameAssembly);
 
-        foreach (var child in scope.GetNamespaceMembers())
-        {
-            foreach (var type in Types(child))
-                yield return type;
-        }
+    static EventModelRecord? EventModel(INamedTypeSymbol symbol)
+    {
+        var attribute = symbol.GetAttributes().FirstOrDefault(candidate =>
+            candidate.AttributeClass?.ToDisplayString() == "Cntryl.Portia.DiscriminatorAttribute");
+        return attribute is null || attribute.ConstructorArguments.Length != 2
+            ? null
+            : new EventModelRecord(symbol.ToDisplayString(), Type(symbol),
+                attribute.ConstructorArguments[0].Value as string ?? string.Empty,
+                attribute.ConstructorArguments[1].Value as int? ?? 0);
     }
 
-    static IEnumerable<INamedTypeSymbol> NestedTypes(INamedTypeSymbol owner)
+    static SharedRegistrationsModel SharedRegistrations(
+        ImmutableArray<JsonContextModelRecord> jsonContexts,
+        ImmutableArray<EventModelRecord> declaredEvents,
+        ImmutableArray<EventModelRecord> referencedEvents)
     {
-        foreach (var type in owner.GetTypeMembers())
+        var contexts = new StringBuilder();
+        foreach (var context in Unique(jsonContexts, model => model.DisplayName))
         {
-            yield return type;
-            foreach (var nested in NestedTypes(type))
-                yield return nested;
+            _ = contexts.Append("_ = builder.AddGeneratedJsonContext(static options => new ")
+                .Append(context.TypeName).AppendLine("(options));");
         }
+
+        var events = new StringBuilder();
+        foreach (var model in Unique(declaredEvents.Concat(referencedEvents), model => model.DisplayName))
+        {
+            _ = events.Append("_ = builder.AddGeneratedEvent<").Append(model.TypeName).Append(">(")
+                .Append(model.Version).Append(", ")
+                .Append(RequestTransportDiscovery.FormatStringLiteral(model.Name)).AppendLine(");");
+        }
+
+        return new SharedRegistrationsModel(contexts.ToString(), events.ToString());
     }
+
+    // One entry per declared type, ordered by its display name — a partial declaration reaches the
+    // pipeline once per part, and a referenced event once per syntax that names it.
+    static IEnumerable<T> Unique<T>(IEnumerable<T> models, Func<T, string> key) =>
+        models.GroupBy(key, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => group.First());
 
     static bool IsDomainEvent(INamedTypeSymbol symbol, bool currentAssembly)
     {
@@ -410,7 +430,12 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             return "null"; // The generated interceptor throws before any registration mutation.
 
         var properties = RequestProperties(request).ToArray();
-        var expression = new StringBuilder("static typed => $\"");
+        // A permission string is a stable identifier an application looks up in its own policy
+        // store, so an interpolated property must render the same on every host. Plain $"..."
+        // formats with the ambient culture, which changes a negative id's sign character and a
+        // decimal or date entirely.
+        var expression = new StringBuilder(
+            "static typed => string.Create(global::System.Globalization.CultureInfo.InvariantCulture, $\"");
         var offset = 0;
         foreach (Match match in PermissionTokenPattern.Matches(value))
         {
@@ -428,7 +453,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             }
         }
 
-        return expression.Append(Escape(value.Substring(offset))).Append('"').ToString();
+        return expression.Append(Escape(value.Substring(offset))).Append("\")").ToString();
     }
 
     static RegistrationDiagnostic? PermissionDiagnostic(ITypeSymbol request, Location location)
@@ -481,7 +506,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     static string Type(ITypeSymbol symbol) => symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
     static void Generate(SourceProductionContext context, ImmutableArray<Call> calls,
-        ImmutableArray<RequestTransportComponent> dispatchedRequests)
+        ImmutableArray<RequestTransportComponent> dispatchedRequests, SharedRegistrationsModel shared)
     {
         foreach (var call in calls)
         {
@@ -521,7 +546,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                     .AppendLine("global::System.ArgumentNullException.ThrowIfNull(services);")
                     .AppendLine(
                         "var builder = global::Cntryl.Portia.PortiaApplicationServiceCollectionExtensions.AddPortia(services);")
-                    .Append(call.Body).Append(inferred).AppendLine("return builder;").AppendLine("}")
+                    .Append(shared.JsonContexts).Append(call.Body).Append(shared.Events).Append(inferred)
+                    .AppendLine("return builder;").AppendLine("}")
                 : source.Append("public static global::Cntryl.Portia.PortiaBuilder Register").Append(i)
                     .Append(call.Role switch
                     {
@@ -531,13 +557,19 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                         _ => "(this global::Cntryl.Portia.PortiaBuilder builder) {\n"
                     })
                     .AppendLine("global::System.ArgumentNullException.ThrowIfNull(builder);").Append(call.Body)
-                    .AppendLine("return builder;").AppendLine("}");
+                    .Append(shared.Events).AppendLine("return builder;").AppendLine("}");
         }
 
         _ = source.AppendLine("} }");
         context.AddSource("PortiaGeneratedRegistrationInterceptors.g.cs",
             SourceText.From(source.ToString(), Encoding.UTF8));
     }
+
+    sealed record JsonContextModelRecord(string DisplayName, string TypeName);
+
+    sealed record EventModelRecord(string DisplayName, string TypeName, string Name, int Version);
+
+    sealed record SharedRegistrationsModel(string JsonContexts, string Events);
 
     sealed record Call(
         InterceptableLocationModel? Location,

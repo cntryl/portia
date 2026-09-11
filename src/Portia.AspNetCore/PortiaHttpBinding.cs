@@ -225,12 +225,15 @@ public static class PortiaHttpBinding
         var found = body.TryGetProperty(name, out var value);
         if (!found && options.PropertyNameCaseInsensitive)
         {
+            // First match in document order, the same rule TryGetProperty already applies to an
+            // exact match — and stop there rather than scanning the rest of the object.
             foreach (var property in body.EnumerateObject())
             {
                 if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
                 {
                     value = property.Value;
                     found = true;
+                    break;
                 }
             }
         }

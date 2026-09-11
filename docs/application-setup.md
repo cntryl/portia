@@ -135,6 +135,11 @@ The name is the declaration's identity: declaring the same name twice keeps the 
 callback and ignores the second, so shared setup that runs in both hosts composes
 without special-casing.
 
+`AddRequestSchedule` follows the same activation boundary. Shared setup may declare cron-based,
+system-identity requests in every deployment, but only `AddWorkers()` installs the startup service
+that ensures them. Every worker replica safely reapplies definitions through the provider's native
+route upsert. Declarations removed from setup remain durable until explicitly canceled.
+
 Each hosted projector/reactor pass retries failures with exponential backoff beginning at its
 `PollInterval`, capped by `WorkloadOptions.MaximumFailureDelay`. Ten consecutive failures fault
 the worker with `WorkloadFailureException` by default; configure `FailureAttemptLimit` when

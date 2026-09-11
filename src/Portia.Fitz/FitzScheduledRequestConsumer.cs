@@ -32,10 +32,27 @@ public sealed class FitzScheduledRequestConsumer(
 
         await foreach (var notification in subscription.WithCancellation(ct).ConfigureAwait(false))
         {
-            using var document = JsonDocument.Parse(notification.Payload);
-            if (document.RootElement.TryGetProperty("contract", out _))
+            // An entry this consumer cannot translate — a legacy envelope, or one without a
+            // complete system identity — is reported and dropped rather than ending the
+            // subscription, which would stop every other schedule on this route too. The
+            // recorded fault is what tells an operator the entry needs recreating.
+            if (Translate(notification) is { } translated)
             {
-                throw new LegacyScheduledRequestException(notification.Route);
+                yield return translated;
+            }
+        }
+    }
+
+    RequestNotification? Translate(ScheduleNotification notification)
+    {
+        try
+        {
+            using (var document = JsonDocument.Parse(notification.Payload))
+            {
+                if (document.RootElement.TryGetProperty("contract", out _))
+                {
+                    throw new LegacyScheduledRequestException(notification.Route);
+                }
             }
 
             var scheduled = JsonSerializer.Deserialize(notification.Payload.Span,
@@ -57,11 +74,16 @@ public sealed class FitzScheduledRequestConsumer(
             var request = envelope.Request as IRequest
                           ?? throw new InvalidOperationException(
                               "A fired Fitz schedule entry deserialized to a result-bearing request; only no-result requests can be scheduled.");
-            yield return new RequestNotification(request, null,
+            return new RequestNotification(request, null,
                 new RequestMetadata(Uuid.CreateVersion4(), envelope.Metadata.CorrelationId,
                     envelope.Metadata.RequestId),
                 new ScheduleInvocation(notification.Route), envelope.TraceContext,
                 RequestActor.CreateSystem(scheduled.SystemSubject, scheduled.SystemIssuer), envelope.Name);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            PortiaTelemetry.RecordRunnerFault(nameof(FitzScheduledRequestConsumer), RunnerFaultStage.Validation, ex);
+            return null;
         }
     }
 }

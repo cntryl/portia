@@ -67,11 +67,12 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
 
         foreach (var ((name, fromVersion), _) in upcastersByKey)
         {
+            // The walk only ever moves forward one schema version at a time, so it terminates at
+            // the first version with neither a registered type nor an upcaster to bridge it.
             var version = fromVersion + 1;
-            var visited = new HashSet<int>();
             while (!catalog.TryResolve(name, version, out _))
             {
-                if (!visited.Add(version) || !upcastersByKey.ContainsKey((name, version)))
+                if (!upcastersByKey.ContainsKey((name, version)))
                 {
                     errors.Add((name, version,
                         $"Event '{name}' is missing an upcaster from schema version {version}."));

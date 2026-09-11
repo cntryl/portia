@@ -30,7 +30,14 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
     ///     commit as the checkpoint. Never open a second transaction against the same route while
     ///     this one is in flight; Fitz KV isolation conflicts, it does not merge concurrent writers.
     /// </summary>
-    protected IKvTransaction Transaction { get; private set; } = null!;
+    /// <exception cref="InvalidOperationException">
+    ///     No projection batch is open. Reading this outside a batch would otherwise hand back the
+    ///     previous batch's disposed transaction, where a repository write is staged into a unit of
+    ///     work that has already ended and is silently lost.
+    /// </exception>
+    protected IKvTransaction Transaction => _open ?? throw new InvalidOperationException(
+        "No projection batch is open on this store. A repository write must happen between "
+        + "BeginAsync and the returned batch's commit or disposal, so it shares the checkpoint's transaction.");
 
     /// <inheritdoc />
     public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
@@ -54,7 +61,6 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
         _open = await FitzKvCheckpoints
             .BeginAsync(_client, _route, KvMode.ReadWrite, "Projection batch", context.Identity, ct)
             .ConfigureAwait(false);
-        Transaction = _open;
         return new Batch(this, _open, context.Identity);
     }
 

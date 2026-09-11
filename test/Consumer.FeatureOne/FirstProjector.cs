@@ -1,7 +1,7 @@
 namespace Cntryl.Portia.Consumer;
 
 public sealed partial class FirstProjector(IAccountRepository target, IConsumerScope scope)
-    : BatchProjector(target, EventStreamPattern.ForPattern("consumer", "accounts"), "first-projector"),
+    : BatchProjector(target, ConsumerStreams.AccountsPattern, "first-projector"),
         IProjectorHandler<Deposited>, IProjectorHandler<Declined>
 {
     public ValueTask HandleAsync(Declined ev, IProjectorContext context, CancellationToken ct)

@@ -52,10 +52,11 @@ At host startup Portia freezes the configured options and resolves metadata for 
 registration before a Fitz hosted service can connect. All missing roots are reported together,
 sorted by full name. A non-hosted DI consumer receives the same check when it first resolves the
 JSON options. Portia does not emit metadata or take serialization ownership from the application.
-Portia's runtime
-packages set `IsAotCompatible=true`, are built with the resulting trim/AOT analyzers, and are
-exercised by CoreCLR tests with JSON reflection disabled. No native `PublishAot` binary is built
-or executed, so analyzer-clean and reflection-disabled evidence is not a claim that a native
-artifact was executed.
+Portia's runtime packages set `IsAotCompatible=true`, are built with the resulting trim/AOT
+analyzers, and are exercised by CoreCLR tests with JSON reflection disabled. CI also packs the
+shipping packages, restores them into an external consumer, publishes that consumer as a native
+`linux-x64` executable with `PublishAot=true`, and executes the binary. This is the supported
+runtime proof for the Portia ASP.NET Core path; applications must still prove AOT compatibility of
+their own dependencies and platform-specific deployment choices.
 
 See [scope](scope.md).

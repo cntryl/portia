@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using Cntryl.Fitz;
 using Cntryl.Fitz.Abstractions.Domains.Kv;
+using Cntryl.Fitz.Abstractions.Domains.Schedule;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
@@ -15,6 +16,43 @@ namespace Cntryl.Portia;
 public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 {
     readonly FitzBrokerFixture _broker = broker;
+
+    /// <summary>Two replicas upsert one route, changed desired state replaces it, and cancellation removes it.</summary>
+    [Fact]
+    public async Task ShouldUpsertAndCancelDeclarativeScheduleAgainstRealFitzBroker()
+    {
+        await using var firstClient = await _broker.CreateClientAsync();
+        await using var secondClient = await _broker.CreateClientAsync();
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var first = new FitzRequestScheduler(firstClient.Schedule, serializer);
+        var second = new FitzRequestScheduler(secondClient.Schedule, serializer);
+        const string route = "schedule://test/shared/action/run";
+
+        try
+        {
+            Assert.Equal(route, await first.EnsureAsync(new UniversalAction(1),
+                new RequestScheduleSpec("0 0 * * *"), RequestRouteValues.None,
+                RequestActor.CreateSystem("replica")));
+            Assert.Equal(route, await second.EnsureAsync(new UniversalAction(1),
+                new RequestScheduleSpec("0 0 * * *"), RequestRouteValues.None,
+                RequestActor.CreateSystem("replica")));
+            Assert.Single(await firstClient.Schedule.ListBySelectorAsync(route));
+
+            _ = await second.EnsureAsync(new UniversalAction(2), new RequestScheduleSpec("0 1 * * *"),
+                RequestRouteValues.None, RequestActor.CreateSystem("replica"));
+            var updated = Assert.Single(await firstClient.Schedule.ListBySelectorAsync(route));
+            var outer = System.Text.Json.JsonSerializer.Deserialize(updated.Payload,
+                FitzJsonContext.Default.FitzScheduledRequestEnvelope)!;
+            var envelope = serializer.DeserializeEnvelope(outer.RequestEnvelope);
+            Assert.Equal(2, Assert.IsType<UniversalAction>(envelope.Request).Value);
+        }
+        finally
+        {
+            await firstClient.Schedule.CancelAsync(route);
+        }
+
+        Assert.Empty(await firstClient.Schedule.ListBySelectorAsync(route));
+    }
 
     /// <summary>
     ///     Runs the public event-store conformance suite against the real broker, so FitzEventStore

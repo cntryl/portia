@@ -4,7 +4,7 @@ public sealed partial class SecondReactor(
     IConsumerEffects effects,
     IConsumerScope scope,
     IProjectionCheckpointStore checkpoints)
-    : Reactor(checkpoints, EventStreamPattern.ForPattern("consumer", "accounts"), "second-reactor"),
+    : Reactor(checkpoints, ConsumerStreams.AccountsPattern, "second-reactor"),
         IReactorHandler<Deposited>, IReactorHandler<Declined>
 {
     public ValueTask HandleAsync(IReactorContext<Declined> context, CancellationToken ct)

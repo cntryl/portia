@@ -1,1 +1,2 @@
 #nullable enable
+Cntryl.Portia.PortiaBuilder.AddRequestSchedule<TRequest>(TRequest request, Cntryl.Portia.RequestScheduleSpec! spec, Cntryl.Portia.RequestRouteValues! routeValues, System.Security.Claims.ClaimsPrincipal! actor) -> Cntryl.Portia.PortiaBuilder!

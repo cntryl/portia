@@ -3,7 +3,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class Account : Aggregate
 {
     public Account(Uuid id, IDomainEventMetadataFactory? metadataFactory = null)
-        : base(id, new EventStreamAddress("consumer", "accounts", id.ToString()), metadataFactory)
+        : base(id, ConsumerStreams.AccountStream(id), metadataFactory)
     {
         On<Deposited>(ev => Balance += ev.Amount);
     }

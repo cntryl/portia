@@ -52,6 +52,19 @@ jobs:
           --configuration Release
           -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
 
+      - name: Publish and execute NativeAOT package consumer
+        run: >-
+          dotnet publish
+          smoke/Portia.AspNetCore.NativeAotConsumer/Portia.AspNetCore.NativeAotConsumer.csproj
+          --configuration Release
+          --runtime linux-x64
+          --self-contained true
+          -p:PublishAot=true
+          -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          --output artifacts/native-aot
+      - name: Execute NativeAOT package consumer
+        run: artifacts/native-aot/Portia.AspNetCore.NativeAotConsumer
+
       - name: Test solution
         env:
           FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws

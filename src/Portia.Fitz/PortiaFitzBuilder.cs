@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Cntryl.Fitz.Abstractions.Domains.Kv;
+using Cntryl.Fitz.Abstractions.Domains.Schedule;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -73,6 +74,8 @@ public sealed class PortiaFitzBuilder
             return this;
         var services = _application.Services;
         AddSerializers(services);
+        services.TryAddSingleton<IScheduleClient>(provider =>
+            provider.GetRequiredService<FitzApplicationConnection>().Client.Schedule);
         services.TryAddSingleton<IRemoteRequestSender>(provider => new FitzRemoteRequestSender(
             provider.GetRequiredService<FitzApplicationConnection>().Client.Rpc,
             provider.GetRequiredService<IRequestSerializer>(),
@@ -87,7 +90,7 @@ public sealed class PortiaFitzBuilder
             provider.GetRequiredService<IRequestSerializer>(),
             provider.GetRequiredService<RequestTransportCatalog>()));
         services.TryAddSingleton<IRequestScheduler>(provider => new FitzRequestScheduler(
-            provider.GetRequiredService<FitzApplicationConnection>().Client.Schedule,
+            provider.GetRequiredService<IScheduleClient>(),
             provider.GetRequiredService<IRequestSerializer>(),
             provider.GetRequiredService<RequestTransportCatalog>()));
         return this;

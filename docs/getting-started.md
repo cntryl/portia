@@ -337,6 +337,26 @@ that default; later calls add transport kinds to the selection. Use `DisableRequ
 workload-only deployment. An explicitly selected transport must match at least one selected handler
 or worker startup fails before Fitz connects. Outbound-only inferred requests never become listeners.
 
+Declare durable cron schedules in the same shared setup. They remain dormant in API-only hosts
+and are upserted sequentially whenever a host that calls `AddWorkers()` starts:
+
+```csharp
+services.AddPortia()
+    .AddRequestSchedule(new ReconcileAccounts(), new RequestScheduleSpec("0 */5 * * *"),
+        RequestRouteValues.None, RequestActor.CreateSystem("account-scheduler"))
+    .AddFitz(configuration.GetSection("Fitz"))
+    .AddWorkers();
+```
+
+`AddRequestSchedule` is declarative desired state; commands and reactors continue to call
+`IRequestScheduler.ScheduleAsync` for causal scheduling. Fitz uses the resolved concrete route as
+the schedule and cancellation identity. Reapplying an identical definition keeps its firing cursor;
+changing it at the same route uses Fitz's native last-write-wins upsert. Removing a declaration does
+not cancel it: explicitly call `IScheduleClient.CancelAsync` with the concrete route. The native
+client is available from DI for listing and administration over Portia's shared Fitz connection.
+A durable schedule definition produces live, non-backlogged Fitz firing deliveries; use a queue
+when every missed delivery must remain pending.
+
 Keep Fitz connections long-lived and register an `IRequestActorValidator` for inbound work.
 Fitz supplies the request serializers and creates a fresh dependency-injection scope for each
 invocation or delivery.

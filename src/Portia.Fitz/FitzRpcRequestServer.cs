@@ -18,9 +18,13 @@ public sealed class FitzRpcRequestServer(
     IServiceScopeFactory scopeFactory,
     RequestTransportCatalog? catalog = null) : IRequestRpcRegistrar
 {
+    // Resolving the fallback catalog opens a scope and re-reads every generated descriptor, so it
+    // happens once for the life of the server even when two registrations race.
+    readonly Lazy<RequestTransportCatalog> _catalog = new(() => catalog ?? Compose(scopeFactory),
+        LazyThreadSafetyMode.ExecutionAndPublication);
+
     readonly IRpcClient _rpc = rpc ?? throw new ArgumentNullException(nameof(rpc));
     readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-    RequestTransportCatalog? _catalog = catalog;
 
     async ValueTask<IAsyncDisposable> IRequestRpcRegistrar.RegisterAsync<TRequest>(CancellationToken ct)
         => await RegisterAsync<TRequest>(ct).ConfigureAwait(false);
@@ -28,16 +32,12 @@ public sealed class FitzRpcRequestServer(
     async ValueTask<IAsyncDisposable> IRequestRpcRegistrar.RegisterAsync<TRequest, TOut>(CancellationToken ct)
         => await RegisterAsync<TRequest, TOut>(ct).ConfigureAwait(false);
 
-    RequestTransportCatalog Catalog()
-    {
-        if (_catalog is not null)
-        {
-            return _catalog;
-        }
+    RequestTransportCatalog Catalog() => _catalog.Value;
 
-        using var scope = _scopeFactory.CreateScope();
-        return _catalog =
-            new RequestTransportCatalog(scope.ServiceProvider.GetServices<RequestTransportRegistration>());
+    static RequestTransportCatalog Compose(IServiceScopeFactory scopes)
+    {
+        using var scope = scopes.CreateScope();
+        return new RequestTransportCatalog(scope.ServiceProvider.GetServices<RequestTransportRegistration>());
     }
 
     /// <summary>Registers callable descriptors for explicitly registered Portia requests.</summary>

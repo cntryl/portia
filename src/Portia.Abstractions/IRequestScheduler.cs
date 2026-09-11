@@ -10,6 +10,16 @@ namespace Cntryl.Portia;
 /// </summary>
 public interface IRequestScheduler
 {
+    /// <summary>Ensures that the concrete schedule route contains the requested durable definition.</summary>
+    /// <remarks>
+    ///     Providers whose ordinary scheduling path adds volatile envelope data must override this method.
+    ///     The concrete route is the cancellation identity; another definition at that route replaces it.
+    /// </remarks>
+    ValueTask<string> EnsureAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
+        RequestRouteValues routeValues, ClaimsPrincipal actor, CancellationToken ct = default)
+        where TRequest : IRequest, ISchedulable
+        => ScheduleAsync(request, spec, routeValues, actor, ct);
+
     /// <summary>
     ///     Schedules a request. Only a request marked <see cref="ISchedulable" /> can be scheduled.
     /// </summary>
@@ -25,7 +35,7 @@ public interface IRequestScheduler
     ///     and anonymous identities are rejected and no bearer credential is persisted.
     /// </param>
     /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>An identity that can later cancel the schedule.</returns>
+    /// <returns>The concrete schedule route, which can later cancel or replace the schedule.</returns>
     ValueTask<string> ScheduleAsync<TRequest>(
         TRequest request,
         RequestScheduleSpec spec,
@@ -62,7 +72,7 @@ public interface IRequestScheduler
     /// <summary>
     ///     Cancels a previously scheduled request.
     /// </summary>
-    /// <param name="scheduleId">The identity returned by <c>ScheduleAsync</c>.</param>
+    /// <param name="scheduleId">The concrete route returned by <c>ScheduleAsync</c> or <c>EnsureAsync</c>.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the cancellation.</returns>
     ValueTask CancelAsync(string scheduleId, CancellationToken ct = default);

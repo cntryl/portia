@@ -1,2 +1,3 @@
 #nullable enable
 Cntryl.Portia.PortiaFitzBuilder.UseKvCheckpoints(string! route) -> Cntryl.Portia.PortiaFitzBuilder!
+Cntryl.Portia.FitzRequestScheduler.EnsureAsync<TRequest>(TRequest request, Cntryl.Portia.RequestScheduleSpec! spec, Cntryl.Portia.RequestRouteValues! routeValues, System.Security.Claims.ClaimsPrincipal! actor, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<string!>

@@ -180,6 +180,21 @@ public sealed class PortiaBuilder
             _catalog.HandlerRequests.ContainsKey(registration.RequestType) &&
             registration.Transports.HasFlag(transport));
 
+    /// <summary>Declares a durable scheduled request that worker hosts ensure on every startup.</summary>
+    public PortiaBuilder AddRequestSchedule<TRequest>(TRequest request, RequestScheduleSpec spec,
+        RequestRouteValues routeValues, System.Security.Claims.ClaimsPrincipal actor)
+        where TRequest : IRequest, ISchedulable
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(spec);
+        ArgumentNullException.ThrowIfNull(routeValues);
+        ArgumentNullException.ThrowIfNull(actor);
+        _ = Services.AddSingleton<IRequestScheduleDeclaration>(
+            new RequestScheduleDeclaration<TRequest>(request, spec, routeValues, actor));
+        return ConfigureWorker("Portia.RequestSchedules", static services =>
+            services.AddSingleton<IHostedService, RequestScheduleStartupService>());
+    }
+
     /// <summary>Registers one reactor with an explicitly selected execution scope.</summary>
     /// <typeparam name="TReactor">The concrete reactor type.</typeparam>
     /// <param name="scope">Whether the reactor runs once globally or once per active tenant.</param>

@@ -5,11 +5,11 @@ current, deliberate boundary.
 
 - Portia's own runtime code avoids reflection: JSON uses source-generated contexts and
   component registration uses compile-time generated descriptors. Runtime packages set
-  `IsAotCompatible=true` and run the resulting AOT/trim analyzers. Portia does not build or
-  publish a native `PublishAot` executable, so it makes no claim about an executed native binary.
-  AOT/trim compatibility of an application's own
-  serializers, converters, generated contexts, and other dependencies is that application's
-  responsibility, not Portia's.
+  `IsAotCompatible=true` and run the resulting AOT/trim analyzers. CI publishes and executes an
+  external, packed ASP.NET Core consumer as a native `linux-x64` executable with
+  `PublishAot=true`. This proves the supported Portia path, while an application's own
+  serializers, converters, generated contexts, and other dependencies remain that application's
+  responsibility.
 - The pinned Cntryl.Fitz package does not itself advertise `IsAotCompatible`; NativeAOT
   compatibility for applications that use `Portia.Fitz` also depends on that upstream package.
 - Aggregate snapshotting is not supported and is not planned. Aggregates are expected to stay

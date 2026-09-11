@@ -331,20 +331,15 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
             _notifications = subscription.GetAsyncEnumerator(_stop.Token);
         }
 
+        // The token bounds this wait, not the subscription: a caller that polls with a backstop
+        // must still receive the next commit. The in-flight MoveNextAsync is therefore retained
+        // rather than cancelled, and resumed by the next wait. Only disposal ends the subscription.
         public async ValueTask WaitAsync(CancellationToken ct = default)
         {
             _pending ??= _notifications.MoveNextAsync().AsTask();
-            try
-            {
-                if (!await _pending.WaitAsync(ct).ConfigureAwait(false))
-                    throw new InvalidOperationException("The Fitz stream subscription ended without cancellation.");
-                _pending = null;
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                await _stop.CancelAsync().ConfigureAwait(false);
-                throw;
-            }
+            if (!await _pending.WaitAsync(ct).ConfigureAwait(false))
+                throw new InvalidOperationException("The Fitz stream subscription ended without cancellation.");
+            _pending = null;
         }
 
         public async ValueTask DisposeAsync()

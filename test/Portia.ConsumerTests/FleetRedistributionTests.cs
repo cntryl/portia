@@ -180,7 +180,7 @@ public sealed class FleetRedistributionTests
             await Until(() => active == 8);
             membership.Observer.FailView = true;
             clock.Advance(Options.ReconciliationInterval);
-            Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+            await clock.WaitForDelayAsync(TimeSpan.FromSeconds(1));
             Assert.Equal(0, active);
             _ = Assert.Single(membership.Attempts);
             membership.Observer.FailView = false;

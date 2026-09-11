@@ -146,7 +146,7 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
 
         if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol
             || symbol.IsAbstract
-            || !IsAccessibleFromGeneratedCode(symbol)
+            || !IsCatalogable(symbol)
             || !InheritsFrom(symbol, DomainEventMetadataName))
         {
             return null;
@@ -164,7 +164,7 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         var declaration = (TypeDeclarationSyntax)context.Node;
         if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol
             || symbol.IsAbstract
-            || !IsAccessibleFromGeneratedCode(symbol)
+            || !IsCatalogable(symbol)
             || !InheritsFrom(symbol, DomainEventMetadataName))
         {
             return null;
@@ -225,6 +225,13 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
 
     static bool ImplementsInterface(INamedTypeSymbol symbol, string interfaceMetadataName) =>
         symbol.AllInterfaces.Any(i => i.ToDisplayString() == interfaceMetadataName);
+
+    // A type the generated catalog can name as a closed generic argument. An open generic event
+    // cannot be one — Register<T> needs a closed type, and one [Discriminator] cannot identify a
+    // schema shared by every closed form — so emitting it would produce source that does not
+    // compile rather than a registration.
+    static bool IsCatalogable(INamedTypeSymbol symbol) =>
+        !symbol.IsGenericType && IsAccessibleFromGeneratedCode(symbol);
 
     // Only a type (and every enclosing type, for a nested declaration) that's at least internal
     // can be named as a generic type argument from the generated top-level extension method —

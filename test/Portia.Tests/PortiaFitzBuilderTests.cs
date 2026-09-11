@@ -1,4 +1,5 @@
 using Cntryl.Fitz;
+using Cntryl.Fitz.Abstractions.Domains.Schedule;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -7,6 +8,18 @@ namespace Cntryl.Portia;
 /// <summary>Verifies deployment-level Fitz listener discovery from selected request handlers.</summary>
 public sealed class PortiaFitzBuilderTests
 {
+    /// <summary>The native schedule API is published from Portia's shared Fitz connection.</summary>
+    [Fact]
+    public void ShouldRegisterNativeScheduleClientAlias()
+    {
+        var services = new ServiceCollection();
+        var fitz = new PortiaFitzBuilder(services.AddPortia());
+
+        _ = fitz.AddRequestClients();
+
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IScheduleClient));
+    }
+
     /// <summary>An explicit transport selector is deployment intent, not an optional filter.</summary>
     [Fact]
     public void ShouldFailGivenNoMatchingHandlersWhenQueueWorkersAreSelected()

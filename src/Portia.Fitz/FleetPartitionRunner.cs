@@ -238,7 +238,7 @@ public sealed partial class FleetPartitionRunner(
 
         try
         {
-            await Task.WhenAll(runs.Select(item => item.Run.Task)).WaitAsync(timeout).ConfigureAwait(false);
+            await Task.WhenAll(runs.Select(item => item.Run.Task)).WaitAsync(timeout, _clock).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {

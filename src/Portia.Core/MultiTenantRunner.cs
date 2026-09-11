@@ -206,7 +206,7 @@ public sealed class MultiTenantRunner(
         {
             foreach (var (tenantId, run) in active)
                 Cancel(run.Cancellation);
-            using var shutdown = new CancellationTokenSource(_shutdownGrace);
+            using var shutdown = new CancellationTokenSource(_shutdownGrace, _clock);
             foreach (var tenantId in active.Keys.ToArray())
                 await StopAsync(tenantId, onTenantStopped, active, false, shutdown.Token).ConfigureAwait(false);
         }

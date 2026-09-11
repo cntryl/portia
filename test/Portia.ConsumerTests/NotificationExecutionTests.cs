@@ -10,6 +10,34 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed class NotificationExecutionTests
 {
+    [Fact]
+    public async Task EnsuredScheduleDefinitionsAreStableAndContainNoTraceContext()
+    {
+        static async Task<(string Route, byte[] Body)> EnsureAsync()
+        {
+            var wire = new Wire();
+            using var activity = new System.Diagnostics.Activity("host-start").Start();
+            _ = await new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).EnsureAsync(
+                new BrokerExecutionContextTests.Command(2), new RequestScheduleSpec("0 0 * * *"),
+                new RequestRouteValues(Resource: "actual"), RequestActor.CreateSystem("scheduler"));
+            return (wire.Route, wire.Body.ToArray());
+        }
+
+        var first = await EnsureAsync();
+        var second = await EnsureAsync();
+
+        Assert.Equal("schedule://context/work/actual/execute", first.Route);
+        Assert.Equal(first.Body, second.Body);
+        Assert.DoesNotContain("trace", Encoding.UTF8.GetString(first.Body), StringComparison.OrdinalIgnoreCase);
+        var expected = Uuid.CreateVersion5(Uuid.UrlNamespace, "portia:schedule:" + first.Route).ToString();
+        using var document = JsonDocument.Parse(first.Body);
+        var requestEnvelope = document.RootElement.GetProperty("request_envelope").GetBytesFromBase64();
+        var envelope = ConsumerJson.CreateSerializer().DeserializeEnvelope(requestEnvelope);
+        Assert.Equal(expected, envelope.Metadata.RequestId.ToString());
+        Assert.Equal(envelope.Metadata.RequestId, envelope.Metadata.CorrelationId);
+        Assert.Null(envelope.TraceContext);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -118,9 +146,9 @@ public sealed class NotificationExecutionTests
         var consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute");
         await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => enumerator.MoveNextAsync().AsTask());
-
-        Assert.Contains("invalid system identity envelope", error.Message, StringComparison.Ordinal);
+        // The entry is dropped rather than dispatched, and dropping it does not end the
+        // subscription; the recorded runner fault carries why (see FitzNotificationFaultTests).
+        Assert.False(await enumerator.MoveNextAsync());
     }
 
     [Fact]
@@ -134,11 +162,9 @@ public sealed class NotificationExecutionTests
         var consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute");
         await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
 
-        var exception =
-            await Assert.ThrowsAsync<LegacyScheduledRequestException>(() => enumerator.MoveNextAsync().AsTask());
-
-        Assert.Contains("Cancel and recreate", exception.Message, StringComparison.Ordinal);
-        Assert.Contains(wire.Route, exception.Message, StringComparison.Ordinal);
+        // A legacy entry is never dispatched, and one of them no longer stops every other
+        // schedule on the route; FitzNotificationFaultTests covers the reported diagnostic.
+        Assert.False(await enumerator.MoveNextAsync());
     }
 
     [Theory]

@@ -1,8 +1,13 @@
 using System.Threading.Channels;
 
-namespace Cntryl.Portia.Consumer;
+namespace Cntryl.Portia;
 
-sealed class ManualClock : TimeProvider
+/// <summary>
+///     A <see cref="TimeProvider" /> whose timers only fire when a test advances it, and which reports
+///     every delay a component asked it to schedule. A component that reaches past its injected clock
+///     to the system timer is therefore visible here as a delay that never arrives.
+/// </summary>
+sealed class ManualTestClock : TimeProvider
 {
     readonly Lock _gate = new();
     readonly Channel<TimeSpan> _scheduled = Channel.CreateUnbounded<TimeSpan>();
@@ -25,23 +30,7 @@ sealed class ManualClock : TimeProvider
     }
 
     public async Task<TimeSpan> WaitForDelayAsync(CancellationToken ct = default) =>
-        await _scheduled.Reader.ReadAsync(ct).AsTask().WaitAsync(TimeSpan.FromSeconds(10), ct);
-
-    /// <summary>
-    ///     Waits until a delay of exactly <paramref name="expected" /> is scheduled, skipping any
-    ///     other delay a component schedules first — a caller asserting on one bound should not
-    ///     have to know every other timer the same component happens to own.
-    /// </summary>
-    public async Task WaitForDelayAsync(TimeSpan expected, CancellationToken ct = default)
-    {
-        for (var attempt = 0; attempt < 20; attempt++)
-        {
-            if (await WaitForDelayAsync(ct) == expected)
-                return;
-        }
-
-        throw new TimeoutException($"No delay of {expected} was scheduled on the clock.");
-    }
+        await _scheduled.Reader.ReadAsync(ct).AsTask().WaitAsync(TimeSpan.FromSeconds(5), ct);
 
     public void Advance(TimeSpan duration)
     {
@@ -58,7 +47,7 @@ sealed class ManualClock : TimeProvider
             timer.Callback(timer.State);
     }
 
-    sealed class ClockTimer(ManualClock clock, TimerCallback callback, object? state) : ITimer
+    sealed class ClockTimer(ManualTestClock clock, TimerCallback callback, object? state) : ITimer
     {
         bool _disposed;
         public TimerCallback Callback => callback;
@@ -71,17 +60,11 @@ sealed class ManualClock : TimeProvider
             lock (clock._gate)
             {
                 if (_disposed)
-                {
                     return false;
-                }
-
                 Due = dueTime < TimeSpan.Zero ? DateTimeOffset.MaxValue : clock._now + dueTime;
                 Period = period;
                 if (dueTime >= TimeSpan.Zero)
-                {
                     _ = clock._scheduled.Writer.TryWrite(dueTime);
-                }
-
                 return true;
             }
         }

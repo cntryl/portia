@@ -239,14 +239,18 @@ sealed partial class PortiaWorkloadService(
                     continue;
                 }
 
-                using var backstop = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                backstop.CancelAfter(registration.PollInterval);
+                // The backstop is the same application-configured poll interval the delays above
+                // use, so it is scheduled on the same clock. CreateLinkedTokenSource takes no
+                // TimeProvider, so the deadline is its own source and the linked one only combines
+                // it with the stopping token.
+                using var deadline = new CancellationTokenSource(registration.PollInterval, _clock);
+                using var backstop = CancellationTokenSource.CreateLinkedTokenSource(ct, deadline.Token);
                 try
                 {
                     await subscription.WaitAsync(backstop.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested &&
-                                                         backstop.IsCancellationRequested)
+                                                         deadline.IsCancellationRequested)
                 {
                     // A notification is only a wakeup. Periodically re-read durable state in
                     // case a reconnect or bounded subscription buffer lost the signal.

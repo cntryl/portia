@@ -101,7 +101,7 @@ public sealed class CompleteWorkflowTests
                 Assert.Equal(4UL, account.CommittedStreamPosition);
                 var records = new List<DomainEventRecord>();
                 await foreach (var record in scope.ServiceProvider.GetRequiredService<IEventStore>()
-                                   .ReadAsync(EventStreamPattern.ForPattern("consumer", "accounts")))
+                                   .ReadAsync(ConsumerStreams.AccountsPattern))
                 {
                     if (record.Event.Metadata.AggregateId == id)
                     {

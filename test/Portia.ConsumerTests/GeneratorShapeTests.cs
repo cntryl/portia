@@ -2,6 +2,33 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed class GeneratorShapeTests
 {
+    [Theory]
+    [InlineData("builder.AddRequestSchedule(new Scheduled(), new RequestScheduleSpec(\"0 0 * * *\"), RequestRouteValues.None, RequestActor.System)")]
+    [InlineData("scheduler.EnsureAsync(new Scheduled(), new RequestScheduleSpec(\"0 0 * * *\"), RequestRouteValues.None, RequestActor.System)")]
+    public void ShouldRegisterOutboundSchedulableRequestGivenScheduleDeclarationOrEnsure(string invocation)
+    {
+        var source = $$"""
+                       using Cntryl.Portia;
+                       using Microsoft.Extensions.DependencyInjection;
+                       [RequestRoute("app", "jobs", "daily", "run")]
+                       [Discriminator("test.scheduled")]
+                       public sealed record Scheduled : IRequest, ISchedulable;
+                       public static class Scenario
+                       {
+                           public static void Run(IServiceCollection services, IRequestScheduler scheduler)
+                           {
+                               var builder = services.AddPortia();
+                               _ = {{invocation}};
+                           }
+                       }
+                       """;
+
+        var generated = GeneratorCompilation.GeneratedSource(source, new RegistrationCallInterceptorGenerator());
+
+        Assert.Contains("test.scheduled", generated, StringComparison.Ordinal);
+        Assert.Contains("RequestTransports.Schedulable", generated, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void ShouldReportUnsupportedCallSiteGivenRegistrationMethodGroupWhenGenerating()
     {
@@ -211,6 +238,30 @@ public sealed class GeneratorShapeTests
         Assert.Contains("AddGeneratedEvent<global::Contracts.UsedEvent>(1, \"UsedEvent\")", generated,
             StringComparison.Ordinal);
         Assert.DoesNotContain("UnrelatedEvent", generated, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldExcludeOpenGenericDomainEventFromAddPortiaRegistration()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using Microsoft.Extensions.DependencyInjection;
+                              [Discriminator("generic.event")]
+                              public sealed record GenericEvent<T>(T Value) : DomainEvent;
+                              [Discriminator("closed.event")]
+                              public sealed record ClosedEvent : DomainEvent;
+                              public static class Scenario
+                              {
+                                  public static void Register(IServiceCollection services) => services.AddPortia();
+                              }
+                              """;
+
+        _ = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
+        var generated = GeneratorCompilation.GeneratedSource(source, new RegistrationCallInterceptorGenerator());
+
+        Assert.Contains("AddGeneratedEvent<global::ClosedEvent>", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("GenericEvent", generated, StringComparison.Ordinal);
     }
 
     [Fact]

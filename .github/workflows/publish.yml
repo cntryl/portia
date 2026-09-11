@@ -99,6 +99,19 @@ jobs:
           --configuration Release
           -p:PortiaSmokePackageVersion="$PACKAGE_VERSION"
 
+      - name: Publish and execute NativeAOT package consumer
+        run: >-
+          dotnet publish
+          smoke/Portia.AspNetCore.NativeAotConsumer/Portia.AspNetCore.NativeAotConsumer.csproj
+          --configuration Release
+          --runtime linux-x64
+          --self-contained true
+          -p:PublishAot=true
+          -p:PortiaSmokePackageVersion="$PACKAGE_VERSION"
+          --output artifacts/native-aot
+      - name: Execute NativeAOT package consumer
+        run: artifacts/native-aot/Portia.AspNetCore.NativeAotConsumer
+
       - name: Test solution
         run: dotnet test Portia.slnx --configuration Release --no-build --no-restore
 

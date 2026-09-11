@@ -362,7 +362,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .AppendLine("    {")
             .Append("        return app.MapMethods(pattern, new[] { \"").Append(call.Verb.ToUpperInvariant())
             .Append(
-                "\" }, (global::System.Func<global::Microsoft.AspNetCore.Http.HttpContext, global::System.Threading.Tasks.Task>)Dispatch)")
+                "\" }, (global::Microsoft.AspNetCore.Http.RequestDelegate)Dispatch)")
             .AppendLine()
             .Append("            .WithMetadata(new global::Cntryl.Portia.PortiaOpenApiOperation(")
             .Append(Literal(call.OperationId)).Append(", ")

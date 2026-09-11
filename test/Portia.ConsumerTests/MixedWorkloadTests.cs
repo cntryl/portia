@@ -40,7 +40,10 @@ public sealed class MixedWorkloadTests
         using var host = builder.Build();
         var store = host.Services.GetRequiredService<IEventStore>();
         var ids = new[] { Uuid.CreateVersion4(), Uuid.CreateVersion4(), Uuid.CreateVersion4() };
-        var realms = new[] { "alpha", "beta", "consumer" };
+        // The per-tenant workloads have their declared realm replaced by the tenant they run
+        // for; the global one keeps the realm the fixture declares, so its event has to be
+        // seeded there rather than under a literal that no longer matches.
+        var realms = new[] { "alpha", "beta", ConsumerStreams.Realm };
         for (var i = 0; i < realms.Length; i++)
         {
             await store.AppendAsync(new EventStreamAddress(realms[i], "accounts", ids[i].ToString()), 0,

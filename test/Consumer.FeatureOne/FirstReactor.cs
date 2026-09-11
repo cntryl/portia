@@ -4,7 +4,7 @@ public sealed partial class FirstReactor(
     IConsumerEffects effects,
     IConsumerScope scope,
     IProjectionCheckpointStore checkpoints)
-    : Reactor(checkpoints, EventStreamPattern.ForPattern("consumer", "accounts"), "first-reactor"),
+    : Reactor(checkpoints, ConsumerStreams.AccountsPattern, "first-reactor"),
         IReactorHandler<Deposited>, IReactorHandler<Declined>
 {
     public ValueTask HandleAsync(IReactorContext<Declined> context, CancellationToken ct)

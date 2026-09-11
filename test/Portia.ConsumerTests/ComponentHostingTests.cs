@@ -64,6 +64,12 @@ public sealed partial class ComponentHostingTests
         try
         {
             await worker.StartAsync(default);
+            // The poll interval reaches the clock twice: first as the wait's backstop, then as the
+            // delay before the broken subscription is recreated. Advancing has to happen after the
+            // second one is scheduled — a timer registered after the advance is due a further
+            // interval out and never fires — so wait for both rather than for the disposal that
+            // sits between them.
+            Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
             Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
             Assert.Equal(1, changes.SubscriptionCount);
             Assert.Equal(1, changes.DisposalCount);
