@@ -330,7 +330,8 @@ public sealed class WorkloadCoordinatorConformanceTests
 
                 await StopAsync(owned[0]);
                 Start(second);
-                await Task.Delay(TimeSpan.FromMilliseconds(25), ct);
+                // Reacquire synchronously after replacement starts, so scheduler contention cannot move
+                // the injected violation beyond the conformance suite's finite stability window.
                 Start(first);
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             }
