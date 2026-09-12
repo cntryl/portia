@@ -1,59 +1,59 @@
 #nullable enable
 Cntryl.Portia.FitzEventStore
 Cntryl.Portia.FitzEventStore.AppendAsync(Cntryl.Portia.EventStreamAddress! stream, ulong expectedStreamPosition, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>! events, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-Cntryl.Portia.FitzEventStore.FitzEventStore(Cntryl.Fitz.Abstractions.Domains.Stream.IStreamClient! streams, Cntryl.Portia.IDomainEventSerializer! serializer) -> void
+Cntryl.Portia.FitzEventStore.FitzEventStore(Cntryl.Fitz.IStreamClient! streams, Cntryl.Portia.IDomainEventSerializer! serializer) -> void
 Cntryl.Portia.FitzEventStore.ReadAsync(Cntryl.Portia.EventStreamAddress! stream, ulong fromOffset = 0, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.DomainEventRecord!>!
 Cntryl.Portia.FitzEventStore.ReadAsync(Cntryl.Portia.EventStreamPattern! pattern, ulong fromOffset = 0, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.DomainEventRecord!>!
 Cntryl.Portia.FitzEventStore.SubscribeAsync(Cntryl.Portia.EventStreamPattern! pattern, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.IDomainEventSubscription!>
 Cntryl.Portia.FitzFleetMembership
-Cntryl.Portia.FitzFleetMembership.FitzFleetMembership(Cntryl.Fitz.Abstractions.Domains.Lease.ILeaseClient! client) -> void
-Cntryl.Portia.FitzFleetMembership.RunAsync(Cntryl.Portia.FleetRunOptions! options, System.Func<Cntryl.Fitz.Abstractions.Domains.Lease.ILeaseInventoryObserver!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! callback, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Cntryl.Portia.FitzFleetMembership.FitzFleetMembership(Cntryl.Fitz.ILeaseClient! client) -> void
+Cntryl.Portia.FitzFleetMembership.RunAsync(Cntryl.Portia.FleetRunOptions! options, System.Func<Cntryl.Fitz.ILeaseInventoryObserver!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! callback, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Cntryl.Portia.FitzKvCheckpointStore
-Cntryl.Portia.FitzKvCheckpointStore.FitzKvCheckpointStore(Cntryl.Fitz.Abstractions.Domains.Kv.IKvClient! client, string! route) -> void
+Cntryl.Portia.FitzKvCheckpointStore.FitzKvCheckpointStore(Cntryl.Fitz.IKvClient! client, string! route) -> void
 Cntryl.Portia.FitzKvCheckpointStore.LoadAsync(Cntryl.Portia.CheckpointIdentity! identity, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>
 Cntryl.Portia.FitzKvCheckpointStore.SaveAsync(Cntryl.Portia.CheckpointIdentity! identity, Cntryl.Portia.ProjectionCheckpoint checkpoint, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Cntryl.Portia.FitzKvConcurrencyException
 Cntryl.Portia.FitzKvConcurrencyException.FitzKvConcurrencyException(string! message, System.Exception? innerException = null) -> void
 Cntryl.Portia.FitzKvProjectionStore
 Cntryl.Portia.FitzKvProjectionStore.BeginAsync(Cntryl.Portia.ProjectionBatchContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.IProjectionBatch!>
-Cntryl.Portia.FitzKvProjectionStore.FitzKvProjectionStore(Cntryl.Fitz.Abstractions.Domains.Kv.IKvClient! client, string! route) -> void
+Cntryl.Portia.FitzKvProjectionStore.FitzKvProjectionStore(Cntryl.Fitz.IKvClient! client, string! route) -> void
 Cntryl.Portia.FitzKvProjectionStore.LoadCheckpointAsync(Cntryl.Portia.CheckpointIdentity! identity, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>
-Cntryl.Portia.FitzKvProjectionStore.Transaction.get -> Cntryl.Fitz.Abstractions.Domains.Kv.IKvTransaction!
+Cntryl.Portia.FitzKvProjectionStore.Transaction.get -> Cntryl.Fitz.IKvTransaction!
 Cntryl.Portia.FitzNoticeRequestConsumer
-Cntryl.Portia.FitzNoticeRequestConsumer.FitzNoticeRequestConsumer(Cntryl.Fitz.Abstractions.Domains.Notice.INoticeClient! notice, Cntryl.Portia.IRequestDeserializer! serializer, string! route) -> void
+Cntryl.Portia.FitzNoticeRequestConsumer.FitzNoticeRequestConsumer(Cntryl.Fitz.INoticeClient! notice, Cntryl.Portia.IRequestDeserializer! serializer, string! route, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.FitzNoticeRequestConsumer!>? logger = null) -> void
 Cntryl.Portia.FitzNoticeRequestConsumer.ReadAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.RequestNotification>!
 Cntryl.Portia.FitzNoticeRequestSender
-Cntryl.Portia.FitzNoticeRequestSender.FitzNoticeRequestSender(Cntryl.Fitz.Abstractions.Domains.Notice.INoticeClient! notice, Cntryl.Portia.IRequestSerializer! serializer, Cntryl.Portia.RequestTransportCatalog? catalog = null) -> void
+Cntryl.Portia.FitzNoticeRequestSender.FitzNoticeRequestSender(Cntryl.Fitz.INoticeClient! notice, Cntryl.Portia.IRequestSerializer! serializer, Cntryl.Portia.RequestTransportCatalog? catalog = null) -> void
 Cntryl.Portia.FitzNoticeRequestSender.PublishAsync<TRequest>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, Cntryl.Portia.RequestMetadata! metadata, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Cntryl.Portia.FitzNoticeRequestSender.PublishAsync<TRequest>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Cntryl.Portia.FitzPartitionLeaseCompetitor
-Cntryl.Portia.FitzPartitionLeaseCompetitor.FitzPartitionLeaseCompetitor(Cntryl.Fitz.Abstractions.Domains.Lease.ILeaseClient! client) -> void
-Cntryl.Portia.FitzPartitionLeaseCompetitor.WithLeaseAsync(string! route, ulong ttlSecs, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! callback, Cntryl.Fitz.Abstractions.Domains.Lease.LeaseExecutionOptions? options = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Cntryl.Portia.FitzPartitionLeaseCompetitor.FitzPartitionLeaseCompetitor(Cntryl.Fitz.ILeaseClient! client) -> void
+Cntryl.Portia.FitzPartitionLeaseCompetitor.WithLeaseAsync(string! route, ulong ttlSecs, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! callback, Cntryl.Fitz.LeaseExecutionOptions? options = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Cntryl.Portia.FitzRemoteRequestSender
-Cntryl.Portia.FitzRemoteRequestSender.FitzRemoteRequestSender(Cntryl.Fitz.Abstractions.Domains.Rpc.IRpcClient! rpc, Cntryl.Portia.IRequestSerializer! requestSerializer, Cntryl.Portia.IRequestOutcomeDeserializer! outcomeDeserializer, Cntryl.Portia.RequestTransportCatalog? catalog = null) -> void
+Cntryl.Portia.FitzRemoteRequestSender.FitzRemoteRequestSender(Cntryl.Fitz.IRpcClient! rpc, Cntryl.Portia.IRequestSerializer! requestSerializer, Cntryl.Portia.IRequestOutcomeDeserializer! outcomeDeserializer, Cntryl.Portia.RequestTransportCatalog? catalog = null) -> void
 Cntryl.Portia.FitzRemoteRequestSender.SendAsync<TRequest, TOut>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, Cntryl.Portia.RequestMetadata! metadata, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result<TOut>>
 Cntryl.Portia.FitzRemoteRequestSender.SendAsync<TRequest, TOut>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result<TOut>>
 Cntryl.Portia.FitzRemoteRequestSender.SendAsync<TRequest>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, Cntryl.Portia.RequestMetadata! metadata, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
 Cntryl.Portia.FitzRemoteRequestSender.SendAsync<TRequest>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
 Cntryl.Portia.FitzRequestQueueConsumer
-Cntryl.Portia.FitzRequestQueueConsumer.FitzRequestQueueConsumer(Cntryl.Fitz.Abstractions.Domains.Queue.IQueueClient! queue, Cntryl.Portia.IRequestDeserializer! serializer, string! route, ulong visibilityTimeoutSeconds = 30, int maxItemsPerReserve = 1, System.TimeSpan? waitDuration = null, System.TimeProvider? timeProvider = null, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.FitzRequestQueueConsumer!>? logger = null) -> void
+Cntryl.Portia.FitzRequestQueueConsumer.FitzRequestQueueConsumer(Cntryl.Fitz.IQueueClient! queue, Cntryl.Portia.IRequestDeserializer! serializer, string! route, ulong visibilityTimeoutSeconds = 30, int maxItemsPerReserve = 1, System.TimeSpan? waitDuration = null, System.TimeProvider? timeProvider = null, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.FitzRequestQueueConsumer!>? logger = null) -> void
 Cntryl.Portia.FitzRequestQueueConsumer.ReadAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.IQueuedRequest!>!
 Cntryl.Portia.FitzRequestQueuePublisher
 Cntryl.Portia.FitzRequestQueuePublisher.EnqueueAsync<TRequest>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, Cntryl.Portia.RequestMetadata! metadata, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Cntryl.Portia.FitzRequestQueuePublisher.EnqueueAsync<TRequest>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-Cntryl.Portia.FitzRequestQueuePublisher.FitzRequestQueuePublisher(Cntryl.Fitz.Abstractions.Domains.Queue.IQueueClient! queue, Cntryl.Portia.IRequestSerializer! serializer, Cntryl.Portia.RequestTransportCatalog? catalog = null) -> void
+Cntryl.Portia.FitzRequestQueuePublisher.FitzRequestQueuePublisher(Cntryl.Fitz.IQueueClient! queue, Cntryl.Portia.IRequestSerializer! serializer, Cntryl.Portia.RequestTransportCatalog? catalog = null) -> void
 Cntryl.Portia.FitzRequestScheduler
 Cntryl.Portia.FitzRequestScheduler.CancelAsync(string! scheduleId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-Cntryl.Portia.FitzRequestScheduler.FitzRequestScheduler(Cntryl.Fitz.Abstractions.Domains.Schedule.IScheduleClient! schedule, Cntryl.Portia.IRequestSerializer! serializer, Cntryl.Portia.RequestTransportCatalog? catalog = null) -> void
+Cntryl.Portia.FitzRequestScheduler.FitzRequestScheduler(Cntryl.Fitz.IScheduleClient! schedule, Cntryl.Portia.IRequestSerializer! serializer, Cntryl.Portia.RequestTransportCatalog? catalog = null) -> void
 Cntryl.Portia.FitzRequestScheduler.ScheduleAsync<TRequest>(TRequest request, Cntryl.Portia.RequestScheduleSpec! spec, Cntryl.Portia.RequestRouteValues! routeValues, System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.RequestMetadata! metadata, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<string!>
 Cntryl.Portia.FitzRequestScheduler.ScheduleAsync<TRequest>(TRequest request, Cntryl.Portia.RequestScheduleSpec! spec, Cntryl.Portia.RequestRouteValues! routeValues, System.Security.Claims.ClaimsPrincipal! actor, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<string!>
 Cntryl.Portia.FitzRpcRequestServer
-Cntryl.Portia.FitzRpcRequestServer.FitzRpcRequestServer(Cntryl.Fitz.Abstractions.Domains.Rpc.IRpcClient! rpc, Microsoft.Extensions.DependencyInjection.IServiceScopeFactory! scopeFactory, Cntryl.Portia.RequestTransportCatalog? catalog = null) -> void
-Cntryl.Portia.FitzRpcRequestServer.RegisterAsync<TRequest, TOut>(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Fitz.Abstractions.Domains.Rpc.RpcWorkerRegistration!>
-Cntryl.Portia.FitzRpcRequestServer.RegisterAsync<TRequest>(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Fitz.Abstractions.Domains.Rpc.RpcWorkerRegistration!>
+Cntryl.Portia.FitzRpcRequestServer.FitzRpcRequestServer(Cntryl.Fitz.IRpcClient! rpc, Microsoft.Extensions.DependencyInjection.IServiceScopeFactory! scopeFactory, Cntryl.Portia.RequestTransportCatalog? catalog = null) -> void
+Cntryl.Portia.FitzRpcRequestServer.RegisterAsync<TRequest, TOut>(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Fitz.RpcWorkerRegistration!>
+Cntryl.Portia.FitzRpcRequestServer.RegisterAsync<TRequest>(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Fitz.RpcWorkerRegistration!>
 Cntryl.Portia.FitzRpcRequestServer.RegisterRequestsAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.IAsyncDisposable!>
 Cntryl.Portia.FitzScheduledRequestConsumer
-Cntryl.Portia.FitzScheduledRequestConsumer.FitzScheduledRequestConsumer(Cntryl.Fitz.Abstractions.Domains.Schedule.IScheduleClient! schedule, Cntryl.Portia.IRequestDeserializer! serializer, string! route) -> void
+Cntryl.Portia.FitzScheduledRequestConsumer.FitzScheduledRequestConsumer(Cntryl.Fitz.IScheduleClient! schedule, Cntryl.Portia.IRequestDeserializer! serializer, string! route, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.FitzScheduledRequestConsumer!>? logger = null) -> void
 Cntryl.Portia.FitzScheduledRequestConsumer.ReadAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.RequestNotification>!
 Cntryl.Portia.FleetPartitionRunner
 Cntryl.Portia.FleetPartitionRunner.FleetPartitionRunner(Cntryl.Portia.IPartitionLeaseCompetitor! leases, Cntryl.Portia.IFleetMembership! membership, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.FleetPartitionRunner!>? logger = null, System.TimeProvider? timeProvider = null) -> void
@@ -78,9 +78,9 @@ Cntryl.Portia.FleetRunOptions.ReconciliationInterval.init -> void
 Cntryl.Portia.FleetRunOptions.WorkerId.get -> string?
 Cntryl.Portia.FleetRunOptions.WorkerId.init -> void
 Cntryl.Portia.IFleetMembership
-Cntryl.Portia.IFleetMembership.RunAsync(Cntryl.Portia.FleetRunOptions! options, System.Func<Cntryl.Fitz.Abstractions.Domains.Lease.ILeaseInventoryObserver!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! callback, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Cntryl.Portia.IFleetMembership.RunAsync(Cntryl.Portia.FleetRunOptions! options, System.Func<Cntryl.Fitz.ILeaseInventoryObserver!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! callback, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Cntryl.Portia.IPartitionLeaseCompetitor
-Cntryl.Portia.IPartitionLeaseCompetitor.WithLeaseAsync(string! route, ulong ttlSecs, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! callback, Cntryl.Fitz.Abstractions.Domains.Lease.LeaseExecutionOptions? options = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Cntryl.Portia.IPartitionLeaseCompetitor.WithLeaseAsync(string! route, ulong ttlSecs, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! callback, Cntryl.Fitz.LeaseExecutionOptions? options = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Cntryl.Portia.IPartitionWorkload
 Cntryl.Portia.IPartitionWorkload.RunAsync(string! partition, System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task!
 Cntryl.Portia.JsonRequestSerializer
@@ -107,11 +107,11 @@ Cntryl.Portia.Testing.InMemoryLeaseClient
 Cntryl.Portia.Testing.InMemoryLeaseClient.Acquisitions.get -> System.Collections.Generic.List<string!>!
 Cntryl.Portia.Testing.InMemoryLeaseClient.FailNextAcquisition(string! route) -> void
 Cntryl.Portia.Testing.InMemoryLeaseClient.InMemoryLeaseClient() -> void
-Cntryl.Portia.Testing.InMemoryLeaseClient.WithLeaseAsync(string! route, ulong ttlSecs, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! callback, Cntryl.Fitz.Abstractions.Domains.Lease.LeaseExecutionOptions? options = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Cntryl.Portia.Testing.InMemoryLeaseClient.WithLeaseAsync(string! route, ulong ttlSecs, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! callback, Cntryl.Fitz.LeaseExecutionOptions? options = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Cntryl.Portia.Testing.InMemoryRpcClient
-Cntryl.Portia.Testing.InMemoryRpcClient.CallAsync(string! route, System.ReadOnlyMemory<byte> body, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Fitz.Abstractions.Domains.Rpc.RpcResponseFrame!>!
+Cntryl.Portia.Testing.InMemoryRpcClient.CallAsync(string! route, System.ReadOnlyMemory<byte> body, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Fitz.RpcResponseFrame!>!
 Cntryl.Portia.Testing.InMemoryRpcClient.InMemoryRpcClient() -> void
-Cntryl.Portia.Testing.InMemoryRpcClient.RegisterWorkerAsync(string! pattern, System.Func<Cntryl.Fitz.Abstractions.Domains.Rpc.RpcRequest!, Cntryl.Fitz.Abstractions.Domains.Rpc.IRpcResponseWriter!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! handler, Cntryl.Fitz.Abstractions.Domains.Rpc.RpcWorkerOptions? options = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Fitz.Abstractions.Domains.Rpc.RpcWorkerRegistration!>!
+Cntryl.Portia.Testing.InMemoryRpcClient.RegisterWorkerAsync(string! pattern, System.Func<Cntryl.Fitz.RpcRequest!, Cntryl.Fitz.IRpcResponseWriter!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! handler, Cntryl.Fitz.RpcWorkerOptions? options = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Fitz.RpcWorkerRegistration!>!
 override Cntryl.Portia.FleetRunOptions.Equals(object? obj) -> bool
 override Cntryl.Portia.FleetRunOptions.GetHashCode() -> int
 override Cntryl.Portia.FleetRunOptions.ToString() -> string!

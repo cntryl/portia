@@ -8,7 +8,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Cntryl.Conventions.Testing.Analyzers" />
     <PackageReference Include="Cntryl.Conventions.Testing.CodeFixes" />
-    <PackageReference Include="Cntryl.Fitz" />
+    <PackageReference Include="Cntryl.Fitz.Core" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />

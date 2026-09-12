@@ -129,7 +129,7 @@ public sealed class RequestNotificationRunnerTests
             ActivityStopped = activity =>
             {
                 if (activity.OperationName == PortiaTelemetry.ProcessActivityName &&
-                    activity.GetTagItem("messaging.system") is string transport
+                    activity.GetTagItem("portia.transport.name") is string transport
                      && transport == "schedule")
                 {
                     transports.Enqueue(transport);

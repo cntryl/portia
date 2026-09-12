@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
-using Cntryl.Fitz.Abstractions.Domains.Schedule;
+using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
@@ -10,10 +10,12 @@ namespace Cntryl.Portia;
 /// <param name="schedule">The Fitz schedule client.</param>
 /// <param name="serializer">The request serializer.</param>
 /// <param name="route">The concrete Fitz schedule route to subscribe to (<c>schedule://realm/area/resource/operation</c>).</param>
+/// <param name="logger">Reports a delivery that cannot be translated.</param>
 public sealed class FitzScheduledRequestConsumer(
     IScheduleClient schedule,
     IRequestDeserializer serializer,
-    string route) : IRequestNotificationConsumer
+    string route,
+    ILogger<FitzScheduledRequestConsumer>? logger = null) : IRequestNotificationConsumer
 {
     readonly string _route = string.IsNullOrWhiteSpace(route)
         ? throw new ArgumentException("A schedule route cannot be empty.", nameof(route))
@@ -36,14 +38,14 @@ public sealed class FitzScheduledRequestConsumer(
             // complete system identity — is reported and dropped rather than ending the
             // subscription, which would stop every other schedule on this route too. The
             // recorded fault is what tells an operator the entry needs recreating.
-            if (Translate(notification) is { } translated)
+            if (Translate(notification, ct) is { } translated)
             {
                 yield return translated;
             }
         }
     }
 
-    RequestNotification? Translate(ScheduleNotification notification)
+    RequestNotification? Translate(ScheduleNotification notification, CancellationToken ct)
     {
         try
         {
@@ -77,12 +79,17 @@ public sealed class FitzScheduledRequestConsumer(
             return new RequestNotification(request, null,
                 new RequestMetadata(Uuid.CreateVersion4(), envelope.Metadata.CorrelationId,
                     envelope.Metadata.RequestId),
-                new ScheduleInvocation(notification.Route), envelope.TraceContext,
+                new ScheduleInvocation(notification.Route) { MessagingSystem = "fitz" }, envelope.TraceContext,
                 RequestActor.CreateSystem(scheduled.SystemSubject, scheduled.SystemIssuer), envelope.Name);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            PortiaTelemetry.RecordRunnerFault(nameof(FitzScheduledRequestConsumer), RunnerFaultStage.Validation, ex);
+            throw;
+        }
+        catch (Exception)
+        {
+            PortiaTelemetry.RecordLostDelivery("unknown", "schedule", logger);
+            PortiaTelemetry.RecordDelivery("unknown", "schedule", RequestDeliveryOutcome.Lost);
             return null;
         }
     }

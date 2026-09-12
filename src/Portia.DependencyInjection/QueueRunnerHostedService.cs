@@ -37,6 +37,7 @@ sealed class QueueRunnerHostedService(
                 PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, logger);
             }
 
+            PortiaTelemetry.RecordWorkerRestart(nameof(QueueRunner), "execution");
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(1), _clock, stoppingToken).ConfigureAwait(false);

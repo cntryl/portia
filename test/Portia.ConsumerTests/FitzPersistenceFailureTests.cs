@@ -1,6 +1,4 @@
 using System.Globalization;
-using Cntryl.Fitz.Abstractions.Domains.Stream;
-using Cntryl.Fitz.Errors;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;

@@ -18,7 +18,7 @@ public sealed class RequestShapeDiagnosticsGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(types, static (output, model) =>
         {
             output.ReportDiagnostic(Diagnostic.Create(GeneratedTypeShape.Unsupported,
-                model.Location.ToLocation(), model.TypeName));
+                model.Location.ToLocation(), model.TypeName, model.Reason));
         });
     }
 
@@ -26,11 +26,12 @@ public sealed class RequestShapeDiagnosticsGenerator : IIncrementalGenerator
     {
         var symbol = context.SemanticModel.GetDeclaredSymbol((ClassDeclarationSyntax)context.Node, ct) as
             INamedTypeSymbol;
-        return symbol is null || symbol.IsAbstract || GeneratedTypeShape.IsSupported(symbol) ||
-               !PortiaComponentRoles.IsComponent(symbol)
+        var reason = symbol is null ? null : GeneratedTypeShape.UnsupportedReason(symbol);
+        return symbol is null || symbol.IsAbstract || reason is null || !PortiaComponentRoles.IsComponent(symbol)
             ? null
-            : new Model(symbol.ToDisplayString(), DiagnosticLocation.From(symbol.Locations.FirstOrDefault()));
+            : new Model(symbol.ToDisplayString(), reason,
+                DiagnosticLocation.From(symbol.Locations.FirstOrDefault()));
     }
 
-    sealed record Model(string TypeName, DiagnosticLocation Location);
+    sealed record Model(string TypeName, string Reason, DiagnosticLocation Location);
 }

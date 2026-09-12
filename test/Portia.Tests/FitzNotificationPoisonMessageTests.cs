@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text;
-using Cntryl.Fitz.Abstractions.Domains.Notice;
-using Cntryl.Fitz.Abstractions.Domains.Schedule;
+using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
@@ -20,14 +19,16 @@ public sealed class FitzNotificationPoisonMessageTests
     public async Task ShouldSkipAnUndeserializableNoticeAndKeepReading()
     {
         var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var logger = new CapturingLogger<FitzNoticeRequestConsumer>();
         var consumer = new FitzNoticeRequestConsumer(
             new ScriptedNoticeClient([Encoding.UTF8.GetBytes("not-an-envelope"), Envelope(serializer)]),
-            serializer, "notice://test/shared/action");
+            serializer, "notice://test/shared/action", logger);
 
         var delivered = await ReadAllAsync(consumer);
 
         _ = Assert.Single(delivered);
         _ = Assert.IsType<UniversalAction>(delivered[0].Request);
+        Assert.Equal((1004, LogLevel.Warning), Assert.Single(logger.Entries));
     }
 
     /// <summary>
@@ -38,14 +39,16 @@ public sealed class FitzNotificationPoisonMessageTests
     public async Task ShouldSkipAnUndeserializableScheduleEntryAndKeepReading()
     {
         var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var logger = new CapturingLogger<FitzScheduledRequestConsumer>();
         var consumer = new FitzScheduledRequestConsumer(
             new ScriptedScheduleClient([Encoding.UTF8.GetBytes("{}"), ScheduleEnvelope(serializer)]),
-            serializer, "schedule://test/shared/action/run");
+            serializer, "schedule://test/shared/action/run", logger);
 
         var delivered = await ReadAllAsync(consumer);
 
         _ = Assert.Single(delivered);
         _ = Assert.IsType<UniversalAction>(delivered[0].Request);
+        Assert.Equal((1004, LogLevel.Warning), Assert.Single(logger.Entries));
     }
 
     static async Task<List<RequestNotification>> ReadAllAsync(IRequestNotificationConsumer consumer)
@@ -111,5 +114,18 @@ public sealed class FitzNotificationPoisonMessageTests
                 await Task.Yield();
             }
         }
+    }
+
+    sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<(int EventId, LogLevel Level)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Entries.Add((eventId.Id, logLevel));
     }
 }

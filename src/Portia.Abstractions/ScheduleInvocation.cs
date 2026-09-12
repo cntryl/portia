@@ -6,4 +6,7 @@ public sealed record ScheduleInvocation(string Route) : RequestInvocation
 {
     /// <inheritdoc />
     public override string TransportName => "schedule";
+
+    /// <inheritdoc />
+    public override RequestTraceRelationship TraceRelationship => RequestTraceRelationship.Link;
 }

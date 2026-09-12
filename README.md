@@ -116,16 +116,18 @@ executes two feature assemblies through direct dispatch, HTTP, RPC, and queues.
 To run the test suite:
 
 ```
-docker compose up --detach fitz
 dotnet format Portia.slnx --verify-no-changes
 dotnet build Portia.slnx --configuration Release
-dotnet test Portia.slnx --configuration Release --no-build
+dotnet test Portia.slnx --configuration Release --no-build --filter "Category!=BrokerIntegration"
+docker compose up --detach --wait fitz
+dotnet test Portia.slnx --configuration Release --no-build --filter "Category=BrokerIntegration"
 docker compose down --volumes
 ```
 
-The Fitz integration and public consumer tests connect to the Compose-managed broker at
+The first test command is broker-free. The integration command selects every test that connects to the
+Compose-managed broker at
 `ws://127.0.0.1:4090/ws` by default; override `FITZ_TEST_ENDPOINT` when using another broker. CI starts and removes the
-Compose stack automatically. The remaining tests run in process.
+Compose stack automatically.
 
 ## The projects
 
@@ -139,6 +141,7 @@ Compose stack automatically. The remaining tests run in process.
 | `Portia.AspNetCore`          | Generated HTTP binding plus automatic Microsoft OpenAPI 3.1 JSON and YAML documents. It depends directly on `Portia.DependencyInjection`, so an HTTP-only package reference also brings the registration APIs, generator/analyzer assets, and interceptor compiler configuration.                                                                                                                                                                                                                                                                                  |
 | `Portia.Fitz`                | Fitz-backed transports: RPC send/receive, queue publish/consume, notice/schedule notifications, `FitzEventStore`, and `FleetPartitionRunner` (fleet distribution via Fitz leases).                                                                                                                                                                                                                                                                                                                                                                                 |
 | `Portia.Jwt`                 | A JWT-backed `IRequestActorValidator` — re-validates a request's carried actor token, no ASP.NET Core dependency.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `Portia.Telemetry`           | Optional one-call OpenTelemetry hosting integration for Portia traces, metrics, and structured logs. Exporters, resources, sampling, and filtering remain application-owned.                                                                                                                                                                                                                                                                                                                                                                                     |
 | `Portia.DependencyInjection` | Composes the application with fluent `AddPortia()` and activates its workers with `AddWorkers()`, which runs every declared projector and reactor under one hosted service.                                                                                                                                                                                                                                                                                                                                                                                        |
 | `Portia.Testing`             | Testing utilities for downstream apps: aggregate scenarios, in-memory stores, actor/permission doubles, and backend-neutral event-store, projection, and reaction-deduplication conformance suites. All of it lives in the `Cntryl.Portia.Testing` namespace, so a test double never turns up in an application's completion list beside the production contracts — add `using Cntryl.Portia.Testing;` in test code. Fitz-specific doubles (`InMemoryRpcClient`, `InMemoryLeaseClient`) share that namespace but ship from `Portia.Fitz`, since they depend on it. |
 

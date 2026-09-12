@@ -1,6 +1,5 @@
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using Cntryl.Fitz.Abstractions.Domains.Stream;
 
 namespace Cntryl.Portia;
 

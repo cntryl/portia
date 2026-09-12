@@ -10,8 +10,9 @@ current, deliberate boundary.
   `PublishAot=true`. This proves the supported Portia path, while an application's own
   serializers, converters, generated contexts, and other dependencies remain that application's
   responsibility.
-- The pinned Cntryl.Fitz package does not itself advertise `IsAotCompatible`; NativeAOT
-  compatibility for applications that use `Portia.Fitz` also depends on that upstream package.
+- The pinned Cntryl.Fitz packages advertise `IsAotCompatible`; NativeAOT compatibility for an
+  application that uses `Portia.Fitz` still depends on its own serializers, converters, and other
+  dependencies.
 - Aggregate snapshotting is not supported and is not planned. Aggregates are expected to stay
   bounded enough to rehydrate directly from their event streams. Prefix truncation is also
   unsupported: readers must continue to expose original contiguous physical offsets.

@@ -2,8 +2,6 @@ using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
-using Cntryl.Fitz.Abstractions.Domains.Notice;
-using Cntryl.Fitz.Abstractions.Domains.Schedule;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
@@ -80,7 +78,9 @@ public sealed class NotificationExecutionTests
         {
             Assert.Equal(parent.CorrelationId, context.CorrelationId);
             Assert.Equal(scheduled ? handler.Contexts[0].CausationId : parent.CauseId, context.CausationId);
-            Assert.Equal(scheduled ? new ScheduleInvocation(wire.Route) : new NoticeInvocation(wire.Route),
+            Assert.Equal(scheduled
+                    ? new ScheduleInvocation(wire.Route) { MessagingSystem = "fitz" }
+                    : new NoticeInvocation(wire.Route) { MessagingSystem = "fitz" },
                 context.Invocation);
         });
         if (scheduled)
@@ -168,7 +168,7 @@ public sealed class NotificationExecutionTests
     }
 
     [Theory]
-    [InlineData(RequestScheduleDeliveryMode.One, ScheduleDeliveryMode.Single)]
+    [InlineData(RequestScheduleDeliveryMode.One, ScheduleDeliveryMode.Once)]
     [InlineData(RequestScheduleDeliveryMode.Broadcast, ScheduleDeliveryMode.Broadcast)]
     public async Task DeliveryModeIsCarriedToTheBrokerUntranslated(RequestScheduleDeliveryMode requested,
         ScheduleDeliveryMode expected)

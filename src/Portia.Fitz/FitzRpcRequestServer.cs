@@ -1,4 +1,3 @@
-using Cntryl.Fitz.Abstractions.Domains.Rpc;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
@@ -93,6 +92,7 @@ public sealed class FitzRpcRequestServer(
         where TRequest : IRequest, ICallable
     {
         var pattern = FitzRouting.ResolveRpcWorkerPattern<TRequest>(Catalog());
+        var requestName = Catalog().Get(typeof(TRequest)).Discriminator.Name;
 
         return new ValueTask<RpcWorkerRegistration>(_rpc.RegisterWorkerAsync(
             pattern,
@@ -103,25 +103,76 @@ public sealed class FitzRpcRequestServer(
                 var outcomeSerializer = scope.ServiceProvider.GetRequiredService<IRequestOutcomeSerializer>();
                 var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
                 var actorValidator = scope.ServiceProvider.GetRequiredService<IRequestActorValidator>();
-                var envelope = requestDeserializer.DeserializeEnvelope(request.Body);
+                var invocation = new RpcInvocation(request.Route) { MessagingSystem = "fitz" };
+                DeserializedRequest envelope;
+                try
+                {
+                    envelope = requestDeserializer.DeserializeEnvelope(request.Body);
+                }
+                catch (OperationCanceledException) when (handlerCt.IsCancellationRequested)
+                {
+                    using var process = PortiaTelemetry.StartProcess(requestName, invocation, null);
+                    PortiaTelemetry.RecordCanceled(process);
+                    PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Canceled);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    using var process = PortiaTelemetry.StartProcess(requestName, invocation, null);
+                    PortiaTelemetry.RecordFault(process, ex);
+                    PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Fault);
+                    throw;
+                }
 
                 if (envelope.Request is not TRequest typed)
                 {
-                    await writer.SendAsync(
-                        outcomeSerializer.SerializeOutcome(Result.Failure(new RequestError(
-                            RequestErrorKind.Validation,
-                            $"Expected a '{typeof(TRequest)}' payload."))),
-                        true,
-                        handlerCt).ConfigureAwait(false);
+                    var failure = new RequestError(RequestErrorKind.Validation, "Unexpected request contract.");
+                    using var process = PortiaTelemetry.StartProcess(requestName, invocation, envelope.TraceContext);
+                    try
+                    {
+                        await writer.SendAsync(outcomeSerializer.SerializeOutcome(Result.Failure(failure)), true,
+                            handlerCt).ConfigureAwait(false);
+                        PortiaTelemetry.RecordOutcome(process, false, failure);
+                        PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Completed);
+                    }
+                    catch (OperationCanceledException) when (handlerCt.IsCancellationRequested)
+                    {
+                        PortiaTelemetry.RecordCanceled(process);
+                        PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Canceled);
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        PortiaTelemetry.RecordFault(process, ex);
+                        PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Fault);
+                        throw;
+                    }
+
                     return;
                 }
 
-                var dispatch = await RequestDispatch.SendAsync(actorValidator, bus, typed,
-                    envelope.ToDelivery(new RpcInvocation(request.Route),
-                        scope.ServiceProvider.GetService<TimeProvider>()),
-                    handlerCt).ConfigureAwait(false);
-                await writer.SendAsync(outcomeSerializer.SerializeOutcome(dispatch.Outcome), true, handlerCt)
-                    .ConfigureAwait(false);
+                try
+                {
+                    _ = await RequestDispatch.SendAsync(actorValidator, bus, typed,
+                            envelope.ToDelivery(invocation, scope.ServiceProvider.GetService<TimeProvider>()),
+                            async (outcome, token) =>
+                            {
+                                await writer.SendAsync(outcomeSerializer.SerializeOutcome(outcome), true, token)
+                                    .ConfigureAwait(false);
+                            }, handlerCt)
+                        .ConfigureAwait(false);
+                    PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Completed);
+                }
+                catch (OperationCanceledException) when (handlerCt.IsCancellationRequested)
+                {
+                    PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Canceled);
+                    throw;
+                }
+                catch
+                {
+                    PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Fault);
+                    throw;
+                }
             },
             ct: ct));
     }
@@ -138,6 +189,7 @@ public sealed class FitzRpcRequestServer(
         where TRequest : IRequest<TOut>, ICallable
     {
         var pattern = FitzRouting.ResolveRpcWorkerPattern<TRequest>(Catalog());
+        var requestName = Catalog().Get(typeof(TRequest)).Discriminator.Name;
 
         return new ValueTask<RpcWorkerRegistration>(_rpc.RegisterWorkerAsync(
             pattern,
@@ -148,25 +200,76 @@ public sealed class FitzRpcRequestServer(
                 var outcomeSerializer = scope.ServiceProvider.GetRequiredService<IRequestOutcomeSerializer>();
                 var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
                 var actorValidator = scope.ServiceProvider.GetRequiredService<IRequestActorValidator>();
-                var envelope = requestDeserializer.DeserializeEnvelope(request.Body);
+                var invocation = new RpcInvocation(request.Route) { MessagingSystem = "fitz" };
+                DeserializedRequest envelope;
+                try
+                {
+                    envelope = requestDeserializer.DeserializeEnvelope(request.Body);
+                }
+                catch (OperationCanceledException) when (handlerCt.IsCancellationRequested)
+                {
+                    using var process = PortiaTelemetry.StartProcess(requestName, invocation, null);
+                    PortiaTelemetry.RecordCanceled(process);
+                    PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Canceled);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    using var process = PortiaTelemetry.StartProcess(requestName, invocation, null);
+                    PortiaTelemetry.RecordFault(process, ex);
+                    PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Fault);
+                    throw;
+                }
 
                 if (envelope.Request is not TRequest typed)
                 {
-                    await writer.SendAsync(
-                        outcomeSerializer.SerializeResult(Result<TOut>.Failure(new RequestError(
-                            RequestErrorKind.Validation,
-                            $"Expected a '{typeof(TRequest)}' payload."))),
-                        true,
-                        handlerCt).ConfigureAwait(false);
+                    var failure = new RequestError(RequestErrorKind.Validation, "Unexpected request contract.");
+                    using var process = PortiaTelemetry.StartProcess(requestName, invocation, envelope.TraceContext);
+                    try
+                    {
+                        await writer.SendAsync(outcomeSerializer.SerializeResult(Result<TOut>.Failure(failure)), true,
+                            handlerCt).ConfigureAwait(false);
+                        PortiaTelemetry.RecordOutcome(process, false, failure);
+                        PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Completed);
+                    }
+                    catch (OperationCanceledException) when (handlerCt.IsCancellationRequested)
+                    {
+                        PortiaTelemetry.RecordCanceled(process);
+                        PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Canceled);
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        PortiaTelemetry.RecordFault(process, ex);
+                        PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Fault);
+                        throw;
+                    }
+
                     return;
                 }
 
-                var dispatch = await RequestDispatch.SendAsync(actorValidator, bus, typed,
-                    envelope.ToDelivery(new RpcInvocation(request.Route),
-                        scope.ServiceProvider.GetService<TimeProvider>()),
-                    handlerCt).ConfigureAwait(false);
-                await writer.SendAsync(outcomeSerializer.SerializeResult(dispatch.Outcome), true, handlerCt)
-                    .ConfigureAwait(false);
+                try
+                {
+                    _ = await RequestDispatch.SendAsync(actorValidator, bus, typed,
+                            envelope.ToDelivery(invocation, scope.ServiceProvider.GetService<TimeProvider>()),
+                            async (outcome, token) =>
+                            {
+                                await writer.SendAsync(outcomeSerializer.SerializeResult(outcome), true, token)
+                                    .ConfigureAwait(false);
+                            }, handlerCt)
+                        .ConfigureAwait(false);
+                    PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Completed);
+                }
+                catch (OperationCanceledException) when (handlerCt.IsCancellationRequested)
+                {
+                    PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Canceled);
+                    throw;
+                }
+                catch
+                {
+                    PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Fault);
+                    throw;
+                }
             },
             ct: ct));
     }

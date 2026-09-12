@@ -9,4 +9,7 @@ sealed record RequestTransportComponent(
     string Operation,
     int DiscriminatorVersion,
     string DiscriminatorName,
-    string? ResultType);
+    string? ResultType)
+{
+    public DiagnosticLocation Location { get; init; }
+}

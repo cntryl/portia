@@ -1,4 +1,3 @@
-using Cntryl.Fitz.Abstractions.Domains.Rpc;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;

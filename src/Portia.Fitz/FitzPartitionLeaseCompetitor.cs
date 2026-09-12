@@ -1,4 +1,3 @@
-using Cntryl.Fitz.Abstractions.Domains.Lease;
 
 namespace Cntryl.Portia;
 
@@ -20,5 +19,5 @@ public sealed class FitzPartitionLeaseCompetitor(ILeaseClient client) : IPartiti
         Func<CancellationToken, ValueTask> callback,
         LeaseExecutionOptions? options = null,
         CancellationToken ct = default) =>
-        _client.WithLeaseAsync(route, ttlSecs, callback, options, ct);
+        _client.WithLeaseAsync(route, TimeSpan.FromSeconds(ttlSecs), callback, options, ct);
 }

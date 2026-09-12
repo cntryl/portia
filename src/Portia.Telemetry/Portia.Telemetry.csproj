@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Optional one-call OpenTelemetry hosting integration for Portia traces, metrics, and logs.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

@@ -35,61 +35,79 @@ public sealed class QueueRunner(
     {
         await foreach (var queued in _consumer.ReadAsync(ct).WithCancellation(ct).ConfigureAwait(false))
         {
-            await using var scope = await _scopeFactory.CreateAsync(ct).ConfigureAwait(false);
+            var requestName = "unknown";
+            var transport = queued.Invocation.TransportName;
+            var deliveryOutcome = RequestDeliveryOutcome.Fault;
             try
             {
-                using var delivery =
-                    CancellationTokenSource.CreateLinkedTokenSource(ct, queued.ReservationCancellation);
-                var dispatch = await RequestDispatch.SendAsync(scope.ActorValidator, scope.Bus, queued.Request,
-                        RequestDelivery.For(queued.Request, queued.Name, queued.Invocation, queued.Metadata,
-                            queued.ActorToken, queued.TraceContext, scope.TimeProvider), delivery.Token)
-                    .ConfigureAwait(false);
+                await using var scope = await _scopeFactory.CreateAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    requestName = queued.Name ?? "unknown";
+                    using var delivery =
+                        CancellationTokenSource.CreateLinkedTokenSource(ct, queued.ReservationCancellation);
+                    var dispatch = await RequestDispatch.SendAsync(scope.ActorValidator, scope.Bus, queued.Request,
+                            RequestDelivery.For(queued.Request, queued.Name, queued.Invocation, queued.Metadata,
+                                queued.ActorToken, queued.TraceContext, scope.TimeProvider), delivery.Token)
+                        .ConfigureAwait(false);
 
-                if (!dispatch.WasDispatched)
-                {
-                    PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Validation,
-                        logger: _logger);
-                    await CompleteTerminalAsync(scope, queued, dispatch.Outcome.Error, null,
-                            QueuedRequestTerminalReason.ActorValidationFailure, ct)
-                        .ConfigureAwait(false);
+                    if (!dispatch.WasDispatched)
+                    {
+                        deliveryOutcome = await CompleteTerminalAsync(scope, queued, dispatch.Outcome.Error, null,
+                                QueuedRequestTerminalReason.ActorValidationFailure, requestName, ct)
+                            .ConfigureAwait(false);
+                    }
+                    else if (dispatch.Outcome.IsSuccess)
+                    {
+                        await queued.CompleteAsync(ct).ConfigureAwait(false);
+                        deliveryOutcome = RequestDeliveryOutcome.Completed;
+                    }
+                    else if (dispatch.Outcome.Error is { IsTransient: false } permanent)
+                    {
+                        deliveryOutcome = await CompleteTerminalAsync(scope, queued, permanent, null,
+                                QueuedRequestTerminalReason.PermanentFailure, requestName, ct)
+                            .ConfigureAwait(false);
+                    }
+                    else if (IsRetryLimitReached(scope, queued))
+                    {
+                        deliveryOutcome = await CompleteTerminalAsync(scope, queued, dispatch.Outcome.Error, null,
+                                QueuedRequestTerminalReason.RetryLimitReached, requestName, ct)
+                            .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await queued.AbandonAsync(ct).ConfigureAwait(false);
+                        deliveryOutcome = RequestDeliveryOutcome.Abandoned;
+                    }
                 }
-                else if (dispatch.Outcome.IsSuccess)
+                catch (Exception ex) when (!ct.IsCancellationRequested &&
+                                           ex is not (TerminalHandlerFailureException or
+                                               TerminalHandlerMissingException))
                 {
-                    await queued.CompleteAsync(ct).ConfigureAwait(false);
-                }
-                else if (dispatch.Outcome.Error is { IsTransient: false } permanent)
-                {
-                    await CompleteTerminalAsync(scope, queued, permanent, null,
-                            QueuedRequestTerminalReason.PermanentFailure, ct)
-                        .ConfigureAwait(false);
-                }
-                else if (IsRetryLimitReached(scope, queued))
-                {
-                    await CompleteTerminalAsync(scope, queued, dispatch.Outcome.Error, null,
-                            QueuedRequestTerminalReason.RetryLimitReached, ct)
-                        .ConfigureAwait(false);
-                }
-                else
-                {
-                    await queued.AbandonAsync(ct).ConfigureAwait(false);
+                    // An unrecognized exception's retriability is unknown; abandoning (rather than
+                    // silently dropping the request) is the safer default.
+                    PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, _logger);
+                    if (IsRetryLimitReached(scope, queued))
+                    {
+                        deliveryOutcome = await CompleteTerminalAsync(scope, queued, null, ex,
+                                QueuedRequestTerminalReason.RetryLimitReached, requestName, ct)
+                            .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await queued.AbandonAsync(ct).ConfigureAwait(false);
+                        deliveryOutcome = RequestDeliveryOutcome.Abandoned;
+                    }
                 }
             }
-            catch (Exception ex) when (!ct.IsCancellationRequested &&
-                                       ex is not (TerminalHandlerFailureException or TerminalHandlerMissingException))
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                // An unrecognized exception's retriability is unknown; abandoning (rather than
-                // silently dropping the request) is the safer default.
-                PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, _logger);
-                if (IsRetryLimitReached(scope, queued))
-                {
-                    await CompleteTerminalAsync(scope, queued, null, ex,
-                            QueuedRequestTerminalReason.RetryLimitReached, ct)
-                        .ConfigureAwait(false);
-                }
-                else
-                {
-                    await queued.AbandonAsync(ct).ConfigureAwait(false);
-                }
+                deliveryOutcome = RequestDeliveryOutcome.Canceled;
+                throw;
+            }
+            finally
+            {
+                PortiaTelemetry.RecordDelivery(requestName, transport, deliveryOutcome);
             }
         }
     }
@@ -97,8 +115,9 @@ public sealed class QueueRunner(
     static bool IsRetryLimitReached(IQueueDeliveryScope scope, IQueuedRequest queued) =>
         scope.Options.TerminalAttempt is { } terminal && queued.Attempt >= terminal;
 
-    async ValueTask CompleteTerminalAsync(IQueueDeliveryScope scope, IQueuedRequest queued, RequestError? error,
-        Exception? exception, QueuedRequestTerminalReason reason, CancellationToken ct)
+    async ValueTask<RequestDeliveryOutcome> CompleteTerminalAsync(IQueueDeliveryScope scope, IQueuedRequest queued,
+        RequestError? error, Exception? exception, QueuedRequestTerminalReason reason, string requestName,
+        CancellationToken ct)
     {
         var terminalHandler = scope.TerminalHandler ?? throw new TerminalHandlerMissingException(reason);
 
@@ -122,7 +141,10 @@ public sealed class QueueRunner(
         {
             PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Cleanup, acknowledgmentException,
                 _logger);
+            return RequestDeliveryOutcome.Fault;
         }
 
+        PortiaTelemetry.RecordTerminalDelivery(requestName, queued.Invocation.TransportName, _logger);
+        return RequestDeliveryOutcome.Terminal;
     }
 }

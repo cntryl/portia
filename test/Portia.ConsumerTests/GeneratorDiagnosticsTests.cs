@@ -145,6 +145,28 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
+    public void DuplicateRequestNamesBothClrTypesAtDuplicateDeclaration()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              [RequestRoute("*", "orders", "order", "create")]
+                              [Discriminator("orders.create", 2)]
+                              public sealed record Original : IRequest, IQueuable;
+                              [RequestRoute("*", "orders", "order", "duplicate")]
+                              [Discriminator("orders.create", 2)]
+                              public sealed record Duplicate : IRequest, IQueuable;
+                              """;
+
+        var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics(source,
+            new PortiaServiceRegistrationGenerator()), item => item.Id == "PORTIA022");
+
+        Assert.Equal("Request CLR types 'Original' and 'Duplicate' both declare discriminator 'orders.create' " +
+                     "version 2", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal("Duplicate", source.Substring(diagnostic.Location.SourceSpan.Start,
+            diagnostic.Location.SourceSpan.Length));
+    }
+
+    [Fact]
     public void Portia015ReportsGenericHandler()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
@@ -158,7 +180,10 @@ public sealed class GeneratorDiagnosticsTests
                                                                public ValueTask<Result> HandleAsync(IRequestContext<Request> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                                            }
                                                            """, new RequestShapeDiagnosticsGenerator());
-        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA015");
+        var diagnostic = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA015");
+        Assert.Equal("Component 'Handler<T>' cannot be generated: generic component types are unsupported; " +
+                     "use a closed, non-generic component class",
+            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     [Fact]
@@ -221,6 +246,73 @@ public sealed class GeneratorDiagnosticsTests
                                                            """, new ComponentPracticeGenerator());
 
         _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
+    }
+
+    [Fact]
+    public void Portia104IgnoresCatchAllsThatNarrowOrRethrowUnexpectedFailures()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using Cntryl.Portia;
+                                                           using Cntryl.Portia.Testing;
+                                                           using System;
+                                                           using System.Threading;
+                                                           using System.Threading.Tasks;
+                                                           public sealed record FilteredRequest : IRequest;
+                                                           public sealed class FilteredHandler : IRequestHandler<FilteredRequest>
+                                                           {
+                                                               public async ValueTask<Result> HandleAsync(IRequestContext<FilteredRequest> context, CancellationToken ct)
+                                                               {
+                                                                   try { await Task.Yield(); return Result.Success; }
+                                                                   catch (Exception ex) when (ex is InvalidOperationException)
+                                                                   {
+                                                                       return Result.Failure(new(RequestErrorKind.Validation, "expected"));
+                                                                   }
+                                                               }
+                                                           }
+                                                           public sealed record RethrowingRequest : IRequest;
+                                                           public sealed class RethrowingHandler : IRequestHandler<RethrowingRequest>
+                                                           {
+                                                               public async ValueTask<Result> HandleAsync(IRequestContext<RethrowingRequest> context, CancellationToken ct)
+                                                               {
+                                                                   try { await Task.Yield(); return Result.Success; }
+                                                                   catch (Exception ex)
+                                                                   {
+                                                                       if (ex is InvalidOperationException)
+                                                                           return Result.Failure(new(RequestErrorKind.Validation, "expected"));
+                                                                       throw;
+                                                                   }
+                                                               }
+                                                           }
+                                                           """, new ComponentPracticeGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
+    }
+
+    [Fact]
+    public void Portia104IgnoresFailureValuesThatAreNotReturned()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using Cntryl.Portia;
+                                                           using Cntryl.Portia.Testing;
+                                                           using System;
+                                                           using System.Threading;
+                                                           using System.Threading.Tasks;
+                                                           public sealed record Request : IRequest;
+                                                           public sealed class Handler : IRequestHandler<Request>
+                                                           {
+                                                               public async ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct)
+                                                               {
+                                                                   try { await Task.Yield(); return Result.Success; }
+                                                                   catch (Exception)
+                                                                   {
+                                                                       _ = Result.Failure(new(RequestErrorKind.Internal, "telemetry value"));
+                                                                       throw;
+                                                                   }
+                                                               }
+                                                           }
+                                                           """, new ComponentPracticeGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
     }
 
     [Fact]

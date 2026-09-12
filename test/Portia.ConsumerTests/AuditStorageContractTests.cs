@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 
 namespace Cntryl.Portia.Consumer;
 
+[Trait("Category", "BrokerIntegration")]
 public sealed class AuditStorageContractTests
 {
     readonly RequestDispatchContext _saveContext = new(RequestActor.System);

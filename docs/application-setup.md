@@ -111,10 +111,12 @@ on every request until it is resolved.
 ## Worker deployment
 
 Queue redelivery remains broker-owned below `QueueRunnerOptions.TerminalAttempt`, or indefinitely
-when no threshold is configured. Actor-validation failures and non-transient handler results are
-intrinsically terminal; retryable results and unexpected exceptions become terminal only at the
-configured threshold. Every terminal delivery requires an `IQueuedRequestTerminalHandler`. A
-missing handler faults the runner and hosted worker with `TerminalHandlerMissingException` before
+when no threshold is configured. A positive threshold requires a transport-reported durable attempt
+count. Fitz 1.0 reports no queue attempt count, so a Fitz queue worker configured with a positive
+`TerminalAttempt` fails during startup instead of silently retrying forever. Actor-validation failures
+and non-transient handler results remain intrinsically terminal. Every terminal delivery requires an
+`IQueuedRequestTerminalHandler`. A missing handler faults the runner and hosted worker with
+`TerminalHandlerMissingException` before
 acknowledgment or abandonment; callback failure uses `TerminalHandlerFailureException` with the
 same ownership rule. The callback receives `QueuedRequestTerminalReason` plus the original
 request, metadata, invocation, attempt, error, and exception, and completes before Portia

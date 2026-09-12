@@ -51,16 +51,36 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task OffersToCreateAContextWhenTheProjectHasNone()
     {
-        var (actions, solution) = await FixAsync(UnrootedRequest, "App.Query");
+        var (actions, solution) = await FixAsync(UnrootedRequest, "App.Query", projectName: "orders-api");
 
-        var action = Assert.Single(actions, item => item.Title.StartsWith("Create PortiaJsonContext", StringComparison.Ordinal));
+        var action = Assert.Single(actions,
+            item => item.Title.StartsWith("Create a Portia JSON context", StringComparison.Ordinal));
         var created = await ApplyAsync(solution, action);
         var document = Assert.Single(created.Projects.Single().Documents,
             item => item.Name == "PortiaJsonContext.cs");
         var text = (await document.GetTextAsync()).ToString();
+        Assert.Contains("namespace App;", text, StringComparison.Ordinal);
         Assert.Contains("[PortiaJsonContext]", text, StringComparison.Ordinal);
         Assert.Contains("[JsonSerializable(typeof(App.Query))]", text, StringComparison.Ordinal);
         Assert.Contains("JsonSerializerContext", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(CSharpSyntaxTree.ParseText(text).GetDiagnostics(),
+            diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public async Task CreatesAUniquelyNamedContextWhenPortiaJsonContextIsAlreadyTaken()
+    {
+        var source = UnrootedRequest + """
+
+                                       internal sealed class PortiaJsonContext;
+                                       """;
+        var (actions, solution) = await FixAsync(source, "App.Query");
+
+        var created = await ApplyAsync(solution, Assert.Single(actions));
+        var document = Assert.Single(created.Projects.Single().Documents,
+            item => item.Name == "ApplicationJsonContext.cs");
+        var text = (await document.GetTextAsync()).ToString();
+        Assert.Contains("internal sealed partial class ApplicationJsonContext", text, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -203,11 +223,64 @@ public sealed class JsonMetadataCodeFixTests
         Assert.NotNull(provider.GetFixAllProvider());
     }
 
-    static async Task<(IReadOnlyList<CodeAction> Actions, Solution Solution)> FixAsync(string source, string typeName,
-        bool expectDiagnostic = true)
+    [Fact]
+    public async Task FixAllCreatesOneContextContainingEveryMissingRoot()
     {
         using var workspace = new AdhocWorkspace();
+        var document = AddProject(workspace, UnrootedRequest);
+        var diagnostics = GeneratorCompilation.Diagnostics(UnrootedRequest, new JsonMetadataDiagnosticGenerator())
+            .Where(item => item.Id == "PORTIA025").ToArray();
+        Assert.Equal(2, diagnostics.Length);
+        var provider = new JsonMetadataCodeFixProvider();
+        var context = new FixAllContext(document, provider, FixAllScope.Project, "Portia.CreateJsonContext",
+            provider.FixableDiagnosticIds, new TestDiagnosticProvider(diagnostics), CancellationToken.None);
+
+        var action = Assert.IsAssignableFrom<CodeAction>(
+            await provider.GetFixAllProvider()!.GetFixAsync(context));
+        var changed = await ApplyAsync(document.Project.Solution, action);
+
+        var generated = Assert.Single(changed.Projects.Single().Documents,
+            item => item.Name == "PortiaJsonContext.cs");
+        var text = (await generated.GetTextAsync()).ToString();
+        Assert.Equal(1, CountOccurrences(text, "typeof(App.Query)"));
+        Assert.Equal(1, CountOccurrences(text, "typeof(App.Answer)"));
+    }
+
+    [Fact]
+    public async Task FixAllAddsEveryMissingRootToTheChosenContextOnce()
+    {
+        var source = UnrootedRequest + """
+
+                                       [PortiaJsonContext]
+                                       internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+                                       """;
+        using var workspace = new AdhocWorkspace();
         var document = AddProject(workspace, source);
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator())
+            .Where(item => item.Id == "PORTIA025").ToArray();
+        Assert.Equal(2, diagnostics.Length);
+        var provider = new JsonMetadataCodeFixProvider();
+        var actions = new List<CodeAction>();
+        await provider.RegisterCodeFixesAsync(new CodeFixContext(document, diagnostics[0],
+            (action, _) => actions.Add(action), CancellationToken.None));
+        var equivalenceKey = Assert.Single(actions).EquivalenceKey!;
+        var context = new FixAllContext(document, provider, FixAllScope.Project, equivalenceKey,
+            provider.FixableDiagnosticIds, new TestDiagnosticProvider(diagnostics), CancellationToken.None);
+
+        var action = Assert.IsAssignableFrom<CodeAction>(
+            await provider.GetFixAllProvider()!.GetFixAsync(context));
+        var changed = await ApplyAsync(document.Project.Solution, action);
+        var text = await SingleDocumentTextAsync(changed);
+
+        Assert.Equal(1, CountOccurrences(text, "typeof(App.Query)"));
+        Assert.Equal(1, CountOccurrences(text, "typeof(App.Answer)"));
+    }
+
+    static async Task<(IReadOnlyList<CodeAction> Actions, Solution Solution)> FixAsync(string source, string typeName,
+        bool expectDiagnostic = true, string projectName = "JsonMetadataFix")
+    {
+        using var workspace = new AdhocWorkspace();
+        var document = AddProject(workspace, source, projectName);
         var candidates = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator())
             .Where(item => item.Id == "PORTIA025"
                            && item.Properties.TryGetValue("TypeName", out var name)
@@ -252,7 +325,7 @@ public sealed class JsonMetadataCodeFixTests
 
     // The fix resolves [PortiaJsonContext] through a semantic model, so the project has to carry real
     // references; a detached Project returned by the With* builders never reaches the workspace.
-    static Document AddProject(AdhocWorkspace workspace, string source)
+    static Document AddProject(AdhocWorkspace workspace, string source, string projectName = "JsonMetadataFix")
     {
         var projectId = ProjectId.CreateNewId();
         var documentId = DocumentId.CreateNewId(projectId);
@@ -260,12 +333,25 @@ public sealed class JsonMetadataCodeFixTests
             .Split(Path.PathSeparator).Append(typeof(Aggregate).Assembly.Location)
             .Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path));
         var solution = workspace.CurrentSolution
-            .AddProject(ProjectInfo.Create(projectId, VersionStamp.Default, "JsonMetadataFix", "JsonMetadataFix",
+            .AddProject(ProjectInfo.Create(projectId, VersionStamp.Default, projectName, projectName,
                     LanguageNames.CSharp)
                 .WithParseOptions(new CSharpParseOptions(LanguageVersion.Preview))
                 .WithCompilationOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
                 .WithMetadataReferences(references))
             .AddDocument(documentId, "Scenario.cs", SourceText.From(source));
         return solution.GetDocument(documentId)!;
+    }
+
+    sealed class TestDiagnosticProvider(IReadOnlyCollection<Diagnostic> diagnostics)
+        : FixAllContext.DiagnosticProvider
+    {
+        public override Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(Document document,
+            CancellationToken cancellationToken) => Task.FromResult(diagnostics.AsEnumerable());
+
+        public override Task<IEnumerable<Diagnostic>> GetProjectDiagnosticsAsync(Project project,
+            CancellationToken cancellationToken) => Task.FromResult(Enumerable.Empty<Diagnostic>());
+
+        public override Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(Project project,
+            CancellationToken cancellationToken) => Task.FromResult(diagnostics.AsEnumerable());
     }
 }

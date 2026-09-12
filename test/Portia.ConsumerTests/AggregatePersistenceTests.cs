@@ -2,6 +2,7 @@ using System.Globalization;
 
 namespace Cntryl.Portia.Consumer;
 
+[Trait("Category", "BrokerIntegration")]
 public sealed class AggregatePersistenceTests
 {
     readonly RequestDispatchContext _saveContext = new(RequestActor.System);

@@ -8,18 +8,16 @@ namespace Cntryl.Portia;
 [Collection(TelemetryTestGroup.Name)]
 public sealed class ObservabilityContractTests
 {
-    /// <summary>Workload lifecycle instruments publish their exact semantic units.</summary>
+    /// <summary>The meter publishes the exact version-two instrument names and semantic units.</summary>
     [Fact]
-    public void ShouldPublishWorkloadMetricUnits()
+    public void ShouldPublishExactMetricContract()
     {
         var units = new ConcurrentDictionary<string, string?>();
         using var listener = new MeterListener
         {
             InstrumentPublished = (instrument, _) =>
             {
-                if (instrument.Meter.Name == PortiaTelemetry.SourceName && instrument.Name is "portia.workload.active"
-                        or "portia.worker.failure"
-                        or "portia.worker.restart")
+                if (instrument.Meter.Name == PortiaTelemetry.SourceName)
                 {
                     units[instrument.Name] = instrument.Unit;
                 }
@@ -28,9 +26,26 @@ public sealed class ObservabilityContractTests
         listener.Start();
         _ = PortiaTelemetry.Meter;
 
-        Assert.Equal("{workload}", units["portia.workload.active"]);
-        Assert.Equal("{failure}", units["portia.worker.failure"]);
-        Assert.Equal("{restart}", units["portia.worker.restart"]);
+        Assert.Equal(
+        [
+            ("portia.aggregate.event.count", "{event}"),
+            ("portia.aggregate.operation.duration", "s"),
+            ("portia.authorization.duration", "s"),
+            ("portia.event_store.event.count", "{event}"),
+            ("portia.event_store.operation.duration", "s"),
+            ("portia.fleet.assignment.active", "{assignment}"),
+            ("portia.processor.batch.duration", "s"),
+            ("portia.processor.event.count", "{event}"),
+            ("portia.processor.lag", "s"),
+            ("portia.request.active", "{request}"),
+            ("portia.request.delivery.count", "{delivery}"),
+            ("portia.request.duration", "s"),
+            ("portia.transport.operation.duration", "s"),
+            ("portia.transport.trace_context.invalid", "{request}"),
+            ("portia.worker.failure", "{failure}"),
+            ("portia.worker.restart", "{restart}"),
+            ("portia.workload.active", "{workload}")
+        ], units.OrderBy(item => item.Key).Select(item => (item.Key, item.Value)));
     }
 
     /// <summary>Local dispatch emits one static span and bounded request measurements.</summary>
@@ -44,13 +59,14 @@ public sealed class ObservabilityContractTests
         _ = await host.Bus.SendAsync(new TelemetrySuccessAction(), RequestActor.System);
 
         var activity = Assert.Single(activities,
-            item => (item.GetTagItem("request.type") as string) == nameof(TelemetrySuccessAction));
+            item => (item.GetTagItem("portia.request.name") as string) == nameof(TelemetrySuccessAction));
         Assert.Equal(PortiaTelemetry.ExecuteActivityName, activity.DisplayName);
         Assert.DoesNotContain(activity.TagObjects, tag => tag.Key.Contains("id", StringComparison.OrdinalIgnoreCase));
         var duration = Assert.Single(measurements,
             item => item.Name == "portia.request.duration" &&
                     item.Tags.Any(tag => Equals(tag.Value, nameof(TelemetrySuccessAction))));
-        Assert.Equal(["request.type", "transport", "outcome"], duration.Tags.Select(tag => tag.Key));
+        Assert.Equal(["portia.request.name", "portia.transport.name", "portia.outcome"],
+            duration.Tags.Select(tag => tag.Key));
     }
 
     /// <summary>
@@ -74,7 +90,7 @@ public sealed class ObservabilityContractTests
         var duration = Assert.Single(measurements, item => item.Name == "portia.request.duration"
                                                            && item.Tags.Any(tag =>
                                                                Equals(tag.Value, nameof(TelemetryGuardedSequence))));
-        Assert.Equal("forbidden", Assert.Single(duration.Tags, tag => tag.Key == "outcome").Value);
+        Assert.Equal("forbidden", Assert.Single(duration.Tags, tag => tag.Key == "portia.outcome").Value);
     }
 
     /// <summary>Scheduled delivery starts a new trace linked to, rather than parented by, the scheduling trace.</summary>
@@ -83,11 +99,13 @@ public sealed class ObservabilityContractTests
     {
         using var listener = ListenToActivities(out var activities);
         var propagated = new RequestTraceContext("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
-        using (PortiaTelemetry.StartProcess("Scheduled", "fitz.schedule", propagated, true))
+        using (PortiaTelemetry.StartProcess("Scheduled",
+                   new ScheduleInvocation("schedule://hidden") { MessagingSystem = "fitz" }, propagated))
         {
         }
 
-        var activity = Assert.Single(activities, item => (item.GetTagItem("request.type") as string) == "Scheduled");
+        var activity = Assert.Single(activities,
+            item => (item.GetTagItem("portia.request.name") as string) == "Scheduled");
         Assert.NotEqual(ActivityTraceId.CreateFromString("4bf92f3577b34da6a3ce929d0e0e4736"), activity.TraceId);
         Assert.Equal(ActivityTraceId.CreateFromString("4bf92f3577b34da6a3ce929d0e0e4736"),
             Assert.Single(activity.Links).Context.TraceId);

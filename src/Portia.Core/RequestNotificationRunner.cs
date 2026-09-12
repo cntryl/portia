@@ -33,6 +33,9 @@ public sealed class RequestNotificationRunner(
     {
         await foreach (var delivered in _consumer.ReadAsync(ct).WithCancellation(ct).ConfigureAwait(false))
         {
+            var requestName = delivered.Name ?? delivered.Request.GetType().Name;
+            var transport = delivered.Invocation.TransportName;
+            var completed = false;
             try
             {
                 await using var scope = await _scopeFactory.CreateAsync(ct).ConfigureAwait(false);
@@ -50,21 +53,37 @@ public sealed class RequestNotificationRunner(
                     // the invocation through RequestDispatch — a fired schedule must not report a
                     // different transport depending on which authentication path delivered it.
                     var trusted = delivered.ToDelivery(scope.TimeProvider);
-                    using var process = PortiaTelemetry.StartProcess(trusted.Name,
-                        trusted.Invocation.TransportName, trusted.TraceContext, true);
-                    _ = await scope.Bus.DispatchAsync(delivered.Request,
-                        new RequestDispatchContext(actor, trusted.Invocation, trusted.Metadata,
-                            trusted.TimeProvider), ct).ConfigureAwait(false);
+                    using var process = PortiaTelemetry.StartProcess(trusted.Name, trusted.Invocation,
+                        trusted.TraceContext);
+                    try
+                    {
+                        var outcome = await scope.Bus.DispatchAsync(delivered.Request,
+                            new RequestDispatchContext(actor, trusted.Invocation, trusted.Metadata,
+                                trusted.TimeProvider), ct).ConfigureAwait(false);
+                        PortiaTelemetry.RecordOutcome(process, outcome.IsSuccess, outcome.Error);
+                        completed = outcome.IsSuccess;
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        PortiaTelemetry.RecordCanceled(process);
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        PortiaTelemetry.RecordFault(process, ex);
+                        throw;
+                    }
                 }
                 else
                 {
                     var dispatch = await RequestDispatch.SendAsync(scope.ActorValidator, scope.Bus,
                         delivered.Request, delivered.ToDelivery(scope.TimeProvider), ct).ConfigureAwait(false);
-                    if (!dispatch.WasDispatched)
-                    {
-                        PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner),
-                            RunnerFaultStage.Validation, logger: _logger);
-                    }
+                    completed = dispatch.WasDispatched && dispatch.Outcome.IsSuccess;
+                }
+
+                if (!completed)
+                {
+                    PortiaTelemetry.RecordLostDelivery(requestName, transport, _logger);
                 }
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
@@ -73,6 +92,11 @@ public sealed class RequestNotificationRunner(
                 // is simply lost. Continue processing later deliveries.
                 PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), RunnerFaultStage.Execution, ex,
                     _logger);
+            }
+            finally
+            {
+                PortiaTelemetry.RecordDelivery(requestName, transport,
+                    completed ? RequestDeliveryOutcome.Completed : RequestDeliveryOutcome.Lost);
             }
         }
     }

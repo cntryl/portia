@@ -13,4 +13,7 @@ public sealed record HttpInvocation(string Method, string Path, string? RoutePat
 {
     /// <inheritdoc />
     public override string TransportName => "http";
+
+    /// <inheritdoc />
+    public override RequestTraceRelationship TraceRelationship => RequestTraceRelationship.Parent;
 }

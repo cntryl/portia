@@ -11,5 +11,7 @@ sealed record FitzWorkerHost(
     IRequestDeserializer Serializer,
     TimeProvider Clock,
     ILogger<FitzRequestQueueConsumer>? QueueLogger,
+    ILogger<FitzNoticeRequestConsumer>? NoticeLogger,
+    ILogger<FitzScheduledRequestConsumer>? ScheduleLogger,
     ILogger<QueueRunner>? QueueRunnerLogger,
     ILogger<RequestNotificationRunner>? NotificationLogger);

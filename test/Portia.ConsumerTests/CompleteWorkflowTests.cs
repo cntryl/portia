@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 namespace Cntryl.Portia.Consumer;
 
 [Collection("Account application workers")]
+[Trait("Category", "BrokerIntegration")]
 public sealed class CompleteWorkflowTests
 {
     static readonly int[] Deposits = [5, 7, 11, 13];

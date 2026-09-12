@@ -1,5 +1,4 @@
 using Cntryl.Fitz;
-using Cntryl.Fitz.Abstractions.Domains.Schedule;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -49,6 +48,27 @@ public sealed class PortiaFitzBuilderTests
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
         Assert.Contains("AddQueueWorkers()", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A Fitz queue worker cannot enforce a positive terminal attempt when the wire reports no attempts.</summary>
+    [Fact]
+    public async Task ShouldFailBeforeConnectingGivenTerminalAttemptForFitzQueueWorker()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        var application = builder.Services.AddPortia();
+        _ = builder.Services.AddSingleton<IRequestActorValidator>(new TestRequestActorValidator());
+        _ = builder.Services.Configure<QueueRunnerOptions>(options => options.TerminalAttempt = 3);
+        _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Queuable));
+        _ = application
+            .AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), fitz => _ = fitz.AddQueueWorkers())
+            .AddWorkers();
+        using var host = builder.Build();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+
+        Assert.Contains("QueueRunnerOptions.TerminalAttempt", error.Message, StringComparison.Ordinal);
+        Assert.Contains("does not report queue attempts", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Every explicitly composed selector must resolve independently.</summary>

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 namespace Cntryl.Portia.Consumer;
 
 [Collection("Account application workers")]
+[Trait("Category", "BrokerIntegration")]
 public sealed class SharedDeploymentTests
 {
     readonly RequestDispatchContext _saveContext = new(RequestActor.System);

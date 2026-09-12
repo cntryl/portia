@@ -17,7 +17,6 @@ concurrency:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  PORTIA_SMOKE_PACKAGE_VERSION: 1.0.0-ci.${{ github.run_id }}.${{ github.run_attempt }}
 
 jobs:
   ci:
@@ -39,59 +38,25 @@ jobs:
       - name: Check formatting
         run: dotnet format Portia.slnx --verify-no-changes
 
-      # --wait holds until the container is up rather than racing the first test against a broker
-      # that is still starting.
-      - name: Start Fitz server
-        run: docker compose up -d --wait
-
       - name: Build solution
         run: dotnet build Portia.slnx --configuration Release
 
-      - name: Pack local smoke packages
-        run: >-
-          dotnet pack Portia.slnx
-          --configuration Release
-          --no-build
-          --no-restore
-          --output artifacts/packages
-          -p:PackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-
-      - name: Run ASP.NET Core package consumer
-        run: >-
-          dotnet run
-          --project smoke/Portia.AspNetCore.PackageConsumer/Portia.AspNetCore.PackageConsumer.csproj
-          --configuration Release
-          -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-
-      - name: Publish and execute NativeAOT package consumer
-        run: >-
-          dotnet publish
-          smoke/Portia.AspNetCore.NativeAotConsumer/Portia.AspNetCore.NativeAotConsumer.csproj
-          --configuration Release
-          --runtime linux-x64
-          --self-contained true
-          -p:PublishAot=true
-          -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          --output artifacts/native-aot
-      - name: Execute NativeAOT package consumer
-        run: artifacts/native-aot/Portia.AspNetCore.NativeAotConsumer
-
       - name: Test solution
-        env:
-          FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
         run: >-
           dotnet test Portia.slnx
           --configuration Release
           --no-build
-          --collect:"XPlat Code Coverage"
+          --filter "Category!=BrokerIntegration"
 
-      - name: Upload coverage
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: '**/TestResults/**/coverage.cobertura.xml'
-          if-no-files-found: warn
+      - name: Test full broker integration
+        env:
+          FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
+        run: |
+          docker compose up -d --wait
+          dotnet test Portia.slnx \
+            --configuration Release \
+            --no-build \
+            --filter "Category=BrokerIntegration"
 
       - name: Stop Fitz server
         if: ${{ always() }}

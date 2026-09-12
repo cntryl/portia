@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Cntryl.Fitz.Abstractions.Domains.Queue;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
@@ -223,23 +222,23 @@ public sealed class QueueConsumerContractTests
         public bool SubscribedBeforeReserve { get; private set; }
         public TaskCompletionSource Idle { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body, int? delayMs = null,
+        public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? delay = null,
             CancellationToken ct = default)
         {
             Enqueues++;
             return Task.FromResult(0UL);
         }
 
-        public async Task<IQueueReservedItem[]> ReserveAsync(string route, ulong leaseSeconds, int batchSize = 1,
-            int? waitSeconds = null, CancellationToken ct = default)
+        public async Task<IQueueReservedItem[]> ReserveAsync(string route, TimeSpan lease, int batchSize = 1,
+            TimeSpan? wait = null, CancellationToken ct = default)
         {
             SubscribedBeforeReserve = Subscribed;
-            WaitSeconds = waitSeconds;
+            WaitSeconds = wait is null ? null : (int)wait.Value.TotalSeconds;
             BatchSize = batchSize;
             if (Interlocked.Increment(ref _reads) == 1)
                 return items;
             _ = Idle.TrySetResult();
-            if (waitSeconds == 0)
+            if (wait == TimeSpan.Zero)
             {
                 return [];
             }
@@ -282,7 +281,7 @@ public sealed class QueueConsumerContractTests
         public ReadOnlyMemory<byte> Body => body;
         public uint Attempt => attempt;
 
-        public Task ExtendAsync(ulong leaseSeconds, CancellationToken ct = default)
+        public Task ExtendAsync(TimeSpan lease, CancellationToken ct = default)
         {
             Extensions++;
             _ = Extended.TrySetResult();
@@ -301,5 +300,7 @@ public sealed class QueueConsumerContractTests
         }
 
         public Task CompleteWithTokenAsync(ulong token, CancellationToken ct = default) => CompleteAsync(ct);
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

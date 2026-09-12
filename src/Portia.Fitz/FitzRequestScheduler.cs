@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using System.Text.Json;
-using Cntryl.Fitz.Abstractions.Domains.Schedule;
 
 namespace Cntryl.Portia;
 
@@ -32,7 +31,7 @@ public sealed class FitzRequestScheduler(
         ArgumentNullException.ThrowIfNull(actor);
         var route = FitzRouting.ResolveScheduleRoute(_catalog, request, routeValues);
         var id = Uuid.CreateVersion5(Uuid.UrlNamespace, "portia:schedule:" + route);
-        return CreateAsync(request, spec, actor, new RequestMetadata(id, id), route, null, ct);
+        return CreateAsync(request, spec, actor, new RequestMetadata(id, id), route, false, ct);
     }
 
     /// <inheritdoc />
@@ -60,12 +59,12 @@ public sealed class FitzRequestScheduler(
         ArgumentNullException.ThrowIfNull(routeValues);
         ArgumentNullException.ThrowIfNull(actor);
         var route = FitzRouting.ResolveScheduleRoute(_catalog, request, routeValues);
-        return await CreateAsync(request, spec, actor, metadata, route, PortiaTelemetry.CaptureTraceContext(), ct)
+        return await CreateAsync(request, spec, actor, metadata, route, true, ct)
             .ConfigureAwait(false);
     }
 
     async ValueTask<string> CreateAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
-        ClaimsPrincipal actor, RequestMetadata metadata, string route, RequestTraceContext? traceContext,
+        ClaimsPrincipal actor, RequestMetadata metadata, string route, bool propagateTraceContext,
         CancellationToken ct) where TRequest : IRequest, ISchedulable
     {
         if (!RequestActor.IsSystem(actor))
@@ -77,11 +76,13 @@ public sealed class FitzRequestScheduler(
         var subject = actor.FindFirst(ClaimTypes.NameIdentifier)
                       ?? throw new ArgumentException("A scheduled system identity requires a subject.", nameof(actor));
 
-        using var activity = PortiaTelemetry.StartSend(typeof(TRequest).Name, "fitz.schedule");
+        var requestName = _catalog.Get(request.GetType()).Discriminator.Name;
+        using var activity = PortiaTelemetry.StartSend(requestName, "schedule", "fitz");
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "success";
         try
         {
+            var traceContext = propagateTraceContext ? PortiaTelemetry.CaptureTraceContext() : null;
             var requestEnvelope = _serializer.Serialize(request, null, metadata, traceContext);
             var body = JsonSerializer.SerializeToUtf8Bytes(
                 new FitzScheduledRequestEnvelope(1, subject.Value, subject.Issuer, requestEnvelope.ToArray()),
@@ -89,23 +90,26 @@ public sealed class FitzRequestScheduler(
             var scheduleId = await _schedule
                 .CreateAsync(route, spec.Cron, ToFitzDeliveryMode(spec.DeliveryMode), body.ToArray(), ct)
                 .ConfigureAwait(false);
-            return scheduleId ??
-                   throw new InvalidOperationException(
-                       $"Scheduling request over route '{route}' did not return an identity.");
+            var identity = scheduleId ??
+                           throw new InvalidOperationException("Scheduling the request did not return an identity.");
+            PortiaTelemetry.RecordOutcome(activity, true, null);
+            return identity;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             outcome = "canceled";
+            PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
-        catch
+        catch (Exception ex)
         {
             outcome = "fault";
+            PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }
         finally
         {
-            PortiaTelemetry.TransportFinished(started, "fitz.schedule", "schedule", outcome);
+            PortiaTelemetry.TransportFinished(started, "schedule", "schedule", outcome);
         }
     }
 
@@ -118,7 +122,7 @@ public sealed class FitzRequestScheduler(
 
     static ScheduleDeliveryMode ToFitzDeliveryMode(RequestScheduleDeliveryMode mode) => mode switch
     {
-        RequestScheduleDeliveryMode.One => ScheduleDeliveryMode.Single,
+        RequestScheduleDeliveryMode.One => ScheduleDeliveryMode.Once,
         RequestScheduleDeliveryMode.Broadcast => ScheduleDeliveryMode.Broadcast,
         _ => throw new ArgumentOutOfRangeException(nameof(mode))
     };

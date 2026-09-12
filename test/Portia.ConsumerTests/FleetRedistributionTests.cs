@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Cntryl.Fitz.Abstractions.Domains.Lease;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -119,9 +118,11 @@ public sealed class FleetRedistributionTests
     }
 
     [Theory]
+    [InlineData(30_000, 30UL)]
     [InlineData(1100, 2UL)]
     [InlineData(1, 1UL)]
-    public async Task MembershipFailureBackoffRetainsGeneratedWorkerIdentityAndRoundsTtlUp(int milliseconds,
+    public async Task MembershipFailureBackoffRetainsGeneratedWorkerIdentityAndUsesFailFastContention(
+        int milliseconds,
         ulong expectedTtl)
     {
         var clock = new ManualClock();
@@ -143,6 +144,7 @@ public sealed class FleetRedistributionTests
             clock.Advance(TimeSpan.FromTicks(1));
             await Until(() => leases.Ttl != 0);
             Assert.Equal(expectedTtl, leases.Ttl);
+            Assert.False(leases.Options?.WaitForAvailability);
             Assert.Equal(2, membership.Attempts.Count);
             var workerIds = membership.Attempts.Select(options => options.WorkerId).ToArray();
             Assert.Equal(workerIds[0], workerIds[1]);
@@ -222,11 +224,13 @@ public sealed class FleetRedistributionTests
     sealed class CapturingLeases : IPartitionLeaseCompetitor
     {
         public ulong Ttl { get; private set; }
+        public LeaseExecutionOptions? Options { get; private set; }
 
         public async Task WithLeaseAsync(string route, ulong ttlSecs, Func<CancellationToken, ValueTask> callback,
             LeaseExecutionOptions? options = null, CancellationToken ct = default)
         {
             Ttl = ttlSecs;
+            Options = options;
             await callback(ct);
         }
     }
@@ -288,7 +292,7 @@ public sealed class FleetRedistributionTests
     sealed class Observer : ILeaseInventoryObserver
     {
         volatile bool _ready = true;
-        IReadOnlyDictionary<string, LeaseListItem> _view = new Dictionary<string, LeaseListItem>();
+        volatile IReadOnlyDictionary<string, LeaseListItem> _view = new Dictionary<string, LeaseListItem>();
         public bool FailView { get; set; }
 
         public bool IsReady
@@ -298,13 +302,14 @@ public sealed class FleetRedistributionTests
         }
 
         public IReadOnlyDictionary<string, LeaseListItem> View =>
-            FailView ? throw new IOException("Inventory failed") : Volatile.Read(ref _view);
+            FailView ? throw new IOException("Inventory failed") : _view;
 
         public IAsyncEnumerable<LeaseInventoryUpdate> Updates => throw new NotSupportedException();
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
-        public void Set(params string[] workers) => Volatile.Write(ref _view, workers.ToDictionary(
+        public void Set(params string[] workers) => _view = workers.ToDictionary(
             worker => "lease://fleet/members/" + worker,
-            worker => new LeaseListItem("lease://fleet/members/" + worker, "owner", 1, "", 30, 0)));
+            worker => new LeaseListItem("lease://fleet/members/" + worker, "owner", 1, "",
+                TimeSpan.FromSeconds(30), 0));
     }
 }

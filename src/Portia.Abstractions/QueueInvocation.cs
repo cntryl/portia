@@ -7,4 +7,7 @@ public sealed record QueueInvocation(string Route, uint Attempt) : RequestInvoca
 {
     /// <inheritdoc />
     public override string TransportName => "queue";
+
+    /// <inheritdoc />
+    public override RequestTraceRelationship TraceRelationship => RequestTraceRelationship.Link;
 }

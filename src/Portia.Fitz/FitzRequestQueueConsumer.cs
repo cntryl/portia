@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Cntryl.Fitz.Abstractions.Domains.Queue;
 using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
@@ -50,7 +49,8 @@ public sealed class FitzRequestQueueConsumer(
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
-                var items = await _queue.ReserveAsync(_route, visibilityTimeoutSeconds, _batchSize, 0, ct)
+                var items = await _queue.ReserveAsync(_route, TimeSpan.FromSeconds(visibilityTimeoutSeconds),
+                        _batchSize, TimeSpan.Zero, ct)
                     .ConfigureAwait(false);
                 var reservations = new List<FitzQueuedRequest>(items.Length);
                 try
@@ -164,7 +164,10 @@ public sealed class FitzRequestQueueConsumer(
         public string? Name => _payload.Value.Name;
         public RequestMetadata Metadata => _payload.Value.Metadata;
         public RequestTraceContext? TraceContext => _payload.Value.TraceContext;
-        public RequestInvocation Invocation => new QueueInvocation(_item.Route, _item.Attempt);
+        public RequestInvocation Invocation => new QueueInvocation(_item.Route, _item.Attempt)
+        {
+            MessagingSystem = "fitz"
+        };
         public string? ActorToken => _payload.Value.ActorToken;
         public uint Attempt => _item.Attempt;
         public CancellationToken ReservationCancellation => _lost.Token;
@@ -201,7 +204,7 @@ public sealed class FitzRequestQueueConsumer(
                 while (true)
                 {
                     await Task.Delay(interval, clock, _stop.Token).ConfigureAwait(false);
-                    await _item.ExtendAsync(leaseSeconds, _stop.Token).ConfigureAwait(false);
+                    await _item.ExtendAsync(TimeSpan.FromSeconds(leaseSeconds), _stop.Token).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (_stop.IsCancellationRequested)

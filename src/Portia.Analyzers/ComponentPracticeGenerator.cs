@@ -199,6 +199,11 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
 
                 foreach (var clause in method.DescendantNodes(DescendIntoHandlerBody).OfType<CatchClauseSyntax>())
                 {
+                    // A filter explicitly narrows which System.Exception values this catch accepts. Treat it
+                    // like a specific catch: the handler has named the failure it anticipates.
+                    if (clause.Filter is not null)
+                        continue;
+
                     if (clause.Declaration?.Type is
                         // A bare catch, or one naming System.Exception itself — a specific exception
                         // type is a failure the handler genuinely anticipates, which is what Result is for.
@@ -209,12 +214,17 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
                         continue;
                     }
 
-                    if (!clause.Block.DescendantNodes(DescendIntoCatchBlock).OfType<InvocationExpressionSyntax>()
-                            .Any(invocation => IsResultFailure(
-                                semanticModel.GetSymbolInfo(invocation, ct).Symbol as
-                                    IMethodSymbol,
-                                resultType,
-                                genericResultType)))
+                    // Report only the shape named by the diagnostic: a failed Result returned directly from
+                    // the catch. Merely constructing a failure value, or returning one only from a narrowed
+                    // branch before rethrowing everything else, does not convert an unexpected exception.
+                    if (!clause.Block.Statements.OfType<ReturnStatementSyntax>().Any(statement =>
+                            statement.Expression is { } expression
+                            && !expression.DescendantNodesAndSelf().OfType<ThrowExpressionSyntax>().Any()
+                            && expression.DescendantNodesAndSelf().OfType<InvocationExpressionSyntax>()
+                                .Any(invocation => IsResultFailure(
+                                    semanticModel.GetSymbolInfo(invocation, ct).Symbol as IMethodSymbol,
+                                    resultType,
+                                    genericResultType))))
                     {
                         continue;
                     }
@@ -225,11 +235,6 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         }
 
         static bool DescendIntoHandlerBody(SyntaxNode current)
-        {
-            return current is not (LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax);
-        }
-
-        static bool DescendIntoCatchBlock(SyntaxNode current)
         {
             return current is not (LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax);
         }

@@ -71,7 +71,7 @@ public sealed class FleetPartitionRunnerTests
         };
         listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
         {
-            Assert.Equal(["runner", "stage"], tags.ToArray().Select(tag => tag.Key));
+            Assert.Equal(["portia.runner.name", "portia.stage"], tags.ToArray().Select(tag => tag.Key));
             _ = Interlocked.Increment(ref failures);
         });
         listener.Start();
@@ -94,18 +94,22 @@ public sealed class FleetPartitionRunnerTests
         Assert.Equal([partition], exception.Partitions);
         Assert.Equal(options.PartitionStopTimeout, exception.Timeout);
         Assert.Equal(1, Volatile.Read(ref failures));
-        Assert.Equal(1, logger.EventIds.Count(id => id == 1101));
+        var log = Assert.Single(logger.Entries, entry => entry.EventId.Id == 1101);
+        Assert.Equal(LogLevel.Error, log.Level);
+        Assert.Same(exception, log.Exception);
+        Assert.DoesNotContain(partition, log.Message, StringComparison.Ordinal);
         release.SetResult();
     }
 
     sealed class CapturingLogger : ILogger<FleetPartitionRunner>
     {
-        public List<int> EventIds { get; } = [];
+        public List<(LogLevel Level, EventId EventId, string Message, Exception? Exception)> Entries { get; } = [];
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
         public bool IsEnabled(LogLevel logLevel) => true;
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter) => EventIds.Add(eventId.Id);
+            Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, eventId, formatter(state, exception), exception));
     }
 
     /// <summary>A non-positive callback termination timeout is rejected before the runner starts.</summary>
@@ -353,7 +357,7 @@ public sealed class FleetPartitionRunnerTests
 
         Assert.All(failures, tags =>
         {
-            Assert.Equal(["runner", "stage"], tags.Select(tag => tag.Key));
+            Assert.Equal(["portia.runner.name", "portia.stage"], tags.Select(tag => tag.Key));
             Assert.DoesNotContain(tags,
                 tag => (tag.Value as string)?.Contains("lease://", StringComparison.Ordinal) == true);
         });

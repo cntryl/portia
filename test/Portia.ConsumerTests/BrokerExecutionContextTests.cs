@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
 
+[Trait("Category", "BrokerIntegration")]
 public sealed class BrokerExecutionContextTests
 {
     [Fact]
@@ -26,7 +27,8 @@ public sealed class BrokerExecutionContextTests
         Assert.Equal(parent.CauseId, execution.CausationId);
         Assert.NotEqual(parent.ExecutionId, execution.ExecutionId);
         Assert.NotEqual(parent.CauseId, execution.RequestId);
-        Assert.Equal(new RpcInvocation($"rpc://context/work/{resource}/execute"), execution.Invocation);
+        Assert.Equal(new RpcInvocation($"rpc://context/work/{resource}/execute") { MessagingSystem = "fitz" },
+            execution.Invocation);
         Assert.Equal("receiver", execution.Actor.FindFirst(ClaimTypes.NameIdentifier)!.Value);
     }
 
@@ -53,8 +55,8 @@ public sealed class BrokerExecutionContextTests
         Assert.True(await deliveries.MoveNextAsync());
         var second = deliveries.Current;
         Assert.Equal(metadata, second.Metadata);
-        Assert.True(second.Attempt > 0);
-        Assert.Equal(new QueueInvocation(route, second.Attempt), second.Invocation);
+        Assert.Equal(QueueItem.AttemptUnavailable, second.Attempt);
+        Assert.Equal(new QueueInvocation(route, second.Attempt) { MessagingSystem = "fitz" }, second.Invocation);
         var secondExecution = new RequestDispatchContext(RequestActor.System, second.Invocation, second.Metadata);
         Assert.Equal(firstExecution.RequestId, secondExecution.RequestId);
         Assert.NotEqual(firstExecution.ExecutionId, secondExecution.ExecutionId);

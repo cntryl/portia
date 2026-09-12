@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia.Consumer;
 
+[Trait("Category", "BrokerIntegration")]
 public sealed class ApplicationFleetTests
 {
     [Fact]

@@ -382,6 +382,13 @@ public sealed class RequestPipelineBehaviorTests
         Assert.Equal("notice", new NoticeInvocation("x").TransportName);
         Assert.Equal("schedule", new ScheduleInvocation("x").TransportName);
         Assert.Equal("custom", new CustomInvocation().TransportName);
+        Assert.Equal(RequestTraceRelationship.Parent, new DirectInvocation().TraceRelationship);
+        Assert.Equal(RequestTraceRelationship.Parent, new HttpInvocation("GET", "/x", "/x", "x").TraceRelationship);
+        Assert.Equal(RequestTraceRelationship.Parent, new RpcInvocation("x").TraceRelationship);
+        Assert.Equal(RequestTraceRelationship.Link, new QueueInvocation("x", 1).TraceRelationship);
+        Assert.Equal(RequestTraceRelationship.Link, new NoticeInvocation("x").TraceRelationship);
+        Assert.Equal(RequestTraceRelationship.Link, new ScheduleInvocation("x").TraceRelationship);
+        Assert.Null(new DirectInvocation().MessagingSystem);
     }
 
     static ServiceProvider Provider(List<string> calls, RequestHandlerRegistration handler,
@@ -429,6 +436,8 @@ public sealed class RequestPipelineBehaviorTests
     internal sealed record CustomInvocation : RequestInvocation
     {
         public override string TransportName => "custom";
+
+        public override RequestTraceRelationship TraceRelationship => RequestTraceRelationship.Parent;
     }
 
     internal sealed class PipelineActionHandler(List<string> calls) : IRequestHandler<PipelineAction>

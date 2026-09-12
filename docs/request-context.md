@@ -50,10 +50,11 @@ service providers, or acknowledgement handles. A wildcard subscription selector 
 not substituted for the actual route received. Custom transports can define another
 `RequestInvocation` record and must supply execution context through `DispatchAsync`.
 
-Fitz 0.1.3 does not expose broker message, call, reservation, or schedule occurrence
-IDs through these delivery objects. Portia does not invent them. The isolated broker
-returned attempt `1` on a queue redelivery; treat `Attempt` as transport-reported
-information, not an application idempotency key or a guaranteed monotonic counter.
+Fitz 1.0.0 does not expose broker message, call, reservation, or schedule occurrence
+IDs through these delivery objects. Portia does not invent them. Its current queue wire
+also does not report delivery attempts, so every Fitz queue delivery exposes
+`QueueItem.AttemptUnavailable` (`0`). Treat `Attempt` as transport-reported information,
+not an application idempotency key or a guaranteed monotonic counter.
 
 ## Child requests and credentials
 

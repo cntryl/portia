@@ -13,7 +13,7 @@
   <ItemGroup>
     <PackageReference Include="Cntryl.Conventions.Testing.Analyzers" />
     <PackageReference Include="Cntryl.Conventions.Testing.CodeFixes" />
-    <PackageReference Include="Cntryl.Fitz" />
+    <PackageReference Include="Cntryl.Fitz.Core" />
     <PackageReference Include="coverlet.collector">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -21,6 +21,7 @@
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.OpenApi" />
     <PackageReference Include="Microsoft.OpenApi.YamlReader" />
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio">
@@ -32,6 +33,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Portia.Core/Portia.Core.csproj" />
     <ProjectReference Include="../../src/Portia.Testing/Portia.Testing.csproj" />
+    <ProjectReference Include="../../src/Portia.Telemetry/Portia.Telemetry.csproj" />
     <ProjectReference Include="../../src/Portia.DependencyInjection/Portia.DependencyInjection.csproj" />
     <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj" />
     <ProjectReference Include="../../src/Portia.Fitz/Portia.Fitz.csproj" />

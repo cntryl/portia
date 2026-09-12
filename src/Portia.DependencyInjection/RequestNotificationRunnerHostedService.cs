@@ -35,6 +35,7 @@ sealed class RequestNotificationRunnerHostedService(
                     logger);
             }
 
+            PortiaTelemetry.RecordWorkerRestart(nameof(RequestNotificationRunner), "notification");
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(1), _clock, stoppingToken).ConfigureAwait(false);

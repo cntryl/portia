@@ -62,14 +62,14 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                 }
 
                 var name = method.Name;
-                if (name is "AddEvent" or "RegisterDynamicRequest"
-                    or "MapPortiaGet" or "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch" or "MapPortiaDelete"
-                    or "MapPortiaGetStream" or "MapPortiaGetSse")
+                var registration = IsPortiaRegistration(method);
+                var endpointMapping = IsPortiaEndpointMapping(method);
+                if ((registration && name is "AddEvent" or "RegisterDynamicRequest") || endpointMapping)
                 {
                     foreach (var argument in method.TypeArguments)
                         Add(argument, invocation.GetLocation());
                 }
-                else if (name == "AddRequestHandler" &&
+                else if (registration && name == "AddRequestHandler" &&
                          method.TypeArguments.FirstOrDefault() is INamedTypeSymbol handler)
                 {
                     foreach (var iface in handler.AllInterfaces.Where(IsHandlerInterface))
@@ -100,7 +100,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                         Add(argument, invocation.GetLocation());
                 }
 
-                if (name.StartsWith("MapPortia", StringComparison.Ordinal) &&
+                if (endpointMapping &&
                     method.TypeArguments.FirstOrDefault() is INamedTypeSymbol request)
                 {
                     var mutating = name is "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch";
@@ -127,8 +127,11 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                      .OrderBy(pair => pair.Key.ToDisplayString(), StringComparer.Ordinal))
         {
             output.ReportDiagnostic(Diagnostic.Create(MissingMetadata, pair.Value,
-                ImmutableDictionary<string, string?>.Empty.Add("TypeName",
-                    pair.Key.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                ImmutableDictionary<string, string?>.Empty
+                    .Add("TypeName", pair.Key.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                    .Add("Namespace", pair.Key.ContainingNamespace is { IsGlobalNamespace: false } space
+                        ? space.ToDisplayString()
+                        : string.Empty),
                 pair.Key.ToDisplayString()));
         }
 
@@ -186,6 +189,24 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
             or "Cntryl.Portia.IRemoteRequestSender" or "Cntryl.Portia.IRequestQueuePublisher"
             or "Cntryl.Portia.INoticeRequestSender" or "Cntryl.Portia.IRequestScheduler"
             or "Cntryl.Portia.RequestSenderContextExtensions" or "Cntryl.Portia.PortiaBuilder";
+    }
+
+    static bool IsPortiaRegistration(IMethodSymbol method)
+    {
+        var owner = method.ReducedFrom?.ContainingType ?? method.ContainingType;
+        return owner.ToDisplayString() == "Cntryl.Portia.PortiaBuilder";
+    }
+
+    static bool IsPortiaEndpointMapping(IMethodSymbol method)
+    {
+        if (method.Name is not ("MapPortiaGet" or "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch"
+            or "MapPortiaDelete" or "MapPortiaGetStream" or "MapPortiaGetSse"))
+        {
+            return false;
+        }
+
+        var owner = method.ReducedFrom?.ContainingType ?? method.ContainingType;
+        return owner.ToDisplayString() == "Cntryl.Portia.PortiaEndpointRouteBuilderExtensions";
     }
 
     static bool IsConcreteDomainEvent(INamedTypeSymbol type)

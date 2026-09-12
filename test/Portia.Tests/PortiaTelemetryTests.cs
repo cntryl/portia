@@ -34,9 +34,9 @@ public sealed class PortiaTelemetryTests
         // since a shared request type (e.g. GetValue) really can be dispatched by another test
         // file at the same moment this listener is active.
         var activity = Assert.Single(activities,
-            a => (a.GetTagItem("request.type") as string) == "TelemetrySuccessAction");
+            a => (a.GetTagItem("portia.request.name") as string) == "TelemetrySuccessAction");
         Assert.Equal(PortiaTelemetry.ExecuteActivityName, activity.DisplayName);
-        Assert.Equal("success", activity.GetTagItem("outcome"));
+        Assert.Equal("success", activity.GetTagItem("portia.outcome"));
         Assert.Equal(ActivityStatusCode.Unset, activity.Status);
     }
 
@@ -54,9 +54,11 @@ public sealed class PortiaTelemetryTests
         _ = await bus.SendAsync(new TelemetryFailureAction(), RequestActor.System);
 
         var activity = Assert.Single(activities,
-            a => (a.GetTagItem("request.type") as string) == "TelemetryFailureAction");
-        Assert.Equal("validation", activity.GetTagItem("outcome"));
+            a => (a.GetTagItem("portia.request.name") as string) == "TelemetryFailureAction");
+        Assert.Equal("validation", activity.GetTagItem("portia.outcome"));
         Assert.Equal(ActivityStatusCode.Error, activity.Status);
+        Assert.Empty(activity.Events);
+        Assert.DoesNotContain(activity.TagObjects, tag => Equals(tag.Value, "Invalid."));
     }
 
     /// <summary>
@@ -74,8 +76,8 @@ public sealed class PortiaTelemetryTests
         _ = await bus.SendAsync(new TelemetryGuardedAction(), RequestActor.Anonymous);
 
         var activity = Assert.Single(activities,
-            a => (a.GetTagItem("request.type") as string) == "TelemetryGuardedAction");
-        Assert.Equal("forbidden", activity.GetTagItem("outcome"));
+            a => (a.GetTagItem("portia.request.name") as string) == "TelemetryGuardedAction");
+        Assert.Equal("forbidden", activity.GetTagItem("portia.outcome"));
         Assert.Equal(ActivityStatusCode.Error, activity.Status);
     }
 
@@ -100,7 +102,8 @@ public sealed class PortiaTelemetryTests
             items.Add(item);
 
         Assert.Equal([1, 2, 3], items);
-        _ = Assert.Single(activities, a => (a.GetTagItem("request.type") as string) == "TelemetrySequence");
+        _ = Assert.Single(activities,
+            a => (a.GetTagItem("portia.request.name") as string) == "TelemetrySequence");
     }
 
     static ActivityListener Listen(out ConcurrentBag<Activity> activities)

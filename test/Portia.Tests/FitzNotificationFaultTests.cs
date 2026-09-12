@@ -1,7 +1,6 @@
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
-using Cntryl.Fitz.Abstractions.Domains.Schedule;
 
 namespace Cntryl.Portia;
 
@@ -20,7 +19,7 @@ public sealed class FitzNotificationFaultTests
         var legacy = serializer.Serialize(new UniversalAction(1), "legacy-bearer-token", RequestMetadata.Create(),
             null);
 
-        Assert.Equal([("FitzScheduledRequestConsumer", "validation")], await DrainAsync(serializer, legacy));
+        Assert.Equal([("unknown", "schedule", "lost")], await DrainAsync(serializer, legacy));
     }
 
     /// <summary>Verifies an envelope without a complete system identity is dropped and counted the same way.</summary>
@@ -33,7 +32,7 @@ public sealed class FitzNotificationFaultTests
             new FitzScheduledRequestEnvelope(1, "   ", "Portia", request.ToArray()),
             FitzJsonContext.Default.FitzScheduledRequestEnvelope);
 
-        Assert.Equal([("FitzScheduledRequestConsumer", "validation")], await DrainAsync(serializer, payload));
+        Assert.Equal([("unknown", "schedule", "lost")], await DrainAsync(serializer, payload));
     }
 
     /// <summary>
@@ -49,14 +48,16 @@ public sealed class FitzNotificationFaultTests
         Assert.Contains("schedule://test/shared/action/run", exception.Message, StringComparison.Ordinal);
     }
 
-    static async Task<List<(string Runner, string Stage)>> DrainAsync(IRequestDeserializer serializer,
+    static async Task<List<(string Request, string Transport, string Outcome)>> DrainAsync(
+        IRequestDeserializer serializer,
         ReadOnlyMemory<byte> payload)
     {
-        var faults = new List<(string, string)>();
+        var lost = new List<(string, string, string)>();
         using var listener = new MeterListener();
         listener.InstrumentPublished = (instrument, meterListener) =>
         {
-            if (instrument.Meter.Name == PortiaTelemetry.SourceName && instrument.Name == "portia.worker.failure")
+            if (instrument.Meter.Name == PortiaTelemetry.SourceName &&
+                instrument.Name == "portia.request.delivery.count")
             {
                 meterListener.EnableMeasurementEvents(instrument);
             }
@@ -64,8 +65,8 @@ public sealed class FitzNotificationFaultTests
         listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
         {
             var values = tags.ToArray();
-            lock (faults)
-                faults.Add(((string)values[0].Value!, (string)values[1].Value!));
+            lock (lost)
+                lost.Add(((string)values[0].Value!, (string)values[1].Value!, (string)values[2].Value!));
         });
         listener.Start();
         var consumer = new FitzScheduledRequestConsumer(new OnePayloadScheduleClient(payload), serializer,
@@ -75,8 +76,8 @@ public sealed class FitzNotificationFaultTests
             Assert.Fail("A schedule entry that cannot be translated must not be dispatched.");
 
         listener.RecordObservableInstruments();
-        lock (faults)
-            return [.. faults];
+        lock (lost)
+            return [.. lost];
     }
 
     sealed class OnePayloadScheduleClient(ReadOnlyMemory<byte> payload) : IScheduleClient

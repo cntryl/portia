@@ -1,4 +1,3 @@
-using Cntryl.Fitz.Abstractions.Domains.Rpc;
 
 namespace Cntryl.Portia;
 
@@ -49,7 +48,8 @@ public sealed class FitzRemoteRequestSender(
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(routeValues);
 
-        using var activity = PortiaTelemetry.StartSend(typeof(TRequest).Name, "fitz.rpc");
+        var requestName = _catalog.Get(request.GetType()).Discriminator.Name;
+        using var activity = PortiaTelemetry.StartSend(requestName, "rpc", "fitz");
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "success";
         try
@@ -60,21 +60,24 @@ public sealed class FitzRemoteRequestSender(
             var result =
                 _outcomeDeserializer.DeserializeOutcome((await CallAsync(route, body, ct).ConfigureAwait(false)).Body);
             outcome = PortiaTelemetry.Outcome(result.IsSuccess, result.Error);
+            PortiaTelemetry.RecordOutcome(activity, result.IsSuccess, result.Error);
             return result;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             outcome = "canceled";
+            PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
-        catch
+        catch (Exception ex)
         {
             outcome = "fault";
+            PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }
         finally
         {
-            PortiaTelemetry.TransportFinished(started, "fitz.rpc", "send", outcome);
+            PortiaTelemetry.TransportFinished(started, "rpc", "send", outcome);
         }
     }
 
@@ -92,7 +95,8 @@ public sealed class FitzRemoteRequestSender(
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(routeValues);
 
-        using var activity = PortiaTelemetry.StartSend(typeof(TRequest).Name, "fitz.rpc");
+        var requestName = _catalog.Get(request.GetType()).Discriminator.Name;
+        using var activity = PortiaTelemetry.StartSend(requestName, "rpc", "fitz");
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "success";
         try
@@ -104,21 +108,24 @@ public sealed class FitzRemoteRequestSender(
                 _outcomeDeserializer.DeserializeResult<TOut>((await CallAsync(route, body, ct).ConfigureAwait(false))
                     .Body);
             outcome = PortiaTelemetry.Outcome(result.IsSuccess, result.Error);
+            PortiaTelemetry.RecordOutcome(activity, result.IsSuccess, result.Error);
             return result;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             outcome = "canceled";
+            PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
-        catch
+        catch (Exception ex)
         {
             outcome = "fault";
+            PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }
         finally
         {
-            PortiaTelemetry.TransportFinished(started, "fitz.rpc", "send", outcome);
+            PortiaTelemetry.TransportFinished(started, "rpc", "send", outcome);
         }
     }
 
@@ -129,6 +136,6 @@ public sealed class FitzRemoteRequestSender(
         await foreach (var frame in _rpc.CallAsync(route, body, ct).WithCancellation(ct).ConfigureAwait(false))
             lastFrame = frame;
 
-        return lastFrame ?? throw new InvalidOperationException($"The RPC call to '{route}' produced no response.");
+        return lastFrame ?? throw new InvalidOperationException("The RPC call produced no response.");
     }
 }

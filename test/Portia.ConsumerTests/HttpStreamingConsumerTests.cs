@@ -36,6 +36,8 @@ public sealed class HttpStreamingConsumerTests
         {
             public int Enumerations, EnumerationDisposals, HandlerDisposals;
             public TaskCompletionSource First = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public TaskCompletionSource EnumerationFinished = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public TaskCompletionSource HandlerFinished = new(TaskCreationOptions.RunContinuationsAsynchronously);
             public TaskCompletionSource ScopeFinished = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         public sealed class Authorizer(Stats stats) : IRequestAuthorizer<StreamRequest>, IRequestAuthorizer<SseStreamRequest>, IAsyncDisposable
@@ -68,9 +70,18 @@ public sealed class HttpStreamingConsumerTests
                     await Task.Yield();
                     yield return "b";
                 }
-                finally { stats.EnumerationDisposals++; }
+                finally
+                {
+                    stats.EnumerationDisposals++;
+                    stats.EnumerationFinished.TrySetResult();
+                }
             }
-            public ValueTask DisposeAsync() { stats.HandlerDisposals++; return ValueTask.CompletedTask; }
+            public ValueTask DisposeAsync()
+            {
+                stats.HandlerDisposals++;
+                stats.HandlerFinished.TrySetResult();
+                return ValueTask.CompletedTask;
+            }
         }
         public static class Scenario
         {
@@ -107,6 +118,11 @@ public sealed class HttpStreamingConsumerTests
                 }
                 catch (Exception) when (mode is 2 or 3) { failed = true; }
                 await stats.ScopeFinished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                if (mode is not 401 and not 403)
+                {
+                    await Task.WhenAll(stats.EnumerationFinished.Task, stats.HandlerFinished.Task)
+                        .WaitAsync(TimeSpan.FromSeconds(5));
+                }
                 return (status, body, stats.Enumerations, stats.EnumerationDisposals, stats.HandlerDisposals, failed);
             }
         }

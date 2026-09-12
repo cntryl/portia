@@ -16,7 +16,8 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         "Portia", DiagnosticSeverity.Error, true);
 
     static readonly DiagnosticDescriptor DuplicateDiscriminator = new("PORTIA022", "Duplicate request discriminator",
-        "Request discriminator '{0}' version {1} is also declared by '{2}'", "Portia", DiagnosticSeverity.Error, true);
+        "Request CLR types '{0}' and '{1}' both declare discriminator '{2}' version {3}", "Portia",
+        DiagnosticSeverity.Error, true);
 
     static readonly DiagnosticDescriptor InvalidRoute = new("PORTIA024", "Invalid request route segment",
         "Transported request '{0}' declares invalid route segment '{1}'; use '*' or letters, digits, '.', '_', '-', and '~'",
@@ -87,11 +88,14 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
             .ToArray();
         foreach (var group in ordered.GroupBy(request => (request.DiscriminatorName, request.DiscriminatorVersion)))
         {
-            var duplicate = group.Skip(1).FirstOrDefault();
-            if (duplicate is not null)
+            var declarations = group.OrderBy(request => request.Location.Path, StringComparer.Ordinal)
+                .ThenBy(request => request.Location.SpanStart).ToArray();
+            var original = declarations[0];
+            foreach (var duplicate in declarations.Skip(1))
             {
-                context.ReportDiagnostic(Diagnostic.Create(DuplicateDiscriminator, Location.None,
-                    group.Key.DiscriminatorName, group.Key.DiscriminatorVersion, group.First().TypeName));
+                context.ReportDiagnostic(Diagnostic.Create(DuplicateDiscriminator, duplicate.Location.ToLocation(),
+                    Display(original.TypeName), Display(duplicate.TypeName), group.Key.DiscriminatorName,
+                    group.Key.DiscriminatorVersion));
             }
         }
 
@@ -124,4 +128,8 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         context.AddSource("PortiaGeneratedServiceCollectionExtensions.g.cs",
             SourceText.From(source.ToString(), Encoding.UTF8));
     }
+
+    static string Display(string typeName) => typeName.StartsWith("global::", StringComparison.Ordinal)
+        ? typeName.Substring(8)
+        : typeName;
 }

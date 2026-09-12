@@ -42,6 +42,31 @@ public sealed class PortiaTelemetryLoggerFallbackTests
         PortiaTelemetry.RecordRunnerFault("TestRunner", RunnerFaultStage.Execution,
             new InvalidOperationException("boom"));
 
+    /// <summary>Every non-fault catalog entry has its fixed identifier and prescribed level.</summary>
+    [Fact]
+    public void ShouldUseStableEventIdsAndLevelsWithoutRoutesOrBusinessMessages()
+    {
+        var logger = new CapturingLogger();
+
+        PortiaTelemetry.RecordFleetAssignment("worker-secret", "lease://secret/partition", true, logger);
+        PortiaTelemetry.RecordWorkload("test.projector", "tenant", true, logger);
+        PortiaTelemetry.RecordLostDelivery("test.request", "notice", logger);
+        PortiaTelemetry.RecordTerminalDelivery("test.request", "queue", logger);
+        PortiaTelemetry.RecordSingleProcessCoordinator(logger);
+
+        Assert.Equal(
+        [
+            (1001, LogLevel.Debug),
+            (1003, LogLevel.Debug),
+            (1004, LogLevel.Warning),
+            (1005, LogLevel.Warning),
+            (1006, LogLevel.Warning)
+        ], logger.Entries.Select(entry => (entry.EventId.Id, entry.Level)));
+        Assert.DoesNotContain(logger.Entries, entry => entry.Message.Contains("worker-secret", StringComparison.Ordinal));
+        Assert.DoesNotContain(logger.Entries,
+            entry => entry.Message.Contains("lease://secret/partition", StringComparison.Ordinal));
+    }
+
     sealed class CapturingLogger : ILogger
     {
         public List<(LogLevel Level, EventId EventId, string Message, Exception? Exception)> Entries { get; } = [];

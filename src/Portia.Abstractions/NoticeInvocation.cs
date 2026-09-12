@@ -6,4 +6,7 @@ public sealed record NoticeInvocation(string Route) : RequestInvocation
 {
     /// <inheritdoc />
     public override string TransportName => "notice";
+
+    /// <inheritdoc />
+    public override RequestTraceRelationship TraceRelationship => RequestTraceRelationship.Link;
 }

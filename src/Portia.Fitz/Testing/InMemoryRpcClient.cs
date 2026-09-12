@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Cntryl.Fitz.Abstractions.Domains.Rpc;
 
 namespace Cntryl.Portia.Testing;
 

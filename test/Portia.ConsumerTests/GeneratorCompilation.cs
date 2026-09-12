@@ -26,13 +26,18 @@ static class GeneratorCompilation
     }
 
     public static IReadOnlyList<Diagnostic> Diagnostics(string source, params IIncrementalGenerator[] generators)
+        => Diagnostics(source, [], generators);
+
+    public static IReadOnlyList<Diagnostic> Diagnostics(string source,
+        IReadOnlyCollection<MetadataReference> additionalReferences, params IIncrementalGenerator[] generators)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
             .Distinct(StringComparer.Ordinal)
-            .Select(path => MetadataReference.CreateFromFile(path));
+            .Select(path => MetadataReference.CreateFromFile(path))
+            .Concat(additionalReferences);
         var compilation = CSharpCompilation.Create("Diagnostics",
             [CSharpSyntaxTree.ParseText(source, parseOptions, "DiagnosticScenario.cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));

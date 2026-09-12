@@ -7,6 +7,9 @@ registration APIs, generator/analyzer assets, and interceptor compiler configura
 transitively. Add `Portia.Fitz` for Fitz storage/transports and `Portia.Jwt` when inbound work
 carries JWT actor identities. Packages use the
 cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
+Add the optional `Portia.Telemetry` package and call `AddOpenTelemetry().WithPortia()` when the
+application wants Portia's traces, metrics, and structured logs registered with OpenTelemetry.
+Portia does not select an exporter, resource, sampling policy, filter, endpoint, or credential.
 Review the [scope](scope.md) page for what Portia supports and the
 [design decisions](design-decisions.md) behind its operational boundaries.
 

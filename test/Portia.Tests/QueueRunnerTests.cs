@@ -1,13 +1,41 @@
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
 /// <summary>
 ///     Verifies that queued requests dispatch through the same request bus as any other origin.
 /// </summary>
+[Collection(TelemetryTestGroup.Name)]
 public sealed class QueueRunnerTests
 {
+    /// <summary>Each reservation records one final disposition and only terminal/fault logs.</summary>
+    [Fact]
+    public async Task ShouldRecordOneDeliveryOutcomeWithoutRetryOrBusinessErrorLogNoise()
+    {
+        using var busHost = TestRequestBus.Create();
+        var logger = new CapturingLogger();
+        var items = new IQueuedRequest[]
+        {
+            new FakeQueuedRequest(new ChangeValue(1)),
+            new FakeQueuedRequest(new InvalidChangeValue(2, true)),
+            new FakeQueuedRequest(new InvalidChangeValue(3)),
+            new FakeQueuedRequest(new ChangeValue(4), true)
+        };
+        var terminal = new RecordingTerminalHandler();
+        using var meter = ListenToDeliveries(out var outcomes);
+        var runner = new QueueRunner(new FakeQueueConsumer(items), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), terminalHandler: terminal), logger);
+
+        await runner.RunAsync();
+
+        Assert.Equal(["abandoned", "abandoned", "completed", "terminal"], outcomes.Order());
+        Assert.Equal([1005, 1002], logger.Entries.Select(entry => entry.EventId.Id));
+        Assert.DoesNotContain(logger.Entries, entry => entry.Message.Contains("Value is invalid", StringComparison.Ordinal));
+        Assert.IsType<InvalidOperationException>(logger.Entries[1].Exception);
+    }
+
     /// <summary>
     ///     Verifies that every queued request is dispatched to its handler and completed.
     /// </summary>
@@ -202,6 +230,7 @@ public sealed class QueueRunnerTests
     {
         using var busHost = TestRequestBus.Create();
         var faults = new List<KeyValuePair<string, object?>[]>();
+        using var deliveryMeter = ListenToDeliveries(out var deliveryOutcomes);
         using var meterListener = new MeterListener();
         meterListener.InstrumentPublished = (instrument, listener) =>
         {
@@ -226,6 +255,7 @@ public sealed class QueueRunnerTests
         meterListener.Dispose();
         Assert.Contains(faults, tags => tags.Any(tag => Equals(tag.Value, nameof(QueueRunner)))
                                         && tags.Any(tag => Equals(tag.Value, "cleanup")));
+        Assert.Equal(["completed", "fault"], deliveryOutcomes.Order());
     }
 
     /// <summary>A retryable handler result at the configured threshold becomes terminal.</summary>
@@ -387,7 +417,7 @@ public sealed class QueueRunnerTests
         var attempts = 0;
 
         var failure = await Assert.ThrowsAsync(expected.GetType(), () => FitzApplicationWorkers.RetryAsync(
-            "queue://test/work/item", _ =>
+            "FitzQueueWorkerDefinition", _ =>
             {
                 attempts++;
                 return Task.FromException(expected);
@@ -478,5 +508,44 @@ public sealed class QueueRunnerTests
         public ValueTask<Result> HandleAsync(IRequestContext<InvalidChangeValue> context, CancellationToken ct) =>
             ValueTask.FromResult(Result.Failure(new RequestError(RequestErrorKind.Validation, "Value is invalid.",
                 context.Request.IsTransient)));
+    }
+
+    static MeterListener ListenToDeliveries(out List<string> outcomes)
+    {
+        var captured = new List<string>();
+        outcomes = captured;
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == PortiaTelemetry.SourceName &&
+                    instrument.Name == "portia.request.delivery.count")
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            var values = tags.ToArray();
+            lock (captured)
+                captured.Add((string)values[2].Value!);
+        });
+        listener.Start();
+        return listener;
+    }
+
+    sealed class CapturingLogger : ILogger<QueueRunner>
+    {
+        public List<(LogLevel Level, EventId EventId, string Message, Exception? Exception)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, eventId, formatter(state, exception), exception));
     }
 }

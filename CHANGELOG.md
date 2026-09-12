@@ -8,6 +8,11 @@ alerts are as breaking to change as an API.
 
 ### Added
 
+- The optional `Portia.Telemetry` package adds idempotent `OpenTelemetryBuilder.WithPortia()`
+  registration for Portia traces, metrics, and the standard `ILogger` bridge. Applications retain
+  ownership of exporters, resources, sampling, filtering, endpoints, and credentials; no existing
+  Portia package gains an OpenTelemetry dependency.
+
 - `PortiaHttpOptions.ServeOpenApi` controls whether Portia maps `/openapi/v1.json` and
   `/openapi/v1.yml`, defaulting to `true`. Portia previously mapped them by intercepting `Build()`
   with no way to opt out, which took a deployment decision — whether a schema is publicly reachable
@@ -25,6 +30,12 @@ alerts are as breaking to change as an API.
 
 ### Fixed
 
+- Portia diagnostics now require semantic evidence and say exactly what is wrong. `PORTIA025`
+  ignores consumer methods that merely share Portia API names, `PORTIA012` recognizes referenced
+  domain events used by the application, `PORTIA104` ignores filtered catches and paths that
+  rethrow unexpected failures, and duplicate discriminator/unsupported-shape diagnostics identify
+  both the source location and the concrete cause. The JSON metadata code fix creates a valid,
+  collision-free context beside the missing type, and project Fix All adds every root in one edit.
 - An idle server-sent-event stream emits keep-alive comments. A quiet stream is the normal state of
   an event source, and an idle connection is what proxies, load balancers and browsers reclaim, so a
   `text/event-stream` response that said nothing between events was being closed underneath the
@@ -68,9 +79,30 @@ alerts are as breaking to change as an API.
   A flat one-second delay retried an entire fleet in lockstep against a broker that had just failed.
 - A queue reservation's renewal failure is published and read through `Volatile`, so acknowledging a
   reservation whose lease was already lost cannot miss it.
+- Fitz queue workers reject a positive `QueueRunnerOptions.TerminalAttempt` during startup. Fitz 1.0
+  reports `QueueItem.AttemptUnavailable` for every queue delivery, so accepting the threshold left
+  retryable failures in an unbounded redelivery loop that could never reach the configured attempt.
+- Fleet partition and membership acquisition now fails fast on contention and uses Portia's bounded,
+  jittered retry loop. Fitz serializes acquisitions per client, so waiting inside one contended acquire
+  blocked every partition behind it and prevented healthy scale-out and takeover from converging.
 
 ### Changed
 
+- **Telemetry 2.0.0:** replace the unreleased request telemetry schema without compatibility
+  aliases. Request activities now use `portia.request.name`, `portia.transport.name`, and
+  `portia.outcome`; known Fitz operations additionally emit standard `messaging.system` and
+  `messaging.operation.type`. `RequestInvocation` now requires an explicit parent-or-link trace
+  relationship and may name its messaging system. The low-level activity helpers now take bounded
+  request and transport facts, and `portia.request.delivery.count` records a typed final delivery
+  outcome. RPC remains one parented trace; queue, notice, and schedule attempts are distinct linked
+  roots. See [observability](docs/observability.md) for the replacement contract and log catalog.
+
+- Replace `Cntryl.Fitz` with `Cntryl.Fitz.Core` 1.0.0 and update
+  `Cntryl.Fitz.Abstractions` from 0.1.3 to 1.0.0, then
+  update the Compose broker digest alongside them. Portia now consumes Fitz's unified
+  `Cntryl.Fitz` namespace, `TimeSpan` duration API, memory-backed payloads, and
+  `ScheduleDeliveryMode.Once` name. Public Portia signatures that expose Fitz types consequently
+  use their 1.0 namespace identities.
 - The OpenAPI document is composed once and served as rendered bytes. It was recomposed on every
   request — measured at 1.9 ms and 573 KiB of allocation per request for a five-endpoint
   application — on a route that needs no authorization, which made it an amplification anyone could

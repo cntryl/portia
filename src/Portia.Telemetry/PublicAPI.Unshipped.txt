@@ -1,0 +1,3 @@
+#nullable enable
+Cntryl.Portia.PortiaOpenTelemetryBuilderExtensions
+static Cntryl.Portia.PortiaOpenTelemetryBuilderExtensions.WithPortia(this OpenTelemetry.OpenTelemetryBuilder! builder) -> OpenTelemetry.OpenTelemetryBuilder!

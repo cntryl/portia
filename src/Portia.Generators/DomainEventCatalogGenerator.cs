@@ -47,6 +47,13 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             .Where(static model => model is not null)
             .Select(static (model, _) => model!);
         var eventModels = events.Collect();
+        var referencedEventModels = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) => node is TypeSyntax,
+                static (syntaxContext, _) => GetReferencedEventModel(syntaxContext))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!)
+            .Collect();
         var eventRegistrations = events
             .Select(static (model, _) => new EventRegistration(model.TypeName, model.Name, model.Version))
             .Collect()
@@ -73,8 +80,9 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             .Collect();
 
         context.RegisterSourceOutput(
-            eventModels.Combine(upcasters),
-            static (sourceContext, pair) => GenerateDiagnostics(sourceContext, pair.Left, pair.Right));
+            eventModels.Combine(referencedEventModels).Combine(upcasters),
+            static (sourceContext, pair) => GenerateDiagnostics(sourceContext,
+                pair.Left.Left.AddRange(pair.Left.Right), pair.Right));
         context.RegisterSourceOutput(eventRegistrations, static (sourceContext, registrations) =>
             GenerateCatalog(sourceContext, registrations));
     }
@@ -157,6 +165,25 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             ? null
             : new EventModel(symbol.ToDisplayString(), name, version,
                 DiagnosticLocation.From(declaration.Identifier.GetLocation()));
+    }
+
+    static EventModel? GetReferencedEventModel(GeneratorSyntaxContext context)
+    {
+        var syntax = (TypeSyntax)context.Node;
+        if (context.SemanticModel.GetTypeInfo(syntax).Type is not INamedTypeSymbol symbol
+            || SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly,
+                context.SemanticModel.Compilation.Assembly)
+            || !IsCatalogable(symbol)
+            || !InheritsFrom(symbol, DomainEventMetadataName))
+        {
+            return null;
+        }
+
+        var (name, version) = GetSchemaIdentity(symbol);
+        return name is null
+            ? null
+            : new EventModel(symbol.ToDisplayString(), name, version,
+                DiagnosticLocation.From(syntax.GetLocation()));
     }
 
     static InvalidEventDiscriminator? GetInvalidEventDiscriminator(GeneratorSyntaxContext context)

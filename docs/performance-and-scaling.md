@@ -121,7 +121,9 @@ workflows with events and reactors, and make every at-least-once reaction safe t
 stable effect ID or an integration-owned inbox/outbox with the target's transaction.
 
 Terminal queue outcomes include permanent handler failure, actor-validation failure, and reaching
-an explicitly configured retry limit. Each requires `IQueuedRequestTerminalHandler`; missing one
+an explicitly configured retry limit when the transport reports a durable attempt count. Fitz 1.0
+does not report queue attempts, so its worker rejects a positive `QueueRunnerOptions.TerminalAttempt`
+at startup. Each supported terminal outcome requires `IQueuedRequestTerminalHandler`; missing one
 faults the runner before acknowledgment or abandonment. The callback completes before the single
 transport acknowledgment. Those operations are not atomic, so the handler must tolerate replay.
 The Fitz adapter retains delivery ownership when either terminal callback setup or execution

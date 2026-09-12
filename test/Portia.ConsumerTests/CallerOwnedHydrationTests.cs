@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
 
+[Trait("Category", "BrokerIntegration")]
 public sealed class CallerOwnedHydrationTests
 {
     readonly RequestDispatchContext _saveContext = new(RequestActor.System);

@@ -6,4 +6,7 @@ public sealed record RpcInvocation(string Route) : RequestInvocation
 {
     /// <inheritdoc />
     public override string TransportName => "rpc";
+
+    /// <inheritdoc />
+    public override RequestTraceRelationship TraceRelationship => RequestTraceRelationship.Parent;
 }

@@ -5,6 +5,7 @@ using System.Text;
 
 namespace Cntryl.Portia.Consumer;
 
+[Trait("Category", "BrokerIntegration")]
 public sealed class FleetBrokerTests
 {
     [Theory]
@@ -48,7 +49,18 @@ public sealed class FleetBrokerTests
                 options with { WorkerId = workerB }, cancelB.Token);
             var expectedB = partitions.Where(route => Owner(route, "a", workerB) == workerB)
                 .ToHashSet(StringComparer.Ordinal);
-            await Until(() => expectedB.SetEquals(activeB.Keys) && activeA.Count + activeB.Count == partitions.Length);
+            try
+            {
+                await Until(() =>
+                    expectedB.SetEquals(activeB.Keys) && activeA.Count + activeB.Count == partitions.Length);
+            }
+            catch (OperationCanceledException error)
+            {
+                throw new InvalidOperationException(
+                    $"Fleet did not converge. Expected B: [{string.Join(",", expectedB)}]; "
+                    + $"active A: [{string.Join(",", activeA.Keys)}]; active B: [{string.Join(",", activeB.Keys)}].",
+                    error);
+            }
             foreach (var route in activeA.Keys)
             {
                 Assert.Equal(original[route], activeA[route]);
@@ -96,8 +108,9 @@ public sealed class FleetBrokerTests
         var ghost = Enumerable.Range(0, 100).Select(i => "ghost" + i).First(id => Owner(partition, "a", id) == id);
         // Unmanaged leases intentionally receive no renewals. Keep the connection alive to
         // distinguish TTL expiry from a broker's session-disconnect cleanup.
-        await using var member = await stalled.Lease.AcquireAsync($"lease://{realm}/members/{ghost}", 2);
-        await using var lease = await stalled.Lease.AcquireAsync(partition, 2);
+        await using var member = await stalled.Lease.AcquireAsync($"lease://{realm}/members/{ghost}",
+            TimeSpan.FromSeconds(2));
+        await using var lease = await stalled.Lease.AcquireAsync(partition, TimeSpan.FromSeconds(2));
         var acquired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cancellation = new CancellationTokenSource();
         var runner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(survivor.Lease),

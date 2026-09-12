@@ -1,4 +1,3 @@
-using Cntryl.Fitz.Abstractions.Domains.Lease;
 
 namespace Cntryl.Portia;
 
@@ -16,7 +15,8 @@ public sealed class FitzFleetMembership(ILeaseClient client) : IFleetMembership
         ArgumentNullException.ThrowIfNull(callback);
         options.Validate([]);
         var workerId = options.WorkerId ?? Guid.NewGuid().ToString("D");
-        return _client.WithLeaseAsync(options.MembershipSelector[..^1] + workerId, options.TtlSeconds,
+        return _client.WithLeaseAsync(options.MembershipSelector[..^1] + workerId,
+            TimeSpan.FromSeconds(options.TtlSeconds),
             async (_, membershipCt) =>
             {
                 await using var observer = await _client.ObserveAsync(options.MembershipSelector,
@@ -24,6 +24,6 @@ public sealed class FitzFleetMembership(ILeaseClient client) : IFleetMembership
                         membershipCt)
                     .ConfigureAwait(false);
                 await callback(observer, membershipCt).ConfigureAwait(false);
-            }, new LeaseExecutionOptions { WaitForAvailability = true }, ct);
+            }, new LeaseExecutionOptions(), ct);
     }
 }

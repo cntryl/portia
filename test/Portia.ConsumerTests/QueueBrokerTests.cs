@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
 
+[Trait("Category", "BrokerIntegration")]
 public sealed class QueueBrokerTests
 {
     [Fact]
@@ -25,13 +26,14 @@ public sealed class QueueBrokerTests
         Assert.True(await reader.MoveNextAsync());
         Assert.Equal(id, Assert.IsType<ScopeRequest>(reader.Current.Request).Id);
         await reader.Current.CompleteAsync();
-        var redelivered = Assert.Single(await client.Queue.ReserveAsync(route, 1, waitSeconds: 3));
+        var redelivered = Assert.Single(await client.Queue.ReserveAsync(
+            route, TimeSpan.FromSeconds(1), wait: TimeSpan.FromSeconds(3)));
         Assert.Equal("{"u8.ToArray(), redelivered.Body.ToArray());
-        // Fitz .NET 0.1.1 supplies 1 for RESERVE responses; Portia preserves that SDK value.
+        // Fitz supplies 1 for RESERVE responses; Portia preserves that SDK value.
         Assert.Equal(attempt, redelivered.Attempt);
         // Test cleanup acknowledges the observed redelivery; Portia never acknowledged the malformed delivery.
         await redelivered.CompleteAsync();
-        Assert.Empty(await client.Queue.ReserveAsync(route, 1, waitSeconds: 0));
+        Assert.Empty(await client.Queue.ReserveAsync(route, TimeSpan.FromSeconds(1), wait: TimeSpan.Zero));
     }
 
     /// <summary>
@@ -81,7 +83,8 @@ public sealed class QueueBrokerTests
         try
         {
             await provider.GetRequiredService<ConsumerHost.Effects>().WaitForAsync("nested");
-            Assert.Empty(await competitor.Queue.ReserveAsync(route, 1, waitSeconds: 4));
+            Assert.Empty(await competitor.Queue.ReserveAsync(
+                route, TimeSpan.FromSeconds(1), wait: TimeSpan.FromSeconds(4)));
         }
         finally
         {
@@ -95,11 +98,12 @@ public sealed class QueueBrokerTests
             }
         }
 
-        var redelivered = Assert.Single(await competitor.Queue.ReserveAsync(route, 1, waitSeconds: 3));
+        var redelivered = Assert.Single(await competitor.Queue.ReserveAsync(
+            route, TimeSpan.FromSeconds(1), wait: TimeSpan.FromSeconds(3)));
         var request = serializer.DeserializeEnvelope(redelivered.Body).Request;
         Assert.Equal(id, Assert.IsType<ScopeRequest>(request).Id);
         // The pinned SDK does not expose the broker's durable delivery counter.
-        Assert.Equal(1U, redelivered.Attempt);
+        Assert.Equal(QueueItem.AttemptUnavailable, redelivered.Attempt);
         await redelivered.CompleteAsync();
         Assert.All(provider.GetRequiredService<ConsumerHost.Effects>().Scopes.Values, Assert.True);
     }

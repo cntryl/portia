@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using Cntryl.Fitz.Abstractions.Domains.Notice;
+using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
@@ -9,10 +9,12 @@ namespace Cntryl.Portia;
 /// <param name="notice">The Fitz notice client.</param>
 /// <param name="serializer">The request serializer.</param>
 /// <param name="route">The concrete Fitz notice route to subscribe to (<c>notice://realm/area/resource</c>).</param>
+/// <param name="logger">Reports a delivery that cannot be translated.</param>
 public sealed class FitzNoticeRequestConsumer(
     INoticeClient notice,
     IRequestDeserializer serializer,
-    string route) : IRequestNotificationConsumer
+    string route,
+    ILogger<FitzNoticeRequestConsumer>? logger = null) : IRequestNotificationConsumer
 {
     readonly INoticeClient _notice = notice ?? throw new ArgumentNullException(nameof(notice));
 
@@ -36,14 +38,14 @@ public sealed class FitzNoticeRequestConsumer(
             // either way. Losing it must not also end the subscription and take every later
             // notification with it, so the failure is reported and the message dropped — the same
             // per-delivery isolation the queue consumer gets from deferring its own payload.
-            if (Translate(message) is { } notification)
+            if (Translate(message, ct) is { } notification)
             {
                 yield return notification;
             }
         }
     }
 
-    RequestNotification? Translate(NoticeMessage message)
+    RequestNotification? Translate(NoticeMessage message, CancellationToken ct)
     {
         try
         {
@@ -52,11 +54,17 @@ public sealed class FitzNoticeRequestConsumer(
                           ?? throw new InvalidOperationException(
                               "A Fitz notice message deserialized to a result-bearing request; only no-result requests can be published over notice.");
             return new RequestNotification(request, envelope.ActorToken, envelope.Metadata,
-                new NoticeInvocation(message.Route), envelope.TraceContext, Name: envelope.Name);
+                new NoticeInvocation(message.Route) { MessagingSystem = "fitz" }, envelope.TraceContext,
+                Name: envelope.Name);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            PortiaTelemetry.RecordRunnerFault(nameof(FitzNoticeRequestConsumer), RunnerFaultStage.Validation, ex);
+            throw;
+        }
+        catch (Exception)
+        {
+            PortiaTelemetry.RecordLostDelivery("unknown", "notice", logger);
+            PortiaTelemetry.RecordDelivery("unknown", "notice", RequestDeliveryOutcome.Lost);
             return null;
         }
     }

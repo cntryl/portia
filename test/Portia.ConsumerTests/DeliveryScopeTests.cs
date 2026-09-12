@@ -1,6 +1,5 @@
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
-using Cntryl.Fitz.Abstractions.Domains.Rpc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 

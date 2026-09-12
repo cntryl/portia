@@ -25,15 +25,23 @@ public static class RequestDispatch
     /// <param name="ct">Cancels actor validation and dispatch.</param>
     /// <returns>The validation or dispatch outcome and whether the bus was invoked.</returns>
     /// <remarks>
-    ///     Creates one consumer activity. Scheduled invocations start a new trace linked to
-    ///     the delivery's trace context; other inbound invocations use it as their parent.
+    ///     Creates one consumer activity. The invocation explicitly declares whether propagated
+    ///     context starts a linked root or is used as the parent.
     /// </remarks>
-    public static async ValueTask<RequestDispatchOutcome> SendAsync(
+    public static ValueTask<RequestDispatchOutcome> SendAsync(
         IRequestActorValidator actorValidator,
         IRequestBus bus,
         IRequest request,
         RequestDelivery delivery,
-        CancellationToken ct = default)
+        CancellationToken ct = default) => SendAsync(actorValidator, bus, request, delivery, null, ct);
+
+    internal static async ValueTask<RequestDispatchOutcome> SendAsync(
+        IRequestActorValidator actorValidator,
+        IRequestBus bus,
+        IRequest request,
+        RequestDelivery delivery,
+        Func<Result, CancellationToken, ValueTask>? complete,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(actorValidator);
         ArgumentNullException.ThrowIfNull(bus);
@@ -41,16 +49,40 @@ public static class RequestDispatch
         ArgumentNullException.ThrowIfNull(delivery);
 
         using var process = StartProcess(delivery);
-        var actorResult = await actorValidator.ValidateAsync(delivery.ActorToken, ct).ConfigureAwait(false);
-        if (!actorResult.IsSuccess)
+        try
         {
-            return new RequestDispatchOutcome(Result.Failure(actorResult.Error), false);
-        }
-        else
-        {
+            var actorResult = await actorValidator.ValidateAsync(delivery.ActorToken, ct).ConfigureAwait(false);
+            if (!actorResult.IsSuccess)
+            {
+                var rejected = Result.Failure(actorResult.Error);
+                if (complete is not null)
+                {
+                    await complete(rejected, ct).ConfigureAwait(false);
+                }
+
+                PortiaTelemetry.RecordOutcome(process, false, rejected.Error);
+                return new RequestDispatchOutcome(rejected, false);
+            }
+
             var outcome = await bus.DispatchAsync(request, Context(Actor(actorResult, actorValidator), delivery), ct)
                 .ConfigureAwait(false);
+            if (complete is not null)
+            {
+                await complete(outcome, ct).ConfigureAwait(false);
+            }
+
+            PortiaTelemetry.RecordOutcome(process, outcome.IsSuccess, outcome.Error);
             return new RequestDispatchOutcome(outcome, true);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            PortiaTelemetry.RecordCanceled(process);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            PortiaTelemetry.RecordFault(process, ex);
+            throw;
         }
     }
 
@@ -63,15 +95,23 @@ public static class RequestDispatch
     /// <param name="ct">Cancels actor validation and dispatch.</param>
     /// <returns>The validation or dispatch outcome and whether the bus was invoked.</returns>
     /// <remarks>
-    ///     Creates one consumer activity. Scheduled invocations start a new trace linked to
-    ///     the delivery's trace context; other inbound invocations use it as their parent.
+    ///     Creates one consumer activity. The invocation explicitly declares whether propagated
+    ///     context starts a linked root or is used as the parent.
     /// </remarks>
-    public static async ValueTask<RequestDispatchOutcome<TOut>> SendAsync<TOut>(
+    public static ValueTask<RequestDispatchOutcome<TOut>> SendAsync<TOut>(
         IRequestActorValidator actorValidator,
         IRequestBus bus,
         IRequest<TOut> request,
         RequestDelivery delivery,
-        CancellationToken ct = default)
+        CancellationToken ct = default) => SendAsync(actorValidator, bus, request, delivery, null, ct);
+
+    internal static async ValueTask<RequestDispatchOutcome<TOut>> SendAsync<TOut>(
+        IRequestActorValidator actorValidator,
+        IRequestBus bus,
+        IRequest<TOut> request,
+        RequestDelivery delivery,
+        Func<Result<TOut>, CancellationToken, ValueTask>? complete,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(actorValidator);
         ArgumentNullException.ThrowIfNull(bus);
@@ -79,22 +119,45 @@ public static class RequestDispatch
         ArgumentNullException.ThrowIfNull(delivery);
 
         using var process = StartProcess(delivery);
-        var actorResult = await actorValidator.ValidateAsync(delivery.ActorToken, ct).ConfigureAwait(false);
-        if (!actorResult.IsSuccess)
+        try
         {
-            return new RequestDispatchOutcome<TOut>(Result<TOut>.Failure(actorResult.Error), false);
-        }
-        else
-        {
+            var actorResult = await actorValidator.ValidateAsync(delivery.ActorToken, ct).ConfigureAwait(false);
+            if (!actorResult.IsSuccess)
+            {
+                var rejected = Result<TOut>.Failure(actorResult.Error);
+                if (complete is not null)
+                {
+                    await complete(rejected, ct).ConfigureAwait(false);
+                }
+
+                PortiaTelemetry.RecordOutcome(process, false, rejected.Error);
+                return new RequestDispatchOutcome<TOut>(rejected, false);
+            }
+
             var outcome = await bus.DispatchAsync(request, Context(Actor(actorResult, actorValidator), delivery), ct)
                 .ConfigureAwait(false);
+            if (complete is not null)
+            {
+                await complete(outcome, ct).ConfigureAwait(false);
+            }
+
+            PortiaTelemetry.RecordOutcome(process, outcome.IsSuccess, outcome.Error);
             return new RequestDispatchOutcome<TOut>(outcome, true);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            PortiaTelemetry.RecordCanceled(process);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            PortiaTelemetry.RecordFault(process, ex);
+            throw;
         }
     }
 
     static Activity? StartProcess(RequestDelivery delivery) => PortiaTelemetry.StartProcess(
-        delivery.Name, delivery.Invocation.TransportName, delivery.TraceContext,
-        delivery.Invocation is ScheduleInvocation);
+        delivery.Name, delivery.Invocation, delivery.TraceContext);
 
     static RequestDispatchContext Context(ClaimsPrincipal actor, RequestDelivery delivery) =>
         new(actor, delivery.Invocation, delivery.Metadata, delivery.TimeProvider);

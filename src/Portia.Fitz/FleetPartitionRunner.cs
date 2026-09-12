@@ -1,4 +1,3 @@
-using Cntryl.Fitz.Abstractions.Domains.Lease;
 using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
@@ -183,6 +182,9 @@ public sealed partial class FleetPartitionRunner(
         ulong ttl, CancellationToken ct)
     {
         var attempt = 0;
+        // Portia owns the retry loop. A server-side queued acquisition can monopolize Fitz's
+        // single acquisition lane and prevent the other assigned partitions from competing.
+        var execution = new LeaseExecutionOptions();
         while (!ct.IsCancellationRequested)
         {
             var acquired = false;
@@ -192,7 +194,7 @@ public sealed partial class FleetPartitionRunner(
                 {
                     acquired = true;
                     return new ValueTask(callback(partition, leaseCt));
-                }, new LeaseExecutionOptions { WaitForAvailability = true }, ct).ConfigureAwait(false);
+                }, execution, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -290,7 +292,7 @@ public sealed partial class FleetPartitionRunner(
             PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), RunnerFaultStage.Cleanup, exception);
             if (_logger is not null)
             {
-                LogPartitionTerminationTimeout(_logger, string.Join(",", exception.Partitions), exception);
+                LogPartitionTerminationTimeout(_logger, exception);
             }
 
             throw exception;
@@ -337,9 +339,8 @@ public sealed partial class FleetPartitionRunner(
         PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), stage, exception, _logger);
 
     [LoggerMessage(EventId = 1101, Level = LogLevel.Error,
-        Message =
-            "Portia FleetPartitionRunner fault at cleanup (FleetPartitionTerminationTimeoutException); partitions: {Partitions}")]
-    static partial void LogPartitionTerminationTimeout(ILogger logger, string partitions, Exception exception);
+        Message = "Portia FleetPartitionRunner partition termination timed out")]
+    static partial void LogPartitionTerminationTimeout(ILogger logger, Exception exception);
 
     sealed class PartitionRun(
         CancellationTokenSource cancellation,

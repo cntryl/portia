@@ -9,6 +9,6 @@ sealed record FitzNoticeWorkerDefinition(string Route) : FitzRoutedWorkerDefinit
 
     internal override Func<CancellationToken, Task>? CreateRunner(FitzWorkerHost host) =>
         new RequestNotificationRunner(
-            new FitzNoticeRequestConsumer(host.Client.Notice, host.Serializer, Route),
+            new FitzNoticeRequestConsumer(host.Client.Notice, host.Serializer, Route, host.NoticeLogger),
             new DependencyInjectionRequestDeliveryScopeFactory(host.Scopes), host.NotificationLogger).RunAsync;
 }

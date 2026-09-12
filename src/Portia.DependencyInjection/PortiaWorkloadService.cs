@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
-sealed partial class PortiaWorkloadService(
+sealed class PortiaWorkloadService(
     IServiceScopeFactory scopes,
     IEnumerable<WorkloadRegistration> registrations,
     IServiceProviderIsService available,
@@ -139,10 +139,7 @@ sealed partial class PortiaWorkloadService(
             return workloadCoordinator;
         }
 
-        if (_logger is not null)
-        {
-            LogSingleProcessCoordinator(_logger);
-        }
+        PortiaTelemetry.RecordSingleProcessCoordinator(_logger);
 
         // Reconcile cadence is infrastructure timing, not application time, so it deliberately
         // does not follow a registered TimeProvider — a test that controls the workload poll
@@ -314,8 +311,4 @@ sealed partial class PortiaWorkloadService(
         return TimeSpan.FromTicks(Math.Min(ticks, maximumTicks));
     }
 
-    [LoggerMessage(Level = LogLevel.Warning,
-        Message =
-            "No IWorkloadCoordinator is registered; owning every workload in this process. That is correct for a single worker replica only \u2014 register a distributed coordinator before scaling workers out.")]
-    static partial void LogSingleProcessCoordinator(ILogger logger);
 }

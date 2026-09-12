@@ -19,3 +19,23 @@ Cntryl.Portia.QueuedRequestTerminalReason
 Cntryl.Portia.QueuedRequestTerminalReason.ActorValidationFailure = 2 -> Cntryl.Portia.QueuedRequestTerminalReason
 Cntryl.Portia.QueuedRequestTerminalReason.PermanentFailure = 1 -> Cntryl.Portia.QueuedRequestTerminalReason
 Cntryl.Portia.QueuedRequestTerminalReason.RetryLimitReached = 0 -> Cntryl.Portia.QueuedRequestTerminalReason
+Cntryl.Portia.RequestDeliveryOutcome
+Cntryl.Portia.RequestDeliveryOutcome.Abandoned = 1 -> Cntryl.Portia.RequestDeliveryOutcome
+Cntryl.Portia.RequestDeliveryOutcome.Canceled = 4 -> Cntryl.Portia.RequestDeliveryOutcome
+Cntryl.Portia.RequestDeliveryOutcome.Completed = 0 -> Cntryl.Portia.RequestDeliveryOutcome
+Cntryl.Portia.RequestDeliveryOutcome.Fault = 5 -> Cntryl.Portia.RequestDeliveryOutcome
+Cntryl.Portia.RequestDeliveryOutcome.Lost = 3 -> Cntryl.Portia.RequestDeliveryOutcome
+Cntryl.Portia.RequestDeliveryOutcome.Terminal = 2 -> Cntryl.Portia.RequestDeliveryOutcome
+Cntryl.Portia.RequestTraceRelationship
+Cntryl.Portia.RequestTraceRelationship.Link = 1 -> Cntryl.Portia.RequestTraceRelationship
+Cntryl.Portia.RequestTraceRelationship.Parent = 0 -> Cntryl.Portia.RequestTraceRelationship
+abstract Cntryl.Portia.RequestInvocation.TraceRelationship.get -> Cntryl.Portia.RequestTraceRelationship
+override Cntryl.Portia.DirectInvocation.TraceRelationship.get -> Cntryl.Portia.RequestTraceRelationship
+override Cntryl.Portia.HttpInvocation.TraceRelationship.get -> Cntryl.Portia.RequestTraceRelationship
+override Cntryl.Portia.NoticeInvocation.TraceRelationship.get -> Cntryl.Portia.RequestTraceRelationship
+override Cntryl.Portia.QueueInvocation.TraceRelationship.get -> Cntryl.Portia.RequestTraceRelationship
+override Cntryl.Portia.RpcInvocation.TraceRelationship.get -> Cntryl.Portia.RequestTraceRelationship
+override Cntryl.Portia.ScheduleInvocation.TraceRelationship.get -> Cntryl.Portia.RequestTraceRelationship
+static Cntryl.Portia.PortiaTelemetry.RecordDelivery(string! requestName, string! transport, Cntryl.Portia.RequestDeliveryOutcome outcome) -> void
+virtual Cntryl.Portia.RequestInvocation.MessagingSystem.get -> string?
+virtual Cntryl.Portia.RequestInvocation.MessagingSystem.init -> void

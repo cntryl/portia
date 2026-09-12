@@ -50,4 +50,55 @@ public sealed class JsonMetadataGeneratorTests
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
+
+    [Fact]
+    public void IgnoresConsumerMethodsWhoseNamesMatchPortiaApis()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using Cntryl.Portia;
+                                                           public sealed record Payload;
+                                                           public static class ConsumerApis
+                                                           {
+                                                               public static void AddEvent<T>() { }
+                                                               public static void RegisterDynamicRequest<T>() { }
+                                                               public static void MapPortiaPost<T>() { }
+
+                                                               public static void Configure()
+                                                               {
+                                                                   AddEvent<Payload>();
+                                                                   RegisterDynamicRequest<Payload>();
+                                                                   MapPortiaPost<Payload>();
+                                                               }
+                                                           }
+                                                           """, new JsonMetadataDiagnosticGenerator());
+
+        Assert.DoesNotContain(diagnostics,
+            diagnostic => diagnostic.Id is "PORTIA025" or "CS8785");
+    }
+
+    [Fact]
+    public void AcceptsAnUpcasterForAReferencedDomainEventUsedByTheApplication()
+    {
+        var contracts = GeneratorCompilation.Reference("""
+                                                       using Cntryl.Portia;
+                                                       namespace Contracts;
+                                                       [Discriminator("external.changed", 2)]
+                                                       public sealed record ExternalChanged : DomainEvent;
+                                                       """);
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using Cntryl.Portia;
+                                                           using Contracts;
+                                                           public sealed class Projection
+                                                               : Projector(null!, EventStreamPattern.ForPattern("events")),
+                                                                 IProjectorHandler<ExternalChanged>;
+                                                           public sealed class Upcaster : IJsonDomainEventUpcaster
+                                                           {
+                                                               public string EventName => "external.changed";
+                                                               public int FromVersion => 1;
+                                                               public System.Text.Json.Nodes.JsonObject Upcast(System.Text.Json.Nodes.JsonObject json) => json;
+                                                           }
+                                                           """, [contracts], new DomainEventCatalogGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA012");
+    }
 }

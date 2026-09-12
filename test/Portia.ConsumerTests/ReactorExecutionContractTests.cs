@@ -1,5 +1,6 @@
 namespace Cntryl.Portia.Consumer;
 
+[Trait("Category", "BrokerIntegration")]
 public sealed class ReactorExecutionContractTests
 {
     [Theory]

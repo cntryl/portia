@@ -600,7 +600,7 @@ const Cntryl.Portia.PortiaTelemetry.ExecuteActivityName = "portia.request.execut
 const Cntryl.Portia.PortiaTelemetry.ProcessActivityName = "portia.request.process" -> string!
 const Cntryl.Portia.PortiaTelemetry.SendActivityName = "portia.request.send" -> string!
 const Cntryl.Portia.PortiaTelemetry.SourceName = "Cntryl.Portia" -> string!
-const Cntryl.Portia.PortiaTelemetry.Version = "1.0.0" -> string!
+const Cntryl.Portia.PortiaTelemetry.Version = "2.0.0" -> string!
 const Cntryl.Portia.RequestRouteAttribute.Wildcard = "*" -> string!
 override Cntryl.Portia.ActorAttribution.Equals(object? obj) -> bool
 override Cntryl.Portia.ActorAttribution.GetHashCode() -> int
@@ -737,11 +737,11 @@ static Cntryl.Portia.PortiaTelemetry.RecordOutcome(System.Diagnostics.Activity? 
 static Cntryl.Portia.PortiaTelemetry.RecordRunnerFault(string! runnerName, Cntryl.Portia.RunnerFaultStage stage, System.Exception? exception = null, Microsoft.Extensions.Logging.ILogger? logger = null) -> void
 static Cntryl.Portia.PortiaTelemetry.RecordWorkerRestart(string! runner, string! stage) -> void
 static Cntryl.Portia.PortiaTelemetry.RecordWorkload(string! component, string! scope, bool active, Microsoft.Extensions.Logging.ILogger? logger = null) -> void
-static Cntryl.Portia.PortiaTelemetry.RequestFinished(long started, string! requestType, string! transport, string! outcome) -> void
-static Cntryl.Portia.PortiaTelemetry.RequestStarted(string! requestType, string! transport) -> void
-static Cntryl.Portia.PortiaTelemetry.StartExecute(string! requestType) -> System.Diagnostics.Activity?
-static Cntryl.Portia.PortiaTelemetry.StartProcess(string! requestType, string! transport, Cntryl.Portia.RequestTraceContext? propagated, bool linked) -> System.Diagnostics.Activity?
-static Cntryl.Portia.PortiaTelemetry.StartSend(string! requestType, string! transport) -> System.Diagnostics.Activity?
+static Cntryl.Portia.PortiaTelemetry.RequestFinished(long started, string! requestName, string! transport, string! outcome) -> void
+static Cntryl.Portia.PortiaTelemetry.RequestStarted(string! requestName, string! transport) -> void
+static Cntryl.Portia.PortiaTelemetry.StartExecute(string! requestName, string! transport) -> System.Diagnostics.Activity?
+static Cntryl.Portia.PortiaTelemetry.StartProcess(string! requestName, Cntryl.Portia.RequestInvocation! invocation, Cntryl.Portia.RequestTraceContext? propagated) -> System.Diagnostics.Activity?
+static Cntryl.Portia.PortiaTelemetry.StartSend(string! requestName, string! transport, string? messagingSystem) -> System.Diagnostics.Activity?
 static Cntryl.Portia.PortiaTelemetry.StartTimestamp() -> long
 static Cntryl.Portia.PortiaTelemetry.TransportFinished(long started, string! transport, string! operation, string! outcome) -> void
 static Cntryl.Portia.ProjectionBatchContext.operator !=(Cntryl.Portia.ProjectionBatchContext? left, Cntryl.Portia.ProjectionBatchContext? right) -> bool

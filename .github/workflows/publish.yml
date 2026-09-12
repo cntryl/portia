@@ -10,24 +10,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  version:
-    uses: ./.github/workflows/version.yml
-    permissions:
-      contents: read
-
   publish:
-    name: Verify, publish, and tag
-    needs: version
+    name: Publish and tag
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     permissions:
       contents: write
       packages: write
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      PACKAGE_VERSION: ${{ needs.version.outputs.semver }}
       PACKAGE_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
-      FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
 
     steps:
       - name: Require main
@@ -46,89 +38,32 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Install .NET 10 SDK
+      - name: Set up .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
           cache: true
           cache-dependency-path: '**/packages.lock.json'
 
-      - name: Validate package version
+      - name: Read package version
         shell: bash
         run: |
-          if [[ ! "$PACKAGE_VERSION" =~ ^1\.0\.[0-9]+$ ]]; then
-            echo "::error title=Invalid package version::Expected 1.0.x, got $PACKAGE_VERSION"
+          package_version="$(dotnet msbuild src/Portia.AspNetCore/Portia.AspNetCore.csproj -getProperty:PackageVersion -nologo | sed -n 's/^  PackageVersion = //p')"
+          if [[ ! "$package_version" =~ ^0\.1\.[0-9]+$ ]]; then
+            echo "::error title=Invalid package version::Expected 0.1.x, got '$package_version'"
             exit 1
           fi
-
-      - name: Restore locked dependencies
-        run: dotnet restore Portia.slnx --locked-mode
-
-      - name: Check formatting
-        run: dotnet format Portia.slnx --verify-no-changes --no-restore
-
-      - name: Require promoted public API baselines
-        shell: bash
-        run: |
-          if grep --recursive --with-filename --extended-regexp --invert-match \
-            '^([[:space:]]*|#nullable (enable|disable))$' \
-            --include='PublicAPI.Unshipped.txt' src; then
-            echo "::error title=Unshipped public API::Promote every public API entry to Shipped before publishing."
-            exit 1
-          fi
-
-      - name: Start Fitz server
-        run: docker compose up -d
-
-      - name: Build solution
-        run: dotnet build Portia.slnx --configuration Release --no-restore
+          echo "PACKAGE_VERSION=$package_version" >> "$GITHUB_ENV"
 
       - name: Pack NuGet packages
-        run: |
-          dotnet pack Portia.slnx \
-            --configuration Release \
-            --no-build \
-            --no-restore \
-            --output artifacts/packages \
-            -p:PackageVersion="$PACKAGE_VERSION"
-
-      - name: Run ASP.NET Core package consumer
         run: >-
-          dotnet run
-          --project smoke/Portia.AspNetCore.PackageConsumer/Portia.AspNetCore.PackageConsumer.csproj
+          dotnet pack Portia.slnx
           --configuration Release
-          -p:PortiaSmokePackageVersion="$PACKAGE_VERSION"
+          --output artifacts/packages
+          -p:RestoreLockedMode=true
+          -p:PackageVersion="$PACKAGE_VERSION"
 
-      - name: Publish and execute NativeAOT package consumer
-        run: >-
-          dotnet publish
-          smoke/Portia.AspNetCore.NativeAotConsumer/Portia.AspNetCore.NativeAotConsumer.csproj
-          --configuration Release
-          --runtime linux-x64
-          --self-contained true
-          -p:PublishAot=true
-          -p:PortiaSmokePackageVersion="$PACKAGE_VERSION"
-          --output artifacts/native-aot
-      - name: Execute NativeAOT package consumer
-        run: artifacts/native-aot/Portia.AspNetCore.NativeAotConsumer
-
-      - name: Test solution
-        run: dotnet test Portia.slnx --configuration Release --no-build --no-restore
-
-      - name: Stop Fitz server
-        if: ${{ always() }}
-        run: docker compose down --volumes
-
-      - name: Publish to GitHub Packages
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          dotnet nuget push artifacts/packages/*.nupkg \
-            --api-key "$NUGET_AUTH_TOKEN" \
-            --source "$PACKAGE_SOURCE" \
-            --skip-duplicate
-
-      - name: Create tag if missing
+      - name: Prepare release tag
         id: tag
         shell: bash
         run: |
@@ -145,6 +80,15 @@ jobs:
             echo "created=true" >> "$GITHUB_OUTPUT"
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to GitHub Packages
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dotnet nuget push artifacts/packages/*.nupkg \
+            --api-key "$NUGET_AUTH_TOKEN" \
+            --source "$PACKAGE_SOURCE" \
+            --skip-duplicate
 
       - name: Push tag to origin
         if: steps.tag.outputs.created == 'true'

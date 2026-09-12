@@ -35,9 +35,9 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         Validate(request, context, ct);
         var registration = registry.Handler(request.GetType());
         var policies = registry.Policies(registration.RequestType);
-        using var activity = PortiaTelemetry.StartExecute(policies.Name);
-        var started = PortiaTelemetry.StartTimestamp();
         var transport = context.Invocation.TransportName;
+        using var activity = PortiaTelemetry.StartExecute(policies.Name, transport);
+        var started = PortiaTelemetry.StartTimestamp();
         PortiaTelemetry.RequestStarted(policies.Name, transport);
         var outcome = "fault";
         var completed = false;
@@ -49,15 +49,14 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             completed = true;
             return result;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
         catch (Exception ex)
         {
-            _ = activity?.AddException(ex);
-            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }
         finally
@@ -74,9 +73,9 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         Validate(request, context, ct);
         var registration = registry.Handler(request.GetType());
         var policies = registry.Policies(registration.RequestType);
-        using var activity = PortiaTelemetry.StartExecute(policies.Name);
-        var started = PortiaTelemetry.StartTimestamp();
         var transport = context.Invocation.TransportName;
+        using var activity = PortiaTelemetry.StartExecute(policies.Name, transport);
+        var started = PortiaTelemetry.StartTimestamp();
         PortiaTelemetry.RequestStarted(policies.Name, transport);
         var outcome = "fault";
         var completed = false;
@@ -88,15 +87,14 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             completed = true;
             return result;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
         catch (Exception ex)
         {
-            _ = activity?.AddException(ex);
-            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }
         finally
@@ -115,9 +113,9 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         var registration = registry.Handler(request.GetType());
         var policies = registry.Policies(registration.RequestType);
         var requestContext = registration.CreateContext(request, context);
-        using var activity = PortiaTelemetry.StartExecute(policies.Name);
-        var started = PortiaTelemetry.StartTimestamp();
         var transport = context.Invocation.TransportName;
+        using var activity = PortiaTelemetry.StartExecute(policies.Name, transport);
+        var started = PortiaTelemetry.StartTimestamp();
         PortiaTelemetry.RequestStarted(policies.Name, transport);
         var outcome = "fault";
         var completed = false;
@@ -142,10 +140,23 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             }
 
             outcome = "success";
+            PortiaTelemetry.RecordOutcome(activity, true, null);
             completed = true;
         }
         finally
         {
+            if (!completed)
+            {
+                if (ct.IsCancellationRequested)
+                {
+                    PortiaTelemetry.RecordCanceled(activity);
+                }
+                else if (activity is not null && activity.GetTagItem("portia.outcome") is null)
+                {
+                    PortiaTelemetry.RecordFault(activity);
+                }
+            }
+
             PortiaTelemetry.RequestFinished(started, policies.Name, transport, Finish(completed, outcome, ct));
         }
     }
@@ -167,7 +178,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         {
             while (true)
             {
-                var (hasValue, value) = await MoveNextAsync(enumerator, activity).ConfigureAwait(false);
+                var (hasValue, value) = await MoveNextAsync(enumerator, activity, ct).ConfigureAwait(false);
                 if (!hasValue)
                 {
                     yield break;
@@ -180,12 +191,12 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         finally
         {
-            await DisposeAsync(enumerator, activity).ConfigureAwait(false);
+            await DisposeAsync(enumerator, activity, ct).ConfigureAwait(false);
         }
     }
 
     static async ValueTask<(bool HasValue, TOut? Value)> MoveNextAsync<TOut>(IAsyncEnumerator<TOut> enumerator,
-        Activity? activity)
+        Activity? activity, CancellationToken ct)
     {
         try
         {
@@ -193,34 +204,33 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
                 ? (true, enumerator.Current)
                 : (false, default);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
         catch (Exception ex)
         {
-            _ = activity?.AddException(ex);
-            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }
     }
 
-    static async ValueTask DisposeAsync<TOut>(IAsyncEnumerator<TOut> enumerator, Activity? activity)
+    static async ValueTask DisposeAsync<TOut>(IAsyncEnumerator<TOut> enumerator, Activity? activity,
+        CancellationToken ct)
     {
         try
         {
             await enumerator.DisposeAsync().ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
         catch (Exception ex)
         {
-            _ = activity?.AddException(ex);
-            _ = activity?.SetStatus(ActivityStatusCode.Error);
+            PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }
     }

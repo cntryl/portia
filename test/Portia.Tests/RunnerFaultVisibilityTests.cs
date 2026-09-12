@@ -40,10 +40,34 @@ public sealed class RunnerFaultVisibilityTests
         Assert.Empty(activities);
         var (Value, Tags) = Assert.Single(measurements);
         Assert.Equal(1, Value);
-        Assert.Equal(["runner", "stage"], Tags.Select(tag => tag.Key));
+        Assert.Equal(["portia.runner.name", "portia.stage"], Tags.Select(tag => tag.Key));
         Assert.Equal("execution", Tags[1].Value);
         Assert.DoesNotContain(Tags, tag => Equals(tag.Value, nameof(InvalidOperationException)));
         Assert.DoesNotContain(Tags, tag => Equals(tag.Value, "secret"));
+    }
+
+    /// <summary>Polling-adjacent lifecycle, checkpoint, retry, and renewal measurements create no spans.</summary>
+    [Fact]
+    public void ShouldNeverCreateActivitiesForNonRequestRuntimeLoops()
+    {
+        var activities = new ConcurrentBag<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == PortiaTelemetry.SourceName,
+            Sample = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activities.Add
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        PortiaTelemetry.RecordWorkerRestart("queue", "execution");
+        PortiaTelemetry.RecordRunnerFault("queue", RunnerFaultStage.Renewal);
+        PortiaTelemetry.RecordWorkload("test.projector", "tenant", true);
+        PortiaTelemetry.RecordFleetAssignment("worker-secret", "partition-secret", true);
+        PortiaTelemetry.EventStoreFinished(PortiaTelemetry.StartTimestamp(), "read", "pattern", "success");
+        PortiaTelemetry.ProcessorBatchFinished(PortiaTelemetry.StartTimestamp(), "test.projector", "projector",
+            "success", 0);
+
+        Assert.Empty(activities);
     }
 
     internal sealed record RunnerFaultAction : IRequest;

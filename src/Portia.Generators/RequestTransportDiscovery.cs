@@ -26,7 +26,8 @@ static class RequestTransportDiscovery
     {
         var declaration = (TypeDeclarationSyntax)context.Node;
         return context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol symbol
-            ? GetRequestTransportComponent(symbol)
+               && GetRequestTransportComponent(symbol) is { } component
+            ? component with { Location = DiagnosticLocation.From(declaration.Identifier.GetLocation()) }
             : null;
     }
 

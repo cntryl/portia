@@ -1,4 +1,3 @@
-using Cntryl.Fitz.Abstractions.Domains.Lease;
 
 namespace Cntryl.Portia.Testing;
 

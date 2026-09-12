@@ -64,7 +64,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
                 symbol.ContainingNamespace.IsGlobalNamespace ? null : symbol.ContainingNamespace.ToDisplayString(),
                 GetParents(symbol), GeneratedTypeShape.HintName(symbol),
                 DiagnosticLocation.From(symbol.Locations.FirstOrDefault()),
-                GeneratedTypeShape.IsSupported(symbol, true),
+                GeneratedTypeShape.UnsupportedReason(symbol, true),
                 declaration.Modifiers.Any(SyntaxKind.PartialKeyword), projector,
                 InheritsFrom(symbol, projector ? "Cntryl.Portia.BatchProjector" : "Cntryl.Portia.BatchReactor"),
                 handlers);
@@ -80,10 +80,10 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
             return;
         }
 
-        if (!processor.ShapeSupported)
+        if (processor.UnsupportedReason is { } unsupportedReason)
         {
             context.ReportDiagnostic(Diagnostic.Create(GeneratedTypeShape.Unsupported,
-                processor.Location.ToLocation(), processor.DisplayName));
+                processor.Location.ToLocation(), processor.DisplayName, unsupportedReason));
             return;
         }
         var invalidBatchHandler = processor.Handlers.FirstOrDefault(h => h.Batch && !processor.Batch);
@@ -240,7 +240,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         string[] parents,
         string hintName,
         DiagnosticLocation location,
-        bool shapeSupported,
+        string? unsupportedReason,
         bool partial,
         bool projector,
         bool batch,
@@ -252,14 +252,14 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         public string[] Parents { get; } = parents;
         public string HintName { get; } = hintName;
         public DiagnosticLocation Location { get; } = location;
-        public bool ShapeSupported { get; } = shapeSupported;
+        public string? UnsupportedReason { get; } = unsupportedReason;
         public bool Partial { get; } = partial;
         public bool Projector { get; } = projector;
         public bool Batch { get; } = batch;
         public Handler[] Handlers { get; } = handlers;
         public bool Equals(Processor? other) => other is not null && Name == other.Name &&
             DisplayName == other.DisplayName && Namespace == other.Namespace && HintName == other.HintName &&
-            Location.Equals(other.Location) && ShapeSupported == other.ShapeSupported && Partial == other.Partial &&
+            Location.Equals(other.Location) && UnsupportedReason == other.UnsupportedReason && Partial == other.Partial &&
             Projector == other.Projector && Batch == other.Batch && Parents.SequenceEqual(other.Parents) &&
             Handlers.SequenceEqual(other.Handlers);
         public override bool Equals(object? obj) => Equals(obj as Processor);

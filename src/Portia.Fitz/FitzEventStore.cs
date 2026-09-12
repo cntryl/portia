@@ -1,7 +1,5 @@
 using System.Runtime.CompilerServices;
 using System.Text;
-using Cntryl.Fitz.Abstractions.Domains.Stream;
-using Cntryl.Fitz.Errors;
 
 namespace Cntryl.Portia;
 
@@ -180,7 +178,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                             $"Fitz stream pattern '{route}' contains a gap at offset '{item.Offset}'.");
                         var metadata = record.Metadata ?? throw new InvalidOperationException(
                             "A Portia Fitz record does not contain its concrete stream route.");
-                        var stream = EventStreamAddress.Parse(Encoding.UTF8.GetString(metadata));
+                        var stream = EventStreamAddress.Parse(Encoding.UTF8.GetString(metadata.Span));
                         if (!FitzEventStreamPatternOffsets.Matches(stream, pattern))
                             throw new InvalidOperationException($"Stream '{stream}' does not match pattern '{pattern}'.");
                         var areaOffset = record.AreaOffset;

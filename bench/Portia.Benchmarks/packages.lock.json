@@ -119,27 +119,27 @@
         "dependencies": {
           "Microsoft.AspNetCore.OpenApi": "[10.0.11, )",
           "Microsoft.OpenApi": "[2.12.0, )",
-          "Portia.Abstractions": "[1.0.0, )",
-          "Portia.DependencyInjection": "[1.0.0, )"
+          "Portia.Abstractions": "[0.1.0, )",
+          "Portia.DependencyInjection": "[0.1.0, )"
         }
       },
       "portia.core": {
         "type": "Project",
         "dependencies": {
-          "Portia.Abstractions": "[1.0.0, )"
+          "Portia.Abstractions": "[0.1.0, )"
         }
       },
       "portia.dependencyinjection": {
         "type": "Project",
         "dependencies": {
-          "Portia.Abstractions": "[1.0.0, )",
-          "Portia.Core": "[1.0.0, )"
+          "Portia.Abstractions": "[0.1.0, )",
+          "Portia.Core": "[0.1.0, )"
         }
       },
       "portia.testing": {
         "type": "Project",
         "dependencies": {
-          "Portia.Abstractions": "[1.0.0, )"
+          "Portia.Abstractions": "[0.1.0, )"
         }
       },
       "Microsoft.AspNetCore.OpenApi": {

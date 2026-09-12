@@ -1,4 +1,3 @@
-using Cntryl.Fitz.Abstractions.Domains.Queue;
 
 namespace Cntryl.Portia;
 
@@ -33,7 +32,8 @@ public sealed class FitzRequestQueuePublisher(
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(routeValues);
 
-        using var activity = PortiaTelemetry.StartSend(typeof(TRequest).Name, "fitz.queue");
+        var requestName = _catalog.Get(request.GetType()).Discriminator.Name;
+        using var activity = PortiaTelemetry.StartSend(requestName, "queue", "fitz");
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "success";
         try
@@ -41,20 +41,23 @@ public sealed class FitzRequestQueuePublisher(
             var route = FitzRouting.ResolveQueueRoute(_catalog, request, routeValues);
             var body = _serializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
             _ = await _queue.EnqueueAsync(route, body, null, ct).ConfigureAwait(false);
+            PortiaTelemetry.RecordOutcome(activity, true, null);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             outcome = "canceled";
+            PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
-        catch
+        catch (Exception ex)
         {
             outcome = "fault";
+            PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }
         finally
         {
-            PortiaTelemetry.TransportFinished(started, "fitz.queue", "enqueue", outcome);
+            PortiaTelemetry.TransportFinished(started, "queue", "enqueue", outcome);
         }
     }
 }

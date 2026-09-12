@@ -5,6 +5,7 @@ namespace Cntryl.Portia;
 ///     membership fixtures. Public FleetBrokerTests separately verify real membership scale-out and TTL expiry.
 /// </summary>
 [Collection(FitzBrokerCollectionDefinition.Name)]
+[Trait("Category", "BrokerIntegration")]
 public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
 {
     readonly FitzBrokerFixture _broker = broker;

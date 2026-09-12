@@ -1,9 +1,10 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using System.Text;
 using Cntryl.Fitz;
-using Cntryl.Fitz.Abstractions.Domains.Kv;
-using Cntryl.Fitz.Abstractions.Domains.Schedule;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
@@ -13,6 +14,7 @@ namespace Cntryl.Portia;
 ///     the focused in-memory fakes used by the unit tests.
 /// </summary>
 [Collection(FitzBrokerCollectionDefinition.Name)]
+[Trait("Category", "BrokerIntegration")]
 public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 {
     readonly FitzBrokerFixture _broker = broker;
@@ -41,7 +43,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             _ = await second.EnsureAsync(new UniversalAction(2), new RequestScheduleSpec("0 1 * * *"),
                 RequestRouteValues.None, RequestActor.CreateSystem("replica"));
             var updated = Assert.Single(await firstClient.Schedule.ListBySelectorAsync(route));
-            var outer = System.Text.Json.JsonSerializer.Deserialize(updated.Payload,
+            var outer = System.Text.Json.JsonSerializer.Deserialize(updated.Payload.Span,
                 FitzJsonContext.Default.FitzScheduledRequestEnvelope)!;
             var envelope = serializer.DeserializeEnvelope(outer.RequestEnvelope);
             Assert.Equal(2, Assert.IsType<UniversalAction>(envelope.Request).Value);
@@ -52,6 +54,41 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         }
 
         Assert.Empty(await firstClient.Schedule.ListBySelectorAsync(route));
+    }
+
+    /// <summary>A real persisted schedule carries the completed producer span as its future link.</summary>
+    [Fact]
+    public async Task ShouldPersistScheduleProducerContextAgainstRealFitzBroker()
+    {
+        using var listener = ListenToRequests(out var activities);
+        await using var client = await _broker.CreateClientAsync();
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var scheduler = new FitzRequestScheduler(client.Schedule, serializer);
+        const string route = "schedule://test/shared/action/run";
+        string? scheduleId = null;
+        try
+        {
+            scheduleId = await scheduler.ScheduleAsync(new UniversalAction(73),
+                new RequestScheduleSpec("0 0 * * *"), RequestRouteValues.None,
+                RequestActor.CreateSystem("telemetry-test"));
+            var stored = Assert.Single(await client.Schedule.ListBySelectorAsync(route));
+            var scheduled = System.Text.Json.JsonSerializer.Deserialize(stored.Payload.Span,
+                FitzJsonContext.Default.FitzScheduledRequestEnvelope)!;
+            var envelope = serializer.DeserializeEnvelope(scheduled.RequestEnvelope);
+            var producer = Assert.Single(activities,
+                activity => activity.OperationName == PortiaTelemetry.SendActivityName &&
+                            Equals(activity.GetTagItem("portia.transport.name"), "schedule"));
+
+            Assert.Equal(producer.Id, envelope.TraceContext?.TraceParent);
+            Assert.Equal(producer.TraceStateString, envelope.TraceContext?.TraceState);
+        }
+        finally
+        {
+            if (scheduleId is not null)
+            {
+                await scheduler.CancelAsync(scheduleId);
+            }
+        }
     }
 
     /// <summary>
@@ -213,6 +250,8 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldRoundTripRequestThroughRealFitzBroker()
     {
+        using var activityListener = ListenToRequests(out var activities);
+        using var meterListener = ListenToDeliveries(out var deliveries);
         await using var workerClient = await _broker.CreateClientAsync();
         await using var callerClient = await _broker.CreateClientAsync();
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
@@ -230,6 +269,62 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
         Assert.True(result.IsSuccess);
         Assert.Equal(7, result.Value);
+        AssertParentedFitzTopology(activities, "test.rpc.get-value", "rpc");
+        AssertCompletedDelivery(deliveries, "test.rpc.get-value", "rpc");
+    }
+
+    /// <summary>A real queue delivery starts a linked root and records one completed reservation.</summary>
+    [Fact]
+    public async Task ShouldEmitLinkedQueueTopologyAgainstRealFitzBroker()
+    {
+        await using var workerClient = await _broker.CreateClientAsync();
+        await using var callerClient = await _broker.CreateClientAsync();
+        const string route = "queue://test/shared/action";
+        await DrainQueueAsync(workerClient.Queue, route);
+        using var activityListener = ListenToRequests(out var activities);
+        using var meterListener = ListenToDeliveries(out var deliveries);
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var handler = new UniversalActionHandler();
+        using var busHost = TestRequestBus.Create(universalActionHandler: handler);
+        var consumer = new FitzRequestQueueConsumer(workerClient.Queue, serializer, route, 5,
+            waitDuration: TimeSpan.FromMilliseconds(100));
+        var runner = new QueueRunner(new OneQueueConsumer(consumer),
+            RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator()));
+        var publisher = new FitzRequestQueuePublisher(callerClient.Queue, serializer);
+
+        await publisher.EnqueueAsync(new UniversalAction(74), RequestRouteValues.None, "valid-token");
+        await runner.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Contains(74, handler.HandledValues);
+        AssertLinkedFitzTopology(activities, "test.shared.universal-action", "queue");
+        AssertCompletedDelivery(deliveries, "test.shared.universal-action", "queue");
+    }
+
+    /// <summary>A real notice delivery starts a linked root and records one completed delivery.</summary>
+    [Fact]
+    public async Task ShouldEmitLinkedNoticeTopologyAgainstRealFitzBroker()
+    {
+        await using var workerClient = await _broker.CreateClientAsync();
+        await using var callerClient = await _broker.CreateClientAsync();
+        using var activityListener = ListenToRequests(out var activities);
+        using var meterListener = ListenToDeliveries(out var deliveries);
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var handler = new UniversalActionHandler();
+        using var busHost = TestRequestBus.Create(universalActionHandler: handler);
+        var signalingNotice = new SignalingNoticeClient(workerClient.Notice);
+        var consumer = new FitzNoticeRequestConsumer(signalingNotice, serializer, "notice://test/shared/action");
+        var runner = new RequestNotificationRunner(new OneNotificationConsumer(consumer),
+            RequestDeliveryScopes.Fixed(busHost.Bus, new TestRequestActorValidator()));
+        var run = runner.RunAsync();
+        await signalingNotice.Ready.WaitAsync(TimeSpan.FromSeconds(10));
+
+        await new FitzNoticeRequestSender(callerClient.Notice, serializer)
+            .PublishAsync(new UniversalAction(75), RequestRouteValues.None, "valid-token");
+        await run.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Contains(75, handler.HandledValues);
+        AssertLinkedFitzTopology(activities, "test.shared.universal-action", "notice");
+        AssertCompletedDelivery(deliveries, "test.shared.universal-action", "notice");
     }
 
     /// <summary>
@@ -255,6 +350,169 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         // isn't relying on the test's own cancellation to end the call.
         Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(2),
             $"Took {elapsed.Elapsed} — too close to looking like a hang.");
+    }
+
+    static ActivityListener ListenToRequests(out ConcurrentBag<Activity> activities)
+    {
+        var captured = new ConcurrentBag<Activity>();
+        activities = captured;
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == PortiaTelemetry.SourceName,
+            Sample = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = captured.Add
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
+    }
+
+    static MeterListener ListenToDeliveries(out ConcurrentBag<DeliveryMeasurement> deliveries)
+    {
+        var captured = new ConcurrentBag<DeliveryMeasurement>();
+        deliveries = captured;
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == PortiaTelemetry.SourceName &&
+                    instrument.Name == "portia.request.delivery.count")
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, tags, _) =>
+            captured.Add(new DeliveryMeasurement(value, tags.ToArray())));
+        listener.Start();
+        return listener;
+    }
+
+    static void AssertParentedFitzTopology(IEnumerable<Activity> captured, string requestName, string transport)
+    {
+        var activities = captured.Where(activity =>
+            Equals(activity.GetTagItem("portia.request.name"), requestName)).ToArray();
+        var send = Assert.Single(activities, activity => activity.OperationName == PortiaTelemetry.SendActivityName);
+        var process = Assert.Single(activities,
+            activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);
+        var execute = Assert.Single(activities,
+            activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName);
+        Assert.Equal(send.TraceId, process.TraceId);
+        Assert.Equal(send.SpanId, process.ParentSpanId);
+        Assert.Equal(process.TraceId, execute.TraceId);
+        Assert.Equal(process.SpanId, execute.ParentSpanId);
+        AssertBoundedFitzTags(send, process, execute, transport);
+    }
+
+    static void AssertLinkedFitzTopology(IEnumerable<Activity> captured, string requestName, string transport)
+    {
+        var activities = captured.Where(activity =>
+            Equals(activity.GetTagItem("portia.request.name"), requestName)).ToArray();
+        var send = Assert.Single(activities, activity => activity.OperationName == PortiaTelemetry.SendActivityName);
+        var process = Assert.Single(activities,
+            activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);
+        var execute = Assert.Single(activities,
+            activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName);
+        Assert.NotEqual(send.TraceId, process.TraceId);
+        var link = Assert.Single(process.Links);
+        Assert.Equal(send.TraceId, link.Context.TraceId);
+        Assert.Equal(send.SpanId, link.Context.SpanId);
+        Assert.Equal(process.TraceId, execute.TraceId);
+        Assert.Equal(process.SpanId, execute.ParentSpanId);
+        AssertBoundedFitzTags(send, process, execute, transport);
+    }
+
+    static void AssertBoundedFitzTags(Activity send, Activity process, Activity execute, string transport)
+    {
+        Assert.Equal(ActivityKind.Producer, send.Kind);
+        Assert.Equal(ActivityKind.Consumer, process.Kind);
+        Assert.Equal(ActivityKind.Internal, execute.Kind);
+        Assert.Equal(
+            ["portia.request.name", "portia.transport.name", "messaging.system", "messaging.operation.type", "portia.outcome"],
+            send.TagObjects.Select(tag => tag.Key));
+        Assert.Equal(
+            ["portia.request.name", "portia.transport.name", "messaging.system", "messaging.operation.type", "portia.outcome"],
+            process.TagObjects.Select(tag => tag.Key));
+        Assert.Equal(["portia.request.name", "portia.transport.name", "portia.outcome"],
+            execute.TagObjects.Select(tag => tag.Key));
+        Assert.All(new[] { send, process, execute }, activity =>
+        {
+            Assert.Equal(transport, activity.GetTagItem("portia.transport.name"));
+            Assert.Equal("success", activity.GetTagItem("portia.outcome"));
+            Assert.DoesNotContain(activity.TagObjects, tag =>
+                tag.Value is string value && value.Contains("://", StringComparison.Ordinal));
+        });
+    }
+
+    static void AssertCompletedDelivery(IEnumerable<DeliveryMeasurement> captured, string requestName,
+        string transport)
+    {
+        var delivery = Assert.Single(captured);
+        Assert.Equal(1, delivery.Value);
+        Assert.Equal(["portia.request.name", "portia.transport.name", "portia.outcome"],
+            delivery.Tags.Select(tag => tag.Key));
+        Assert.Equal([requestName, transport, "completed"], delivery.Tags.Select(tag => tag.Value));
+    }
+
+    static async Task DrainQueueAsync(IQueueClient queue, string route)
+    {
+        while (true)
+        {
+            var items = await queue.ReserveAsync(route, TimeSpan.FromSeconds(1), wait: TimeSpan.Zero);
+            if (items.Length == 0)
+            {
+                return;
+            }
+
+            foreach (var item in items)
+            {
+                await item.CompleteAsync();
+            }
+        }
+    }
+
+    readonly record struct DeliveryMeasurement(long Value, KeyValuePair<string, object?>[] Tags);
+
+    sealed class OneQueueConsumer(IRequestQueueConsumer inner) : IRequestQueueConsumer
+    {
+        public async IAsyncEnumerable<IQueuedRequest> ReadAsync(
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            await foreach (var item in inner.ReadAsync(ct).WithCancellation(ct))
+            {
+                yield return item;
+                yield break;
+            }
+        }
+    }
+
+    sealed class OneNotificationConsumer(IRequestNotificationConsumer inner) : IRequestNotificationConsumer
+    {
+        public async IAsyncEnumerable<RequestNotification> ReadAsync(
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            await foreach (var item in inner.ReadAsync(ct).WithCancellation(ct))
+            {
+                yield return item;
+                yield break;
+            }
+        }
+    }
+
+    sealed class SignalingNoticeClient(INoticeClient inner) : INoticeClient
+    {
+        readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Ready => _ready.Task;
+
+        public Task PublishAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
+            inner.PublishAsync(route, body, ct);
+
+        public async Task<NoticeSubscription> SubscribeAsync(string selector, CancellationToken ct = default)
+        {
+            var subscription = await inner.SubscribeAsync(selector, ct).ConfigureAwait(false);
+            _ready.TrySetResult();
+            return subscription;
+        }
     }
 
     sealed class FitzEventStoreProbe(Client client) : IEventStoreConformanceProbe

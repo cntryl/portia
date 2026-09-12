@@ -9,6 +9,7 @@
     <Project Path="src/Portia.Generators/Portia.Generators.csproj" />
     <Project Path="src/Portia.Core/Portia.Core.csproj" />
     <Project Path="src/Portia.Testing/Portia.Testing.csproj" />
+    <Project Path="src/Portia.Telemetry/Portia.Telemetry.csproj" />
     <Project Path="src/Portia.DependencyInjection/Portia.DependencyInjection.csproj" />
     <Project Path="src/Portia.Fitz/Portia.Fitz.csproj" />
     <Project Path="src/Portia.AspNetCore/Portia.AspNetCore.csproj" />

@@ -1,4 +1,3 @@
-using Cntryl.Fitz.Abstractions.Domains.Notice;
 
 namespace Cntryl.Portia;
 
@@ -33,7 +32,8 @@ public sealed class FitzNoticeRequestSender(
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(routeValues);
 
-        using var activity = PortiaTelemetry.StartSend(typeof(TRequest).Name, "fitz.notice");
+        var requestName = _catalog.Get(request.GetType()).Discriminator.Name;
+        using var activity = PortiaTelemetry.StartSend(requestName, "notice", "fitz");
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "success";
         try
@@ -41,20 +41,23 @@ public sealed class FitzNoticeRequestSender(
             var route = FitzRouting.ResolveNoticeRoute(_catalog, request, routeValues);
             var body = _serializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
             await _notice.PublishAsync(route, body, ct).ConfigureAwait(false);
+            PortiaTelemetry.RecordOutcome(activity, true, null);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             outcome = "canceled";
+            PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
-        catch
+        catch (Exception ex)
         {
             outcome = "fault";
+            PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }
         finally
         {
-            PortiaTelemetry.TransportFinished(started, "fitz.notice", "publish", outcome);
+            PortiaTelemetry.TransportFinished(started, "notice", "publish", outcome);
         }
     }
 }
