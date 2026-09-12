@@ -88,6 +88,8 @@ public abstract class Aggregate(
             throw new InvalidOperationException("An aggregate with uncommitted changes cannot load committed events.");
         }
 
+        if (!committedEvents.IsEmpty)
+            _ = _issuedEventIds.EnsureCapacity(checked(_issuedEventIds.Count + committedEvents.Length));
         var validated = 0;
         try
         {

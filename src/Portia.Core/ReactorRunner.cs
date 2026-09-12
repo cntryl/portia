@@ -48,13 +48,14 @@ public sealed class ReactorRunner(
         ArgumentNullException.ThrowIfNull(reactor);
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
-        var actor = _principals.GetPrincipal(reactor);
+        var actor = PrincipalSnapshot.Copy(_principals.GetPrincipal(reactor));
         if (!RequestActor.IsSystem(actor))
         {
             throw new InvalidOperationException("A reactor principal provider must return a system principal.");
         }
 
         var startingCheckpoint = checkpoint;
+        var identity = new CheckpointIdentity(reactor.Name, reactor.Pattern);
         var batchSize = reactor.IsBatch ? options.MaxBatchSize : 1;
         var contexts = new List<IReactorContext>(batchSize);
         var processed = 0;
@@ -62,7 +63,7 @@ public sealed class ReactorRunner(
         await foreach (var record in _reader.ReadAsync(reactor.Pattern, checkpoint.NextOffset, ct).WithCancellation(ct)
                            .ConfigureAwait(false))
         {
-            contexts.Add(new ReactionExecutionContext(record, actor, _clock));
+            contexts.Add(ReactionExecutionContext.FromSystemSnapshot(record, actor, _clock));
             processed++;
             if (contexts.Count == batchSize)
             {
@@ -95,7 +96,7 @@ public sealed class ReactorRunner(
                 ct.ThrowIfCancellationRequested();
                 var next = new ProjectionCheckpoint(
                     EventStreamOffsets.GetNextOffset(reactor.Pattern, contexts[^1].Source));
-                await reactor.Checkpoints.SaveAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), next, ct)
+                await reactor.Checkpoints.SaveAsync(identity, next, ct)
                     .ConfigureAwait(false);
                 contexts.Clear();
                 return next;

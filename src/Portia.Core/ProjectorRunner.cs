@@ -35,6 +35,8 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
 
         var startingCheckpoint = checkpoint;
         var batchSize = projector.IsBatch ? options.MaxBatchSize : 1;
+        var identity = new CheckpointIdentity(projector.Name, projector.Pattern, options.RebuildId);
+        var context = new ProjectorContext(identity);
         var records = new List<DomainEventRecord>(batchSize);
         var processed = 0;
         var budgetExhausted = false;
@@ -48,7 +50,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
 
             if (records.Count == batchSize)
             {
-                checkpoint = await CommitAsync(projector, records, checkpoint, options.RebuildId, ct)
+                checkpoint = await CommitAsync(projector, records, checkpoint, identity, context, ct)
                     .ConfigureAwait(false);
             }
 
@@ -61,7 +63,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
 
         if (records.Count != 0)
         {
-            checkpoint = await CommitAsync(projector, records, checkpoint, options.RebuildId, ct)
+            checkpoint = await CommitAsync(projector, records, checkpoint, identity, context, ct)
                 .ConfigureAwait(false);
         }
 
@@ -72,7 +74,8 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         Projector projector,
         List<DomainEventRecord> records,
         ProjectionCheckpoint checkpoint,
-        string? rebuildId,
+        CheckpointIdentity identity,
+        IProjectorContext projectorContext,
         CancellationToken ct)
     {
         var started = PortiaTelemetry.StartTimestamp();
@@ -81,12 +84,10 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         var outcome = "success";
         try
         {
-            var context =
-                new ProjectionBatchContext(new CheckpointIdentity(projector.Name, projector.Pattern, rebuildId),
-                    checkpoint);
+            var context = new ProjectionBatchContext(identity, checkpoint);
             await using var batch = await projector.Store.BeginAsync(context, ct).ConfigureAwait(false);
 
-            await projector.ProjectAsync(records, context.Identity, ct).ConfigureAwait(false);
+            await projector.ProjectAsync(records, projectorContext, ct).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
 
             var lastRecord = records[^1];

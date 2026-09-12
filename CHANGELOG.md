@@ -35,6 +35,11 @@ alerts are as breaking to change as an API.
 
 ### Fixed
 
+- Domain-event serialization no longer builds intermediate JSON object trees on the current-schema
+  path, projector and reactor passes reuse immutable per-pass state, and aggregate hydration
+  pre-sizes its event-ID set. The optimized envelope writer can choose different legal JSON string
+  escapes, but preserves the durable fields and values and reads envelopes written by the previous
+  implementation.
 - Portia diagnostics now require semantic evidence and say exactly what is wrong. `PORTIA025`
   ignores consumer methods that merely share Portia API names, `PORTIA012` recognizes referenced
   domain events used by the application, `PORTIA104` ignores filtered catches and paths that

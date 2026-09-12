@@ -1,9 +1,9 @@
 # Performance and scaling
 
 These measurements describe this checkout, not a promise about another application or machine.
-They were recorded on 2026-09-10 on an Apple M5 (10 physical cores), macOS Tahoe 26.6.2
-(25G83), .NET SDK 10.0.400, and .NET 10.0.11 Arm64 RyuJIT. BenchmarkDotNet used its
-`ShortRun` job except for the deliberately bounded large-history run.
+They were recorded on 2026-09-10 and refreshed on 2026-09-12 on an Apple M5 (10 physical
+cores), macOS Tahoe 26.6.2 (25G83), .NET SDK 10.0.400, and .NET 10.0.11 Arm64 RyuJIT.
+BenchmarkDotNet used its `ShortRun` job except for the deliberately bounded large-history run.
 
 Reproduce the measurements from the repository root:
 
@@ -19,6 +19,10 @@ dotnet run --configuration Release --no-build --project bench/Portia.Benchmarks 
   --filter 'Cntryl.Portia.ProcessorDispatchBenchmarks.*' --job Short
 dotnet run --configuration Release --no-build --project bench/Portia.Benchmarks -- \
   --filter 'Cntryl.Portia.HttpBindingBenchmarks.*' --job Short
+dotnet run --configuration Release --no-build --project bench/Portia.Benchmarks -- \
+  --filter 'Cntryl.Portia.DomainEventSerializationBenchmarks.*' --job Short
+dotnet run --configuration Release --no-build --project bench/Portia.Benchmarks -- \
+  --filter 'Cntryl.Portia.ReactorDispatchBenchmarks.*' --job Short
 ```
 
 Short runs are useful for guarding a focused change but have wider confidence intervals than a
@@ -41,31 +45,60 @@ The one- and five-behavior means fell 18% and 25%, respectively. Five-behavior a
 78%, and the no-behavior path became allocation-free. The yielding case makes the asynchronous
 path visible instead of allowing a synchronous-only optimization to look complete.
 
-Aggregate hydration retains a complete validation pass before applying anything. Passing the
-repository's populated list directly and replaying its span removes the redundant array:
+Aggregate hydration retains a complete validation pass before applying anything. The aggregate
+pre-sizes its permanent event-ID set from that validated batch rather than repeatedly growing it:
 
 | History | Before | After | Allocation before | Allocation after |
 |---|---:|---:|---:|---:|
-| 512 events | 16.35 us | 16.72 us | 69,640 B | 65,520 B |
+| 32 events | 2.403 us | 2.401 us | 3,336 B | 2,424 B |
+| 512 events | 37.145 us | 33.225 us | 57,128 B | 23,752 B |
 | 10,000 events | - | 2.417 ms | - | 1.40 MB |
 | 100,000 events | - | 22.978 ms | - | 12.06 MB |
 
-The 512-event allocation reduction is 4,120 B, consistent with removing a 512-element reference
-array. Its mean changed by 2.3%. The large-history job uses one invocation per iteration so pilot
-selection cannot create multi-gigabyte temporary allocation; its values are measured, not
+The large-history measurements predate the event-ID capacity change and are retained to show the
+linear replay shape, not as updated allocation figures. That job uses one invocation per iteration
+so pilot selection cannot create multi-gigabyte temporary allocation; its values are measured, not
 extrapolated.
 
 Processor dispatch has an important semantic tradeoff:
 
-| Processor, 512 events | Mean | Allocation | Commit boundary |
-|---|---:|---:|---|
-| `Projector` | 45.27 us | 102,600 B | Once per event |
-| `BatchProjector` | 5.55 us | 12,864 B | Once per bounded batch |
+| Processor, 512 events | Before | After | Allocation before | Allocation after | Commit boundary |
+|---|---:|---:|---:|---:|---|
+| `Projector` | 90.46 us | 70.19 us | 102,600 B | 37,192 B | Once per event |
+| `BatchProjector` | 12.60 us | 12.65 us | 12,864 B | 12,864 B | Once per bounded batch |
 
 Use the single-event base when each event genuinely needs an independent atomic
 data-and-checkpoint commit. Prefer a batch base for high-volume processing when the repository can
 atomically commit the bounded batch. A batch reduces framework and persistence overhead but does
 not make external effects transactional.
+
+Projector identity and immutable handler context are now created once per pass. This removes
+per-commit reconstruction without changing the storage transaction or checkpoint boundary.
+
+Reactor execution had a separate allocation source: every triggering event copied and revalidated
+the same system principal. The runner now validates one private snapshot per pass, while every
+public `context.Actor` access still returns an isolated copy:
+
+| Reactor, 512 events | Before | After | Allocation before | Allocation after |
+|---|---:|---:|---:|---:|
+| `Reactor` | 423.38 us | 306.52 us | 420.82 KB | 69.34 KB |
+| `BatchReactor` | 392.75 us | 230.01 us | 352.95 KB | 53.36 KB |
+
+The batch timing comparison is directional because its three-iteration ShortRun had a wide spread;
+the allocation reduction was deterministic. Real reactor effects normally dominate these framework
+figures.
+
+Domain-event envelopes avoid intermediate JSON object trees on the exact-version path. Upcasting
+still materializes a mutable `JsonObject` only when an old payload actually needs transformation:
+
+| Operation | Payload | Before | After | Allocation before | Allocation after |
+|---|---:|---:|---:|---:|---:|
+| Serialize | 16 B | 1.792 us | 0.731 us | 1,584 B | 1,224 B |
+| Serialize | 256 B | 1.979 us | 0.764 us | 2,064 B | 1,704 B |
+| Serialize | 4 KiB | 3.563 us | 1.729 us | 9,744 B | 9,384 B |
+| Deserialize | 16 B | 3.301 us | 1.802 us | 2,240 B | 840 B |
+| Deserialize | 256 B | 3.146 us | 1.964 us | 2,960 B | 1,320 B |
+| Deserialize | 4 KiB | 5.927 us | 3.108 us | 14,480 B | 9,000 B |
 
 HTTP benchmarks parse `JsonDocument` during setup, so the warm cases isolate generated member
 binding and metadata lookup:

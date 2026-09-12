@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Cntryl.Portia;
 
@@ -100,26 +102,52 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
 
         var type = ev.GetType();
         var (name, version) = _catalog.Describe(type);
-        var envelope = new EventEnvelope(
-            name,
-            version,
-            JsonSerializer.SerializeToNode(ev.Metadata, PortiaCoreJsonContext.Default.DomainEventMetadata)!.AsObject(),
-            JsonSerializer.SerializeToNode(ev, _options.GetTypeInfo(type))!.AsObject());
+        var metadata = JsonSerializer.SerializeToUtf8Bytes(ev.Metadata,
+            PortiaCoreJsonContext.Default.DomainEventMetadata);
+        var payload = JsonSerializer.SerializeToUtf8Bytes(ev, _options.GetTypeInfo(type));
+        var capacity = checked(metadata.Length + payload.Length + name.Length * 6 + 64);
+        var buffer = new ArrayBufferWriter<byte>(capacity);
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("name", name);
+            writer.WriteNumber("version", version);
+            writer.WritePropertyName("metadata");
+            writer.WriteRawValue(metadata, skipInputValidation: true);
+            writer.WritePropertyName("payload");
+            writer.WriteRawValue(payload, skipInputValidation: true);
+            writer.WriteEndObject();
+        }
 
-        return JsonSerializer.SerializeToUtf8Bytes(envelope, PortiaCoreJsonContext.Default.EventEnvelope);
+        return buffer.WrittenMemory;
     }
 
     /// <inheritdoc />
     public DomainEvent Deserialize(ReadOnlyMemory<byte> data)
     {
-        var envelope = JsonSerializer.Deserialize(data.Span, PortiaCoreJsonContext.Default.EventEnvelope)
-                       ?? throw new InvalidOperationException("The event envelope deserialized to null.");
+        using var document = JsonDocument.Parse(data);
+        var root = document.RootElement;
+        var name = root.GetProperty("name").GetString()
+                   ?? throw new InvalidOperationException("The event envelope requires a name.");
+        var version = root.GetProperty("version").GetInt32();
+        var payloadElement = root.GetProperty("payload");
+        DomainEvent? ev;
+        if (_catalog.TryResolve(name, version, out var resolvedType) && resolvedType is not null)
+        {
+            ev = (DomainEvent?)payloadElement.Deserialize(_options.GetTypeInfo(resolvedType));
+        }
+        else
+        {
+            var payload = payloadElement.Deserialize(PortiaCoreJsonContext.Default.JsonObject)
+                          ?? throw new InvalidOperationException("The event payload deserialized to null.");
+            (resolvedType, payload) = _resolver.Resolve(name, version, payload);
+            ev = (DomainEvent?)payload.Deserialize(_options.GetTypeInfo(resolvedType));
+        }
 
-        var (resolvedType, payload) = _resolver.Resolve(envelope.Name, envelope.Version, envelope.Payload);
-        var ev = (DomainEvent?)payload.Deserialize(_options.GetTypeInfo(resolvedType))
-                 ?? throw new InvalidOperationException($"The '{resolvedType}' payload deserialized to null.");
-
-        var metadata = envelope.Metadata.Deserialize(PortiaCoreJsonContext.Default.DomainEventMetadata)
+        if (ev is null)
+            throw new InvalidOperationException($"The '{resolvedType}' payload deserialized to null.");
+        var metadata = root.GetProperty("metadata")
+                           .Deserialize(PortiaCoreJsonContext.Default.DomainEventMetadata)
                        ?? throw new InvalidOperationException("The event metadata deserialized to null.");
         ev.AttachMetadata(metadata);
 

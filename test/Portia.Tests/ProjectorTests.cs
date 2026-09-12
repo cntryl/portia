@@ -18,11 +18,10 @@ public sealed class ProjectorTests
         var stream = new EventStreamAddress("test", "projectors", "one");
         var first = Committed(new ValueChanged(40), 1);
         var second = Committed(new ValueIncremented(2), 2);
+        var context = new ProjectorContext(new CheckpointIdentity(projector.Name, projector.Pattern));
 
-        await projector.ProjectAsync([new DomainEventRecord(stream, first, 0, 0, 0)],
-            new CheckpointIdentity(projector.Name, projector.Pattern), default);
-        await projector.ProjectAsync([new DomainEventRecord(stream, second, 1, 1, 1)],
-            new CheckpointIdentity(projector.Name, projector.Pattern), default);
+        await projector.ProjectAsync([new DomainEventRecord(stream, first, 0, 0, 0)], context, default);
+        await projector.ProjectAsync([new DomainEventRecord(stream, second, 1, 1, 1)], context, default);
 
         Assert.Equal(42, projection.Value);
         Assert.Equal(2, projection.HandlerCount);
@@ -123,7 +122,7 @@ public sealed class ProjectorTests
         var ev = Committed(new ValueAudited("unhandled"), 1);
 
         await projector.ProjectAsync([new DomainEventRecord(stream, ev, 0, 0, 0)],
-            new CheckpointIdentity(projector.Name, projector.Pattern), default);
+            new ProjectorContext(new CheckpointIdentity(projector.Name, projector.Pattern)), default);
 
         Assert.Equal(0, projection.Value);
         Assert.Equal(0, projection.HandlerCount);

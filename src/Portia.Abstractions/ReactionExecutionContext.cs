@@ -14,22 +14,24 @@ public sealed class ReactionExecutionContext : IReactorContext
     /// </param>
     /// <exception cref="ArgumentException"><paramref name="actor" /> is not a system principal.</exception>
     public ReactionExecutionContext(DomainEventRecord source, ClaimsPrincipal actor, TimeProvider? timeProvider = null)
+        : this(source, timeProvider ?? TimeProvider.System, SnapshotSystemActor(actor))
+    {
+    }
+
+    ReactionExecutionContext(DomainEventRecord source, TimeProvider timeProvider, ClaimsPrincipal actorSnapshot)
     {
         ArgumentNullException.ThrowIfNull(source);
-        ActorSnapshot = PrincipalSnapshot.Copy(actor);
-        if (!RequestActor.IsSystem(ActorSnapshot))
-        {
-            throw new ArgumentException("Reactors must execute as a system principal, never an end-user principal.",
-                nameof(actor));
-        }
-
+        ActorSnapshot = actorSnapshot;
         DomainEventValidation.Validate(source.Event);
         Source = source;
         CauseId = source.Event.Metadata.EventId;
         CorrelationId = source.Event.Metadata.CorrelationId ?? CauseId;
         ExecutionId = Uuid.CreateVersion4();
-        StartedAt = (timeProvider ?? TimeProvider.System).GetUtcNow();
+        StartedAt = timeProvider.GetUtcNow();
     }
+
+    internal static ReactionExecutionContext FromSystemSnapshot(DomainEventRecord source,
+        ClaimsPrincipal actorSnapshot, TimeProvider timeProvider) => new(source, timeProvider, actorSnapshot);
 
     internal ClaimsPrincipal ActorSnapshot { get; }
 
@@ -50,4 +52,13 @@ public sealed class ReactionExecutionContext : IReactorContext
 
     /// <inheritdoc />
     public DomainEventRecord Source { get; }
+
+    static ClaimsPrincipal SnapshotSystemActor(ClaimsPrincipal actor)
+    {
+        var snapshot = PrincipalSnapshot.Copy(actor);
+        return RequestActor.IsSystem(snapshot)
+            ? snapshot
+            : throw new ArgumentException(
+                "Reactors must execute as a system principal, never an end-user principal.", nameof(actor));
+    }
 }

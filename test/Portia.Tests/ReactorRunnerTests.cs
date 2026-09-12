@@ -1,3 +1,5 @@
+using System.Security.Claims;
+
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -84,6 +86,24 @@ public sealed class ReactorRunnerTests
 
         Assert.Equal(2UL, first.NextOffset);
         Assert.Equal(3UL, second.NextOffset);
+    }
+
+    /// <summary>Actor snapshots exposed by one reaction cannot mutate another reaction in the same pass.</summary>
+    [Fact]
+    public async Task ShouldIsolateExposedActorsAcrossOnePass()
+    {
+        var id = Uuid.CreateVersion4();
+        var stream = new EventStreamAddress("test", "reactors", id.ToString());
+        var store = new InMemoryEventStore();
+        await store.AppendAsync(stream, 0, [
+            Committed(new ValueChanged(1), id, 1),
+            Committed(new ValueChanged(2), id, 2)
+        ]);
+        var reactor = new ActorIsolationReactor();
+
+        _ = await new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start);
+
+        Assert.Equal([false, false], reactor.SawMutation);
     }
 
     /// <summary>
@@ -174,5 +194,20 @@ public sealed class ReactorRunnerTests
             aggregateVersion,
             DateTimeOffset.UtcNow));
         return ev;
+    }
+
+    sealed class ActorIsolationReactor() : Reactor(new InMemoryProjectionCheckpointStore(),
+        EventStreamPattern.ForPattern("test", "reactors"))
+    {
+        public List<bool> SawMutation { get; } = [];
+
+        protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+            CancellationToken ct)
+        {
+            var actor = context.Actor;
+            SawMutation.Add(actor.HasClaim("mutation", "first"));
+            ((ClaimsIdentity)actor.Identity!).AddClaim(new Claim("mutation", "first"));
+            return ValueTask.CompletedTask;
+        }
     }
 }

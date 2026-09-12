@@ -84,9 +84,9 @@ public abstract class Projector
         }
     }
 
-    internal ValueTask ProjectAsync(IReadOnlyList<DomainEventRecord> records, CheckpointIdentity identity,
+    internal ValueTask ProjectAsync(IReadOnlyList<DomainEventRecord> records, IProjectorContext context,
         CancellationToken ct)
-        => ProjectBatchAsync(records, new ProjectorContext(identity), ct);
+        => ProjectBatchAsync(records, context, ct);
 
     /// <summary>Dispatches one event. Generated typed handlers skip unrelated event types.</summary>
     /// <param name="record">The event to project, with its stream position.</param>
