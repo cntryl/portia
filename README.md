@@ -246,6 +246,8 @@ See the authoritative [scope](docs/scope.md) for what Portia does and does not s
 [performance and scaling](docs/performance-and-scaling.md) for measured hot paths and operational limits.
 The [design decisions](docs/design-decisions.md) explain the failure modes and invariants behind the framework's
 less-obvious boundaries.
+The accepted [platform vision](docs/platform-vision.md) fixes the separation between Fitz, Portia, Cassie, and
+userland read-model backends.
 
 [Projectors and reactors](docs/projectors-and-reactors.md) shows constructor-injected repositories, batch handling, and
 storage contracts.

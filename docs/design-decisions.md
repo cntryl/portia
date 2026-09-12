@@ -20,6 +20,21 @@ projection transaction, and are checkpointed separately because of it. `PORTIA10
 projector takes a known effect dependency. It deliberately remains a best-effort heuristic rather
 than claiming to prove arbitrary application behavior.
 
+## Read-model storage is first-party optimized and userland pluggable
+
+Portia owns projection execution and its atomic checkpoint contract, not a universal storage or
+query abstraction. Cassie is the intended first-party read-model engine for native SQL, graph,
+time-series, and vector models. It must implement the same public projection boundary available to
+an application-owned PostgreSQL, Snowflake, or other repository; no Cassie-only runner or weakened
+checkpoint semantics are permitted.
+
+An application repository implements `IProjectionStore`, participates in an `IProjectionBatch`,
+and uses its backend's native client, schema, and query model. If its data mutations and checkpoint
+cannot commit atomically, the integration is an at-least-once reactor effect instead of a
+transactional projector. This distinction keeps additional stores easy to add without reducing all
+read models to a lowest-common-denominator DSL. The accepted three-layer product boundary and its
+delivery gates are recorded in [platform vision](platform-vision.md).
+
 ## Reactors model effects, not only commands
 
 A reaction may dispatch a command or invoke an integration gateway directly. Commands are the

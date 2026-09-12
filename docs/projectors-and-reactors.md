@@ -90,6 +90,12 @@ handle with `CommitAsync(checkpoint, ct)` and `DisposeAsync()`. The repository i
 receives every application write during that unit of work. No extra projection-port
 interface or target adapter is required.
 
+The repository may use Cassie, PostgreSQL, Snowflake, or another read-model backend directly. It
+retains that backend's native schema, client, and query capabilities; Portia requires no generic
+table, graph, time-series, or vector abstraction. A backend that can commit repository mutations
+and the checkpoint atomically implements this projection boundary. A backend or ingestion path
+that cannot do so belongs behind an at-least-once reactor with application-owned idempotency.
+
 Commit must atomically persist both changes and progress. Disposal releases resources
 and discards uncommitted changes; it never commits. `ProjectionBatchContext.Checkpoint`
 provides the expected starting progress for conditional writes. Use the complete
@@ -319,3 +325,6 @@ their small probe interfaces in the application's storage test project and run `
 the test framework already in use. The deduplication suite proves duplicate suppression but cannot
 prove crash atomicity between an external effect and bookkeeping; use an idempotent target or a
 transactional inbox/outbox when that failure window matters.
+
+The broader first-party Cassie and userland storage boundary is recorded in
+[platform vision](platform-vision.md).

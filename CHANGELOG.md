@@ -8,6 +8,11 @@ alerts are as breaking to change as an API.
 
 ### Added
 
+- Document the accepted platform boundary: Fitz is the authoritative event and distributed
+  fabric, Portia owns application and projection execution semantics, Cassie is the first-party
+  SQL/graph/time-series/vector read-model engine, and PostgreSQL, Snowflake, or another backend
+  remains an ordinary userland `IProjectionStore` integration rather than requiring a Portia fork
+  or generic storage DSL.
 - The optional `Portia.Telemetry` package adds idempotent `OpenTelemetryBuilder.WithPortia()`
   registration for Portia traces, metrics, and the standard `ILogger` bridge. Applications retain
   ownership of exporters, resources, sampling, filtering, endpoints, and credentials; no existing
