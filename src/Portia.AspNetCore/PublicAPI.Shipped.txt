@@ -91,3 +91,8 @@ static Cntryl.Portia.PortiaStreamResults.Json<T>(System.Collections.Generic.IAsy
 static Cntryl.Portia.PortiaStreamResults.Sse<T>(System.Collections.Generic.IAsyncEnumerable<T>! source) -> Microsoft.AspNetCore.Http.IResult!
 static Cntryl.Portia.ResultHttpExtensions.ToHttpResult(this Cntryl.Portia.Result result) -> Microsoft.AspNetCore.Http.IResult!
 static Cntryl.Portia.ResultHttpExtensions.ToHttpResult<T>(this Cntryl.Portia.Result<T> result, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>! typeInfo) -> Microsoft.AspNetCore.Http.IResult!
+Cntryl.Portia.PortiaHttpOptions.ServeOpenApi.get -> bool
+Cntryl.Portia.PortiaHttpOptions.ServeOpenApi.set -> void
+Cntryl.Portia.PortiaHttpOptions.ServerSentEventKeepAlive.get -> System.TimeSpan?
+Cntryl.Portia.PortiaHttpOptions.ServerSentEventKeepAlive.set -> void
+static readonly Cntryl.Portia.PortiaHttpOptions.DefaultServerSentEventKeepAlive -> System.TimeSpan

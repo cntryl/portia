@@ -61,3 +61,4 @@ static Cntryl.Portia.PortiaHostingServiceCollectionExtensions.AddPortiaQueueRunn
 static Cntryl.Portia.PortiaHostingServiceCollectionExtensions.AddPortiaRequestNotificationRunner(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static Cntryl.Portia.WorkloadRegistration.operator !=(Cntryl.Portia.WorkloadRegistration? left, Cntryl.Portia.WorkloadRegistration? right) -> bool
 static Cntryl.Portia.WorkloadRegistration.operator ==(Cntryl.Portia.WorkloadRegistration? left, Cntryl.Portia.WorkloadRegistration? right) -> bool
+Cntryl.Portia.PortiaBuilder.AddRequestSchedule<TRequest>(TRequest request, Cntryl.Portia.RequestScheduleSpec! spec, Cntryl.Portia.RequestRouteValues! routeValues, System.Security.Claims.ClaimsPrincipal! actor) -> Cntryl.Portia.PortiaBuilder!

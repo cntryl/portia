@@ -65,3 +65,13 @@ static Cntryl.Portia.Testing.ProjectionStoreConformance.VerifyAsync(Cntryl.Porti
 static Cntryl.Portia.Testing.ReactionDeduplicationConformance.VerifyAsync(Cntryl.Portia.Testing.IReactionDeduplicationProbe! probe, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 static Cntryl.Portia.Testing.TestPermissionEvaluator.AllowAll() -> Cntryl.Portia.Testing.TestPermissionEvaluator!
 static Cntryl.Portia.Testing.TestPermissionEvaluator.DenyAll() -> Cntryl.Portia.Testing.TestPermissionEvaluator!
+Cntryl.Portia.Testing.AggregateScenario<TAggregate>.CommittedEventCount.get -> ulong
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe.ConvergenceTimeout.get -> System.TimeSpan
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe.OpenWorkerAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceWorker!>
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe.ResetAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe.StabilityWindow.get -> System.TimeSpan
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceWorker
+Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceWorker.Coordinator.get -> Cntryl.Portia.IWorkloadCoordinator!
+Cntryl.Portia.Testing.WorkloadCoordinatorConformance
+static Cntryl.Portia.Testing.WorkloadCoordinatorConformance.VerifyAsync(Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe! probe, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask

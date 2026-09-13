@@ -45,6 +45,9 @@ jobs:
           cache: true
           cache-dependency-path: '**/packages.lock.json'
 
+      - name: Verify public API baseline
+        run: bash eng/verify-public-api-baseline.sh
+
       - name: Read package version
         shell: bash
         run: |
