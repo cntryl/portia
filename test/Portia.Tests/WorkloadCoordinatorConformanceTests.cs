@@ -297,7 +297,6 @@ public sealed class WorkloadCoordinatorConformanceTests
             var identity = Assert.Single(workloads());
             using var ownership = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var owned = run(identity, ownership.Token);
-            await Task.Delay(TimeSpan.FromMilliseconds(25), ct);
             await ownership.CancelAsync();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => owned);
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
