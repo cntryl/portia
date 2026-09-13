@@ -14,6 +14,8 @@
     <Project Path="src/Portia.Fitz/Portia.Fitz.csproj" />
     <Project Path="src/Portia.AspNetCore/Portia.AspNetCore.csproj" />
     <Project Path="src/Portia.Jwt/Portia.Jwt.csproj" />
+    <Project Path="src/Portia.Mcp/Portia.Mcp.csproj" />
+    <Project Path="src/Portia.Mcp.AspNetCore/Portia.Mcp.AspNetCore.csproj" />
   </Folder>
   <Folder Name="/test/">
     <Project Path="test/Portia.Tests/Portia.Tests.csproj" />
@@ -22,5 +24,9 @@
     <Project Path="test/Consumer.FeatureTwo/Consumer.FeatureTwo.csproj" />
     <Project Path="test/Portia.ConsumerTests/Portia.ConsumerTests.csproj" />
     <Project Path="test/Portia.ReflectionDisabledTests/Portia.ReflectionDisabledTests.csproj" />
+    <Project Path="test/Portia.McpTests/Portia.McpTests.csproj" />
+  </Folder>
+  <Folder Name="/smoke/">
+    <Project Path="smoke/Portia.McpStdioHost/Portia.McpStdioHost.csproj" />
   </Folder>
 </Solution>

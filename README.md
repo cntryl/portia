@@ -117,6 +117,7 @@ effect instead.
 - [Scope](docs/scope.md) and [design decisions](docs/design-decisions.md): guarantees and deliberate limits
 - [Performance and scaling](docs/performance-and-scaling.md): measured hot paths and scaling model
 - [NativeAOT](docs/native-aot.md): trimming and source-generated JSON setup
+- [Model Context Protocol](docs/mcp.md): generated tools over stdio and Streamable HTTP
 
 ## Development
 

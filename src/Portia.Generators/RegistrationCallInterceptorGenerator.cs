@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -111,6 +112,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
     static bool IsRegistrationName(SimpleNameSyntax name) => name.Identifier.ValueText is
         "AddPortia" or "AddRequestHandler" or "AddRequestAuthorizer" or "AddRequestPipelineBehavior"
+        or "AddMcpTool"
         or "RegisterDynamicRequest" or "AddEvent";
 
     static Call? Analyze(GeneratorSyntaxContext context)
@@ -160,6 +162,11 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 : new Call(InterceptableLocationModel.From(location), role, null,
                     "the event needs a valid Discriminator attribute",
                     DiagnosticLocation.From(invocation.GetLocation()));
+        }
+
+        if (role == "MCP tool")
+        {
+            return McpToolCall(type, invocation, location);
         }
 
         var interfaces = type.AllInterfaces.Where(i =>
@@ -254,7 +261,13 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
     static string? RegistrationRole(IMethodSymbol method)
     {
-        var containingType = method.ContainingType.ToDisplayString();
+        var containingType = (method.ReducedFrom?.ContainingType ?? method.ContainingType).ToDisplayString();
+        if (method.Name == "AddMcpTool" && method.TypeArguments.Length == 1
+            && containingType == "Cntryl.Portia.PortiaMcpApplicationExtensions")
+        {
+            return "MCP tool";
+        }
+
         return method.Name == "AddPortia" &&
                containingType == "Cntryl.Portia.PortiaApplicationServiceCollectionExtensions"
             ? "application"
@@ -269,6 +282,68 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                     _ => null
                 }
                 : null;
+    }
+
+    static Call McpToolCall(INamedTypeSymbol type, InvocationExpressionSyntax invocation,
+        InterceptableLocation location)
+    {
+        var diagnosticLocation = DiagnosticLocation.From(invocation.GetLocation());
+        var callable = type.AllInterfaces.Any(candidate =>
+            candidate.ToDisplayString() == "Cntryl.Portia.ICallable");
+        var request = type.AllInterfaces.FirstOrDefault(candidate =>
+            candidate.OriginalDefinition.ToDisplayString() is "Cntryl.Portia.IRequest"
+                or "Cntryl.Portia.IRequest<TOut>");
+        if (!callable || request is null)
+        {
+            return new Call(InterceptableLocationModel.From(location), "MCP tool", null,
+                "the request must implement IRequest or IRequest<T> and ICallable", diagnosticLocation);
+        }
+
+        var discriminator = type.GetAttributes().FirstOrDefault(candidate =>
+            candidate.AttributeClass?.ToDisplayString() == "Cntryl.Portia.DiscriminatorAttribute");
+        if (discriminator?.ConstructorArguments.FirstOrDefault().Value is not string name
+            || string.IsNullOrWhiteSpace(name))
+        {
+            return new Call(InterceptableLocationModel.From(location), "MCP tool", null,
+                "the request needs a valid Discriminator attribute", diagnosticLocation);
+        }
+
+        var description = DocumentationSummary(type);
+        if (string.IsNullOrWhiteSpace(description) && invocation.ArgumentList.Arguments.Count == 0)
+        {
+            return new Call(InterceptableLocationModel.From(location), "MCP tool", null,
+                "the request needs an XML summary or an explicit description", diagnosticLocation);
+        }
+
+        description ??= string.Empty;
+
+        var genericTypes = new StringBuilder().Append('<').Append(Type(type));
+        if (request.TypeArguments.Length == 1)
+            _ = genericTypes.Append(", ").Append(Type(request.TypeArguments[0]));
+        _ = genericTypes.Append('>');
+        var configure = invocation.ArgumentList.Arguments.Count == 0
+            ? "null"
+            : invocation.ArgumentList.Arguments[0].Expression.ToString();
+        var body = "_ = global::Cntryl.Portia.PortiaMcpApplicationExtensions.AddGeneratedMcpTool"
+                   + genericTypes + "(builder, " + RequestTransportDiscovery.FormatStringLiteral(name!) + ", "
+                   + RequestTransportDiscovery.FormatStringLiteral(description!) + ", configure);\n";
+        return new Call(InterceptableLocationModel.From(location), "MCP tool", body, null, diagnosticLocation);
+    }
+
+    static string? DocumentationSummary(INamedTypeSymbol type)
+    {
+        var xml = type.GetDocumentationCommentXml(expandIncludes: true, cancellationToken: default);
+        if (string.IsNullOrWhiteSpace(xml))
+            return null;
+        try
+        {
+            var summary = XDocument.Parse(xml).Root?.Element("summary")?.Value;
+            return summary is null ? null : Regex.Replace(summary, @"\s+", " ").Trim();
+        }
+        catch (System.Xml.XmlException)
+        {
+            return null;
+        }
     }
 
     static RequestTransportComponent? DispatchedRequest(GeneratorSyntaxContext context)
@@ -554,6 +629,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                         "authorizer" =>
                             "(this global::Cntryl.Portia.PortiaBuilder builder, global::Cntryl.Portia.AuthorizationStage stage) {\n",
                         "behavior" => "(this global::Cntryl.Portia.PortiaBuilder builder, int order) {\n",
+                        "MCP tool" =>
+                            "(this global::Cntryl.Portia.PortiaBuilder builder, global::System.Action<global::Cntryl.Portia.McpToolOptions>? configure = null) {\n",
                         _ => "(this global::Cntryl.Portia.PortiaBuilder builder) {\n"
                     })
                     .AppendLine("global::System.ArgumentNullException.ThrowIfNull(builder);").Append(call.Body)

@@ -35,19 +35,20 @@ public sealed class WebApplicationOpenApiGenerator : IIncrementalGenerator
         }
 
         var location = context.SemanticModel.GetInterceptableLocation((InvocationExpressionSyntax)context.Node);
+        var hasMcp = context.SemanticModel.Compilation.GetTypeByMetadataName("Cntryl.Portia.PortiaMcpHttp") is not null;
         return location is null
             ? null
             : method.Name switch
             {
                 "Build" when method.ContainingType.ToDisplayString() ==
                              "Microsoft.AspNetCore.Builder.WebApplicationBuilder"
-                             && method.Parameters.Length == 0 => new Call(CallKind.Build, location),
+                             && method.Parameters.Length == 0 => new Call(CallKind.Build, location, hasMcp),
                 "Create" when method.ContainingType.ToDisplayString() == "Microsoft.AspNetCore.Builder.WebApplication"
                               && method.Parameters.Length == 1 && method.Parameters[0].Type is IArrayTypeSymbol
                               {
                                   ElementType.SpecialType: SpecialType.System_String
                               }
-                    => new Call(CallKind.Create, location),
+                    => new Call(CallKind.Create, location, hasMcp),
                 _ => null
             };
     }
@@ -83,15 +84,19 @@ public sealed class WebApplicationOpenApiGenerator : IIncrementalGenerator
                 .Append(", \"").Append(call.Location.Data).AppendLine("\")]");
             _ = call.Kind == CallKind.Build
                 ? source.Append("    public static global::Microsoft.AspNetCore.Builder.WebApplication Call").Append(i)
-                    .AppendLine(
-                        "(this global::Microsoft.AspNetCore.Builder.WebApplicationBuilder builder) => global::Cntryl.Portia.PortiaOpenApi.Build(builder);")
+                    .AppendLine("(this global::Microsoft.AspNetCore.Builder.WebApplicationBuilder builder) => "
+                        + BuildTarget(call.HasMcp) + ".Build(builder);")
                 : source.Append("    public static global::Microsoft.AspNetCore.Builder.WebApplication Call").Append(i)
-                    .AppendLine("(string[]? args = null) => global::Cntryl.Portia.PortiaOpenApi.Create(args);");
+                    .AppendLine("(string[]? args = null) => " + BuildTarget(call.HasMcp) + ".Create(args);");
         }
 
         _ = source.AppendLine("}").AppendLine("}");
         context.AddSource("PortiaGeneratedWebApplication.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
     }
+
+    static string BuildTarget(bool hasMcp) => hasMcp
+        ? "global::Cntryl.Portia.PortiaMcpHttp"
+        : "global::Cntryl.Portia.PortiaOpenApi";
 
     enum CallKind
     {
@@ -99,9 +104,10 @@ public sealed class WebApplicationOpenApiGenerator : IIncrementalGenerator
         Create
     }
 
-    sealed class Call(CallKind kind, InterceptableLocation location)
+    sealed class Call(CallKind kind, InterceptableLocation location, bool hasMcp = false)
     {
         public CallKind Kind { get; } = kind;
         public InterceptableLocation Location { get; } = location;
+        public bool HasMcp { get; } = hasMcp;
     }
 }

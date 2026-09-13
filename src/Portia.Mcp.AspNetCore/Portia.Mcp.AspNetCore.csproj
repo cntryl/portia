@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>ASP.NET Core Streamable HTTP hosting for Portia MCP tools.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Portia.AspNetCore/Portia.AspNetCore.csproj" />
+    <ProjectReference Include="../Portia.Mcp/Portia.Mcp.csproj" />
+  </ItemGroup>
+</Project>

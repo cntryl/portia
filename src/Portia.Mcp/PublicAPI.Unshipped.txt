@@ -1,0 +1,48 @@
+Cntryl.Portia.McpToolOptions
+Cntryl.Portia.McpToolRegistration
+Cntryl.Portia.McpToolRegistration.Description.get -> string!
+Cntryl.Portia.McpToolRegistration.Destructive.get -> bool?
+Cntryl.Portia.McpToolRegistration.Idempotent.get -> bool?
+Cntryl.Portia.McpToolRegistration.Name.get -> string!
+Cntryl.Portia.McpToolRegistration.OpenWorld.get -> bool?
+Cntryl.Portia.McpToolRegistration.ReadOnly.get -> bool?
+Cntryl.Portia.McpToolRegistration.RequestType.get -> System.Type!
+Cntryl.Portia.McpToolRegistration.ResultType.get -> System.Type?
+Cntryl.Portia.McpToolRegistration.Title.get -> string?
+Cntryl.Portia.McpToolRegistration<TRequest, TOut>
+Cntryl.Portia.McpToolRegistration<TRequest, TOut>.McpToolRegistration(string! name, string! description, Cntryl.Portia.McpToolOptions! options) -> void
+Cntryl.Portia.McpToolRegistration<TRequest>
+Cntryl.Portia.McpToolRegistration<TRequest>.McpToolRegistration(string! name, string! description, Cntryl.Portia.McpToolOptions! options) -> void
+Cntryl.Portia.McpToolOptions.DescribedAs(string! description) -> Cntryl.Portia.McpToolOptions!
+Cntryl.Portia.McpToolOptions.Destructive() -> Cntryl.Portia.McpToolOptions!
+Cntryl.Portia.McpToolOptions.Idempotent() -> Cntryl.Portia.McpToolOptions!
+Cntryl.Portia.McpToolOptions.McpToolOptions() -> void
+Cntryl.Portia.McpToolOptions.Named(string! name) -> Cntryl.Portia.McpToolOptions!
+Cntryl.Portia.McpToolOptions.OpenWorld() -> Cntryl.Portia.McpToolOptions!
+Cntryl.Portia.McpToolOptions.ReadOnly() -> Cntryl.Portia.McpToolOptions!
+Cntryl.Portia.McpToolOptions.Titled(string! title) -> Cntryl.Portia.McpToolOptions!
+Cntryl.Portia.PortiaMcpApplicationExtensions
+static Cntryl.Portia.PortiaMcpApplicationExtensions.AddMcpTool<TRequest>(this Cntryl.Portia.PortiaBuilder! application, System.Action<Cntryl.Portia.McpToolOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.McpStdioOptions
+Cntryl.Portia.McpStdioOptions.UseActorProvider<TProvider>() -> Cntryl.Portia.McpStdioOptions!
+Cntryl.Portia.McpStdioOptions.UseLocalDevelopmentActor(string! name = "local-mcp-user") -> Cntryl.Portia.McpStdioOptions!
+static Cntryl.Portia.PortiaMcpApplicationExtensions.AddMcpStdio(this Cntryl.Portia.PortiaBuilder! application, System.Action<Cntryl.Portia.McpStdioOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!
+static Cntryl.Portia.PortiaMcpApplicationExtensions.AddGeneratedMcpTool<TRequest, TOut>(this Cntryl.Portia.PortiaBuilder! application, string! name, string! description, System.Action<Cntryl.Portia.McpToolOptions!>? configure) -> Cntryl.Portia.PortiaBuilder!
+static Cntryl.Portia.PortiaMcpApplicationExtensions.AddGeneratedMcpTool<TRequest>(this Cntryl.Portia.PortiaBuilder! application, string! name, string! description, System.Action<Cntryl.Portia.McpToolOptions!>? configure) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.IMcpActorProvider
+Cntryl.Portia.IMcpActorProvider.GetActorAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Security.Claims.ClaimsPrincipal!>
+Cntryl.Portia.McpInvocation
+override Cntryl.Portia.McpInvocation.<Clone>$() -> Cntryl.Portia.McpInvocation!
+Cntryl.Portia.McpInvocation.Deconstruct(out string! ToolName) -> void
+Cntryl.Portia.McpInvocation.Equals(Cntryl.Portia.McpInvocation? other) -> bool
+Cntryl.Portia.McpInvocation.McpInvocation(string! ToolName) -> void
+Cntryl.Portia.McpInvocation.ToolName.get -> string!
+Cntryl.Portia.McpInvocation.ToolName.init -> void
+override Cntryl.Portia.McpInvocation.Equals(object? obj) -> bool
+override Cntryl.Portia.McpInvocation.GetHashCode() -> int
+override Cntryl.Portia.McpInvocation.ToString() -> string!
+override Cntryl.Portia.McpInvocation.TraceRelationship.get -> Cntryl.Portia.RequestTraceRelationship
+override Cntryl.Portia.McpInvocation.TransportName.get -> string!
+override sealed Cntryl.Portia.McpInvocation.Equals(Cntryl.Portia.RequestInvocation? other) -> bool
+static Cntryl.Portia.McpInvocation.operator !=(Cntryl.Portia.McpInvocation? left, Cntryl.Portia.McpInvocation? right) -> bool
+static Cntryl.Portia.McpInvocation.operator ==(Cntryl.Portia.McpInvocation? left, Cntryl.Portia.McpInvocation? right) -> bool

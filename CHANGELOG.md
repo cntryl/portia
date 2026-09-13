@@ -8,6 +8,13 @@ alerts are as breaking to change as an API.
 
 ### Added
 
+- Optional `Cntryl.Portia.Mcp` and `Cntryl.Portia.Mcp.AspNetCore` packages expose explicitly
+  selected `ICallable` requests as generated MCP tools over stdio or stateless Streamable HTTP.
+  `AddMcpTool<TRequest>()` stays in the shared Portia composition root, derives names, descriptions,
+  and JSON Schemas from existing request metadata, and dispatches through the normal `IRequestBus`
+  actor, authorization, pipeline, result, cancellation, and diagnostics boundaries. HTTP activation
+  composes with standard endpoint conventions; stdio requires an explicit actor policy.
+
 - Document the accepted platform boundary: Fitz is the authoritative event and distributed
   fabric, Portia owns application and projection execution semantics, Cassie is the first-party
   SQL/graph/time-series/vector read-model engine, and PostgreSQL, Snowflake, or another backend
