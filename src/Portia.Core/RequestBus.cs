@@ -383,10 +383,24 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         if (registration.Permission is not null)
         {
             var started = PortiaTelemetry.StartTimestamp();
-            var permission = await services.GetRequiredService<IPermissionEvaluator>()
-                .EvaluateAsync(context.Actor, registration.Permission(request), ct).ConfigureAwait(false);
-            PortiaTelemetry.AuthorizationFinished(started, "permission", "permission",
-                PortiaTelemetry.Outcome(permission.IsSuccess, permission.Error));
+            var outcome = "fault";
+            Result permission;
+            try
+            {
+                permission = await services.GetRequiredService<IPermissionEvaluator>()
+                    .EvaluateAsync(context.Actor, registration.Permission(request), ct).ConfigureAwait(false);
+                outcome = PortiaTelemetry.Outcome(permission.IsSuccess, permission.Error);
+            }
+            catch (Exception exception)
+            {
+                outcome = PortiaTelemetry.ExceptionOutcome(exception, ct);
+                throw;
+            }
+            finally
+            {
+                PortiaTelemetry.AuthorizationFinished(started, "permission", "permission", outcome);
+            }
+
             if (!permission.IsSuccess)
             {
                 return permission;
@@ -402,10 +416,25 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         foreach (var authorizer in authorizers)
         {
             var started = PortiaTelemetry.StartTimestamp();
-            var result = await authorizer.AuthorizeAsync(services, request, context, ct).ConfigureAwait(false);
-            ValidateResult(result, authorizer.AuthorizerType, "request authorizer");
-            PortiaTelemetry.AuthorizationFinished(started, authorizer.ComponentName, authorizer.StageName,
-                PortiaTelemetry.Outcome(result.IsSuccess, result.Error));
+            var outcome = "fault";
+            Result result;
+            try
+            {
+                result = await authorizer.AuthorizeAsync(services, request, context, ct).ConfigureAwait(false);
+                ValidateResult(result, authorizer.AuthorizerType, "request authorizer");
+                outcome = PortiaTelemetry.Outcome(result.IsSuccess, result.Error);
+            }
+            catch (Exception exception)
+            {
+                outcome = PortiaTelemetry.ExceptionOutcome(exception, ct);
+                throw;
+            }
+            finally
+            {
+                PortiaTelemetry.AuthorizationFinished(started, authorizer.ComponentName, authorizer.StageName,
+                    outcome);
+            }
+
             if (!result.IsSuccess)
             {
                 return result;

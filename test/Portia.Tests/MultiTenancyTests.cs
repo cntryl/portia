@@ -465,6 +465,31 @@ public sealed class MultiTenancyTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
     }
 
+    /// <summary>A subscription completing after cursor disposal is rejected and released before any read.</summary>
+    [Fact]
+    public async Task ShouldReleaseSubscriptionWhenCursorIsDisposedWhileSubscribing()
+    {
+        var source = new GatedCursorSource();
+        var directory = new EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(source,
+            TenantRegistryPattern, GetTenantId, notifier: source);
+        var cursor = await directory.OpenCursorAsync();
+        var reader = cursor.ReadAsync().GetAsyncEnumerator();
+        var pending = reader.MoveNextAsync().AsTask();
+        await source.SubscribeStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await cursor.DisposeAsync();
+        source.ReleaseSubscription();
+        var firstCompletion = await Task.WhenAny(pending, source.ReadStarted.Task)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+        source.ReleaseRead();
+        var error = await Record.ExceptionAsync(() => pending);
+        await reader.DisposeAsync();
+
+        Assert.Same(pending, firstCompletion);
+        _ = Assert.IsType<ObjectDisposedException>(error);
+        Assert.Equal(1, source.DisposalCount);
+    }
+
     /// <summary>A broken cursor read disposes its subscription and resumes after its last durable offset.</summary>
     [Fact]
     public async Task ShouldSubscribeBeforeReadingAndRecreateResumableCursorAfterFailure()
@@ -901,6 +926,59 @@ public sealed class MultiTenancyTests
                 if (Interlocked.Exchange(ref _disposed, 1) == 0)
                 {
                     _ = Interlocked.Decrement(ref owner._activeSubscriptions);
+                    _ = Interlocked.Increment(ref owner._disposalCount);
+                }
+
+                return ValueTask.CompletedTask;
+            }
+        }
+    }
+
+    sealed class GatedCursorSource : IDomainEventReader, IDomainEventNotifier
+    {
+        readonly TaskCompletionSource _allowRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        readonly TaskCompletionSource _allowSubscription = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int _disposalCount;
+
+        public int DisposalCount => Volatile.Read(ref _disposalCount);
+        public TaskCompletionSource ReadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource SubscribeStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void ReleaseRead() => _ = _allowRead.TrySetResult();
+
+        public void ReleaseSubscription() => _ = _allowSubscription.TrySetResult();
+
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
+            CancellationToken ct = default) => throw new NotSupportedException();
+
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            _ = ReadStarted.TrySetResult();
+            await _allowRead.Task.WaitAsync(ct);
+            yield break;
+        }
+
+        public async ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
+            CancellationToken ct = default)
+        {
+            _ = SubscribeStarted.TrySetResult();
+            await _allowSubscription.Task.WaitAsync(ct);
+            return new Subscription(this);
+        }
+
+        sealed class Subscription(GatedCursorSource owner) : IDomainEventSubscription
+        {
+            int _disposed;
+
+            public ValueTask WaitAsync(CancellationToken ct = default) =>
+                ValueTask.FromException(new IOException("Disposed cursor began reading."));
+
+            public ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                {
                     _ = Interlocked.Increment(ref owner._disposalCount);
                 }
 

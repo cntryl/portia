@@ -97,14 +97,9 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
             records.Clear();
             return nextCheckpoint;
         }
-        catch (OperationCanceledException)
+        catch (Exception exception)
         {
-            outcome = "canceled";
-            throw;
-        }
-        catch
-        {
-            outcome = "fault";
+            outcome = PortiaTelemetry.ExceptionOutcome(exception, ct);
             throw;
         }
         finally

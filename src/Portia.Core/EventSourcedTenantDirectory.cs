@@ -153,6 +153,17 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                     ? null
                     : await directory._notifier.SubscribeAsync(directory._pattern, ct).ConfigureAwait(false);
                 Volatile.Write(ref _subscription, subscription);
+                if (Volatile.Read(ref _disposed) != 0)
+                {
+                    if (subscription is not null &&
+                        ReferenceEquals(Interlocked.CompareExchange(ref _subscription, null, subscription),
+                            subscription))
+                    {
+                        await subscription.DisposeAsync().ConfigureAwait(false);
+                    }
+
+                    throw new ObjectDisposedException(GetType().FullName);
+                }
 
                 while (true)
                 {

@@ -9,21 +9,24 @@ public sealed class RequestTransportCatalog
 
     /// <summary>Creates a catalog from generated request descriptors.</summary>
     /// <param name="registrations">One descriptor per request type the application declares.</param>
-    /// <exception cref="ArgumentException">Two descriptors describe the same request type.</exception>
+    /// <exception cref="InvalidOperationException">Two descriptors conflict for the same request type.</exception>
     public RequestTransportCatalog(IEnumerable<RequestTransportRegistration> registrations)
     {
         ArgumentNullException.ThrowIfNull(registrations);
         var byType = new Dictionary<Type, RequestTransportRegistration>();
         foreach (var registration in registrations)
         {
-            // One route and discriminator per request type, so which of two descriptors won is never a
-            // question. Say which type collided rather than leaving the dictionary to report a bare key.
-            if (!byType.TryAdd(registration.RequestType, registration))
+            if (byType.TryGetValue(registration.RequestType, out var existing))
             {
-                throw new ArgumentException(
-                    $"Request type '{registration.RequestType}' has more than one transport descriptor; "
-                    + "declare each request once.", nameof(registrations));
+                if (!existing.HasSameContractAs(registration))
+                {
+                    throw registration.ConflictingContract();
+                }
+
+                continue;
             }
+
+            byType.Add(registration.RequestType, registration);
         }
 
         _registrations = byType.ToFrozenDictionary();

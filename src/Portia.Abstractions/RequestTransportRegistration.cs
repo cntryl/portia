@@ -48,4 +48,19 @@ public sealed class RequestTransportRegistration(
 
     /// <summary>Gets the unary result or streaming item type, when the request produces one.</summary>
     public Type? ResultType { get; } = resultType;
+
+    internal bool HasSameContractAs(RequestTransportRegistration other) =>
+        RequestType == other.RequestType &&
+        Transports == other.Transports &&
+        ResultType == other.ResultType &&
+        (RegisterRpc is null) == (other.RegisterRpc is null) &&
+        Discriminator.Version == other.Discriminator.Version &&
+        string.Equals(Discriminator.Name, other.Discriminator.Name, StringComparison.Ordinal) &&
+        string.Equals(Route.Realm, other.Route.Realm, StringComparison.Ordinal) &&
+        string.Equals(Route.Area, other.Route.Area, StringComparison.Ordinal) &&
+        string.Equals(Route.Resource, other.Route.Resource, StringComparison.Ordinal) &&
+        string.Equals(Route.Operation, other.Route.Operation, StringComparison.Ordinal);
+
+    internal InvalidOperationException ConflictingContract() => new(
+        $"Request '{RequestType}' has conflicting transport descriptors.");
 }

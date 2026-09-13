@@ -101,14 +101,9 @@ public sealed class ReactorRunner(
                 contexts.Clear();
                 return next;
             }
-            catch (OperationCanceledException)
+            catch (Exception exception)
             {
-                outcome = "canceled";
-                throw;
-            }
-            catch
-            {
-                outcome = "fault";
+                outcome = PortiaTelemetry.ExceptionOutcome(exception, ct);
                 throw;
             }
             finally

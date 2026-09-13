@@ -43,9 +43,9 @@ public sealed class AggregateRepository(IEventStore store) : IAggregateRepositor
             outcome = "success";
             return aggregate;
         }
-        catch (OperationCanceledException)
+        catch (Exception exception)
         {
-            outcome = "canceled";
+            outcome = PortiaTelemetry.ExceptionOutcome(exception, ct);
             throw;
         }
         finally
@@ -92,9 +92,9 @@ public sealed class AggregateRepository(IEventStore store) : IAggregateRepositor
             aggregate.Save();
             outcome = "success";
         }
-        catch (OperationCanceledException)
+        catch (Exception exception)
         {
-            outcome = "canceled";
+            outcome = PortiaTelemetry.ExceptionOutcome(exception, ct);
             throw;
         }
         finally

@@ -241,66 +241,75 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
     {
         var telemetryStarted = PortiaTelemetry.StartTimestamp();
         var telemetryOutcome = "fault";
-        ArgumentNullException.ThrowIfNull(stream);
-        ArgumentNullException.ThrowIfNull(events);
-        ct.ThrowIfCancellationRequested();
-        DomainEventValidation.ValidateBatch(events);
-
-        if (events.Count == 0)
-        {
-            PortiaTelemetry.EventStoreFinished(telemetryStarted, "append", "stream", "success");
-            return;
-        }
-
-        var session = await _streams.BeginAsync(stream.ToString(), ct: ct).ConfigureAwait(false);
-        var streamMetadata = Encoding.UTF8.GetBytes(stream.ToString());
-        var failed = false;
+        var telemetryCount = 0;
 
         try
         {
-            for (var index = 0; index < events.Count; index++)
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(events);
+            ct.ThrowIfCancellationRequested();
+            DomainEventValidation.ValidateBatch(events);
+
+            if (events.Count == 0)
             {
-                var ev = events[index];
-                var expectedOffset = checked(expectedStreamPosition + (ulong)index);
-                _ = await session.AppendAsync(
-                    expectedOffset,
-                    _serializer.Serialize(ev),
-                    streamMetadata,
-                    ct: ct).ConfigureAwait(false);
+                telemetryOutcome = "success";
+                return;
             }
 
-            await session.CommitAsync(ct).ConfigureAwait(false);
-            telemetryOutcome = "success";
-        }
-        catch (Exception ex)
-        {
-            failed = true;
-            await RollbackAsync(session).ConfigureAwait(false);
+            var session = await _streams.BeginAsync(stream.ToString(), ct: ct).ConfigureAwait(false);
+            var failed = false;
+            try
+            {
+                var streamMetadata = Encoding.UTF8.GetBytes(stream.ToString());
+                for (var index = 0; index < events.Count; index++)
+                {
+                    var ev = events[index];
+                    var expectedOffset = checked(expectedStreamPosition + (ulong)index);
+                    _ = await session.AppendAsync(
+                        expectedOffset,
+                        _serializer.Serialize(ev),
+                        streamMetadata,
+                        ct: ct).ConfigureAwait(false);
+                }
 
-            if (ex is StreamException { DomainCode: 2001 })
-            {
-                throw new EventStreamConcurrencyException(
-                    $"Stream '{stream}' is not at the expected physical stream position.", ex);
+                await session.CommitAsync(ct).ConfigureAwait(false);
+                telemetryCount = events.Count;
+                telemetryOutcome = "success";
             }
-            else
+            catch (Exception ex)
             {
+                failed = true;
+                await RollbackAsync(session).ConfigureAwait(false);
+
+                if (ex is StreamException { DomainCode: 2001 })
+                {
+                    throw new EventStreamConcurrencyException(
+                        $"Stream '{stream}' is not at the expected physical stream position.", ex);
+                }
+
                 throw;
             }
+            finally
+            {
+                try
+                {
+                    await session.DisposeAsync().ConfigureAwait(false);
+                }
+                catch when (failed)
+                {
+                    // Cleanup must not replace the append/commit failure seen by the caller.
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            telemetryOutcome = PortiaTelemetry.ExceptionOutcome(exception, ct);
+            throw;
         }
         finally
         {
-            try
-            {
-                await session.DisposeAsync().ConfigureAwait(false);
-            }
-            catch when (failed)
-            {
-                // Cleanup must not replace the append/commit failure seen by the caller.
-            }
-
             PortiaTelemetry.EventStoreFinished(telemetryStarted, "append", "stream",
-                ct.IsCancellationRequested ? "canceled" : telemetryOutcome,
-                telemetryOutcome == "success" ? events.Count : 0);
+                telemetryOutcome, telemetryCount);
         }
     }
 

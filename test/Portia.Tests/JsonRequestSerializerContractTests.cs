@@ -67,20 +67,20 @@ public sealed class JsonRequestSerializerContractTests
     }
 
     /// <summary>
-    ///     Verifies that one request type cannot carry two transport descriptors. Which route and
-    ///     discriminator a request uses must not depend on registration order, so the collision is
+    ///     Verifies that one request type cannot carry conflicting transport descriptors. Which route
+    ///     and discriminator a request uses must not depend on registration order, so the collision is
     ///     reported against the type that caused it rather than left to a dictionary's bare key error.
     /// </summary>
     [Fact]
-    public void ShouldRejectTwoTransportDescriptorsForOneRequestType()
+    public void ShouldRejectConflictingTransportDescriptorsForOneRequestType()
     {
-        var error = Assert.Throws<ArgumentException>(() => new JsonRequestSerializer([
+        var error = Assert.Throws<InvalidOperationException>(() => new JsonRequestSerializer([
             Registration(typeof(UniversalAction), "test.shared.first"),
             Registration(typeof(UniversalAction), "test.shared.second")
         ], TestJson.Options()));
 
         Assert.Contains(nameof(UniversalAction), error.Message, StringComparison.Ordinal);
-        Assert.Contains("declare each request once", error.Message, StringComparison.Ordinal);
+        Assert.Contains("conflicting transport descriptors", error.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

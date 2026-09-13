@@ -30,8 +30,22 @@ public sealed class RequestRegistry
         IEnumerable<RequestPipelineBehaviorRegistration> behaviors, IEnumerable<RequestTransportRegistration> requests)
     {
         ArgumentNullException.ThrowIfNull(requests);
+        var transportRegistrations = new Dictionary<Type, RequestTransportRegistration>();
         foreach (var registration in requests)
-            _names[registration.RequestType] = registration.Discriminator.Name;
+        {
+            if (transportRegistrations.TryGetValue(registration.RequestType, out var existing))
+            {
+                if (!existing.HasSameContractAs(registration))
+                {
+                    throw registration.ConflictingContract();
+                }
+
+                continue;
+            }
+
+            transportRegistrations.Add(registration.RequestType, registration);
+            _names.Add(registration.RequestType, registration.Discriminator.Name);
+        }
         foreach (var registration in handlers)
         {
             if (_handlers.TryGetValue(registration.RequestType, out var existing) &&

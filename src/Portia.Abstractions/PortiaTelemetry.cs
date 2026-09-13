@@ -403,6 +403,9 @@ public static partial class PortiaTelemetry
             _ => "fault"
         };
 
+    internal static string ExceptionOutcome(Exception exception, CancellationToken ct) =>
+        exception is OperationCanceledException && ct.IsCancellationRequested ? "canceled" : "fault";
+
     /// <summary>Records a bounded background-fault metric and structured error log.</summary>
     /// <param name="runnerName">The stable runner name.</param>
     /// <param name="stage">The phase of the runner's work that faulted.</param>

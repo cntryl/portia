@@ -52,7 +52,7 @@ jobs:
           --no-build
           --filter "Category!=BrokerIntegration"
 
-      - name: Confirm packed NativeAOT consumer
+      - name: Confirm packed consumers
         run: |
           dotnet pack Portia.slnx \
             --configuration Release \
@@ -73,6 +73,14 @@ jobs:
             -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION" \
             --output artifacts/native-aot
           artifacts/native-aot/Portia.AspNetCore.NativeAotConsumer
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-projection-packages" dotnet restore \
+            smoke/Portia.ProjectionStore.PackageConsumer/Portia.ProjectionStore.PackageConsumer.csproj \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-projection-packages" dotnet run \
+            --project smoke/Portia.ProjectionStore.PackageConsumer/Portia.ProjectionStore.PackageConsumer.csproj \
+            --configuration Release \
+            --no-restore \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
 
       - name: Test full broker integration
         env:

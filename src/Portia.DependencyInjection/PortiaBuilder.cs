@@ -161,10 +161,18 @@ public sealed class PortiaBuilder
     public PortiaBuilder AddGeneratedRequest(RequestTransportRegistration registration)
     {
         ArgumentNullException.ThrowIfNull(registration);
-        if (_catalog.Requests.TryAdd(registration.RequestType, registration))
+        if (_catalog.Requests.TryGetValue(registration.RequestType, out var existing))
         {
-            _ = Services.AddSingleton(registration);
+            if (!existing.HasSameContractAs(registration))
+            {
+                throw registration.ConflictingContract();
+            }
+
+            return this;
         }
+
+        _catalog.Requests.Add(registration.RequestType, registration);
+        _ = Services.AddSingleton(registration);
 
         _json.AddRoot(registration.RequestType);
         if (registration.ResultType is not null)

@@ -47,6 +47,58 @@ public sealed class RegistrationConflictTests
         Assert.NotNull(registry);
     }
 
+    /// <summary>Equivalent transport metadata composes idempotently at every runtime boundary.</summary>
+    [Fact]
+    public void ShouldAcceptEquivalentTransportDescriptors()
+    {
+        var first = Transport();
+        var second = Transport();
+        var services = new ServiceCollection();
+
+        _ = services.AddPortia().AddGeneratedRequest(first).AddGeneratedRequest(second);
+        var registry = new RequestRegistry([], [], [], [first, second]);
+        var catalog = new RequestTransportCatalog([first, second]);
+
+        _ = Assert.Single(services, item =>
+            item.ImplementationInstance is RequestTransportRegistration registration &&
+            registration.RequestType == typeof(TransportConflictRequest));
+        Assert.NotNull(registry);
+        Assert.Same(first, catalog.Get(typeof(TransportConflictRequest)));
+    }
+
+    /// <summary>Conflicting transport metadata fails before the builder mutates the service collection.</summary>
+    [Fact]
+    public void ShouldRejectConflictingTransportDescriptorsAtRegistration()
+    {
+        var services = new ServiceCollection();
+        var builder = services.AddPortia().AddGeneratedRequest(Transport());
+        var count = services.Count;
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            builder.AddGeneratedRequest(Transport(operation: "different")));
+
+        Assert.Contains("conflicting transport descriptors", error.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(TransportConflictRequest), error.Message, StringComparison.Ordinal);
+        Assert.Equal(count, services.Count);
+    }
+
+    /// <summary>The registry rejects conflicting transport metadata independently of registration order.</summary>
+    /// <param name="reverse">Whether the conflicting descriptor arrives first.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShouldRejectConflictingTransportDescriptorsAtRegistryComposition(bool reverse)
+    {
+        var first = Transport();
+        var second = Transport(discriminator: "different");
+        RequestTransportRegistration[] requests = reverse ? [second, first] : [first, second];
+
+        var error = Assert.Throws<InvalidOperationException>(() => new RequestRegistry([], [], [], requests));
+
+        Assert.Contains("conflicting transport descriptors", error.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(TransportConflictRequest), error.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>
     ///     Verifies that an authorization stage outside the defined set is refused at composition. An
     ///     undefined stage would sort into an arbitrary position around the declarative permission check,
@@ -224,7 +276,14 @@ public sealed class RegistrationConflictTests
         Assert.Contains("concrete, closed component type", error.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
+
+    static RequestTransportRegistration Transport(string operation = "execute",
+        string discriminator = "transport-conflict") => new(typeof(TransportConflictRequest), RequestTransports.Callable,
+        new RequestRouteAttribute("tests", "requests", "universal", operation),
+        new DiscriminatorAttribute(discriminator));
 }
+
+sealed record TransportConflictRequest : IRequest;
 
 // A projector that cannot be constructed, used only to be refused.
 abstract class AbstractProjector(IProjectionStore target)
