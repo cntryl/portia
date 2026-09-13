@@ -58,6 +58,22 @@ carried credential when work executes. Both then dispatch through `IRequestBus`,
 permission and authorizer pipeline runs. Adapters may authenticate differently but cannot define
 an alternative authorization path.
 
+## MCP is another Portia ingress, not another application model
+
+Applications declare an MCP tool beside the request handler with `AddMcpTool<TRequest>()` and
+activate that shared catalog at a host boundary with either `AddMcpStdio()` or the explicit
+`AddMcpHttp()` plus `MapPortiaMcp()` pair.
+There is no second composition root, MCP-specific handler, or runtime assembly scan. `ICallable`
+remains the remote request-response opt-in; the request discriminator supplies the stable default
+tool name; its XML summary supplies the model-facing description; and the existing application JSON
+shape is the entire input. Explicit metadata overrides presentation only and never authorization.
+
+An invocation binds the generated request and enters the same `IRequestBus` pipeline used by other
+Portia receivers. HTTP authentication or an explicit stdio `IMcpActorProvider` owns identity.
+`RequestRoute` continues to describe routing transports and does not manufacture MCP parameters.
+The optional packages own tools only: resources, prompts, sampling, elicitation, streaming requests,
+queues-as-tasks, and schedules-as-tools remain unsupported until they have native Portia semantics.
+
 ## Fitz owns distributed workload leases
 
 Portia uses Fitz lease inventory to assign work across the fleet and holds a Fitz lease around each

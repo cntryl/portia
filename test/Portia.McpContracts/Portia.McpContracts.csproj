@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <RootNamespace>Cntryl.Portia.McpContracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Remove="Xunit" />
+    <ProjectReference Include="../../src/Portia.Abstractions/Portia.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

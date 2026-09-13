@@ -73,6 +73,19 @@ jobs:
             -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION" \
             --output artifacts/native-aot
           artifacts/native-aot/Portia.AspNetCore.NativeAotConsumer
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-mcp-aot-packages" dotnet restore \
+            smoke/Portia.Mcp.AspNetCore.NativeAotConsumer/Portia.Mcp.AspNetCore.NativeAotConsumer.csproj \
+            --runtime linux-x64 \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-mcp-aot-packages" dotnet publish \
+            smoke/Portia.Mcp.AspNetCore.NativeAotConsumer/Portia.Mcp.AspNetCore.NativeAotConsumer.csproj \
+            --configuration Release \
+            --runtime linux-x64 \
+            --self-contained true \
+            --no-restore \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION" \
+            --output artifacts/mcp-native-aot
+          artifacts/mcp-native-aot/Portia.Mcp.AspNetCore.NativeAotConsumer
           NUGET_PACKAGES="$RUNNER_TEMP/portia-projection-packages" dotnet restore \
             smoke/Portia.ProjectionStore.PackageConsumer/Portia.ProjectionStore.PackageConsumer.csproj \
             -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
