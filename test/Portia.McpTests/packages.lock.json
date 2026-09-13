@@ -146,6 +146,12 @@
           "ModelContextProtocol.AspNetCore": "[2.2.0, )"
         }
       },
+      "portia.mcpcontracts": {
+        "type": "Project",
+        "dependencies": {
+          "Cntryl.Portia.Abstractions": "[0.1.0, )"
+        }
+      },
       "Microsoft.AspNetCore.OpenApi": {
         "type": "CentralTransitive",
         "requested": "[10.0.11, )",

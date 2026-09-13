@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Security.Claims;
 using Cntryl.Portia;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
@@ -7,8 +8,15 @@ var builder = WebApplication.CreateSlimBuilder(args);
 builder.WebHost.UseUrls("http://127.0.0.1:0");
 _ = builder.Services.AddPortia()
     .AddRequestHandler<ReadGreetingHandler>()
-    .AddMcpTool<ReadGreeting>(tool => tool.ReadOnly());
+    .AddMcpTool<ReadGreeting>(tool => tool.ReadOnly())
+    .AddMcpHttp();
 var app = builder.Build();
+app.Use((context, next) =>
+{
+    context.User = new ClaimsPrincipal(new ClaimsIdentity(
+        [new Claim(ClaimTypes.Name, "native-aot-test-actor")], "smoke"));
+    return next(context);
+});
 _ = app.MapPortiaMcp();
 await app.StartAsync();
 
@@ -25,7 +33,7 @@ var result = await client.CallToolAsync("greetings.read", new Dictionary<string,
 {
     ["name"] = "native-aot"
 }!);
-if (result.IsError == true || result.StructuredContent?.GetRawText() != "\"Hello, native-aot.\"")
+if (result.IsError == true || result.StructuredContent?.GetProperty("result").GetString() != "Hello, native-aot.")
     throw new InvalidOperationException($"Unexpected MCP result: {result.StructuredContent?.GetRawText()}");
 await app.StopAsync();
 

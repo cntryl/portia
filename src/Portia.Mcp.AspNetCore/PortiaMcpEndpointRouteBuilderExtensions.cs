@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Cntryl.Portia;
 
@@ -16,9 +18,18 @@ public static class PortiaMcpEndpointRouteBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentException.ThrowIfNullOrWhiteSpace(pattern);
+        if (endpoints.ServiceProvider.GetService<PortiaMcpHttpMarker>() is null)
+            throw new InvalidOperationException(
+                "MapPortiaMcp requires AddMcpHttp() in the shared Portia application composition.");
         if (!endpoints.ServiceProvider.GetServices<McpToolRegistration>().Any())
             throw new InvalidOperationException(
                 "MapPortiaMcp requires at least one AddMcpTool<TRequest>() declaration.");
-        return endpoints.MapMcp(pattern);
+        var maximum = endpoints.ServiceProvider.GetService<IOptions<PortiaHttpOptions>>()?.Value.MaxJsonBodyBytes
+                      ?? PortiaHttpOptions.DefaultMaxJsonBodyBytes;
+        if (maximum <= 0)
+            throw new InvalidOperationException($"{nameof(PortiaHttpOptions.MaxJsonBodyBytes)} must be positive.");
+        return endpoints.MapMcp(pattern).WithMetadata(new McpRequestSizeLimit(maximum));
     }
+
+    sealed record McpRequestSizeLimit(long? MaxRequestBodySize) : IRequestSizeLimitMetadata;
 }

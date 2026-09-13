@@ -5,7 +5,7 @@ namespace Cntryl.Portia;
 public sealed record McpInvocation(string ToolName) : RequestInvocation
 {
     /// <inheritdoc />
-    public override string TransportName => "Mcp";
+    public override string TransportName => "mcp";
 
     /// <inheritdoc />
     public override RequestTraceRelationship TraceRelationship => RequestTraceRelationship.Parent;

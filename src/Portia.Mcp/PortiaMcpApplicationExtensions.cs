@@ -1,6 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Console;
 using ModelContextProtocol.Server;
 
 namespace Cntryl.Portia;
@@ -64,12 +67,14 @@ public static class PortiaMcpApplicationExtensions
                     $"MCP tool name '{registration.Name}' is already owned by request '{owner}'.");
             catalog.Registrations.Add(registration.RequestType, registration);
             catalog.Names.Add(registration.Name, registration.RequestType);
-            _ = application.Services.AddSingleton(registration);
             _ = application.Services.AddSingleton<McpToolRegistration>(registration);
             application.Services.TryAddEnumerable(
                 ServiceDescriptor.Singleton<IHostedService, McpStartupValidator>());
             _ = application.Services.AddSingleton<McpServerTool>(services =>
-                new PortiaMcpServerTool(registration, services.GetRequiredService<System.Text.Json.JsonSerializerOptions>()));
+                new PortiaMcpServerTool(registration,
+                    services.GetRequiredService<System.Text.Json.JsonSerializerOptions>(),
+                    services.GetService<ILogger<PortiaMcpServerTool>>()
+                    ?? NullLogger<PortiaMcpServerTool>.Instance));
         }
 
         return application;
@@ -84,6 +89,12 @@ public static class PortiaMcpApplicationExtensions
         if (!application.Services.Any(service => service.ServiceType == typeof(McpToolRegistration)))
             throw new InvalidOperationException(
                 "AddMcpStdio requires at least one AddMcpTool<TRequest>() declaration.");
+        if (!application.Services.Any(service => service.ServiceType == typeof(IMcpActorProvider)))
+            throw new InvalidOperationException(
+                "AddMcpStdio requires an explicit actor policy. Configure UseActorProvider<TProvider>() "
+                + "or UseLocalDevelopmentActor().");
+        application.Services.Configure<ConsoleLoggerOptions>(options =>
+            options.LogToStandardErrorThreshold = LogLevel.Trace);
         _ = application.Services.AddMcpServer().WithStdioServerTransport();
         return application;
     }

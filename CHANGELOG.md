@@ -15,6 +15,14 @@ alerts are as breaking to change as an API.
   actor, authorization, pipeline, result, cancellation, and diagnostics boundaries. HTTP activation
   composes with standard endpoint conventions; stdio requires an explicit actor policy.
 
+- MCP hosting now keeps stdio protocol output free of console logs, emits object-shaped structured
+  results for wire compatibility, validates tool names and descriptions, preserves bounded error
+  kinds in telemetry, and records unexpected faults without disclosing them to clients. HTTP
+  activation is explicit through `AddMcpHttp()`, honors `PortiaHttpOptions.MaxJsonBodyBytes`, and no
+  longer alters unrelated `WebApplication` builds. XML summaries retain common documentation markup
+  and inherit documentation when source is available, with a stable fallback for contracts
+  assemblies that do not publish XML documentation.
+
 - Document the accepted platform boundary: Fitz is the authoritative event and distributed
   fabric, Portia owns application and projection execution semantics, Cassie is the first-party
   SQL/graph/time-series/vector read-model engine, and PostgreSQL, Snowflake, or another backend

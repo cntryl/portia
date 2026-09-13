@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.ComponentModel;
 using System.Security.Claims;
 using System.Text.Json;
@@ -14,19 +15,34 @@ namespace Cntryl.Portia;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public abstract class McpToolRegistration
 {
+    Tool? _protocolTool;
+
     internal McpToolRegistration(Type requestType, Type? resultType, string name, string description,
         McpToolOptions options)
     {
         RequestType = requestType;
         ResultType = resultType;
+        RequestName = name;
         Name = string.IsNullOrWhiteSpace(options.Name) ? name : options.Name;
         Description = string.IsNullOrWhiteSpace(options.Description) ? description : options.Description;
+        if (!IsValidName(Name))
+            throw new ArgumentException(
+                $"MCP tool name '{Name}' must contain 1 to 128 ASCII letters, digits, dots, underscores, or hyphens.",
+                nameof(options));
+        if (string.IsNullOrWhiteSpace(Description))
+            throw new ArgumentException(
+                $"MCP tool '{Name}' requires a non-empty description.", nameof(options));
         Title = options.Title;
         ReadOnly = options.ReadOnlyHint;
         Destructive = options.DestructiveHint;
         Idempotent = options.IdempotentHint;
         OpenWorld = options.OpenWorldHint;
+        Invocation = new McpInvocation(Name);
     }
+
+    internal string RequestName { get; }
+
+    internal McpInvocation Invocation { get; }
 
     /// <summary>Gets the concrete Portia request type.</summary>
     public Type RequestType { get; }
@@ -57,11 +73,21 @@ public abstract class McpToolRegistration
 
     internal Tool CreateProtocolTool(JsonSerializerOptions json)
     {
+        if (_protocolTool is not null)
+            return _protocolTool;
         var input = JsonSchemaExporter.GetJsonSchemaAsNode(json.GetTypeInfo(RequestType));
         if (input is JsonObject inputObject)
             inputObject["type"] = "object";
-        var output = ResultType is null ? null : JsonSchemaExporter.GetJsonSchemaAsNode(json.GetTypeInfo(ResultType));
-        return new Tool
+        var result = ResultType is null ? null : JsonSchemaExporter.GetJsonSchemaAsNode(json.GetTypeInfo(ResultType));
+        if (result is not null)
+            RewriteResultReferences(result);
+        JsonNode? output = result is null ? null : new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject { ["result"] = result },
+            ["required"] = new JsonArray("result")
+        };
+        var tool = new Tool
         {
             Name = Name,
             Description = Description,
@@ -77,24 +103,32 @@ public abstract class McpToolRegistration
                 OpenWorldHint = OpenWorld
             }
         };
+        return Interlocked.CompareExchange(ref _protocolTool, tool, null) ?? tool;
     }
 
-    internal abstract ValueTask<CallToolResult> InvokeAsync(
+    internal abstract ValueTask<McpToolInvocationResult> InvokeAsync(
         ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call,
         JsonSerializerOptions json, CancellationToken ct);
 
     /// <summary>Binds one generated request from untrusted MCP arguments.</summary>
     protected static TRequest Bind<TRequest>(CallToolRequestParams call, JsonSerializerOptions json)
     {
-        var arguments = new JsonObject();
-        if (call.Arguments is not null)
+        try
         {
-            foreach (var argument in call.Arguments)
-                arguments[argument.Key] = JsonNode.Parse(argument.Value.GetRawText());
-        }
+            var arguments = new JsonObject();
+            if (call.Arguments is not null)
+            {
+                foreach (var argument in call.Arguments)
+                    arguments[argument.Key] = JsonValue.Create(argument.Value);
+            }
 
-        return (TRequest?)JsonSerializer.Deserialize(arguments, json.GetTypeInfo(typeof(TRequest)))
-               ?? throw new JsonException("The MCP tool input cannot be null.");
+            return (TRequest?)JsonSerializer.Deserialize(arguments, json.GetTypeInfo(typeof(TRequest)))
+                   ?? throw new JsonException("The MCP tool input cannot be null.");
+        }
+        catch (JsonException exception)
+        {
+            throw new McpBindingException(exception);
+        }
     }
 
     /// <summary>Resolves the authenticated or explicitly provided actor.</summary>
@@ -106,10 +140,10 @@ public abstract class McpToolRegistration
             return call.User;
         var services = call.Services ?? throw new InvalidOperationException("The MCP request has no service scope.");
         var provider = services.GetService<IMcpActorProvider>()
-                       ?? throw new InvalidOperationException(
+                       ?? throw new McpActorRequiredException(
                            "MCP ingress has no authenticated principal or registered IMcpActorProvider.");
         return await provider.GetActorAsync(ct).ConfigureAwait(false)
-               ?? throw new InvalidOperationException("IMcpActorProvider returned null.");
+               ?? throw new McpActorRequiredException("IMcpActorProvider returned null.");
     }
 
     /// <summary>Maps an expected Portia failure to an MCP tool failure.</summary>
@@ -137,6 +171,60 @@ public abstract class McpToolRegistration
         })
     };
 
+    internal static JsonElement StructuredResult<TOut>(TOut value, JsonTypeInfo<TOut> typeInfo)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WritePropertyName("result");
+            JsonSerializer.Serialize(writer, value, typeInfo);
+            writer.WriteEndObject();
+        }
+
+        using var document = JsonDocument.Parse(buffer.WrittenMemory);
+        return document.RootElement.Clone();
+    }
+
+    static bool IsValidName(string name)
+    {
+        if (name.Length is < 1 or > 128)
+            return false;
+        foreach (var character in name)
+        {
+            if (!(character is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9'
+                    or '_' or '-' or '.'))
+                return false;
+        }
+
+        return true;
+    }
+
+    static void RewriteResultReferences(JsonNode node)
+    {
+        if (node is JsonObject objectNode)
+        {
+            foreach (var property in objectNode.ToArray())
+            {
+                if (property.Key == "$ref" && property.Value?.GetValue<string>() is { } reference
+                                           && reference.StartsWith("#/", StringComparison.Ordinal))
+                {
+                    objectNode[property.Key] = string.Concat("#/properties/result", reference.AsSpan(1));
+                }
+                else if (property.Value is not null)
+                {
+                    RewriteResultReferences(property.Value);
+                }
+            }
+        }
+        else if (node is JsonArray array)
+        {
+            foreach (var item in array)
+                if (item is not null)
+                    RewriteResultReferences(item);
+        }
+    }
+
     static JsonElement Element(JsonNode node)
     {
         using var document = JsonDocument.Parse(node.ToJsonString());
@@ -144,13 +232,20 @@ public abstract class McpToolRegistration
     }
 }
 
+readonly record struct McpToolInvocationResult(CallToolResult Result, RequestError? Error);
+
+sealed class McpBindingException(Exception innerException)
+    : Exception("The MCP tool input is invalid.", innerException);
+
+sealed class McpActorRequiredException(string message) : Exception(message);
+
 /// <summary>Generated descriptor for a no-result MCP request.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class McpToolRegistration<TRequest>(string name, string description, McpToolOptions options)
     : McpToolRegistration(typeof(TRequest), null, name, description, options)
     where TRequest : IRequest, ICallable
 {
-    internal override async ValueTask<CallToolResult> InvokeAsync(
+    internal override async ValueTask<McpToolInvocationResult> InvokeAsync(
         ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call,
         JsonSerializerOptions json, CancellationToken ct)
     {
@@ -158,12 +253,13 @@ public sealed class McpToolRegistration<TRequest>(string name, string descriptio
         var request = Bind<TRequest>(call.Params, json);
         var actor = await ActorAsync(call, ct).ConfigureAwait(false);
         var bus = services.GetRequiredService<IRequestBus>();
-        var context = new RequestDispatchContext(actor, new McpInvocation(Name),
+        var context = new RequestDispatchContext(actor, Invocation,
             timeProvider: services.GetService<TimeProvider>());
         var result = await bus.DispatchAsync(request, context, ct).ConfigureAwait(false);
         return result.IsSuccess
-            ? new CallToolResult { IsError = false, Content = [new TextContentBlock { Text = "Succeeded." }] }
-            : Failure(result.Error!);
+            ? new McpToolInvocationResult(
+                new CallToolResult { IsError = false, Content = [new TextContentBlock { Text = "Succeeded." }] }, null)
+            : new McpToolInvocationResult(Failure(result.Error!), result.Error);
     }
 }
 
@@ -173,7 +269,7 @@ public sealed class McpToolRegistration<TRequest, TOut>(string name, string desc
     : McpToolRegistration(typeof(TRequest), typeof(TOut), name, description, options)
     where TRequest : IRequest<TOut>, ICallable
 {
-    internal override async ValueTask<CallToolResult> InvokeAsync(
+    internal override async ValueTask<McpToolInvocationResult> InvokeAsync(
         ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call,
         JsonSerializerOptions json, CancellationToken ct)
     {
@@ -181,18 +277,17 @@ public sealed class McpToolRegistration<TRequest, TOut>(string name, string desc
         var request = Bind<TRequest>(call.Params, json);
         var actor = await ActorAsync(call, ct).ConfigureAwait(false);
         var bus = services.GetRequiredService<IRequestBus>();
-        var context = new RequestDispatchContext(actor, new McpInvocation(Name),
+        var context = new RequestDispatchContext(actor, Invocation,
             timeProvider: services.GetService<TimeProvider>());
         var result = await bus.DispatchAsync<TOut>(request, context, ct).ConfigureAwait(false);
         if (!result.IsSuccess)
-            return Failure(result.Error!);
-        var value = JsonSerializer.SerializeToElement(result.Value,
-            (JsonTypeInfo<TOut>)json.GetTypeInfo(typeof(TOut)));
-        return new CallToolResult
+            return new McpToolInvocationResult(Failure(result.Error!), result.Error);
+        var value = StructuredResult(result.Value, (JsonTypeInfo<TOut>)json.GetTypeInfo(typeof(TOut)));
+        return new McpToolInvocationResult(new CallToolResult
         {
             IsError = false,
             StructuredContent = value,
             Content = [new TextContentBlock { Text = value.GetRawText() }]
-        };
+        }, null);
     }
 }

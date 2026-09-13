@@ -308,42 +308,78 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 "the request needs a valid Discriminator attribute", diagnosticLocation);
         }
 
-        var description = DocumentationSummary(type);
-        if (string.IsNullOrWhiteSpace(description) && invocation.ArgumentList.Arguments.Count == 0)
-        {
-            return new Call(InterceptableLocationModel.From(location), "MCP tool", null,
-                "the request needs an XML summary or an explicit description", diagnosticLocation);
-        }
-
-        description ??= string.Empty;
+        var description = DocumentationSummary(type) ?? $"Invokes the {type.Name} request.";
 
         var genericTypes = new StringBuilder().Append('<').Append(Type(type));
         if (request.TypeArguments.Length == 1)
             _ = genericTypes.Append(", ").Append(Type(request.TypeArguments[0]));
         _ = genericTypes.Append('>');
-        var configure = invocation.ArgumentList.Arguments.Count == 0
-            ? "null"
-            : invocation.ArgumentList.Arguments[0].Expression.ToString();
         var body = "_ = global::Cntryl.Portia.PortiaMcpApplicationExtensions.AddGeneratedMcpTool"
                    + genericTypes + "(builder, " + RequestTransportDiscovery.FormatStringLiteral(name!) + ", "
                    + RequestTransportDiscovery.FormatStringLiteral(description!) + ", configure);\n";
         return new Call(InterceptableLocationModel.From(location), "MCP tool", body, null, diagnosticLocation);
     }
 
-    static string? DocumentationSummary(INamedTypeSymbol type)
+    static string? DocumentationSummary(INamedTypeSymbol type) =>
+        DocumentationSummary(type, new HashSet<ISymbol>(SymbolEqualityComparer.Default));
+
+    static string? DocumentationSummary(INamedTypeSymbol type, HashSet<ISymbol> visited)
     {
+        if (!visited.Add(type))
+            return null;
         var xml = type.GetDocumentationCommentXml(expandIncludes: true, cancellationToken: default);
         if (string.IsNullOrWhiteSpace(xml))
             return null;
         try
         {
-            var summary = XDocument.Parse(xml).Root?.Element("summary")?.Value;
-            return summary is null ? null : Regex.Replace(summary, @"\s+", " ").Trim();
+            var root = XDocument.Parse(xml).Root;
+            var summary = root?.Element("summary");
+            if (summary is not null)
+            {
+                var rendered = string.Concat(summary.Nodes().Select(RenderDocumentationNode));
+                if (!string.IsNullOrWhiteSpace(rendered))
+                    return Regex.Replace(rendered, @"\s+", " ").Trim();
+            }
+
+            if (root?.DescendantsAndSelf().Any(element => element.Name.LocalName == "inheritdoc") != true)
+                return null;
+            if (type.BaseType is { SpecialType: not SpecialType.System_Object } baseType
+                && DocumentationSummary(baseType, visited) is { } inherited)
+                return inherited;
+            foreach (var implemented in type.Interfaces)
+            {
+                if (DocumentationSummary(implemented, visited) is { } inheritedInterface)
+                    return inheritedInterface;
+            }
+
+            return null;
         }
         catch (System.Xml.XmlException)
         {
             return null;
         }
+    }
+
+    static string RenderDocumentationNode(XNode node) => node switch
+    {
+        XText text => text.Value,
+        XElement { Name.LocalName: "see" } see => SeeText(see),
+        XElement { Name.LocalName: "paramref" or "typeparamref" } reference =>
+            reference.Attribute("name")?.Value ?? string.Empty,
+        XElement element => string.Concat(element.Nodes().Select(RenderDocumentationNode)),
+        _ => string.Empty
+    };
+
+    static string SeeText(XElement see)
+    {
+        if (see.Attribute("langword")?.Value is { Length: > 0 } keyword)
+            return keyword;
+        if (see.Attribute("cref")?.Value is not { Length: > 0 } reference)
+            return string.Concat(see.Nodes().Select(RenderDocumentationNode));
+        var separator = Math.Max(reference.LastIndexOf('.'), reference.LastIndexOf(':'));
+        var name = reference.Substring(separator + 1);
+        var generic = name.IndexOf('`');
+        return generic < 0 ? name : name.Substring(0, generic);
     }
 
     static RequestTransportComponent? DispatchedRequest(GeneratorSyntaxContext context)

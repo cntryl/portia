@@ -25,6 +25,7 @@
     <Project Path="test/Portia.ConsumerTests/Portia.ConsumerTests.csproj" />
     <Project Path="test/Portia.ReflectionDisabledTests/Portia.ReflectionDisabledTests.csproj" />
     <Project Path="test/Portia.McpTests/Portia.McpTests.csproj" />
+    <Project Path="test/Portia.McpContracts/Portia.McpContracts.csproj" />
   </Folder>
   <Folder Name="/smoke/">
     <Project Path="smoke/Portia.McpStdioHost/Portia.McpStdioHost.csproj" />

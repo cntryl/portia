@@ -27,6 +27,9 @@ hosts.
 By default, the request's `Discriminator` name is the MCP tool name and its XML summary is the
 model-facing description. The request's existing Portia JSON contract is the complete input schema.
 `RequestRoute` stays transport-routing metadata and does not add synthetic MCP arguments.
+When a referenced contracts assembly does not publish XML documentation, Portia supplies a stable
+`Invokes the {RequestType} request.` fallback; use `DescribedAs(...)` when that fallback is not
+specific enough for a model to choose the tool confidently.
 
 Presentation metadata can be refined without changing the domain request:
 
@@ -47,17 +50,21 @@ Reference `Cntryl.Portia.Mcp.AspNetCore`, build the same application, and map on
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddAccountsApplication(builder.Configuration);
+builder.Services.AddAccountsApplication(builder.Configuration)
+    .AddMcpHttp();
 
 var app = builder.Build();
 app.MapPortiaMcp().RequireAuthorization("agents");
 app.Run();
 ```
 
-The default endpoint is `/mcp` and the supported HTTP mode is stateless Streamable HTTP. Standard
+The default endpoint is `/mcp` and the default HTTP mode is stateless Streamable HTTP. The optional
+`AddMcpHttp(options => ...)` callback can select another SDK-supported session mode without Portia
+overwriting it later during `Build()`. Standard
 ASP.NET Core endpoint conventions remain authoritative for authentication, authorization, host
 filtering, and CORS. Portia uses the authenticated `HttpContext.User`; MCP arguments and metadata
 cannot replace that principal. Authorization still runs inside `IRequestBus` on every invocation.
+The endpoint also honors `PortiaHttpOptions.MaxJsonBodyBytes`.
 
 ## Standard input and output
 
@@ -72,11 +79,13 @@ await builder.Build().RunAsync();
 Stdio has no authenticated HTTP principal, so actor selection is explicit and fails closed when no
 provider is registered. `UseLocalDevelopmentActor()` is intentionally named and documented as a
 single-user development convenience; production hosts use `UseActorProvider<TProvider>()`. Protocol
-frames use standard output; application logs must be configured for standard error.
+frames use standard output; `AddMcpStdio()` routes the built-in console logger to standard error so
+hosting diagnostics cannot corrupt the protocol stream.
 
 ## Results and failures
 
-`IRequest<T>` successes return `T` as MCP structured content and as compact JSON text. A successful
+`IRequest<T>` successes return an object-shaped `{ "result": T }` as MCP structured content and as
+compact JSON text, keeping the result valid for every supported MCP protocol revision. A successful
 `IRequest` returns a short success message. Expected Portia failures set MCP `isError` and include a
 structured `kind`, `message`, and `isTransient` object so a model can correct inputs or decide whether
 retrying is appropriate. Binding, missing-actor, and unexpected failures use stable `Binding`,

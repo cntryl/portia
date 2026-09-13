@@ -61,7 +61,8 @@ an alternative authorization path.
 ## MCP is another Portia ingress, not another application model
 
 Applications declare an MCP tool beside the request handler with `AddMcpTool<TRequest>()` and
-activate that shared catalog at a host boundary with either `AddMcpStdio()` or `MapPortiaMcp()`.
+activate that shared catalog at a host boundary with either `AddMcpStdio()` or the explicit
+`AddMcpHttp()` plus `MapPortiaMcp()` pair.
 There is no second composition root, MCP-specific handler, or runtime assembly scan. `ICallable`
 remains the remote request-response opt-in; the request discriminator supplies the stable default
 tool name; its XML summary supplies the model-facing description; and the existing application JSON
