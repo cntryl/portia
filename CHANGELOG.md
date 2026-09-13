@@ -36,8 +36,9 @@ alerts are as breaking to change as an API.
 ### Fixed
 
 - CI restores the locked dependency graph explicitly before formatting, and the lock files match
-  the currently published `Cntryl.Fitz.Core` 1.0.0 package. The hosted failure now reports package
-  hash drift directly instead of surfacing only as a formatter restore failure. CI also packs the
+  the currently published `Cntryl.Fitz.Core` 1.0.0 package. The build SDK is exact so a newer patch
+  cannot silently change SDK-injected dependencies underneath that locked graph. Package drift now
+  fails in the restore step instead of surfacing only as a formatter failure. CI also packs the
   shipping packages, publishes a fresh external ASP.NET Core consumer with NativeAOT, and executes
   its HTTP and OpenAPI assertions.
 - Domain-event serialization no longer builds intermediate JSON object trees on the current-schema
