@@ -88,6 +88,6 @@ consistency boundary, model an explicit domain rollover to a new aggregate inste
 ## Delivery evidence
 
 The normal test suite covers in-process contracts, public consumers, reflection-disabled JSON,
-and Fitz integration through Docker Compose. `Portia.Testing` provides reusable conformance suites
+and Fitz integration through Docker Compose. `Cntryl.Portia.Testing` provides reusable conformance suites
 for application persistence and for `IEventStore` itself. A backend or platform scenario that did not run is unverified, never
 reported as passing. See [scope](scope.md) for the current support boundary.

@@ -51,7 +51,7 @@
           "Microsoft.IdentityModel.Logging": "8.22.0"
         }
       },
-      "portia.abstractions": {
+      "Cntryl.Portia.Abstractions": {
         "type": "Project",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.11, )"

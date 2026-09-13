@@ -221,72 +221,72 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "Cntryl.Portia.Abstractions": {
+        "type": "Project"
+      },
+      "Cntryl.Portia.Analyzers": {
+        "type": "Project"
+      },
+      "Cntryl.Portia.AspNetCore": {
+        "type": "Project",
+        "dependencies": {
+          "Cntryl.Portia.Abstractions": "[0.1.0, )",
+          "Cntryl.Portia.DependencyInjection": "[0.1.0, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.11, )",
+          "Microsoft.OpenApi": "[2.12.0, )"
+        }
+      },
+      "Cntryl.Portia.CodeFixes": {
+        "type": "Project"
+      },
+      "Cntryl.Portia.Core": {
+        "type": "Project",
+        "dependencies": {
+          "Cntryl.Portia.Abstractions": "[0.1.0, )"
+        }
+      },
+      "Cntryl.Portia.DependencyInjection": {
+        "type": "Project",
+        "dependencies": {
+          "Cntryl.Portia.Abstractions": "[0.1.0, )",
+          "Cntryl.Portia.Core": "[0.1.0, )"
+        }
+      },
+      "Cntryl.Portia.Fitz": {
+        "type": "Project",
+        "dependencies": {
+          "Cntryl.Fitz.Core": "[1.0.0, )",
+          "Cntryl.Portia.Abstractions": "[0.1.0, )",
+          "Cntryl.Portia.DependencyInjection": "[0.1.0, )"
+        }
+      },
+      "Cntryl.Portia.Generators": {
+        "type": "Project"
+      },
+      "Cntryl.Portia.Testing": {
+        "type": "Project",
+        "dependencies": {
+          "Cntryl.Portia.Abstractions": "[0.1.0, )"
+        }
+      },
       "consumer.contracts": {
         "type": "Project",
         "dependencies": {
-          "Portia.DependencyInjection": "[0.1.0, )"
+          "Cntryl.Portia.DependencyInjection": "[0.1.0, )"
         }
       },
       "consumer.featureone": {
         "type": "Project",
         "dependencies": {
-          "Consumer.Contracts": "[0.1.0, )",
-          "Portia.DependencyInjection": "[0.1.0, )"
+          "Cntryl.Portia.DependencyInjection": "[0.1.0, )",
+          "Consumer.Contracts": "[0.1.0, )"
         }
       },
       "consumer.featuretwo": {
         "type": "Project",
         "dependencies": {
-          "Consumer.Contracts": "[0.1.0, )",
-          "Portia.DependencyInjection": "[0.1.0, )"
-        }
-      },
-      "portia.abstractions": {
-        "type": "Project"
-      },
-      "portia.analyzers": {
-        "type": "Project"
-      },
-      "portia.aspnetcore": {
-        "type": "Project",
-        "dependencies": {
-          "Microsoft.AspNetCore.OpenApi": "[10.0.11, )",
-          "Microsoft.OpenApi": "[2.12.0, )",
-          "Portia.Abstractions": "[0.1.0, )",
-          "Portia.DependencyInjection": "[0.1.0, )"
-        }
-      },
-      "portia.codefixes": {
-        "type": "Project"
-      },
-      "portia.core": {
-        "type": "Project",
-        "dependencies": {
-          "Portia.Abstractions": "[0.1.0, )"
-        }
-      },
-      "portia.dependencyinjection": {
-        "type": "Project",
-        "dependencies": {
-          "Portia.Abstractions": "[0.1.0, )",
-          "Portia.Core": "[0.1.0, )"
-        }
-      },
-      "portia.fitz": {
-        "type": "Project",
-        "dependencies": {
-          "Cntryl.Fitz.Core": "[1.0.0, )",
-          "Portia.Abstractions": "[0.1.0, )",
-          "Portia.DependencyInjection": "[0.1.0, )"
-        }
-      },
-      "portia.generators": {
-        "type": "Project"
-      },
-      "portia.testing": {
-        "type": "Project",
-        "dependencies": {
-          "Portia.Abstractions": "[0.1.0, )"
+          "Cntryl.Portia.DependencyInjection": "[0.1.0, )",
+          "Consumer.Contracts": "[0.1.0, )"
         }
       },
       "Cntryl.Fitz.Abstractions": {

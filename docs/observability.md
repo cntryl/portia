@@ -4,7 +4,7 @@ Portia's core packages emit dependency-free diagnostics through `ActivitySource`
 source-generated `ILogger` calls. The activity source and meter are both named `Cntryl.Portia`; the
 telemetry contract version is `2.0.0`.
 
-Applications can subscribe directly, or reference the optional `Portia.Telemetry` package and add
+Applications can subscribe directly, or reference the optional `Cntryl.Portia.Telemetry` package and add
 all three signals to the standard OpenTelemetry hosting pipeline in one call:
 
 ```csharp

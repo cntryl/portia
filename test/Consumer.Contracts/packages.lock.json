@@ -33,26 +33,26 @@
         "resolved": "10.0.11",
         "contentHash": "SXcz+kF+4Oo9b1+55zntpJFYfwb1jw66ioxptyNOOTDc8g2FHnBFWjZpsWfCvZIhzr0x+4e2trVTs4OKwQfBtw=="
       },
-      "portia.abstractions": {
+      "Cntryl.Portia.Abstractions": {
         "type": "Project",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.11, )"
         }
       },
-      "portia.core": {
+      "Cntryl.Portia.Core": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.11, )",
-          "Portia.Abstractions": "[0.1.0, )"
+          "Cntryl.Portia.Abstractions": "[0.1.0, )",
+          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.11, )"
         }
       },
-      "portia.dependencyinjection": {
+      "Cntryl.Portia.DependencyInjection": {
         "type": "Project",
         "dependencies": {
+          "Cntryl.Portia.Abstractions": "[0.1.0, )",
+          "Cntryl.Portia.Core": "[0.1.0, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.11, )",
-          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.11, )",
-          "Portia.Abstractions": "[0.1.0, )",
-          "Portia.Core": "[0.1.0, )"
+          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.11, )"
         }
       },
       "Microsoft.Extensions.Configuration.Abstractions": {

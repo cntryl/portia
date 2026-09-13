@@ -10,6 +10,6 @@
     <PublishAot>true</PublishAot>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Portia.AspNetCore" Version="$(PortiaSmokePackageVersion)" />
+    <PackageReference Include="Cntryl.Portia.AspNetCore" Version="$(PortiaSmokePackageVersion)" />
   </ItemGroup>
 </Project>

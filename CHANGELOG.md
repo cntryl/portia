@@ -13,7 +13,7 @@ alerts are as breaking to change as an API.
   SQL/graph/time-series/vector read-model engine, and PostgreSQL, Snowflake, or another backend
   remains an ordinary userland `IProjectionStore` integration rather than requiring a Portia fork
   or generic storage DSL.
-- The optional `Portia.Telemetry` package adds idempotent `OpenTelemetryBuilder.WithPortia()`
+- The optional `Cntryl.Portia.Telemetry` package adds idempotent `OpenTelemetryBuilder.WithPortia()`
   registration for Portia traces, metrics, and the standard `ILogger` bridge. Applications retain
   ownership of exporters, resources, sampling, filtering, endpoints, and credentials; no existing
   Portia package gains an OpenTelemetry dependency.
@@ -231,8 +231,8 @@ alerts are as breaking to change as an API.
 - Analyzer guidance now distinguishes a batch handler on the wrong processor base (`PORTIA017`)
   from selecting both single and batch handling for one event (`PORTIA028`), and duplicate
   domain-event discriminator errors (`PORTIA023`) name both CLR types at the duplicate declaration.
-  Architecture diagnostics now live in the pure `Portia.Analyzers` project, separate from the
-  workspace-dependent `Portia.CodeFixes` project. Its fixes for `PORTIA002` and `PORTIA005` add
+  Architecture diagnostics now ship in the pure `Cntryl.Portia.Analyzers` package, separate from the
+  workspace-dependent `Cntryl.Portia.CodeFixes` package. Its fixes for `PORTIA002` and `PORTIA005` add
   the missing `partial` modifier and support Fix All.
   The getting-started guide now covers GitHub Packages authentication, core concepts, and the
   compile-time versus startup-validation boundary.
@@ -253,7 +253,7 @@ alerts are as breaking to change as an API.
   `context.Actor`, and passing it twice gave one call two sources of truth for who is acting. `ct`
   also lost its default, matching `IRequestHandler`.
 
-- `Portia.Testing` lives in the `Cntryl.Portia.Testing` namespace, along with `Portia.Fitz`'s
+- `Cntryl.Portia.Testing` lives in the `Cntryl.Portia.Testing` namespace, along with `Cntryl.Portia.Fitz`'s
   `InMemoryRpcClient` and `InMemoryLeaseClient`. Test doubles and conformance suites no longer sit
   in an application's completion list beside the production contracts.
 
@@ -278,7 +278,7 @@ alerts are as breaking to change as an API.
   parsing, standard formatting, and ordering to its wrapped `Guid`. Parameterless formatting,
   equality, JSON representation, and UUID generation semantics are unchanged.
 
-- `Portia.AspNetCore` now depends directly on `Portia.DependencyInjection`. A consumer referencing
+- `Cntryl.Portia.AspNetCore` now depends directly on `Cntryl.Portia.DependencyInjection`. A consumer referencing
   only the HTTP package receives the registration APIs, generator/analyzer assets, and interceptor
   compiler configuration transitively.
 
@@ -396,7 +396,7 @@ alerts are as breaking to change as an API.
 
 ### Added
 
-- `EventStoreConformance` in `Portia.Testing`: append ordering, contiguous resource offsets,
+- `EventStoreConformance` in `Cntryl.Portia.Testing`: append ordering, contiguous resource offsets,
   offset resumption, pattern-read coverage, and the requirement that a stale append throw
   `EventStreamConcurrencyException` and write nothing.
 - Practice diagnostics, all warnings: `PORTIA100` (a projector must not take a dependency that can

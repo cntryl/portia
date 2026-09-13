@@ -6,9 +6,9 @@ These APIs are implemented in the current source checkout.
 
 ## Shared application project
 
-Reference `Portia.Fitz`; it brings the core and dependency-injection packages. The
+Reference `Cntryl.Portia.Fitz`; it brings the core and dependency-injection packages. The
 dependency-injection package includes Portia's generator and compiler configuration.
-Applications without Fitz can reference `Portia.DependencyInjection` directly.
+Applications without Fitz can reference `Cntryl.Portia.DependencyInjection` directly.
 
 ```csharp
 using Cntryl.Portia;
@@ -70,8 +70,8 @@ and its `TokenProvider`. No permissive actor validator is registered automatical
 
 ## API deployment
 
-Reference the shared project and `Portia.AspNetCore`. The HTTP package depends directly on
-`Portia.DependencyInjection`, so it supplies the registration APIs, generator/analyzer assets,
+Reference the shared project and `Cntryl.Portia.AspNetCore`. The HTTP package depends directly on
+`Cntryl.Portia.DependencyInjection`, so it supplies the registration APIs, generator/analyzer assets,
 and interceptor compiler configuration transitively. The host does not need a separate
 dependency-injection or analyzer package, or a manual compiler property.
 

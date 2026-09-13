@@ -25,6 +25,6 @@
     <None Include="../Portia.Generators/bin/$(Configuration)/netstandard2.0/Portia.Generators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <None Include="../Portia.Analyzers/bin/$(Configuration)/netstandard2.0/Portia.Analyzers.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <None Include="../Portia.CodeFixes/bin/$(Configuration)/netstandard2.0/Portia.CodeFixes.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
-    <None Include="../Portia.Generators/buildTransitive/Portia.Generators.props" Pack="true" PackagePath="buildTransitive/Portia.DependencyInjection.props" />
+    <None Include="../Portia.Generators/buildTransitive/Portia.Generators.props" Pack="true" PackagePath="buildTransitive/Cntryl.Portia.DependencyInjection.props" />
   </ItemGroup>
 </Project>

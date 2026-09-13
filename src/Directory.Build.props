@@ -2,6 +2,7 @@
   <Import Project="../Directory.Build.props"/>
 
   <PropertyGroup>
+    <PackageId>Cntryl.$(MSBuildProjectName)</PackageId>
     <IsPackable>true</IsPackable>
     <Authors>cntryl</Authors>
     <RepositoryUrl>https://github.com/cntryl/portia</RepositoryUrl>

@@ -77,7 +77,7 @@ and a single registration is a reasonable shortcut. It stops being one as soon a
 consumes the repository: every such caller then depends on the checkpoint API, and every test
 double for it has to implement `BeginAsync`.
 
-`Portia.DependencyInjection` supplies the generator for typed dispatch.
+`Cntryl.Portia.DependencyInjection` supplies the generator for typed dispatch.
 `IProjectorContext` contains checkpoint identity and rebuild metadata, never application
 services. `WorkloadScope.PerTenant` replaces the declared pattern's realm with the active tenant ID;
 `WorkloadScope.Global` keeps the declared realm. Names default to the concrete type's full name;
@@ -214,8 +214,8 @@ batching is not an external transaction or an exactly-once guarantee. Use the tr
 
 ## Fitz KV persistence
 
-An application already running on `Portia.Fitz` has a durable store it is connected to, and
-`Portia.Fitz` bundles both halves of the storage contract against it. Neither one is a turnkey
+An application already running on `Cntryl.Portia.Fitz` has a durable store it is connected to, and
+`Cntryl.Portia.Fitz` bundles both halves of the storage contract against it. Neither one is a turnkey
 projection: a projection is the application's own data model, so the framework supplies the
 transaction and the checkpoint and the application supplies the reads and writes that share them.
 
@@ -294,7 +294,7 @@ batch sizes and their repositories must enforce backend limits without partially
 an oversized projection batch. Test atomicity, conditional conflicts, cancellation,
 and ambiguous commit responses against the chosen backend.
 
-`Portia.Testing` turns the storage requirements into executable suites (all in the
+`Cntryl.Portia.Testing` turns the storage requirements into executable suites (all in the
 `Cntryl.Portia.Testing` namespace):
 
 - `ProjectionStoreConformance` verifies atomic data/checkpoint commits, rollback, optimistic
@@ -319,7 +319,7 @@ fails. Retries back off exponentially from the workload's poll interval, up to
 with `WorkloadFailureException`. This makes a poison event terminal and observable without
 silently skipping it. A successful pass resets both the count and the backoff.
 
-`Portia.Testing` supplies backend-neutral `ProjectionStoreConformance` and optional
+`Cntryl.Portia.Testing` supplies backend-neutral `ProjectionStoreConformance` and optional
 `ReactionDeduplicationConformance` suites. Implement
 their small probe interfaces in the application's storage test project and run `VerifyAsync` from
 the test framework already in use. The deduplication suite proves duplicate suppression but cannot

@@ -152,7 +152,7 @@
           "OpenTelemetry.Api": "1.18.0"
         }
       },
-      "portia.abstractions": {
+      "Cntryl.Portia.Abstractions": {
         "type": "Project",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.11, )"

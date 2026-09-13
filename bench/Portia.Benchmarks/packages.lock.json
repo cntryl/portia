@@ -111,35 +111,35 @@
         "resolved": "4.7.0",
         "contentHash": "VybpaOQQhqE6siHppMktjfGBw1GCwvCqiufqmP8F1nj7fTUNtW35LOEt3UZTEsECfo+ELAl/9o9nJx3U91i7vA=="
       },
-      "portia.abstractions": {
+      "Cntryl.Portia.Abstractions": {
         "type": "Project"
       },
-      "portia.aspnetcore": {
+      "Cntryl.Portia.AspNetCore": {
         "type": "Project",
         "dependencies": {
+          "Cntryl.Portia.Abstractions": "[0.1.0, )",
+          "Cntryl.Portia.DependencyInjection": "[0.1.0, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.11, )",
-          "Microsoft.OpenApi": "[2.12.0, )",
-          "Portia.Abstractions": "[0.1.0, )",
-          "Portia.DependencyInjection": "[0.1.0, )"
+          "Microsoft.OpenApi": "[2.12.0, )"
         }
       },
-      "portia.core": {
+      "Cntryl.Portia.Core": {
         "type": "Project",
         "dependencies": {
-          "Portia.Abstractions": "[0.1.0, )"
+          "Cntryl.Portia.Abstractions": "[0.1.0, )"
         }
       },
-      "portia.dependencyinjection": {
+      "Cntryl.Portia.DependencyInjection": {
         "type": "Project",
         "dependencies": {
-          "Portia.Abstractions": "[0.1.0, )",
-          "Portia.Core": "[0.1.0, )"
+          "Cntryl.Portia.Abstractions": "[0.1.0, )",
+          "Cntryl.Portia.Core": "[0.1.0, )"
         }
       },
-      "portia.testing": {
+      "Cntryl.Portia.Testing": {
         "type": "Project",
         "dependencies": {
-          "Portia.Abstractions": "[0.1.0, )"
+          "Cntryl.Portia.Abstractions": "[0.1.0, )"
         }
       },
       "Microsoft.AspNetCore.OpenApi": {

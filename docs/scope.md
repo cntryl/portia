@@ -11,7 +11,7 @@ current, deliberate boundary.
   serializers, converters, generated contexts, and other dependencies remain that application's
   responsibility.
 - The pinned Cntryl.Fitz packages advertise `IsAotCompatible`; NativeAOT compatibility for an
-  application that uses `Portia.Fitz` still depends on its own serializers, converters, and other
+  application that uses `Cntryl.Portia.Fitz` still depends on its own serializers, converters, and other
   dependencies.
 - Aggregate snapshotting is not supported and is not planned. Aggregates are expected to stay
   bounded enough to rehydrate directly from their event streams. Prefix truncation is also
@@ -27,7 +27,7 @@ current, deliberate boundary.
   form, binary, and streaming-body inputs are not supported.
 - Portia never skips a poison projection or reaction event. Hosted passes retry with bounded
   exponential backoff and then fault the worker, leaving the last successful checkpoint intact.
-- Durable event persistence is bundled for Fitz only. `Portia.Fitz` supplies `FitzEventStore`,
+- Durable event persistence is bundled for Fitz only. `Cntryl.Portia.Fitz` supplies `FitzEventStore`,
   `FitzKvProjectionStore` — an abstract base the application's own repository derives from, so its
   projection writes share the transaction Portia commits the checkpoint in — and
   `FitzKvCheckpointStore` for reactor progress, selected with `UseKvCheckpoints`. See
@@ -40,7 +40,7 @@ current, deliberate boundary.
   contract.
 - Portia does not currently ship PostgreSQL, Snowflake, SQL Server, Redis, or other general-purpose
   durable persistence adapters.
-  `Portia.Testing` supplies backend-neutral projection and optional reaction deduplication
+  `Cntryl.Portia.Testing` supplies backend-neutral projection and optional reaction deduplication
   conformance suites so application implementations can prove the required invariants for any
   other backend.
 

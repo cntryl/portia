@@ -14,7 +14,7 @@
         "resolved": "10.0.11",
         "contentHash": "IBf7lbovvjGWVWXZX5cJ/cO0WXbId0Zq4BuSeT94mGZuOAP66oMeH9PTBZ9Jpp3Jb6jtK0qm/NyUbPRo1gC/wQ=="
       },
-      "portia.abstractions": {
+      "Cntryl.Portia.Abstractions": {
         "type": "Project",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.11, )"
