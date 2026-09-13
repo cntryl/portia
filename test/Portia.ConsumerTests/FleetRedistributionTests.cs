@@ -21,12 +21,15 @@ public sealed class FleetRedistributionTests
         var membership = new Membership();
         membership.Observer.Set("a");
         var state = new State();
+        var clock = new ManualClock();
+        var options = Options;
         var services = new ServiceCollection();
         _ = services.AddSingleton<IFleetMembership>(membership);
         _ = services.AddSingleton<IPartitionLeaseCompetitor, InMemoryLeaseClient>();
+        _ = services.AddSingleton<TimeProvider>(clock);
         _ = services.AddSingleton(state);
         _ = services.AddScoped<Workload>();
-        _ = services.AddPortiaFleetPartitionRunner<Workload>(Partitions, Options);
+        _ = services.AddPortiaFleetPartitionRunner<Workload>(Partitions, options);
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
         { ValidateScopes = true, ValidateOnBuild = true });
         var host = Assert.Single(provider.GetServices<IHostedService>());
@@ -34,21 +37,23 @@ public sealed class FleetRedistributionTests
         {
             await host.StartAsync(default);
             await Until(() => state.Active.Count == 8);
+            await clock.WaitForDelayAsync(options.ReconciliationInterval);
             var original = state.Active.ToDictionary();
             membership.Observer.Set("b", "a");
-            await Until(() => state.Active.Count == 4);
+            await AdvanceReconciliation(clock, options.ReconciliationInterval);
             Assert.Equal([Partitions[2], Partitions[3], Partitions[5], Partitions[7]],
                 state.Active.Keys.Order(StringComparer.Ordinal));
             foreach (var (route, scope) in state.Active)
                 Assert.Equal(original[route], scope);
             Assert.Equal(4, state.Disposed.Count);
             membership.Observer.Set("a", "b", "c");
-            await Until(() => state.Active.Count == 3);
+            await AdvanceReconciliation(clock, options.ReconciliationInterval);
             Assert.False(state.Active.ContainsKey(Partitions[5]));
             membership.Observer.Set("c", "b", "a");
-            await Task.Delay(50);
+            await AdvanceReconciliation(clock, options.ReconciliationInterval);
             Assert.Equal(8, state.Starts);
             membership.Observer.Set("a");
+            await AdvanceReconciliation(clock, options.ReconciliationInterval);
             await Until(() => state.Active.Count == 8);
             Assert.Equal(13, state.Starts);
         }
@@ -60,6 +65,12 @@ public sealed class FleetRedistributionTests
 
         Assert.Empty(state.Active);
         Assert.Equal(state.Starts, state.Disposed.Count);
+    }
+
+    static async Task AdvanceReconciliation(ManualClock clock, TimeSpan interval)
+    {
+        clock.Advance(interval);
+        await clock.WaitForDelayAsync(interval);
     }
 
     [Fact]
