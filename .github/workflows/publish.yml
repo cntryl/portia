@@ -51,7 +51,7 @@ jobs:
       - name: Read package version
         shell: bash
         run: |
-          package_version="$(dotnet msbuild src/Portia.AspNetCore/Portia.AspNetCore.csproj -getProperty:PackageVersion -nologo | sed -n 's/^  PackageVersion = //p')"
+          package_version="$(dotnet msbuild src/Portia.AspNetCore/Portia.AspNetCore.csproj -getProperty:PackageVersion -nologo)"
           if [[ ! "$package_version" =~ ^0\.1\.[0-9]+$ ]]; then
             echo "::error title=Invalid package version::Expected 0.1.x, got '$package_version'"
             exit 1
