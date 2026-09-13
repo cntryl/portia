@@ -6,7 +6,7 @@
         "type": "Direct",
         "requested": "[1.0.0, )",
         "resolved": "1.0.0",
-        "contentHash": "D36npvUU8sA5zaeWrCbP1wn8o8y07iiihmF/cNdyoxeM3AZM1mDQQN9vfJRm0U6WOctikcfe9xE4dxcMN+XS3w==",
+        "contentHash": "6/Rz8PmGkqbcW2U9l8sCdHhUX2QQtBTz3/l5UwZ9FFAEUruWFnCYG4K6iNQxL5k4pG5Uuv+rabHhy5HKSj3R8A==",
         "dependencies": {
           "Cntryl.Fitz.Abstractions": "1.0.0"
         }

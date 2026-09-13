@@ -17,6 +17,7 @@ concurrency:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  PORTIA_SMOKE_PACKAGE_VERSION: 1.0.0-ci.${{ github.run_id }}.${{ github.run_attempt }}
 
 jobs:
   ci:
@@ -35,11 +36,14 @@ jobs:
           cache: true
           cache-dependency-path: '**/packages.lock.json'
 
+      - name: Restore locked packages
+        run: dotnet restore Portia.slnx --locked-mode
+
       - name: Check formatting
-        run: dotnet format Portia.slnx --verify-no-changes
+        run: dotnet format Portia.slnx --verify-no-changes --no-restore
 
       - name: Build solution
-        run: dotnet build Portia.slnx --configuration Release
+        run: dotnet build Portia.slnx --configuration Release --no-restore
 
       - name: Test solution
         run: >-
@@ -47,6 +51,28 @@ jobs:
           --configuration Release
           --no-build
           --filter "Category!=BrokerIntegration"
+
+      - name: Confirm packed NativeAOT consumer
+        run: |
+          dotnet pack Portia.slnx \
+            --configuration Release \
+            --no-build \
+            --no-restore \
+            --output artifacts/packages \
+            -p:PackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-aot-packages" dotnet restore \
+            smoke/Portia.AspNetCore.NativeAotConsumer/Portia.AspNetCore.NativeAotConsumer.csproj \
+            --runtime linux-x64 \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-aot-packages" dotnet publish \
+            smoke/Portia.AspNetCore.NativeAotConsumer/Portia.AspNetCore.NativeAotConsumer.csproj \
+            --configuration Release \
+            --runtime linux-x64 \
+            --self-contained true \
+            --no-restore \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION" \
+            --output artifacts/native-aot
+          artifacts/native-aot/Portia.AspNetCore.NativeAotConsumer
 
       - name: Test full broker integration
         env:
