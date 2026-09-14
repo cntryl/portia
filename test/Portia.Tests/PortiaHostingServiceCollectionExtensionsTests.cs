@@ -207,35 +207,6 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
             StringComparison.Ordinal);
     }
 
-    /// <summary>A terminal partition timeout requests host shutdown even when callbacks stay stuck.</summary>
-    [Fact]
-    public async Task ShouldStopHostGivenHostedPartitionIgnoresCancellation()
-    {
-        var workload = new StuckPartitionWorkload();
-        var services = new ServiceCollection();
-        _ = services.AddSingleton(workload);
-        using var provider = services.BuildServiceProvider();
-        var lifetime = new RecordingApplicationLifetime();
-        var options = SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
-        {
-            PartitionStopTimeout = TimeSpan.FromMilliseconds(50)
-        };
-        var hosted = new FleetPartitionRunnerHostedService<StuckPartitionWorkload>(
-            new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership()),
-            provider.GetRequiredService<IServiceScopeFactory>(),
-            ["lease://portia/fleet/stuck-hosted"],
-            options,
-            lifetime);
-        await hosted.StartAsync(default);
-        await workload.Started.WaitAsync(TimeSpan.FromSeconds(2));
-        using var stopTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-
-        await hosted.StopAsync(stopTimeout.Token);
-        await lifetime.StopRequested.WaitAsync(TimeSpan.FromSeconds(1));
-
-        workload.Release();
-    }
-
     /// <summary>
     ///     Rejects an invalid reactor batch size during registration rather than deferring the error
     ///     until the hosted service is resolved and enters its retry loop.
@@ -248,7 +219,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var services = new ServiceCollection();
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            services.AddPortia().AddReactor<TestReactor>(WorkloadScope.Global,
+            services.AddPortia().AddReactor<TestReactor>("TestReactor", WorkloadScope.Global,
                 o => o.Processing = new ProjectionRunOptions { MaxBatchSize = maxBatchSize }));
 
         Assert.Equal(nameof(ProjectionRunOptions.MaxBatchSize), exception.ParamName);
@@ -322,7 +293,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
         _ = services.AddPortia()
-            .AddProjector<TestProjector>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(20))
+            .AddProjector<TestProjector>("test-projector", WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(20))
             .AddWorkers();
         using var provider = services.BuildServiceProvider();
 
@@ -332,9 +303,9 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         await hostedService.StopAsync(default);
 
         Assert.Equal(42, target.Projection.Value);
-        Assert.Equal(1UL,
+        Assert.Equal(new EventCursor("1"),
             (await target.LoadCheckpointAsync(new CheckpointIdentity("test-projector",
-                EventStreamPattern.ForPattern("test", "projectors")))).NextOffset);
+                EventStreamPattern.ForPattern("test", "projectors")))).Cursor);
     }
 
     /// <summary>
@@ -354,7 +325,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
         _ = services.AddPortia()
-            .AddProjector<TestProjector>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(10))
+            .AddProjector<TestProjector>("test-projector", WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(10))
             .AddWorkers();
         using var provider = services.BuildServiceProvider();
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
@@ -365,9 +336,9 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         await hostedService.StopAsync(default);
 
         Assert.Equal(1, target.Projection.HandlerCount);
-        Assert.Equal(1UL,
+        Assert.Equal(new EventCursor("1"),
             (await target.LoadCheckpointAsync(new CheckpointIdentity("test-projector",
-                EventStreamPattern.ForPattern("test", "projectors")))).NextOffset);
+                EventStreamPattern.ForPattern("test", "projectors")))).Cursor);
     }
 
     /// <summary>
@@ -387,9 +358,8 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton<IDomainEventReader>(store);
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
-        _ = services.AddPortia().AddProjector<TestProjector>(WorkloadScope.Global, o =>
+        _ = services.AddPortia().AddProjector<TestProjector>("test-projector", WorkloadScope.Global, o =>
         {
-            o.Name = "test-projector";
             o.PollInterval = TimeSpan.FromMilliseconds(10);
         }).AddWorkers();
         using var provider = services.BuildServiceProvider();
@@ -406,37 +376,9 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         Assert.False(executeTask.IsFaulted);
         Assert.True(target.LoadAttempts >= 3);
         Assert.Equal(1, target.Projection.HandlerCount);
-        Assert.Equal(1UL,
+        Assert.Equal(new EventCursor("1"),
             (await target.LoadCheckpointAsync(new CheckpointIdentity("test-projector",
-                EventStreamPattern.ForPattern("test", "projectors")))).NextOffset);
-    }
-
-    /// <summary>
-    ///     Verifies that <c>Portia.Fitz</c>'s <c>AddPortiaFleetPartitionRunner</c> resolves a typed
-    ///     workload in its own scope while the partition lease is held.
-    /// </summary>
-    [Fact]
-    public async Task ShouldRunScopedPartitionWorkloadWhenFleetHostedServiceStarts()
-    {
-        var state = new HostingWorkloadState();
-        var services = new ServiceCollection();
-        _ = services.AddSingleton<IPartitionLeaseCompetitor>(new InMemoryLeaseClient());
-        _ = services.AddSingleton(state);
-        _ = services.AddScoped<HostingPartitionWorkload>();
-        _ = services.AddSingleton<IFleetMembership, SingleWorkerMembership>();
-        _ = services.AddPortiaFleetPartitionRunner<HostingPartitionWorkload>(
-            ["lease://portia/fleet/partition-a"],
-            SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)));
-        using var provider = services.BuildServiceProvider(true);
-
-        var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
-        await hostedService.StartAsync(default);
-        await WaitUntilAsync(() => state.StartedPartitions.Count == 1);
-        await hostedService.StopAsync(default);
-
-        Assert.Equal(["lease://portia/fleet/partition-a"], state.StartedPartitions);
-        Assert.Equal(["lease://portia/fleet/partition-a"], state.StoppedPartitions);
-        _ = Assert.Single(state.WorkloadInstances);
+                EventStreamPattern.ForPattern("test", "projectors")))).Cursor);
     }
 
     static async Task WaitUntilAsync(Func<bool> condition)

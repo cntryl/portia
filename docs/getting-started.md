@@ -86,7 +86,7 @@ Select handlers, authorizers, and pipeline behaviors through the stable generic 
 The generator replaces each call
 with its typed descriptor and reports a compile error when the type does not implement that role.
 Projectors and reactors are selected with
-`AddProjector<T>(...)` and `AddReactor<T>(...)`, which also choose their execution scope.
+`AddProjector<T>("T", ...)` and `AddReactor<T>("T", ...)`, which also choose their execution scope.
 
 Registering a handler also registers its request's transport descriptor. A contract used only
 by a sending application is inferred from strongly typed `SendAsync`, `StreamAsync`,
@@ -243,8 +243,8 @@ Do not emit or save concurrently on one aggregate instance. An OCC conflict thro
 
 ## Map HTTP endpoints
 
-The HTTP application automatically exposes OpenAPI 3.1 at `/openapi/v1.json` and
-`/openapi/v1.yml`; no `AddOpenApi()`, `MapOpenApi()`, or endpoint annotations are required.
+Call `AddHttp()` during composition and `MapPortiaOpenApi()` after building to expose OpenAPI 3.1 at
+`/openapi/v1.json` and `/openapi/v1.yml`. Portia does not intercept ambient application creation.
 Portia describes generated bindings while ordinary minimal-API endpoints remain governed by
 Microsoft's standard generator. To download YAML:
 
@@ -271,28 +271,19 @@ the request's own parameters place it, not from a `Last-Event-ID`.
 
 ### Choosing where the document is served
 
-Both routes are served in every environment by default, and neither requires authorization.
+The routes are served only when the application explicitly calls `MapPortiaOpenApi()`.
 Publishing a schema is not itself a disclosure — every mapped endpoint is one the application opted
 into with `ICallable` — but whether it should be publicly reachable is a deployment decision, so
-`PortiaHttpOptions.ServeOpenApi` withdraws Portia's two routes:
+The application can instead map the composed document wherever it wants, with Portia's operation
+IDs, parameters, and responses included. ASP.NET Core's own `MapOpenApi` composes it per request;
+the caching described below applies to Portia's routes:
 
 ```csharp
-builder.Services.Configure<PortiaHttpOptions>(options => options.ServeOpenApi = false);
-```
-
-Turning serving off does not stop the document from being composed. The application can map it
-wherever it wants, and gets the same document — Portia's operation IDs, parameters, and responses
-included. An application that maps the document itself is calling ASP.NET Core's own `MapOpenApi`,
-which composes it per request; the caching described below applies to Portia's routes:
-
-```csharp
-// Development only, matching the ASP.NET Core template's own default.
-builder.Services.Configure<PortiaHttpOptions>(options =>
-    options.ServeOpenApi = builder.Environment.IsDevelopment());
-
-// Or serve it yourself, behind whatever the rest of the application uses.
-builder.Services.Configure<PortiaHttpOptions>(options => options.ServeOpenApi = false);
-...
+builder.Services.AddPortia().AddHttp();
+var app = builder.Build();
+if (app.Environment.IsDevelopment())
+    app.MapPortiaOpenApi();
+// Or use ASP.NET Core's mapping behind the application's own policy:
 app.MapOpenApi("/internal/openapi/{documentName}.json").RequireAuthorization("ops");
 ```
 
@@ -310,7 +301,7 @@ Repository project references receive the analyzer directly from the dependency-
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddPortia().AddRequestHandler<DepositAccountHandler>();
+builder.Services.AddPortia().AddHttp().AddRequestHandler<DepositAccountHandler>();
 // Register persistence and application dependencies as above.
 var app = builder.Build();
 app.MapPortiaPost<DepositAccount>("/accounts/{id}");
@@ -380,8 +371,8 @@ that calls `AddWorkers()` starts those workers:
 ```csharp
 services.AddPortia()
     .AddRequestHandler<DepositAccountHandler>()
-    .AddProjector<AccountProjector>(WorkloadScope.PerTenant)
-    .AddReactor<AccountReactor>(WorkloadScope.PerTenant)
+    .AddProjector<AccountProjector>("AccountProjector", WorkloadScope.PerTenant)
+    .AddReactor<AccountReactor>("AccountReactor", WorkloadScope.PerTenant)
     .AddFitz(configuration.GetSection("Fitz"))
     .AddWorkers();
 ```
@@ -447,9 +438,9 @@ Register workloads in shared application setup, then activate the worker deploym
 
 ```csharp
 services.AddPortia()
-    .AddProjector<AccountProjector>(WorkloadScope.PerTenant)
-    .AddProjector<PlatformSummaryProjector>(WorkloadScope.Global)
-    .AddReactor<AccountReactor>(WorkloadScope.PerTenant)
+    .AddProjector<AccountProjector>("AccountProjector", WorkloadScope.PerTenant)
+    .AddProjector<PlatformSummaryProjector>("PlatformSummaryProjector", WorkloadScope.Global)
+    .AddReactor<AccountReactor>("AccountReactor", WorkloadScope.PerTenant)
     .AddWorkers();
 ```
 
@@ -478,7 +469,7 @@ workloads restart in new scopes; removal and shutdown cancel execution and backo
 A rebuild uses an explicit generation ID:
 
 ```csharp
-portia.AddProjector<AccountProjector>(WorkloadScope.PerTenant, o =>
+portia.AddProjector<AccountProjector>("AccountProjector", WorkloadScope.PerTenant, o =>
 {
     o.Processing = new ProjectionRunOptions { RebuildId = "accounts-2026-09", MaxBatchSize = 512 };
 });
@@ -490,17 +481,20 @@ Live processing has a null ID. Handlers still read `context.IsRebuild`, derived 
 Keep live and rebuilt data separate; the application decides when and how to promote rebuilt
 results. Do not seed rebuild progress from live progress.
 
-Register one shared Fitz `ILeaseClient`, the scoped partition workload, and fleet options:
+Register workloads through the normal Portia worker activation and enable Fitz fleet coordination:
 
 ```csharp
-services.AddScoped<AccountPartitionWorkload>();
-services.AddPortiaFleetPartitionRunner<AccountPartitionWorkload>(
-    ["lease://accounts/partitions/0", "lease://accounts/partitions/1"],
-    new FleetRunOptions { MembershipSelector = "lease://accounts/workers/*" });
+services.AddPortia()
+    .AddProjector<AccountProjector>("account-projector", WorkloadScope.PerTenant)
+    .AddFitz(configuration, fitz => fitz.UseFleet(new FleetRunOptions
+    {
+        MembershipSelector = "lease://accounts/workers/*"
+    }))
+    .AddWorkers();
 ```
 
-`AccountPartitionWorkload` implements `IPartitionWorkload`. Each acquired lease gets its own
-scope and runs until Fitz reports lease loss or shutdown through cancellation. The membership
+Each acquired projector or reactor workload lease gets its own scope and runs until Fitz reports
+lease loss or shutdown through cancellation. The membership
 area must not contain partition leases or unrelated leases. All workers in the fleet must use
 identical selectors and partition sets. An omitted worker ID becomes one UUIDv4 per run,
 retained across reconnects; explicit IDs must be unique among live workers.

@@ -4,4 +4,5 @@ namespace Cntryl.Portia;
 ///     Marks a request that can be sent to a remote handler and awaited (Fitz RPC, or another
 ///     request/response transport). Combine with <see cref="RequestRouteAttribute" />.
 /// </summary>
+[RequestTransport("callable")]
 public interface ICallable;

@@ -9,7 +9,7 @@ sealed record FitzQueueWorkerDefinition(string Route) : FitzRoutedWorkerDefiniti
 
     internal override Func<CancellationToken, Task>? CreateRunner(FitzWorkerHost host) =>
         new QueueRunner(
-            new FitzRequestQueueConsumer(host.Client.Queue, host.Serializer, Route, timeProvider: host.Clock,
+            new FitzRequestQueueConsumer(host.Client.Queue, host.Serializer, Route, host.Catalog, timeProvider: host.Clock,
                 logger: host.QueueLogger),
             new DependencyInjectionQueueDeliveryScopeFactory(host.Scopes), host.QueueRunnerLogger).RunAsync;
 }

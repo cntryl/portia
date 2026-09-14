@@ -78,8 +78,8 @@ The application registers the behavior and the durable work caused by its events
 ```csharp
 services.AddPortia()
     .AddRequestHandler<DepositHandler>()
-    .AddProjector<AccountBalanceProjector>(WorkloadScope.PerTenant)
-    .AddReactor<DepositReceiptReactor>(WorkloadScope.PerTenant)
+    .AddProjector<AccountBalanceProjector>("AccountBalanceProjector", WorkloadScope.PerTenant)
+    .AddReactor<DepositReceiptReactor>("DepositReceiptReactor", WorkloadScope.PerTenant)
     .AddFitz(configuration.GetSection("Fitz"));
 ```
 

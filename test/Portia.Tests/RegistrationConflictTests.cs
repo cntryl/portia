@@ -233,10 +233,10 @@ public sealed class RegistrationConflictTests
     {
         var services = new ServiceCollection();
         var builder = services.AddPortia()
-            .AddProjector<NamedProjector>(WorkloadScope.Global, options => options.Name = "shared");
+            .AddProjector<NamedProjector>("shared", WorkloadScope.Global);
 
         var error = Assert.Throws<InvalidOperationException>(() =>
-            builder.AddProjector<TestProjector>(WorkloadScope.Global, options => options.Name = "shared"));
+            builder.AddProjector<TestProjector>("shared", WorkloadScope.Global));
 
         Assert.Contains("Conflicting workload registration", error.Message, StringComparison.Ordinal);
         Assert.Contains("shared", error.Message, StringComparison.Ordinal);
@@ -253,8 +253,8 @@ public sealed class RegistrationConflictTests
         var services = new ServiceCollection();
 
         _ = services.AddPortia()
-            .AddProjector<NamedProjector>(WorkloadScope.Global, options => options.Name = "first")
-            .AddProjector<TestProjector>(WorkloadScope.Global, options => options.Name = "second");
+            .AddProjector<NamedProjector>("first", WorkloadScope.Global)
+            .AddProjector<TestProjector>("second", WorkloadScope.Global);
 
         Assert.Equal(2, services.Count(item => item.ServiceType == typeof(WorkloadRegistration)));
     }
@@ -270,15 +270,15 @@ public sealed class RegistrationConflictTests
         var services = new ServiceCollection();
         var builder = services.AddPortia();
 
-        var error = Assert.Throws<ArgumentException>(() => builder.AddProjector<AbstractProjector>(
-            WorkloadScope.Global));
+        var error = Assert.Throws<ArgumentException>(() =>
+            builder.AddProjector<AbstractProjector>("AbstractProjector", WorkloadScope.Global));
 
         Assert.Contains("concrete, closed component type", error.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 
     static RequestTransportRegistration Transport(string operation = "execute",
-        string discriminator = "transport-conflict") => new(typeof(TransportConflictRequest), RequestTransports.Callable,
+        string discriminator = "transport-conflict") => new(typeof(TransportConflictRequest), [RequestTransportId.Callable],
         new RequestRouteAttribute("tests", "requests", "universal", operation),
         new DiscriminatorAttribute(discriminator));
 }

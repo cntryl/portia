@@ -30,8 +30,8 @@ public sealed class ConformanceRejectionTests
     [InlineData(StoreDefect.ThrowsAdapterExceptionOnConflict, "EventStreamConcurrencyException")]
     [InlineData(StoreDefect.WritesDespiteConflict, "must write nothing")]
     [InlineData(StoreDefect.PatternReadMissesStreams, "every stream in the area")]
-    [InlineData(StoreDefect.PatternReadOmitsAreaOffset, "area offset")]
-    [InlineData(StoreDefect.PatternReadIsUnordered, "ascending, distinct")]
+    [InlineData(StoreDefect.PatternReadOmitsAreaOffset, "resumable cursor")]
+    [InlineData(StoreDefect.PatternReadIsUnordered, "resume immediately")]
     public async Task ShouldRejectEventStoreProbeGivenOneBrokenInvariant(StoreDefect defect, string expected)
     {
         var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
@@ -202,7 +202,7 @@ public sealed class ConformanceRejectionTests
             if (defect == StoreDefect.ReturnsRecordsForAbsentStream)
             {
                 yield return new DomainEventRecord(stream,
-                    DomainEventSeed.Attach(new ConformanceEvent(1), Uuid.CreateVersion4(), 1), 0, 0, 0);
+                    DomainEventSeed.Attach(new ConformanceEvent(1), Uuid.CreateVersion4(), 1), 0, new EventCursor("1"));
             }
 
             var records = new List<DomainEventRecord>();
@@ -237,11 +237,11 @@ public sealed class ConformanceRejectionTests
             }
         }
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
             var records = new List<DomainEventRecord>();
-            await foreach (var record in inner.ReadAsync(pattern, fromOffset, ct))
+            await foreach (var record in inner.ReadAsync(pattern, cursor, ct))
                 records.Add(record);
 
             if (defect == StoreDefect.PatternReadMissesStreams)
@@ -257,7 +257,7 @@ public sealed class ConformanceRejectionTests
             foreach (var record in records)
             {
                 yield return defect == StoreDefect.PatternReadOmitsAreaOffset
-                    ? record with { AreaOffset = null }
+                    ? record with { NextCursor = EventCursor.Start }
                     : record;
             }
         }

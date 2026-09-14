@@ -20,7 +20,7 @@ public sealed class ReactorTests
         var stream = new EventStreamAddress("test", "reactors", sourceId.ToString());
         var ev = Committed(new ValueChanged(42), sourceId, 1);
 
-        await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, 0, 0), default);
+        await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, new EventCursor("1")), default);
 
         var target = Assert.Single(repository.SavedAggregates);
         Assert.Equal(42, target.Value);
@@ -37,7 +37,7 @@ public sealed class ReactorTests
         var stream = new EventStreamAddress("test", "reactors", "one");
         var ev = Committed(new ValueIncremented(3), Uuid.CreateVersion4(), 1);
 
-        await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, 0, 0), default);
+        await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, new EventCursor("1")), default);
 
         Assert.Equal(3, reactor.LastIncrementAmount);
     }
@@ -55,7 +55,7 @@ public sealed class ReactorTests
         var stream = new EventStreamAddress("test", "reactors", "one");
         var ev = Committed(new ValueAudited("unhandled"), Uuid.CreateVersion4(), 1);
 
-        await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, 0, 0), default);
+        await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, new EventCursor("1")), default);
 
         Assert.Empty(repository.SavedAggregates);
         Assert.Null(reactor.LastIncrementAmount);
@@ -67,7 +67,7 @@ public sealed class ReactorTests
     {
         var reactor = new TestReactor(new RecordingAggregateRepository());
         var ev = Committed(new ValueChanged(42), Uuid.CreateVersion4(), 1);
-        var record = new DomainEventRecord(new EventStreamAddress("test", "reactors", "one"), ev, 0, 0, 0);
+        var record = new DomainEventRecord(new EventStreamAddress("test", "reactors", "one"), ev, 0, new EventCursor("1"));
         var context = new ReactionExecutionContext(record, RequestActor.System);
 
         Assert.Equal(reactor.EffectId(context, "email"), reactor.EffectId(context, "email"));
@@ -96,7 +96,7 @@ public sealed class ReactorTests
             1,
             new DateTimeOffset(2026, 9, 9, 12, 0, 0, TimeSpan.Zero)));
         var record = new DomainEventRecord(
-            new EventStreamAddress("acme", "reactors", "one"), ev, 0, 0, 0);
+            new EventStreamAddress("acme", "reactors", "one"), ev, 0, new EventCursor("1"));
         var context = new ReactionExecutionContext(record, RequestActor.System);
 
         var effectId = reactor.EffectId(context, "email");

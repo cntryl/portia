@@ -24,7 +24,6 @@ static class ConsumerJson
 
     static RequestTransportRegistration Registration<TRequest>(string realm, string area, string resource,
         string operation, string discriminator) where TRequest : IRequestBase => new(typeof(TRequest),
-        RequestTransports.Callable | RequestTransports.Queuable | RequestTransports.Notifiable |
-        RequestTransports.Schedulable,
+        [RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice, RequestTransportId.Schedule],
         new RequestRouteAttribute(realm, area, resource, operation), new DiscriminatorAttribute(discriminator));
 }

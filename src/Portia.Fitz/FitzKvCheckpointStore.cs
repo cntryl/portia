@@ -33,7 +33,7 @@ public sealed class FitzKvCheckpointStore(IKvClient client, string route) : IPro
         var failed = false;
         try
         {
-            await tx.PutAsync(FitzKvCheckpoints.Key(identity), FitzKvCheckpoints.Encode(checkpoint.NextOffset), ct)
+            await tx.PutAsync(FitzKvCheckpoints.Key(identity), FitzKvCheckpoints.Encode(checkpoint.Cursor), ct)
                 .ConfigureAwait(false);
             await tx.CommitAsync(ct).ConfigureAwait(false);
         }

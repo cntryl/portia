@@ -3,6 +3,9 @@ using System.Text.Json.Serialization;
 
 namespace Cntryl.Portia;
 
+[JsonSerializable(typeof(OpenApiContractRequest))]
+[JsonSerializable(typeof(OpenApiContractStream))]
+[JsonSerializable(typeof(OpenApiContractNode))]
 [PortiaJsonContext]
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(UniversalAction))]
@@ -62,6 +65,7 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(RequestPipelineBehaviorTests.InvalidPipelineAction))]
 [JsonSerializable(typeof(RequestPipelineBehaviorTests.NestedConcurrentAction))]
 [JsonSerializable(typeof(CreateUser))]
+[JsonSerializable(typeof(CustomTransportRequest))]
 [JsonSerializable(typeof(SendWelcomeEmail))]
 [JsonSerializable(typeof(UnhandledEvent))]
 [JsonSerializable(typeof(HierarchyChildEvent))]

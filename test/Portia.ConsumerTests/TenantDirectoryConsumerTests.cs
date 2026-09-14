@@ -53,8 +53,8 @@ public sealed class TenantDirectoryConsumerTests
                                                     public sealed class Reader : IDomainEventReader
                                                     {
                                                         public int Reads;
-                                                        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong offset = 0, CancellationToken ct = default) => throw new NotSupportedException();
-                                                        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong offset = 0, [EnumeratorCancellation] CancellationToken ct = default)
+                                                        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong offset, CancellationToken ct) => throw new NotSupportedException();
+                                                        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor, [EnumeratorCancellation] CancellationToken ct)
                                                         {
                                                             Reads++;
                                                             await Task.CompletedTask;

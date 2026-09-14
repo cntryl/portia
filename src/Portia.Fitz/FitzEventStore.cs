@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -40,8 +41,8 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
     /// <inheritdoc />
     public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
         EventStreamAddress stream,
-        ulong fromOffset = 0,
-        [EnumeratorCancellation] CancellationToken ct = default)
+        ulong fromOffset,
+        [EnumeratorCancellation] CancellationToken ct)
     {
         var telemetryStarted = PortiaTelemetry.StartTimestamp();
         var telemetryOutcome = "success";
@@ -88,7 +89,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                                 $"Fitz stream offset '{record.Offset}' does not match expected offset '{expectedOffset}'.");
                         var ev = _serializer.Deserialize(record.Body);
                         DomainEventValidation.Validate(ev);
-                        result = new DomainEventRecord(stream, ev, record.Offset, record.AreaOffset, record.RealmOffset);
+                        result = new DomainEventRecord(stream, ev, record.Offset, Cursor(checked(record.Offset + 1)));
                     }
                     catch (OperationCanceledException) when (ct.IsCancellationRequested)
                     {
@@ -133,8 +134,8 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
     /// <inheritdoc />
     public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
         EventStreamPattern pattern,
-        ulong fromOffset = 0,
-        [EnumeratorCancellation] CancellationToken ct = default)
+        EventCursor cursor,
+        [EnumeratorCancellation] CancellationToken ct)
     {
         var telemetryStarted = PortiaTelemetry.StartTimestamp();
         var telemetryOutcome = "success";
@@ -147,8 +148,8 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                 throw new ArgumentNullException(nameof(pattern));
             }
             var route = pattern.ToString();
-            var startOffset = fromOffset;
-            var nextOffset = fromOffset;
+            var startOffset = Offset(cursor);
+            var nextOffset = startOffset;
 
             while (true)
             {
@@ -190,7 +191,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                                 $"Fitz pattern offset '{scopeOffset}' does not match expected offset '{nextOffset}'.");
                         var ev = _serializer.Deserialize(record.Body);
                         DomainEventValidation.Validate(ev);
-                        result = new DomainEventRecord(stream, ev, record.Offset, areaOffset, realmOffset);
+                        result = new DomainEventRecord(stream, ev, record.Offset, Cursor(checked(scopeOffset + 1)));
                     }
                     catch (OperationCanceledException) when (ct.IsCancellationRequested)
                     {
@@ -231,6 +232,14 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                 telemetryOutcome, telemetryCount);
         }
     }
+
+    static EventCursor Cursor(ulong offset) => new(offset.ToString(CultureInfo.InvariantCulture));
+
+    static ulong Offset(EventCursor cursor) => cursor == EventCursor.Start
+        ? 0
+        : ulong.TryParse(cursor.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var offset)
+            ? offset
+            : throw new ArgumentException("The event cursor was not issued by the Fitz event store.", nameof(cursor));
 
     /// <inheritdoc />
     public async ValueTask AppendAsync(

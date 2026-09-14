@@ -56,15 +56,15 @@ public sealed class CompleteWorkflowTests
             new FitzRequestQueuePublisher(client.Queue, requestSerializer));
         // One worker service runs every declared projector and reactor.
         _ = builder.Services.AddPortia()
-            .AddProjector<FirstProjector>(WorkloadScope.Global)
-            .AddProjector<SecondProjector>(WorkloadScope.Global)
-            .AddReactor<FirstReactor>(WorkloadScope.Global)
-            .AddReactor<SecondReactor>(WorkloadScope.Global)
+            .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global)
+            .AddProjector<SecondProjector>("second-projector", WorkloadScope.Global)
+            .AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)
+            .AddReactor<SecondReactor>("second-reactor", WorkloadScope.Global)
             .AddWorkers();
         var id = Uuid.CreateVersion4();
         var route = new RequestRouteValues(Resource: id.ToString());
         _ = builder.Services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(client.Queue,
-            requestSerializer, "queue://consumer/business/" + id));
+            requestSerializer, "queue://consumer/business/" + id, ConsumerJson.Catalog()));
         _ = builder.Services.AddPortiaQueueRunner();
         await using var app = builder.Build();
         map(app);

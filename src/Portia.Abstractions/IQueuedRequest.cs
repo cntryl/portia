@@ -34,6 +34,12 @@ public interface IQueuedRequest
     uint Attempt { get; }
 
     /// <summary>
+    ///     Gets whether <see cref="Attempt" /> is a durable transport-owned count preserved across
+    ///     redeliveries. The default is <see langword="false" />.
+    /// </summary>
+    bool SupportsDurableAttempts => false;
+
+    /// <summary>
     ///     Gets the raw bearer token of the actor that enqueued this request, or
     ///     <see langword="null" /> for an unauthenticated actor. Re-validate this (via
     ///     <see cref="IRequestActorValidator" />) rather than trusting it as-is — it may have expired

@@ -112,7 +112,7 @@ public sealed class ComponentRegistrationTests
     ///     registered with the transports it actually implements, and only those.
     /// </summary>
     [Fact]
-    public void ShouldRegisterRequestTransportsMatchingDeclaredMarkers()
+    public void ShouldRegisterTransportIdsMatchingDeclaredMarkers()
     {
         var services = new ServiceCollection();
         _ = services.AddSingleton<IAggregateRepository>(new RecordingAggregateRepository());
@@ -122,17 +122,37 @@ public sealed class ComponentRegistrationTests
         var registrations = provider.GetServices<RequestTransportRegistration>().ToList();
 
         var createUser = Assert.Single(registrations, r => r.RequestType == typeof(CreateUser));
-        Assert.Equal(RequestTransports.Callable, createUser.Transports);
+        Assert.True(createUser.Transports.SetEquals([RequestTransportId.Callable]));
         Assert.Equal("*", createUser.Route.Realm);
         Assert.Equal("identity", createUser.Route.Area);
         Assert.Equal("users", createUser.Route.Resource);
         Assert.Equal("create", createUser.Route.Operation);
 
         var sendWelcomeEmail = Assert.Single(registrations, r => r.RequestType == typeof(SendWelcomeEmail));
-        Assert.Equal(
-            RequestTransports.Callable | RequestTransports.Queuable | RequestTransports.Notifiable |
-            RequestTransports.Schedulable,
-            sendWelcomeEmail.Transports);
+        Assert.True(sendWelcomeEmail.Transports.SetEquals(
+            [RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice, RequestTransportId.Schedule]));
         Assert.Equal("welcome", sendWelcomeEmail.Route.Operation);
+
+        var custom = Assert.Single(registrations, r => r.RequestType == typeof(CustomTransportRequest));
+        Assert.True(custom.Transports.SetEquals([new RequestTransportId("custom-adapter")]));
+    }
+
+    /// <summary>Verifies transport IDs remain safe, stable tokens.</summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("queue/priority")]
+    [InlineData("notice ")]
+    public void ShouldRejectInvalidTransportIds(string value) =>
+        _ = Assert.Throws<ArgumentException>(() => new RequestTransportId(value));
+
+    /// <summary>Verifies registrations cannot contain the invalid default transport ID.</summary>
+    [Fact]
+    public void ShouldRejectARegistrationWithoutAValidTransport()
+    {
+        var route = new RequestRouteAttribute("test", "requests", "probe", "run");
+        var discriminator = new DiscriminatorAttribute("test.request.probe");
+
+        _ = Assert.Throws<ArgumentException>(() => new RequestTransportRegistration(
+            typeof(CreateUser), [default(RequestTransportId)], route, discriminator));
     }
 }

@@ -10,11 +10,13 @@ namespace Cntryl.Portia;
 /// <param name="schedule">The Fitz schedule client.</param>
 /// <param name="serializer">The request serializer.</param>
 /// <param name="route">The concrete Fitz schedule route to subscribe to (<c>schedule://realm/area/resource/operation</c>).</param>
+/// <param name="catalog">Validates the request's declared transport capability.</param>
 /// <param name="logger">Reports a delivery that cannot be translated.</param>
 public sealed class FitzScheduledRequestConsumer(
     IScheduleClient schedule,
     IRequestDeserializer serializer,
     string route,
+    RequestTransportCatalog catalog,
     ILogger<FitzScheduledRequestConsumer>? logger = null) : IRequestNotificationConsumer
 {
     readonly string _route = string.IsNullOrWhiteSpace(route)
@@ -22,6 +24,7 @@ public sealed class FitzScheduledRequestConsumer(
         : route;
 
     readonly IScheduleClient _schedule = schedule ?? throw new ArgumentNullException(nameof(schedule));
+    readonly RequestTransportCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
     readonly IRequestDeserializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
     /// <inheritdoc />
@@ -76,6 +79,8 @@ public sealed class FitzScheduledRequestConsumer(
             var request = envelope.Request as IRequest
                           ?? throw new InvalidOperationException(
                               "A fired Fitz schedule entry deserialized to a result-bearing request; only no-result requests can be scheduled.");
+            if (!_catalog.Get(request.GetType()).Transports.Contains(RequestTransportId.Schedule))
+                throw new InvalidRequestTransportException(request, RequestTransportId.Schedule);
             return new RequestNotification(request, null,
                 new RequestMetadata(Uuid.CreateVersion4(), envelope.Metadata.CorrelationId,
                     envelope.Metadata.RequestId),

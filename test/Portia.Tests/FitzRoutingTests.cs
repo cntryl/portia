@@ -8,7 +8,7 @@ namespace Cntryl.Portia;
 public sealed class FitzRoutingTests
 {
     static readonly RequestTransportCatalog Catalog = new([
-        new RequestTransportRegistration(typeof(RoutingProbe), RequestTransports.Callable,
+        new RequestTransportRegistration(typeof(RoutingProbe), [RequestTransportId.Callable],
             new RequestRouteAttribute("*", "routing", "probe", "run"),
             new DiscriminatorAttribute("test.routing.probe"))
     ]);

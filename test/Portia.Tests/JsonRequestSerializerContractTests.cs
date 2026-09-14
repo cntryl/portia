@@ -151,7 +151,7 @@ public sealed class JsonRequestSerializerContractTests
     }
 
     static RequestTransportRegistration Registration(Type type, string name) => new(type,
-        RequestTransports.Callable, new RequestRouteAttribute("test", "shared", "collision", "run"),
+        [RequestTransportId.Callable], new RequestRouteAttribute("test", "shared", "collision", "run"),
         new DiscriminatorAttribute(name));
 
     static JsonObject Envelope(JsonRequestSerializer serializer) =>

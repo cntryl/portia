@@ -15,7 +15,7 @@ public sealed class WorkerStartupRequirementTests
     public async Task WorkersWithoutAnEventReaderFailBeforeServing()
     {
         var builder = Host.CreateApplicationBuilder();
-        _ = builder.Services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global).AddWorkers();
+        _ = builder.Services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global).AddWorkers();
         using var host = builder.Build();
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
@@ -31,7 +31,7 @@ public sealed class WorkerStartupRequirementTests
         var builder = Host.CreateApplicationBuilder();
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
-        _ = builder.Services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.PerTenant).AddWorkers();
+        _ = builder.Services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.PerTenant).AddWorkers();
         using var host = builder.Build();
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
@@ -46,7 +46,7 @@ public sealed class WorkerStartupRequirementTests
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
         _ = builder.Services.AddPortia()
-            .AddProjector<FirstProjector>(WorkloadScope.Global, options => options.PollInterval = TimeSpan.FromDays(1))
+            .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global, options => options.PollInterval = TimeSpan.FromDays(1))
             .AddWorkers();
         using var host = builder.Build();
 

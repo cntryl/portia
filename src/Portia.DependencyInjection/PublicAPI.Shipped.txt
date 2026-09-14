@@ -10,11 +10,12 @@ Cntryl.Portia.PortiaBuilder.AddGeneratedEvent<TEvent>(int version, string! name)
 Cntryl.Portia.PortiaBuilder.AddGeneratedHandler(Cntryl.Portia.RequestHandlerRegistration! registration) -> Cntryl.Portia.PortiaBuilder!
 Cntryl.Portia.PortiaBuilder.AddGeneratedJsonContext(System.Func<System.Text.Json.JsonSerializerOptions!, System.Text.Json.Serialization.JsonSerializerContext!>! factory) -> Cntryl.Portia.PortiaBuilder!
 Cntryl.Portia.PortiaBuilder.AddGeneratedRequest(Cntryl.Portia.RequestTransportRegistration! registration) -> Cntryl.Portia.PortiaBuilder!
-Cntryl.Portia.PortiaBuilder.AddProjector<TProjector>(Cntryl.Portia.WorkloadScope scope, System.Action<Cntryl.Portia.WorkloadOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!
-Cntryl.Portia.PortiaBuilder.AddReactor<TReactor>(Cntryl.Portia.WorkloadScope scope, System.Action<Cntryl.Portia.WorkloadOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddProjector<TProjector>(string! name, Cntryl.Portia.WorkloadScope scope, System.Action<Cntryl.Portia.WorkloadOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddReactor<TReactor>(string! name, Cntryl.Portia.WorkloadScope scope, System.Action<Cntryl.Portia.WorkloadOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!
 Cntryl.Portia.PortiaBuilder.AddRequestAuthorizer<TAuthorizer>(Cntryl.Portia.AuthorizationStage stage = Cntryl.Portia.AuthorizationStage.ResourceAccess) -> Cntryl.Portia.PortiaBuilder!
 Cntryl.Portia.PortiaBuilder.AddRequestHandler<THandler>() -> Cntryl.Portia.PortiaBuilder!
 Cntryl.Portia.PortiaBuilder.AddRequestPipelineBehavior<TBehavior>(int order = 0) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddRequestSchedule<TRequest>(TRequest request, Cntryl.Portia.RequestScheduleSpec! spec, Cntryl.Portia.RequestRouteValues! routeValues, System.Security.Claims.ClaimsPrincipal! actor) -> Cntryl.Portia.PortiaBuilder!
 Cntryl.Portia.PortiaBuilder.AddWorkers() -> Cntryl.Portia.PortiaBuilder!
 Cntryl.Portia.PortiaBuilder.ConfigureJson(System.Action<System.Text.Json.JsonSerializerOptions!>! configure) -> Cntryl.Portia.PortiaBuilder!
 Cntryl.Portia.PortiaBuilder.ConfigureWorker(string! name, System.Action<Microsoft.Extensions.DependencyInjection.IServiceCollection!>! configure) -> Cntryl.Portia.PortiaBuilder!
@@ -31,8 +32,6 @@ Cntryl.Portia.WorkloadOptions.FailureAttemptLimit.get -> int
 Cntryl.Portia.WorkloadOptions.FailureAttemptLimit.set -> void
 Cntryl.Portia.WorkloadOptions.MaximumFailureDelay.get -> System.TimeSpan
 Cntryl.Portia.WorkloadOptions.MaximumFailureDelay.set -> void
-Cntryl.Portia.WorkloadOptions.Name.get -> string?
-Cntryl.Portia.WorkloadOptions.Name.set -> void
 Cntryl.Portia.WorkloadOptions.PollInterval.get -> System.TimeSpan
 Cntryl.Portia.WorkloadOptions.PollInterval.set -> void
 Cntryl.Portia.WorkloadOptions.Processing.get -> Cntryl.Portia.ProjectionRunOptions!
@@ -61,4 +60,3 @@ static Cntryl.Portia.PortiaHostingServiceCollectionExtensions.AddPortiaQueueRunn
 static Cntryl.Portia.PortiaHostingServiceCollectionExtensions.AddPortiaRequestNotificationRunner(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static Cntryl.Portia.WorkloadRegistration.operator !=(Cntryl.Portia.WorkloadRegistration? left, Cntryl.Portia.WorkloadRegistration? right) -> bool
 static Cntryl.Portia.WorkloadRegistration.operator ==(Cntryl.Portia.WorkloadRegistration? left, Cntryl.Portia.WorkloadRegistration? right) -> bool
-Cntryl.Portia.PortiaBuilder.AddRequestSchedule<TRequest>(TRequest request, Cntryl.Portia.RequestScheduleSpec! spec, Cntryl.Portia.RequestRouteValues! routeValues, System.Security.Claims.ClaimsPrincipal! actor) -> Cntryl.Portia.PortiaBuilder!

@@ -43,7 +43,7 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var active = new HashSet<TenantId>();
-        await foreach (var record in _reader.ReadAsync(_pattern, 0, ct).WithCancellation(ct).ConfigureAwait(false))
+        await foreach (var record in _reader.ReadAsync(_pattern, EventCursor.Start, ct).WithCancellation(ct).ConfigureAwait(false))
             _ = Apply(active, record.Event);
         foreach (var tenantId in active)
             yield return tenantId;
@@ -58,16 +58,16 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
             : await _notifier.SubscribeAsync(_pattern, ct).ConfigureAwait(false);
         var active = new HashSet<TenantId>();
         var initiallyRemoved = new HashSet<TenantId>();
-        ulong offset = 0;
+        var cursor = EventCursor.Start;
         var initial = true;
         while (true)
         {
             ct.ThrowIfCancellationRequested();
             var sawAny = false;
-            await foreach (var record in _reader.ReadAsync(_pattern, offset, ct).WithCancellation(ct)
+            await foreach (var record in _reader.ReadAsync(_pattern, cursor, ct).WithCancellation(ct)
                                .ConfigureAwait(false))
             {
-                offset = EventStreamOffsets.GetNextOffset(_pattern, record);
+                cursor = record.NextCursor;
                 sawAny = true;
                 var change = Apply(active, record.Event, initial ? initiallyRemoved : null);
                 if (!initial && change is { } delta)
@@ -135,7 +135,7 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
         bool _initial = true;
         TenantLifecycleChange[]? _initialChanges;
         int _initialIndex;
-        ulong _nextOffset;
+        EventCursor _nextCursor;
         int _reading;
         IDomainEventSubscription? _subscription;
 
@@ -177,10 +177,10 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                     }
 
                     var sawAny = false;
-                    await foreach (var record in directory._reader.ReadAsync(directory._pattern, _nextOffset, ct)
+                    await foreach (var record in directory._reader.ReadAsync(directory._pattern, _nextCursor, ct)
                                        .WithCancellation(ct).ConfigureAwait(false))
                     {
-                        _nextOffset = EventStreamOffsets.GetNextOffset(directory._pattern, record);
+                        _nextCursor = record.NextCursor;
                         sawAny = true;
                         var change = directory.Apply(_active, record.Event);
                         if (!_initial && change is { } delta)

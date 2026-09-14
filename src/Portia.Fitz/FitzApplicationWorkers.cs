@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Cntryl.Portia;
 
@@ -14,7 +13,6 @@ sealed class FitzApplicationWorkers(
     RequestTransportCatalog catalog,
     IRequestDeserializer serializer,
     TimeProvider? timeProvider = null,
-    IOptions<QueueRunnerOptions>? queueOptions = null,
     ILogger<FitzApplicationWorkers>? logger = null,
     ILogger<FitzRequestQueueConsumer>? queueLogger = null,
     ILogger<FitzNoticeRequestConsumer>? noticeLogger = null,
@@ -25,7 +23,6 @@ sealed class FitzApplicationWorkers(
 {
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly ILogger<FitzApplicationWorkers>? _logger = logger;
-    readonly QueueRunnerOptions _queueOptions = queueOptions?.Value ?? new QueueRunnerOptions();
     readonly IReadOnlyList<FitzWorkerDefinition> _workers = configuration.Workers;
     readonly WorkloadRegistration[] _workloads = [.. workloads];
     IAsyncDisposable? _rpc;
@@ -39,13 +36,6 @@ sealed class FitzApplicationWorkers(
 
     public Task StartingAsync(CancellationToken cancellationToken)
     {
-        if (_workers.OfType<FitzQueueWorkerDefinition>().Any() && _queueOptions.TerminalAttempt is > 0)
-        {
-            throw new InvalidOperationException(
-                "QueueRunnerOptions.TerminalAttempt cannot be positive for a Fitz queue worker because Fitz 1.0 "
-                + "does not report queue attempts. Remove the threshold or use a transport with a durable attempt count.");
-        }
-
         var required = _workers.SelectMany(worker => worker.Requirements).ToHashSet();
         foreach (var registration in _workloads)
         {
@@ -106,7 +96,7 @@ sealed class FitzApplicationWorkers(
     {
         // Each definition builds its own runner, so a worker kind added later is hosted here
         // without an arm to add — and cannot silently fall into another kind's branch.
-        var host = new FitzWorkerHost(connection.Client, scopes, serializer, _clock, queueLogger, noticeLogger,
+        var host = new FitzWorkerHost(connection.Client, scopes, serializer, catalog, _clock, queueLogger, noticeLogger,
             scheduleLogger, runnerLogger, notificationLogger);
         var tasks = new List<Task>();
         foreach (var worker in _workers)

@@ -24,18 +24,19 @@ public sealed class FleetRedistributionTests
         var clock = new ManualClock();
         var options = Options;
         var services = new ServiceCollection();
-        _ = services.AddSingleton<IFleetMembership>(membership);
-        _ = services.AddSingleton<IPartitionLeaseCompetitor, InMemoryLeaseClient>();
-        _ = services.AddSingleton<TimeProvider>(clock);
         _ = services.AddSingleton(state);
         _ = services.AddScoped<Workload>();
-        _ = services.AddPortiaFleetPartitionRunner<Workload>(Partitions, options);
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
         { ValidateScopes = true, ValidateOnBuild = true });
-        var host = Assert.Single(provider.GetServices<IHostedService>());
+        using var cancellation = new CancellationTokenSource();
+        var run = new FleetPartitionRunner(new InMemoryLeaseClient(), membership, timeProvider: clock).RunAsync(
+            Partitions, async (partition, ct) =>
+            {
+                await using var scope = provider.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<Workload>().RunAsync(partition, ct);
+            }, options, cancellation.Token);
         try
         {
-            await host.StartAsync(default);
             await Until(() => state.Active.Count == 8);
             await clock.WaitForDelayAsync(options.ReconciliationInterval);
             var original = state.Active.ToDictionary();
@@ -59,8 +60,8 @@ public sealed class FleetRedistributionTests
         }
         finally
         {
-            await host.StopAsync(default);
-            (host as IDisposable)?.Dispose();
+            cancellation.Cancel();
+            await run;
         }
 
         Assert.Empty(state.Active);
@@ -120,12 +121,12 @@ public sealed class FleetRedistributionTests
     [InlineData("lease://fleet/members/*", "", 30)]
     [InlineData("lease://fleet/members/*", "bad/id", 30)]
     [InlineData("lease://fleet/members/*", null, 0)]
-    public void InvalidFleetConfigurationDoesNotMutateServices(string selector, string? workerId, int ttl)
+    public async Task InvalidFleetConfigurationIsRejected(string selector, string? workerId, int ttl)
     {
-        var services = new ServiceCollection();
-        _ = Assert.ThrowsAny<ArgumentException>(() => services.AddPortiaFleetPartitionRunner<Workload>(Partitions,
+        var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new Membership());
+        _ = await Assert.ThrowsAnyAsync<ArgumentException>(() => runner.RunAsync(Partitions,
+            static (_, _) => Task.CompletedTask,
             Options with { MembershipSelector = selector, WorkerId = workerId, LeaseTtl = TimeSpan.FromSeconds(ttl) }));
-        Assert.Empty(services);
     }
 
     [Theory]

@@ -137,7 +137,7 @@ public sealed class TelemetryCompletionTests
         public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
             CancellationToken ct = default) => new CancelingRecords();
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
             CancellationToken ct = default) => new CancelingRecords();
 
         public ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,

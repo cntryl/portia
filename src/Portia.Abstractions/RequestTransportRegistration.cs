@@ -17,7 +17,7 @@ namespace Cntryl.Portia;
 /// <param name="resultType">The unary result or streaming item type, when present.</param>
 public sealed class RequestTransportRegistration(
     Type requestType,
-    RequestTransports transports,
+    IEnumerable<RequestTransportId> transports,
     RequestRouteAttribute route,
     DiscriminatorAttribute discriminator,
     Func<IRequestRpcRegistrar, CancellationToken, ValueTask<IAsyncDisposable>>? registerRpc = null,
@@ -31,7 +31,7 @@ public sealed class RequestTransportRegistration(
     /// <summary>
     ///     Gets the transports the request declared itself reachable through.
     /// </summary>
-    public RequestTransports Transports { get; } = transports;
+    public IReadOnlySet<RequestTransportId> Transports { get; } = ValidateTransports(transports);
 
     /// <summary>
     ///     Gets the request's declared route (segments may be <see cref="RequestRouteAttribute.Wildcard" />).
@@ -51,7 +51,7 @@ public sealed class RequestTransportRegistration(
 
     internal bool HasSameContractAs(RequestTransportRegistration other) =>
         RequestType == other.RequestType &&
-        Transports == other.Transports &&
+        Transports.SetEquals(other.Transports) &&
         ResultType == other.ResultType &&
         (RegisterRpc is null) == (other.RegisterRpc is null) &&
         Discriminator.Version == other.Discriminator.Version &&
@@ -63,4 +63,13 @@ public sealed class RequestTransportRegistration(
 
     internal InvalidOperationException ConflictingContract() => new(
         $"Request '{RequestType}' has conflicting transport descriptors.");
+
+    static HashSet<RequestTransportId> ValidateTransports(IEnumerable<RequestTransportId> transports)
+    {
+        ArgumentNullException.ThrowIfNull(transports);
+        var result = new HashSet<RequestTransportId>(transports);
+        if (result.Count == 0 || result.Any(static transport => string.IsNullOrWhiteSpace(transport.Value)))
+            throw new ArgumentException("At least one valid transport ID is required.", nameof(transports));
+        return result;
+    }
 }

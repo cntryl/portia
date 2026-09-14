@@ -16,7 +16,7 @@ public sealed class QueueBrokerTests
         var id = Uuid.CreateVersion4();
         _ = await client.Queue.EnqueueAsync(route,
             serializer.Serialize(new ScopeRequest(id), null, RequestMetadata.Create(), null));
-        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, 1);
+        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog(), 1);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
         Assert.True(await reader.MoveNextAsync());
         var malformed = reader.Current;
@@ -48,7 +48,7 @@ public sealed class QueueBrokerTests
         var serializer = ConsumerJson.CreateSerializer();
         _ = await client.Queue.EnqueueAsync(route,
             serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null, RequestMetadata.Create(), null));
-        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, 1);
+        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog(), 1);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
 
         Assert.True(await reader.MoveNextAsync());
@@ -75,7 +75,7 @@ public sealed class QueueBrokerTests
         // reserve waits beyond the original lease, so this still proves renewal rather than merely
         // observing the initial reservation window.
         _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(client.Queue, serializer, route,
-            3));
+            ConsumerJson.Catalog(), 3));
         _ = services.AddPortiaQueueRunner();
         await using var provider = ConsumerHost.Build(services);
         using var cancellation = new CancellationTokenSource();

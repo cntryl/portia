@@ -52,8 +52,8 @@ jobs:
         shell: bash
         run: |
           package_version="$(dotnet msbuild src/Portia.AspNetCore/Portia.AspNetCore.csproj -getProperty:PackageVersion -nologo)"
-          if [[ ! "$package_version" =~ ^0\.1\.[0-9]+$ ]]; then
-            echo "::error title=Invalid package version::Expected 0.1.x, got '$package_version'"
+          if [[ ! "$package_version" =~ ^0\.2\.[0-9]+$ ]]; then
+            echo "::error title=Invalid package version::Expected 0.2.x, got '$package_version'"
             exit 1
           fi
           echo "PACKAGE_VERSION=$package_version" >> "$GITHUB_ENV"

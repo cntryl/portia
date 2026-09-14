@@ -60,7 +60,7 @@ public sealed class ReactorRunner(
         var contexts = new List<IReactorContext>(batchSize);
         var processed = 0;
         var budgetExhausted = false;
-        await foreach (var record in _reader.ReadAsync(reactor.Pattern, checkpoint.NextOffset, ct).WithCancellation(ct)
+        await foreach (var record in _reader.ReadAsync(reactor.Pattern, checkpoint.Cursor, ct).WithCancellation(ct)
                            .ConfigureAwait(false))
         {
             contexts.Add(ReactionExecutionContext.FromSystemSnapshot(record, actor, _clock));
@@ -70,7 +70,7 @@ public sealed class ReactorRunner(
                 checkpoint = await CommitAsync().ConfigureAwait(false);
             }
 
-            if (processed == options.MaxEventsPerPass)
+            if (processed >= options.MaxEventsPerPass)
             {
                 budgetExhausted = true;
                 break;
@@ -94,8 +94,7 @@ public sealed class ReactorRunner(
             {
                 await reactor.ReactAsync(contexts, ct).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
-                var next = new ProjectionCheckpoint(
-                    EventStreamOffsets.GetNextOffset(reactor.Pattern, contexts[^1].Source));
+                var next = new ProjectionCheckpoint(contexts[^1].Source.NextCursor);
                 await reactor.Checkpoints.SaveAsync(identity, next, ct)
                     .ConfigureAwait(false);
                 contexts.Clear();

@@ -17,8 +17,8 @@ public sealed partial class ComponentHostingTests
         _ = services.AddSingleton<IDomainEventNotifier>(changes);
         var portia = services.AddPortia();
         _ = (projector
-                ? portia.AddProjector<FirstProjector>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromDays(1))
-                : portia.AddReactor<FirstReactor>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromDays(1)))
+                ? portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromDays(1))
+                : portia.AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromDays(1)))
             .AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
@@ -56,7 +56,7 @@ public sealed partial class ComponentHostingTests
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
         _ = services.AddSingleton<IDomainEventNotifier>(changes);
-        _ = services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global,
+        _ = services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
             options => options.PollInterval = TimeSpan.FromSeconds(1)).AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
@@ -95,7 +95,7 @@ public sealed partial class ComponentHostingTests
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<IDomainEventNotifier>(changes);
         _ = services.AddSingleton<PatternSequence>();
-        _ = services.AddPortia().AddProjector<ChangingPatternProjector>(WorkloadScope.Global, options =>
+        _ = services.AddPortia().AddProjector<ChangingPatternProjector>("ChangingPatternProjector", WorkloadScope.Global, options =>
         {
             options.FailureAttemptLimit = 1;
             options.PollInterval = TimeSpan.FromDays(1);
@@ -124,7 +124,7 @@ public sealed partial class ComponentHostingTests
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
-        _ = services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global,
+        _ = services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
             o => o.Processing = new ProjectionRunOptions { RebuildId = rebuildId }).AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         var storage = provider.GetRequiredService<ConsumerHost.ProjectionStorage>();
@@ -164,7 +164,7 @@ public sealed partial class ComponentHostingTests
         _ = services.AddSingleton<TimeProvider>(clock);
         var changes = new Changes();
         _ = services.AddSingleton<IDomainEventNotifier>(changes);
-        _ = services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global, options =>
+        _ = services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global, options =>
         {
             options.FailureAttemptLimit = 2;
             options.PollInterval = TimeSpan.FromSeconds(1);
@@ -197,8 +197,8 @@ public sealed partial class ComponentHostingTests
         _ = services.AddSingleton<IDomainEventReader>(reader);
         var portia = services.AddPortia();
         _ = (projector
-            ? portia.AddProjector<FirstProjector>(WorkloadScope.Global)
-            : portia.AddReactor<FirstReactor>(WorkloadScope.Global)).AddWorkers();
+            ? portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global)
+            : portia.AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)).AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
@@ -226,8 +226,8 @@ public sealed partial class ComponentHostingTests
         _ = services.AddSingleton<TimeProvider>(clock);
         var portia = services.AddPortia();
         _ = (projector
-            ? portia.AddProjector<FirstProjector>(WorkloadScope.Global)
-            : portia.AddReactor<FirstReactor>(WorkloadScope.Global)).AddWorkers();
+            ? portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global)
+            : portia.AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)).AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
@@ -267,8 +267,8 @@ public sealed partial class ComponentHostingTests
         _ = services.AddAccounts();
         _ = services.AddReporting();
         _ = services.AddPortia()
-            .AddReactor<FirstReactor>(WorkloadScope.Global)
-            .AddReactor<SecondReactor>(WorkloadScope.Global)
+            .AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)
+            .AddReactor<SecondReactor>("second-reactor", WorkloadScope.Global)
             .AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
@@ -306,8 +306,8 @@ public sealed partial class ComponentHostingTests
         _ = services.AddAccounts();
         _ = services.AddReporting();
         _ = services.AddPortia()
-            .AddProjector<FirstProjector>(WorkloadScope.Global)
-            .AddProjector<SecondProjector>(WorkloadScope.Global)
+            .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global)
+            .AddProjector<SecondProjector>("second-projector", WorkloadScope.Global)
             .AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
@@ -345,7 +345,7 @@ public sealed partial class ComponentHostingTests
             CancellationToken ct = default)
             => throw new NotSupportedException();
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
             Entered.SetResult();

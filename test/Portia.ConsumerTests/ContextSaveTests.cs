@@ -148,8 +148,8 @@ public sealed class ContextSaveTests
             CancellationToken ct = default)
             => _inner.ReadAsync(stream, fromOffset, ct);
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
             CancellationToken ct = default)
-            => _inner.ReadAsync(pattern, fromOffset, ct);
+            => _inner.ReadAsync(pattern, cursor, ct);
     }
 }

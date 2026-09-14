@@ -81,8 +81,10 @@ public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddFrameworkTests();
+        _ = builder.Services.AddPortia().AddHttp();
         _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
         _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");
         _ = _app.MapGet("/ordinary", () => Results.Ok()).WithName("httpGetWidget");
         await _app.StartAsync();
@@ -101,8 +103,10 @@ public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddFrameworkTests();
+        _ = builder.Services.AddPortia().AddHttp();
         _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
         _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
         var group = _app.MapGroup("/api");
         _ = group.MapPortiaPost<HttpCreateOrder, Uuid>("/orders");
         _ = group.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");

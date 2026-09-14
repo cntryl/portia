@@ -31,7 +31,7 @@ public sealed class ReactorRunnerTests
         var target = Assert.Single(repository.SavedAggregates);
         Assert.Equal(40, target.Value);
         Assert.Equal(1, reactor.LastIncrementAmount);
-        Assert.Equal(3UL, checkpoint.NextOffset);
+        Assert.Equal("3", checkpoint.Cursor.ToString());
     }
 
     /// <summary>
@@ -43,7 +43,7 @@ public sealed class ReactorRunnerTests
         var store = new InMemoryEventStore();
         var reactor = new TestReactor(new RecordingAggregateRepository());
         var runner = new ReactorRunner(store);
-        var checkpoint = new ProjectionCheckpoint(3);
+        var checkpoint = new ProjectionCheckpoint(new EventCursor("3"));
 
         var nextCheckpoint = await runner.RunAsync(reactor, checkpoint);
 
@@ -84,8 +84,48 @@ public sealed class ReactorRunnerTests
         var first = await runner.RunPassAsync(reactor, ProjectionCheckpoint.Start, options);
         var second = await runner.RunPassAsync(reactor, first, options);
 
-        Assert.Equal(2UL, first.NextOffset);
-        Assert.Equal(3UL, second.NextOffset);
+        Assert.Equal("2", first.Cursor.ToString());
+        Assert.Equal("3", second.Cursor.ToString());
+    }
+
+    /// <summary>A batch reactor cannot enumerate beyond a pass budget smaller than its batch.</summary>
+    [Fact]
+    public async Task ShouldBoundBatchPassWithoutReadingAheadAndResume()
+    {
+        var store = await StoreValuesAsync(1, 2, 3);
+        var checkpoints = new RecordingCheckpointStore();
+        var reactor = new RecordingBatchReactor(checkpoints);
+        var runner = new ReactorRunner(store);
+        var options = new ProjectionRunOptions { MaxBatchSize = 8, MaxEventsPerPass = 2 };
+
+        var first = await runner.RunPassAsync(reactor, ProjectionCheckpoint.Start, options);
+        var second = await runner.RunPassAsync(reactor, first, options);
+
+        Assert.Equal("2", first.Cursor.ToString());
+        Assert.Equal("3", second.Cursor.ToString());
+        Assert.Equal([2, 1], reactor.BatchSizes);
+        Assert.Equal([1UL, 2UL, 3UL], reactor.AggregateVersions);
+        Assert.Equal(["2", "3"], checkpoints.SavedCursors);
+    }
+
+    /// <summary>A batch reactor saves full and partial batches at a non-divisible pass budget.</summary>
+    [Fact]
+    public async Task ShouldCommitPartialBatchAtNonDivisiblePassBudgetAndResume()
+    {
+        var store = await StoreValuesAsync(1, 2, 3, 4, 5, 6);
+        var checkpoints = new RecordingCheckpointStore();
+        var reactor = new RecordingBatchReactor(checkpoints);
+        var runner = new ReactorRunner(store);
+        var options = new ProjectionRunOptions { MaxBatchSize = 3, MaxEventsPerPass = 5 };
+
+        var first = await runner.RunPassAsync(reactor, ProjectionCheckpoint.Start, options);
+        var second = await runner.RunPassAsync(reactor, first, options);
+
+        Assert.Equal("5", first.Cursor.ToString());
+        Assert.Equal("6", second.Cursor.ToString());
+        Assert.Equal([3, 2, 1], reactor.BatchSizes);
+        Assert.Equal([1UL, 2UL, 3UL, 4UL, 5UL, 6UL], reactor.AggregateVersions);
+        Assert.Equal(["3", "5", "6"], checkpoints.SavedCursors);
     }
 
     /// <summary>Actor snapshots exposed by one reaction cannot mutate another reaction in the same pass.</summary>
@@ -140,7 +180,7 @@ public sealed class ReactorRunnerTests
         // Event 1 was handled a second time on retry, even though it succeeded the first time —
         // exactly the "no bound on redone work, side effects may not be idempotent" gap.
         Assert.Equal([1, 1, 2, 3], reactor.HandledValues);
-        Assert.Equal(3UL, checkpoint.NextOffset);
+        Assert.Equal("3", checkpoint.Cursor.ToString());
     }
 
     /// <summary>
@@ -173,7 +213,7 @@ public sealed class ReactorRunnerTests
         // The first batch (events 1-2) must already be durably saved — not just held in memory —
         // by the time the second batch's failure propagates.
         var savedAfterFailure = await checkpointStore.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern));
-        Assert.Equal(2UL, savedAfterFailure.NextOffset);
+        Assert.Equal("2", savedAfterFailure.Cursor.ToString());
         Assert.Equal([1, 2], reactor.HandledValues);
 
         // Retrying from the saved checkpoint (not ProjectionCheckpoint.Start) only re-reacts to
@@ -182,7 +222,7 @@ public sealed class ReactorRunnerTests
         var finalCheckpoint = await runner.RunAsync(reactor, resumeFrom, 2);
 
         Assert.Equal([1, 2, 3, 4], reactor.HandledValues);
-        Assert.Equal(4UL, finalCheckpoint.NextOffset);
+        Assert.Equal("4", finalCheckpoint.Cursor.ToString());
     }
 
     static T Committed<T>(T ev, Uuid aggregateId, ulong aggregateVersion)
@@ -194,6 +234,49 @@ public sealed class ReactorRunnerTests
             aggregateVersion,
             DateTimeOffset.UtcNow));
         return ev;
+    }
+
+    static async Task<InMemoryEventStore> StoreValuesAsync(params int[] values)
+    {
+        var id = Uuid.CreateVersion4();
+        var store = new InMemoryEventStore();
+        await store.AppendAsync(new EventStreamAddress("test", "reactors", id.ToString()), 0,
+            values.Select(value => Committed(new ValueChanged(value), id, (ulong)value)).ToArray());
+        return store;
+    }
+
+    sealed class RecordingCheckpointStore : IProjectionCheckpointStore
+    {
+        ProjectionCheckpoint _checkpoint;
+
+        public List<string> SavedCursors { get; } = [];
+
+        public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity,
+            CancellationToken ct = default) => ValueTask.FromResult(_checkpoint);
+
+        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            _checkpoint = checkpoint;
+            SavedCursors.Add(checkpoint.Cursor.ToString());
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    sealed class RecordingBatchReactor(IProjectionCheckpointStore checkpoints)
+        : BatchReactor(checkpoints, EventStreamPattern.ForPattern("test", "reactors"))
+    {
+        public List<ulong> AggregateVersions { get; } = [];
+        public List<int> BatchSizes { get; } = [];
+
+        protected override ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            BatchSizes.Add(contexts.Count);
+            AggregateVersions.AddRange(contexts.Select(context => context.Source.Event.Metadata.AggregateVersion));
+            return ValueTask.CompletedTask;
+        }
     }
 
     sealed class ActorIsolationReactor() : Reactor(new InMemoryProjectionCheckpointStore(),

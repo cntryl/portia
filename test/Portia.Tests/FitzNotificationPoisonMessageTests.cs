@@ -11,6 +11,31 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class FitzNotificationPoisonMessageTests
 {
+    /// <summary>A notice request that did not declare notice delivery is lost before dispatch.</summary>
+    [Fact]
+    public async Task ShouldDropNoticeGivenDeclaredTransportMismatch()
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var consumer = new FitzNoticeRequestConsumer(
+            new ScriptedNoticeClient([Envelope(serializer)]), serializer, "notice://test/shared/action",
+            TestJson.Catalog(RequestTransportId.Callable, typeof(UniversalAction)));
+
+        Assert.Empty(await ReadAllAsync(consumer));
+    }
+
+    /// <summary>A scheduled request that did not declare schedule delivery is lost before dispatch.</summary>
+    [Fact]
+    public async Task ShouldDropScheduleGivenDeclaredTransportMismatch()
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var consumer = new FitzScheduledRequestConsumer(
+            new ScriptedScheduleClient([ScheduleEnvelope(serializer)]), serializer,
+            "schedule://test/shared/action/run",
+            TestJson.Catalog(RequestTransportId.Callable, typeof(UniversalAction)));
+
+        Assert.Empty(await ReadAllAsync(consumer));
+    }
+
     /// <summary>
     ///     Verifies a notice whose body is not a Portia envelope is skipped and the next notice on
     ///     the same subscription still arrives.
@@ -22,7 +47,8 @@ public sealed class FitzNotificationPoisonMessageTests
         var logger = new CapturingLogger<FitzNoticeRequestConsumer>();
         var consumer = new FitzNoticeRequestConsumer(
             new ScriptedNoticeClient([Encoding.UTF8.GetBytes("not-an-envelope"), Envelope(serializer)]),
-            serializer, "notice://test/shared/action", logger);
+            serializer, "notice://test/shared/action",
+            TestJson.Catalog(RequestTransportId.Notice, typeof(UniversalAction)), logger);
 
         var delivered = await ReadAllAsync(consumer);
 
@@ -42,7 +68,8 @@ public sealed class FitzNotificationPoisonMessageTests
         var logger = new CapturingLogger<FitzScheduledRequestConsumer>();
         var consumer = new FitzScheduledRequestConsumer(
             new ScriptedScheduleClient([Encoding.UTF8.GetBytes("{}"), ScheduleEnvelope(serializer)]),
-            serializer, "schedule://test/shared/action/run", logger);
+            serializer, "schedule://test/shared/action/run",
+            TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)), logger);
 
         var delivered = await ReadAllAsync(consumer);
 

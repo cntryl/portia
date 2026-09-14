@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.0
+
+- Replaced projection scope offsets with backend-owned `EventCursor` values and structural checkpoint patterns.
+- Required stable, explicit IDs when registering projector and reactor workloads.
+- Replaced the closed request-transport enum with stable, extensible transport IDs discovered from
+  annotated marker interfaces, while preserving the built-in callable, queue, notice, and schedule
+  capabilities.
+- Made HTTP/OpenAPI activation explicit through `AddHttp()` and `MapPortiaOpenApi()`, removed
+  ambient `WebApplication` interception, stopped replacing ASP.NET Core's global JSON options, and
+  moved HTTP binding generation into the ASP.NET Core adapter package.
+- Fitz queue consumers reserve one item at a time, validate durable-attempt support inside
+  `QueueRunner`, and reject undeclared inbound transport capabilities before dispatch.
+- Projector and reactor pass limits now complete an already-started atomic batch before yielding.
+- Fitz projection batches now reject stale checkpoints inside the read/write transaction.
+- Fitz checkpoints now use a versioned UTF-8 representation while continuing to read the 0.1.x
+  eight-byte unsigned big-endian offset format.
+
+## 0.1.0
+
+- Initial public release of the request pipeline, event sourcing, projection/reactor runtime, Fitz, HTTP, telemetry, JWT, testing, analyzer, and generator packages.
+
 Notable changes to Portia. Entries call out anything that changes observable behavior for an
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
@@ -33,12 +54,6 @@ alerts are as breaking to change as an API.
   ownership of exporters, resources, sampling, filtering, endpoints, and credentials; no existing
   Portia package gains an OpenTelemetry dependency.
 
-- `PortiaHttpOptions.ServeOpenApi` controls whether Portia maps `/openapi/v1.json` and
-  `/openapi/v1.yml`, defaulting to `true`. Portia previously mapped them by intercepting `Build()`
-  with no way to opt out, which took a deployment decision — whether a schema is publicly reachable
-  — away from the application. Setting it to `false` withdraws Portia's routes and leaves the
-  document registered, so the application can map it on another path, behind authorization, or on a
-  separate port and receive the same composed document.
 - The package smoke consumers map the local package folder in their own `packageSourceMapping`.
   The repository root maps every package to nuget.org and a nearer mapping replaces rather than
   extends it, so a cold restore could not see the freshly packed smoke packages and resolved a stale

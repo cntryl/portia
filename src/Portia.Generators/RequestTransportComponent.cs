@@ -2,7 +2,7 @@ namespace Cntryl.Portia;
 
 sealed record RequestTransportComponent(
     string TypeName,
-    RequestTransports Transports,
+    IReadOnlyList<string> Transports,
     string Realm,
     string Area,
     string Resource,

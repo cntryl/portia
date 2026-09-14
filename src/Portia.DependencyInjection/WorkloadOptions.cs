@@ -3,9 +3,6 @@ namespace Cntryl.Portia;
 /// <summary>Configures one explicit component registration.</summary>
 public sealed class WorkloadOptions
 {
-    /// <summary>Gets or sets a stable application name; defaults to the component's full type name.</summary>
-    public string? Name { get; set; }
-
     /// <summary>Gets or sets the delay between completed passes.</summary>
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(1);
 

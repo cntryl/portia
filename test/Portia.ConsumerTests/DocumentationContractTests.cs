@@ -6,11 +6,13 @@ public sealed partial class DocumentationContractTests
 {
     static readonly string Root = FindRoot();
 
-    static readonly string[] DiagnosticSourceDirectories = ["src/Portia.Generators", "src/Portia.Analyzers"];
+    static readonly string[] DiagnosticSourceDirectories =
+        ["src/Portia.Generators", "src/Portia.AspNetCore.Generators", "src/Portia.Analyzers"];
 
     static readonly string[] DiagnosticReleaseManifests =
     [
         "docs/AnalyzerReleases.Unshipped.md",
+        "src/Portia.AspNetCore.Generators/AnalyzerReleases.Unshipped.md",
         "src/Portia.Analyzers/AnalyzerReleases.Unshipped.md"
     ];
 
@@ -94,7 +96,7 @@ public sealed partial class DocumentationContractTests
     public void EveryProductProjectGeneratesXmlDocumentation()
     {
         foreach (var project in Directory.EnumerateDirectories(Path.Combine(Root, "src"), "Portia.*")
-                     .Where(path => !path.EndsWith("Portia.Generators", StringComparison.Ordinal)
+                     .Where(path => !path.EndsWith(".Generators", StringComparison.Ordinal)
                                     && !path.EndsWith("Portia.Analyzers", StringComparison.Ordinal)
                                     && !path.EndsWith("Portia.CodeFixes", StringComparison.Ordinal)))
         {

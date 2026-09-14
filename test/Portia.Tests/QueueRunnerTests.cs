@@ -278,6 +278,40 @@ public sealed class QueueRunnerTests
         Assert.False(queued.Abandoned);
     }
 
+    /// <summary>A terminal threshold is rejected by the runner when the adapter has no durable count.</summary>
+    [Fact]
+    public async Task ShouldRejectTerminalAttemptGivenTransportDoesNotSupportDurableAttempts()
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = new FakeQueuedRequest(new ChangeValue(1), supportsDurableAttempts: false);
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync());
+
+        Assert.Contains("durable delivery-attempt count", error.Message, StringComparison.Ordinal);
+        Assert.False(queued.Completed);
+        Assert.False(queued.Abandoned);
+    }
+
+    /// <summary>A request that did not declare queue delivery is terminal and never dispatched.</summary>
+    [Fact]
+    public async Task ShouldCompleteAsInvalidTransportGivenQueueCapabilityMismatch()
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = new FakeQueuedRequest(new ChangeValue(1), transportMismatch: true);
+        var terminal = new RecordingTerminalHandler();
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), terminalHandler: terminal));
+
+        await runner.RunAsync();
+
+        var failure = Assert.Single(terminal.Failures);
+        Assert.Equal(QueuedRequestTerminalReason.InvalidTransport, failure.Reason);
+        _ = Assert.IsType<InvalidRequestTransportException>(failure.Exception);
+        Assert.True(queued.Completed);
+    }
+
     /// <summary>An unexpected exception at the configured threshold also becomes terminal.</summary>
     [Fact]
     public async Task ShouldInvokeTerminalHandlerGivenUnexpectedFailureAtTerminalAttempt()
@@ -447,7 +481,9 @@ public sealed class QueueRunnerTests
         string? actorToken = "valid-token",
         uint attempt = 1,
         List<string>? operations = null,
-        bool throwOnAcknowledge = false) : IQueuedRequest
+        bool throwOnAcknowledge = false,
+        bool supportsDurableAttempts = true,
+        bool transportMismatch = false) : IQueuedRequest
     {
         public int CompletionCount { get; private set; }
 
@@ -459,11 +495,15 @@ public sealed class QueueRunnerTests
         public RequestMetadata Metadata { get; } = RequestMetadata.Create();
         public RequestInvocation Invocation => new QueueInvocation("queue://test/work/item", Attempt);
 
-        public IRequest Request { get; } = throwOnDispatch ? new ThrowingChangeValue(0) : request;
+        public IRequest Request => transportMismatch
+            ? throw new InvalidRequestTransportException(request, RequestTransportId.Queue)
+            : throwOnDispatch ? new ThrowingChangeValue(0) : request;
 
         public string? ActorToken { get; } = actorToken;
 
         public uint Attempt => attempt;
+
+        public bool SupportsDurableAttempts => supportsDurableAttempts;
 
         public ValueTask CompleteAsync(CancellationToken ct = default)
         {

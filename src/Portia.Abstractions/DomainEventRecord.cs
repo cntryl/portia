@@ -6,11 +6,9 @@ namespace Cntryl.Portia;
 /// <param name="Stream">The concrete source stream.</param>
 /// <param name="Event">The domain event.</param>
 /// <param name="ResourceOffset">The zero-based offset within the resource stream.</param>
-/// <param name="AreaOffset">The zero-based area offset, when supplied by the selected read scope.</param>
-/// <param name="RealmOffset">The zero-based realm offset, when supplied by the selected read scope.</param>
+/// <param name="NextCursor">The opaque cursor with which the current read can be resumed.</param>
 public sealed record DomainEventRecord(
     EventStreamAddress Stream,
     DomainEvent Event,
     ulong ResourceOffset,
-    ulong? AreaOffset,
-    ulong? RealmOffset);
+    EventCursor NextCursor);

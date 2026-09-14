@@ -70,7 +70,8 @@ public sealed class FitzNotificationFaultTests
         });
         listener.Start();
         var consumer = new FitzScheduledRequestConsumer(new OnePayloadScheduleClient(payload), serializer,
-            "schedule://test/shared/action/run");
+            "schedule://test/shared/action/run",
+            TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)));
 
         await foreach (var _ in consumer.ReadAsync())
             Assert.Fail("A schedule entry that cannot be translated must not be dispatched.");

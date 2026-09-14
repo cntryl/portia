@@ -41,6 +41,12 @@ public sealed class QueueRunner(
             try
             {
                 await using var scope = await _scopeFactory.CreateAsync(ct).ConfigureAwait(false);
+                if (scope.Options.TerminalAttempt is > 0 && !queued.SupportsDurableAttempts)
+                {
+                    throw new InvalidOperationException(
+                        "QueueRunnerOptions.TerminalAttempt requires a transport with a durable delivery-attempt count.");
+                }
+
                 try
                 {
                     requestName = queued.Name ?? "unknown";
@@ -84,6 +90,14 @@ public sealed class QueueRunner(
                                            ex is not (TerminalHandlerFailureException or
                                                TerminalHandlerMissingException))
                 {
+                    if (ex is InvalidRequestTransportException mismatch)
+                    {
+                        deliveryOutcome = await CompleteTerminalAsync(scope, queued, null, mismatch,
+                                QueuedRequestTerminalReason.InvalidTransport, requestName, ct, mismatch.Request)
+                            .ConfigureAwait(false);
+                        continue;
+                    }
+
                     // An unrecognized exception's retriability is unknown; abandoning (rather than
                     // silently dropping the request) is the safer default.
                     PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, _logger);
@@ -117,14 +131,14 @@ public sealed class QueueRunner(
 
     async ValueTask<RequestDeliveryOutcome> CompleteTerminalAsync(IQueueDeliveryScope scope, IQueuedRequest queued,
         RequestError? error, Exception? exception, QueuedRequestTerminalReason reason, string requestName,
-        CancellationToken ct)
+        CancellationToken ct, IRequest? request = null)
     {
         var terminalHandler = scope.TerminalHandler ?? throw new TerminalHandlerMissingException(reason);
 
         try
         {
             await terminalHandler.HandleAsync(new QueuedRequestFailureContext(
-                    queued.Request, queued.Metadata, queued.Invocation, queued.Attempt, error, exception)
+                    request ?? queued.Request, queued.Metadata, queued.Invocation, queued.Attempt, error, exception)
             { Reason = reason }, ct)
                 .ConfigureAwait(false);
         }

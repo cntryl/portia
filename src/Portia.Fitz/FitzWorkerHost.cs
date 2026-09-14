@@ -9,6 +9,7 @@ sealed record FitzWorkerHost(
     Client Client,
     IServiceScopeFactory Scopes,
     IRequestDeserializer Serializer,
+    RequestTransportCatalog Catalog,
     TimeProvider Clock,
     ILogger<FitzRequestQueueConsumer>? QueueLogger,
     ILogger<FitzNoticeRequestConsumer>? NoticeLogger,

@@ -14,18 +14,18 @@ public interface IDomainEventReader
     /// <returns>The next contiguous committed records in ascending resource-offset order.</returns>
     IAsyncEnumerable<DomainEventRecord> ReadAsync(
         EventStreamAddress stream,
-        ulong fromOffset = 0,
-        CancellationToken ct = default);
+        ulong fromOffset,
+        CancellationToken ct);
 
     /// <summary>
     ///     Reads events selected for a projector or reactor from a scope offset.
     /// </summary>
     /// <param name="pattern">The realm or area stream pattern.</param>
-    /// <param name="fromOffset">The first inclusive realm or area offset to read.</param>
+    /// <param name="cursor">The opaque position returned by the preceding read.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>Events with their concrete source streams and checkpointable offsets.</returns>
     IAsyncEnumerable<DomainEventRecord> ReadAsync(
         EventStreamPattern pattern,
-        ulong fromOffset = 0,
-        CancellationToken ct = default);
+        EventCursor cursor,
+        CancellationToken ct);
 }

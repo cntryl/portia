@@ -17,7 +17,7 @@ public sealed class ProcessorBaseTests
         Assert.Equal(6, repository.Value);
         Assert.Equal(batch ? new ulong[] { 2, 3 } : [1, 2, 3], repository.Commits);
         Assert.Equal(batch ? 2 : 3, repository.Disposals);
-        Assert.Equal(3UL, repository.Checkpoint.NextOffset);
+        Assert.Equal("3", repository.Checkpoint.Cursor.ToString());
     }
 
     [Fact]
@@ -34,7 +34,7 @@ public sealed class ProcessorBaseTests
         repository.Fail = false;
         _ = await runner.RunAsync(new BatchAccounts(repository), repository.Checkpoint);
         Assert.Equal(6, repository.Value);
-        Assert.Equal(3UL, repository.Checkpoint.NextOffset);
+        Assert.Equal("3", repository.Checkpoint.Cursor.ToString());
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public sealed class ProcessorBaseTests
         var services = new ServiceCollection();
         _ = services.AddScoped<Repository>();
         _ = services.AddSingleton<IDomainEventReader, InMemoryEventStore>();
-        _ = services.AddPortia().AddProjector<BatchAccounts>(WorkloadScope.PerTenant);
+        _ = services.AddPortia().AddProjector<BatchAccounts>("BatchAccounts", WorkloadScope.PerTenant);
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions
         { ValidateScopes = true, ValidateOnBuild = true });
         using var scope = provider.CreateScope();
@@ -154,7 +154,7 @@ public sealed class ProcessorBaseTests
             }
 
             Checkpoint = checkpoint;
-            Commits.Add(checkpoint.NextOffset);
+            Commits.Add(ulong.Parse(checkpoint.Cursor.Value!, System.Globalization.CultureInfo.InvariantCulture));
             return ValueTask.CompletedTask;
         }
     }
@@ -219,7 +219,7 @@ public sealed class ProcessorBaseTests
 
                 repository.Value += repository._pending;
                 repository.Checkpoint = checkpoint;
-                repository.Commits.Add(checkpoint.NextOffset);
+                repository.Commits.Add(ulong.Parse(checkpoint.Cursor.Value!, System.Globalization.CultureInfo.InvariantCulture));
                 return ValueTask.CompletedTask;
             }
 

@@ -30,7 +30,7 @@ static class RequestTransportRegistrationEmitter
             .Append(request.DiscriminatorVersion)
             .Append(')');
 
-        if (request.Transports.HasFlag(RequestTransports.Callable))
+        if (request.Transports.Contains("callable", StringComparer.Ordinal))
         {
             _ = source.Append(", static (registrar, ct) => registrar.RegisterAsync<")
                 .Append(request.TypeName)
@@ -40,7 +40,7 @@ static class RequestTransportRegistrationEmitter
 
         if (request.ResultType is not null)
         {
-            if (!request.Transports.HasFlag(RequestTransports.Callable))
+            if (!request.Transports.Contains("callable", StringComparer.Ordinal))
             {
                 _ = source.Append(", null");
             }

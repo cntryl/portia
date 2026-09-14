@@ -117,7 +117,7 @@ public sealed class SharedDeploymentTests
             builder.Services.Add(descriptor);
         _ = builder.Services.AddAccounts();
         _ = builder.Services.AddPortia()
-            .AddProjector<FirstProjector>(WorkloadScope.PerTenant)
+            .AddProjector<FirstProjector>("first-projector", WorkloadScope.PerTenant)
             .AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), _ => { })
             .AddWorkers();
         using var host = builder.Build();
@@ -135,9 +135,8 @@ public sealed class SharedDeploymentTests
         _ = services.AddScoped<IRequestActorValidator, AcceptActor>();
         _ = services.AddAccounts();
         return services.AddPortia()
-            .AddProjector<FirstProjector>(WorkloadScope.Global, o =>
+            .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global, o =>
             {
-                o.Name = "first-projector";
                 o.PollInterval = TimeSpan.FromMilliseconds(10);
             })
             .UseFitzClient(client, fitz =>

@@ -15,11 +15,17 @@ sealed class FakeKvClient : IKvClient
 
     public Exception? PutFailure { get; set; }
 
+    public Exception? GetFailure { get; set; }
+
+    public CancellationTokenSource? CancelDuringGet { get; set; }
+
     public Exception? CommitFailure { get; set; }
 
     public Exception? RollbackFailure { get; set; }
 
     public Exception? DisposeFailure { get; set; }
+
+    public List<CancellationToken> RollbackTokens { get; } = [];
 
     public FakeKvTransaction LastTransaction => Transactions[^1];
 
@@ -60,6 +66,11 @@ sealed class FakeKvTransaction(FakeKvClient client, string route, KvDurability d
 
     public Task<KvGetResult> GetAsync(ReadOnlyMemory<byte> key, CancellationToken ct = default)
     {
+        if (client.GetFailure is { } failure)
+            return Task.FromException<KvGetResult>(failure);
+
+        client.CancelDuringGet?.Cancel();
+        ct.ThrowIfCancellationRequested();
         var name = Encoding.UTF8.GetString(key.Span);
         return Task.FromResult(_staged.TryGetValue(name, out var staged)
             ? new KvGetResult(true, staged)
@@ -111,6 +122,7 @@ sealed class FakeKvTransaction(FakeKvClient client, string route, KvDurability d
     public Task RollbackAsync(CancellationToken ct = default)
     {
         Rollbacks++;
+        client.RollbackTokens.Add(ct);
         _staged.Clear();
         return client.RollbackFailure is { } failure ? Task.FromException(failure) : Task.CompletedTask;
     }

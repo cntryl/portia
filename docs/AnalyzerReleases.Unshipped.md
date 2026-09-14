@@ -17,7 +17,6 @@ PORTIA011 | Portia | Error | RequiresPermission references an unknown request pr
 PORTIA012 | Portia | Warning | IJsonDomainEventUpcaster.EventName references an unknown event name
 PORTIA013 | Portia | Error | RequiresPermission references a nullable request property
 PORTIA015 | Portia | Error | Generated components must have supported accessible non-generic declarations
-PORTIA016 | Portia | Error | Unsupported HTTP binding requires a constant route and supported constructor and scalar types
 PORTIA017 | Portia | Error | Batch handlers require the corresponding batch processor base
 PORTIA018 | Portia | Error | Generic component registration requires a matching Portia role
 PORTIA019 | Portia | Error | Registration calls must appear at a call site supported by generated interceptors
@@ -27,6 +26,4 @@ PORTIA022 | Portia | Error | Request discriminator name and version pairs must b
 PORTIA023 | Portia | Error | Domain-event discriminator name and version pairs must be unique
 PORTIA024 | Portia | Error | Declared request route segments must be safe single segments
 PORTIA025 | Portia | Error | Portia serializer root is not explicitly registered on a PortiaJsonContext
-PORTIA026 | Portia | Error | Optional HTTP route tokens must use query parameters or separate endpoints
-PORTIA027 | Portia | Error | Visible Portia HTTP mappings must have unique camel-cased operation IDs
 PORTIA028 | Portia | Error | A processor cannot select single and batch handling for the same event

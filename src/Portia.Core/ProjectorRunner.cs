@@ -41,7 +41,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         var processed = 0;
         var budgetExhausted = false;
         await foreach (var record in _reader
-                           .ReadAsync(projector.Pattern, checkpoint.NextOffset, ct)
+                           .ReadAsync(projector.Pattern, checkpoint.Cursor, ct)
                            .WithCancellation(ct)
                            .ConfigureAwait(false))
         {
@@ -54,7 +54,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
                     .ConfigureAwait(false);
             }
 
-            if (processed == options.MaxEventsPerPass)
+            if (processed >= options.MaxEventsPerPass)
             {
                 budgetExhausted = true;
                 break;
@@ -90,9 +90,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
             await projector.ProjectAsync(records, projectorContext, ct).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
 
-            var lastRecord = records[^1];
-            var nextOffset = EventStreamOffsets.GetNextOffset(projector.Pattern, lastRecord);
-            var nextCheckpoint = new ProjectionCheckpoint(nextOffset);
+            var nextCheckpoint = new ProjectionCheckpoint(records[^1].NextCursor);
             await batch.CommitAsync(nextCheckpoint, ct).ConfigureAwait(false);
             records.Clear();
             return nextCheckpoint;

@@ -5,6 +5,7 @@ public sealed record WorkloadRegistration
 {
     internal WorkloadRegistration(
         IWorkloadDescriptor descriptor,
+        string name,
         WorkloadScope scope,
         Action<WorkloadOptions>? configure)
     {
@@ -18,9 +19,9 @@ public sealed record WorkloadRegistration
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(options.MaximumFailureDelay, TimeSpan.Zero);
         ArgumentNullException.ThrowIfNull(options.Processing);
         options.Processing.Validate();
-        ExplicitName = options.Name;
-        Name = options.Name ?? descriptor.ComponentType.FullName ?? descriptor.ComponentType.Name;
-        ArgumentException.ThrowIfNullOrWhiteSpace(Name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ExplicitName = name;
+        Name = name;
         if (!descriptor.SupportsRebuild &&
             // Asked of the descriptor rather than tested against a known descriptor type, so a
             // component kind added later answers for itself instead of silently gaining rebuilds.

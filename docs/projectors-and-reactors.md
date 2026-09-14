@@ -65,7 +65,7 @@ services.AddScoped<AccountRepository>();
 services.AddScoped<IAccountRepository>(sp => sp.GetRequiredService<AccountRepository>());
 services.AddScoped<IProjectionStore>(sp => sp.GetRequiredService<AccountRepository>());
 services.AddPortia()
-    .AddProjector<AccountProjector>(WorkloadScope.PerTenant);
+    .AddProjector<AccountProjector>("AccountProjector", WorkloadScope.PerTenant);
 ```
 
 Both interfaces must resolve to the *same scoped instance*, which is what makes the projector's
@@ -80,9 +80,8 @@ double for it has to implement `BeginAsync`.
 `Cntryl.Portia.DependencyInjection` supplies the generator for typed dispatch.
 `IProjectorContext` contains checkpoint identity and rebuild metadata, never application
 services. `WorkloadScope.PerTenant` replaces the declared pattern's realm with the active tenant ID;
-`WorkloadScope.Global` keeps the declared realm. Names default to the concrete type's full name;
-use a constructor name for a manually run component or registration `options.Name`
-for an explicitly named hosted workload.
+`WorkloadScope.Global` keeps the declared realm. Hosted workloads require an explicit stable ID in
+`AddProjector` or `AddReactor`; that ID is also their checkpoint component name.
 
 `IProjectionStore` exposes `LoadCheckpointAsync(identity, ct)` and
 `BeginAsync(ProjectionBatchContext, ct)`. The latter returns `IProjectionBatch`, a lifecycle
@@ -202,7 +201,7 @@ public sealed partial class AccountReactor(IAccountReactions accounts, IProjecti
 ```
 
 Register `IAccountReactions` and `IProjectionCheckpointStore` through ordinary scoped DI and the
-reactor through `portia.AddReactor<AccountReactor>(WorkloadScope.PerTenant)`. One class may
+reactor through `portia.AddReactor<AccountReactor>("AccountReactor", WorkloadScope.PerTenant)`. One class may
 implement both; forward the two registrations to the same scoped instance as above when it does.
 
 Every event retains its own system execution identity and causation. Do not use the
@@ -247,8 +246,8 @@ services.AddScoped<IAccountRepository>(sp => sp.GetRequiredService<AccountReposi
 services.AddScoped<IProjectionStore>(sp => sp.GetRequiredService<AccountRepository>());
 services.AddPortia()
     .AddFitz(configuration, fitz => fitz.UseKvCheckpoints("kv://accounts/progress/checkpoints"))
-    .AddProjector<AccountProjector>(WorkloadScope.PerTenant)
-    .AddReactor<WelcomeMailer>(WorkloadScope.PerTenant);
+    .AddProjector<AccountProjector>("AccountProjector", WorkloadScope.PerTenant)
+    .AddReactor<WelcomeMailer>("WelcomeMailer", WorkloadScope.PerTenant);
 ```
 
 The two forwarding registrations are the same requirement stated above: `IAccountRepository` and
@@ -264,6 +263,12 @@ separate within a route. It is an explicit selection rather than a default: a re
 fell back to an in-memory checkpoint would reissue its entire backlog of external effects after
 every restart. Applications that want per-tenant routes register their own scoped
 `FitzKvCheckpointStore` from `WorkloadContext` instead of calling this.
+
+Checkpoint values use a fixed format prefix followed by the backend-owned cursor as UTF-8. Readers
+also accept the Portia 0.1.x representation—exactly eight bytes containing an unsigned big-endian
+offset—and expose it as an invariant decimal `EventCursor`. Unknown unversioned values are rejected;
+loading is non-mutating, and the next successful checkpoint commit upgrades a legacy value to the
+current versioned representation.
 
 Fitz KV locks a route at BEGIN rather than detecting the conflict at COMMIT, so a losing writer is
 rejected before staging anything. Both stores translate that into the adapter-neutral

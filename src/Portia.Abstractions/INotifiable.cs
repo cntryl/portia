@@ -4,4 +4,5 @@ namespace Cntryl.Portia;
 ///     Marks a request that can be published over live (ephemeral) fanout (Fitz notice, or another
 ///     notification transport). Combine with <see cref="RequestRouteAttribute" />.
 /// </summary>
+[RequestTransport("notice")]
 public interface INotifiable;

@@ -20,7 +20,7 @@ public sealed partial class ComponentHostingTests
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
         _ = services.AddSingleton<IDomainEventNotifier>(changes);
-        _ = services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global,
+        _ = services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
             options => options.PollInterval = pollInterval).AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();

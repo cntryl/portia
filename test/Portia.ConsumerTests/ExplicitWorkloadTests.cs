@@ -12,7 +12,7 @@ public sealed class ExplicitWorkloadTests
         var services = new ServiceCollection();
 
         _ = services.AddPortia()
-            .AddReactor<FirstReactor>(WorkloadScope.Global)
+            .AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)
             .AddWorkers();
 
         Assert.Equal(2, services.Count(service => service.ServiceType == typeof(IHostedService)));
@@ -25,7 +25,7 @@ public sealed class ExplicitWorkloadTests
     {
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<IWorkloadCoordinator, CompletedCoordinator>();
-        _ = services.AddPortia().AddReactor<FirstReactor>(WorkloadScope.Global).AddWorkers();
+        _ = services.AddPortia().AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global).AddWorkers();
         await using var provider = services.BuildServiceProvider();
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await worker.StartAsync(default);
@@ -56,8 +56,8 @@ public sealed class ExplicitWorkloadTests
             }
 
             var portia = services.AddPortia().AddWorkers();
-            _ = portia.AddProjector<FirstProjector>(WorkloadScope.PerTenant);
-            _ = portia.AddProjector<SecondProjector>(WorkloadScope.Global);
+            _ = portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.PerTenant);
+            _ = portia.AddProjector<SecondProjector>("second-projector", WorkloadScope.Global);
             if (!infrastructureFirst)
             {
                 _ = services.AddPortia().AddFitz(configuration);
@@ -78,9 +78,9 @@ public sealed class ExplicitWorkloadTests
     {
         var services = new ServiceCollection();
         var portia = services.AddPortia()
-            .AddProjector<FirstProjector>(WorkloadScope.PerTenant)
-            .AddProjector<SecondProjector>(WorkloadScope.Global)
-            .AddReactor<FirstReactor>(WorkloadScope.PerTenant);
+            .AddProjector<FirstProjector>("first-projector", WorkloadScope.PerTenant)
+            .AddProjector<SecondProjector>("second-projector", WorkloadScope.Global)
+            .AddReactor<FirstReactor>("first-reactor", WorkloadScope.PerTenant);
         var workloads = services.Where(service => service.ServiceType == typeof(WorkloadRegistration))
             .Select(service => Assert.IsType<WorkloadRegistration>(service.ImplementationInstance)).ToArray();
         Assert.Equal(3, workloads.Length);
@@ -92,7 +92,7 @@ public sealed class ExplicitWorkloadTests
                                                    && service.ImplementationType is not null
                                                    && typeof(BackgroundService).IsAssignableFrom(
                                                        service.ImplementationType));
-        _ = portia.AddProjector<FirstProjector>(WorkloadScope.PerTenant);
+        _ = portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.PerTenant);
         Assert.Equal(3, services.Count(service => service.ServiceType == typeof(WorkloadRegistration)));
     }
 
@@ -100,11 +100,12 @@ public sealed class ExplicitWorkloadTests
     public void DuplicateWorkloadRejectsDifferentFailurePolicy()
     {
         var services = new ServiceCollection();
-        var portia = services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global,
+        var portia = services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
             options => options.FailureAttemptLimit = 3);
 
-        var exception = Assert.Throws<InvalidOperationException>(() => portia.AddProjector<FirstProjector>(
-            WorkloadScope.Global, options => options.FailureAttemptLimit = 4));
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
+                options => options.FailureAttemptLimit = 4));
 
         Assert.Contains("Conflicting workload registration", exception.Message, StringComparison.Ordinal);
         _ = Assert.Single(services, service => service.ServiceType == typeof(WorkloadRegistration));
@@ -117,11 +118,11 @@ public sealed class ExplicitWorkloadTests
         var portia = services.AddPortia();
         var count = services.Count;
         _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            portia.AddProjector<FirstProjector>((WorkloadScope)42));
+            portia.AddProjector<FirstProjector>("first-projector", (WorkloadScope)42));
         Assert.Equal(count, services.Count);
-        _ = portia.AddProjector<FirstProjector>(WorkloadScope.PerTenant);
+        _ = portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.PerTenant);
         count = services.Count;
-        _ = Assert.Throws<InvalidOperationException>(() => portia.AddProjector<FirstProjector>(WorkloadScope.Global));
+        _ = Assert.Throws<InvalidOperationException>(() => portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global));
         Assert.Equal(count, services.Count);
     }
 

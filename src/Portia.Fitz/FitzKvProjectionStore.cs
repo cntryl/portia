@@ -55,10 +55,43 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
                 + "One store instance owns one Fitz KV transaction, so a second batch would retarget the first one's writes.");
         }
 
-        _open = await FitzKvCheckpoints
+        var transaction = await FitzKvCheckpoints
             .BeginAsync(_client, _route, KvMode.ReadWrite, "Projection batch", context.Identity, ct)
             .ConfigureAwait(false);
-        return new Batch(this, _open, context.Identity);
+        _open = transaction;
+        try
+        {
+            var checkpoint = await transaction.GetAsync(FitzKvCheckpoints.Key(context.Identity), ct)
+                .ConfigureAwait(false);
+            var current = checkpoint.Found
+                ? new ProjectionCheckpoint(FitzKvCheckpoints.Decode(checkpoint.Value!.Value.Span))
+                : ProjectionCheckpoint.Start;
+            if (current != context.Checkpoint)
+            {
+                throw new ProjectionConcurrencyException(
+                    $"Projection batch for '{context.Identity.ComponentName}' started from stale checkpoint "
+                    + $"'{context.Checkpoint.Cursor}'; authoritative checkpoint is '{current.Cursor}'.");
+            }
+
+            return new Batch(this, transaction, context.Identity);
+        }
+        catch
+        {
+            if (ReferenceEquals(_open, transaction))
+                _open = null;
+
+            await FitzKvCheckpoints.RollbackAsync(transaction).ConfigureAwait(false);
+            try
+            {
+                await transaction.DisposeAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                // Preserve the checkpoint read, decode, cancellation, or validation failure.
+            }
+
+            throw;
+        }
     }
 
     sealed class Batch(FitzKvProjectionStore store, IKvTransaction transaction, CheckpointIdentity identity)
@@ -71,7 +104,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
             var tx = transaction;
             try
             {
-                await tx.PutAsync(FitzKvCheckpoints.Key(identity), FitzKvCheckpoints.Encode(checkpoint.NextOffset), ct)
+                await tx.PutAsync(FitzKvCheckpoints.Key(identity), FitzKvCheckpoints.Encode(checkpoint.Cursor), ct)
                     .ConfigureAwait(false);
                 await tx.CommitAsync(ct).ConfigureAwait(false);
                 _done = true;

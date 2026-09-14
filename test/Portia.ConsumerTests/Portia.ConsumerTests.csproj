@@ -25,6 +25,7 @@
     <ProjectReference Include="../../src/Portia.Analyzers/Portia.Analyzers.csproj" />
     <ProjectReference Include="../../src/Portia.CodeFixes/Portia.CodeFixes.csproj" />
     <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj" />
+    <ProjectReference Include="../../src/Portia.AspNetCore.Generators/Portia.AspNetCore.Generators.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Portia's test doubles and conformance suites are their own namespace, so a consumer never

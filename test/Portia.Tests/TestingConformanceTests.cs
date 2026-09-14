@@ -84,9 +84,9 @@ public sealed class TestingConformanceTests
             CancellationToken ct = default)
             => inner.ReadAsync(stream, fromOffset, ct);
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
             CancellationToken ct = default)
-            => inner.ReadAsync(pattern, fromOffset, ct);
+            => inner.ReadAsync(pattern, cursor, ct);
 
         public async ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
             IReadOnlyList<DomainEvent> events, CancellationToken ct = default)

@@ -44,7 +44,7 @@ public sealed class BrokerExecutionContextTests
         var publisher = new FitzRequestQueuePublisher(client.Queue, serializer);
         await publisher.EnqueueAsync(new Command(2), new RequestRouteValues(Resource: resource), "credential",
             metadata);
-        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, 1);
+        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog(), 1);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         await using var deliveries = consumer.ReadAsync(deadline.Token).GetAsyncEnumerator(deadline.Token);
         Assert.True(await deliveries.MoveNextAsync());

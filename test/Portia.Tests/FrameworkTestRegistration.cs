@@ -36,6 +36,7 @@ static class FrameworkTestRegistration
         _ = portia.AddRequestHandler<HttpListWidgetsHandler>();
         _ = portia.AddRequestHandler<HttpStallingStreamHandler>();
         _ = portia.AddRequestHandler<UniversalActionHandler>();
+        _ = portia.AddRequestHandler<CustomTransportRequestHandler>();
         _ = portia.AddRequestHandler<RunnerFaultVisibilityTests.RunnerFaultActionHandler>();
         _ = portia.AddRequestHandler<QueueRunnerTests.InvalidChangeValueHandler>();
         _ = portia.AddRequestAuthorizer<AuthorizedActionAuthorizer>();

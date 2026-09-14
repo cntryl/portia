@@ -140,7 +140,7 @@ sealed class UserlandTarget
             if (current.Checkpoint != expected)
             {
                 throw new ProjectionConcurrencyException(
-                    $"Projection '{identity.ComponentName}' no longer has checkpoint {expected.NextOffset}.");
+                    $"Projection '{identity.ComponentName}' no longer has checkpoint {expected.Cursor}.");
             }
 
             if (fail)

@@ -120,6 +120,46 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         await ProjectionStoreConformance.VerifyAsync(new FitzKvProjectionProbe(_broker));
 
     /// <summary>
+    ///     A malformed checkpoint discovered after BEGIN must release Fitz's route ownership so another
+    ///     client can repair it, after which the original store can immediately begin and commit again.
+    /// </summary>
+    [Fact]
+    public async Task ShouldReleaseRealFitzTransactionAfterMalformedCheckpointValidation()
+    {
+        await using var originalClient = await _broker.CreateClientAsync();
+        await using var repairClient = await _broker.CreateClientAsync();
+        var route = "kv://portia-integration/projection-cleanup/" + Uuid.CreateVersion4();
+        var identity = new CheckpointIdentity(
+            "malformed", EventStreamPattern.ForPattern("portia-integration", "projection-cleanup"));
+        var key = FitzKvCheckpoints.Key(identity);
+
+        await using (var seed = await originalClient.Kv.BeginAsync(route, KvDurability.Sync))
+        {
+            await seed.PutAsync(key, new byte[] { 1, 2, 3 });
+            await seed.CommitAsync();
+        }
+
+        var store = new FitzKvValueRepository(originalClient.Kv, route);
+        _ = await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await store.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)));
+
+        await using (var repair = await repairClient.Kv.BeginAsync(route, KvDurability.Sync))
+        {
+            await repair.PutAsync(key, FitzKvCheckpoints.Encode(EventCursor.Start));
+            await repair.CommitAsync();
+        }
+
+        await using (var batch = await store.BeginAsync(
+                         new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)))
+        {
+            await store.StageAsync(identity, "reused", CancellationToken.None);
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+        }
+
+        Assert.Equal("reused", await store.ReadAsync(identity, CancellationToken.None));
+    }
+
+    /// <summary>
     ///     Verifies durable reactor progress against the real broker. A reactor's checkpoint is the only
     ///     thing standing between a restart and reissuing every external effect it has already caused,
     ///     and unlike the projection store it has no conformance suite behind it — so the round trip, the
@@ -137,15 +177,15 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
         Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(live));
 
-        await store.SaveAsync(live, new ProjectionCheckpoint(42));
+        await store.SaveAsync(live, new ProjectionCheckpoint(new EventCursor("42")));
 
-        Assert.Equal(42ul, (await store.LoadAsync(live)).NextOffset);
+        Assert.Equal("42", (await store.LoadAsync(live)).Cursor.ToString());
         // A rebuild generation shares the route and must not inherit the live generation's progress.
         Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(rebuild));
 
-        await store.SaveAsync(live, new ProjectionCheckpoint(43));
+        await store.SaveAsync(live, new ProjectionCheckpoint(new EventCursor("43")));
 
-        Assert.Equal(43ul, (await store.LoadAsync(live)).NextOffset);
+        Assert.Equal("43", (await store.LoadAsync(live)).Cursor.ToString());
     }
 
     /// <summary>
@@ -286,7 +326,8 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var handler = new UniversalActionHandler();
         using var busHost = TestRequestBus.Create(universalActionHandler: handler);
-        var consumer = new FitzRequestQueueConsumer(workerClient.Queue, serializer, route, 5,
+        var consumer = new FitzRequestQueueConsumer(workerClient.Queue, serializer, route,
+            TestJson.Catalog(RequestTransportId.Queue, typeof(UniversalAction)), 5,
             waitDuration: TimeSpan.FromMilliseconds(100));
         var runner = new QueueRunner(new OneQueueConsumer(consumer),
             RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator()));
@@ -312,7 +353,8 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var handler = new UniversalActionHandler();
         using var busHost = TestRequestBus.Create(universalActionHandler: handler);
         var signalingNotice = new SignalingNoticeClient(workerClient.Notice);
-        var consumer = new FitzNoticeRequestConsumer(signalingNotice, serializer, "notice://test/shared/action");
+        var consumer = new FitzNoticeRequestConsumer(signalingNotice, serializer, "notice://test/shared/action",
+            TestJson.Catalog(RequestTransportId.Notice, typeof(UniversalAction)));
         var runner = new RequestNotificationRunner(new OneNotificationConsumer(consumer),
             RequestDeliveryScopes.Fixed(busHost.Bus, new TestRequestActorValidator()));
         var run = runner.RunAsync();

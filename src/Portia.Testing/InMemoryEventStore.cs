@@ -9,12 +9,13 @@ public sealed class InMemoryEventStore : IEventStore
     readonly Lock _gate = new();
     readonly Dictionary<string, ulong> _realmOffsets = [];
     readonly Dictionary<EventStreamAddress, List<DomainEventRecord>> _streams = [];
+    readonly Dictionary<(EventStreamAddress Stream, ulong ResourceOffset), (ulong Area, ulong Realm)> _scopeOffsets = [];
 
     /// <inheritdoc />
     public IAsyncEnumerable<DomainEventRecord> ReadAsync(
         EventStreamAddress stream,
-        ulong fromOffset = 0,
-        CancellationToken ct = default)
+        ulong fromOffset,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(stream);
         ct.ThrowIfCancellationRequested();
@@ -38,8 +39,8 @@ public sealed class InMemoryEventStore : IEventStore
     /// <inheritdoc />
     public IAsyncEnumerable<DomainEventRecord> ReadAsync(
         EventStreamPattern pattern,
-        ulong fromOffset = 0,
-        CancellationToken ct = default)
+        EventCursor cursor,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(pattern);
         ct.ThrowIfCancellationRequested();
@@ -47,6 +48,7 @@ public sealed class InMemoryEventStore : IEventStore
 
         lock (_gate)
         {
+            var fromOffset = Decode(cursor);
             readBuffer =
             [
                 .. _streams
@@ -54,6 +56,10 @@ public sealed class InMemoryEventStore : IEventStore
                     .SelectMany(pair => pair.Value)
                     .Where(record => GetPatternOffset(record, pattern) >= fromOffset)
                     .OrderBy(record => GetPatternOffset(record, pattern))
+                    .Select(record => record with
+                    {
+                        NextCursor = Encode(checked(GetPatternOffset(record, pattern) + 1))
+                    })
             ];
         }
 
@@ -82,7 +88,6 @@ public sealed class InMemoryEventStore : IEventStore
             if (!_streams.TryGetValue(stream, out var committedRecords))
             {
                 committedRecords = [];
-                _streams.Add(stream, committedRecords);
             }
 
             if ((ulong)committedRecords.Count != expectedStreamPosition)
@@ -108,18 +113,27 @@ public sealed class InMemoryEventStore : IEventStore
             var areaOffset = _areaOffsets.GetValueOrDefault(areaKey);
             var realmOffset = _realmOffsets.GetValueOrDefault(stream.Realm);
 
+            // Finish validation and checked arithmetic before making any part of the batch visible.
+            _ = checked(expectedStreamPosition + (ulong)events.Count);
+            var finalAreaOffset = checked(areaOffset + (ulong)events.Count);
+            var finalRealmOffset = checked(realmOffset + (ulong)events.Count);
+            _streams[stream] = committedRecords;
+
             for (var index = 0; index < events.Count; index++)
             {
+                var resourceOffset = checked(expectedStreamPosition + (ulong)index);
+                var eventAreaOffset = checked(areaOffset + (ulong)index);
+                var eventRealmOffset = checked(realmOffset + (ulong)index);
+                _scopeOffsets.Add((stream, resourceOffset), (eventAreaOffset, eventRealmOffset));
                 committedRecords.Add(new DomainEventRecord(
                     stream,
                     events[index],
-                    checked(expectedStreamPosition + (ulong)index),
-                    checked(areaOffset + (ulong)index),
-                    checked(realmOffset + (ulong)index)));
+                    resourceOffset,
+                    Encode(checked(resourceOffset + 1))));
             }
 
-            _areaOffsets[areaKey] = checked(areaOffset + (ulong)events.Count);
-            _realmOffsets[stream.Realm] = checked(realmOffset + (ulong)events.Count);
+            _areaOffsets[areaKey] = finalAreaOffset;
+            _realmOffsets[stream.Realm] = finalRealmOffset;
         }
 
         return ValueTask.CompletedTask;
@@ -130,15 +144,22 @@ public sealed class InMemoryEventStore : IEventStore
         && (pattern.Area is null || stream.Area == pattern.Area)
         && (pattern.Resource is null || stream.Resource == pattern.Resource);
 
-    static ulong GetPatternOffset(DomainEventRecord record, EventStreamPattern pattern) => pattern.Scope switch
+    ulong GetPatternOffset(DomainEventRecord record, EventStreamPattern pattern) => pattern.Scope switch
     {
         EventStreamPatternScope.Resource => record.ResourceOffset,
-        EventStreamPatternScope.Area =>
-            record.AreaOffset ?? throw new InvalidOperationException("Missing area offset."),
-        EventStreamPatternScope.Realm => record.RealmOffset ??
-                                         throw new InvalidOperationException("Missing realm offset."),
+        EventStreamPatternScope.Area => _scopeOffsets[(record.Stream, record.ResourceOffset)].Area,
+        EventStreamPatternScope.Realm => _scopeOffsets[(record.Stream, record.ResourceOffset)].Realm,
         _ => throw new ArgumentOutOfRangeException(nameof(pattern))
     };
+
+    static EventCursor Encode(ulong offset) => new(offset.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    static ulong Decode(EventCursor cursor) => cursor == EventCursor.Start
+        ? 0
+        : ulong.TryParse(cursor.Value, System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var offset)
+            ? offset
+            : throw new ArgumentException("The event cursor was not issued by this event store.", nameof(cursor));
 
     sealed class BufferedAsyncEnumerable<T>(T[] items, CancellationToken readCt)
         : IAsyncEnumerable<T>

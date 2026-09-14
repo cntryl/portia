@@ -39,7 +39,7 @@ public sealed class PortiaFitzBuilderTests
         var builder = Host.CreateApplicationBuilder();
         var application = builder.Services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
-        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Callable));
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Callable]));
         _ = application
             .AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), fitz => _ = fitz.AddQueueWorkers())
             .AddWorkers();
@@ -50,27 +50,6 @@ public sealed class PortiaFitzBuilderTests
         Assert.Contains("AddQueueWorkers()", error.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>A Fitz queue worker cannot enforce a positive terminal attempt when the wire reports no attempts.</summary>
-    [Fact]
-    public async Task ShouldFailBeforeConnectingGivenTerminalAttemptForFitzQueueWorker()
-    {
-        var builder = Host.CreateApplicationBuilder();
-        var application = builder.Services.AddPortia();
-        _ = builder.Services.AddSingleton<IRequestActorValidator>(new TestRequestActorValidator());
-        _ = builder.Services.Configure<QueueRunnerOptions>(options => options.TerminalAttempt = 3);
-        _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
-        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Queuable));
-        _ = application
-            .AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), fitz => _ = fitz.AddQueueWorkers())
-            .AddWorkers();
-        using var host = builder.Build();
-
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
-
-        Assert.Contains("QueueRunnerOptions.TerminalAttempt", error.Message, StringComparison.Ordinal);
-        Assert.Contains("does not report queue attempts", error.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
     /// <summary>Every explicitly composed selector must resolve independently.</summary>
     [Fact]
     public void ShouldIdentifyMissingNoticeHandlersGivenQueueAndNoticeSelectorsWhenWorkersAreResolved()
@@ -78,7 +57,7 @@ public sealed class PortiaFitzBuilderTests
         var services = new ServiceCollection();
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
-        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Queuable));
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Queue]));
         var fitz = new PortiaFitzBuilder(application);
         _ = fitz.AddQueueWorkers().AddNoticeWorkers();
 
@@ -105,7 +84,7 @@ public sealed class PortiaFitzBuilderTests
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
         _ = application.AddGeneratedRequest(
-            Transport<FitzHostedRequest>(RequestTransports.Callable | RequestTransports.Queuable));
+            Transport<FitzHostedRequest>([RequestTransportId.Callable, RequestTransportId.Queue]));
         var fitz = new PortiaFitzBuilder(application);
 
         _ = fitz.UseFleet(new FleetRunOptions { MembershipSelector = "lease://app/members/*" });
@@ -122,7 +101,7 @@ public sealed class PortiaFitzBuilderTests
         var services = new ServiceCollection();
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
-        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Queuable));
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Queue]));
         var fitz = new PortiaFitzBuilder(application);
 
         _ = fitz.DisableRequestWorkers();
@@ -137,11 +116,8 @@ public sealed class PortiaFitzBuilderTests
         var services = new ServiceCollection();
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
-        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Callable
-                                                                         | RequestTransports.Queuable |
-                                                                         RequestTransports.Notifiable |
-                                                                         RequestTransports.Schedulable));
-        _ = application.AddGeneratedRequest(Transport<FitzOutboundOnlyRequest>(RequestTransports.Queuable));
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice, RequestTransportId.Schedule]));
+        _ = application.AddGeneratedRequest(Transport<FitzOutboundOnlyRequest>([RequestTransportId.Queue]));
         var fitz = new PortiaFitzBuilder(application);
 
         _ = fitz.AddRequestWorkers().AddRequestWorkers();
@@ -166,7 +142,7 @@ public sealed class PortiaFitzBuilderTests
         _ = fitz.AddRequestWorkers();
 
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
-        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Queuable));
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Queue]));
 
         Assert.Equal([new FitzQueueWorkerDefinition("queue://app/accounts/*")], fitz.Workers);
     }
@@ -179,7 +155,7 @@ public sealed class PortiaFitzBuilderTests
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
         _ = application.AddGeneratedRequest(
-            Transport<FitzHostedRequest>(RequestTransports.Callable | RequestTransports.Queuable));
+            Transport<FitzHostedRequest>([RequestTransportId.Callable, RequestTransportId.Queue]));
         var fitz = new PortiaFitzBuilder(application);
 
         _ = fitz.AddQueueWorkers();
@@ -194,9 +170,7 @@ public sealed class PortiaFitzBuilderTests
         var services = new ServiceCollection();
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
-        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Callable
-                                                                         | RequestTransports.Queuable |
-                                                                         RequestTransports.Notifiable));
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice]));
         var fitz = new PortiaFitzBuilder(application);
 
         _ = fitz.AddQueueWorkers().AddNoticeWorkers();
@@ -216,14 +190,14 @@ public sealed class PortiaFitzBuilderTests
         var services = new ServiceCollection();
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
-        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>(RequestTransports.Queuable));
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Queue]));
         var fitz = new PortiaFitzBuilder(application);
         _ = fitz.AddQueueWorkers();
 
         var first = fitz.Workers;
         _ = application.AddGeneratedHandler(
             new RequestRegistration<FitzOutboundOnlyRequest, FitzOutboundOnlyHandler>());
-        _ = application.AddGeneratedRequest(Transport<FitzOutboundOnlyRequest>(RequestTransports.Queuable));
+        _ = application.AddGeneratedRequest(Transport<FitzOutboundOnlyRequest>([RequestTransportId.Queue]));
 
         Assert.Same(first, fitz.Workers);
         Assert.Equal([new FitzQueueWorkerDefinition("queue://app/accounts/*")], fitz.Workers);
@@ -239,11 +213,11 @@ public sealed class PortiaFitzBuilderTests
             new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
         _ = services.AddSingleton<FitzHostedHandler>();
         _ = services.AddSingleton(new RequestTransportRegistration(typeof(FitzHostedRequest),
-            RequestTransports.Callable,
+            [RequestTransportId.Callable],
             new RequestRouteAttribute("app", "accounts", "*", "hosted"), new DiscriminatorAttribute("test.fitz.hosted"),
             Register));
         _ = services.AddSingleton(new RequestTransportRegistration(typeof(FitzOutboundCallableRequest),
-            RequestTransports.Callable,
+            [RequestTransportId.Callable],
             new RequestRouteAttribute("app", "accounts", "*", "outbound"),
             new DiscriminatorAttribute("test.fitz.outbound-callable"), Register));
         using var provider = services.BuildServiceProvider();
@@ -262,7 +236,7 @@ public sealed class PortiaFitzBuilderTests
         }
     }
 
-    static RequestTransportRegistration Transport<TRequest>(RequestTransports transports)
+    static RequestTransportRegistration Transport<TRequest>(IEnumerable<RequestTransportId> transports)
         where TRequest : IRequestBase =>
         new(typeof(TRequest), transports, new RequestRouteAttribute("app", "accounts", "*", "run"),
             new DiscriminatorAttribute("test.fitz." + typeof(TRequest).Name));

@@ -19,7 +19,7 @@ public sealed class ReactorEffectPatternsTests
         Assert.Equal(ProjectionCheckpoint.Start,
             await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern)));
         bus.Outcome = Result.Success;
-        Assert.Equal(1UL, (await new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start)).NextOffset);
+        Assert.Equal("1", (await new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start)).Cursor.ToString());
     }
 
     [Fact]

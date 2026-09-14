@@ -17,7 +17,7 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageOutputPath>$(MSBuildThisFileDirectory)../artifacts/packages</PackageOutputPath>
-    <IsAotCompatible Condition="'$(MSBuildProjectName)' != 'Portia.Generators' and '$(MSBuildProjectName)' != 'Portia.Analyzers' and '$(MSBuildProjectName)' != 'Portia.CodeFixes'">true</IsAotCompatible>
+    <IsAotCompatible Condition="'$(MSBuildProjectName)' != 'Portia.Generators' and '$(MSBuildProjectName)' != 'Portia.AspNetCore.Generators' and '$(MSBuildProjectName)' != 'Portia.Analyzers' and '$(MSBuildProjectName)' != 'Portia.CodeFixes'">true</IsAotCompatible>
     <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
   </PropertyGroup>
 

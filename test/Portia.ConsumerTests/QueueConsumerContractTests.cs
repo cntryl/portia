@@ -18,7 +18,7 @@ public sealed class QueueConsumerContractTests
         var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
         var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
             "queue://consumer/scopes/delivery",
-            4, timeProvider: clock);
+            ConsumerJson.Catalog(), 4, timeProvider: clock);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
         Assert.True(await reader.MoveNextAsync());
         Assert.Equal(TimeSpan.FromSeconds(2), await clock.WaitForDelayAsync());
@@ -44,7 +44,7 @@ public sealed class QueueConsumerContractTests
         { BlockCompletion = true };
         var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
             "queue://consumer/scopes/delivery",
-            4, timeProvider: clock);
+            ConsumerJson.Catalog(), 4, timeProvider: clock);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
         Assert.True(await reader.MoveNextAsync());
         _ = await clock.WaitForDelayAsync();
@@ -76,7 +76,7 @@ public sealed class QueueConsumerContractTests
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
         _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(queue, serializer,
             "queue://consumer/scopes/delivery",
-            4, timeProvider: clock));
+            ConsumerJson.Catalog(), 4, timeProvider: clock));
         _ = services.AddPortiaQueueRunner();
         await using var provider = ConsumerHost.Build(services);
         using var cancellation = new CancellationTokenSource();
@@ -117,7 +117,7 @@ public sealed class QueueConsumerContractTests
         { FailExtension = true };
         var success = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
         var consumer = new FitzRequestQueueConsumer(new QueueClient([failed, success]), serializer,
-            "queue://consumer/scopes/delivery", 4, timeProvider: clock);
+            "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), 4, timeProvider: clock);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
         Assert.True(await reader.MoveNextAsync());
         var lost = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -141,7 +141,8 @@ public sealed class QueueConsumerContractTests
         var serializer = ConsumerJson.CreateSerializer();
         var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 9);
         var queue = new QueueClient([item]);
-        var consumer = new FitzRequestQueueConsumer(queue, serializer, "queue://consumer/scopes/delivery");
+        var consumer = new FitzRequestQueueConsumer(queue, serializer, "queue://consumer/scopes/delivery",
+            ConsumerJson.Catalog());
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
         Assert.True(await reader.MoveNextAsync());
         Assert.True(queue.SubscribedBeforeReserve);
@@ -166,7 +167,7 @@ public sealed class QueueConsumerContractTests
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
         _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(queue, serializer,
-            "queue://consumer/scopes/delivery"));
+            "queue://consumer/scopes/delivery", ConsumerJson.Catalog()));
         _ = services.AddSingleton<IQueuedRequestTerminalHandler>(terminalHandler);
         _ = services.AddPortiaQueueRunner();
         await using var provider = ConsumerHost.Build(services);
@@ -187,6 +188,56 @@ public sealed class QueueConsumerContractTests
             Assert.Equal(4U, malformed.Attempt);
             Assert.Equal(6U, failed.Attempt);
             Assert.Equal(0, queue.Enqueues);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            try
+            {
+                await run;
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task TransportMismatchRetainsEnvelopeForTerminalHandlingAndAcknowledgment()
+    {
+        var registration = new RequestTransportRegistration(typeof(ScopeRequest),
+            [RequestTransportId.Callable],
+            new RequestRouteAttribute("consumer", "scopes", "delivery", "run"),
+            new DiscriminatorAttribute("consumer.scopes.scope-request"));
+        var serializer = new JsonRequestSerializer([registration], ConsumerJson.Options());
+        var metadata = RequestMetadata.Create();
+        var request = new ScopeRequest(Uuid.CreateVersion4());
+        var item = new Reserved(serializer.Serialize(request, null, metadata, null), 1);
+        var queue = new QueueClient([item]);
+        var terminalHandler = new TerminalHandler();
+        var services = ConsumerHost.CreateServices();
+        _ = services.AddAccounts();
+        _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
+        _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(queue, serializer,
+            "queue://consumer/scopes/delivery", new RequestTransportCatalog([registration])));
+        _ = services.AddSingleton<IQueuedRequestTerminalHandler>(terminalHandler);
+        _ = services.AddPortiaQueueRunner();
+        await using var provider = ConsumerHost.Build(services);
+        using var cancellation = new CancellationTokenSource();
+        var run = provider.GetRequiredService<QueueRunner>().RunAsync(cancellation.Token);
+        try
+        {
+            var completed = await Task.WhenAny(queue.Idle.Task, run).WaitAsync(TimeSpan.FromSeconds(10));
+            await completed;
+
+            Assert.Same(queue.Idle.Task, completed);
+            var failure = Assert.Single(terminalHandler.Contexts);
+            Assert.Equal(QueuedRequestTerminalReason.InvalidTransport, failure.Reason);
+            Assert.Equal(request, Assert.IsType<ScopeRequest>(failure.Request));
+            Assert.Equal(metadata, failure.Metadata);
+            _ = Assert.IsType<InvalidRequestTransportException>(failure.Exception);
+            Assert.Equal(1, item.Completions);
+            Assert.Empty(provider.GetRequiredService<ConsumerHost.Effects>().Items);
         }
         finally
         {

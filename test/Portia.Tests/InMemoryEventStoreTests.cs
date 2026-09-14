@@ -64,15 +64,45 @@ public sealed class InMemoryEventStoreTests
         await store.AppendAsync(secondStream, 0, [second]);
 
         var records = new List<DomainEventRecord>();
-        await foreach (var record in store.ReadAsync(EventStreamPattern.ForPattern("test"), 1))
+        await foreach (var record in store.ReadAsync(EventStreamPattern.ForPattern("test"), new EventCursor("1"), default))
             records.Add(record);
 
         var result = Assert.Single(records);
         Assert.Same(second, result.Event);
         Assert.Equal(secondStream, result.Stream);
         Assert.Equal(0UL, result.ResourceOffset);
-        Assert.Equal(0UL, result.AreaOffset);
-        Assert.Equal(1UL, result.RealmOffset);
+        Assert.Equal(new EventCursor("2"), result.NextCursor);
+    }
+
+    /// <summary>Event IDs are stream-local and failed batches leave every scope contiguous.</summary>
+    [Fact]
+    public async Task ShouldAppendSharedEventIdsAtomicallyAcrossStreams()
+    {
+        var id = Uuid.CreateVersion4();
+        var first = new EventStreamAddress("test", "orders", "first");
+        var second = new EventStreamAddress("test", "orders", "second");
+        var store = new InMemoryEventStore();
+        var shared = Committed(new ValueChanged(1), id, 2);
+        await store.AppendAsync(first, 0, [shared]);
+        var other = Committed(new ValueChanged(2), id, 1);
+        await store.AppendAsync(second, 0, [other, shared]);
+        var rejected = Committed(new ValueChanged(3), id, 1);
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.AppendAsync(second, 2, [rejected, shared]));
+        await store.AppendAsync(second, 2, [rejected]);
+        await store.AppendAsync(first, 1, [Committed(new ValueChanged(4), id, 2)]);
+
+        foreach (var pattern in new[] { EventStreamPattern.ForPattern("test"), EventStreamPattern.ForPattern("test", "orders") })
+        {
+            var records = await store.ReadAsync(pattern, EventCursor.Start, default).ToListAsync();
+            Assert.Equal(Enumerable.Range(1, 5).Select(value => value.ToString(System.Globalization.CultureInfo.InvariantCulture)), records.Select(record => record.NextCursor.ToString()));
+            Assert.Equal(new[] { first, second, second, second, first }, records.Select(record => record.Stream));
+            Assert.Equal(new ulong[] { 0, 0, 1, 2, 1 }, records.Select(record => record.ResourceOffset));
+            Assert.Equal(records.Skip(3), await store.ReadAsync(pattern, new EventCursor("3"), default).ToListAsync());
+        }
+        var resource = await store.ReadAsync(EventStreamPattern.ForPattern("test", "orders", "second"), EventCursor.Start, default).ToListAsync();
+        Assert.Equal(Enumerable.Range(1, 3).Select(value => value.ToString(System.Globalization.CultureInfo.InvariantCulture)), resource.Select(record => record.NextCursor.ToString()));
+        Assert.Equal(new DomainEvent[] { other, shared, rejected }, resource.Select(record => record.Event));
     }
 
     static T Committed<T>(T ev, Uuid aggregateId, ulong aggregateVersion)

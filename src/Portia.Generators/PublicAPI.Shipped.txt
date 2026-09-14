@@ -14,12 +14,6 @@ Cntryl.Portia.ProjectorReactorEventDispatcherGenerator.ProjectorReactorEventDisp
 Cntryl.Portia.RegistrationCallInterceptorGenerator
 Cntryl.Portia.RegistrationCallInterceptorGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
 Cntryl.Portia.RegistrationCallInterceptorGenerator.RegistrationCallInterceptorGenerator() -> void
-Cntryl.Portia.RequestHttpBindingGenerator
-Cntryl.Portia.RequestHttpBindingGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
-Cntryl.Portia.RequestHttpBindingGenerator.RequestHttpBindingGenerator() -> void
 Cntryl.Portia.RequestShapeDiagnosticsGenerator
 Cntryl.Portia.RequestShapeDiagnosticsGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
 Cntryl.Portia.RequestShapeDiagnosticsGenerator.RequestShapeDiagnosticsGenerator() -> void
-Cntryl.Portia.WebApplicationOpenApiGenerator
-Cntryl.Portia.WebApplicationOpenApiGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
-Cntryl.Portia.WebApplicationOpenApiGenerator.WebApplicationOpenApiGenerator() -> void

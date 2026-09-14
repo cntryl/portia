@@ -13,7 +13,7 @@ public sealed class StartupValidationTests
     {
         var services = new ServiceCollection();
         _ = Assert.ThrowsAny<ArgumentException>(() =>
-            services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global,
+            services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
                 o => o.Processing = new ProjectionRunOptions { MaxBatchSize = batchSize, RebuildId = rebuildId }));
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
@@ -25,10 +25,10 @@ public sealed class StartupValidationTests
     {
         var services = new ServiceCollection();
         _ = Assert.ThrowsAny<ArgumentException>(() =>
-            services.AddPortia().AddReactor<FirstReactor>(WorkloadScope.Global,
+            services.AddPortia().AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global,
                 o => o.PollInterval = TimeSpan.FromMilliseconds(milliseconds)));
         _ = Assert.ThrowsAny<ArgumentException>(() =>
-            services.AddPortia().AddProjector<FirstProjector>(WorkloadScope.Global,
+            services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
                 o => o.PollInterval = TimeSpan.FromMilliseconds(milliseconds)));
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
@@ -40,7 +40,7 @@ public sealed class StartupValidationTests
     {
         var services = new ServiceCollection();
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => services.AddPortia()
-            .AddProjector<FirstProjector>(WorkloadScope.Global, options => options.FailureAttemptLimit = attempts));
+            .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global, options => options.FailureAttemptLimit = attempts));
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 
@@ -49,7 +49,7 @@ public sealed class StartupValidationTests
     {
         var services = new ServiceCollection();
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => services.AddPortia()
-            .AddProjector<FirstProjector>(WorkloadScope.Global,
+            .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
                 options => options.MaximumFailureDelay = TimeSpan.Zero));
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
@@ -59,7 +59,7 @@ public sealed class StartupValidationTests
     {
         var services = new ServiceCollection();
         _ = Assert.ThrowsAny<ArgumentException>(() =>
-            services.AddPortia().AddReactor<FirstReactor>(WorkloadScope.Global,
+            services.AddPortia().AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global,
                 o => o.Processing = new ProjectionRunOptions { RebuildId = "repair" }));
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }

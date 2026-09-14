@@ -30,7 +30,8 @@ public class AggregateRepositoryBenchmarks
             {
                 var ev = DomainEventSeed.Attach(new ProcessorBenchmarkEvent(index), _aggregateId,
                     (ulong)index + 1, occurredOn: DateTimeOffset.UnixEpoch);
-                return new DomainEventRecord(_stream, ev, (ulong)index, null, null);
+                return new DomainEventRecord(_stream, ev, (ulong)index,
+                    new EventCursor((index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
             }).ToArray()
         };
         _repository = new AggregateRepository(_store);
@@ -45,11 +46,12 @@ public class AggregateRepositoryBenchmarks
     {
         public DomainEventRecord[] Records { get; set; } = [];
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
-            CancellationToken ct = default) => Read(fromOffset, ct);
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
+            CancellationToken ct) => Read(fromOffset, ct);
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
-            CancellationToken ct = default) => Read(fromOffset, ct);
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
+            CancellationToken ct) => Read(cursor == EventCursor.Start ? 0 :
+                ulong.Parse(cursor.Value!, System.Globalization.CultureInfo.InvariantCulture), ct);
 
         public ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
             IReadOnlyList<DomainEvent> events, CancellationToken ct = default) => ValueTask.CompletedTask;
@@ -102,7 +104,8 @@ public class LargeAggregateRepositoryBenchmarks
             {
                 var ev = DomainEventSeed.Attach(new ProcessorBenchmarkEvent(index), _aggregateId,
                     (ulong)index + 1, occurredOn: DateTimeOffset.UnixEpoch);
-                return new DomainEventRecord(_stream, ev, (ulong)index, null, null);
+                return new DomainEventRecord(_stream, ev, (ulong)index,
+                    new EventCursor((index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
             }).ToArray()
         };
         _repository = new AggregateRepository(store);

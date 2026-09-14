@@ -28,7 +28,8 @@ public class ReactorDispatchBenchmarks
         {
             var ev = DomainEventSeed.Attach(new ProcessorBenchmarkEvent(index), aggregateId, (ulong)index + 1,
                 occurredOn: DateTimeOffset.UnixEpoch);
-            return new DomainEventRecord(stream, ev, (ulong)index, (ulong)index, (ulong)index);
+            return new DomainEventRecord(stream, ev, (ulong)index,
+                new EventCursor((index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }).ToArray();
         _runner = new ReactorRunner(_reader);
         _single = new SingleBenchmarkReactor(_checkpoints);
@@ -49,11 +50,11 @@ public class ReactorDispatchBenchmarks
     {
         public DomainEventRecord[] Records { get; set; } = [];
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
-            CancellationToken ct = default) => Read(ct);
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
+            CancellationToken ct) => Read(ct);
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
-            CancellationToken ct = default) => Read(ct);
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
+            CancellationToken ct) => Read(ct);
 
         async IAsyncEnumerable<DomainEventRecord> Read([EnumeratorCancellation] CancellationToken ct)
         {

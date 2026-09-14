@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Text;
 
 namespace Cntryl.Portia;
@@ -10,6 +9,8 @@ namespace Cntryl.Portia;
 /// </summary>
 static class FitzKvCheckpoints
 {
+    static ReadOnlySpan<byte> FormatPrefix => "portia-checkpoint-v1\0"u8;
+
     /// <summary>
     ///     Validates a Fitz KV route up front, so a misshapen one fails at construction rather than on
     ///     every read and write the broker then rejects for the life of the process.
@@ -31,16 +32,32 @@ static class FitzKvCheckpoints
         Encoding.UTF8.GetBytes(string.Join(
             '\0', "checkpoint", identity.ComponentName, identity.Pattern, identity.RebuildId ?? string.Empty));
 
-    /// <summary>Encodes a checkpoint's next offset as an 8-byte big-endian value.</summary>
-    public static ReadOnlyMemory<byte> Encode(ulong nextOffset)
+    /// <summary>Encodes a backend-owned cursor; the prefix alone represents <see cref="EventCursor.Start" />.</summary>
+    public static ReadOnlyMemory<byte> Encode(EventCursor cursor)
     {
-        var buffer = new byte[sizeof(ulong)];
-        BinaryPrimitives.WriteUInt64BigEndian(buffer, nextOffset);
-        return buffer;
+        var cursorBytes = Encoding.UTF8.GetBytes(cursor.ToString());
+        var value = new byte[FormatPrefix.Length + cursorBytes.Length];
+        FormatPrefix.CopyTo(value);
+        cursorBytes.CopyTo(value.AsSpan(FormatPrefix.Length));
+        return value;
     }
 
-    /// <summary>Decodes a checkpoint's next offset from its stored bytes.</summary>
-    public static ulong Decode(ReadOnlySpan<byte> value) => BinaryPrimitives.ReadUInt64BigEndian(value);
+    /// <summary>Decodes a current cursor or a published 0.1.x unsigned big-endian offset.</summary>
+    public static EventCursor Decode(ReadOnlySpan<byte> value)
+    {
+        if (value.StartsWith(FormatPrefix))
+            return value.Length == FormatPrefix.Length
+                ? EventCursor.Start
+                : new EventCursor(Encoding.UTF8.GetString(value[FormatPrefix.Length..]));
+
+        if (value.Length == sizeof(ulong))
+        {
+            var offset = System.Buffers.Binary.BinaryPrimitives.ReadUInt64BigEndian(value);
+            return new EventCursor(offset.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        throw new InvalidDataException("The persisted Fitz checkpoint has an unknown encoding.");
+    }
 
     /// <summary>
     ///     Reads the stored checkpoint for an identity, or <see cref="ProjectionCheckpoint.Start" />

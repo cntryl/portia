@@ -108,9 +108,8 @@ public sealed class SingleProcessWorkloadCoordinatorTests
         _ = services.AddSingleton<IDomainEventReader>(store);
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new NamedProjector(target));
-        _ = services.AddPortia().AddProjector<NamedProjector>(WorkloadScope.Global, o =>
+        _ = services.AddPortia().AddProjector<NamedProjector>(workloadName ?? "declared-projection-name", WorkloadScope.Global, o =>
         {
-            o.Name = workloadName;
             o.PollInterval = TimeSpan.FromMilliseconds(10);
         }).AddWorkers();
         using var provider = services.BuildServiceProvider();

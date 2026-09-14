@@ -13,10 +13,7 @@ static class RequestTransportDiscovery
 {
     const string RequestRouteAttributeMetadataName = "Cntryl.Portia.RequestRouteAttribute";
     const string DiscriminatorAttributeMetadataName = "Cntryl.Portia.DiscriminatorAttribute";
-    const string CallableMetadataName = "Cntryl.Portia.ICallable";
-    const string QueuableMetadataName = "Cntryl.Portia.IQueuable";
-    const string NotifiableMetadataName = "Cntryl.Portia.INotifiable";
-    const string SchedulableMetadataName = "Cntryl.Portia.ISchedulable";
+    const string RequestTransportAttributeMetadataName = "Cntryl.Portia.RequestTransportAttribute";
     const string RequestWithResultMetadataName = "IRequest`1";
     const string StreamRequestMetadataName = "IStreamRequest`1";
 
@@ -118,29 +115,8 @@ static class RequestTransportDiscovery
             return null;
         }
 
-        var transports = RequestTransports.None;
-
-        if (ImplementsInterface(symbol, CallableMetadataName))
-        {
-            transports |= RequestTransports.Callable;
-        }
-
-        if (ImplementsInterface(symbol, QueuableMetadataName))
-        {
-            transports |= RequestTransports.Queuable;
-        }
-
-        if (ImplementsInterface(symbol, NotifiableMetadataName))
-        {
-            transports |= RequestTransports.Notifiable;
-        }
-
-        if (ImplementsInterface(symbol, SchedulableMetadataName))
-        {
-            transports |= RequestTransports.Schedulable;
-        }
-
-        if (transports == RequestTransports.None)
+        var transports = GetTransportIds(symbol);
+        if (transports.Length == 0)
         {
             return null;
         }
@@ -163,32 +139,9 @@ static class RequestTransportDiscovery
             resultTypeInterface?.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
     }
 
-    public static string FormatTransports(RequestTransports transports)
-    {
-        var flags = new List<string>(4);
-
-        if (transports.HasFlag(RequestTransports.Callable))
-        {
-            flags.Add("Callable");
-        }
-
-        if (transports.HasFlag(RequestTransports.Queuable))
-        {
-            flags.Add("Queuable");
-        }
-
-        if (transports.HasFlag(RequestTransports.Notifiable))
-        {
-            flags.Add("Notifiable");
-        }
-
-        if (transports.HasFlag(RequestTransports.Schedulable))
-        {
-            flags.Add("Schedulable");
-        }
-
-        return string.Join(" | ", flags.Select(flag => $"global::Cntryl.Portia.RequestTransports.{flag}"));
-    }
+    public static string FormatTransports(IReadOnlyList<string> transports) =>
+        "new global::Cntryl.Portia.RequestTransportId[] { " + string.Join(", ", transports.Select(id =>
+            $"new global::Cntryl.Portia.RequestTransportId({FormatStringLiteral(id)})")) + " }";
 
     public static string FormatStringLiteral(string value) =>
         "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
@@ -200,19 +153,20 @@ static class RequestTransportDiscovery
         iface.OriginalDefinition.ContainingNamespace.ToDisplayString() == "Cntryl.Portia"
         && iface.OriginalDefinition.MetadataName == StreamRequestMetadataName);
 
-    static bool HasTransportMarker(INamedTypeSymbol symbol) =>
-        ImplementsInterface(symbol, CallableMetadataName)
-        || ImplementsInterface(symbol, QueuableMetadataName)
-        || ImplementsInterface(symbol, NotifiableMetadataName)
-        || ImplementsInterface(symbol, SchedulableMetadataName);
+    static bool HasTransportMarker(INamedTypeSymbol symbol) => GetTransportIds(symbol).Length != 0;
+
+    static string[] GetTransportIds(INamedTypeSymbol symbol) => symbol.AllInterfaces
+        .SelectMany(iface => iface.GetAttributes())
+        .Where(attribute => attribute.AttributeClass?.ToDisplayString() == RequestTransportAttributeMetadataName)
+        .Select(attribute => attribute.ConstructorArguments.ElementAtOrDefault(0).Value as string)
+        .Where(static id => !string.IsNullOrWhiteSpace(id))
+        .Select(static id => id!)
+        .Distinct(StringComparer.Ordinal)
+        .OrderBy(static id => id, StringComparer.Ordinal)
+        .ToArray();
 
     static bool IsValidRouteSegment(string? segment) => !string.IsNullOrWhiteSpace(segment)
                                                         && (segment == "*" || segment.All(character =>
                                                             char.IsLetterOrDigit(character) ||
                                                             character is '.' or '_' or '-' or '~'));
 }
-
-// Mirrors Cntryl.Portia.RequestTransports in Portia.Abstractions for this generator's own
-// bookkeeping — Portia.Generators does not (and should not) reference Portia.Abstractions, so it
-// cannot use the real enum directly. Only the flag names matter; they are emitted as text (see
-// RequestTransportDiscovery.FormatTransports) against the real type in the consumer's compilation.

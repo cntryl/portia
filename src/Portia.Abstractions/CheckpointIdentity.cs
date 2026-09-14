@@ -19,15 +19,15 @@ public sealed record CheckpointIdentity
         }
 
         ComponentName = componentName;
-        Pattern = pattern.ToString();
+        Pattern = pattern;
         RebuildId = rebuildId;
     }
 
     /// <summary>Gets the stable component name.</summary>
     public string ComponentName { get; }
 
-    /// <summary>Gets the canonical stream selector.</summary>
-    public string Pattern { get; }
+    /// <summary>Gets the structural stream selector.</summary>
+    public EventStreamPattern Pattern { get; }
 
     /// <summary>Gets the rebuild generation, or null for live processing.</summary>
     public string? RebuildId { get; }

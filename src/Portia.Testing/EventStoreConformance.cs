@@ -135,7 +135,7 @@ public static class EventStoreConformance
     {
         var store = await probe.OpenAsync(ct).ConfigureAwait(false);
         var pattern = EventStreamPattern.ForPattern(probe.Realm, probe.Area);
-        var records = await ReadAsync(store, pattern, 0, ct).ConfigureAwait(false);
+        var records = await ReadAsync(store, pattern, EventCursor.Start, ct).ConfigureAwait(false);
         var streams = records.Select(record => record.Stream.Resource).Distinct().ToArray();
         if (!streams.Contains("ordered") || !streams.Contains("conflict"))
         {
@@ -143,19 +143,19 @@ public static class EventStoreConformance
                 $"A pattern read returned streams [{string.Join(", ", streams)}]; it must cover every stream in the area.");
         }
 
-        if (records.Any(record => record.AreaOffset is null))
+        if (records.Any(record => record.NextCursor == EventCursor.Start))
         {
             throw new ConformanceViolationException(
-                "A pattern read must supply the area offset a projector checkpoints against.");
+                "A pattern read must supply a resumable cursor for every record.");
         }
 
-        var offsets = records.Select(record => record.AreaOffset!.Value).ToArray();
-        for (var index = 1; index < offsets.Length; index++)
+        if (records.Count > 1)
         {
-            if (offsets[index] <= offsets[index - 1])
+            var resumed = await ReadAsync(store, pattern, records[0].NextCursor, ct).ConfigureAwait(false);
+            if (!resumed.SequenceEqual(records.Skip(1)))
             {
                 throw new ConformanceViolationException(
-                    "A pattern read must return records in ascending, distinct scope-offset order.");
+                    "A pattern read must resume immediately after the record that issued its cursor.");
             }
         }
     }
@@ -176,10 +176,10 @@ public static class EventStoreConformance
     }
 
     static async ValueTask<List<DomainEventRecord>> ReadAsync(IEventStore store, EventStreamPattern pattern,
-        ulong fromOffset, CancellationToken ct)
+        EventCursor cursor, CancellationToken ct)
     {
         var records = new List<DomainEventRecord>();
-        await foreach (var record in store.ReadAsync(pattern, fromOffset, ct).ConfigureAwait(false))
+        await foreach (var record in store.ReadAsync(pattern, cursor, ct).ConfigureAwait(false))
             records.Add(record);
         return records;
     }

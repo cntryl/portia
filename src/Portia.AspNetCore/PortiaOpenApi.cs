@@ -1,55 +1,35 @@
-using System.ComponentModel;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Json;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 
 namespace Cntryl.Portia;
 
-/// <summary>Framework-owned bootstrap used by generated application interceptors.</summary>
-[EditorBrowsable(EditorBrowsableState.Never)]
-public static class PortiaOpenApi
+/// <summary>Explicitly activates Portia's generated HTTP and OpenAPI integration.</summary>
+public static class PortiaHttpExtensions
 {
     const string DocumentName = "v1";
 
     static readonly string[] Get = ["GET"];
 
-    /// <summary>Registers Portia's OpenAPI document and builds the application.</summary>
-    /// <param name="builder">The host builder to register the document on.</param>
-    /// <returns>The built application, with the OpenAPI endpoints mapped.</returns>
-    public static WebApplication Build(WebApplicationBuilder builder)
+    /// <summary>Adds Portia's HTTP and OpenAPI services.</summary>
+    /// <param name="builder">The Portia composition root.</param>
+    /// <param name="configure">Optional HTTP-boundary configuration.</param>
+    /// <returns>The same builder, for chaining.</returns>
+    public static PortiaBuilder AddHttp(this PortiaBuilder builder, Action<PortiaHttpOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        AddServices(builder.Services);
-        return Map(builder.Build());
-    }
-
-    /// <summary>Creates an application with Portia's OpenAPI document.</summary>
-    /// <param name="args">The process command-line arguments, or <see langword="null" /> for none.</param>
-    /// <returns>The built application, with the OpenAPI endpoints mapped.</returns>
-    public static WebApplication Create(string[]? args)
-    {
-        var builder = WebApplication.CreateBuilder(args ?? []);
-        AddServices(builder.Services);
-        return Map(builder.Build());
-    }
-
-    static void AddServices(IServiceCollection services)
-    {
+        var services = builder.Services;
+        _ = configure is null
+            ? services.AddOptions<PortiaHttpOptions>()
+            : services.AddOptions<PortiaHttpOptions>().Configure(configure);
         if (services.Any(descriptor => descriptor.ServiceType == typeof(PortiaOpenApiMarker)))
-        {
-            return;
-        }
+            return builder;
 
         _ = services.AddSingleton<PortiaOpenApiMarker>();
         _ = services.AddSingleton(provider => new PortiaOpenApiDocumentCache(provider, DocumentName));
-        _ = services.AddOptions<PortiaHttpOptions>();
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IConfigureOptions<JsonOptions>, PortiaOpenApiJsonOptions>());
         _ = services.AddOpenApi(DocumentName, options =>
         {
             options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1;
@@ -73,20 +53,19 @@ public static class PortiaOpenApi
                 return Task.CompletedTask;
             });
         });
+        return builder;
     }
 
-    // The document is registered either way: turning serving off withdraws Portia's own two routes
-    // and leaves the composed document for the application to map where it wants.
-    static WebApplication Map(WebApplication app)
+    /// <summary>Maps Portia's OpenAPI 3.1 document as JSON and YAML.</summary>
+    /// <param name="app">The endpoint route builder.</param>
+    /// <returns>The same endpoint route builder, for chaining.</returns>
+    public static IEndpointRouteBuilder MapPortiaOpenApi(this IEndpointRouteBuilder app)
     {
-        if (!app.Services.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.ServeOpenApi)
-        {
-            return app;
-        }
+        ArgumentNullException.ThrowIfNull(app);
 
         // Mapped as request delegates, which keeps RequestDelegateFactory out of an AOT build and
         // leaves these two routes out of the very document they serve.
-        var cache = app.Services.GetRequiredService<PortiaOpenApiDocumentCache>();
+        var cache = app.ServiceProvider.GetRequiredService<PortiaOpenApiDocumentCache>();
         _ = app.MapMethods($"/openapi/{DocumentName}.json", Get,
             (RequestDelegate)(context => cache.WriteAsync(context, false)));
         _ = app.MapMethods($"/openapi/{DocumentName}.yml", Get,

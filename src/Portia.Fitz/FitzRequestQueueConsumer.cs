@@ -7,8 +7,8 @@ namespace Cntryl.Portia;
 /// <param name="queue">The long-lived Fitz queue client.</param>
 /// <param name="serializer">Deserializes a payload inside the delivery's failure boundary.</param>
 /// <param name="route">The concrete queue route.</param>
+/// <param name="catalog">Validates the request's declared transport capability.</param>
 /// <param name="visibilityTimeoutSeconds">Reservation duration, renewed while owned.</param>
-/// <param name="maxItemsPerReserve">Batch size; defaults to one for sequential processing.</param>
 /// <param name="waitDuration">Maximum idle wait before an immediate reconciliation reserve.</param>
 /// <param name="timeProvider">Schedules reservation renewal.</param>
 /// <param name="logger">Reports reservation failures.</param>
@@ -16,19 +16,16 @@ public sealed class FitzRequestQueueConsumer(
     IQueueClient queue,
     IRequestDeserializer serializer,
     string route,
+    RequestTransportCatalog catalog,
     ulong visibilityTimeoutSeconds = 30,
-    int maxItemsPerReserve = 1,
     TimeSpan? waitDuration = null,
     TimeProvider? timeProvider = null,
     ILogger<FitzRequestQueueConsumer>? logger = null) : IRequestQueueConsumer
 {
-    readonly int _batchSize = maxItemsPerReserve > 0
-        ? maxItemsPerReserve
-        : throw new ArgumentOutOfRangeException(nameof(maxItemsPerReserve));
-
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly TimeSpan _notificationBackstop = GetNotificationBackstop(waitDuration);
     readonly IQueueClient _queue = queue ?? throw new ArgumentNullException(nameof(queue));
+    readonly RequestTransportCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
     readonly TimeSpan _renewalInterval = GetRenewalInterval(visibilityTimeoutSeconds);
 
     readonly string _route = string.IsNullOrWhiteSpace(route)
@@ -50,14 +47,14 @@ public sealed class FitzRequestQueueConsumer(
             {
                 ct.ThrowIfCancellationRequested();
                 var items = await _queue.ReserveAsync(_route, TimeSpan.FromSeconds(visibilityTimeoutSeconds),
-                        _batchSize, TimeSpan.Zero, ct)
+                        1, TimeSpan.Zero, ct)
                     .ConfigureAwait(false);
                 var reservations = new List<FitzQueuedRequest>(items.Length);
                 try
                 {
                     foreach (var item in items)
                     {
-                        reservations.Add(new FitzQueuedRequest(item, _serializer, visibilityTimeoutSeconds,
+                        reservations.Add(new FitzQueuedRequest(item, _serializer, _catalog, visibilityTimeoutSeconds,
                             _renewalInterval, _clock, logger, ct));
                     }
 
@@ -129,17 +126,20 @@ public sealed class FitzRequestQueueConsumer(
     {
         readonly IQueueReservedItem _item;
         readonly CancellationTokenSource _lost;
-        readonly Lazy<DeserializedRequest> _payload;
+        readonly Lazy<DeserializedRequest> _envelope;
+        readonly Lazy<IRequest> _request;
         readonly Task _renewal;
         readonly CancellationTokenSource _stop;
         Exception? _renewalError;
 
-        public FitzQueuedRequest(IQueueReservedItem item, IRequestDeserializer serializer, ulong leaseSeconds,
+        public FitzQueuedRequest(IQueueReservedItem item, IRequestDeserializer serializer,
+            RequestTransportCatalog catalog, ulong leaseSeconds,
             TimeSpan interval,
             TimeProvider clock, ILogger? logger, CancellationToken ct)
         {
             _item = item;
-            _payload = new Lazy<DeserializedRequest>(() => serializer.DeserializeEnvelope(item.Body));
+            _envelope = new Lazy<DeserializedRequest>(() => serializer.DeserializeEnvelope(item.Body));
+            _request = new Lazy<IRequest>(() => Validate(_envelope.Value.Request, catalog));
             _stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
             _lost = CancellationTokenSource.CreateLinkedTokenSource(ct);
             _renewal = RenewAsync(leaseSeconds, interval, clock, logger);
@@ -158,19 +158,28 @@ public sealed class FitzRequestQueueConsumer(
             }
         }
 
-        public IRequest Request => _payload.Value.Request as IRequest ??
-                                   throw new InvalidOperationException("Only no-result requests can be queued.");
+        public IRequest Request => _request.Value;
 
-        public string? Name => _payload.Value.Name;
-        public RequestMetadata Metadata => _payload.Value.Metadata;
-        public RequestTraceContext? TraceContext => _payload.Value.TraceContext;
+        public string? Name => _envelope.Value.Name;
+        public RequestMetadata Metadata => _envelope.Value.Metadata;
+        public RequestTraceContext? TraceContext => _envelope.Value.TraceContext;
         public RequestInvocation Invocation => new QueueInvocation(_item.Route, _item.Attempt)
         {
             MessagingSystem = "fitz"
         };
-        public string? ActorToken => _payload.Value.ActorToken;
+        public string? ActorToken => _envelope.Value.ActorToken;
         public uint Attempt => _item.Attempt;
+        public bool SupportsDurableAttempts => _item.Attempt != QueueItem.AttemptUnavailable;
         public CancellationToken ReservationCancellation => _lost.Token;
+
+        static IRequest Validate(IRequestBase requestBase, RequestTransportCatalog catalog)
+        {
+            var request = requestBase as IRequest
+                          ?? throw new InvalidOperationException("Only no-result requests can be queued.");
+            if (!catalog.Get(request.GetType()).Transports.Contains(RequestTransportId.Queue))
+                throw new InvalidRequestTransportException(request, RequestTransportId.Queue);
+            return request;
+        }
 
         public async ValueTask CompleteAsync(CancellationToken ct = default)
         {

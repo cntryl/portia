@@ -11,10 +11,14 @@ static class TestJson
         IEnumerable<IJsonDomainEventUpcaster>? upcasters = null) => new(catalog, upcasters, Options());
 
     public static JsonRequestSerializer Serializer(params Type[] types) => new(
-        types.Select((type, index) => new RequestTransportRegistration(type, RequestTransports.Callable,
+        types.Select((type, index) => new RequestTransportRegistration(type, [RequestTransportId.Callable],
             Route(type, index),
             new DiscriminatorAttribute(Name(type)))),
         Options());
+
+    public static RequestTransportCatalog Catalog(RequestTransportId transport, params Type[] types) => new(
+        types.Select((type, index) => new RequestTransportRegistration(type, [transport], Route(type, index),
+            new DiscriminatorAttribute(Name(type)))));
 
     static RequestRouteAttribute Route(Type type, int index) => type == typeof(UniversalAction)
         ? new RequestRouteAttribute("test", "shared", "action", "run")

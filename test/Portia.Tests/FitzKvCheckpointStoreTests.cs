@@ -11,6 +11,19 @@ public sealed class FitzKvCheckpointStoreTests
 {
     static readonly CheckpointIdentity Identity = new("reactor", EventStreamPattern.ForPattern("tenant", "orders"));
 
+    /// <summary>A persisted reset survives a new reactor store instance.</summary>
+    [Fact]
+    public async Task ShouldReloadStartAfterReset()
+    {
+        var client = new FakeKvClient();
+        var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
+        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("progress")));
+        await store.SaveAsync(Identity, ProjectionCheckpoint.Start);
+        Assert.Equal(ProjectionCheckpoint.Start,
+            await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity));
+        Assert.Equal("portia-checkpoint-v1\0"u8.ToArray(), Assert.Single(client.Committed).Value);
+    }
+
     /// <summary>
     ///     Verifies that a component which has never checkpointed resumes from the start of its pattern
     ///     rather than reporting whatever a missing key decodes to.
@@ -28,23 +41,60 @@ public sealed class FitzKvCheckpointStoreTests
     }
 
     /// <summary>
-    ///     Verifies that a saved checkpoint reads back as the same offset, stored as a fixed-width
-    ///     big-endian value so the bytes sort in the same order as the offsets they encode.
+    ///     Verifies that a saved cursor reads back unchanged, stored with the versioned prefix
+    ///     that distinguishes opaque cursors from legacy big-endian offsets.
     /// </summary>
     [Fact]
-    public async Task ShouldRoundTripSavedCheckpointAsBigEndianBytes()
+    public async Task ShouldRoundTripSavedCheckpointInVersionedFormat()
     {
         var client = new FakeKvClient();
         var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
 
-        await store.SaveAsync(Identity, new ProjectionCheckpoint(4096));
+        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("4096")));
 
-        Assert.Equal(new ProjectionCheckpoint(4096), await store.LoadAsync(Identity));
+        Assert.Equal(new ProjectionCheckpoint(new EventCursor("4096")), await store.LoadAsync(Identity));
         var stored = Assert.Single(client.Committed).Value;
-        Assert.Equal(sizeof(ulong), stored.Length);
-        Assert.Equal(4096UL, BinaryPrimitives.ReadUInt64BigEndian(stored));
+        Assert.Equal("portia-checkpoint-v1\0"u8.ToArray().Concat("4096"u8.ToArray()), stored);
         Assert.Equal(KvDurability.Sync, client.Transactions[0].Durability);
         Assert.Equal(KvMode.ReadWrite, client.Transactions[0].Mode);
+    }
+
+    /// <summary>Reads the fixed-width unsigned big-endian checkpoint format published by Portia 0.1.x.</summary>
+    [Fact]
+    public async Task ShouldLoadLegacyBigEndianCheckpoint()
+    {
+        var client = new FakeKvClient();
+        var legacy = new byte[sizeof(ulong)];
+        BinaryPrimitives.WriteUInt64BigEndian(legacy, 4096);
+        client.Committed[System.Text.Encoding.UTF8.GetString(FitzKvCheckpoints.Key(Identity).Span)] = legacy;
+
+        var checkpoint = await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity);
+
+        Assert.Equal(new ProjectionCheckpoint(new EventCursor("4096")), checkpoint);
+        Assert.Equal(legacy, Assert.Single(client.Committed).Value);
+    }
+
+    /// <summary>Proves a current eight-byte cursor remains opaque because the current format is prefixed.</summary>
+    [Fact]
+    public async Task ShouldRoundTripEightByteOpaqueCursorWithoutLegacyMisclassification()
+    {
+        var client = new FakeKvClient();
+        var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
+
+        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("cursor-8")));
+
+        Assert.Equal(new ProjectionCheckpoint(new EventCursor("cursor-8")), await store.LoadAsync(Identity));
+    }
+
+    /// <summary>Rejects bytes which are neither a current prefixed cursor nor a legacy fixed-width offset.</summary>
+    [Fact]
+    public async Task ShouldRejectUnknownUnversionedCheckpointEncoding()
+    {
+        var client = new FakeKvClient();
+        client.Committed[System.Text.Encoding.UTF8.GetString(FitzKvCheckpoints.Key(Identity).Span)] = "old"u8.ToArray();
+
+        _ = await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity));
     }
 
     /// <summary>
@@ -67,11 +117,12 @@ public sealed class FitzKvCheckpointStoreTests
         };
 
         for (var index = 0; index < identities.Length; index++)
-            await store.SaveAsync(identities[index], new ProjectionCheckpoint((ulong)index + 1));
+            await store.SaveAsync(identities[index], new ProjectionCheckpoint(
+                new EventCursor(((ulong)index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))));
 
         Assert.Equal(identities.Length, client.Committed.Count);
         for (var index = 0; index < identities.Length; index++)
-            Assert.Equal((ulong)index + 1, (await store.LoadAsync(identities[index])).NextOffset);
+            Assert.Equal(((ulong)index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), (await store.LoadAsync(identities[index])).Cursor.ToString());
     }
 
     /// <summary>
@@ -87,7 +138,7 @@ public sealed class FitzKvCheckpointStoreTests
         var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
 
         var error = await Assert.ThrowsAsync<ProjectionConcurrencyException>(async () =>
-            await store.SaveAsync(Identity, new ProjectionCheckpoint(1)));
+            await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1"))));
 
         Assert.Same(conflict, error.InnerException);
         Assert.Contains("reactor", error.Message, StringComparison.Ordinal);
@@ -120,7 +171,7 @@ public sealed class FitzKvCheckpointStoreTests
         var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
 
         var error = await Assert.ThrowsAsync<KvException>(async () =>
-            await store.SaveAsync(Identity, new ProjectionCheckpoint(1)));
+            await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1"))));
 
         Assert.Same(failure, error);
         Assert.Equal(1, client.LastTransaction.Rollbacks);
@@ -146,7 +197,7 @@ public sealed class FitzKvCheckpointStoreTests
 
         var error = await Assert.ThrowsAsync<KvException>(async () =>
             await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints")
-                .SaveAsync(Identity, new ProjectionCheckpoint(1)));
+                .SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1"))));
 
         Assert.Same(failure, error);
         Assert.Equal(1, client.LastTransaction.Rollbacks);
@@ -165,7 +216,7 @@ public sealed class FitzKvCheckpointStoreTests
 
         _ = await Assert.ThrowsAsync<IOException>(async () =>
             await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints")
-                .SaveAsync(Identity, new ProjectionCheckpoint(1)));
+                .SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1"))));
 
         Assert.Equal(0, client.LastTransaction.Rollbacks);
         Assert.Single(client.Committed);

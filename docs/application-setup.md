@@ -31,9 +31,9 @@ public static class ApplicationSetup
 
         return services.AddPortia()
             .AddRequestHandler<DepositAccountHandler>()
-            .AddProjector<AccountProjector>(WorkloadScope.PerTenant)
-            .AddProjector<PlatformSummaryProjector>(WorkloadScope.Global)
-            .AddReactor<AccountReactor>(WorkloadScope.PerTenant)
+            .AddProjector<AccountProjector>("AccountProjector", WorkloadScope.PerTenant)
+            .AddProjector<PlatformSummaryProjector>("PlatformSummaryProjector", WorkloadScope.Global)
+            .AddReactor<AccountReactor>("AccountReactor", WorkloadScope.PerTenant)
             .AddFitz(configuration.GetSection("Fitz"));
     }
 }
@@ -78,9 +78,11 @@ dependency-injection or analyzer package, or a manual compiler property.
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddAccountsApplication(builder.Configuration);
+builder.Services.AddPortia().AddHttp();
 
 var app = builder.Build();
 app.MapPortiaPost<DepositAccount>("/accounts/{id}");
+app.MapPortiaOpenApi();
 app.Run();
 ```
 
@@ -89,12 +91,9 @@ can execute a command directly or publish work. Merely sharing the application
 setup starts no queue, RPC, projector, or reactor worker. Configure HTTP authentication
 and authorization using the application's normal ASP.NET setup.
 
-Generated interception of `WebApplicationBuilder.Build()` (and `WebApplication.Create()`)
-registers Microsoft's `v1` OpenAPI 3.1 document before the provider is built and maps
-`/openapi/v1.json` and `/openapi/v1.yml` afterward. Set
-`PortiaHttpOptions.ServeOpenApi` to `false` to withdraw those two routes; the document stays
-registered, so the application can map it itself — on another path, behind authorization, or on a
-separate port — and receives the same composed document. See
+`AddHttp()` explicitly registers Microsoft's `v1` OpenAPI 3.1 document before the provider is
+built. `MapPortiaOpenApi()` explicitly maps `/openapi/v1.json` and `/openapi/v1.yml`; omit it or map
+ASP.NET Core's document on another path when the schema should not be public. See
 [getting started](getting-started.md#choosing-where-the-document-is-served).
 Registration and mapping are idempotent across
 route groups and multiple Portia endpoints and add no hosted service. `AddPortia()` itself adds
@@ -199,9 +198,9 @@ cannot be rolled back by the framework.
 Workload registration belongs to Portia and requires an explicit scope:
 
 ```csharp
-portia.AddProjector<AccountProjector>(WorkloadScope.PerTenant);
-portia.AddProjector<PlatformSummaryProjector>(WorkloadScope.Global);
-portia.AddReactor<AccountReactor>(WorkloadScope.PerTenant);
+portia.AddProjector<AccountProjector>("AccountProjector", WorkloadScope.PerTenant);
+portia.AddProjector<PlatformSummaryProjector>("PlatformSummaryProjector", WorkloadScope.Global);
+portia.AddReactor<AccountReactor>("AccountReactor", WorkloadScope.PerTenant);
 ```
 
 `WorkloadScope.PerTenant` creates an independently owned workload for each active `ITenantDirectory`
@@ -209,12 +208,10 @@ entry. Portia replaces the component pattern's realm with the tenant ID, retaini
 area and resource filters. `WorkloadScope.Global` creates one logical workload and retains the
 component's declared pattern. It does not grant cross-tenant access or scan every realm.
 
-An omitted scope, both scopes, a conflicting registration, or duplicate workload name
+An omitted ID or scope, an invalid scope, a conflicting registration, or duplicate workload ID
 fails during configuration. Repeating an identical registration is idempotent. The
-component's full CLR type name is its default workload name, used to coordinate ownership.
-That default does **not** rename the component: a projector's or reactor's own `Name` is its
-checkpoint identity, and setting `options.Name` is what deliberately overrides it — so
-declaring a workload never silently repoints existing checkpoints. Projector options also accept `Processing`
+explicit ID is used both to coordinate ownership and as the hosted component's checkpoint identity;
+there is no CLR-name fallback. Projector options also accept `Processing`
 (`ProjectionRunOptions`, including a rebuild ID) and a positive `PollInterval`.
 
 `AddWorkers()` runs every declared workload under one hosted service. With no

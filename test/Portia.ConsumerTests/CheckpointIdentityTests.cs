@@ -15,9 +15,10 @@ public sealed class CheckpointIdentityTests
             new CheckpointIdentity("same", EventStreamPattern.ForPattern("tenant-a", "returns"))
         };
         for (var i = 0; i < identities.Length; i++)
-            await store.SaveAsync(identities[i], new ProjectionCheckpoint((ulong)i + 1));
+            await store.SaveAsync(identities[i], new ProjectionCheckpoint(
+                new EventCursor(((ulong)i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))));
         for (var i = 0; i < identities.Length; i++)
-            Assert.Equal((ulong)i + 1, (await store.LoadAsync(identities[i])).NextOffset);
+            Assert.Equal(((ulong)i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), (await store.LoadAsync(identities[i])).Cursor.ToString());
         Assert.Equal(identities[0],
             new CheckpointIdentity("same", EventStreamPattern.ForPattern("tenant-a", "orders", "")));
     }
@@ -55,9 +56,9 @@ public sealed class CheckpointIdentityTests
         Assert.Equal(2, target.Data[first].Count);
         Assert.Equal(2, target.Data[second].Count);
         Assert.False(Assert.Single(target.Data[live]));
-        Assert.Equal(1UL, (await target.LoadCheckpointAsync(live)).NextOffset);
-        Assert.Equal(2UL, (await target.LoadCheckpointAsync(first)).NextOffset);
-        Assert.Equal(2UL, (await target.LoadCheckpointAsync(second)).NextOffset);
+        Assert.Equal("1", (await target.LoadCheckpointAsync(live)).Cursor.ToString());
+        Assert.Equal("2", (await target.LoadCheckpointAsync(first)).Cursor.ToString());
+        Assert.Equal("2", (await target.LoadCheckpointAsync(second)).Cursor.ToString());
         Assert.All(target.Loads, identity => Assert.Contains(identity, target.Begins));
     }
 
@@ -103,14 +104,14 @@ public sealed class CheckpointIdentityTests
         target.FailCommitNumber = 2;
         _ = await Assert.ThrowsAsync<IOException>(() => Pass(patterns[0]));
         var first = new CheckpointIdentity("same", patterns[0], "interrupted");
-        Assert.Equal(1UL, (await target.LoadCheckpointAsync(first)).NextOffset);
+        Assert.Equal("1", (await target.LoadCheckpointAsync(first)).Cursor.ToString());
         foreach (var pattern in patterns)
         {
             await Pass(pattern);
             await Pass(pattern);
             var identity = new CheckpointIdentity("same", pattern, "interrupted");
             Assert.Equal(2, target.Data[identity].Count);
-            Assert.Equal(2UL, (await target.LoadCheckpointAsync(identity)).NextOffset);
+            Assert.Equal("2", (await target.LoadCheckpointAsync(identity)).Cursor.ToString());
         }
     }
 

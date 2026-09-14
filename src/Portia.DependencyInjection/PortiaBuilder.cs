@@ -183,10 +183,10 @@ public sealed class PortiaBuilder
         return this;
     }
 
-    internal IEnumerable<RequestTransportRegistration> SelectedRequests(RequestTransports transport) =>
+    internal IEnumerable<RequestTransportRegistration> SelectedRequests(RequestTransportId transport) =>
         _catalog.Requests.Values.Where(registration =>
             _catalog.HandlerRequests.ContainsKey(registration.RequestType) &&
-            registration.Transports.HasFlag(transport));
+            registration.Transports.Contains(transport));
 
     /// <summary>Declares a durable scheduled request that worker hosts ensure on every startup.</summary>
     public PortiaBuilder AddRequestSchedule<TRequest>(TRequest request, RequestScheduleSpec spec,
@@ -205,30 +205,32 @@ public sealed class PortiaBuilder
 
     /// <summary>Registers one reactor with an explicitly selected execution scope.</summary>
     /// <typeparam name="TReactor">The concrete reactor type.</typeparam>
+    /// <param name="name">The stable explicit workload ID.</param>
     /// <param name="scope">Whether the reactor runs once globally or once per active tenant.</param>
     /// <param name="configure">Adjusts the workload's polling and failure behavior, or <see langword="null" /> for the defaults.</param>
     /// <returns>This builder, for chaining.</returns>
     public PortiaBuilder AddReactor<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TReactor>(WorkloadScope scope,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TReactor>(string name, WorkloadScope scope,
         Action<WorkloadOptions>? configure = null)
         where TReactor : Reactor
     {
-        var registration = new WorkloadRegistration(ReactorRegistration.Create<TReactor>(), scope, configure);
+        var registration = new WorkloadRegistration(ReactorRegistration.Create<TReactor>(), name, scope, configure);
         Services.TryAddScoped<TReactor>();
         return AddWorkload(registration);
     }
 
     /// <summary>Registers one projector with an explicitly selected execution scope.</summary>
     /// <typeparam name="TProjector">The concrete projector type.</typeparam>
+    /// <param name="name">The stable explicit workload ID.</param>
     /// <param name="scope">Whether the projector runs once globally or once per active tenant.</param>
     /// <param name="configure">Adjusts the workload's polling and failure behavior, or <see langword="null" /> for the defaults.</param>
     /// <returns>This builder, for chaining.</returns>
     public PortiaBuilder AddProjector<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProjector>(WorkloadScope scope,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProjector>(string name, WorkloadScope scope,
         Action<WorkloadOptions>? configure = null)
         where TProjector : Projector
     {
-        var registration = new WorkloadRegistration(ProjectorRegistration.Create<TProjector>(), scope, configure);
+        var registration = new WorkloadRegistration(ProjectorRegistration.Create<TProjector>(), name, scope, configure);
         Services.TryAddScoped<TProjector>();
         return AddWorkload(registration);
     }

@@ -57,13 +57,15 @@ public sealed class NotificationExecutionTests
             Assert.DoesNotContain("actor_token", stored, StringComparison.Ordinal);
             Assert.DoesNotContain("credential", stored, StringComparison.Ordinal);
             Assert.Contains("scheduler", stored, StringComparison.Ordinal);
-            consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute");
+            consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute",
+                ConsumerJson.Catalog());
         }
         else
         {
             await new FitzNoticeRequestSender(wire, serializer).PublishAsync(new BrokerExecutionContextTests.Command(2),
                 routeValues, "credential", parent);
-            consumer = new FitzNoticeRequestConsumer(wire, serializer, "notice://context/work/*");
+            consumer = new FitzNoticeRequestConsumer(wire, serializer, "notice://context/work/*",
+                ConsumerJson.Catalog());
         }
 
         var noticeTemplate = scheduled ? null : serializer.DeserializeEnvelope(wire.Body);
@@ -122,7 +124,7 @@ public sealed class NotificationExecutionTests
             new RequestRouteValues(Resource: "actual"),
             RequestActor.CreateSystem("scheduler"));
         var consumer = new FitzScheduledRequestConsumer(
-            wire, serializer, "schedule://context/work/*/execute");
+            wire, serializer, "schedule://context/work/*/execute", ConsumerJson.Catalog());
         await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
 
         Assert.True(await enumerator.MoveNextAsync());
@@ -143,7 +145,8 @@ public sealed class NotificationExecutionTests
             RequestMetadata.Create(), null);
         await wire.PublishAsync("schedule://context/work/actual/execute", JsonSerializer.SerializeToUtf8Bytes(
             new { version, system_subject = subject, system_issuer = issuer, request_envelope = request.ToArray() }));
-        var consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute");
+        var consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute",
+            ConsumerJson.Catalog());
         await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
 
         // The entry is dropped rather than dispatched, and dropping it does not end the
@@ -159,7 +162,8 @@ public sealed class NotificationExecutionTests
         await wire.PublishAsync("schedule://context/work/actual/execute",
             serializer.Serialize(new BrokerExecutionContextTests.Command(2), "legacy-bearer-token",
                 RequestMetadata.Create(), null));
-        var consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute");
+        var consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute",
+            ConsumerJson.Catalog());
         await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
 
         // A legacy entry is never dispatched, and one of them no longer stops every other

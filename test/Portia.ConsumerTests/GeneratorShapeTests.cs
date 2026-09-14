@@ -2,6 +2,34 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed class GeneratorShapeTests
 {
+    [Fact]
+    public void ShouldDiscoverAnExternalAnnotatedTransportMarker()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              using Microsoft.Extensions.DependencyInjection;
+                              [RequestTransport("custom-adapter")]
+                              public interface ICustomTransport;
+                              [RequestRoute("app", "custom", "requests", "send")]
+                              [Discriminator("consumer.custom.request")]
+                              public sealed record CustomRequest : IRequest, ICustomTransport;
+                              public sealed class Handler : IRequestHandler<CustomRequest>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<CustomRequest> context,
+                                      CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                              }
+                              public static class Scenario
+                              {
+                                  public static PortiaBuilder Register(IServiceCollection services) =>
+                                      services.AddPortia().AddRequestHandler<Handler>();
+                              }
+                              """;
+
+        var generated = GeneratorCompilation.GeneratedSource(source, new RegistrationCallInterceptorGenerator());
+
+        Assert.Contains("RequestTransportId(\"custom-adapter\")", generated, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("builder.AddRequestSchedule(new Scheduled(), new RequestScheduleSpec(\"0 0 * * *\"), RequestRouteValues.None, RequestActor.System)")]
     [InlineData("scheduler.EnsureAsync(new Scheduled(), new RequestScheduleSpec(\"0 0 * * *\"), RequestRouteValues.None, RequestActor.System)")]
@@ -26,7 +54,7 @@ public sealed class GeneratorShapeTests
         var generated = GeneratorCompilation.GeneratedSource(source, new RegistrationCallInterceptorGenerator());
 
         Assert.Contains("test.scheduled", generated, StringComparison.Ordinal);
-        Assert.Contains("RequestTransports.Schedulable", generated, StringComparison.Ordinal);
+        Assert.Contains("RequestTransportId(\"schedule\")", generated, StringComparison.Ordinal);
     }
 
     [Fact]

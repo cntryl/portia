@@ -20,7 +20,7 @@ public sealed class ComponentCompilationTests
                                  var id = Uuid.CreateVersion4();
                                  var ev = new Ev();
                                  ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), id, 1, DateTimeOffset.UtcNow));
-                                 var record = new DomainEventRecord(new EventStreamAddress("test", "area", id.ToString()), ev, 0, 0, 0);
+                                 var record = new DomainEventRecord(new EventStreamAddress("test", "area", id.ToString()), ev, 0, new EventCursor("1"));
                                  return ReactToEventAsync(record, new ReactionExecutionContext(record, RequestActor.System), default);
                              }
                          }
@@ -29,7 +29,7 @@ public sealed class ComponentCompilationTests
                              public View() : base(new Target(), EventStreamPattern.ForPattern("test"), "view") { }
                              public int Count { get; private set; }
                              public ValueTask HandleAsync(Ev ev, IProjectorContext context, CancellationToken ct) { Count++; return ValueTask.CompletedTask; }
-                             public ValueTask Process() => ProjectEventAsync(new DomainEventRecord(new EventStreamAddress("test", "area", "id"), new Ev(), 0, 0, 0), new Context(), default);
+                             public ValueTask Process() => ProjectEventAsync(new DomainEventRecord(new EventStreamAddress("test", "area", "id"), new Ev(), 0, new EventCursor("1")), new Context(), default);
                          }
                          """;
         if (partial)

@@ -53,7 +53,7 @@ public sealed class ApplicationFleetTests
         _ = builder.Services.AddScoped(provider => new ProbeReactor(worker, probe));
         _ = builder.Services.AddSingleton(ReactorRegistration.Create<ProbeReactor>());
         _ = builder.Services.AddPortia()
-            .AddReactor<ProbeReactor>(WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(10))
+            .AddReactor<ProbeReactor>("ProbeReactor", WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(10))
             .UseFitzClient(client, fitz => _ = fitz.UseFleet(new FleetRunOptions
             {
                 MembershipSelector = $"lease://{realm}/members/*",

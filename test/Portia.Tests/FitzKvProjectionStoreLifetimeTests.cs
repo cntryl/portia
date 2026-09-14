@@ -22,7 +22,7 @@ public sealed class FitzKvProjectionStoreLifetimeTests
         var store = new StrayWriteRepository(client, "kv://portia/state/orders");
 
         await using (var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
-            await batch.CommitAsync(new ProjectionCheckpoint(1));
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
 
         var stray = await Assert.ThrowsAsync<InvalidOperationException>(() => store.AddAsync("total", 12));
 

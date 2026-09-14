@@ -1,0 +1,4 @@
+#nullable enable
+Cntryl.Portia.RequestHttpBindingGenerator
+Cntryl.Portia.RequestHttpBindingGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Cntryl.Portia.RequestHttpBindingGenerator.RequestHttpBindingGenerator() -> void

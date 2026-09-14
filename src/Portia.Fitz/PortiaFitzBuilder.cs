@@ -8,17 +8,16 @@ namespace Cntryl.Portia;
 /// <summary>Declares shared Fitz capabilities and worker-only listeners.</summary>
 public sealed class PortiaFitzBuilder
 {
-    const RequestTransports AllRequestTransports = RequestTransports.Callable | RequestTransports.Queuable
-                                                                              | RequestTransports.Notifiable |
-                                                                              RequestTransports.Schedulable;
+    static readonly RequestTransportId[] AllBuiltInTransports =
+        [RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice, RequestTransportId.Schedule];
 
     readonly PortiaBuilder _application;
     readonly HashSet<string> _capabilities = new(StringComparer.Ordinal);
     readonly Lazy<IReadOnlyList<FitzWorkerDefinition>> _workers;
     string? _checkpointRoute;
-    RequestTransports _requiredWorkerTransports;
+    readonly HashSet<RequestTransportId> _requiredWorkerTransports = [];
     bool _workerSelectionExplicit;
-    RequestTransports _workerTransports = AllRequestTransports;
+    readonly HashSet<RequestTransportId> _workerTransports = [.. AllBuiltInTransports];
 
     internal PortiaFitzBuilder(PortiaBuilder application)
     {
@@ -96,30 +95,30 @@ public sealed class PortiaFitzBuilder
 
     /// <summary>Activates every transport declared by requests with selected handlers.</summary>
     /// <returns>This builder, for chaining.</returns>
-    public PortiaFitzBuilder AddRequestWorkers() => EnableWorkers(AllRequestTransports, false);
+    public PortiaFitzBuilder AddRequestWorkers() => EnableWorkers(AllBuiltInTransports, false);
 
     /// <summary>Activates RPC serving when at least one selected handler accepts a callable request.</summary>
     /// <returns>This builder, for chaining.</returns>
-    public PortiaFitzBuilder AddRpcWorkers() => EnableWorkers(RequestTransports.Callable, true);
+    public PortiaFitzBuilder AddRpcWorkers() => EnableWorkers([RequestTransportId.Callable], true);
 
     /// <summary>Activates queue listeners for all selected handlers accepting queuable requests.</summary>
     /// <returns>This builder, for chaining.</returns>
-    public PortiaFitzBuilder AddQueueWorkers() => EnableWorkers(RequestTransports.Queuable, true);
+    public PortiaFitzBuilder AddQueueWorkers() => EnableWorkers([RequestTransportId.Queue], true);
 
     /// <summary>Activates notice listeners for all selected handlers accepting notifiable requests.</summary>
     /// <returns>This builder, for chaining.</returns>
-    public PortiaFitzBuilder AddNoticeWorkers() => EnableWorkers(RequestTransports.Notifiable, true);
+    public PortiaFitzBuilder AddNoticeWorkers() => EnableWorkers([RequestTransportId.Notice], true);
 
     /// <summary>Activates schedule listeners for all selected handlers accepting schedulable requests.</summary>
     /// <returns>This builder, for chaining.</returns>
-    public PortiaFitzBuilder AddScheduledWorkers() => EnableWorkers(RequestTransports.Schedulable, true);
+    public PortiaFitzBuilder AddScheduledWorkers() => EnableWorkers([RequestTransportId.Schedule], true);
 
     /// <summary>Disables inbound request listeners while retaining Fitz persistence and outbound clients.</summary>
     /// <returns>This builder, for chaining.</returns>
     public PortiaFitzBuilder DisableRequestWorkers()
     {
-        _workerTransports = 0;
-        _requiredWorkerTransports = 0;
+        _workerTransports.Clear();
+        _requiredWorkerTransports.Clear();
         _workerSelectionExplicit = true;
         return this;
     }
@@ -170,26 +169,27 @@ public sealed class PortiaFitzBuilder
         return this;
     }
 
-    PortiaFitzBuilder EnableWorkers(RequestTransports transports, bool requireMatch)
+    PortiaFitzBuilder EnableWorkers(IEnumerable<RequestTransportId> transports, bool requireMatch)
     {
         if (_workerSelectionExplicit)
         {
-            _workerTransports |= transports;
+            _workerTransports.UnionWith(transports);
         }
         else
         {
-            _workerTransports = transports;
+            _workerTransports.Clear();
+            _workerTransports.UnionWith(transports);
             _workerSelectionExplicit = true;
         }
 
         if (requireMatch)
-            _requiredWorkerTransports |= transports;
+            _requiredWorkerTransports.UnionWith(transports);
 
         AddSerializers(_application.Services);
         return this;
     }
 
-    IEnumerable<RequestTransportRegistration> SelectedRequests(RequestTransports transport)
+    IEnumerable<RequestTransportRegistration> SelectedRequests(RequestTransportId transport)
         => _application.SelectedRequests(transport);
 
     List<FitzWorkerDefinition> BuildWorkers()
@@ -197,18 +197,18 @@ public sealed class PortiaFitzBuilder
         ValidateRequiredWorkers();
         var workers = new List<FitzWorkerDefinition>();
         var keys = new HashSet<string>(StringComparer.Ordinal);
-        if (_workerTransports.HasFlag(RequestTransports.Callable) && SelectedRequests(RequestTransports.Callable).Any())
+        if (_workerTransports.Contains(RequestTransportId.Callable) && SelectedRequests(RequestTransportId.Callable).Any())
             AddWorker(new FitzRpcWorkerDefinition());
         // Each transport supplies the definition it wants built, so a new worker kind is a new
         // record and a line here rather than another arm in a switch over stringly-typed kinds.
-        AddTransport(RequestTransports.Queuable, FitzQueueWorkerDefinition.For);
-        AddTransport(RequestTransports.Notifiable, FitzNoticeWorkerDefinition.For);
-        AddTransport(RequestTransports.Schedulable, FitzScheduleWorkerDefinition.For);
+        AddTransport(RequestTransportId.Queue, FitzQueueWorkerDefinition.For);
+        AddTransport(RequestTransportId.Notice, FitzNoticeWorkerDefinition.For);
+        AddTransport(RequestTransportId.Schedule, FitzScheduleWorkerDefinition.For);
         return workers;
 
-        void AddTransport(RequestTransports transport, Func<RequestRouteAttribute, FitzWorkerDefinition> create)
+        void AddTransport(RequestTransportId transport, Func<RequestRouteAttribute, FitzWorkerDefinition> create)
         {
-            if (!_workerTransports.HasFlag(transport))
+            if (!_workerTransports.Contains(transport))
                 return;
 
             foreach (var registration in SelectedRequests(transport))
@@ -224,14 +224,14 @@ public sealed class PortiaFitzBuilder
 
     void ValidateRequiredWorkers()
     {
-        Require(RequestTransports.Callable, "AddRpcWorkers()", "callable");
-        Require(RequestTransports.Queuable, "AddQueueWorkers()", "queuable");
-        Require(RequestTransports.Notifiable, "AddNoticeWorkers()", "notifiable");
-        Require(RequestTransports.Schedulable, "AddScheduledWorkers()", "schedulable");
+        Require(RequestTransportId.Callable, "AddRpcWorkers()", "callable");
+        Require(RequestTransportId.Queue, "AddQueueWorkers()", "queuable");
+        Require(RequestTransportId.Notice, "AddNoticeWorkers()", "notifiable");
+        Require(RequestTransportId.Schedule, "AddScheduledWorkers()", "schedulable");
 
-        void Require(RequestTransports transport, string selector, string capability)
+        void Require(RequestTransportId transport, string selector, string capability)
         {
-            if (_requiredWorkerTransports.HasFlag(transport) && !SelectedRequests(transport).Any())
+            if (_requiredWorkerTransports.Contains(transport) && !SelectedRequests(transport).Any())
             {
                 throw new InvalidOperationException(
                     $"{selector} selected no {capability} request handlers. Select a matching handler or remove the worker selector.");

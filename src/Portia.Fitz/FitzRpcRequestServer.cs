@@ -54,7 +54,7 @@ public sealed class FitzRpcRequestServer(
             foreach (var descriptor in scope.ServiceProvider.GetServices<RequestTransportRegistration>())
             {
                 if (!handled.Contains(descriptor.RequestType) ||
-                    !descriptor.Transports.HasFlag(RequestTransports.Callable))
+                    !descriptor.Transports.Contains(RequestTransportId.Callable))
                 {
                     continue;
                 }

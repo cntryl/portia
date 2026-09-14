@@ -10,7 +10,7 @@ sealed class RecordingProjectionBatch(
     public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        committedOffsets.Add(checkpoint.NextOffset);
+        committedOffsets.Add(ulong.Parse(checkpoint.Cursor.Value!, System.Globalization.CultureInfo.InvariantCulture));
         saveCheckpoint(checkpoint);
         return ValueTask.CompletedTask;
     }

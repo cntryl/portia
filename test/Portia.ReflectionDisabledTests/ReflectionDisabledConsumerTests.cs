@@ -13,7 +13,7 @@ public sealed class ReflectionDisabledConsumerTests
     {
         Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         var options = new JsonSerializerOptions(ReflectionDisabledJsonContext.Default.Options);
-        var registration = new RequestTransportRegistration(typeof(CreateGreeting), RequestTransports.Callable,
+        var registration = new RequestTransportRegistration(typeof(CreateGreeting), [RequestTransportId.Callable],
             new RequestRouteAttribute("public", "greetings", "messages", "create"),
             new DiscriminatorAttribute("greetings.create"));
         var requests = new JsonRequestSerializer([registration], options);
@@ -36,8 +36,10 @@ public sealed class ReflectionDisabledConsumerTests
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         var portia = builder.Services.AddPortia();
+        _ = portia.AddHttp();
         _ = portia.AddRequestHandler<CreateGreetingHandler>();
         await using var app = builder.Build();
+        _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaPost<CreateGreeting, string>("/greetings");
         await app.StartAsync();
 
@@ -84,7 +86,7 @@ public sealed class ReflectionDisabledConsumerTests
     }
 
     static RequestTransportRegistration Registration<T>() where T : IRequest => new(typeof(T),
-        RequestTransports.Callable,
+        [RequestTransportId.Callable],
         new RequestRouteAttribute("test", "missing", "roots", typeof(T).Name),
         new DiscriminatorAttribute(typeof(T).Name));
 }

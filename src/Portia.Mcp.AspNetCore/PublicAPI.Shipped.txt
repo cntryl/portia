@@ -1,1 +1,5 @@
 #nullable enable
+Cntryl.Portia.PortiaMcpEndpointRouteBuilderExtensions
+Cntryl.Portia.PortiaMcpHttpApplicationExtensions
+static Cntryl.Portia.PortiaMcpEndpointRouteBuilderExtensions.MapPortiaMcp(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, string! pattern = "/mcp") -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaMcpHttpApplicationExtensions.AddMcpHttp(this Cntryl.Portia.PortiaBuilder! application, System.Action<ModelContextProtocol.AspNetCore.HttpServerTransportOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!

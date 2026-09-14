@@ -9,14 +9,17 @@ namespace Cntryl.Portia;
 /// <param name="notice">The Fitz notice client.</param>
 /// <param name="serializer">The request serializer.</param>
 /// <param name="route">The concrete Fitz notice route to subscribe to (<c>notice://realm/area/resource</c>).</param>
+/// <param name="catalog">Validates the request's declared transport capability.</param>
 /// <param name="logger">Reports a delivery that cannot be translated.</param>
 public sealed class FitzNoticeRequestConsumer(
     INoticeClient notice,
     IRequestDeserializer serializer,
     string route,
+    RequestTransportCatalog catalog,
     ILogger<FitzNoticeRequestConsumer>? logger = null) : IRequestNotificationConsumer
 {
     readonly INoticeClient _notice = notice ?? throw new ArgumentNullException(nameof(notice));
+    readonly RequestTransportCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
 
     readonly string _route = string.IsNullOrWhiteSpace(route)
         ? throw new ArgumentException("A notice route cannot be empty.", nameof(route))
@@ -53,6 +56,8 @@ public sealed class FitzNoticeRequestConsumer(
             var request = envelope.Request as IRequest
                           ?? throw new InvalidOperationException(
                               "A Fitz notice message deserialized to a result-bearing request; only no-result requests can be published over notice.");
+            if (!_catalog.Get(request.GetType()).Transports.Contains(RequestTransportId.Notice))
+                throw new InvalidRequestTransportException(request, RequestTransportId.Notice);
             return new RequestNotification(request, envelope.ActorToken, envelope.Metadata,
                 new NoticeInvocation(message.Route) { MessagingSystem = "fitz" }, envelope.TraceContext,
                 Name: envelope.Name);

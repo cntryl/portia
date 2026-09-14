@@ -882,15 +882,18 @@ public sealed class MultiTenancyTests
             var offset = (ulong)_records.Count;
             ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), offset + 1,
                 DateTimeOffset.UtcNow));
-            _records.Add(new DomainEventRecord(RegistryStream, ev, offset, offset, offset));
+            _records.Add(new DomainEventRecord(RegistryStream, ev, offset,
+                new EventCursor((offset + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))));
         }
 
         public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
             CancellationToken ct = default) => throw new NotSupportedException();
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
+            var fromOffset = cursor == EventCursor.Start ? 0 :
+                ulong.Parse(cursor.Value!, System.Globalization.CultureInfo.InvariantCulture);
             RequestedOffsets.Add(fromOffset);
             AllReadsHadSubscription &= Volatile.Read(ref _activeSubscriptions) > 0;
             foreach (var record in _records.Where(record => record.ResourceOffset >= fromOffset).ToArray())
@@ -952,7 +955,7 @@ public sealed class MultiTenancyTests
         public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
             CancellationToken ct = default) => throw new NotSupportedException();
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, ulong fromOffset = 0,
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
             _ = ReadStarted.TrySetResult();

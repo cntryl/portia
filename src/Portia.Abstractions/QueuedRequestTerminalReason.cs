@@ -10,5 +10,8 @@ public enum QueuedRequestTerminalReason
     PermanentFailure,
 
     /// <summary>The actor carried by the delivery could not be validated.</summary>
-    ActorValidationFailure
+    ActorValidationFailure,
+
+    /// <summary>The request did not declare the queue transport that delivered it.</summary>
+    InvalidTransport
 }

@@ -78,7 +78,7 @@ public sealed class RequestBusExtensionsTests
         ev.AttachMetadata(new DomainEventMetadata(
             Uuid.CreateVersion4(), aggregateId, 1, DateTimeOffset.UtcNow, Uuid.CreateVersion4()));
         return new ReactionExecutionContext(
-            new DomainEventRecord(new EventStreamAddress("test", "reactions", aggregateId.ToString()), ev, 0, 0, 0),
+            new DomainEventRecord(new EventStreamAddress("test", "reactions", aggregateId.ToString()), ev, 0, new EventCursor("1")),
             RequestActor.System);
     }
 

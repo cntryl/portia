@@ -44,10 +44,10 @@ public static class ProjectionStoreConformance
                 .BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, checkpoint), ct)
                 .ConfigureAwait(false);
             await session.StageValueAsync("committed", ct).ConfigureAwait(false);
-            await batch.CommitAsync(new ProjectionCheckpoint(1), ct).ConfigureAwait(false);
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), ct).ConfigureAwait(false);
         }
 
-        await RequireStateAsync(probe, probe.LiveIdentity, "committed", new ProjectionCheckpoint(1),
+        await RequireStateAsync(probe, probe.LiveIdentity, "committed", new ProjectionCheckpoint(new EventCursor("1")),
             "committing application data and progress", ct).ConfigureAwait(false);
     }
 
@@ -62,11 +62,11 @@ public static class ProjectionStoreConformance
             await session.StageValueAsync("must-not-commit", ct).ConfigureAwait(false);
             await session.FailNextCommitAsync(ct).ConfigureAwait(false);
             await RequireFailureAsync(
-                () => batch.CommitAsync(new ProjectionCheckpoint(2), ct),
+                () => batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")), ct),
                 "The injected projection commit failure did not fail.").ConfigureAwait(false);
         }
 
-        await RequireStateAsync(probe, probe.LiveIdentity, "committed", new ProjectionCheckpoint(1),
+        await RequireStateAsync(probe, probe.LiveIdentity, "committed", new ProjectionCheckpoint(new EventCursor("1")),
             "a failed atomic commit", ct).ConfigureAwait(false);
     }
 
@@ -92,20 +92,20 @@ public static class ProjectionStoreConformance
                 .BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, staleCheckpoint), ct)
                 .ConfigureAwait(false);
             await stale.StageValueAsync("stale", ct).ConfigureAwait(false);
-            await firstBatch.CommitAsync(new ProjectionCheckpoint(2), ct).ConfigureAwait(false);
+            await firstBatch.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")), ct).ConfigureAwait(false);
             winnerCommitted = true;
-            await staleBatch.CommitAsync(new ProjectionCheckpoint(2), ct).ConfigureAwait(false);
+            await staleBatch.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")), ct).ConfigureAwait(false);
         }).ConfigureAwait(false);
 
         // The winner commits whether or not the loser ever opened its batch, so the state check below
         // means the same thing for a locking store and an optimistic one.
         if (!winnerCommitted)
         {
-            await firstBatch.CommitAsync(new ProjectionCheckpoint(2), ct).ConfigureAwait(false);
+            await firstBatch.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")), ct).ConfigureAwait(false);
         }
 
         RequireConcurrency(conflict, "A stale projection checkpoint was allowed to commit.");
-        await RequireStateAsync(probe, probe.LiveIdentity, "winner", new ProjectionCheckpoint(2),
+        await RequireStateAsync(probe, probe.LiveIdentity, "winner", new ProjectionCheckpoint(new EventCursor("2")),
             "a stale checkpoint conflict", ct).ConfigureAwait(false);
     }
 
@@ -118,12 +118,12 @@ public static class ProjectionStoreConformance
                 .BeginAsync(new ProjectionBatchContext(probe.RebuildIdentity, checkpoint), ct)
                 .ConfigureAwait(false);
             await session.StageValueAsync("rebuild", ct).ConfigureAwait(false);
-            await batch.CommitAsync(new ProjectionCheckpoint(7), ct).ConfigureAwait(false);
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("7")), ct).ConfigureAwait(false);
         }
 
-        await RequireStateAsync(probe, probe.LiveIdentity, "winner", new ProjectionCheckpoint(2),
+        await RequireStateAsync(probe, probe.LiveIdentity, "winner", new ProjectionCheckpoint(new EventCursor("2")),
             "writing a rebuild generation", ct).ConfigureAwait(false);
-        await RequireStateAsync(probe, probe.RebuildIdentity, "rebuild", new ProjectionCheckpoint(7),
+        await RequireStateAsync(probe, probe.RebuildIdentity, "rebuild", new ProjectionCheckpoint(new EventCursor("7")),
             "reloading a rebuild generation", ct).ConfigureAwait(false);
     }
 
@@ -136,7 +136,7 @@ public static class ProjectionStoreConformance
         if (!string.Equals(value, expectedValue, StringComparison.Ordinal) || checkpoint != expectedCheckpoint)
         {
             throw new ConformanceViolationException(
-                $"After {scenario}, value/checkpoint were '{value ?? "<null>"}'/{checkpoint.NextOffset}; expected '{expectedValue ?? "<null>"}'/{expectedCheckpoint.NextOffset}.");
+                $"After {scenario}, value/checkpoint were '{value ?? "<null>"}'/{checkpoint.Cursor}; expected '{expectedValue ?? "<null>"}'/{expectedCheckpoint.Cursor}.");
         }
     }
 
