@@ -103,20 +103,20 @@ public sealed class HttpBindingShapeTests
         // conventions happen to be written in. Detecting the exclusion only when it sits directly
         // on the mapping made a hard compile error depend on formatting.
         var diagnostics = GeneratorCompilation.Diagnostics($$"""
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           using Microsoft.AspNetCore.Builder;
-                                                           using Microsoft.AspNetCore.Routing;
-                                                           public sealed record RefreshOrder : IRequest, ICallable;
-                                                           public static class Scenario
-                                                           {
-                                                               public static void Map(IEndpointRouteBuilder app)
-                                                               {
-                                                                   app.MapPortiaGet<RefreshOrder>("/orders/refresh");
-                                                                   app.MapPortiaPost<RefreshOrder>("/orders/refresh"){{conventions}};
-                                                               }
-                                                           }
-                                                           """, new RequestHttpBindingGenerator());
+                                                             using Cntryl.Portia;
+                                                             using Cntryl.Portia.Testing;
+                                                             using Microsoft.AspNetCore.Builder;
+                                                             using Microsoft.AspNetCore.Routing;
+                                                             public sealed record RefreshOrder : IRequest, ICallable;
+                                                             public static class Scenario
+                                                             {
+                                                                 public static void Map(IEndpointRouteBuilder app)
+                                                                 {
+                                                                     app.MapPortiaGet<RefreshOrder>("/orders/refresh");
+                                                                     app.MapPortiaPost<RefreshOrder>("/orders/refresh"){{conventions}};
+                                                                 }
+                                                             }
+                                                             """, new RequestHttpBindingGenerator());
 
         Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA027");
     }

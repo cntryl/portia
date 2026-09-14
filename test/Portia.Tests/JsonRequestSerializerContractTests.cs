@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Cntryl.Portia;
@@ -13,6 +12,36 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class JsonRequestSerializerContractTests
 {
+    /// <summary>Every required envelope member is a permanent poison-message failure when absent.</summary>
+    [Theory]
+    [InlineData("version")]
+    [InlineData("contract")]
+    [InlineData("contract_version")]
+    [InlineData("metadata")]
+    [InlineData("payload")]
+    public void ShouldClassifyMissingRequiredRequestEnvelopePropertiesAsPermanent(string property)
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var envelope = Envelope(serializer);
+        _ = envelope.Remove(property);
+
+        var error = Assert.Throws<InvalidOperationException>(() => serializer.DeserializeEnvelope(Bytes(envelope)));
+
+        Assert.Equal(RequestEnvelopeFailureKind.Permanent, RequestEnvelopeFailure.GetKind(error));
+    }
+
+    /// <summary>Malformed JSON keeps its JsonException contract while carrying permanent classification.</summary>
+    [Fact]
+    public void ShouldClassifyMalformedJsonAsPermanentWithoutReplacingJsonException()
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+
+        var error = Assert.ThrowsAny<System.Text.Json.JsonException>(() =>
+            serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes("{")));
+
+        Assert.Equal(RequestEnvelopeFailureKind.Permanent, RequestEnvelopeFailure.GetKind(error));
+    }
+
     /// <summary>
     ///     Verifies that a contract name the receiver has never heard of is refused by name and version,
     ///     rather than guessed at — the shape a receiver meets when a newer sender publishes a request
@@ -133,6 +162,66 @@ public sealed class JsonRequestSerializerContractTests
         var error = Assert.Throws<InvalidOperationException>(() => serializer.DeserializeEnvelope(Bytes(envelope)));
 
         Assert.Contains("version 2 only", error.Message, StringComparison.Ordinal);
+        Assert.Equal(RequestEnvelopeFailureKind.Retryable, RequestEnvelopeFailure.GetKind(error));
+    }
+
+    /// <summary>An unsupported envelope is classified without interpreting another version's body.</summary>
+    [Theory]
+    [InlineData("{\"version\":3}")]
+    [InlineData("{\"version\":3,\"kind\":\"renamed-v3-contract\",\"body\":[]}")]
+    public void ShouldRejectUnsupportedEnvelopeVersionBeforeReadingVersionSpecificFields(string json)
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes(json)));
+
+        Assert.Contains("version 2 only", error.Message, StringComparison.Ordinal);
+        Assert.Equal(RequestEnvelopeFailureKind.Retryable, RequestEnvelopeFailure.GetKind(error));
+    }
+
+    /// <summary>Only a readable integer can select an envelope format.</summary>
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"version\":null}")]
+    [InlineData("{\"version\":\"2\"}")]
+    [InlineData("{\"version\":{}}")]
+    [InlineData("{\"version\":2.5}")]
+    public void ShouldClassifyUnreadableEnvelopeVersionAsPermanent(string json)
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+
+        var error = Assert.ThrowsAny<Exception>(() =>
+            serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes(json)));
+
+        Assert.Equal(RequestEnvelopeFailureKind.Permanent, RequestEnvelopeFailure.GetKind(error));
+    }
+
+    /// <summary>E3: Every malformed corpus member produces a classified envelope failure.</summary>
+    [Theory]
+    [MemberData(nameof(MalformedEnvelopeCorpus))]
+    public void ShouldClassifyEveryEnvelopeFailureGivenGeneratedCorpus(string cellId, byte[] input)
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+
+        var error = Record.Exception(() => serializer.DeserializeEnvelope(input));
+
+        Assert.NotNull(error);
+        Assert.True(error is System.Text.Json.JsonException || RequestEnvelopeFailure.GetKind(error) is not null,
+            $"{cellId} produced unclassified {error.GetType().FullName}: {error.Message}");
+    }
+
+    /// <summary>E4: Unknown top-level members do not prevent a valid envelope from being read.</summary>
+    [Fact]
+    public void ShouldDeserializeValidEnvelopeGivenUnknownTopLevelProperties()
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var envelope = Envelope(serializer);
+        envelope["future"] = new JsonObject { ["nested"] = 7 };
+
+        var result = serializer.DeserializeEnvelope(Bytes(envelope));
+
+        Assert.Equal(new UniversalAction(7), result.Request);
     }
 
     /// <summary>
@@ -159,4 +248,38 @@ public sealed class JsonRequestSerializerContractTests
             .AsObject();
 
     static ReadOnlyMemory<byte> Bytes(JsonNode node) => Encoding.UTF8.GetBytes(node.ToJsonString());
+
+    /// <summary>Builds the deterministic E3 malformed-input corpus.</summary>
+    public static IEnumerable<object[]> MalformedEnvelopeCorpus()
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var valid = Envelope(serializer);
+        var index = 0;
+        foreach (var property in new[] { "version", "contract", "contract_version", "metadata", "payload" })
+        {
+            var missing = (JsonObject)valid.DeepClone();
+            _ = missing.Remove(property);
+            yield return [$"E3-delete-{property}", Bytes(missing).ToArray()];
+            foreach (var replacement in new JsonNode?[] { null, "wrong", new JsonArray(), new JsonObject() })
+            {
+                if (property == "payload" && replacement is JsonObject)
+                    continue;
+                var retyped = (JsonObject)valid.DeepClone();
+                retyped[property] = replacement?.DeepClone();
+                yield return [$"E3-retype-{property}-{index++}", Bytes(retyped).ToArray()];
+            }
+        }
+
+        var validBytes = Bytes(valid).ToArray();
+        for (var length = 0; length < validBytes.Length; length += Math.Max(1, validBytes.Length / 12))
+            yield return [$"E3-truncate-{length}", validBytes[..length]];
+
+        var random = new Random(0x504f5254);
+        for (var sample = 0; sample < 12; sample++)
+        {
+            var bytes = new byte[random.Next(1, 48)];
+            random.NextBytes(bytes);
+            yield return [$"E3-random-{sample}", bytes];
+        }
+    }
 }

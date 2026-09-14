@@ -53,7 +53,7 @@ public sealed class RequestTransportRegistration(
         RequestType == other.RequestType &&
         Transports.SetEquals(other.Transports) &&
         ResultType == other.ResultType &&
-        (RegisterRpc is null) == (other.RegisterRpc is null) &&
+        RegisterRpc is null == other.RegisterRpc is null &&
         Discriminator.Version == other.Discriminator.Version &&
         string.Equals(Discriminator.Name, other.Discriminator.Name, StringComparison.Ordinal) &&
         string.Equals(Route.Realm, other.Route.Realm, StringComparison.Ordinal) &&

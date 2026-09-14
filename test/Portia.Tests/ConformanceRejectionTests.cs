@@ -11,6 +11,68 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class ConformanceRejectionTests
 {
+    /// <summary>The single deduplication guarantee a defective probe breaks.</summary>
+    public enum DeduplicationDefect
+    {
+        /// <summary>Breaks nothing; the positive control.</summary>
+        None,
+
+        /// <summary>Reports a never-before-seen event as already executed.</summary>
+        ReportsFirstAsDuplicate,
+
+        /// <summary>Runs the effect again for an event it already executed.</summary>
+        ExecutesSequentialDuplicate,
+
+        /// <summary>Lets more than one concurrent attempt through for one event.</summary>
+        LosesConcurrentRace,
+
+        /// <summary>Keeps its record of executed events only in memory.</summary>
+        ForgetsAfterReopen
+    }
+
+    /// <summary>The single event-store invariant a defective probe breaks.</summary>
+    public enum StoreDefect
+    {
+        /// <summary>Breaks nothing; the positive control.</summary>
+        None,
+
+        /// <summary>Yields a record for a stream that was never appended to.</summary>
+        ReturnsRecordsForAbsentStream,
+
+        /// <summary>Silently drops one appended record from a stream read.</summary>
+        DropsAppendedRecords,
+
+        /// <summary>Reports resource offsets that do not start at zero.</summary>
+        ShiftsResourceOffsets,
+
+        /// <summary>Returns a stream's records in reverse append order.</summary>
+        ReordersRecords,
+
+        /// <summary>Labels each record with a stream other than the one it was appended to.</summary>
+        ReportsForeignStream,
+
+        /// <summary>Replays a stream from the beginning however far in the caller asked to resume.</summary>
+        IgnoresFromOffset,
+
+        /// <summary>Appends regardless of the expected stream position.</summary>
+        AcceptsStaleAppend,
+
+        /// <summary>Rejects a stale append with its own exception type instead of the shared one.</summary>
+        ThrowsAdapterExceptionOnConflict,
+
+        /// <summary>Throws the right conflict but keeps the rejected events anyway.</summary>
+        WritesDespiteConflict,
+
+        /// <summary>Returns only one stream from a read that spans the whole area.</summary>
+        PatternReadMissesStreams,
+
+        /// <summary>Omits the area offset a projector checkpoints against.</summary>
+        PatternReadOmitsAreaOffset,
+
+        /// <summary>Returns pattern records whose scope offsets do not ascend.</summary>
+        PatternReadIsUnordered
+    }
+
     /// <summary>
     ///     Verifies that every event-store invariant the suite claims to check is one it will genuinely
     ///     reject: read coverage and ordering, zero-based contiguous offsets, the concrete source stream,
@@ -103,72 +165,42 @@ public sealed class ConformanceRejectionTests
     [Fact]
     public async Task ShouldRejectProjectionProbeGivenConflictDiscardsTheWinner()
     {
+        using var probe = new ShapedProjectionProbe(ProjectionStoreShape.DiscardsWinner);
+
         var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            ProjectionStoreConformance.VerifyAsync(new DiscardingWinnerProbe()).AsTask());
+            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
 
         Assert.Contains("stale checkpoint conflict", exception.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>The single event-store invariant a defective probe breaks.</summary>
-    public enum StoreDefect
+    /// <summary>
+    ///     Verifies that a store which compares the expected checkpoint only when a batch opens is
+    ///     rejected: two batches opened before either commits would both pass that check, so the later
+    ///     commit silently overwrites the earlier one.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRejectProjectionProbeGivenCheckpointComparedOnlyWhenBatchOpens()
     {
-        /// <summary>Breaks nothing; the positive control.</summary>
-        None,
+        using var probe = new ShapedProjectionProbe(ProjectionStoreShape.ChecksCheckpointOnlyAtBegin);
 
-        /// <summary>Yields a record for a stream that was never appended to.</summary>
-        ReturnsRecordsForAbsentStream,
+        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
+            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
 
-        /// <summary>Silently drops one appended record from a stream read.</summary>
-        DropsAppendedRecords,
-
-        /// <summary>Reports resource offsets that do not start at zero.</summary>
-        ShiftsResourceOffsets,
-
-        /// <summary>Returns a stream's records in reverse append order.</summary>
-        ReordersRecords,
-
-        /// <summary>Labels each record with a stream other than the one it was appended to.</summary>
-        ReportsForeignStream,
-
-        /// <summary>Replays a stream from the beginning however far in the caller asked to resume.</summary>
-        IgnoresFromOffset,
-
-        /// <summary>Appends regardless of the expected stream position.</summary>
-        AcceptsStaleAppend,
-
-        /// <summary>Rejects a stale append with its own exception type instead of the shared one.</summary>
-        ThrowsAdapterExceptionOnConflict,
-
-        /// <summary>Throws the right conflict but keeps the rejected events anyway.</summary>
-        WritesDespiteConflict,
-
-        /// <summary>Returns only one stream from a read that spans the whole area.</summary>
-        PatternReadMissesStreams,
-
-        /// <summary>Omits the area offset a projector checkpoints against.</summary>
-        PatternReadOmitsAreaOffset,
-
-        /// <summary>Returns pattern records whose scope offsets do not ascend.</summary>
-        PatternReadIsUnordered
+        Assert.Contains("stale projection checkpoint was allowed to commit", exception.Message,
+            StringComparison.Ordinal);
     }
 
-    /// <summary>The single deduplication guarantee a defective probe breaks.</summary>
-    public enum DeduplicationDefect
+    /// <summary>
+    ///     Verifies that a store which holds an exclusive lock from opening a batch until the batch ends
+    ///     passes without deadlocking, even though the stale writer's open has to wait for the winner.
+    /// </summary>
+    [Fact]
+    public async Task ShouldAcceptProjectionProbeGivenBatchOpenWaitsForAnExclusiveLock()
     {
-        /// <summary>Breaks nothing; the positive control.</summary>
-        None,
+        using var probe = new ShapedProjectionProbe(ProjectionStoreShape.LocksAtBegin);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
-        /// <summary>Reports a never-before-seen event as already executed.</summary>
-        ReportsFirstAsDuplicate,
-
-        /// <summary>Runs the effect again for an event it already executed.</summary>
-        ExecutesSequentialDuplicate,
-
-        /// <summary>Lets more than one concurrent attempt through for one event.</summary>
-        LosesConcurrentRace,
-
-        /// <summary>Keeps its record of executed events only in memory.</summary>
-        ForgetsAfterReopen
+        await ProjectionStoreConformance.VerifyAsync(probe, timeout.Token);
     }
 
     sealed class DefectiveEventStoreProbe(StoreDefect defect) : IEventStoreConformanceProbe
@@ -296,9 +328,11 @@ public sealed class ConformanceRejectionTests
     sealed class DefectiveDeduplicationProbe(DeduplicationDefect defect) : IReactionDeduplicationProbe
     {
         readonly ConcurrentDictionary<Uuid, byte> _durable = new();
+        int _concurrentReaderCount;
+
         TaskCompletionSource _concurrentReaders =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
-        int _concurrentReaderCount;
+
         Uuid? _sequentialEventId;
         ConcurrentDictionary<Uuid, byte> _session = new();
 
@@ -341,6 +375,7 @@ public sealed class ConformanceRejectionTests
                         _concurrentReaders.TrySetResult();
                     await _concurrentReaders.Task.WaitAsync(ct);
                 }
+
                 first = !already;
                 seen[eventId] = 0;
             }
@@ -373,11 +408,23 @@ public sealed class ConformanceRejectionTests
             throw new InvalidOperationException("The suite must reject the identities before opening a session.");
     }
 
-    // Refuses the stale writer correctly but rolls the winner back too, so the projection silently
-    // loses the batch that was supposed to have been applied.
-    sealed class DiscardingWinnerProbe : IProjectionStoreConformanceProbe
+    /// <summary>How a hand-written projection store coordinates two writers of one checkpoint.</summary>
+    public enum ProjectionStoreShape
+    {
+        /// <summary>Refuses the stale writer but rolls the winner's committed batch back too.</summary>
+        DiscardsWinner,
+
+        /// <summary>Compares the expected checkpoint when a batch opens and never again at commit.</summary>
+        ChecksCheckpointOnlyAtBegin,
+
+        /// <summary>A conformant store that holds an exclusive lock from opening a batch until it ends.</summary>
+        LocksAtBegin
+    }
+
+    sealed class ShapedProjectionProbe(ProjectionStoreShape shape) : IProjectionStoreConformanceProbe, IDisposable
     {
         readonly Lock _gate = new();
+        readonly SemaphoreSlim _writer = new(1, 1);
         readonly Dictionary<CheckpointIdentity, (string? Value, ProjectionCheckpoint Checkpoint)> _states = [];
 
         public CheckpointIdentity LiveIdentity { get; } = new(
@@ -385,6 +432,10 @@ public sealed class ConformanceRejectionTests
 
         public CheckpointIdentity RebuildIdentity { get; } = new(
             "conformance", EventStreamPattern.ForPattern("testing", "projection"), "rebuild-1");
+
+        ProjectionStoreShape Shape => shape;
+
+        public void Dispose() => _writer.Dispose();
 
         public ValueTask ResetAsync(CancellationToken ct = default)
         {
@@ -396,26 +447,44 @@ public sealed class ConformanceRejectionTests
         public ValueTask<IProjectionStoreConformanceSession> OpenSessionAsync(CancellationToken ct = default) =>
             ValueTask.FromResult<IProjectionStoreConformanceSession>(new Session(this));
 
-        sealed class Session(DiscardingWinnerProbe probe) : IProjectionStoreConformanceSession, IProjectionStore
+        ProjectionCheckpoint CheckpointOf(CheckpointIdentity identity)
         {
-            readonly DiscardingWinnerProbe _probe = probe;
+            lock (_gate)
+                return _states.GetValueOrDefault(identity).Checkpoint;
+        }
+
+        sealed class Session(ShapedProjectionProbe probe) : IProjectionStoreConformanceSession, IProjectionStore
+        {
+            readonly ShapedProjectionProbe _probe = probe;
             Batch? _batch;
 
-            public IProjectionStore Store => this;
-
             public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
+                CancellationToken ct = default) =>
+                ValueTask.FromResult(_probe.CheckpointOf(identity));
+
+            public async ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context,
                 CancellationToken ct = default)
             {
-                lock (_probe._gate)
-                    return ValueTask.FromResult(_probe._states.GetValueOrDefault(identity).Checkpoint);
+                var locked = false;
+                if (_probe.Shape == ProjectionStoreShape.LocksAtBegin)
+                {
+                    await _probe._writer.WaitAsync(ct);
+                    locked = true;
+                }
+
+                if (_probe.Shape != ProjectionStoreShape.DiscardsWinner
+                    && _probe.CheckpointOf(context.Identity) != context.Checkpoint)
+                {
+                    if (locked)
+                        _ = _probe._writer.Release();
+                    throw new ProjectionConcurrencyException("stale checkpoint");
+                }
+
+                _batch = new Batch(this, context, locked);
+                return _batch;
             }
 
-            public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context,
-                CancellationToken ct = default)
-            {
-                _batch = new Batch(this, context);
-                return ValueTask.FromResult<IProjectionBatch>(_batch);
-            }
+            public IProjectionStore Store => this;
 
             public ValueTask StageValueAsync(string value, CancellationToken ct = default)
             {
@@ -437,13 +506,36 @@ public sealed class ConformanceRejectionTests
 
             public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
-            sealed class Batch(Session session, ProjectionBatchContext context) : IProjectionBatch
+            sealed class Batch(Session session, ProjectionBatchContext context, bool locked) : IProjectionBatch
             {
+                bool _locked = locked;
+
                 public string? Value { get; set; }
 
                 public bool FailNext { get; set; }
 
                 public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+                {
+                    // Like a database transaction, a locking batch ends at commit whether or not it succeeds.
+                    try
+                    {
+                        Commit(checkpoint);
+                    }
+                    finally
+                    {
+                        Unlock();
+                    }
+
+                    return ValueTask.CompletedTask;
+                }
+
+                public ValueTask DisposeAsync()
+                {
+                    Unlock();
+                    return ValueTask.CompletedTask;
+                }
+
+                void Commit(ProjectionCheckpoint checkpoint)
                 {
                     if (FailNext)
                     {
@@ -451,23 +543,34 @@ public sealed class ConformanceRejectionTests
                         throw new IOException("injected commit failure");
                     }
 
-                    lock (session._probe._gate)
+                    var probe = session._probe;
+                    lock (probe._gate)
                     {
-                        var current = session._probe._states.GetValueOrDefault(context.Identity);
-                        if (current.Checkpoint != context.Checkpoint)
+                        var current = probe._states.GetValueOrDefault(context.Identity);
+                        if (probe.Shape != ProjectionStoreShape.ChecksCheckpointOnlyAtBegin
+                            && current.Checkpoint != context.Checkpoint)
                         {
-                            // Rejects the loser, then drops the winner's committed batch as well.
-                            _ = session._probe._states.Remove(context.Identity);
+                            if (probe.Shape == ProjectionStoreShape.DiscardsWinner)
+                            {
+                                // Rejects the loser, then drops the winner's committed batch as well.
+                                _ = probe._states.Remove(context.Identity);
+                            }
+
                             throw new ProjectionConcurrencyException("stale checkpoint");
                         }
 
-                        session._probe._states[context.Identity] = (Value, checkpoint);
+                        probe._states[context.Identity] = (Value, checkpoint);
                     }
-
-                    return ValueTask.CompletedTask;
                 }
 
-                public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+                void Unlock()
+                {
+                    if (_locked)
+                    {
+                        _locked = false;
+                        _ = session._probe._writer.Release();
+                    }
+                }
             }
         }
     }

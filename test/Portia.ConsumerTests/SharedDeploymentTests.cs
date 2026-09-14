@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using Cntryl.Fitz;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -102,7 +101,8 @@ public sealed class SharedDeploymentTests
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddAccounts();
         _ = builder.Services.AddPortia()
-            .AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")))
+            .AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), fitz => fitz.UseFleet(
+                new FleetRunOptions { MembershipSelector = "lease://validation/actors/*" }))
             .AddWorkers();
         using var host = builder.Build();
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
@@ -118,7 +118,8 @@ public sealed class SharedDeploymentTests
         _ = builder.Services.AddAccounts();
         _ = builder.Services.AddPortia()
             .AddProjector<FirstProjector>("first-projector", WorkloadScope.PerTenant)
-            .AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), _ => { })
+            .AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), fitz => fitz.UseFleet(
+                new FleetRunOptions { MembershipSelector = "lease://validation/tenants/*" }))
             .AddWorkers();
         using var host = builder.Build();
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
@@ -133,12 +134,11 @@ public sealed class SharedDeploymentTests
         _ = services.RemoveAll<ConsumerHost.Effects>();
         _ = services.AddSingleton(effects);
         _ = services.AddScoped<IRequestActorValidator, AcceptActor>();
+        _ = services.AddScoped<IQueuedRequestTerminalHandler, IgnoreTerminalRequest>();
         _ = services.AddAccounts();
         return services.AddPortia()
-            .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global, o =>
-            {
-                o.PollInterval = TimeSpan.FromMilliseconds(10);
-            })
+            .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
+                o => { o.PollInterval = TimeSpan.FromMilliseconds(10); })
             .UseFitzClient(client, fitz =>
             {
                 _ = fitz.UseFleet(new FleetRunOptions { MembershipSelector = $"lease://app-{first}/members/*" });
@@ -151,5 +151,11 @@ public sealed class SharedDeploymentTests
     {
         public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string? token, CancellationToken ct = default)
             => ValueTask.FromResult(Result<ClaimsPrincipal>.Success(RequestActor.System));
+    }
+
+    sealed class IgnoreTerminalRequest : IQueuedRequestTerminalHandler
+    {
+        public ValueTask HandleAsync(QueuedRequestFailureContext context, CancellationToken ct = default) =>
+            ValueTask.CompletedTask;
     }
 }

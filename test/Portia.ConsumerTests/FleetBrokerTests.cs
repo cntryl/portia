@@ -61,6 +61,7 @@ public sealed class FleetBrokerTests
                     + $"active A: [{string.Join(",", activeA.Keys)}]; active B: [{string.Join(",", activeB.Keys)}].",
                     error);
             }
+
             foreach (var route in activeA.Keys)
             {
                 Assert.Equal(original[route], activeA[route]);

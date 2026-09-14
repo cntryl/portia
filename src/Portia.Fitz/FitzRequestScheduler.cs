@@ -63,6 +63,13 @@ public sealed class FitzRequestScheduler(
             .ConfigureAwait(false);
     }
 
+    /// <inheritdoc />
+    public async ValueTask CancelAsync(string scheduleId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(scheduleId);
+        await _schedule.CancelAsync(scheduleId, ct).ConfigureAwait(false);
+    }
+
     async ValueTask<string> CreateAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
         ClaimsPrincipal actor, RequestMetadata metadata, string route, bool propagateTraceContext,
         CancellationToken ct) where TRequest : IRequest, ISchedulable
@@ -111,13 +118,6 @@ public sealed class FitzRequestScheduler(
         {
             PortiaTelemetry.TransportFinished(started, "schedule", "schedule", outcome);
         }
-    }
-
-    /// <inheritdoc />
-    public async ValueTask CancelAsync(string scheduleId, CancellationToken ct = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(scheduleId);
-        await _schedule.CancelAsync(scheduleId, ct).ConfigureAwait(false);
     }
 
     static ScheduleDeliveryMode ToFitzDeliveryMode(RequestScheduleDeliveryMode mode) => mode switch

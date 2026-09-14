@@ -164,8 +164,8 @@ sealed class PortiaWorkloadService(
                 {
                     await using var scope = scopes.CreateAsyncScope();
                     var provider = scope.ServiceProvider;
-                    provider.GetRequiredService<WorkloadContext>().Initialize(identity, registration.ExplicitName);
-                    registration.Descriptor.Bind(provider, identity, registration.ExplicitName);
+                    provider.GetRequiredService<WorkloadContext>().Initialize(identity, registration.Name);
+                    registration.Descriptor.Bind(provider, identity, registration.Name);
                     var passPattern = registration.Descriptor.Pattern(provider);
                     if (subscription is null)
                     {
@@ -310,5 +310,4 @@ sealed class PortiaWorkloadService(
             : initialTicks << exponent;
         return TimeSpan.FromTicks(Math.Min(ticks, maximumTicks));
     }
-
 }

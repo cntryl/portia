@@ -42,7 +42,8 @@ public sealed record ProjectionRunOptions
 
         if (MaxEventsPerPass <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(MaxEventsPerPass), "Events per pass must be greater than zero.");
+            throw new ArgumentOutOfRangeException(nameof(MaxEventsPerPass),
+                "Events per pass must be greater than zero.");
         }
     }
 }

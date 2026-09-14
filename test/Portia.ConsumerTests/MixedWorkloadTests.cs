@@ -21,18 +21,12 @@ public sealed class MixedWorkloadTests
         _ = builder.Services.AddSingleton<IWorkloadCoordinator>(coordinator);
         _ = builder.Services.AddSingleton<ITenantDirectory>(tenants);
         _ = builder.Services.AddPortia()
-            .AddProjector<FirstProjector>("accounts", WorkloadScope.PerTenant, o =>
-            {
-                o.PollInterval = TimeSpan.FromMilliseconds(10);
-            })
-            .AddProjector<SecondProjector>("summary", WorkloadScope.Global, o =>
-            {
-                o.PollInterval = TimeSpan.FromMilliseconds(10);
-            })
-            .AddReactor<FirstReactor>("reaction", WorkloadScope.PerTenant, o =>
-            {
-                o.PollInterval = TimeSpan.FromMilliseconds(10);
-            })
+            .AddProjector<FirstProjector>("accounts", WorkloadScope.PerTenant,
+                o => { o.PollInterval = TimeSpan.FromMilliseconds(10); })
+            .AddProjector<SecondProjector>("summary", WorkloadScope.Global,
+                o => { o.PollInterval = TimeSpan.FromMilliseconds(10); })
+            .AddReactor<FirstReactor>("reaction", WorkloadScope.PerTenant,
+                o => { o.PollInterval = TimeSpan.FromMilliseconds(10); })
             .AddWorkers();
         using var host = builder.Build();
         var store = host.Services.GetRequiredService<IEventStore>();
@@ -59,8 +53,10 @@ public sealed class MixedWorkloadTests
             await effects.WaitForAsync("reaction", aggregateId: ids[1]);
             var global = new WorkloadIdentity("summary");
             Assert.Equal(1, coordinator.Starts[global]);
-            Assert.DoesNotContain(effects.Items, item => item.Component == "summary" && item.AggregateId != ids[2]);
-            Assert.DoesNotContain(effects.Items, item => item.Component == "accounts" && item.AggregateId == ids[2]);
+            Assert.DoesNotContain(effects.Items,
+                item => item.Component == "summary" && item.AggregateId != ids[2]);
+            Assert.DoesNotContain(effects.Items,
+                item => item.Component == "accounts" && item.AggregateId == ids[2]);
             var storage = host.Services.GetRequiredService<ConsumerHost.ProjectionStorage>();
             Assert.Equal(3, storage.Checkpoints.Count);
             tenants.Change(TenantLifecycleChangeKind.Removed, "alpha");

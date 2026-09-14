@@ -18,8 +18,8 @@ public sealed class FitzNoticeRequestConsumer(
     RequestTransportCatalog catalog,
     ILogger<FitzNoticeRequestConsumer>? logger = null) : IRequestNotificationConsumer
 {
-    readonly INoticeClient _notice = notice ?? throw new ArgumentNullException(nameof(notice));
     readonly RequestTransportCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+    readonly INoticeClient _notice = notice ?? throw new ArgumentNullException(nameof(notice));
 
     readonly string _route = string.IsNullOrWhiteSpace(route)
         ? throw new ArgumentException("A notice route cannot be empty.", nameof(route))

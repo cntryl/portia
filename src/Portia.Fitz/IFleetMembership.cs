@@ -1,4 +1,3 @@
-
 namespace Cntryl.Portia;
 
 /// <summary>Owns renewable worker membership and its authoritative inventory observer.</summary>

@@ -102,6 +102,10 @@ worker faults. Application exception text can enter event 1002, event 1101, and 
 exception events; applications should therefore avoid secrets in exception messages and apply
 their normal log and trace filtering policy.
 
+Scheduled actor validation is the exception to silent retry: each thrown exception or transient
+result records a validation-stage worker fault. A firing is tried at most three times, with one- and
+two-second delays, and is recorded lost once after permanent rejection or exhaustion.
+
 ## Dashboard starting points
 
 - Rate: `rate(portia_request_duration_seconds_count[5m])`

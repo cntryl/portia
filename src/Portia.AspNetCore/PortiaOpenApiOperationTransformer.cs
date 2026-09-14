@@ -38,7 +38,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         foreach (var parameter in metadata.Parameters.Where(parameter => parameter.Source != "body"))
         {
             var schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!);
-            if (parameter.HasDefault && schema is OpenApiSchema concreteSchema)
+            if (parameter.HasDefault && parameter.DefaultValue is not null && schema is OpenApiSchema concreteSchema)
             {
                 concreteSchema.Default =
                     JsonSerializer.SerializeToNode(parameter.DefaultValue, jsonOptions.GetTypeInfo(parameter.Type));
@@ -63,7 +63,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             {
                 var name = parameter.WireName ?? jsonOptions.PropertyNamingPolicy?.ConvertName(parameter.ClrName) ??
                     parameter.ClrName;
-                schema.Properties[name] = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!);
+                schema.Properties[name] =
+                    PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!);
                 if (parameter.Required)
                 {
                     schema.Required ??= new HashSet<string>();
@@ -161,6 +162,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             });
             SetDefaultResponse(status, response);
         }
+
         return Task.CompletedTask;
     }
 

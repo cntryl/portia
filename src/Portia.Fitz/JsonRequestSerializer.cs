@@ -35,31 +35,50 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
     /// <inheritdoc />
     public DeserializedRequest DeserializeEnvelope(ReadOnlyMemory<byte> data)
     {
-        using var document = JsonDocument.Parse(data);
-        var root = document.RootElement;
-        if (!root.TryGetProperty("version", out var version) || version.GetInt32() != 2)
+        try
         {
-            throw new InvalidOperationException("Unsupported request envelope version; Portia accepts version 2 only.");
-        }
+            using var document = JsonDocument.Parse(data);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("version", out var version))
+                throw Permanent("A request envelope requires a version.");
+            var envelopeVersion = version.GetInt32();
+            if (envelopeVersion != 2)
+                throw Retryable("Unsupported request envelope version; Portia accepts version 2 only.");
 
-        var name = RequiredString(root, "contract");
-        var contractVersion = root.GetProperty("contract_version").GetInt32();
-        if (!_byName.TryGetValue((name, contractVersion), out var descriptor))
+            var name = RequiredString(root, "contract");
+            var contractVersion = RequiredProperty(root, "contract_version").GetInt32();
+            var metadata = RequiredProperty(root, "metadata").Deserialize(FitzJsonContext.Default.RequestMetadata)
+                           ?? throw Permanent("A request envelope requires logical metadata.");
+            metadata.Validate();
+            var payload = RequiredProperty(root, "payload");
+            if (payload.ValueKind is not JsonValueKind.Object)
+                throw Permanent("A request envelope payload must be a JSON object.");
+            var actor = OptionalString(root, "actor_token");
+            var traceparent = OptionalString(root, "traceparent");
+            var tracestate = OptionalString(root, "tracestate");
+
+            if (!_byName.TryGetValue((name, contractVersion), out var descriptor))
+                throw Retryable($"Unknown request contract '{name}' version {contractVersion}.");
+
+            var request = (IRequestBase?)payload.Deserialize(descriptor.JsonTypeInfo)
+                          ?? throw Permanent($"The '{name}' payload deserialized to null.");
+            var trace = traceparent is null
+                ? null
+                : new RequestTraceContext(traceparent, tracestate);
+            return new DeserializedRequest(request, name, actor, metadata, trace);
+        }
+        catch (InvalidOperationException ex) when (RequestEnvelopeFailure.GetKind(ex) is not null)
         {
-            throw new InvalidOperationException($"Unknown request contract '{name}' version {contractVersion}.");
+            throw;
         }
-
-        var metadata = root.GetProperty("metadata").Deserialize(FitzJsonContext.Default.RequestMetadata)
-                       ?? throw new InvalidOperationException("A request envelope requires logical metadata.");
-        metadata.Validate();
-        var request = (IRequestBase?)root.GetProperty("payload").Deserialize(descriptor.JsonTypeInfo)
-                      ?? throw new InvalidOperationException($"The '{name}' payload deserialized to null.");
-        var actor = OptionalString(root, "actor_token");
-        var traceparent = OptionalString(root, "traceparent");
-        var trace = traceparent is null
-            ? null
-            : new RequestTraceContext(traceparent, OptionalString(root, "tracestate"));
-        return new DeserializedRequest(request, name, actor, metadata, trace);
+        catch (JsonException ex)
+        {
+            throw RequestEnvelopeFailure.Classify(ex, RequestEnvelopeFailureKind.Permanent);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException or ArgumentException)
+        {
+            throw Permanent("The request envelope is malformed or invalid.", ex);
+        }
     }
 
     /// <inheritdoc />
@@ -170,6 +189,12 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
         });
     }
 
+    static InvalidOperationException Permanent(string message, Exception? inner = null) =>
+        RequestEnvelopeFailure.Create(RequestEnvelopeFailureKind.Permanent, message, inner);
+
+    static InvalidOperationException Retryable(string message) =>
+        RequestEnvelopeFailure.Create(RequestEnvelopeFailureKind.Retryable, message);
+
     void Add(Contract descriptor)
     {
         var key = (descriptor.Name, descriptor.Version);
@@ -198,7 +223,7 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
         var error = root.TryGetProperty("error", out var property)
             ? property.Deserialize(FitzJsonContext.Default.RequestError)
             : null;
-        return success != (error is not null)
+        return success != error is not null
             ? (success, error)
             : throw new InvalidOperationException("Malformed outcome envelope.");
     }
@@ -214,8 +239,17 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
     }
 
     static string RequiredString(JsonElement root, string name)
-        => OptionalString(root, name) ??
-           throw new InvalidOperationException($"Request envelope property '{name}' is required.");
+    {
+        var value = OptionalString(root, name);
+        return !string.IsNullOrWhiteSpace(value)
+            ? value
+            : throw Permanent($"Request envelope property '{name}' is required.");
+    }
+
+    static JsonElement RequiredProperty(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var value)
+            ? value
+            : throw Permanent($"Request envelope property '{name}' is required.");
 
     static string? OptionalString(JsonElement root, string name)
         => root.TryGetProperty(name, out var value) && value.ValueKind != JsonValueKind.Null ? value.GetString() : null;

@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -25,7 +26,8 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
             new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), RequestActor.System);
         using var provider = services.BuildServiceProvider();
 
-        Assert.DoesNotContain(provider.GetServices<IHostedService>(), service => service is RequestScheduleStartupService);
+        Assert.DoesNotContain(provider.GetServices<IHostedService>(),
+            service => service is RequestScheduleStartupService);
         Assert.Empty(scheduler.Requests);
     }
 
@@ -57,7 +59,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
         _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
-            new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), RequestActor.System)
+                new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), RequestActor.System)
             .AddWorkers();
         using var provider = services.BuildServiceProvider();
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
@@ -76,7 +78,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var services = new ServiceCollection();
         _ = services.AddSingleton<IRequestScheduler>(scheduler);
         _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
-            new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), new())
+                new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), new ClaimsPrincipal())
             .AddWorkers();
         using var provider = services.BuildServiceProvider();
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
@@ -93,9 +95,10 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     public async Task ShouldFailWorkerStartupWhenSchedulePersistenceFails()
     {
         var services = new ServiceCollection();
-        _ = services.AddSingleton<IRequestScheduler>(new RecordingStartupScheduler { Failure = new IOException("broker unavailable") });
+        _ = services.AddSingleton<IRequestScheduler>(new RecordingStartupScheduler
+        { Failure = new IOException("broker unavailable") });
         _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
-            new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), RequestActor.System)
+                new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), RequestActor.System)
             .AddWorkers();
         using var provider = services.BuildServiceProvider();
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
@@ -124,7 +127,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
             typeof(TelemetryGuardedAction), typeof(TelemetryGuardedSequence)
         }.Select(type => type.FullName!).Order(StringComparer.Ordinal).ToArray();
         Assert.Equal(guarded, failure.Message[(failure.Message.IndexOf(':') + 1)..].TrimEnd('.').Trim()
-            .Split(", ", StringSplitOptions.None));
+            .Split(", "));
     }
 
     /// <summary>A registered evaluator satisfies hosted startup without constructing it eagerly.</summary>
@@ -239,6 +242,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton(busHost.Bus);
         _ = services.AddSingleton<IRequestQueueConsumer>(new HostingFakeQueueConsumer([new ChangeValue(42)]));
         _ = services.AddSingleton<IRequestActorValidator>(new TestRequestActorValidator());
+        _ = services.AddSingleton<IQueuedRequestTerminalHandler>(new HostingTerminalHandler());
         _ = services.AddPortiaQueueRunner();
         using var provider = services.BuildServiceProvider();
 
@@ -293,7 +297,8 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
         _ = services.AddPortia()
-            .AddProjector<TestProjector>("test-projector", WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(20))
+            .AddProjector<TestProjector>("test-projector", WorkloadScope.Global,
+                o => o.PollInterval = TimeSpan.FromMilliseconds(20))
             .AddWorkers();
         using var provider = services.BuildServiceProvider();
 
@@ -325,7 +330,8 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
         _ = services.AddPortia()
-            .AddProjector<TestProjector>("test-projector", WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromMilliseconds(10))
+            .AddProjector<TestProjector>("test-projector", WorkloadScope.Global,
+                o => o.PollInterval = TimeSpan.FromMilliseconds(10))
             .AddWorkers();
         using var provider = services.BuildServiceProvider();
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
@@ -358,10 +364,8 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton<IDomainEventReader>(store);
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
-        _ = services.AddPortia().AddProjector<TestProjector>("test-projector", WorkloadScope.Global, o =>
-        {
-            o.PollInterval = TimeSpan.FromMilliseconds(10);
-        }).AddWorkers();
+        _ = services.AddPortia().AddProjector<TestProjector>("test-projector", WorkloadScope.Global,
+            o => { o.PollInterval = TimeSpan.FromMilliseconds(10); }).AddWorkers();
         using var provider = services.BuildServiceProvider();
 
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
@@ -434,6 +438,12 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         public ValueTask AbandonAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
     }
 
+    sealed class HostingTerminalHandler : IQueuedRequestTerminalHandler
+    {
+        public ValueTask HandleAsync(QueuedRequestFailureContext context, CancellationToken ct = default) =>
+            ValueTask.CompletedTask;
+    }
+
     sealed class HostingFakeTenantDirectory(IReadOnlyList<TenantId> initial) : ITenantDirectory
     {
         public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync(
@@ -465,7 +475,7 @@ sealed class RecordingStartupScheduler : IRequestScheduler
     public Exception? Failure { get; init; }
 
     public ValueTask<string> EnsureAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
-        RequestRouteValues routeValues, System.Security.Claims.ClaimsPrincipal actor,
+        RequestRouteValues routeValues, ClaimsPrincipal actor,
         CancellationToken ct = default) where TRequest : IRequest, ISchedulable
     {
         if (Failure is not null)
@@ -475,7 +485,7 @@ sealed class RecordingStartupScheduler : IRequestScheduler
     }
 
     public ValueTask<string> ScheduleAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
-        RequestRouteValues routeValues, System.Security.Claims.ClaimsPrincipal actor, RequestMetadata metadata,
+        RequestRouteValues routeValues, ClaimsPrincipal actor, RequestMetadata metadata,
         CancellationToken ct = default) where TRequest : IRequest, ISchedulable =>
         throw new NotSupportedException();
 

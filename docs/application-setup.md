@@ -113,11 +113,18 @@ Queue redelivery remains broker-owned below `QueueRunnerOptions.TerminalAttempt`
 when no threshold is configured. A positive threshold requires a transport-reported durable attempt
 count. Fitz 1.0 reports no queue attempt count, so a Fitz queue worker configured with a positive
 `TerminalAttempt` fails during startup instead of silently retrying forever. Actor-validation failures
-and non-transient handler results remain intrinsically terminal. Every terminal delivery requires an
-`IQueuedRequestTerminalHandler`. A missing handler faults the runner and hosted worker with
-`TerminalHandlerMissingException` before
-acknowledgment or abandonment; callback failure uses `TerminalHandlerFailureException` with the
-same ownership rule. The callback receives `QueuedRequestTerminalReason` plus the original
+and non-transient handler results remain intrinsically terminal. Malformed, incomplete, wrong-kind,
+invalid-metadata, and invalid known-contract request payloads always use `DeserializationFailure`.
+Any readable unsupported integer envelope version is classified as retryable before that version's
+remaining fields are inspected. Unknown contract/version pairs and unclassified read failures are
+also retryable, becoming `RetryLimitReached` only at a durable threshold. Every queue runner requires an
+application-supplied `IQueuedRequestTerminalHandler`; Fitz queue hosting validates that registration
+before opening its broker connection, while direct and generic hosted runners validate a fresh scope
+before transport enumeration. Portia does not install a default policy that silently acknowledges poison
+messages. Every delivery scope is checked again as a backstop for inconsistent custom factories.
+Callback failure uses `TerminalHandlerFailureException` and leaves transport ownership unchanged;
+`TerminalHandlerMissingException` remains an invariant backstop. The callback receives
+`QueuedRequestTerminalReason` plus the original
 request, metadata, invocation, attempt, error, and exception, and completes before Portia
 acknowledges once. Callback and acknowledgment are not atomic, so terminal handlers must tolerate
 replay; an acknowledgment failure is logged while transport ownership expires. Expected business rejection continues
@@ -158,7 +165,13 @@ The API deployment can scale with HTTP demand, while worker replicas compete for
 queue work and serve RPC. Infrastructure autoscaling configuration remains deployment-owned.
 Notice subscriptions are fanout on each replica; scheduled delivery follows the
 schedule's one/broadcast policy. Those transports are not interchangeable with a
-competing queue.
+competing queue. Non-transient scheduled identity rejection drops the firing. A thrown validator
+failure or transient `RequestError` makes at most three attempts, delayed one then two seconds, before
+losing only that firing and continuing the route. Retries wait off the route's read loop, so later
+firings are validated and delivered meanwhile, and a retried firing can arrive after firings that fired
+after it. Up to 32 firings per route wait to retry at once; beyond that, reading pauses until one
+finishes. Hosted retries use the registered `TimeProvider`, record every failed attempt, and resolve a
+fresh disposed scope each time. Caller cancellation propagates.
 
 ## Construct and hydrate aggregates directly
 
@@ -211,7 +224,9 @@ component's declared pattern. It does not grant cross-tenant access or scan ever
 An omitted ID or scope, an invalid scope, a conflicting registration, or duplicate workload ID
 fails during configuration. Repeating an identical registration is idempotent. The
 explicit ID is used both to coordinate ownership and as the hosted component's checkpoint identity;
-there is no CLR-name fallback. Projector options also accept `Processing`
+for reactors it is also the stable effect identity. Constructor-selected component names are used
+only when a component is driven manually outside hosting, so changing a hosted registration name is
+a persistence migration. Projector options also accept `Processing`
 (`ProjectionRunOptions`, including a rebuild ID) and a positive `PollInterval`.
 
 `AddWorkers()` runs every declared workload under one hosted service. With no
@@ -220,8 +235,10 @@ single worker replica and needs no infrastructure at all; it logs a warning sayi
 a distributed coordinator before scaling workers past one replica.
 
 Fitz implements `IWorkloadCoordinator` and consumes these same declarations. There is
-no second component list or per-component lease route. `Fitz:ApplicationName` separates
-applications sharing a broker; it defaults to `portia`. Keep it identical across the
+no second component list or per-component lease route. Component workloads require either
+`Fitz:ApplicationName` or an explicit `UseFleet(...)` only when the effective coordinator is Fitz;
+request-only listeners and workloads using an application-supplied coordinator do not. The
+application name separates applications sharing a broker. Keep it identical across the
 application's replicas and distinct between independently deployed applications.
 Optional `fitz.UseFleet(...)` configures membership timing and an explicit membership
 selector. Workload lease resources are deterministic UUIDv5 values derived from the
@@ -275,7 +292,9 @@ use. Actor validation and request execution happen inside per-delivery scopes.
 and asynchronously dispose exactly one scope per delivery. Directly constructed runners use
 `RequestDeliveryScopes.FixedQueue(...)` or `RequestDeliveryScopes.Fixed(...)`; DI hosting uses
 the scoped factories installed by `AddPortiaQueueRunner()` and
-`AddPortiaRequestNotificationRunner()`.
+`AddPortiaRequestNotificationRunner()`. A queue runner additionally creates and disposes one
+preflight scope before it enumerates its consumer; custom queue scope factories must provide an
+`IQueuedRequestTerminalHandler` consistently in that scope and every delivery scope.
 
 Low-level hosting APIs are available for manually managed runners. Do not also start the same
 component or listener through them. Duplicate component hosting is rejected before

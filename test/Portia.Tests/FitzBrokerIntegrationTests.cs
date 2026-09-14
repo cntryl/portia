@@ -4,7 +4,7 @@ using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using System.Text;
-using Cntryl.Fitz;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
@@ -43,7 +43,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             _ = await second.EnsureAsync(new UniversalAction(2), new RequestScheduleSpec("0 1 * * *"),
                 RequestRouteValues.None, RequestActor.CreateSystem("replica"));
             var updated = Assert.Single(await firstClient.Schedule.ListBySelectorAsync(route));
-            var outer = System.Text.Json.JsonSerializer.Deserialize(updated.Payload.Span,
+            var outer = JsonSerializer.Deserialize(updated.Payload.Span,
                 FitzJsonContext.Default.FitzScheduledRequestEnvelope)!;
             var envelope = serializer.DeserializeEnvelope(outer.RequestEnvelope);
             Assert.Equal(2, Assert.IsType<UniversalAction>(envelope.Request).Value);
@@ -72,7 +72,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
                 new RequestScheduleSpec("0 0 * * *"), RequestRouteValues.None,
                 RequestActor.CreateSystem("telemetry-test"));
             var stored = Assert.Single(await client.Schedule.ListBySelectorAsync(route));
-            var scheduled = System.Text.Json.JsonSerializer.Deserialize(stored.Payload.Span,
+            var scheduled = JsonSerializer.Deserialize(stored.Payload.Span,
                 FitzJsonContext.Default.FitzScheduledRequestEnvelope)!;
             var envelope = serializer.DeserializeEnvelope(scheduled.RequestEnvelope);
             var producer = Assert.Single(activities,
@@ -328,9 +328,10 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         using var busHost = TestRequestBus.Create(universalActionHandler: handler);
         var consumer = new FitzRequestQueueConsumer(workerClient.Queue, serializer, route,
             TestJson.Catalog(RequestTransportId.Queue, typeof(UniversalAction)), 5,
-            waitDuration: TimeSpan.FromMilliseconds(100));
+            TimeSpan.FromMilliseconds(100));
         var runner = new QueueRunner(new OneQueueConsumer(consumer),
-            RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator()));
+            RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator(),
+                terminalHandler: new IgnoreTerminalRequest()));
         var publisher = new FitzRequestQueuePublisher(callerClient.Queue, serializer);
 
         await publisher.EnqueueAsync(new UniversalAction(74), RequestRouteValues.None, "valid-token");
@@ -469,10 +470,16 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         Assert.Equal(ActivityKind.Consumer, process.Kind);
         Assert.Equal(ActivityKind.Internal, execute.Kind);
         Assert.Equal(
-            ["portia.request.name", "portia.transport.name", "messaging.system", "messaging.operation.type", "portia.outcome"],
+            [
+                "portia.request.name", "portia.transport.name", "messaging.system", "messaging.operation.type",
+                "portia.outcome"
+            ],
             send.TagObjects.Select(tag => tag.Key));
         Assert.Equal(
-            ["portia.request.name", "portia.transport.name", "messaging.system", "messaging.operation.type", "portia.outcome"],
+            [
+                "portia.request.name", "portia.transport.name", "messaging.system", "messaging.operation.type",
+                "portia.outcome"
+            ],
             process.TagObjects.Select(tag => tag.Key));
         Assert.Equal(["portia.request.name", "portia.transport.name", "portia.outcome"],
             execute.TagObjects.Select(tag => tag.Key));
@@ -673,10 +680,8 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     sealed class FitzKvProjectionSession(Client client, FitzKvValueRepository repository)
         : IProjectionStoreConformanceSession, IProjectionStore
     {
-        CheckpointIdentity? _identity;
         bool _failNextCommit;
-
-        public IProjectionStore Store => this;
+        CheckpointIdentity? _identity;
 
         public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
             CancellationToken ct = default) => repository.LoadCheckpointAsync(identity, ct);
@@ -688,6 +693,8 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             _identity = context.Identity;
             return new FailableBatch(this, await repository.BeginAsync(context, ct));
         }
+
+        public IProjectionStore Store => this;
 
         public ValueTask StageValueAsync(string value, CancellationToken ct = default) =>
             new(repository.StageAsync(_identity!, value, ct));
@@ -751,6 +758,12 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             string? token,
             CancellationToken ct = default) =>
             ValueTask.FromResult(Result<ClaimsPrincipal>.Success(RequestActor.System));
+    }
+
+    sealed class IgnoreTerminalRequest : IQueuedRequestTerminalHandler
+    {
+        public ValueTask HandleAsync(QueuedRequestFailureContext context, CancellationToken ct = default) =>
+            ValueTask.CompletedTask;
     }
 }
 

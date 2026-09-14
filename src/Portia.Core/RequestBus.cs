@@ -245,7 +245,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         if (!policies.HasAuthorizers && registration.Permission is null && policies.Unary.IsEmpty)
             return InvokeHandlerAsync(registration, request, dispatchContext, ct);
         if (!policies.HasAuthorizers && registration.Permission is null)
-            return InvokeAsync(registration, policies, request, registration.CreateContext(request, dispatchContext), ct);
+            return InvokeAsync(registration, policies, request, registration.CreateContext(request, dispatchContext),
+                ct);
         return AuthorizeAndInvokeAsync(registration, policies, request, dispatchContext, ct);
     }
 

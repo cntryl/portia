@@ -23,6 +23,10 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         "Transported request '{0}' declares invalid route segment '{1}'; use '*' or letters, digits, '.', '_', '-', and '~'",
         "Portia", DiagnosticSeverity.Error, true);
 
+    static readonly DiagnosticDescriptor InvalidTransportId = new("PORTIA029", "Invalid request transport ID",
+        "Transported request '{0}' declares invalid transport ID '{1}'; use ASCII letters, digits, '.', '-', and '_'",
+        "Portia", DiagnosticSeverity.Error, true);
+
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -32,6 +36,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
                 static (syntaxContext, _) => RequestTransportDiscovery.GetRequestTransportComponent(syntaxContext))
             .Where(static request => request is not null)
             .Select(static (request, _) => request!)
+            .WithTrackingName("PortiaRequestTransports")
             .Collect();
         var invalidDiscriminators = context.SyntaxProvider
             .CreateSyntaxProvider(
@@ -39,11 +44,13 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
                 static (syntaxContext, _) => RequestTransportDiscovery.GetInvalidRequestDiscriminator(syntaxContext))
             .Where(static model => model is not null)
             .Select(static (model, _) => model!)
+            .WithTrackingName("PortiaInvalidRequestDiscriminators")
             .Collect();
         context.RegisterSourceOutput(invalidDiscriminators, static (sourceContext, invalid) =>
         {
             foreach (var model in invalid)
-                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidDiscriminator, model.Location.ToLocation(), model.TypeName));
+                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidDiscriminator, model.Location.ToLocation(),
+                    model.TypeName));
         });
         var invalidRoutes = context.SyntaxProvider
             .CreateSyntaxProvider(
@@ -51,14 +58,27 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
                 static (syntaxContext, _) => RequestTransportDiscovery.GetInvalidRoute(syntaxContext))
             .Where(static model => model is not null)
             .Select(static (model, _) => model!)
+            .WithTrackingName("PortiaInvalidRequestRoutes")
             .Collect();
         context.RegisterSourceOutput(invalidRoutes, static (sourceContext, invalid) =>
         {
             foreach (var model in invalid)
-            {
-                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidRoute, model.Location.ToLocation(), model.TypeName,
-                    model.Segment));
-            }
+                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidRoute, model.Location.ToLocation(),
+                    model.TypeName, model.Segment));
+        });
+        var invalidTransportIds = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) => RequestTransportDiscovery.IsCandidate(node),
+                static (syntaxContext, _) => RequestTransportDiscovery.GetInvalidTransportId(syntaxContext))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!)
+            .WithTrackingName("PortiaInvalidRequestTransportIds")
+            .Collect();
+        context.RegisterSourceOutput(invalidTransportIds, static (sourceContext, invalid) =>
+        {
+            foreach (var model in invalid)
+                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidTransportId, model.Location.ToLocation(),
+                    model.TypeName, model.Id));
         });
         var components = context.SyntaxProvider
             .CreateSyntaxProvider(

@@ -53,6 +53,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 static (syntaxContext, _) => AnalyzeCall(syntaxContext))
             .Where(static call => call is not null)
             .Select(static (call, _) => call!)
+            .WithTrackingName("PortiaHttpBindings")
             .Collect();
 
         context.RegisterSourceOutput(calls, static (sourceContext, calls) =>
@@ -585,7 +586,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 .AppendLine("                }")
                 .AppendLine()
                 .AppendLine(
-                    "                var actorToken = global::Cntryl.Portia.PortiaHttpBinding.ReadBearerCredential(httpContext);")
+                    "                var actorToken = global::Cntryl.Portia.PortiaHttpBinding.ReadPortableBearerCredential(httpContext);")
                 .AppendLine(
                     "                await queue.EnqueueAsync(request, global::Cntryl.Portia.PortiaHttpBinding.ResolveRouteValues(httpContext), actorToken, context.Metadata, ct).ConfigureAwait(false);")
                 .AppendLine(

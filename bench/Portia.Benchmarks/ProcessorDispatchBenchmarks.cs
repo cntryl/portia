@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 using Cntryl.Portia.Testing;
@@ -8,8 +9,8 @@ namespace Cntryl.Portia;
 [MemoryDiagnoser]
 public class ProcessorDispatchBenchmarks : IDisposable
 {
-    readonly BenchmarkProjectionStore _store = new();
     readonly BenchmarkReader _reader = new();
+    readonly BenchmarkProjectionStore _store = new();
     BatchBenchmarkProjector _batch = null!;
     ProjectorRunner _runner = null!;
     SingleBenchmarkProjector _single = null!;
@@ -17,6 +18,13 @@ public class ProcessorDispatchBenchmarks : IDisposable
     /// <summary>Gets or sets the number of events processed by each invocation.</summary>
     [Params(1, 32, 512)]
     public int EventCount { get; set; }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        _store.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     /// <summary>Creates stable, fully identified source records.</summary>
     [GlobalSetup]
@@ -29,7 +37,7 @@ public class ProcessorDispatchBenchmarks : IDisposable
             var ev = DomainEventSeed.Attach(new ProcessorBenchmarkEvent(index), aggregateId, (ulong)index + 1,
                 occurredOn: DateTimeOffset.UnixEpoch);
             return new DomainEventRecord(stream, ev, (ulong)index,
-                new EventCursor((index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                new EventCursor((index + 1).ToString(CultureInfo.InvariantCulture)));
         }).ToArray();
         _runner = new ProjectorRunner(_reader);
         _single = new SingleBenchmarkProjector(_store);
@@ -44,13 +52,6 @@ public class ProcessorDispatchBenchmarks : IDisposable
     [Benchmark]
     public ValueTask<ProjectionCheckpoint> Batch() => _runner.RunAsync(_batch, ProjectionCheckpoint.Start,
         new ProjectionRunOptions { MaxBatchSize = EventCount });
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        _store.Dispose();
-        GC.SuppressFinalize(this);
-    }
 
     sealed class BenchmarkReader : IDomainEventReader
     {
@@ -76,18 +77,18 @@ public class ProcessorDispatchBenchmarks : IDisposable
 
     sealed class BenchmarkProjectionStore : IProjectionStore, IProjectionBatch, IDisposable
     {
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-            CancellationToken ct = default) => ValueTask.FromResult(ProjectionCheckpoint.Start);
-
-        public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context,
-            CancellationToken ct = default) => ValueTask.FromResult<IProjectionBatch>(this);
+        public void Dispose() => GC.SuppressFinalize(this);
 
         public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default) =>
             ValueTask.CompletedTask;
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
-        public void Dispose() => GC.SuppressFinalize(this);
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
+            CancellationToken ct = default) => ValueTask.FromResult(ProjectionCheckpoint.Start);
+
+        public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context,
+            CancellationToken ct = default) => ValueTask.FromResult<IProjectionBatch>(this);
     }
 }
 

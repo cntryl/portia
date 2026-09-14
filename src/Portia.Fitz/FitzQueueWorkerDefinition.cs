@@ -4,12 +4,18 @@ sealed record FitzQueueWorkerDefinition(string Route) : FitzRoutedWorkerDefiniti
 {
     internal const string QueueScheme = "queue";
 
+    static readonly Type[] QueueRequiredServices =
+        [.. RoutedRequiredServices, typeof(IQueuedRequestTerminalHandler)];
+
+    internal override IReadOnlyCollection<Type> Requirements => QueueRequiredServices;
+
     internal static FitzQueueWorkerDefinition For(RequestRouteAttribute route) =>
         new(Format(QueueScheme, route, false));
 
     internal override Func<CancellationToken, Task>? CreateRunner(FitzWorkerHost host) =>
         new QueueRunner(
-            new FitzRequestQueueConsumer(host.Client.Queue, host.Serializer, Route, host.Catalog, timeProvider: host.Clock,
+            new FitzRequestQueueConsumer(host.Client.Queue, host.Serializer, Route, host.Catalog,
+                timeProvider: host.Clock,
                 logger: host.QueueLogger),
             new DependencyInjectionQueueDeliveryScopeFactory(host.Scopes), host.QueueRunnerLogger).RunAsync;
 }

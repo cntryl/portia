@@ -22,10 +22,10 @@ public sealed class FitzRequestQueueConsumer(
     TimeProvider? timeProvider = null,
     ILogger<FitzRequestQueueConsumer>? logger = null) : IRequestQueueConsumer
 {
+    readonly RequestTransportCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly TimeSpan _notificationBackstop = GetNotificationBackstop(waitDuration);
     readonly IQueueClient _queue = queue ?? throw new ArgumentNullException(nameof(queue));
-    readonly RequestTransportCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
     readonly TimeSpan _renewalInterval = GetRenewalInterval(visibilityTimeoutSeconds);
 
     readonly string _route = string.IsNullOrWhiteSpace(route)
@@ -124,11 +124,11 @@ public sealed class FitzRequestQueueConsumer(
 
     sealed class FitzQueuedRequest : IQueuedRequest, IAsyncDisposable
     {
+        readonly Lazy<DeserializedRequest> _envelope;
         readonly IQueueReservedItem _item;
         readonly CancellationTokenSource _lost;
-        readonly Lazy<DeserializedRequest> _envelope;
-        readonly Lazy<IRequest> _request;
         readonly Task _renewal;
+        readonly Lazy<IRequest> _request;
         readonly CancellationTokenSource _stop;
         Exception? _renewalError;
 
@@ -163,23 +163,16 @@ public sealed class FitzRequestQueueConsumer(
         public string? Name => _envelope.Value.Name;
         public RequestMetadata Metadata => _envelope.Value.Metadata;
         public RequestTraceContext? TraceContext => _envelope.Value.TraceContext;
+
         public RequestInvocation Invocation => new QueueInvocation(_item.Route, _item.Attempt)
         {
             MessagingSystem = "fitz"
         };
+
         public string? ActorToken => _envelope.Value.ActorToken;
         public uint Attempt => _item.Attempt;
         public bool SupportsDurableAttempts => _item.Attempt != QueueItem.AttemptUnavailable;
         public CancellationToken ReservationCancellation => _lost.Token;
-
-        static IRequest Validate(IRequestBase requestBase, RequestTransportCatalog catalog)
-        {
-            var request = requestBase as IRequest
-                          ?? throw new InvalidOperationException("Only no-result requests can be queued.");
-            if (!catalog.Get(request.GetType()).Transports.Contains(RequestTransportId.Queue))
-                throw new InvalidRequestTransportException(request, RequestTransportId.Queue);
-            return request;
-        }
 
         public async ValueTask CompleteAsync(CancellationToken ct = default)
         {
@@ -205,6 +198,15 @@ public sealed class FitzRequestQueueConsumer(
 
         // Fitz owns expiration, redelivery and dead-letter policy. Do not acknowledge or republish.
         public ValueTask AbandonAsync(CancellationToken ct = default) => StopRenewalAsync();
+
+        static IRequest Validate(IRequestBase requestBase, RequestTransportCatalog catalog)
+        {
+            var request = requestBase as IRequest
+                          ?? throw new InvalidOperationException("Only no-result requests can be queued.");
+            if (!catalog.Get(request.GetType()).Transports.Contains(RequestTransportId.Queue))
+                throw new InvalidRequestTransportException(request, RequestTransportId.Queue);
+            return request;
+        }
 
         async Task RenewAsync(ulong leaseSeconds, TimeSpan interval, TimeProvider clock, ILogger? logger)
         {

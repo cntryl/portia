@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace Cntryl.Portia.Consumer;
 
 /// <summary>
@@ -88,7 +90,7 @@ public sealed class UninterceptedCallSiteTests
                                  """);
 
         _ = app is null
-            ? Assert.IsType<ArgumentException>(error, exactMatch: false)
+            ? Assert.IsType<ArgumentException>(error, false)
             : Assert.IsType<ArgumentNullException>(error);
     }
 
@@ -148,6 +150,6 @@ public sealed class UninterceptedCallSiteTests
         var assembly = GeneratorCompilation.Compile(source);
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!;
         var error = Record.Exception(() => run.Invoke(null, null));
-        return Assert.IsType<System.Reflection.TargetInvocationException>(error).InnerException!;
+        return Assert.IsType<TargetInvocationException>(error).InnerException!;
     }
 }

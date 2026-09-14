@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 using Cntryl.Portia.Testing;
@@ -29,7 +30,7 @@ public class ReactorDispatchBenchmarks
             var ev = DomainEventSeed.Attach(new ProcessorBenchmarkEvent(index), aggregateId, (ulong)index + 1,
                 occurredOn: DateTimeOffset.UnixEpoch);
             return new DomainEventRecord(stream, ev, (ulong)index,
-                new EventCursor((index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                new EventCursor((index + 1).ToString(CultureInfo.InvariantCulture)));
         }).ToArray();
         _runner = new ReactorRunner(_reader);
         _single = new SingleBenchmarkReactor(_checkpoints);

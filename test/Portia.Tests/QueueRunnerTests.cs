@@ -32,7 +32,8 @@ public sealed class QueueRunnerTests
 
         Assert.Equal(["abandoned", "abandoned", "completed", "terminal"], outcomes.Order());
         Assert.Equal([1005, 1002], logger.Entries.Select(entry => entry.EventId.Id));
-        Assert.DoesNotContain(logger.Entries, entry => entry.Message.Contains("Value is invalid", StringComparison.Ordinal));
+        Assert.DoesNotContain(logger.Entries,
+            entry => entry.Message.Contains("Value is invalid", StringComparison.Ordinal));
         Assert.IsType<InvalidOperationException>(logger.Entries[1].Exception);
     }
 
@@ -52,7 +53,8 @@ public sealed class QueueRunnerTests
             new FakeQueuedRequest(new ChangeValue(3))
         };
         var consumer = new FakeQueueConsumer(items);
-        var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator()));
+        var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator(),
+            terminalHandler: new RecordingTerminalHandler()));
 
         await runner.RunAsync();
 
@@ -74,7 +76,8 @@ public sealed class QueueRunnerTests
         var failing = new FakeQueuedRequest(new ChangeValue(1), true);
         var succeeding = new FakeQueuedRequest(new ChangeValue(2));
         var consumer = new FakeQueueConsumer([failing, succeeding]);
-        var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator()));
+        var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator(),
+            terminalHandler: new RecordingTerminalHandler()));
 
         await runner.RunAsync();
 
@@ -113,34 +116,36 @@ public sealed class QueueRunnerTests
         Assert.False(invalid.Abandoned);
     }
 
-    /// <summary>A permanent delivery without an application disposition remains transport-owned.</summary>
+    /// <summary>A direct runner refuses to enumerate without an application terminal policy.</summary>
     [Fact]
-    public async Task ShouldFaultWithoutAcknowledgmentGivenPermanentFailureAndMissingHandler()
+    public async Task ShouldRejectMissingHandlerBeforeConsumerEnumeration()
     {
         using var busHost = TestRequestBus.Create();
         var queued = new FakeQueuedRequest(new InvalidChangeValue(1));
-        var runner = new QueueRunner(new FakeQueueConsumer([queued]),
+        var consumer = new FakeQueueConsumer([queued]);
+        var runner = new QueueRunner(consumer,
             RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator()));
 
-        var failure = await Assert.ThrowsAsync<TerminalHandlerMissingException>(() => runner.RunAsync());
+        var failure = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync());
 
-        Assert.Equal(QueuedRequestTerminalReason.PermanentFailure, failure.Reason);
+        Assert.Equal(typeof(IQueuedRequestTerminalHandler), failure.MissingServiceType);
+        Assert.Contains(typeof(IQueuedRequestTerminalHandler).FullName!, failure.Message, StringComparison.Ordinal);
+        Assert.Equal(0, consumer.EnumerationCount);
         Assert.False(queued.Completed);
         Assert.False(queued.Abandoned);
     }
 
-    /// <summary>An actor-validation terminal outcome is also fail-closed without a callback.</summary>
+    /// <summary>Even a queue containing only successful work requires an explicit terminal policy.</summary>
     [Fact]
-    public async Task ShouldFaultWithoutAcknowledgmentGivenActorValidationFailureAndMissingHandler()
+    public async Task ShouldRejectMissingHandlerForSuccessfulOnlyQueue()
     {
         using var busHost = TestRequestBus.Create();
-        var queued = new FakeQueuedRequest(new ChangeValue(1), actorToken: "expired-token");
+        var queued = new FakeQueuedRequest(new ChangeValue(1));
         var runner = new QueueRunner(new FakeQueueConsumer([queued]),
-            RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator("expired-token")));
+            RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator()));
 
-        var failure = await Assert.ThrowsAsync<TerminalHandlerMissingException>(() => runner.RunAsync());
+        _ = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync());
 
-        Assert.Equal(QueuedRequestTerminalReason.ActorValidationFailure, failure.Reason);
         Assert.False(queued.Completed);
         Assert.False(queued.Abandoned);
     }
@@ -219,6 +224,23 @@ public sealed class QueueRunnerTests
         Assert.Equal(0, queued.AbandonmentCount);
     }
 
+    /// <summary>The transport invocation is snapshot data even when terminal handling inspects it.</summary>
+    [Fact]
+    public async Task ShouldReadInvocationOnceThroughTerminalCallbackAndAcknowledgment()
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = new FakeQueuedRequest(new InvalidChangeValue(1), invocationMayBeReadOnce: true);
+        var terminal = new RecordingTerminalHandler();
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), terminalHandler: terminal));
+
+        await runner.RunAsync();
+
+        Assert.Equal(1, queued.InvocationReadCount);
+        _ = Assert.Single(terminal.Failures);
+        Assert.Equal(1, queued.CompletionCount);
+    }
+
     /// <summary>
     ///     Verifies that a broker which refuses the acknowledgment after a terminal delivery has already
     ///     been handled does not fault the runner. The application's terminal handler has run and its
@@ -278,6 +300,126 @@ public sealed class QueueRunnerTests
         Assert.False(queued.Abandoned);
     }
 
+    /// <summary>An unknown wire contract remains transport-owned below its durable threshold.</summary>
+    [Fact]
+    public async Task ShouldAbandonRetryableEnvelopeFailureBelowTerminalAttempt()
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = new FakeQueuedRequest(new ChangeValue(1), attempt: 2,
+            readException: RequestEnvelopeFailure.Create(RequestEnvelopeFailureKind.Retryable, "unknown contract"));
+        var terminal = new RecordingTerminalHandler();
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
+
+        await runner.RunAsync();
+
+        Assert.Empty(terminal.Failures);
+        Assert.True(queued.Abandoned);
+        Assert.False(queued.Completed);
+    }
+
+    /// <summary>A retryable read failure becomes terminal only when both threshold and callback exist.</summary>
+    [Fact]
+    public async Task ShouldCompleteRetryableEnvelopeFailureAtTerminalAttemptGivenHandler()
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = new FakeQueuedRequest(new ChangeValue(1), attempt: 3,
+            readException: RequestEnvelopeFailure.Create(RequestEnvelopeFailureKind.Retryable, "unknown contract"));
+        var terminal = new RecordingTerminalHandler();
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
+
+        await runner.RunAsync();
+
+        Assert.Equal(QueuedRequestTerminalReason.RetryLimitReached, Assert.Single(terminal.Failures).Reason);
+        Assert.True(queued.Completed);
+    }
+
+    /// <summary>A permanent lazy read always reaches the terminal callback and later work continues.</summary>
+    [Fact]
+    public async Task ShouldTerminalizePermanentEnvelopeFailureAndContinue()
+    {
+        var handler = new ChangeValueHandler();
+        using var busHost = TestRequestBus.Create(handler);
+        var malformed = new FakeQueuedRequest(new ChangeValue(1),
+            readException: RequestEnvelopeFailure.Create(RequestEnvelopeFailureKind.Permanent, "malformed"));
+        var later = new FakeQueuedRequest(new ChangeValue(7));
+        var terminal = new RecordingTerminalHandler();
+        var runner = new QueueRunner(new FakeQueueConsumer([malformed, later]),
+            RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator(), terminalHandler: terminal));
+
+        await runner.RunAsync();
+
+        Assert.Equal(QueuedRequestTerminalReason.DeserializationFailure, Assert.Single(terminal.Failures).Reason);
+        Assert.True(malformed.Completed);
+        Assert.False(malformed.Abandoned);
+        Assert.True(later.Completed);
+        Assert.Equal(7, handler.LastValue);
+    }
+
+    /// <summary>An abandoned lazy read failure is visible exactly once as an execution fault.</summary>
+    [Fact]
+    public async Task ShouldRecordAbandonedReadFailureExactlyOnce()
+    {
+        using var busHost = TestRequestBus.Create();
+        var faults = new List<KeyValuePair<string, object?>[]>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Meter.Name == PortiaTelemetry.SourceName && instrument.Name == "portia.worker.failure")
+                meterListener.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) => faults.Add(tags.ToArray()));
+        listener.Start();
+        var queued = new FakeQueuedRequest(new ChangeValue(1), attempt: 2,
+            readException: RequestEnvelopeFailure.Create(RequestEnvelopeFailureKind.Retryable, "unknown contract"));
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 },
+            new RecordingTerminalHandler()));
+
+        await runner.RunAsync();
+
+        Assert.True(queued.Abandoned);
+        var fault = Assert.Single(faults);
+        Assert.Contains(fault, tag => Equals(tag.Value, nameof(QueueRunner)));
+        Assert.Contains(fault, tag => Equals(tag.Value, "execution"));
+    }
+
+    /// <summary>A malformed read with an application callback retains deserialization terminal semantics.</summary>
+    [Fact]
+    public async Task ShouldCompletePermanentEnvelopeFailureAsDeserializationFailureGivenHandler()
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = new FakeQueuedRequest(new ChangeValue(1),
+            readException: RequestEnvelopeFailure.Create(RequestEnvelopeFailureKind.Permanent, "malformed"));
+        var terminal = new RecordingTerminalHandler();
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), terminalHandler: terminal));
+
+        await runner.RunAsync();
+
+        Assert.Equal(QueuedRequestTerminalReason.DeserializationFailure, Assert.Single(terminal.Failures).Reason);
+        Assert.True(queued.Completed);
+    }
+
+    /// <summary>A retryable lazy read is terminalized at its durable threshold.</summary>
+    [Fact]
+    public async Task ShouldTerminalizeRetryableEnvelopeFailureAtThreshold()
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = new FakeQueuedRequest(new ChangeValue(1), attempt: 3,
+            readException: RequestEnvelopeFailure.Create(RequestEnvelopeFailureKind.Retryable, "unknown contract"));
+        var terminal = new RecordingTerminalHandler();
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
+
+        await runner.RunAsync();
+
+        Assert.Equal(QueuedRequestTerminalReason.RetryLimitReached, Assert.Single(terminal.Failures).Reason);
+        Assert.False(queued.Abandoned);
+        Assert.True(queued.Completed);
+    }
+
     /// <summary>A terminal threshold is rejected by the runner when the adapter has no durable count.</summary>
     [Fact]
     public async Task ShouldRejectTerminalAttemptGivenTransportDoesNotSupportDurableAttempts()
@@ -285,11 +427,29 @@ public sealed class QueueRunnerTests
         using var busHost = TestRequestBus.Create();
         var queued = new FakeQueuedRequest(new ChangeValue(1), supportsDurableAttempts: false);
         var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
-            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }));
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 },
+            new RecordingTerminalHandler()));
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync());
 
         Assert.Contains("durable delivery-attempt count", error.Message, StringComparison.Ordinal);
+        Assert.False(queued.Completed);
+        Assert.False(queued.Abandoned);
+    }
+
+    /// <summary>Zero is not a meaningful terminal delivery attempt.</summary>
+    [Fact]
+    public async Task ShouldRejectZeroTerminalAttemptBeforeReadingTheDelivery()
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = new FakeQueuedRequest(new ChangeValue(1));
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 0 },
+            new RecordingTerminalHandler()));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync());
+
+        Assert.Contains("must be positive", error.Message, StringComparison.Ordinal);
         Assert.False(queued.Completed);
         Assert.False(queued.Abandoned);
     }
@@ -389,7 +549,7 @@ public sealed class QueueRunnerTests
         Assert.False(queued.Abandoned);
     }
 
-    /// <summary>A configured retry threshold is fail-closed when no terminal handler exists.</summary>
+    /// <summary>A configured retry threshold cannot make a missing terminal policy valid.</summary>
     [Fact]
     public async Task ShouldFaultWithoutAcknowledgmentGivenRetryLimitAndMissingHandler()
     {
@@ -398,9 +558,9 @@ public sealed class QueueRunnerTests
         var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }));
 
-        var failure = await Assert.ThrowsAsync<TerminalHandlerMissingException>(() => runner.RunAsync());
+        var failure = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync());
 
-        Assert.Equal(QueuedRequestTerminalReason.RetryLimitReached, failure.Reason);
+        Assert.Equal(typeof(IQueuedRequestTerminalHandler), failure.MissingServiceType);
         Assert.False(queued.Completed);
         Assert.False(queued.Abandoned);
     }
@@ -412,7 +572,8 @@ public sealed class QueueRunnerTests
         using var busHost = TestRequestBus.Create();
         var queued = new FakeQueuedRequest(new ChangeValue(1), true, attempt: 2);
         var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
-            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }));
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 },
+            new RecordingTerminalHandler()));
 
         await runner.RunAsync();
 
@@ -420,7 +581,7 @@ public sealed class QueueRunnerTests
         Assert.True(queued.Abandoned);
     }
 
-    /// <summary>The hosted transport must expose a missing terminal handler instead of restarting.</summary>
+    /// <summary>The hosted transport exposes startup configuration failure instead of restarting.</summary>
     [Fact]
     public async Task ShouldFaultHostedRunnerGivenTerminalHandlerMissing()
     {
@@ -431,10 +592,10 @@ public sealed class QueueRunnerTests
         using var hosted = new QueueRunnerHostedService(runner);
 
         await hosted.StartAsync(default);
-        var failure = await Assert.ThrowsAsync<TerminalHandlerMissingException>(async () =>
+        var failure = await Assert.ThrowsAsync<QueueConfigurationException>(async () =>
             await (hosted.ExecuteTask ?? throw new InvalidOperationException("The hosted runner did not start.")));
 
-        Assert.Equal(QueuedRequestTerminalReason.PermanentFailure, failure.Reason);
+        Assert.Equal(typeof(IQueuedRequestTerminalHandler), failure.MissingServiceType);
         Assert.False(queued.Completed);
         Assert.False(queued.Abandoned);
     }
@@ -461,17 +622,252 @@ public sealed class QueueRunnerTests
         Assert.Equal(1, attempts);
     }
 
+    /// <summary>Fitz does not restart a queue with an invalid terminal-policy configuration.</summary>
+    [Fact]
+    public async Task ShouldFaultFitzWorkerRestartBoundaryGivenQueueConfigurationFailure()
+    {
+        var expected = new QueueConfigurationException(typeof(IQueuedRequestTerminalHandler));
+        var attempts = 0;
+
+        var failure = await Assert.ThrowsAsync<QueueConfigurationException>(() => FitzApplicationWorkers.RetryAsync(
+            "FitzQueueWorkerDefinition", _ =>
+            {
+                attempts++;
+                return Task.FromException(expected);
+            }, TimeSpan.FromSeconds(1), TimeProvider.System, null, default));
+
+        Assert.Same(expected, failure);
+        Assert.Equal(1, attempts);
+    }
+
+    /// <summary>Preflight scope dependencies are disposed and delivery uses a fresh scope.</summary>
+    [Fact]
+    public async Task ShouldDisposePreflightScopeAndUseFreshDeliveryScope()
+    {
+        using var busHost = TestRequestBus.Create();
+        var scopes = new RecordingQueueScopeFactory(busHost.Bus, new TestRequestActorValidator(),
+            includeHandler: _ => true);
+        var queued = new FakeQueuedRequest(new ChangeValue(1));
+
+        await new QueueRunner(new FakeQueueConsumer([queued]), scopes).RunAsync();
+
+        Assert.Equal(2, scopes.Created.Count);
+        Assert.All(scopes.Created, scope => Assert.True(scope.Disposed));
+        Assert.NotSame(scopes.Created[0].TerminalHandler, scopes.Created[1].TerminalHandler);
+        Assert.True(queued.Completed);
+    }
+
+    /// <summary>Every delivery scope is checked even after startup preflight succeeds.</summary>
+    [Fact]
+    public async Task ShouldRejectInconsistentDeliveryScopeWithoutChangingTransportOwnership()
+    {
+        using var busHost = TestRequestBus.Create();
+        var scopes = new RecordingQueueScopeFactory(busHost.Bus, new TestRequestActorValidator(),
+            includeHandler: index => index == 0);
+        var queued = new FakeQueuedRequest(new ChangeValue(1));
+
+        _ = await Assert.ThrowsAsync<QueueConfigurationException>(() =>
+            new QueueRunner(new FakeQueueConsumer([queued]), scopes).RunAsync());
+
+        Assert.Equal(2, scopes.Created.Count);
+        Assert.All(scopes.Created, scope => Assert.True(scope.Disposed));
+        Assert.False(queued.Completed);
+        Assert.False(queued.Abandoned);
+    }
+
+    /// <summary>B1-B12: Queue read failures preserve disposition, continuation, telemetry, and ownership invariants.</summary>
+    [Theory]
+    [MemberData(nameof(QueueReadFailureCases))]
+    public async Task ShouldApplyQueueReadFailurePolicyGivenMatrixCell(string cellId, string failureKind,
+        uint? terminalAttempt, uint attempt, bool terminal, bool faultLogged, bool throwInvocation)
+    {
+        using var busHost = TestRequestBus.Create(new ChangeValueHandler());
+        Exception exception = failureKind switch
+        {
+            "permanent" => RequestEnvelopeFailure.Create(RequestEnvelopeFailureKind.Permanent, cellId),
+            "retryable" => RequestEnvelopeFailure.Create(RequestEnvelopeFailureKind.Retryable, cellId),
+            _ => new IOException(cellId)
+        };
+        var failed = new FakeQueuedRequest(new ChangeValue(1), attempt: attempt, readException: exception,
+            throwOnInvocation: throwInvocation);
+        var next = new FakeQueuedRequest(new ChangeValue(9));
+        var handler = new RecordingTerminalHandler();
+        using var deliveries = ListenToDeliveries(out var outcomes);
+        using var faults = ListenToRunnerFaults(out var recordedFaults);
+        var runner = new QueueRunner(new FakeQueueConsumer([failed, next]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = terminalAttempt },
+            handler));
+
+        await runner.RunAsync();
+
+        Assert.Equal(terminal ? 1 : 0, handler.Failures.Count);
+        Assert.Equal(terminal, failed.Completed);
+        Assert.Equal(!terminal, failed.Abandoned);
+        Assert.False(failed.Completed && failed.Abandoned);
+        Assert.Equal(terminal ? 1 : 0, failed.CompletionCount);
+        Assert.Equal(terminal ? 0 : 1, failed.AbandonmentCount);
+        Assert.True(next.Completed);
+        Assert.Equal(2, outcomes.Count);
+        Assert.Contains(terminal ? "terminal" : "abandoned", outcomes);
+        Assert.Contains("completed", outcomes);
+        Assert.Equal(faultLogged ? 1 : 0, recordedFaults.Count);
+    }
+
+    /// <summary>B11-at: An unclassified terminal read failure records its runner fault exactly once.</summary>
+    [Fact(Skip = "POLICY CONFLICT: B11-at")]
+    public Task ShouldRecordFaultGivenUnclassifiedReadFailureAtTerminalThreshold() =>
+        ShouldApplyQueueReadFailurePolicyGivenMatrixCell("B11-at", "unclassified", 3, 3, true, true, false);
+
+    /// <summary>D1: A throwing terminal handler faults once and retains ownership for representative terminal cells.</summary>
+    [Theory]
+    [InlineData("D1-B", "read")]
+    [InlineData("D1-C2", "permanent")]
+    [InlineData("D1-C5", "actor")]
+    [InlineData("D1-C6", "transport")]
+    public async Task ShouldRetainOwnershipGivenTerminalHandlerThrowsForMatrixCell(string cellId, string situation)
+    {
+        using var busHost = TestRequestBus.Create();
+        var failed = situation switch
+        {
+            "read" => new FakeQueuedRequest(new ChangeValue(1),
+                readException: RequestEnvelopeFailure.Create(RequestEnvelopeFailureKind.Permanent, cellId)),
+            "permanent" => new FakeQueuedRequest(new InvalidChangeValue(1)),
+            "actor" => new FakeQueuedRequest(new ChangeValue(1), actorToken: "expired-token"),
+            _ => new FakeQueuedRequest(new ChangeValue(1), transportMismatch: true)
+        };
+        var next = new FakeQueuedRequest(new ChangeValue(9));
+        var terminal = new RecordingTerminalHandler(throws: true);
+        using var deliveries = ListenToDeliveries(out var outcomes);
+        using var faults = ListenToRunnerFaults(out var recordedFaults);
+        var runner = new QueueRunner(new FakeQueueConsumer([failed, next]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator("expired-token"), terminalHandler: terminal));
+
+        _ = await Assert.ThrowsAsync<TerminalHandlerFailureException>(() => runner.RunAsync());
+
+        Assert.Single(terminal.Failures);
+        Assert.False(failed.Completed);
+        Assert.False(failed.Abandoned);
+        Assert.False(next.Completed);
+        Assert.False(next.Abandoned);
+        Assert.Equal(["fault"], outcomes);
+        Assert.Empty(recordedFaults);
+    }
+
+    /// <summary>Provides one named row for each B-axis policy cell.</summary>
+    public static IEnumerable<object?[]> QueueReadFailureCases()
+    {
+        foreach (var id in new[] { "B1", "B2", "B3", "B5", "B6", "B7", "B9", "B10" })
+        {
+            yield return [$"{id}-below", "permanent", 3U, 2U, true, false, false];
+            yield return [$"{id}-at", "permanent", 3U, 3U, true, false, false];
+            yield return [$"{id}-none", "permanent", null, 1U, true, false, false];
+        }
+
+        foreach (var id in new[] { "B4", "B8" })
+        {
+            yield return [$"{id}-below", "retryable", 3U, 2U, false, true, false];
+            yield return [$"{id}-at", "retryable", 3U, 3U, true, false, false];
+            yield return [$"{id}-none", "retryable", null, 1U, false, true, false];
+        }
+
+        yield return ["B11-below", "unclassified", 3U, 2U, false, true, false];
+        yield return ["B11-none", "unclassified", null, 1U, false, true, false];
+        yield return ["B12-below-invocation", "retryable", 3U, 2U, false, true, true];
+        yield return ["B12-at-invocation", "retryable", 3U, 3U, true, false, true];
+        yield return ["B12-none-invocation", "retryable", null, 1U, false, true, true];
+    }
+
+    static MeterListener ListenToDeliveries(out List<string> outcomes)
+    {
+        var captured = new List<string>();
+        outcomes = captured;
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == PortiaTelemetry.SourceName &&
+                    instrument.Name == "portia.request.delivery.count")
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            var values = tags.ToArray();
+            lock (captured)
+                captured.Add((string)values[2].Value!);
+        });
+        listener.Start();
+        return listener;
+    }
+
+    static MeterListener ListenToRunnerFaults(out List<KeyValuePair<string, object?>[]> faults)
+    {
+        var captured = new List<KeyValuePair<string, object?>[]>();
+        faults = captured;
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == PortiaTelemetry.SourceName && instrument.Name == "portia.worker.failure")
+                    meterListener.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) => captured.Add(tags.ToArray()));
+        listener.Start();
+        return listener;
+    }
+
     sealed class FakeQueueConsumer(IReadOnlyList<IQueuedRequest> items) : IRequestQueueConsumer
     {
+        public int EnumerationCount { get; private set; }
+
         public async IAsyncEnumerable<IQueuedRequest> ReadAsync(
             [EnumeratorCancellation] CancellationToken ct = default)
         {
+            EnumerationCount++;
             foreach (var item in items)
             {
                 ct.ThrowIfCancellationRequested();
                 await Task.Yield();
                 yield return item;
             }
+        }
+    }
+
+    sealed class RecordingQueueScopeFactory(
+        IRequestBus bus,
+        IRequestActorValidator validator,
+        Func<int, bool> includeHandler) : IQueueDeliveryScopeFactory
+    {
+        public List<RecordingQueueScope> Created { get; } = [];
+
+        public ValueTask<IQueueDeliveryScope> CreateAsync(CancellationToken ct = default)
+        {
+            var scope = new RecordingQueueScope(bus, validator,
+                includeHandler(Created.Count) ? new RecordingTerminalHandler() : null);
+            Created.Add(scope);
+            return ValueTask.FromResult<IQueueDeliveryScope>(scope);
+        }
+    }
+
+    sealed class RecordingQueueScope(
+        IRequestBus bus,
+        IRequestActorValidator validator,
+        IQueuedRequestTerminalHandler? terminalHandler) : IQueueDeliveryScope
+    {
+        public IRequestBus Bus { get; } = bus;
+        public IRequestActorValidator ActorValidator { get; } = validator;
+        public TimeProvider? TimeProvider => null;
+        public QueueRunnerOptions Options { get; } = new();
+        public IQueuedRequestTerminalHandler? TerminalHandler { get; } = terminalHandler;
+        public bool Disposed { get; private set; }
+
+        public ValueTask DisposeAsync()
+        {
+            Disposed = true;
+            return ValueTask.CompletedTask;
         }
     }
 
@@ -483,7 +879,10 @@ public sealed class QueueRunnerTests
         List<string>? operations = null,
         bool throwOnAcknowledge = false,
         bool supportsDurableAttempts = true,
-        bool transportMismatch = false) : IQueuedRequest
+        bool transportMismatch = false,
+        bool invocationMayBeReadOnce = false,
+        Exception? readException = null,
+        bool throwOnInvocation = false) : IQueuedRequest
     {
         public int CompletionCount { get; private set; }
 
@@ -492,12 +891,21 @@ public sealed class QueueRunnerTests
         public bool Completed { get; private set; }
 
         public bool Abandoned { get; private set; }
+        public int InvocationReadCount { get; private set; }
         public RequestMetadata Metadata { get; } = RequestMetadata.Create();
-        public RequestInvocation Invocation => new QueueInvocation("queue://test/work/item", Attempt);
 
-        public IRequest Request => transportMismatch
-            ? throw new InvalidRequestTransportException(request, RequestTransportId.Queue)
-            : throwOnDispatch ? new ThrowingChangeValue(0) : request;
+        public RequestInvocation Invocation => !throwOnInvocation &&
+                                               (++InvocationReadCount == 1 || !invocationMayBeReadOnce)
+            ? new QueueInvocation("queue://test/work/item", Attempt)
+            : throw new InvalidOperationException("Invocation is unavailable.");
+
+        public IRequest Request => readException is not null
+            ? throw readException
+            : transportMismatch
+                ? throw new InvalidRequestTransportException(request, RequestTransportId.Queue)
+                : throwOnDispatch
+                    ? new ThrowingChangeValue(0)
+                    : request;
 
         public string? ActorToken { get; } = actorToken;
 
@@ -548,31 +956,6 @@ public sealed class QueueRunnerTests
         public ValueTask<Result> HandleAsync(IRequestContext<InvalidChangeValue> context, CancellationToken ct) =>
             ValueTask.FromResult(Result.Failure(new RequestError(RequestErrorKind.Validation, "Value is invalid.",
                 context.Request.IsTransient)));
-    }
-
-    static MeterListener ListenToDeliveries(out List<string> outcomes)
-    {
-        var captured = new List<string>();
-        outcomes = captured;
-        var listener = new MeterListener
-        {
-            InstrumentPublished = (instrument, meterListener) =>
-            {
-                if (instrument.Meter.Name == PortiaTelemetry.SourceName &&
-                    instrument.Name == "portia.request.delivery.count")
-                {
-                    meterListener.EnableMeasurementEvents(instrument);
-                }
-            }
-        };
-        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
-        {
-            var values = tags.ToArray();
-            lock (captured)
-                captured.Add((string)values[2].Value!);
-        });
-        listener.Start();
-        return listener;
     }
 
     sealed class CapturingLogger : ILogger<QueueRunner>

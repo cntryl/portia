@@ -15,11 +15,21 @@ public class HttpBindingBenchmarks : IDisposable
     JsonDocument _hexBody = null!;
     JsonSerializerOptions _hexOptions = null!;
     JsonDocument _mixedBody = null!;
-    JsonSerializerOptions _mixedOptions = null!;
     string[] _mixedClrNames = null!;
     string[] _mixedJsonNames = null!;
+    JsonSerializerOptions _mixedOptions = null!;
     JsonDocument _numberBody = null!;
     JsonSerializerOptions _numberOptions = null!;
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        _defaultBody.Dispose();
+        _hexBody.Dispose();
+        _numberBody.Dispose();
+        _mixedBody.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     /// <summary>Pre-parses bodies so warm measurements isolate member binding.</summary>
     [GlobalSetup]
@@ -81,16 +91,6 @@ public class HttpBindingBenchmarks : IDisposable
             _hexBody.RootElement, options, 0, "Value", "value", false, false, 0);
     }
 
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        _defaultBody.Dispose();
-        _hexBody.Dispose();
-        _numberBody.Dispose();
-        _mixedBody.Dispose();
-        GC.SuppressFinalize(this);
-    }
-
     static JsonSerializerOptions Options() => new(JsonSerializerDefaults.Web)
     {
         TypeInfoResolver = new DefaultJsonTypeInfoResolver()
@@ -98,16 +98,35 @@ public class HttpBindingBenchmarks : IDisposable
 
     sealed record DefaultBinding(int Value);
 
-    sealed record ConverterBinding([property: JsonConverter(typeof(HexIntConverter))] int Value);
+    sealed record ConverterBinding(
+        [property: JsonConverter(typeof(HexIntConverter))]
+        int Value);
 
     sealed record NumberBinding(
-        [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] int Value);
+        [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
+        int Value);
 
     sealed record MixedBinding(
-        int P1, int P2, int P3, int P4, int P5,
-        int P6, int P7, int P8, int P9, int P10,
-        int P11, int P12, int P13, int P14, int P15,
-        int P16, int P17, int P18, int P19, int P20);
+        int P1,
+        int P2,
+        int P3,
+        int P4,
+        int P5,
+        int P6,
+        int P7,
+        int P8,
+        int P9,
+        int P10,
+        int P11,
+        int P12,
+        int P13,
+        int P14,
+        int P15,
+        int P16,
+        int P17,
+        int P18,
+        int P19,
+        int P20);
 
     sealed class HexIntConverter : JsonConverter<int>
     {

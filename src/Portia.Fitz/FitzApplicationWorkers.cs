@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Cntryl.Portia;
 
@@ -36,7 +37,29 @@ sealed class FitzApplicationWorkers(
 
     public Task StartingAsync(CancellationToken cancellationToken)
     {
+        if (_workloads.Length != 0)
+        {
+            using var scope = scopes.CreateScope();
+            var coordinator = scope.ServiceProvider.GetService<IWorkloadCoordinator>();
+            if (coordinator is FitzWorkloadCoordinator && configuration.Fleet is null)
+                throw new InvalidOperationException(
+                    "Fitz:ApplicationName or an explicit UseFleet(...) is required when Fitz coordinates workloads.");
+        }
+
+        if (_workers.OfType<FitzQueueWorkerDefinition>().Any())
+        {
+            using var scope = scopes.CreateScope();
+            var options = scope.ServiceProvider.GetService<IOptions<QueueRunnerOptions>>()?.Value
+                          ?? new QueueRunnerOptions();
+            options.Validate();
+            if (options.TerminalAttempt is > 0)
+                throw new InvalidOperationException(
+                    "Fitz queue workers do not support QueueRunnerOptions.TerminalAttempt because Fitz 1.0 does not expose durable attempt counts.");
+        }
+
         var required = _workers.SelectMany(worker => worker.Requirements).ToHashSet();
+        if (_workers.OfType<FitzScheduleWorkerDefinition>().Any())
+            _ = required.Add(typeof(IScheduledRequestActorValidator));
         foreach (var registration in _workloads)
         {
             _ = required.Add(typeof(IEventStore));
@@ -96,8 +119,8 @@ sealed class FitzApplicationWorkers(
     {
         // Each definition builds its own runner, so a worker kind added later is hosted here
         // without an arm to add — and cannot silently fall into another kind's branch.
-        var host = new FitzWorkerHost(connection.Client, scopes, serializer, catalog, _clock, queueLogger, noticeLogger,
-            scheduleLogger, runnerLogger, notificationLogger);
+        var host = new FitzWorkerHost(connection.Client, scopes, serializer, catalog, _clock,
+            queueLogger, noticeLogger, scheduleLogger, runnerLogger, notificationLogger);
         var tasks = new List<Task>();
         foreach (var worker in _workers)
         {
@@ -124,7 +147,8 @@ sealed class FitzApplicationWorkers(
             {
                 break;
             }
-            catch (Exception ex) when (ex is TerminalHandlerFailureException or TerminalHandlerMissingException)
+            catch (Exception ex) when (ex is TerminalHandlerFailureException or TerminalHandlerMissingException or
+                                           QueueConfigurationException)
             {
                 throw;
             }

@@ -6,7 +6,8 @@ namespace Cntryl.Portia;
 
 /// <summary>Invokes one generated streaming pipeline behavior registration.</summary>
 public sealed class StreamRequestPipelineBehaviorRegistration<TRequest,
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior, TOut>(int order)
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+TBehavior, TOut>(int order)
     : RequestPipelineBehaviorRegistration(typeof(TRequest), typeof(TBehavior), order),
         IStreamRequestBehaviorInvocation<TOut>
     where TRequest : IStreamRequest<TOut>

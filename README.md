@@ -1,11 +1,11 @@
 # Portia
 
-Portia is a cohesive application framework for .NET 10. It carries an operation from its entry
-point through authorization and domain decisions, then runs the durable work that follows.
+Portia is a cohesive application framework for .NET 10. It carries an operation from its entry point through
+authorization and domain decisions, then runs the durable work that follows.
 
-ASP.NET Core already does HTTP well. Portia is the application model behind HTTP—and behind RPC,
-queues, notices, schedules, and local calls. A request keeps the same handler, actor, authorization,
-causation, result, and telemetry semantics regardless of how it arrives.
+ASP.NET Core already does HTTP well. Portia is the application model behind HTTP—and behind RPC, queues, notices,
+schedules, and local calls. A request keeps the same handler, actor, authorization, causation, result, and telemetry
+semantics regardless of how it arrives.
 
 ```text
 HTTP / RPC / queue / schedule / local
@@ -21,26 +21,23 @@ HTTP / RPC / queue / schedule / local
                            Cassie / PostgreSQL / Snowflake / ...
 ```
 
-The unit of value is not `command → handler → route`. It is the complete path from intent to
-durable consequence.
+The unit of value is not `command → handler → route`. It is the complete path from intent to durable consequence.
 
 ## What Portia provides
 
-- **One application operation, many entry points.** A handler is selected once and can be reached
-  locally or through an explicitly allowed transport without transport logic entering the handler.
-- **One execution context.** Actor identity, authorization, correlation, causation, expected
-  failures, tracing, and metrics follow the request across process and delivery boundaries.
-- **Event-sourced decisions.** Aggregates are ordinary application objects. Portia hydrates and
-  saves their events with optimistic concurrency and stable event identities.
-- **Durable consequences.** Projectors atomically commit read-model changes with their checkpoints.
-  Reactors run external effects at least once with preserved event causation. Failed work never
-  silently advances progress.
-- **One composition, independent deployments.** An API and its workers share application setup but
-  can be deployed and scaled separately. Workers support global, per-tenant, and fleet-coordinated
-  ownership.
-- **Compile-time wiring.** Registration, transport descriptors, HTTP binding, and JSON roots are
-  source-generated and checked by Portia analyzers. The supported runtime path uses no assembly
-  scanning or reflection and is exercised as a packed NativeAOT application in CI.
+- **One application operation, many entry points.** A handler is selected once and can be reached locally or through an
+  explicitly allowed transport without transport logic entering the handler.
+- **One execution context.** Actor identity, authorization, correlation, causation, expected failures, tracing, and
+  metrics follow the request across process and delivery boundaries.
+- **Event-sourced decisions.** Aggregates are ordinary application objects. Portia hydrates and saves their events with
+  optimistic concurrency and stable event identities.
+- **Durable consequences.** Projectors atomically commit read-model changes with their checkpoints. Reactors run
+  external effects at least once with preserved event causation. Failed work never silently advances progress.
+- **One composition, independent deployments.** An API and its workers share application setup but can be deployed and
+  scaled separately. Workers support global, per-tenant, and fleet-coordinated ownership.
+- **Compile-time wiring.** Registration, transport descriptors, HTTP binding, and JSON roots are source-generated and
+  checked by Portia analyzers. The supported runtime path uses no assembly scanning or reflection and is exercised as a
+  packed NativeAOT application in CI.
 
 ## A vertical slice
 
@@ -83,29 +80,27 @@ services.AddPortia()
     .AddFitz(configuration.GetSection("Fitz"));
 ```
 
-An API host explicitly maps HTTP endpoints. A worker host calls the same application setup and
-adds `.AddWorkers()`. The handler and domain model do not change when the operation is sent over
-RPC, placed on a queue, or invoked in-process.
+An API host explicitly maps HTTP endpoints. A worker host calls the same application setup and adds `.AddWorkers()`. The
+handler and domain model do not change when the operation is sent over RPC, placed on a queue, or invoked in-process.
 
 The
 [complete consumer fixture](test/Portia.ConsumerTests/CompleteWorkflowTests.cs)
-executes one business handler through direct dispatch, HTTP, RPC, and a real Fitz queue, then proves
-that the resulting events retain actor and causal metadata and drive projectors and reactors.
+executes one business handler through direct dispatch, HTTP, RPC, and a real Fitz queue, then proves that the resulting
+events retain actor and causal metadata and drive projectors and reactors.
 
 ## Persistence without a lowest-common-denominator model
 
-Fitz is Portia's first-party event log, transport, scheduler, and coordination layer. Cassie is the
-first-party read-model engine for SQL, graph, time-series, and vector workloads.
+Fitz is Portia's first-party event log, transport, scheduler, and coordination layer. Cassie is the first-party
+read-model engine for SQL, graph, time-series, and vector workloads.
 
-Neither is hidden behind a generic query language. A projector receives an ordinary application
-repository built on the backend's native client and schema. That repository implements
-`IProjectionStore` and `IProjectionBatch` only to give Portia the lifecycle and atomic
-read-model-plus-checkpoint boundary it needs.
+Neither is hidden behind a generic query language. A projector receives an ordinary application repository built on the
+backend's native client and schema. That repository implements
+`IProjectionStore` and `IProjectionBatch` only to give Portia the lifecycle and atomic read-model-plus-checkpoint
+boundary it needs.
 
-PostgreSQL, Snowflake, or another store can therefore be added in userland without changing
-Portia, writing a custom runner, or translating queries into a framework DSL. If a target cannot
-atomically commit its changes and checkpoint, it is modeled honestly as an at-least-once reactor
-effect instead.
+PostgreSQL, Snowflake, or another store can therefore be added in userland without changing Portia, writing a custom
+runner, or translating queries into a framework DSL. If a target cannot atomically commit its changes and checkpoint, it
+is modeled honestly as an at-least-once reactor effect instead.
 
 ## Start here
 
@@ -131,8 +126,8 @@ docker compose down --volumes
 ```
 
 Broker integration uses `ws://127.0.0.1:4090/ws` by default. Override it with
-`FITZ_TEST_ENDPOINT`. CI runs the same format, build, broker-free test, packed-consumer, and broker
-integration sequence.
+`FITZ_TEST_ENDPOINT`. CI runs the same format, build, broker-free test, packed-consumer, and broker integration
+sequence.
 
 ## License
 

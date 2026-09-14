@@ -8,13 +8,16 @@ interface IRequestScheduleDeclaration
     ValueTask<string> EnsureAsync(IRequestScheduler scheduler, CancellationToken ct);
 }
 
-sealed class RequestScheduleDeclaration<TRequest>(TRequest request, RequestScheduleSpec spec,
-    RequestRouteValues routeValues, ClaimsPrincipal actor) : IRequestScheduleDeclaration
+sealed class RequestScheduleDeclaration<TRequest>(
+    TRequest request,
+    RequestScheduleSpec spec,
+    RequestRouteValues routeValues,
+    ClaimsPrincipal actor) : IRequestScheduleDeclaration
     where TRequest : IRequest, ISchedulable
 {
     public ValueTask<string> EnsureAsync(IRequestScheduler scheduler, CancellationToken ct)
     {
-        if (!RequestActor.IsSystem(actor) || actor.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) is null)
+        if (!RequestActor.IsSystem(actor) || actor.FindFirst(ClaimTypes.NameIdentifier) is null)
         {
             throw new InvalidOperationException(
                 $"Startup schedule for '{typeof(TRequest)}' requires an explicit Portia system actor with a subject.");
@@ -24,7 +27,8 @@ sealed class RequestScheduleDeclaration<TRequest>(TRequest request, RequestSched
     }
 }
 
-sealed class RequestScheduleStartupService(IEnumerable<IRequestScheduleDeclaration> declarations,
+sealed class RequestScheduleStartupService(
+    IEnumerable<IRequestScheduleDeclaration> declarations,
     IServiceProvider services) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)

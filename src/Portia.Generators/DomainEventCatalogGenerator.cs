@@ -68,7 +68,8 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(invalidDiscriminators, static (sourceContext, invalid) =>
         {
             foreach (var model in invalid)
-                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidDiscriminator, model.Location.ToLocation(), model.TypeName));
+                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidDiscriminator, model.Location.ToLocation(),
+                    model.TypeName));
         });
 
         var upcasters = context.SyntaxProvider
@@ -113,7 +114,6 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
                 context.ReportDiagnostic(Diagnostic.Create(DuplicateDiscriminator, duplicate.Location.ToLocation(),
                     original.TypeName, duplicate.TypeName, group.Key.Name, group.Key.Version));
         }
-
     }
 
     static void GenerateCatalog(

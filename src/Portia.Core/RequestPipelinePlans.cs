@@ -457,15 +457,18 @@ sealed class StreamRequestPipelinePlan<TOut>
         }
     }
 
-    sealed class FrameBoundEnumerable(StreamRequestPipelinePlan<TOut> plan,
-        RequestPipelineFrame<IStreamRequest<TOut>> frame, CancellationToken dispatchToken) : IAsyncEnumerable<TOut>
+    sealed class FrameBoundEnumerable(
+        StreamRequestPipelinePlan<TOut> plan,
+        RequestPipelineFrame<IStreamRequest<TOut>> frame,
+        CancellationToken dispatchToken) : IAsyncEnumerable<TOut>
     {
         public IAsyncEnumerator<TOut> GetAsyncEnumerator(CancellationToken cancellationToken = default) =>
             new FrameBoundEnumerator(frame,
                 plan.Enumerate(frame, dispatchToken).GetAsyncEnumerator(cancellationToken));
     }
 
-    sealed class FrameBoundEnumerator(RequestPipelineFrame<IStreamRequest<TOut>> frame,
+    sealed class FrameBoundEnumerator(
+        RequestPipelineFrame<IStreamRequest<TOut>> frame,
         IAsyncEnumerator<TOut> inner) : IAsyncEnumerator<TOut>
     {
         public TOut Current => inner.Current;

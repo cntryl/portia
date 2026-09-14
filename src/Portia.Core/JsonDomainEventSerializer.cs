@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 
 namespace Cntryl.Portia;
 
@@ -87,11 +86,11 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
 
         _resolver = errors.Count > 0
             ? throw new InvalidOperationException("Invalid JSON domain-event upcaster registrations:" +
-                                                Environment.NewLine
-                                                + string.Join(Environment.NewLine, errors.Distinct()
-                                                    .OrderBy(error => error.Name, StringComparer.Ordinal)
-                                                    .ThenBy(error => error.Version)
-                                                    .Select(error => $"- {error.Message}")))
+                                                  Environment.NewLine
+                                                  + string.Join(Environment.NewLine, errors.Distinct()
+                                                      .OrderBy(error => error.Name, StringComparer.Ordinal)
+                                                      .ThenBy(error => error.Version)
+                                                      .Select(error => $"- {error.Message}")))
             : new DomainEventSchemaResolver(catalog, upcastersByKey);
     }
 
@@ -113,9 +112,9 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
             writer.WriteString("name", name);
             writer.WriteNumber("version", version);
             writer.WritePropertyName("metadata");
-            writer.WriteRawValue(metadata, skipInputValidation: true);
+            writer.WriteRawValue(metadata, true);
             writer.WritePropertyName("payload");
-            writer.WriteRawValue(payload, skipInputValidation: true);
+            writer.WriteRawValue(payload, true);
             writer.WriteEndObject();
         }
 

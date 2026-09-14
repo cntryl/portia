@@ -28,7 +28,7 @@ public sealed class PartialProcessorCodeFixProvider : CodeFixProvider
             return;
 
         context.RegisterCodeFix(CodeAction.Create("Make processor partial",
-            ct => AddPartialAsync(context.Document, declaration, ct), "Portia.MakeProcessorPartial"),
+                ct => AddPartialAsync(context.Document, declaration, ct), "Portia.MakeProcessorPartial"),
             context.Diagnostics);
     }
 
@@ -37,7 +37,15 @@ public sealed class PartialProcessorCodeFixProvider : CodeFixProvider
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
         var partial = SyntaxFactory.Token(SyntaxKind.PartialKeyword).WithTrailingTrivia(SyntaxFactory.Space);
-        return document.WithSyntaxRoot(root!.ReplaceNode(declaration,
-            declaration.WithModifiers(declaration.Modifiers.Add(partial))));
+        var replacement = declaration;
+        if (declaration.Modifiers.Count == 0)
+        {
+            partial = partial.WithLeadingTrivia(declaration.Keyword.LeadingTrivia);
+            replacement = declaration.ReplaceToken(declaration.Keyword,
+                declaration.Keyword.WithLeadingTrivia(default(SyntaxTriviaList)));
+        }
+
+        replacement = replacement.WithModifiers(replacement.Modifiers.Add(partial));
+        return document.WithSyntaxRoot(root!.ReplaceNode(declaration, replacement));
     }
 }

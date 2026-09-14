@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
@@ -31,7 +32,7 @@ public class AggregateRepositoryBenchmarks
                 var ev = DomainEventSeed.Attach(new ProcessorBenchmarkEvent(index), _aggregateId,
                     (ulong)index + 1, occurredOn: DateTimeOffset.UnixEpoch);
                 return new DomainEventRecord(_stream, ev, (ulong)index,
-                    new EventCursor((index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                    new EventCursor((index + 1).ToString(CultureInfo.InvariantCulture)));
             }).ToArray()
         };
         _repository = new AggregateRepository(_store);
@@ -50,8 +51,8 @@ public class AggregateRepositoryBenchmarks
             CancellationToken ct) => Read(fromOffset, ct);
 
         public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            CancellationToken ct) => Read(cursor == EventCursor.Start ? 0 :
-                ulong.Parse(cursor.Value!, System.Globalization.CultureInfo.InvariantCulture), ct);
+            CancellationToken ct) =>
+            Read(cursor == EventCursor.Start ? 0 : ulong.Parse(cursor.Value!, CultureInfo.InvariantCulture), ct);
 
         public ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
             IReadOnlyList<DomainEvent> events, CancellationToken ct = default) => ValueTask.CompletedTask;
@@ -74,14 +75,16 @@ public class AggregateRepositoryBenchmarks
     public sealed class BenchmarkAggregate : Aggregate
     {
         /// <summary>Creates an empty aggregate at the selected stream.</summary>
-        public BenchmarkAggregate(Uuid id, EventStreamAddress stream) : base(id, stream) =>
+        public BenchmarkAggregate(Uuid id, EventStreamAddress stream) : base(id, stream)
+        {
             On<ProcessorBenchmarkEvent>(_ => { });
+        }
     }
 }
 
 /// <summary>Measures bounded, one-invocation aggregate hydration for large histories.</summary>
 [MemoryDiagnoser]
-[SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 1, iterationCount: 3, invocationCount: 1)]
+[SimpleJob(RuntimeMoniker.Net10_0, 1, 1, 3, 1)]
 public class LargeAggregateRepositoryBenchmarks
 {
     Uuid _aggregateId;
@@ -105,7 +108,7 @@ public class LargeAggregateRepositoryBenchmarks
                 var ev = DomainEventSeed.Attach(new ProcessorBenchmarkEvent(index), _aggregateId,
                     (ulong)index + 1, occurredOn: DateTimeOffset.UnixEpoch);
                 return new DomainEventRecord(_stream, ev, (ulong)index,
-                    new EventCursor((index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                    new EventCursor((index + 1).ToString(CultureInfo.InvariantCulture)));
             }).ToArray()
         };
         _repository = new AggregateRepository(store);

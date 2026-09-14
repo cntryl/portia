@@ -1,5 +1,3 @@
-using Cntryl.Fitz;
-
 namespace Cntryl.Portia.Consumer;
 
 static class ConsumerBroker

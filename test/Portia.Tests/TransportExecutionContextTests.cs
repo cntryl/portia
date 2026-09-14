@@ -51,7 +51,8 @@ public sealed class TransportExecutionContextTests
         var first = new Queued(metadata, 1);
         var second = new Queued(metadata, 2);
         var bus = new RecordingBus();
-        await new QueueRunner(new Consumer(first, second), RequestDeliveryScopes.FixedQueue(bus, new Validator()))
+        await new QueueRunner(new Consumer(first, second), RequestDeliveryScopes.FixedQueue(bus, new Validator(),
+                terminalHandler: new IgnoreTerminalRequest()))
             .RunAsync();
         Assert.Equal(2, bus.Contexts.Count);
         Assert.All(bus.Contexts, ctx => Assert.Equal(metadata.RequestId, ctx.RequestId));
@@ -64,12 +65,18 @@ public sealed class TransportExecutionContextTests
     /// <param name="Amount">An arbitrary payload value bound from the route.</param>
     public sealed record TransportCommand(int Amount) : IRequest, ICallable;
 
+    sealed class IgnoreTerminalRequest : IQueuedRequestTerminalHandler
+    {
+        public ValueTask HandleAsync(QueuedRequestFailureContext context, CancellationToken ct = default) =>
+            ValueTask.CompletedTask;
+    }
+
     sealed class RecordingBus : IRequestBus
     {
+        public List<RequestDispatchContext> Contexts { get; } = [];
 
         public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
             CancellationToken ct = default) => ValueTask.FromResult(Result.Success);
-        public List<RequestDispatchContext> Contexts { get; } = [];
 
         public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
             new(actor, metadata: metadata);

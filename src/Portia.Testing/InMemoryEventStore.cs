@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Cntryl.Portia.Testing;
 
 /// <summary>
@@ -8,8 +10,11 @@ public sealed class InMemoryEventStore : IEventStore
     readonly Dictionary<(string Realm, string Area), ulong> _areaOffsets = [];
     readonly Lock _gate = new();
     readonly Dictionary<string, ulong> _realmOffsets = [];
+
+    readonly Dictionary<(EventStreamAddress Stream, ulong ResourceOffset), (ulong Area, ulong Realm)>
+        _scopeOffsets = [];
+
     readonly Dictionary<EventStreamAddress, List<DomainEventRecord>> _streams = [];
-    readonly Dictionary<(EventStreamAddress Stream, ulong ResourceOffset), (ulong Area, ulong Realm)> _scopeOffsets = [];
 
     /// <inheritdoc />
     public IAsyncEnumerable<DomainEventRecord> ReadAsync(
@@ -152,12 +157,12 @@ public sealed class InMemoryEventStore : IEventStore
         _ => throw new ArgumentOutOfRangeException(nameof(pattern))
     };
 
-    static EventCursor Encode(ulong offset) => new(offset.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    static EventCursor Encode(ulong offset) => new(offset.ToString(CultureInfo.InvariantCulture));
 
     static ulong Decode(EventCursor cursor) => cursor == EventCursor.Start
         ? 0
-        : ulong.TryParse(cursor.Value, System.Globalization.NumberStyles.None,
-            System.Globalization.CultureInfo.InvariantCulture, out var offset)
+        : ulong.TryParse(cursor.Value, NumberStyles.None,
+            CultureInfo.InvariantCulture, out var offset)
             ? offset
             : throw new ArgumentException("The event cursor was not issued by this event store.", nameof(cursor));
 

@@ -1,11 +1,17 @@
+using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Cntryl.Portia;
 
-sealed record OpenApiContractNode(string DisplayName,
-    [property: JsonPropertyName("wire-name")] string ExplicitName,
-    DayOfWeek DayValue, HttpMoney CustomValue, OpenApiContractNode? NextNode = null);
+sealed record OpenApiContractNode(
+    string DisplayName,
+    [property: JsonPropertyName("wire-name")]
+    string ExplicitName,
+    DayOfWeek DayValue,
+    HttpMoney CustomValue,
+    OpenApiContractNode? NextNode = null);
 
 [Discriminator("test.openapi.contract")]
 [RequestRoute("test", "openapi", "contract", "echo")]
@@ -13,7 +19,8 @@ sealed record OpenApiContractRequest(OpenApiContractNode Payload) : IRequest<Ope
 
 sealed class OpenApiContractHandler : IRequestHandler<OpenApiContractRequest, OpenApiContractNode>
 {
-    public ValueTask<Result<OpenApiContractNode>> HandleAsync(IRequestContext<OpenApiContractRequest> context, CancellationToken ct) =>
+    public ValueTask<Result<OpenApiContractNode>> HandleAsync(IRequestContext<OpenApiContractRequest> context,
+        CancellationToken ct) =>
         ValueTask.FromResult(Result<OpenApiContractNode>.Success(context.Request.Payload));
 }
 
@@ -23,9 +30,10 @@ sealed record OpenApiContractStream : IStreamRequest<OpenApiContractNode>, ICall
 
 sealed class OpenApiContractStreamHandler : IStreamRequestHandler<OpenApiContractStream, OpenApiContractNode>
 {
-    public async IAsyncEnumerable<OpenApiContractNode> HandleAsync(IRequestContext<OpenApiContractStream> context, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    public async IAsyncEnumerable<OpenApiContractNode> HandleAsync(IRequestContext<OpenApiContractStream> context,
+        [EnumeratorCancellation] CancellationToken ct)
     {
-        yield return new("stream", "explicit", DayOfWeek.Monday, new HttpMoney("USD", 42));
+        yield return new OpenApiContractNode("stream", "explicit", DayOfWeek.Monday, new HttpMoney("USD", 42));
         await Task.CompletedTask;
     }
 }
@@ -33,8 +41,8 @@ sealed class OpenApiContractStreamHandler : IStreamRequestHandler<OpenApiContrac
 sealed class OpenApiMoneyConverter : JsonConverter<HttpMoney>
 {
     public override HttpMoney Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
-        new("USD", int.Parse(reader.GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        new("USD", int.Parse(reader.GetString()!, CultureInfo.InvariantCulture));
 
     public override void Write(Utf8JsonWriter writer, HttpMoney value, JsonSerializerOptions options) =>
-        writer.WriteStringValue(value.Cents.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        writer.WriteStringValue(value.Cents.ToString(CultureInfo.InvariantCulture));
 }

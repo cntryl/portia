@@ -8,8 +8,8 @@ namespace Cntryl.Portia;
 sealed class FleetAssignmentCache
 {
     readonly Dictionary<string, string?> _owners = new(StringComparer.Ordinal);
-    string[] _workers = [];
     byte[][] _workerIds = [];
+    string[] _workers = [];
 
     public HashSet<string> GetAssignments(IReadOnlyCollection<string> partitions,
         IEnumerable<string> workers, string workerId)

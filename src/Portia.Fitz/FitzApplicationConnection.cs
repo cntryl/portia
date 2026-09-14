@@ -1,4 +1,3 @@
-using Cntryl.Fitz;
 using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia;

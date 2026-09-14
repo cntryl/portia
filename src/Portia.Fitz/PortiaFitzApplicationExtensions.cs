@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using Cntryl.Fitz;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -142,11 +141,9 @@ public static class PortiaFitzApplicationExtensions
                     throw new InvalidOperationException(
                         "This application has conflicting Fitz connections. Configure one shared connection.");
                 }
-                else
-                {
-                    configure(existing.Builder);
-                    return application;
-                }
+
+                configure(existing.Builder);
+                return application;
             }
 
             _ = services.AddSingleton(connection);

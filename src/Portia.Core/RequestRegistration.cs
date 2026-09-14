@@ -9,7 +9,8 @@ namespace Cntryl.Portia;
 /// <typeparam name="THandler">The handler.</typeparam>
 /// <param name="permission">The generated permission expression.</param>
 public sealed class RequestRegistration<TRequest,
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler>(
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+THandler>(
     Func<TRequest, string>? permission = null)
     : RequestHandlerRegistration(typeof(TRequest), typeof(THandler), null,
         permission is null ? null : request => permission((TRequest)request)), IRequestInvocation

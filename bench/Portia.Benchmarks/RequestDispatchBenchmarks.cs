@@ -7,10 +7,10 @@ namespace Cntryl.Portia;
 
 /// <summary>Measures the in-process request dispatch overhead around an already-completed handler.</summary>
 [MemoryDiagnoser]
-public partial class RequestDispatchBenchmarks
+public class RequestDispatchBenchmarks
 {
-    DispatchState _fiveBehaviors = null!;
     DispatchState _asyncBehavior = null!;
+    DispatchState _fiveBehaviors = null!;
     DispatchState _oneBehavior = null!;
     DispatchState _withoutBehaviors = null!;
 
@@ -69,18 +69,21 @@ public partial class RequestDispatchBenchmarks
             bus.CreateContext(new ClaimsPrincipal(new ClaimsIdentity())));
     }
 
-    sealed class DispatchState(ServiceProvider provider, IServiceScope scope, IRequestBus bus,
+    sealed class DispatchState(
+        ServiceProvider provider,
+        IServiceScope scope,
+        IRequestBus bus,
         RequestDispatchContext context) : IDisposable
     {
         static readonly BenchmarkRequest Request = new();
-
-        public ValueTask<Result> Dispatch() => bus.DispatchAsync(Request, context);
 
         public void Dispose()
         {
             scope.Dispose();
             provider.Dispose();
         }
+
+        public ValueTask<Result> Dispatch() => bus.DispatchAsync(Request, context);
     }
 
     internal sealed record BenchmarkRequest : IRequest;
@@ -98,9 +101,13 @@ public partial class RequestDispatchBenchmarks
     }
 
     internal sealed class FirstBehavior : PassThroughBehavior;
+
     internal sealed class SecondBehavior : PassThroughBehavior;
+
     internal sealed class ThirdBehavior : PassThroughBehavior;
+
     internal sealed class FourthBehavior : PassThroughBehavior;
+
     internal sealed class FifthBehavior : PassThroughBehavior;
 
     internal sealed class YieldingBehavior : IRequestPipelineBehavior<BenchmarkRequest>

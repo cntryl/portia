@@ -18,7 +18,7 @@ public sealed class AggregateMetadataFactoryTests
     [Fact]
     public void ShouldRejectFactoryReturningEmptyEventId()
     {
-        var aggregate = new TestAggregate(Uuid.CreateVersion4(), Factory(eventId: Uuid.Empty));
+        var aggregate = new TestAggregate(Uuid.CreateVersion4(), Factory(Uuid.Empty));
 
         var error = Assert.Throws<InvalidOperationException>(() => aggregate.ChangeValue(1));
 
@@ -175,7 +175,8 @@ public sealed class AggregateMetadataFactoryTests
         var aggregate = new TestAggregate(id);
 
         _ = Assert.Throws<InvalidOperationException>(() =>
-            aggregate.Load(ReadOnly(Committed(new ValueChanged(40), id, 1), Committed(new ValueIncremented(2), id, 3))));
+            aggregate.Load(ReadOnly(Committed(new ValueChanged(40), id, 1),
+                Committed(new ValueIncremented(2), id, 3))));
 
         Assert.Equal(0UL, aggregate.Version);
         Assert.Equal(0UL, aggregate.CommittedStreamPosition);
@@ -198,7 +199,10 @@ public sealed class AggregateMetadataFactoryTests
         DateTimeOffset? occurredOn = null) => new(eventId, aggregateId, version, occurredOn);
 
     // Returns whatever it is told to, standing in for an application factory with a bug in it.
-    sealed class MisbehavingMetadataFactory(Uuid? eventId, Uuid? aggregateId, ulong? version,
+    sealed class MisbehavingMetadataFactory(
+        Uuid? eventId,
+        Uuid? aggregateId,
+        ulong? version,
         DateTimeOffset? occurredOn) : IDomainEventMetadataFactory
     {
         public DomainEventMetadata Create(Uuid actualAggregateId, ulong actualVersion) => new(

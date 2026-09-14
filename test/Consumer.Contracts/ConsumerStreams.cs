@@ -16,11 +16,11 @@ namespace Cntryl.Portia.Consumer;
 /// </summary>
 public static class ConsumerStreams
 {
-    /// <summary>Gets the fixture's stream realm, unique to this test process.</summary>
-    public static string Realm { get; } = "consumer-" + Guid.NewGuid().ToString("N");
-
     /// <summary>Gets the area every account stream and audit session belongs to.</summary>
     public const string Accounts = "accounts";
+
+    /// <summary>Gets the fixture's stream realm, unique to this test process.</summary>
+    public static string Realm { get; } = "consumer-" + Guid.NewGuid().ToString("N");
 
     /// <summary>Gets the pattern the fixture's projectors and reactors consume.</summary>
     public static EventStreamPattern AccountsPattern { get; } = EventStreamPattern.ForPattern(Realm, Accounts);

@@ -123,7 +123,8 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         }
 
         foreach (var invocation in node.DescendantNodes().OfType<InvocationExpressionSyntax>()
-                     .Where(candidate => candidate.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() == node))
+                     .Where(candidate =>
+                         candidate.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() == node))
         {
             if (semanticModel.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method ||
                 MetadataName(method.ContainingType) != "Microsoft.Extensions.DependencyInjection.ActivatorUtilities")
@@ -318,23 +319,39 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         _ => CaughtExceptionAsResult
     };
 
-    enum Kind { ProjectorEffect, ServiceLocation, AggregateService, MultipleHandlers, CaughtExceptionAsResult }
+    enum Kind
+    {
+        ProjectorEffect,
+        ServiceLocation,
+        AggregateService,
+        MultipleHandlers,
+        CaughtExceptionAsResult
+    }
 
     sealed class Finding(Kind kind, SourceLocation location, object[] arguments) : IEquatable<Finding>
     {
         public Kind Kind { get; } = kind;
         public SourceLocation Location { get; } = location;
         public object[] Arguments { get; } = arguments;
+
+        public bool Equals(Finding? other) => other is not null && Kind == other.Kind && Location.Equals(other.Location)
+                                              && Arguments.SequenceEqual(other.Arguments);
+
         public static Finding Create(Kind kind, Location? location, params object[] arguments) =>
             new(kind, SourceLocation.From(location), arguments);
-        public bool Equals(Finding? other) => other is not null && Kind == other.Kind && Location.Equals(other.Location)
-                                             && Arguments.SequenceEqual(other.Arguments);
+
         public override bool Equals(object? obj) => Equals(obj as Finding);
         public override int GetHashCode() => Kind.GetHashCode();
     }
 
-    readonly struct SourceLocation(string path, int start, int length, int startLine, int startCharacter,
-        int endLine, int endCharacter) : IEquatable<SourceLocation>
+    readonly struct SourceLocation(
+        string path,
+        int start,
+        int length,
+        int startLine,
+        int startCharacter,
+        int endLine,
+        int endCharacter) : IEquatable<SourceLocation>
     {
         readonly string _path = path;
         readonly int _start = start;
@@ -353,17 +370,20 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
                 location.SourceSpan.Length, lines.Start.Line, lines.Start.Character, lines.End.Line,
                 lines.End.Character);
         }
-        public Microsoft.CodeAnalysis.Location ToLocation() =>
+
+        public Location ToLocation() =>
             string.IsNullOrEmpty(_path) && _start == 0 && _length == 0
                 ? Microsoft.CodeAnalysis.Location.None
                 : Microsoft.CodeAnalysis.Location.Create(_path, new TextSpan(_start, _length),
                     new LinePositionSpan(new LinePosition(_startLine, _startCharacter),
                         new LinePosition(_endLine, _endCharacter)));
+
         public bool Equals(SourceLocation other) => _path == other._path && _start == other._start &&
                                                     _length == other._length && _startLine == other._startLine &&
                                                     _startCharacter == other._startCharacter &&
                                                     _endLine == other._endLine &&
                                                     _endCharacter == other._endCharacter;
+
         public override bool Equals(object? obj) => obj is SourceLocation other && Equals(other);
         public override int GetHashCode() => (_path, _start, _length).GetHashCode();
     }

@@ -21,7 +21,8 @@ public sealed class ProjectorTests
         var context = new ProjectorContext(new CheckpointIdentity(projector.Name, projector.Pattern));
 
         await projector.ProjectAsync([new DomainEventRecord(stream, first, 0, new EventCursor("1"))], context, default);
-        await projector.ProjectAsync([new DomainEventRecord(stream, second, 1, new EventCursor("2"))], context, default);
+        await projector.ProjectAsync([new DomainEventRecord(stream, second, 1, new EventCursor("2"))], context,
+            default);
 
         Assert.Equal(42, projection.Value);
         Assert.Equal(2, projection.HandlerCount);

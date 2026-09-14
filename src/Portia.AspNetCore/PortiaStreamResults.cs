@@ -116,7 +116,7 @@ public static class PortiaStreamResults
             // only to the event-stream shape: a JSON array has nowhere to put one.
             var keepAlive = sse
                 ? context.RequestServices.GetService<IOptions<PortiaHttpOptions>>()?.Value.ServerSentEventKeepAlive
-                : (TimeSpan?)null;
+                : null;
             await using var iterator = source.GetAsyncEnumerator(ct);
             var pending = iterator.MoveNextAsync();
             // The first item is awaited before any header is written so authorization can still

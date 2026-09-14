@@ -24,7 +24,7 @@ public sealed class DomainEventValidationTests
     [InlineData(true, true)]
     public void ShouldAcceptWellFormedEvent(bool audit, bool attributed)
     {
-        var metadata = Metadata(audit: audit) with
+        var metadata = Metadata(audit) with
         {
             ExecutionId = attributed ? Uuid.CreateVersion4() : null,
             Actor = attributed ? new ActorAttribution("alice", "accounts") : null
@@ -133,7 +133,10 @@ public sealed class DomainEventValidationTests
     [Fact]
     public void ShouldRejectNonUtcOccurrenceTime()
     {
-        var metadata = Metadata() with { OccurredOn = new DateTimeOffset(2026, 9, 11, 12, 0, 0, TimeSpan.FromHours(2)) };
+        var metadata = Metadata() with
+        {
+            OccurredOn = new DateTimeOffset(2026, 9, 11, 12, 0, 0, TimeSpan.FromHours(2))
+        };
 
         var error = Assert.Throws<InvalidOperationException>(() => DomainEventValidation.Validate(Event(metadata)));
 
@@ -193,7 +196,7 @@ public sealed class DomainEventValidationTests
         };
 
         var error = Assert.Throws<InvalidOperationException>(() =>
-            DomainEventValidation.ValidateBatch([Event(Metadata(aggregateId, 1)), Event(second)]));
+            DomainEventValidation.ValidateBatch([Event(Metadata(aggregateId)), Event(second)]));
 
         Assert.Contains("one aggregate's raised events in order", error.Message, StringComparison.Ordinal);
     }
@@ -210,7 +213,7 @@ public sealed class DomainEventValidationTests
         var eventId = Uuid.CreateVersion4();
 
         var error = Assert.Throws<InvalidOperationException>(() => DomainEventValidation.ValidateBatch([
-            Event(Metadata(aggregateId, 1) with { EventId = eventId }),
+            Event(Metadata(aggregateId) with { EventId = eventId }),
             Event(Metadata(aggregateId, 2) with { EventId = eventId })
         ]));
 
@@ -236,7 +239,7 @@ public sealed class DomainEventValidationTests
 
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.AppendAsync(stream, 0,
-                [Event(Metadata(aggregateId, 1)), Event(Metadata(Uuid.CreateVersion4(), 2))]));
+                [Event(Metadata(aggregateId)), Event(Metadata(Uuid.CreateVersion4(), 2))]));
 
         await foreach (var record in store.ReadAsync(stream))
             Assert.Fail($"A rejected batch appended event {record.Event.Metadata.EventId}.");

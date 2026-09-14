@@ -147,10 +147,10 @@ public sealed class TelemetryCompletionTests
 
     sealed class CancelingRecords : IAsyncEnumerable<DomainEventRecord>, IAsyncEnumerator<DomainEventRecord>
     {
-        public DomainEventRecord Current => throw new InvalidOperationException();
-
         public IAsyncEnumerator<DomainEventRecord> GetAsyncEnumerator(CancellationToken cancellationToken = default) =>
             this;
+
+        public DomainEventRecord Current => throw new InvalidOperationException();
 
         public ValueTask<bool> MoveNextAsync() => ValueTask.FromException<bool>(new OperationCanceledException());
 
@@ -252,15 +252,16 @@ public sealed class TelemetryCompletionTests
             _listener.Start();
         }
 
+        public void Dispose() => _listener.Dispose();
+
         public string SingleOutcome(string name, string? runner = null)
         {
             var measurement = Assert.Single(_measurements, item => item.Name == name &&
-                (runner is null || item.Tags.Any(tag => tag.Key == "portia.runner.name" &&
-                                                       Equals(tag.Value, runner))));
+                                                                   (runner is null || item.Tags.Any(tag =>
+                                                                       tag.Key == "portia.runner.name" &&
+                                                                       Equals(tag.Value, runner))));
             return Assert.IsType<string>(Assert.Single(measurement.Tags,
                 tag => tag.Key == "portia.outcome").Value);
         }
-
-        public void Dispose() => _listener.Dispose();
     }
 }

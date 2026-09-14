@@ -36,11 +36,12 @@ public sealed class HostedReactorRecoveryTests
         var services = new ServiceCollection();
         _ = services.AddSingleton<IDomainEventReader>(eventStore);
         _ = services.AddSingleton(reactor);
-        _ = services.AddPortia().AddReactor<FlakyOnThirdAttemptReactor>("flaky-on-third-attempt-reactor", WorkloadScope.Global, o =>
-        {
-            o.PollInterval = TimeSpan.FromMilliseconds(20);
-            o.Processing = new ProjectionRunOptions { MaxBatchSize = 2 };
-        }).AddWorkers();
+        _ = services.AddPortia().AddReactor<FlakyOnThirdAttemptReactor>("flaky-on-third-attempt-reactor",
+            WorkloadScope.Global, o =>
+            {
+                o.PollInterval = TimeSpan.FromMilliseconds(20);
+                o.Processing = new ProjectionRunOptions { MaxBatchSize = 2 };
+            }).AddWorkers();
         using var provider = services.BuildServiceProvider();
 
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());

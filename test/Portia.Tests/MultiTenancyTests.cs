@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 
 namespace Cntryl.Portia;
 
@@ -558,7 +560,8 @@ public sealed class MultiTenancyTests
         var options = new MultiTenantRunnerOptions { TenantStopTimeout = TimeSpan.FromSeconds(5) };
         var runner = new MultiTenantRunner(directory, options, null, clock);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var stopEntered = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopEntered =
+            new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
         var run = runner.RunAsync(async (tenant, token) =>
         {
             _ = tenant;
@@ -780,11 +783,8 @@ public sealed class MultiTenancyTests
 
     sealed class RemovalDirectory : IResumableTenantDirectory
     {
-        readonly System.Threading.Channels.Channel<TenantLifecycleChange> _changes =
-            System.Threading.Channels.Channel.CreateUnbounded<TenantLifecycleChange>();
-
-        public void Remove() => _ = _changes.Writer.TryWrite(
-            new TenantLifecycleChange(TenantLifecycleChangeKind.Removed, new TenantId("acme")));
+        readonly Channel<TenantLifecycleChange> _changes =
+            Channel.CreateUnbounded<TenantLifecycleChange>();
 
         public ValueTask<ITenantDirectoryCursor> OpenCursorAsync(CancellationToken ct = default) =>
             ValueTask.FromResult<ITenantDirectoryCursor>(new Cursor(_changes.Reader));
@@ -803,7 +803,10 @@ public sealed class MultiTenancyTests
             yield break;
         }
 
-        sealed class Cursor(System.Threading.Channels.ChannelReader<TenantLifecycleChange> changes)
+        public void Remove() => _ = _changes.Writer.TryWrite(
+            new TenantLifecycleChange(TenantLifecycleChangeKind.Removed, new TenantId("acme")));
+
+        sealed class Cursor(ChannelReader<TenantLifecycleChange> changes)
             : ITenantDirectoryCursor
         {
             public async IAsyncEnumerable<TenantLifecycleChange> ReadAsync(
@@ -822,7 +825,11 @@ public sealed class MultiTenancyTests
     {
         public ProbeCursor Cursor { get; } = new();
         public int OpenCount { get; private set; }
-        public bool RemovedWhileDisconnected { set => Cursor.RemovedWhileDisconnected = value; }
+
+        public bool RemovedWhileDisconnected
+        {
+            set => Cursor.RemovedWhileDisconnected = value;
+        }
 
         public ValueTask<ITenantDirectoryCursor> OpenCursorAsync(CancellationToken ct = default)
         {
@@ -877,13 +884,12 @@ public sealed class MultiTenancyTests
         public List<ulong> RequestedOffsets { get; } = [];
         public int SubscriptionCount => Volatile.Read(ref _subscriptionCount);
 
-        public void Add(DomainEvent ev)
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
+            CancellationToken ct = default)
         {
-            var offset = (ulong)_records.Count;
-            ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), offset + 1,
-                DateTimeOffset.UtcNow));
-            _records.Add(new DomainEventRecord(RegistryStream, ev, offset,
-                new EventCursor((offset + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))));
+            _ = Interlocked.Increment(ref _subscriptionCount);
+            _ = Interlocked.Increment(ref _activeSubscriptions);
+            return ValueTask.FromResult<IDomainEventSubscription>(new CursorSubscription(this));
         }
 
         public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
@@ -892,8 +898,7 @@ public sealed class MultiTenancyTests
         public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
-            var fromOffset = cursor == EventCursor.Start ? 0 :
-                ulong.Parse(cursor.Value!, System.Globalization.CultureInfo.InvariantCulture);
+            var fromOffset = cursor == EventCursor.Start ? 0 : ulong.Parse(cursor.Value!, CultureInfo.InvariantCulture);
             RequestedOffsets.Add(fromOffset);
             AllReadsHadSubscription &= Volatile.Read(ref _activeSubscriptions) > 0;
             foreach (var record in _records.Where(record => record.ResourceOffset >= fromOffset).ToArray())
@@ -905,12 +910,13 @@ public sealed class MultiTenancyTests
             await Task.CompletedTask;
         }
 
-        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
-            CancellationToken ct = default)
+        public void Add(DomainEvent ev)
         {
-            _ = Interlocked.Increment(ref _subscriptionCount);
-            _ = Interlocked.Increment(ref _activeSubscriptions);
-            return ValueTask.FromResult<IDomainEventSubscription>(new CursorSubscription(this));
+            var offset = (ulong)_records.Count;
+            ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), offset + 1,
+                DateTimeOffset.UtcNow));
+            _records.Add(new DomainEventRecord(RegistryStream, ev, offset,
+                new EventCursor((offset + 1).ToString(CultureInfo.InvariantCulture))));
         }
 
         sealed class CursorSubscription(CursorSource owner) : IDomainEventSubscription
@@ -945,12 +951,17 @@ public sealed class MultiTenancyTests
 
         public int DisposalCount => Volatile.Read(ref _disposalCount);
         public TaskCompletionSource ReadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public TaskCompletionSource SubscribeStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public void ReleaseRead() => _ = _allowRead.TrySetResult();
-
-        public void ReleaseSubscription() => _ = _allowSubscription.TrySetResult();
+        public async ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
+            CancellationToken ct = default)
+        {
+            _ = SubscribeStarted.TrySetResult();
+            await _allowSubscription.Task.WaitAsync(ct);
+            return new Subscription(this);
+        }
 
         public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
             CancellationToken ct = default) => throw new NotSupportedException();
@@ -963,13 +974,9 @@ public sealed class MultiTenancyTests
             yield break;
         }
 
-        public async ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
-            CancellationToken ct = default)
-        {
-            _ = SubscribeStarted.TrySetResult();
-            await _allowSubscription.Task.WaitAsync(ct);
-            return new Subscription(this);
-        }
+        public void ReleaseRead() => _ = _allowRead.TrySetResult();
+
+        public void ReleaseSubscription() => _ = _allowSubscription.TrySetResult();
 
         sealed class Subscription(GatedCursorSource owner) : IDomainEventSubscription
         {

@@ -3,11 +3,11 @@ namespace Cntryl.Portia;
 abstract record FitzRoutedWorkerDefinition(string Route, string Scheme, int SegmentCount)
     : FitzWorkerDefinition(Validate(Route, Scheme, SegmentCount))
 {
-    static readonly Type[] RequiredServices =
+    protected static readonly Type[] RoutedRequiredServices =
         [typeof(IRequestBus), typeof(IRequestActorValidator), typeof(IRequestDeserializer)];
 
     internal override string Key => $"{Scheme}:{Route}";
-    internal override IReadOnlyCollection<Type> Requirements => RequiredServices;
+    internal override IReadOnlyCollection<Type> Requirements => RoutedRequiredServices;
 
     /// <summary>Formats this kind's route from a request's declared segments.</summary>
     internal static string Format(string scheme, RequestRouteAttribute route, bool includeOperation) => includeOperation

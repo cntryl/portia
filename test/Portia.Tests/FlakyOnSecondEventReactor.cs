@@ -17,10 +17,8 @@ sealed partial class FlakyOnSecondEventReactor(IProjectionCheckpointStore? check
             _hasFailedOnce = true;
             throw new InvalidOperationException("Simulated transient failure reacting to the second event.");
         }
-        else
-        {
-            HandledValues.Add(context.Trigger.Value);
-            return ValueTask.CompletedTask;
-        }
+
+        HandledValues.Add(context.Trigger.Value);
+        return ValueTask.CompletedTask;
     }
 }

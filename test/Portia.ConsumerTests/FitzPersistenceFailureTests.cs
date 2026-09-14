@@ -12,7 +12,8 @@ public sealed class FitzPersistenceFailureTests
     [InlineData("commit", false)]
     [InlineData("commit", true)]
     [InlineData("success", false)]
-    public async Task SessionAlwaysDisposesWhileFailurePreservesOriginalErrorAndPendingBatch(string failureAt, bool cleanupFails)
+    public async Task SessionAlwaysDisposesWhileFailurePreservesOriginalErrorAndPendingBatch(string failureAt,
+        bool cleanupFails)
     {
         var session = new Session(failureAt, cleanupFails);
         var streams = new Streams(session);

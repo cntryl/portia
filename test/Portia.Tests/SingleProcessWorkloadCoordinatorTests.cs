@@ -87,15 +87,13 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     }
 
     /// <summary>
-    ///     Regression test: a projector's or reactor's own <c>Name</c> is its checkpoint identity. A
-    ///     workload registration that does not set <c>WorkloadOptions.Name</c> must leave it alone —
-    ///     renaming it to the component's type name would silently repoint an existing deployment's
-    ///     checkpoints and replay the whole stream.
+    ///     The explicit registration name is the hosted checkpoint identity. The constructor name
+    ///     remains the default only when the component is driven manually outside hosting.
     /// </summary>
     [Theory]
     [InlineData(null, "declared-projection-name")]
     [InlineData("chosen-by-the-host", "chosen-by-the-host")]
-    public async Task ShouldPreserveComponentCheckpointNameUnlessWorkloadNamesItExplicitly(string? workloadName,
+    public async Task ShouldUseRegistrationNameAsHostedComponentCheckpointIdentity(string? workloadName,
         string expected)
     {
         var id = Uuid.CreateVersion4();
@@ -108,10 +106,8 @@ public sealed class SingleProcessWorkloadCoordinatorTests
         _ = services.AddSingleton<IDomainEventReader>(store);
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new NamedProjector(target));
-        _ = services.AddPortia().AddProjector<NamedProjector>(workloadName ?? "declared-projection-name", WorkloadScope.Global, o =>
-        {
-            o.PollInterval = TimeSpan.FromMilliseconds(10);
-        }).AddWorkers();
+        _ = services.AddPortia().AddProjector<NamedProjector>(workloadName ?? "declared-projection-name",
+            WorkloadScope.Global, o => { o.PollInterval = TimeSpan.FromMilliseconds(10); }).AddWorkers();
         using var provider = services.BuildServiceProvider();
 
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());

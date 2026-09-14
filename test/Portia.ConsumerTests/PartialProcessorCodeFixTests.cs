@@ -27,6 +27,25 @@ public sealed class PartialProcessorCodeFixTests
             new ProjectorReactorEventDispatcherGenerator()), diagnostic => diagnostic.Id == "PORTIA002");
     }
 
+    [Theory]
+    [InlineData("/// docs\nclass Projection() : Projector(null!, EventStreamPattern.ForPattern(\"events\"));",
+        "/// docs\npartial class Projection")]
+    [InlineData("    class Projection() : Projector(null!, EventStreamPattern.ForPattern(\"events\"));",
+        "    partial class Projection")]
+    [InlineData("[System.Obsolete]\nclass Projection() : Projector(null!, EventStreamPattern.ForPattern(\"events\"));",
+        "[System.Obsolete]\npartial class Projection")]
+    public async Task ModifierFreeDeclarationPreservesTriviaOnItsActualFirstToken(string declaration,
+        string expected)
+    {
+        var corrected = await ApplyAllAsync("using Cntryl.Portia;\npublic sealed record Changed : DomainEvent;\n" +
+                                            declaration.Replace(";", ", IProjectorHandler<Changed>;"));
+
+        Assert.Contains(expected, corrected, StringComparison.Ordinal);
+        Assert.DoesNotContain(GeneratorCompilation.Diagnostics(corrected,
+                new ProjectorReactorEventDispatcherGenerator()),
+            diagnostic => diagnostic.Severity == DiagnosticSeverity.Warning);
+    }
+
     [Fact]
     public async Task FixAllCorrectsProjectorAndReactorAndLeavesGeneratedOutputCompilable()
     {

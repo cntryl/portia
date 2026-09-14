@@ -101,17 +101,6 @@ public sealed class FleetPartitionRunnerTests
         release.SetResult();
     }
 
-    sealed class CapturingLogger : ILogger<FleetPartitionRunner>
-    {
-        public List<(LogLevel Level, EventId EventId, string Message, Exception? Exception)> Entries { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel logLevel) => true;
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter) =>
-            Entries.Add((logLevel, eventId, formatter(state, exception), exception));
-    }
-
     /// <summary>A non-positive callback termination timeout is rejected before the runner starts.</summary>
     [Fact]
     public async Task ShouldRejectNonPositivePartitionStopTimeout()
@@ -575,5 +564,17 @@ public sealed class FleetPartitionRunnerTests
         {
             // Expected from Task.WhenAll when a competing partition's own token was cancelled.
         }
+    }
+
+    sealed class CapturingLogger : ILogger<FleetPartitionRunner>
+    {
+        public List<(LogLevel Level, EventId EventId, string Message, Exception? Exception)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, eventId, formatter(state, exception), exception));
     }
 }

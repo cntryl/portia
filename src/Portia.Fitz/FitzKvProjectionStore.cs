@@ -1,4 +1,3 @@
-
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -118,10 +117,8 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
                 {
                     throw FitzKvCheckpoints.Conflict("Projection batch", identity, ex);
                 }
-                else
-                {
-                    throw;
-                }
+
+                throw;
             }
         }
 

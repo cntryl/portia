@@ -36,7 +36,8 @@ public static class DomainEventReaderExtensions
     public static IAsyncEnumerable<DomainEventRecord> ReadAsync(
         this IDomainEventReader reader,
         EventStreamPattern pattern)
-        => ReadAsync(reader, pattern, default);
+        =>
+            reader.ReadAsync(pattern, default);
 
     /// <summary>Reads a stream pattern from its beginning.</summary>
     public static IAsyncEnumerable<DomainEventRecord> ReadAsync(

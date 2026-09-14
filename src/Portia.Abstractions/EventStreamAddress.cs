@@ -56,13 +56,11 @@ public sealed record EventStreamAddress
         {
             throw new FormatException($"'{route}' is not a canonical stream route.");
         }
-        else
-        {
-            var segments = route[prefix.Length..].Split('/');
-            return segments.Length == 3
-                ? new EventStreamAddress(segments[0], segments[1], segments[2])
-                : throw new FormatException($"'{route}' is not a canonical stream route.");
-        }
+
+        var segments = route[prefix.Length..].Split('/');
+        return segments.Length == 3
+            ? new EventStreamAddress(segments[0], segments[1], segments[2])
+            : throw new FormatException($"'{route}' is not a canonical stream route.");
     }
 
     static string ValidateSegment(string value, string parameterName)

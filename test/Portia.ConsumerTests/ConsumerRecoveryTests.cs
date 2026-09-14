@@ -23,6 +23,7 @@ public sealed class ConsumerRecoveryTests
         var services = ConsumerHost.CreateServices();
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
+        _ = services.AddScoped<IQueuedRequestTerminalHandler, TestTerminalHandler>();
         _ = services.AddSingleton<TimeProvider>(clock);
         if (notification)
         {

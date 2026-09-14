@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.Globalization;
 using System.Text;
 
 namespace Cntryl.Portia;
@@ -57,6 +59,7 @@ public sealed class FitzKvProjectionStoreTests
             default:
                 throw new InvalidOperationException($"Unknown failure kind '{failureKind}'.");
         }
+
         var checkpointBeforeFailure = client.Read(key)?.ToArray();
 
         if (cleanupFails)
@@ -122,14 +125,16 @@ public sealed class FitzKvProjectionStoreTests
         const string route = "kv://portia/state/orders";
         var store = new TotalsRepository(client, route);
         var progress = new ProjectionCheckpoint(new EventCursor("progress"));
-        await using (var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
+        await using (var batch =
+                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
             await batch.CommitAsync(progress);
         await using (var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, progress)))
             await batch.CommitAsync(ProjectionCheckpoint.Start);
         Assert.Equal(ProjectionCheckpoint.Start, await new FitzKvCheckpointStore(client, route).LoadAsync(Identity));
         var fresh = new TotalsRepository(client, route);
         Assert.Equal(ProjectionCheckpoint.Start, await fresh.LoadCheckpointAsync(Identity));
-        await using (var batch = await fresh.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
+        await using (var batch =
+                     await fresh.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
             await batch.CommitAsync(progress);
         Assert.Equal(progress, await fresh.LoadCheckpointAsync(Identity));
     }
@@ -144,7 +149,8 @@ public sealed class FitzKvProjectionStoreTests
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
 
-        await using (var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
+        await using (var batch =
+                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
         {
             await store.AddAsync("total", 12);
             Assert.Empty(client.Committed);
@@ -162,7 +168,7 @@ public sealed class FitzKvProjectionStoreTests
     {
         var client = new FakeKvClient();
         var legacy = new byte[sizeof(ulong)];
-        System.Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(legacy, 8);
+        BinaryPrimitives.WriteUInt64BigEndian(legacy, 8);
         var key = FitzKvCheckpoints.Key(Identity);
         client.Committed[Encoding.UTF8.GetString(key.Span)] = legacy;
         var store = new TotalsRepository(client, "kv://portia/state/orders");
@@ -206,7 +212,8 @@ public sealed class FitzKvProjectionStoreTests
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
 
-        await using (var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
+        await using (var batch =
+                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
 
         Assert.Equal(0, client.LastTransaction.Rollbacks);
@@ -225,7 +232,8 @@ public sealed class FitzKvProjectionStoreTests
         var conflict = new KvException("conflict", "TX_CONFLICT", domainCode: FitzErrorCodes.KvIsolationConflict);
         var client = new FakeKvClient { CommitFailure = conflict };
         var store = new TotalsRepository(client, "kv://portia/state/orders");
-        await using var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+        await using var batch =
+            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
         await store.AddAsync("total", 12);
 
         var error = await Assert.ThrowsAsync<ProjectionConcurrencyException>(async () =>
@@ -268,7 +276,8 @@ public sealed class FitzKvProjectionStoreTests
         var failure = new KvException("commit failed", "KV_BACKEND", domainCode: FitzErrorCodes.KvBackendError);
         var client = new FakeKvClient { CommitFailure = failure, RollbackFailure = new IOException("rollback failed") };
         var store = new TotalsRepository(client, "kv://portia/state/orders");
-        await using var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+        await using var batch =
+            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
 
         var error = await Assert.ThrowsAsync<KvException>(async () =>
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1"))));
@@ -302,10 +311,12 @@ public sealed class FitzKvProjectionStoreTests
         var store = new TotalsRepository(client, "kv://portia/state/orders");
         var rebuild = new CheckpointIdentity(
             Identity.ComponentName, EventStreamPattern.ForPattern("tenant", "orders"), "rebuild-1");
-        await using (var live = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
+        await using (var live = await store.BeginAsync(new ProjectionBatchContext(Identity,
+                         ProjectionCheckpoint.Start)))
             await live.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")));
 
-        await using (var batch = await store.BeginAsync(new ProjectionBatchContext(rebuild, ProjectionCheckpoint.Start)))
+        await using (var batch =
+                     await store.BeginAsync(new ProjectionBatchContext(rebuild, ProjectionCheckpoint.Start)))
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("7")));
 
         Assert.Equal(new ProjectionCheckpoint(new EventCursor("2")), await store.LoadCheckpointAsync(Identity));
@@ -322,7 +333,8 @@ public sealed class FitzKvProjectionStoreTests
     {
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
-        await using var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+        await using var batch =
+            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)));
@@ -340,10 +352,13 @@ public sealed class FitzKvProjectionStoreTests
     {
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
-        await using (var first = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
+        await using (var first =
+                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
             await first.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
 
-        await using (var second = await store.BeginAsync(new ProjectionBatchContext(Identity, new ProjectionCheckpoint(new EventCursor("1")))))
+        await using (var second =
+                     await store.BeginAsync(new ProjectionBatchContext(Identity,
+                         new ProjectionCheckpoint(new EventCursor("1")))))
             await second.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")));
 
         Assert.Equal(2, client.Transactions.Count);
@@ -413,6 +428,6 @@ public sealed class FitzKvProjectionStoreTests
 
         public Task AddAsync(string name, int amount) =>
             Transaction.PutAsync(DataKey(name),
-                Encoding.UTF8.GetBytes(amount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                Encoding.UTF8.GetBytes(amount.ToString(CultureInfo.InvariantCulture)));
     }
 }

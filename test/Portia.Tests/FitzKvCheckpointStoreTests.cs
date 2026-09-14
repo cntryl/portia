@@ -1,4 +1,6 @@
 using System.Buffers.Binary;
+using System.Globalization;
+using System.Text;
 
 namespace Cntryl.Portia;
 
@@ -66,7 +68,7 @@ public sealed class FitzKvCheckpointStoreTests
         var client = new FakeKvClient();
         var legacy = new byte[sizeof(ulong)];
         BinaryPrimitives.WriteUInt64BigEndian(legacy, 4096);
-        client.Committed[System.Text.Encoding.UTF8.GetString(FitzKvCheckpoints.Key(Identity).Span)] = legacy;
+        client.Committed[Encoding.UTF8.GetString(FitzKvCheckpoints.Key(Identity).Span)] = legacy;
 
         var checkpoint = await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity);
 
@@ -91,7 +93,7 @@ public sealed class FitzKvCheckpointStoreTests
     public async Task ShouldRejectUnknownUnversionedCheckpointEncoding()
     {
         var client = new FakeKvClient();
-        client.Committed[System.Text.Encoding.UTF8.GetString(FitzKvCheckpoints.Key(Identity).Span)] = "old"u8.ToArray();
+        client.Committed[Encoding.UTF8.GetString(FitzKvCheckpoints.Key(Identity).Span)] = "old"u8.ToArray();
 
         _ = await Assert.ThrowsAsync<InvalidDataException>(async () =>
             await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity));
@@ -118,11 +120,12 @@ public sealed class FitzKvCheckpointStoreTests
 
         for (var index = 0; index < identities.Length; index++)
             await store.SaveAsync(identities[index], new ProjectionCheckpoint(
-                new EventCursor(((ulong)index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))));
+                new EventCursor(((ulong)index + 1).ToString(CultureInfo.InvariantCulture))));
 
         Assert.Equal(identities.Length, client.Committed.Count);
         for (var index = 0; index < identities.Length; index++)
-            Assert.Equal(((ulong)index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), (await store.LoadAsync(identities[index])).Cursor.ToString());
+            Assert.Equal(((ulong)index + 1).ToString(CultureInfo.InvariantCulture),
+                (await store.LoadAsync(identities[index])).Cursor.ToString());
     }
 
     /// <summary>

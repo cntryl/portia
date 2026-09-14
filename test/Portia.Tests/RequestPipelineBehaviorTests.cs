@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -6,6 +7,9 @@ namespace Cntryl.Portia;
 /// <summary>Verifies ordered typed request pipeline behavior composition.</summary>
 public sealed class RequestPipelineBehaviorTests
 {
+    const string SingleUseMessage =
+        "A request pipeline continuation may be invoked at most once and only during its behavior invocation.";
+
     /// <summary>Request-family and concrete behaviors wrap the handler in stable order.</summary>
     [Fact]
     public async Task ShouldRunMatchingBehaviorsInOrderAroundHandler()
@@ -330,7 +334,8 @@ public sealed class RequestPipelineBehaviorTests
         _ = services.AddSingleton(seen);
         _ = services.AddSingleton<ContextBehavior>();
         _ = services.AddSingleton<ContextHandler>();
-        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<PipelineAction, ContextHandler>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineAction, ContextHandler>());
         _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
             new RequestPipelineBehaviorRegistration<IBehaviorRequest, ContextBehavior>(0));
         using var provider = services.BuildServiceProvider();
@@ -347,7 +352,7 @@ public sealed class RequestPipelineBehaviorTests
     public async Task ShouldIsolateNestedAndConcurrentDispatchFrames()
     {
         var services = Services([]);
-        var handled = new System.Collections.Concurrent.ConcurrentBag<int>();
+        var handled = new ConcurrentBag<int>();
         var gate = new DispatchGate();
         _ = services.AddSingleton(handled);
         _ = services.AddSingleton(gate);
@@ -531,9 +536,6 @@ public sealed class RequestPipelineBehaviorTests
             => ValueTask.FromResult(Result.Failure(new RequestError(RequestErrorKind.Forbidden, "denied")));
     }
 
-    const string SingleUseMessage =
-        "A request pipeline continuation may be invoked at most once and only during its behavior invocation.";
-
     internal sealed class ShortCircuitBehavior(List<string> calls) : IRequestPipelineBehavior<PipelineAction>
     {
         public ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
@@ -586,8 +588,8 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class ConcurrentBehavior : IRequestPipelineBehavior<PipelineAction>
     {
-        int _ready;
         readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int _ready;
 
         public List<InvalidOperationException> Failures { get; } = [];
 
@@ -679,8 +681,8 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class DispatchGate
     {
-        int _arrivals;
         readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int _arrivals;
 
         public bool Bypass { get; set; }
 
@@ -707,7 +709,7 @@ public sealed class RequestPipelineBehaviorTests
         }
     }
 
-    internal sealed class NestedConcurrentHandler(System.Collections.Concurrent.ConcurrentBag<int> handled)
+    internal sealed class NestedConcurrentHandler(ConcurrentBag<int> handled)
         : IRequestHandler<NestedConcurrentAction>
     {
         public ValueTask<Result> HandleAsync(IRequestContext<NestedConcurrentAction> context, CancellationToken ct)

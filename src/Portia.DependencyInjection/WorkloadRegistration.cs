@@ -20,7 +20,6 @@ public sealed record WorkloadRegistration
         ArgumentNullException.ThrowIfNull(options.Processing);
         options.Processing.Validate();
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ExplicitName = name;
         Name = name;
         if (!descriptor.SupportsRebuild &&
             // Asked of the descriptor rather than tested against a known descriptor type, so a
@@ -46,14 +45,11 @@ public sealed record WorkloadRegistration
     /// <summary>Gets the execution scope.</summary>
     public WorkloadScope Scope { get; }
 
-    /// <summary>Gets the stable logical name used to coordinate ownership of this workload.</summary>
-    public string Name { get; }
-
     /// <summary>
-    ///     Gets the name the application chose, or null to keep the component's own name
-    ///     — which is its checkpoint identity — exactly as its constructor set it.
+    ///     Gets the stable hosted identity used for ownership, checkpoints, and reactor effects.
+    ///     Constructor-selected component names apply only when a component is driven manually.
     /// </summary>
-    internal string? ExplicitName { get; }
+    public string Name { get; }
 
     /// <summary>Gets the delay between passes.</summary>
     public TimeSpan PollInterval { get; }

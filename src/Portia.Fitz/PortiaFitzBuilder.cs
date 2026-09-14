@@ -13,11 +13,11 @@ public sealed class PortiaFitzBuilder
 
     readonly PortiaBuilder _application;
     readonly HashSet<string> _capabilities = new(StringComparer.Ordinal);
+    readonly HashSet<RequestTransportId> _requiredWorkerTransports = [];
+    readonly HashSet<RequestTransportId> _workerTransports = [.. AllBuiltInTransports];
     readonly Lazy<IReadOnlyList<FitzWorkerDefinition>> _workers;
     string? _checkpointRoute;
-    readonly HashSet<RequestTransportId> _requiredWorkerTransports = [];
     bool _workerSelectionExplicit;
-    readonly HashSet<RequestTransportId> _workerTransports = [.. AllBuiltInTransports];
 
     internal PortiaFitzBuilder(PortiaBuilder application)
     {
@@ -197,7 +197,8 @@ public sealed class PortiaFitzBuilder
         ValidateRequiredWorkers();
         var workers = new List<FitzWorkerDefinition>();
         var keys = new HashSet<string>(StringComparer.Ordinal);
-        if (_workerTransports.Contains(RequestTransportId.Callable) && SelectedRequests(RequestTransportId.Callable).Any())
+        if (_workerTransports.Contains(RequestTransportId.Callable) &&
+            SelectedRequests(RequestTransportId.Callable).Any())
             AddWorker(new FitzRpcWorkerDefinition());
         // Each transport supplies the definition it wants built, so a new worker kind is a new
         // record and a line here rather than another arm in a switch over stringly-typed kinds.

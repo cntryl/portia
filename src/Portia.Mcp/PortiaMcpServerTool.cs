@@ -12,8 +12,10 @@ sealed class PortiaMcpServerTool(
 {
     static readonly CallToolResult BindingFailure = McpToolRegistration.IngressFailure(
         "Binding", "The tool input is not valid.");
+
     static readonly CallToolResult UnauthorizedFailure = McpToolRegistration.IngressFailure(
         "Unauthorized", "An authenticated actor is required.");
+
     static readonly CallToolResult InternalFailure = McpToolRegistration.IngressFailure(
         "Internal", "The tool could not be completed.");
 

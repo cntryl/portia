@@ -39,10 +39,11 @@ public sealed class MultiTenantRunner(
     readonly ILogger<MultiTenantRunner>? _logger = logger;
     readonly TimeSpan _restartInterval = GetRestartInterval(restartInterval);
     readonly TimeSpan _shutdownGrace = GetShutdownGrace(shutdownGrace);
-    readonly TimeSpan _tenantStopTimeout = TimeSpan.FromSeconds(5);
 
     readonly ITenantDirectory _tenantDirectory =
         tenantDirectory ?? throw new ArgumentNullException(nameof(tenantDirectory));
+
+    readonly TimeSpan _tenantStopTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>Creates a runner using the default five-second shutdown grace.</summary>
     /// <param name="tenantDirectory">Reports active tenants and lifecycle changes.</param>

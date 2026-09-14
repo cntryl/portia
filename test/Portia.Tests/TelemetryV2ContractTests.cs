@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
+using System.Security.Claims;
 using System.Text.Json;
 
 namespace Cntryl.Portia;
@@ -24,7 +25,8 @@ public sealed class TelemetryV2ContractTests
                    new QueueInvocation("queue://secret/route", 2) { MessagingSystem = "fitz" }, null))
             PortiaTelemetry.RecordOutcome(process, true, null);
 
-        var executeActivity = Assert.Single(activities, activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName);
+        var executeActivity = Assert.Single(activities,
+            activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName);
         Assert.All(activities, activity =>
         {
             Assert.Equal(PortiaTelemetry.SourceName, activity.Source.Name);
@@ -34,15 +36,25 @@ public sealed class TelemetryV2ContractTests
         Assert.Equal(["portia.request.name", "portia.transport.name", "portia.outcome"],
             executeActivity.TagObjects.Select(tag => tag.Key));
 
-        var sendActivity = Assert.Single(activities, activity => activity.OperationName == PortiaTelemetry.SendActivityName);
+        var sendActivity = Assert.Single(activities,
+            activity => activity.OperationName == PortiaTelemetry.SendActivityName);
         Assert.Equal(ActivityKind.Producer, sendActivity.Kind);
-        Assert.Equal(["portia.request.name", "portia.transport.name", "messaging.system", "messaging.operation.type", "portia.outcome"],
+        Assert.Equal(
+            [
+                "portia.request.name", "portia.transport.name", "messaging.system", "messaging.operation.type",
+                "portia.outcome"
+            ],
             sendActivity.TagObjects.Select(tag => tag.Key));
         Assert.Equal("send", sendActivity.GetTagItem("messaging.operation.type"));
 
-        var processActivity = Assert.Single(activities, activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);
+        var processActivity = Assert.Single(activities,
+            activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);
         Assert.Equal(ActivityKind.Consumer, processActivity.Kind);
-        Assert.Equal(["portia.request.name", "portia.transport.name", "messaging.system", "messaging.operation.type", "portia.outcome"],
+        Assert.Equal(
+            [
+                "portia.request.name", "portia.transport.name", "messaging.system", "messaging.operation.type",
+                "portia.outcome"
+            ],
             processActivity.TagObjects.Select(tag => tag.Key));
         Assert.Equal("process", processActivity.GetTagItem("messaging.operation.type"));
         Assert.DoesNotContain(activities.SelectMany(activity => activity.TagObjects),
@@ -82,7 +94,8 @@ public sealed class TelemetryV2ContractTests
         {
         }
 
-        var queue = Assert.Single(activities, activity => Equals(activity.GetTagItem("portia.transport.name"), "queue"));
+        var queue = Assert.Single(activities,
+            activity => Equals(activity.GetTagItem("portia.transport.name"), "queue"));
         Assert.NotEqual(propagated.TraceParent[3..35], queue.TraceId.ToString());
         Assert.Equal(propagated.TraceParent[3..35], Assert.Single(queue.Links).Context.TraceId.ToString());
 
@@ -129,7 +142,8 @@ public sealed class TelemetryV2ContractTests
         Assert.True(result.IsSuccess);
         var requestActivities = activities.Where(activity =>
             Equals(activity.GetTagItem("portia.request.name"), "test.rpc.get-value")).ToArray();
-        var send = Assert.Single(requestActivities, activity => activity.OperationName == PortiaTelemetry.SendActivityName);
+        var send = Assert.Single(requestActivities,
+            activity => activity.OperationName == PortiaTelemetry.SendActivityName);
         var process = Assert.Single(requestActivities,
             activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);
         var execute = Assert.Single(requestActivities,
@@ -164,9 +178,11 @@ public sealed class TelemetryV2ContractTests
 
         var requestActivities = activities.Where(activity =>
             Equals(activity.GetTagItem("portia.request.name"), "test.shared.universal-action")).ToArray();
-        var processes = requestActivities.Where(activity => activity.OperationName == PortiaTelemetry.ProcessActivityName)
+        var processes = requestActivities
+            .Where(activity => activity.OperationName == PortiaTelemetry.ProcessActivityName)
             .ToArray();
-        var executions = requestActivities.Where(activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName)
+        var executions = requestActivities
+            .Where(activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName)
             .ToArray();
         Assert.Equal(2, processes.Length);
         Assert.Equal(2, executions.Length);
@@ -197,7 +213,7 @@ public sealed class TelemetryV2ContractTests
         Assert.Equal("unauthorized", process.GetTagItem("portia.outcome"));
         Assert.Equal(ActivityStatusCode.Error, process.Status);
         Assert.DoesNotContain(activities, activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName &&
-                                                     activity.TraceId == process.TraceId);
+                                                      activity.TraceId == process.TraceId);
         Assert.Empty(process.Events);
     }
 
@@ -340,7 +356,7 @@ public sealed class TelemetryV2ContractTests
             RequestMetadata.Create());
 
         _ = await Assert.ThrowsAsync<OperationCanceledException>(() => RequestDispatch.SendAsync(
-            new CooperativeCancellationValidator(), busHost.Bus, new ChangeValue(1), delivery, cancellation.Token)
+                new CooperativeCancellationValidator(), busHost.Bus, new ChangeValue(1), delivery, cancellation.Token)
             .AsTask());
 
         var process = Assert.Single(activities);
@@ -425,17 +441,17 @@ public sealed class TelemetryV2ContractTests
 
     sealed class UnrequestedCancellationValidator : IRequestActorValidator
     {
-        public ValueTask<Result<System.Security.Claims.ClaimsPrincipal>> ValidateAsync(string? token,
+        public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string? token,
             CancellationToken ct = default) => throw new OperationCanceledException("unexpected cancellation");
     }
 
     sealed class CooperativeCancellationValidator : IRequestActorValidator
     {
-        public ValueTask<Result<System.Security.Claims.ClaimsPrincipal>> ValidateAsync(string? token,
+        public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string? token,
             CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
-            return ValueTask.FromResult(Result<System.Security.Claims.ClaimsPrincipal>.Success(RequestActor.System));
+            return ValueTask.FromResult(Result<ClaimsPrincipal>.Success(RequestActor.System));
         }
     }
 }

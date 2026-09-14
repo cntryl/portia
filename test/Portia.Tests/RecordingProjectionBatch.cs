@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Cntryl.Portia;
 
 sealed class RecordingProjectionBatch(
@@ -10,7 +12,7 @@ sealed class RecordingProjectionBatch(
     public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        committedOffsets.Add(ulong.Parse(checkpoint.Cursor.Value!, System.Globalization.CultureInfo.InvariantCulture));
+        committedOffsets.Add(ulong.Parse(checkpoint.Cursor.Value!, CultureInfo.InvariantCulture));
         saveCheckpoint(checkpoint);
         return ValueTask.CompletedTask;
     }

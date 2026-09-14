@@ -1,4 +1,3 @@
-
 namespace Cntryl.Portia;
 
 sealed class SingleWorkerMembership : IFleetMembership

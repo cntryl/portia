@@ -31,7 +31,8 @@ public sealed class AllTransportsSharedHandlerTests
         // Queue.
         var queueConsumer = new FakeQueueConsumer([new FakeQueuedItem(new UniversalAction(2))]);
         var queueRunner = new QueueRunner(queueConsumer,
-            RequestDeliveryScopes.FixedQueue(bus, new AlwaysValidActorValidator()));
+            RequestDeliveryScopes.FixedQueue(bus, new AlwaysValidActorValidator(),
+                terminalHandler: new IgnoreTerminalRequest()));
         await queueRunner.RunAsync();
         Assert.Equal([1, 2], handler.HandledValues);
 
@@ -62,6 +63,12 @@ public sealed class AllTransportsSharedHandlerTests
     {
         public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string? token, CancellationToken ct = default) =>
             ValueTask.FromResult(Result<ClaimsPrincipal>.Success(RequestActor.System));
+    }
+
+    sealed class IgnoreTerminalRequest : IQueuedRequestTerminalHandler
+    {
+        public ValueTask HandleAsync(QueuedRequestFailureContext context, CancellationToken ct = default) =>
+            ValueTask.CompletedTask;
     }
 
     sealed class FakeQueueConsumer(IReadOnlyList<IQueuedRequest> items) : IRequestQueueConsumer

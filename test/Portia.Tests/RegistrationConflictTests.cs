@@ -75,7 +75,7 @@ public sealed class RegistrationConflictTests
         var count = services.Count;
 
         var error = Assert.Throws<InvalidOperationException>(() =>
-            builder.AddGeneratedRequest(Transport(operation: "different")));
+            builder.AddGeneratedRequest(Transport("different")));
 
         Assert.Contains("conflicting transport descriptors", error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(TransportConflictRequest), error.Message, StringComparison.Ordinal);
@@ -170,8 +170,7 @@ public sealed class RegistrationConflictTests
             [
                 new RequestAuthorizerRegistration<UniversalAction, UniversalActionAuthorizer>(
                     AuthorizationStage.Principal),
-                new RequestAuthorizerRegistration<UniversalAction, UniversalActionAuthorizer>(
-                    AuthorizationStage.ResourceAccess)
+                new RequestAuthorizerRegistration<UniversalAction, UniversalActionAuthorizer>()
             ],
             [], []));
 
@@ -214,10 +213,10 @@ public sealed class RegistrationConflictTests
     public void ShouldRejectConflictingBehaviorOrdersAtRegistryComposition()
     {
         var error = Assert.Throws<InvalidOperationException>(() => new RequestRegistry([], [],
-            [
-                new RequestPipelineBehaviorRegistration<UniversalAction, CountingBehavior>(1),
-                new RequestPipelineBehaviorRegistration<UniversalAction, CountingBehavior>(2)
-            ], []));
+        [
+            new RequestPipelineBehaviorRegistration<UniversalAction, CountingBehavior>(1),
+            new RequestPipelineBehaviorRegistration<UniversalAction, CountingBehavior>(2)
+        ], []));
 
         Assert.Contains("conflicting orders", error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(CountingBehavior), error.Message, StringComparison.Ordinal);
@@ -278,7 +277,8 @@ public sealed class RegistrationConflictTests
     }
 
     static RequestTransportRegistration Transport(string operation = "execute",
-        string discriminator = "transport-conflict") => new(typeof(TransportConflictRequest), [RequestTransportId.Callable],
+        string discriminator = "transport-conflict") => new(typeof(TransportConflictRequest),
+        [RequestTransportId.Callable],
         new RequestRouteAttribute("tests", "requests", "universal", operation),
         new DiscriminatorAttribute(discriminator));
 }

@@ -77,6 +77,7 @@ static Cntryl.Portia.PortiaHttpBinding.GetJsonOptions(Microsoft.AspNetCore.Http.
 static Cntryl.Portia.PortiaHttpBinding.PrefersRespondAsync(Microsoft.AspNetCore.Http.HttpContext! context) -> bool
 static Cntryl.Portia.PortiaHttpBinding.Problem(int statusCode, string! message) -> Microsoft.AspNetCore.Http.IResult!
 static Cntryl.Portia.PortiaHttpBinding.ReadBearerCredential(Microsoft.AspNetCore.Http.HttpContext! context) -> string?
+static Cntryl.Portia.PortiaHttpBinding.ReadPortableBearerCredential(Microsoft.AspNetCore.Http.HttpContext! context) -> string?
 static Cntryl.Portia.PortiaHttpBinding.ReadBody<T>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, string! name, bool nullable, bool hasDefault, T defaultValue) -> T
 static Cntryl.Portia.PortiaHttpBinding.ReadBody<TRequest, TValue>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, int memberIndex, string! memberName, string! fallbackName, bool nullable, bool hasDefault, TValue defaultValue) -> TValue
 static Cntryl.Portia.PortiaHttpBinding.ReadJsonBodyAsync(Microsoft.AspNetCore.Http.HttpContext! context, bool bodyRequired, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask<System.Text.Json.JsonDocument!>

@@ -42,12 +42,13 @@ public sealed class FleetAssignmentCacheTests
             id.CopyTo(input, 8 + route.Length);
             var digest = SHA256.HashData(input);
             var comparison = greatest is null ? 1 : digest.AsSpan().SequenceCompareTo(greatest);
-            if (comparison > 0 || comparison == 0 && string.CompareOrdinal(worker, winner) > 0)
+            if (comparison > 0 || (comparison == 0 && string.CompareOrdinal(worker, winner) > 0))
             {
                 greatest = digest;
                 winner = worker;
             }
         }
+
         return winner;
     }
 }

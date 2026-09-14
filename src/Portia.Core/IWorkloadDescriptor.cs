@@ -16,6 +16,7 @@ interface IWorkloadDescriptor
 
     void Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName);
     EventStreamPattern Pattern(IServiceProvider services);
+
     ValueTask<ProjectionPassResult> RunPass(IServiceProvider services, ProjectionRunOptions options,
         CancellationToken ct);
 

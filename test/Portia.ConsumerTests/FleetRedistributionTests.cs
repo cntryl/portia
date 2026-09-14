@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia.Consumer;
 

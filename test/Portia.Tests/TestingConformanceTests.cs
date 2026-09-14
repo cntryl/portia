@@ -175,10 +175,8 @@ public sealed class TestingConformanceTests
                     {
                         throw new InvalidOperationException("stale checkpoint");
                     }
-                    else
-                    {
-                        throw new ProjectionConcurrencyException("stale checkpoint");
-                    }
+
+                    throw new ProjectionConcurrencyException("stale checkpoint");
                 }
 
                 _states[context.Identity] = new ProjectionState(value, checkpoint);

@@ -19,7 +19,8 @@ interface IRequestInvocation<TOut>
 /// <typeparam name="TOut">The result.</typeparam>
 /// <param name="permission">The generated permission expression.</param>
 public sealed class RequestRegistration<TRequest,
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler, TOut>(
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+THandler, TOut>(
     Func<TRequest, string>? permission = null)
     : RequestHandlerRegistration(typeof(TRequest), typeof(THandler), typeof(TOut),
         permission is null ? null : request => permission((TRequest)request)), IRequestInvocation<TOut>
@@ -46,7 +47,8 @@ public sealed class RequestRegistration<TRequest,
 /// <typeparam name="TRequest">The request.</typeparam>
 /// <typeparam name="TAuthorizer">The authorizer.</typeparam>
 public sealed class RequestAuthorizerRegistration<TRequest,
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TAuthorizer>(
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+TAuthorizer>(
     AuthorizationStage stage = AuthorizationStage.ResourceAccess)
     : RequestAuthorizerRegistration(typeof(TRequest), typeof(TAuthorizer), stage)
     where TRequest : IRequestBase
@@ -68,7 +70,8 @@ interface IRequestBehaviorInvocation<TOut>
 
 /// <summary>Invokes one generated no-result pipeline behavior registration.</summary>
 public sealed class RequestPipelineBehaviorRegistration<TRequest,
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior>(int order)
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+TBehavior>(int order)
     : RequestPipelineBehaviorRegistration(typeof(TRequest), typeof(TBehavior), order), IRequestBehaviorInvocation
     where TRequest : IRequest
     where TBehavior : class, IRequestPipelineBehavior<TRequest>
@@ -83,7 +86,8 @@ public sealed class RequestPipelineBehaviorRegistration<TRequest,
 
 /// <summary>Invokes one generated result-bearing pipeline behavior registration.</summary>
 public sealed class RequestPipelineBehaviorRegistration<TRequest,
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior, TOut>(int order)
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+TBehavior, TOut>(int order)
     : RequestPipelineBehaviorRegistration(typeof(TRequest), typeof(TBehavior), order), IRequestBehaviorInvocation<TOut>
     where TRequest : IRequest<TOut>
     where TBehavior : class, IRequestPipelineBehavior<TRequest, TOut>

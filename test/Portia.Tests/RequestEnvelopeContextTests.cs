@@ -25,9 +25,9 @@ public sealed class RequestEnvelopeContextTests
         Assert.Equal("opaque-token", first.ActorToken);
         Assert.Equal(new EnvelopeCommand(2), first.Request);
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(bytes.Span));
-        Assert.Equal(2, Assert.IsType<JsonValue>(json["version"], exactMatch: false).GetValue<int>());
-        Assert.Equal("test.EnvelopeCommand", Assert.IsType<JsonValue>(json["contract"], exactMatch: false).GetValue<string>());
-        Assert.Equal(1, Assert.IsType<JsonValue>(json["contract_version"], exactMatch: false).GetValue<int>());
+        Assert.Equal(2, Assert.IsType<JsonValue>(json["version"], false).GetValue<int>());
+        Assert.Equal("test.EnvelopeCommand", Assert.IsType<JsonValue>(json["contract"], false).GetValue<string>());
+        Assert.Equal(1, Assert.IsType<JsonValue>(json["contract_version"], false).GetValue<int>());
         Assert.DoesNotContain("execution_id", json.ToJsonString());
         Assert.DoesNotContain("claims", json.ToJsonString());
     }
@@ -44,8 +44,8 @@ public sealed class RequestEnvelopeContextTests
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(bytes.Span));
 
         Assert.Equal(trace, envelope.TraceContext);
-        Assert.Equal(trace.TraceParent, Assert.IsType<JsonValue>(json["traceparent"], exactMatch: false).GetValue<string>());
-        Assert.Equal(trace.TraceState, Assert.IsType<JsonValue>(json["tracestate"], exactMatch: false).GetValue<string>());
+        Assert.Equal(trace.TraceParent, Assert.IsType<JsonValue>(json["traceparent"], false).GetValue<string>());
+        Assert.Equal(trace.TraceState, Assert.IsType<JsonValue>(json["tracestate"], false).GetValue<string>());
         Assert.DoesNotContain("baggage", json.ToJsonString(), StringComparison.OrdinalIgnoreCase);
     }
 

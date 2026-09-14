@@ -3,11 +3,18 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
 
+sealed class TestTerminalHandler : IQueuedRequestTerminalHandler
+{
+    public ValueTask HandleAsync(QueuedRequestFailureContext context, CancellationToken ct = default) =>
+        ValueTask.CompletedTask;
+}
+
 static class ConsumerHost
 {
     public static ServiceCollection CreateServices(bool scoped = true)
     {
         var services = new ServiceCollection();
+        _ = services.AddScoped<IQueuedRequestTerminalHandler, TestTerminalHandler>();
         _ = services.AddScoped<IAggregateRepository, AggregateRepository>();
         _ = services.AddSingleton<Effects>();
         _ = services.AddSingleton<IConsumerEffects>(provider => provider.GetRequiredService<Effects>());
@@ -129,11 +136,9 @@ static class ConsumerHost
                 storage.FailReload = false;
                 throw new InvalidOperationException("Checkpoint reload failed");
             }
-            else
-            {
-                return ValueTask.FromResult(
-                    storage.Checkpoints.GetValueOrDefault(identity, ProjectionCheckpoint.Start));
-            }
+
+            return ValueTask.FromResult(
+                storage.Checkpoints.GetValueOrDefault(identity, ProjectionCheckpoint.Start));
         }
 
         public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
@@ -161,10 +166,8 @@ static class ConsumerHost
                 storage.FailReload = true;
                 throw new InvalidOperationException("Commit completed but response failed");
             }
-            else
-            {
-                return ValueTask.CompletedTask;
-            }
+
+            return ValueTask.CompletedTask;
         }
 
         public ValueTask DisposeAsync()

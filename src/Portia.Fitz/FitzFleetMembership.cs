@@ -1,4 +1,3 @@
-
 namespace Cntryl.Portia;
 
 /// <summary>Holds a renewable worker lease and owns its fleet inventory observer for that lease's lifetime.</summary>

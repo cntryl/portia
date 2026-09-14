@@ -7,6 +7,29 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed partial class ComponentHostingTests
 {
+    [Fact]
+    public async Task HostedRegistrationNameOverridesConstructorCheckpointAndEffectIdentity()
+    {
+        var services = ConsumerHost.CreateServices();
+        _ = services.AddPortia().AddReactor<FirstReactor>("upgraded-reactor", WorkloadScope.Global).AddWorkers();
+        await using var provider = ConsumerHost.Build(services);
+        await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+        try
+        {
+            await worker.StartAsync(default);
+            await provider.GetRequiredService<ConsumerHost.Effects>().WaitForAsync("upgraded-reactor");
+        }
+        finally
+        {
+            await worker.StopAsync(default);
+            worker.Dispose();
+        }
+
+        var effect = Assert.Single(provider.GetRequiredService<ConsumerHost.Effects>().Items);
+        Assert.Equal("upgraded-reactor", effect.Component);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -17,8 +40,10 @@ public sealed partial class ComponentHostingTests
         _ = services.AddSingleton<IDomainEventNotifier>(changes);
         var portia = services.AddPortia();
         _ = (projector
-                ? portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromDays(1))
-                : portia.AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global, o => o.PollInterval = TimeSpan.FromDays(1)))
+                ? portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
+                    o => o.PollInterval = TimeSpan.FromDays(1))
+                : portia.AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global,
+                    o => o.PollInterval = TimeSpan.FromDays(1)))
             .AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
@@ -95,11 +120,12 @@ public sealed partial class ComponentHostingTests
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<IDomainEventNotifier>(changes);
         _ = services.AddSingleton<PatternSequence>();
-        _ = services.AddPortia().AddProjector<ChangingPatternProjector>("ChangingPatternProjector", WorkloadScope.Global, options =>
-        {
-            options.FailureAttemptLimit = 1;
-            options.PollInterval = TimeSpan.FromDays(1);
-        }).AddWorkers();
+        _ = services.AddPortia().AddProjector<ChangingPatternProjector>("ChangingPatternProjector",
+            WorkloadScope.Global, options =>
+            {
+                options.FailureAttemptLimit = 1;
+                options.PollInterval = TimeSpan.FromDays(1);
+            }).AddWorkers();
         await using var provider = ConsumerHost.Build(services);
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await worker.StartAsync(default);
@@ -153,7 +179,6 @@ public sealed partial class ComponentHostingTests
             await worker.StopAsync(default);
             (worker as IDisposable)?.Dispose();
         }
-
     }
 
     [Fact]
@@ -370,7 +395,12 @@ public sealed partial class ComponentHostingTests
         int _subscriptionCount;
         public TaskCompletionSource Subscribed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int DisposalCount => Volatile.Read(ref _disposalCount);
-        public bool FailNextWait { set => Volatile.Write(ref _failNextWait, value ? 1 : 0); }
+
+        public bool FailNextWait
+        {
+            set => Volatile.Write(ref _failNextWait, value ? 1 : 0);
+        }
+
         public int SubscriptionCount => Volatile.Read(ref _subscriptionCount);
 
         public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
@@ -417,7 +447,7 @@ public sealed partial class ComponentHostingTests
             Interlocked.Increment(ref _created) == 1 ? "first-pattern" : "second-pattern");
     }
 
-    internal sealed partial class ChangingPatternProjector(IAccountRepository target, PatternSequence patterns)
+    sealed class ChangingPatternProjector(IAccountRepository target, PatternSequence patterns)
         : Projector(target, patterns.Next(), "changing-pattern"), IProjectorHandler<Deposited>
     {
         public ValueTask HandleAsync(Deposited ev, IProjectorContext context, CancellationToken ct) =>

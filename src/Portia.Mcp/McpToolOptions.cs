@@ -27,7 +27,9 @@ public sealed class McpToolOptions
     /// <summary>Overrides the stable discriminator-derived tool name.</summary>
     public McpToolOptions Named(string name)
     {
-        Name = string.IsNullOrWhiteSpace(name) ? throw new ArgumentException("A tool name cannot be empty.", nameof(name)) : name;
+        Name = string.IsNullOrWhiteSpace(name)
+            ? throw new ArgumentException("A tool name cannot be empty.", nameof(name))
+            : name;
         return this;
     }
 
@@ -43,7 +45,9 @@ public sealed class McpToolOptions
     /// <summary>Adds a human-readable display title.</summary>
     public McpToolOptions Titled(string title)
     {
-        Title = string.IsNullOrWhiteSpace(title) ? throw new ArgumentException("A tool title cannot be empty.", nameof(title)) : title;
+        Title = string.IsNullOrWhiteSpace(title)
+            ? throw new ArgumentException("A tool title cannot be empty.", nameof(title))
+            : title;
         return this;
     }
 

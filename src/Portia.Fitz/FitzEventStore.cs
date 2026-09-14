@@ -54,6 +54,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                 telemetryOutcome = "fault";
                 throw new ArgumentNullException(nameof(stream));
             }
+
             var route = stream.ToString();
             var startOffset = fromOffset;
             var nextOffset = fromOffset;
@@ -101,6 +102,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                         telemetryOutcome = "fault";
                         throw;
                     }
+
                     telemetryCount++;
                     yield return result;
                     nextOffset++;
@@ -147,6 +149,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                 telemetryOutcome = "fault";
                 throw new ArgumentNullException(nameof(pattern));
             }
+
             var route = pattern.ToString();
             var startOffset = Offset(cursor);
             var nextOffset = startOffset;
@@ -181,7 +184,8 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                             "A Portia Fitz record does not contain its concrete stream route.");
                         var stream = EventStreamAddress.Parse(Encoding.UTF8.GetString(metadata.Span));
                         if (!FitzEventStreamPatternOffsets.Matches(stream, pattern))
-                            throw new InvalidOperationException($"Stream '{stream}' does not match pattern '{pattern}'.");
+                            throw new InvalidOperationException(
+                                $"Stream '{stream}' does not match pattern '{pattern}'.");
                         var areaOffset = record.AreaOffset;
                         var realmOffset = record.RealmOffset;
                         var scopeOffset = FitzEventStreamPatternOffsets.GetPatternOffset(
@@ -203,6 +207,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                         telemetryOutcome = "fault";
                         throw;
                     }
+
                     telemetryCount++;
                     yield return result;
                     nextOffset++;
@@ -232,14 +237,6 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                 telemetryOutcome, telemetryCount);
         }
     }
-
-    static EventCursor Cursor(ulong offset) => new(offset.ToString(CultureInfo.InvariantCulture));
-
-    static ulong Offset(EventCursor cursor) => cursor == EventCursor.Start
-        ? 0
-        : ulong.TryParse(cursor.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var offset)
-            ? offset
-            : throw new ArgumentException("The event cursor was not issued by the Fitz event store.", nameof(cursor));
 
     /// <inheritdoc />
     public async ValueTask AppendAsync(
@@ -321,6 +318,14 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                 telemetryOutcome, telemetryCount);
         }
     }
+
+    static EventCursor Cursor(ulong offset) => new(offset.ToString(CultureInfo.InvariantCulture));
+
+    static ulong Offset(EventCursor cursor) => cursor == EventCursor.Start
+        ? 0
+        : ulong.TryParse(cursor.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var offset)
+            ? offset
+            : throw new ArgumentException("The event cursor was not issued by the Fitz event store.", nameof(cursor));
 
     static async Task RollbackAsync(IStreamSession session)
     {

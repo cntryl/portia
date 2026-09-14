@@ -65,7 +65,6 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
                     var workload = owned[identity];
                     if (!workload.Run.IsCompleted)
                     {
-                        continue;
                     }
                     else
                     {

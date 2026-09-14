@@ -78,7 +78,8 @@ public sealed class RequestBusExtensionsTests
         ev.AttachMetadata(new DomainEventMetadata(
             Uuid.CreateVersion4(), aggregateId, 1, DateTimeOffset.UtcNow, Uuid.CreateVersion4()));
         return new ReactionExecutionContext(
-            new DomainEventRecord(new EventStreamAddress("test", "reactions", aggregateId.ToString()), ev, 0, new EventCursor("1")),
+            new DomainEventRecord(new EventStreamAddress("test", "reactions", aggregateId.ToString()), ev, 0,
+                new EventCursor("1")),
             RequestActor.System);
     }
 
@@ -89,10 +90,10 @@ public sealed class RequestBusExtensionsTests
 
     sealed class RecordingRequestBus(Result outcome) : IRequestBus
     {
+        public RequestDispatchContext? Context { get; private set; }
 
         public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
             CancellationToken ct = default) => ValueTask.FromResult(Result.Success);
-        public RequestDispatchContext? Context { get; private set; }
 
         public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
             new(actor, metadata: metadata);

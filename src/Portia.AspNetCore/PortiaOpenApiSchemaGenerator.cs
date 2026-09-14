@@ -14,7 +14,7 @@ static class PortiaOpenApiSchemaGenerator
 {
     public static IOpenApiSchema Create(Type type, JsonSerializerOptions options, OpenApiDocument document)
     {
-        var node = JsonSchemaExporter.GetJsonSchemaAsNode(options.GetTypeInfo(type), new JsonSchemaExporterOptions
+        var node = options.GetTypeInfo(type).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
         {
             // The OpenAPI reader expects object nodes for entries in a properties map.
             TransformSchemaNode = (_, schema) => schema.GetValueKind() switch
@@ -48,6 +48,7 @@ static class PortiaOpenApiSchemaGenerator
             if (!targets.ContainsKey(target))
                 targets.Add(target, id + "_" + targets.Count.ToString(CultureInfo.InvariantCulture));
         }
+
         foreach (var (reference, target) in references)
             reference["$ref"] = "#/components/schemas/" + targets[target];
         foreach (var (target, componentId) in targets)
@@ -59,7 +60,8 @@ static class PortiaOpenApiSchemaGenerator
             var result = new OpenApiJsonReader().ReadFragment<OpenApiSchema>(schema,
                 OpenApiSpecVersion.OpenApi3_1, document, out var diagnostic);
             if (diagnostic.Errors.Count > 0)
-                throw new InvalidOperationException($"Cannot export the Portia JSON schema for '{type}': {string.Join("; ", diagnostic.Errors)}");
+                throw new InvalidOperationException(
+                    $"Cannot export the Portia JSON schema for '{type}': {string.Join("; ", diagnostic.Errors)}");
             return result ?? throw new InvalidOperationException($"No Portia JSON schema was exported for '{type}'.");
         }
 
@@ -68,12 +70,15 @@ static class PortiaOpenApiSchemaGenerator
             nodes.Add(path, current);
             if (current is JsonObject obj)
             {
-                if (obj["$ref"] is JsonValue reference && reference.TryGetValue<string>(out var target) && target.StartsWith('#'))
+                if (obj["$ref"] is JsonValue reference && reference.TryGetValue<string>(out var target) &&
+                    target.StartsWith('#'))
                     references.Add((obj, target));
                 foreach (var (name, child) in obj)
                 {
                     if (child is not null)
-                        Visit(child, path + "/" + name.Replace("~", "~0", StringComparison.Ordinal).Replace("/", "~1", StringComparison.Ordinal));
+                        Visit(child,
+                            path + "/" + name.Replace("~", "~0", StringComparison.Ordinal)
+                                .Replace("/", "~1", StringComparison.Ordinal));
                 }
             }
             else if (current is JsonArray array)

@@ -59,7 +59,7 @@ public sealed class ObservabilityContractTests
         _ = await host.Bus.SendAsync(new TelemetrySuccessAction(), RequestActor.System);
 
         var activity = Assert.Single(activities,
-            item => (item.GetTagItem("portia.request.name") as string) == nameof(TelemetrySuccessAction));
+            item => item.GetTagItem("portia.request.name") as string == nameof(TelemetrySuccessAction));
         Assert.Equal(PortiaTelemetry.ExecuteActivityName, activity.DisplayName);
         Assert.DoesNotContain(activity.TagObjects, tag => tag.Key.Contains("id", StringComparison.OrdinalIgnoreCase));
         var duration = Assert.Single(measurements,
@@ -105,7 +105,7 @@ public sealed class ObservabilityContractTests
         }
 
         var activity = Assert.Single(activities,
-            item => (item.GetTagItem("portia.request.name") as string) == "Scheduled");
+            item => item.GetTagItem("portia.request.name") as string == "Scheduled");
         Assert.NotEqual(ActivityTraceId.CreateFromString("4bf92f3577b34da6a3ce929d0e0e4736"), activity.TraceId);
         Assert.Equal(ActivityTraceId.CreateFromString("4bf92f3577b34da6a3ce929d0e0e4736"),
             Assert.Single(activity.Links).Context.TraceId);

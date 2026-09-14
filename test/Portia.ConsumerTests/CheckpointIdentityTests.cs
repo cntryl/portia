@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
@@ -16,9 +17,10 @@ public sealed class CheckpointIdentityTests
         };
         for (var i = 0; i < identities.Length; i++)
             await store.SaveAsync(identities[i], new ProjectionCheckpoint(
-                new EventCursor(((ulong)i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))));
+                new EventCursor(((ulong)i + 1).ToString(CultureInfo.InvariantCulture))));
         for (var i = 0; i < identities.Length; i++)
-            Assert.Equal(((ulong)i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), (await store.LoadAsync(identities[i])).Cursor.ToString());
+            Assert.Equal(((ulong)i + 1).ToString(CultureInfo.InvariantCulture),
+                (await store.LoadAsync(identities[i])).Cursor.ToString());
         Assert.Equal(identities[0],
             new CheckpointIdentity("same", EventStreamPattern.ForPattern("tenant-a", "orders", "")));
     }

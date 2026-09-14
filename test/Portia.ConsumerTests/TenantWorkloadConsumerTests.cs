@@ -134,10 +134,8 @@ public sealed class TenantWorkloadConsumerTests
             {
                 throw new IOException("Tenant workload failed");
             }
-            else
-            {
-                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-            }
+
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
         }
     }
 

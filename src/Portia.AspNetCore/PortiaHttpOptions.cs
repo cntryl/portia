@@ -6,11 +6,11 @@ public sealed class PortiaHttpOptions
     /// <summary>Gets the default maximum JSON request-body size (10 MiB).</summary>
     public const long DefaultMaxJsonBodyBytes = 10 * 1024 * 1024;
 
-    /// <summary>Gets or sets the maximum JSON request-body size.</summary>
-    public long MaxJsonBodyBytes { get; set; } = DefaultMaxJsonBodyBytes;
-
     /// <summary>Gets the default interval between server-sent-event keep-alive comments (15 seconds).</summary>
     public static readonly TimeSpan DefaultServerSentEventKeepAlive = TimeSpan.FromSeconds(15);
+
+    /// <summary>Gets or sets the maximum JSON request-body size.</summary>
+    public long MaxJsonBodyBytes { get; set; } = DefaultMaxJsonBodyBytes;
 
     /// <summary>
     ///     Gets or sets how often an idle server-sent-event stream emits a comment, or

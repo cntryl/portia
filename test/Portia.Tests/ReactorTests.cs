@@ -67,7 +67,8 @@ public sealed class ReactorTests
     {
         var reactor = new TestReactor(new RecordingAggregateRepository());
         var ev = Committed(new ValueChanged(42), Uuid.CreateVersion4(), 1);
-        var record = new DomainEventRecord(new EventStreamAddress("test", "reactors", "one"), ev, 0, new EventCursor("1"));
+        var record = new DomainEventRecord(new EventStreamAddress("test", "reactors", "one"), ev, 0,
+            new EventCursor("1"));
         var context = new ReactionExecutionContext(record, RequestActor.System);
 
         Assert.Equal(reactor.EffectId(context, "email"), reactor.EffectId(context, "email"));

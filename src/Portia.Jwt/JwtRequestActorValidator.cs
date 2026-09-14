@@ -59,10 +59,8 @@ public sealed class JwtRequestActorValidator(TokenValidationParameters validatio
             return Result<ClaimsPrincipal>.Failure(new RequestError(
                 RequestErrorKind.Unauthorized, "The actor token is not valid."));
         }
-        else
-        {
-            return Result<ClaimsPrincipal>.Success(new ClaimsPrincipal(validationResult.ClaimsIdentity));
-        }
+
+        return Result<ClaimsPrincipal>.Success(new ClaimsPrincipal(validationResult.ClaimsIdentity));
     }
 
     static TokenValidationParameters Clone(TokenValidationParameters validationParameters)

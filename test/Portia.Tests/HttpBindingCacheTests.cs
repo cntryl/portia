@@ -88,10 +88,13 @@ public sealed class HttpBindingCacheTests
 
     sealed record PlainBinding(int Value);
 
-    sealed record ConvertedBinding([property: JsonConverter(typeof(HexConverter))] int Value);
+    sealed record ConvertedBinding(
+        [property: JsonConverter(typeof(HexConverter))]
+        int Value);
 
     sealed record NumberBinding(
-        [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] int Value);
+        [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
+        int Value);
 
     sealed class HexConverter : JsonConverter<int>
     {

@@ -1,3 +1,6 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -11,7 +14,7 @@ namespace Cntryl.Portia;
 /// <summary>Adds MCP exposure to the shared Portia application composition.</summary>
 public static class PortiaMcpApplicationExtensions
 {
-    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<PortiaBuilder, ToolCatalog> Catalogs = [];
+    static readonly ConditionalWeakTable<PortiaBuilder, ToolCatalog> Catalogs = [];
 
     /// <summary>Exposes one callable request as an MCP tool.</summary>
     /// <typeparam name="TRequest">The concrete callable request.</typeparam>
@@ -28,14 +31,14 @@ public static class PortiaMcpApplicationExtensions
     }
 
     /// <summary>Adds a generated no-result tool descriptor.</summary>
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static PortiaBuilder AddGeneratedMcpTool<TRequest>(this PortiaBuilder application, string name,
         string description, Action<McpToolOptions>? configure)
         where TRequest : IRequest, ICallable
         => AddGenerated(application, new McpToolRegistration<TRequest>(name, description, Options(configure)));
 
     /// <summary>Adds a generated result-bearing tool descriptor.</summary>
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static PortiaBuilder AddGeneratedMcpTool<TRequest, TOut>(this PortiaBuilder application, string name,
         string description, Action<McpToolOptions>? configure)
         where TRequest : IRequest<TOut>, ICallable
@@ -72,7 +75,7 @@ public static class PortiaMcpApplicationExtensions
                 ServiceDescriptor.Singleton<IHostedService, McpStartupValidator>());
             _ = application.Services.AddSingleton<McpServerTool>(services =>
                 new PortiaMcpServerTool(registration,
-                    services.GetRequiredService<System.Text.Json.JsonSerializerOptions>(),
+                    services.GetRequiredService<JsonSerializerOptions>(),
                     services.GetService<ILogger<PortiaMcpServerTool>>()
                     ?? NullLogger<PortiaMcpServerTool>.Instance));
         }

@@ -1,8 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry;
-using OpenTelemetry.Logs;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Trace;
 
 namespace Cntryl.Portia;
 

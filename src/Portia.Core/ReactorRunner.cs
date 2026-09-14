@@ -95,8 +95,10 @@ public sealed class ReactorRunner(
                 await reactor.ReactAsync(contexts, ct).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
                 var next = new ProjectionCheckpoint(contexts[^1].Source.NextCursor);
-                await reactor.Checkpoints.SaveAsync(identity, next, ct)
-                    .ConfigureAwait(false);
+                if (reactor.Checkpoints is IConditionalProjectionCheckpointStore conditional)
+                    await conditional.SaveAsync(identity, checkpoint, next, ct).ConfigureAwait(false);
+                else
+                    await reactor.Checkpoints.SaveAsync(identity, next, ct).ConfigureAwait(false);
                 contexts.Clear();
                 return next;
             }

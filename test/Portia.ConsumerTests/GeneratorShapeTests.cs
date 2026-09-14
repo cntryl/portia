@@ -31,8 +31,10 @@ public sealed class GeneratorShapeTests
     }
 
     [Theory]
-    [InlineData("builder.AddRequestSchedule(new Scheduled(), new RequestScheduleSpec(\"0 0 * * *\"), RequestRouteValues.None, RequestActor.System)")]
-    [InlineData("scheduler.EnsureAsync(new Scheduled(), new RequestScheduleSpec(\"0 0 * * *\"), RequestRouteValues.None, RequestActor.System)")]
+    [InlineData(
+        "builder.AddRequestSchedule(new Scheduled(), new RequestScheduleSpec(\"0 0 * * *\"), RequestRouteValues.None, RequestActor.System)")]
+    [InlineData(
+        "scheduler.EnsureAsync(new Scheduled(), new RequestScheduleSpec(\"0 0 * * *\"), RequestRouteValues.None, RequestActor.System)")]
     public void ShouldRegisterOutboundSchedulableRequestGivenScheduleDeclarationOrEnsure(string invocation)
     {
         var source = $$"""

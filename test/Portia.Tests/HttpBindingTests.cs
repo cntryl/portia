@@ -274,8 +274,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
     /// </summary>
     /// <param name="json">The request body, spelling the property some other way.</param>
     [Theory]
-    [InlineData(/*lang=json,strict*/ """{"Value":"bound"}""")]
-    [InlineData(/*lang=json,strict*/ """{"VALUE":"bound"}""")]
+    [InlineData( /*lang=json,strict*/ """{"Value":"bound"}""")]
+    [InlineData( /*lang=json,strict*/ """{"VALUE":"bound"}""")]
     public async Task ShouldBindBodyPropertyWhoseCasingDiffersFromTheNamingPolicy(string json)
     {
         var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/optional"));
@@ -353,7 +353,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     {
         var context = new DefaultHttpContext();
         context.Response.Body = new MemoryStream();
-        var result = Result.Failure(new RequestError(RequestErrorKind.Unauthorized, "IDX secret", false));
+        var result = Result.Failure(new RequestError(RequestErrorKind.Unauthorized, "IDX secret"));
 
         await result.ToHttpResult().ExecuteAsync(context);
 
@@ -465,7 +465,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     so authorizing before accepting does not cost the asynchronous path.
     /// </summary>
     [Fact]
-    public async Task ShouldEnqueueWhenCallerHasPermissionAndPrefersRespondAsync()
+    public async Task ShouldRejectAuthenticatedAsyncCallerWithoutPortableBearerCredential()
     {
         var publisher = new RecordingRequestQueuePublisher();
         var client = await StartAsync(app => app.MapPortiaPost<HttpGuardedQueueAction>("/guarded-queue"),
@@ -479,8 +479,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        _ = Assert.Single(publisher.Enqueued);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(publisher.Enqueued);
     }
 
     async Task<HttpClient> StartAsync(Action<IEndpointRouteBuilder> map,

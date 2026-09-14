@@ -3,6 +3,8 @@ namespace Cntryl.Portia.Testing;
 /// <summary>Reusable atomicity, concurrency, and generation-isolation checks for projection stores.</summary>
 public static class ProjectionStoreConformance
 {
+    static readonly TimeSpan StaleOpenGrace = TimeSpan.FromMilliseconds(250);
+
     /// <summary>Runs the complete projection-store conformance suite.</summary>
     /// <param name="probe">An isolated implementation adapter.</param>
     /// <param name="ct">A token that can cancel verification.</param>
@@ -76,37 +78,66 @@ public static class ProjectionStoreConformance
         await using var stale = await probe.OpenSessionAsync(ct).ConfigureAwait(false);
         var checkpoint = await first.Store.LoadCheckpointAsync(probe.LiveIdentity, ct).ConfigureAwait(false);
         var staleCheckpoint = await stale.Store.LoadCheckpointAsync(probe.LiveIdentity, ct).ConfigureAwait(false);
-        await using var firstBatch = await first.Store
+
+        // The stale writer starts opening its batch before the winner commits, so a store that compares
+        // the expected checkpoint only when a batch opens — and would let two overlapping batches both
+        // commit — is caught. The open is not awaited before the winner commits: a store that locks the
+        // resource at BEGIN, as Fitz KV does, makes it wait for the winner, and awaiting it here would
+        // deadlock. A short grace lets an optimistic store finish opening before the winner commits.
+        Task<IProjectionBatch>? staleOpen = null;
+        var winnerCommitted = false;
+        var firstBatch = await first.Store
             .BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, checkpoint), ct)
             .ConfigureAwait(false);
-        await first.StageValueAsync("winner", ct).ConfigureAwait(false);
-
-        // A losing writer may be refused when it opens its batch — a store that locks the resource,
-        // as Fitz KV does at BEGIN — or when it commits, for a store that compares the checkpoint it
-        // read. Both are conformant, so the conflict is allowed to surface anywhere in the losing
-        // sequence; what it must never do is succeed, or fail as anything but the shared exception.
-        var winnerCommitted = false;
-        var conflict = await CaptureAsync(async () =>
+        try
         {
-            await using var staleBatch = await stale.Store
+            await first.StageValueAsync("winner", ct).ConfigureAwait(false);
+            staleOpen = Task.Run(async () => await stale.Store
                 .BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, staleCheckpoint), ct)
-                .ConfigureAwait(false);
-            await stale.StageValueAsync("stale", ct).ConfigureAwait(false);
+                .ConfigureAwait(false), ct);
+            _ = await Task.WhenAny(staleOpen, Task.Delay(StaleOpenGrace, ct)).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
             await firstBatch.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")), ct).ConfigureAwait(false);
             winnerCommitted = true;
+        }
+        finally
+        {
+            await firstBatch.DisposeAsync().ConfigureAwait(false);
+            if (!winnerCommitted && staleOpen is not null)
+            {
+                await DiscardAsync(staleOpen).ConfigureAwait(false);
+            }
+        }
+
+        // A losing writer may be refused when it opens its batch — a store that locks the resource or
+        // compares the checkpoint as it opens — or when it commits, for a store that compares the
+        // checkpoint it read. Both are conformant, so the conflict is allowed to surface anywhere in the
+        // losing sequence; what it must never do is succeed, or fail as anything but the shared exception.
+        var conflict = await CaptureAsync(async () =>
+        {
+            await using var staleBatch = await staleOpen.ConfigureAwait(false);
+            await stale.StageValueAsync("stale", ct).ConfigureAwait(false);
             await staleBatch.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")), ct).ConfigureAwait(false);
         }).ConfigureAwait(false);
-
-        // The winner commits whether or not the loser ever opened its batch, so the state check below
-        // means the same thing for a locking store and an optimistic one.
-        if (!winnerCommitted)
-        {
-            await firstBatch.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")), ct).ConfigureAwait(false);
-        }
 
         RequireConcurrency(conflict, "A stale projection checkpoint was allowed to commit.");
         await RequireStateAsync(probe, probe.LiveIdentity, "winner", new ProjectionCheckpoint(new EventCursor("2")),
             "a stale checkpoint conflict", ct).ConfigureAwait(false);
+    }
+
+    // Releases a stale batch that finished opening only after the winner failed, so the verification
+    // failure that is already propagating is not replaced by the stale batch's own outcome.
+    static async ValueTask DiscardAsync(Task<IProjectionBatch> open)
+    {
+        try
+        {
+            var batch = await open.ConfigureAwait(false);
+            await batch.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // The winner's failure is the one worth reporting.
+        }
     }
 
     static async ValueTask VerifyGenerationIsolationAsync(IProjectionStoreConformanceProbe probe, CancellationToken ct)

@@ -43,7 +43,8 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var active = new HashSet<TenantId>();
-        await foreach (var record in _reader.ReadAsync(_pattern, EventCursor.Start, ct).WithCancellation(ct).ConfigureAwait(false))
+        await foreach (var record in _reader.ReadAsync(_pattern, EventCursor.Start, ct).WithCancellation(ct)
+                           .ConfigureAwait(false))
             _ = Apply(active, record.Event);
         foreach (var tenantId in active)
             yield return tenantId;
@@ -105,7 +106,8 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
             _ = initiallyRemoved?.Remove(added);
             return active.Add(added) ? new TenantLifecycleChange(TenantLifecycleChangeKind.Added, added) : null;
         }
-        else if (ev is TStopEvent)
+
+        if (ev is TStopEvent)
         {
             var removed = _getTenantId(ev);
             _ = initiallyRemoved?.Add(removed);
@@ -113,10 +115,8 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                 ? new TenantLifecycleChange(TenantLifecycleChangeKind.Removed, removed)
                 : null;
         }
-        else
-        {
-            return null;
-        }
+
+        return null;
     }
 
     static TimeSpan GetInterval(TimeSpan? pollInterval)

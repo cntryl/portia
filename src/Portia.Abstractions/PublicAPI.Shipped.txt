@@ -213,6 +213,8 @@ Cntryl.Portia.IRemoteRequestSender.SendAsync<TRequest>(TRequest request, Cntryl.
 Cntryl.Portia.IRequest
 Cntryl.Portia.IRequest<TOut>
 Cntryl.Portia.IRequestActorValidator
+Cntryl.Portia.IScheduledRequestActorValidator
+Cntryl.Portia.IScheduledRequestActorValidator.ValidateAsync(string! route, string! subject, string! issuer, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result<System.Security.Claims.ClaimsPrincipal!>>
 Cntryl.Portia.IRequestActorValidator.ValidateAsync(string? token, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result<System.Security.Claims.ClaimsPrincipal!>>
 Cntryl.Portia.IRequestAuthorizer<TRequest>
 Cntryl.Portia.IRequestAuthorizer<TRequest>.AuthorizeAsync(Cntryl.Portia.IRequestContext<TRequest>! context, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
@@ -354,6 +356,7 @@ Cntryl.Portia.QueuedRequestFailureContext.Request.get -> Cntryl.Portia.IRequest?
 Cntryl.Portia.QueuedRequestFailureContext.Request.init -> void
 Cntryl.Portia.QueuedRequestTerminalReason
 Cntryl.Portia.QueuedRequestTerminalReason.ActorValidationFailure = 2 -> Cntryl.Portia.QueuedRequestTerminalReason
+Cntryl.Portia.QueuedRequestTerminalReason.DeserializationFailure = 4 -> Cntryl.Portia.QueuedRequestTerminalReason
 Cntryl.Portia.QueuedRequestTerminalReason.InvalidTransport = 3 -> Cntryl.Portia.QueuedRequestTerminalReason
 Cntryl.Portia.QueuedRequestTerminalReason.PermanentFailure = 1 -> Cntryl.Portia.QueuedRequestTerminalReason
 Cntryl.Portia.QueuedRequestTerminalReason.RetryLimitReached = 0 -> Cntryl.Portia.QueuedRequestTerminalReason

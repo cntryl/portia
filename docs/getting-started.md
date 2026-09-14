@@ -420,8 +420,13 @@ dispatch, and dispose it on completion, failure, or cancellation:
 ```csharp
 services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(
     fitz.Queue, serializer, "queue://consumer/business/account-id"));
+services.AddScoped<IQueuedRequestTerminalHandler, ApplicationQueueFailurePolicy>();
 services.AddPortiaQueueRunner();
 ```
+
+The terminal handler is required even when the queue is expected to contain only successful work.
+Portia does not install a default policy that acknowledges poison messages; the application must
+choose its own dead-letter, quarantine, alerting, or other terminal disposition before consumption.
 
 Queue polling defaults to a five-second wait and one reserved item. Active work
 renews its Fitz reservation. Malformed or unexpectedly failed requests stop renewal

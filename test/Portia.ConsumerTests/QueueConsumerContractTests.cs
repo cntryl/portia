@@ -74,6 +74,7 @@ public sealed class QueueConsumerContractTests
         var services = ConsumerHost.CreateServices();
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
+        _ = services.AddScoped<IQueuedRequestTerminalHandler, TestTerminalHandler>();
         _ = services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(queue, serializer,
             "queue://consumer/scopes/delivery",
             ConsumerJson.Catalog(), 4, timeProvider: clock));
@@ -178,13 +179,22 @@ public sealed class QueueConsumerContractTests
             var completed = await Task.WhenAny(queue.Idle.Task, run).WaitAsync(TimeSpan.FromSeconds(10));
             await completed;
             Assert.Same(queue.Idle.Task, completed);
-            Assert.Equal(0, malformed.Completions);
+            Assert.Equal(1, malformed.Completions);
             Assert.Equal(0, failed.Completions);
             Assert.Equal(1, terminal.Completions);
             Assert.Equal(1, success.Completions);
-            var terminalContext = Assert.Single(terminalHandler.Contexts);
-            Assert.Equal(QueuedRequestTerminalReason.PermanentFailure, terminalContext.Reason);
-            Assert.Equal("Terminal rejection", terminalContext.Error?.Message);
+            Assert.Collection(terminalHandler.Contexts,
+                malformedContext =>
+                {
+                    Assert.Equal(QueuedRequestTerminalReason.DeserializationFailure, malformedContext.Reason);
+                    Assert.Null(malformedContext.Request);
+                    Assert.Null(malformedContext.Metadata);
+                },
+                terminalContext =>
+                {
+                    Assert.Equal(QueuedRequestTerminalReason.PermanentFailure, terminalContext.Reason);
+                    Assert.Equal("Terminal rejection", terminalContext.Error?.Message);
+                });
             Assert.Equal(4U, malformed.Attempt);
             Assert.Equal(6U, failed.Attempt);
             Assert.Equal(0, queue.Enqueues);
@@ -293,11 +303,9 @@ public sealed class QueueConsumerContractTests
             {
                 return [];
             }
-            else
-            {
-                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-                return [];
-            }
+
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return [];
         }
 
         public Task<QueueSubscription> SubscribeAsync(string pattern, CancellationToken ct = default)

@@ -10,7 +10,8 @@ namespace Cntryl.Portia;
 /// <typeparam name="TOut">The streamed item.</typeparam>
 /// <param name="permission">The generated permission expression.</param>
 public sealed class StreamRequestRegistration<TRequest,
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler, TOut>(
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+THandler, TOut>(
     Func<TRequest, string>? permission = null)
     : RequestHandlerRegistration(typeof(TRequest), typeof(THandler), typeof(TOut),
         permission is null ? null : request => permission((TRequest)request)), IStreamRequestInvocation<TOut>

@@ -157,8 +157,7 @@ public sealed class AggregateSaveConcurrencyTests
 
             if (FailAppend)
                 throw new IOException("Injected append failure");
-            else
-                await _inner.AppendAsync(stream, expectedStreamPosition, events, ct);
+            await _inner.AppendAsync(stream, expectedStreamPosition, events, ct);
         }
     }
 }

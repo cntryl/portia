@@ -3,7 +3,6 @@ using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using OpenTelemetry;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;

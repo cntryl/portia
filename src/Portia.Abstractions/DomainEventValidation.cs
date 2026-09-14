@@ -14,7 +14,7 @@ static class DomainEventValidation
             throw new InvalidOperationException("Supplied event attribution identities cannot be empty.");
         }
 
-        if ((metadata.ExecutionId is null) != (metadata.Actor is null))
+        if (metadata.ExecutionId is null != metadata.Actor is null)
             throw new InvalidOperationException("Execution identity and actor attribution must be supplied together.");
         if (metadata.Actor is { } actor &&
             (string.IsNullOrWhiteSpace(actor.Subject) || string.IsNullOrWhiteSpace(actor.Issuer)))

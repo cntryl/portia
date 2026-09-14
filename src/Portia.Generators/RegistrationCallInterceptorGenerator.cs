@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml;
 using System.Xml.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -51,8 +52,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 static (ctx, _) => Analyze(ctx))
             .Where(static call => call is not null)
             .Select(static (call, _) => call!)
-            .Collect()
-            .WithTrackingName("PortiaRegistrationCalls");
+            .WithTrackingName("PortiaRegistrationCalls")
+            .Collect();
         var dispatchedRequests = context.SyntaxProvider.CreateSyntaxProvider(
                 static (node, _) => node is InvocationExpressionSyntax
                 {
@@ -222,7 +223,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                     .Append(Type(iface.TypeArguments[0])).Append(", ").Append(Type(type)).AppendLine(">(stage));");
                 continue;
             }
-            else if (role == "behavior")
+
+            if (role == "behavior")
             {
                 var behaviorDescriptor = iface.OriginalDefinition.MetadataName == "IStreamRequestPipelineBehavior`2"
                     ? "StreamRequestPipelineBehaviorRegistration"
@@ -263,7 +265,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     {
         var containingType = (method.ReducedFrom?.ContainingType ?? method.ContainingType).ToDisplayString();
         if (method.Name == "AddMcpTool" && method.TypeArguments.Length == 1
-            && containingType == "Cntryl.Portia.PortiaMcpApplicationExtensions")
+                                        && containingType == "Cntryl.Portia.PortiaMcpApplicationExtensions")
         {
             return "MCP tool";
         }
@@ -354,7 +356,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
             return null;
         }
-        catch (System.Xml.XmlException)
+        catch (XmlException)
         {
             return null;
         }
@@ -416,13 +418,11 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         {
             return null;
         }
-        else
-        {
-            var type = context.SemanticModel.GetTypeInfo(argument.Expression).Type;
-            return type is INamedTypeSymbol named
-                ? RequestTransportDiscovery.GetRequestTransportComponent(named)
-                : null;
-        }
+
+        var type = context.SemanticModel.GetTypeInfo(argument.Expression).Type;
+        return type is INamedTypeSymbol named
+            ? RequestTransportDiscovery.GetRequestTransportComponent(named)
+            : null;
     }
 
     static JsonContextModelRecord? JsonContextModel(GeneratorSyntaxContext context)
@@ -557,11 +557,9 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             {
                 return "null"; // PermissionDiagnostic reports PORTIA011 before source emission.
             }
-            else
-            {
-                _ = expression.Append("{typed.").Append(property.Name).Append('}');
-                offset = match.Index + match.Length;
-            }
+
+            _ = expression.Append("{typed.").Append(property.Name).Append('}');
+            offset = match.Index + match.Length;
         }
 
         return expression.Append(Escape(value.Substring(offset))).Append("\")").ToString();

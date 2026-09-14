@@ -55,7 +55,6 @@ public static class ResultHttpExtensions
             if (error.Kind == RequestErrorKind.Unauthorized)
             {
                 httpContext.Response.Headers.WWWAuthenticate = "Bearer";
-                return;
             }
             else
             {

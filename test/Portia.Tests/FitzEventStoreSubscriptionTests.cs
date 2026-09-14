@@ -27,8 +27,8 @@ public sealed class FitzEventStoreSubscriptionTests
 
         using (var backstop = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))
         {
-            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                async () => await subscription.WaitAsync(backstop.Token));
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+                await subscription.WaitAsync(backstop.Token));
         }
 
         Assert.Equal(0, client.Unsubscribes);
@@ -52,8 +52,8 @@ public sealed class FitzEventStoreSubscriptionTests
 
         using (var backstop = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))
         {
-            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                async () => await subscription.WaitAsync(backstop.Token));
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+                await subscription.WaitAsync(backstop.Token));
         }
 
         await subscription.DisposeAsync();

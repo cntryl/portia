@@ -24,7 +24,7 @@ static class RequestTransportDiscovery
         var declaration = (TypeDeclarationSyntax)context.Node;
         return context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol symbol
                && GetRequestTransportComponent(symbol) is { } component
-            ? component with { Location = DiagnosticLocation.From(declaration.Identifier.GetLocation()) }
+            ? component.WithLocation(DiagnosticLocation.From(declaration.Identifier.GetLocation()))
             : null;
     }
 
@@ -46,7 +46,8 @@ static class RequestTransportDiscovery
                 candidate.AttributeClass?.ToDisplayString() == DiscriminatorAttributeMetadataName);
         var name = attribute?.ConstructorArguments.ElementAtOrDefault(0).Value as string;
         var version = attribute?.ConstructorArguments.ElementAtOrDefault(1).Value as int? ?? 0;
-        return attribute is not null && !string.IsNullOrWhiteSpace(name) && version > 0
+        return (attribute is not null && !string.IsNullOrWhiteSpace(name) && version > 0)
+               || DiagnosticSuppression.IsSuppressed(context, declaration, symbol, "PORTIA020")
             ? null
             : new InvalidDiscriminator(symbol.ToDisplayString(),
                 DiagnosticLocation.From(declaration.Identifier.GetLocation()));
@@ -76,7 +77,34 @@ static class RequestTransportDiscovery
             var segment = argument.Value as string;
             if (!IsValidRouteSegment(segment))
             {
+                if (DiagnosticSuppression.IsSuppressed(context, declaration, symbol, "PORTIA024"))
+                    return null;
                 return new InvalidRoute(symbol.ToDisplayString(), segment ?? string.Empty,
+                    DiagnosticLocation.From(declaration.Identifier.GetLocation()));
+            }
+        }
+
+        return null;
+    }
+
+    public static InvalidTransportId? GetInvalidTransportId(GeneratorSyntaxContext context)
+    {
+        var declaration = (TypeDeclarationSyntax)context.Node;
+        if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol || symbol.IsAbstract)
+            return null;
+
+        foreach (var attribute in symbol.AllInterfaces.SelectMany(iface => iface.GetAttributes())
+                     .Where(attribute =>
+                         attribute.AttributeClass?.ToDisplayString() == RequestTransportAttributeMetadataName))
+        {
+            var id = attribute.ConstructorArguments.ElementAtOrDefault(0).Value as string ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(id) || id.Any(character =>
+                    !(character is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9')
+                    && character is not '.' and not '-' and not '_'))
+            {
+                if (DiagnosticSuppression.IsSuppressed(context, declaration, symbol, "PORTIA029"))
+                    return null;
+                return new InvalidTransportId(symbol.ToDisplayString(), id,
                     DiagnosticLocation.From(declaration.Identifier.GetLocation()));
             }
         }

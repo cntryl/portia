@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace Cntryl.Portia;
@@ -21,7 +22,8 @@ public sealed class FitzKvProjectionStoreLifetimeTests
         var client = new FakeKvClient();
         var store = new StrayWriteRepository(client, "kv://portia/state/orders");
 
-        await using (var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
+        await using (var batch =
+                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
 
         var stray = await Assert.ThrowsAsync<InvalidOperationException>(() => store.AddAsync("total", 12));
@@ -45,6 +47,6 @@ public sealed class FitzKvProjectionStoreLifetimeTests
     {
         public Task AddAsync(string name, int amount) =>
             Transaction.PutAsync(Encoding.UTF8.GetBytes("total\0" + name),
-                Encoding.UTF8.GetBytes(amount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                Encoding.UTF8.GetBytes(amount.ToString(CultureInfo.InvariantCulture)));
     }
 }

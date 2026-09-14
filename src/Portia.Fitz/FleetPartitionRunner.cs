@@ -16,13 +16,13 @@ public sealed partial class FleetPartitionRunner(
     ILogger<FleetPartitionRunner>? logger = null,
     TimeProvider? timeProvider = null)
 {
+    // Doubling from one second reaches the ceiling well inside this many attempts.
+    const int MaximumBackoffAttempt = 16;
+
     /// <summary>Gets the ceiling a retry delay grows to after repeated failures.</summary>
     public static readonly TimeSpan MaximumRetryBackoff = TimeSpan.FromSeconds(30);
 
     static readonly TimeSpan InitialRetryBackoff = TimeSpan.FromSeconds(1);
-
-    // Doubling from one second reaches the ceiling well inside this many attempts.
-    const int MaximumBackoffAttempt = 16;
 
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly IPartitionLeaseCompetitor _leases = leases ?? throw new ArgumentNullException(nameof(leases));
@@ -231,7 +231,7 @@ public sealed partial class FleetPartitionRunner(
         // The caller's counter is clamped as it grows, so a runner that retries for long enough to
         // overflow it cannot end up shifting by a negative exponent and computing a negative delay.
         var ceiling = Math.Min(InitialRetryBackoff.Ticks * (1L << (attempt - 1)), MaximumRetryBackoff.Ticks);
-        var delay = TimeSpan.FromTicks((ceiling / 2) + Random.Shared.NextInt64(ceiling / 2));
+        var delay = TimeSpan.FromTicks(ceiling / 2 + Random.Shared.NextInt64(ceiling / 2));
         try
         {
             await Task.Delay(delay, _clock, ct).ConfigureAwait(false);

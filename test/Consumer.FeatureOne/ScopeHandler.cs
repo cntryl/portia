@@ -13,7 +13,8 @@ public sealed class ScopeHandler(IRequestBus bus, IConsumerScope scope, IConsume
         {
             throw new InvalidOperationException("Consumer failure");
         }
-        else if (context.Request.Behavior == 2)
+
+        if (context.Request.Behavior == 2)
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
         }

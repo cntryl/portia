@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.AspNetCore;
-using ModelContextProtocol.Server;
 
 namespace Cntryl.Portia;
 

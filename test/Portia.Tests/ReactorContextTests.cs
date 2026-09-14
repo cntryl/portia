@@ -102,7 +102,8 @@ public sealed class ReactorContextTests
         var aggregateId = Uuid.CreateVersion4();
         ev = new ValueChanged(42);
         ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, 1, DateTimeOffset.UtcNow));
-        return new DomainEventRecord(new EventStreamAddress("test", "reactions", aggregateId.ToString()), ev, 0, new EventCursor("1"));
+        return new DomainEventRecord(new EventStreamAddress("test", "reactions", aggregateId.ToString()), ev, 0,
+            new EventCursor("1"));
     }
 
     // An execution that is well formed apart from running as a user rather than the system.

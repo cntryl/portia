@@ -28,10 +28,11 @@ sealed class RequestPolicies(
     RequestPipelineBehaviorRegistration[] behaviorsInnermostFirst)
 {
     readonly RequestPipelineBehaviorRegistration[] _behaviors = behaviorsInnermostFirst;
-    readonly Lazy<UnaryRequestPipelinePlan> _unary = new(() => new(behaviorsInnermostFirst),
-        LazyThreadSafetyMode.ExecutionAndPublication);
     readonly ConcurrentDictionary<Type, object> _results = new();
     readonly ConcurrentDictionary<Type, object> _streams = new();
+
+    readonly Lazy<UnaryRequestPipelinePlan> _unary = new(() => new UnaryRequestPipelinePlan(behaviorsInnermostFirst),
+        LazyThreadSafetyMode.ExecutionAndPublication);
 
     internal string Name { get; } = name;
     internal RequestAuthorizerRegistration[] PrincipalAuthorizers { get; } = principalAuthorizers;

@@ -38,6 +38,8 @@ public sealed class FitzRpcCatalogResolutionTests
 
         public int Scopes => Volatile.Read(ref _scopes);
 
+        public void Dispose() => _arrived.Dispose();
+
         public IServiceScope CreateScope()
         {
             // Make the race deterministic instead of hoping for an interleaving: the first caller
@@ -47,7 +49,5 @@ public sealed class FitzRpcCatalogResolutionTests
             _ = _arrived.Wait(TimeSpan.FromMilliseconds(250));
             return inner.CreateScope();
         }
-
-        public void Dispose() => _arrived.Dispose();
     }
 }

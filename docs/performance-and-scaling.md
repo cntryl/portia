@@ -156,8 +156,10 @@ stable effect ID or an integration-owned inbox/outbox with the target's transact
 Terminal queue outcomes include permanent handler failure, actor-validation failure, and reaching
 an explicitly configured retry limit when the transport reports a durable attempt count. Fitz 1.0
 does not report queue attempts, so its worker rejects a positive `QueueRunnerOptions.TerminalAttempt`
-at startup. Each supported terminal outcome requires `IQueuedRequestTerminalHandler`; missing one
-faults the runner before acknowledgment or abandonment. The callback completes before the single
+at startup. Every queue runner requires an application-selected `IQueuedRequestTerminalHandler`, even
+when a queue is expected to contain only successful work. Direct and generic hosted runners validate
+a disposable scope before enumerating the transport, and each delivery scope is rechecked. Portia
+supplies no default poison-message acknowledgment policy. The callback completes before the single
 transport acknowledgment. Those operations are not atomic, so the handler must tolerate replay.
 The Fitz adapter retains delivery ownership when either terminal callback setup or execution
 faults; Portia does not claim a broker-independent durable dead-letter transaction.

@@ -168,21 +168,19 @@ public readonly record struct Uuid : ISpanParsable<Uuid>, ISpanFormattable, ICom
             _ = Encoding.UTF8.GetBytes(name, input[NamespaceByteLength..]);
             return CreateVersion5(namespaceId, input, nameByteLength);
         }
-        else
-        {
-            var rentedInput = ArrayPool<byte>.Shared.Rent(inputByteLength);
 
-            try
-            {
-                var input = rentedInput.AsSpan(0, inputByteLength);
-                _ = Encoding.UTF8.GetBytes(name, input[NamespaceByteLength..]);
-                return CreateVersion5(namespaceId, input, nameByteLength);
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(rentedInput.AsSpan(0, inputByteLength));
-                ArrayPool<byte>.Shared.Return(rentedInput);
-            }
+        var rentedInput = ArrayPool<byte>.Shared.Rent(inputByteLength);
+
+        try
+        {
+            var input = rentedInput.AsSpan(0, inputByteLength);
+            _ = Encoding.UTF8.GetBytes(name, input[NamespaceByteLength..]);
+            return CreateVersion5(namespaceId, input, nameByteLength);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(rentedInput.AsSpan(0, inputByteLength));
+            ArrayPool<byte>.Shared.Return(rentedInput);
         }
     }
 
@@ -206,21 +204,19 @@ public readonly record struct Uuid : ISpanParsable<Uuid>, ISpanFormattable, ICom
             name.CopyTo(input[NamespaceByteLength..]);
             return CreateVersion5(namespaceId, input, name.Length);
         }
-        else
-        {
-            var rentedInput = ArrayPool<byte>.Shared.Rent(inputByteLength);
 
-            try
-            {
-                var input = rentedInput.AsSpan(0, inputByteLength);
-                name.CopyTo(input[NamespaceByteLength..]);
-                return CreateVersion5(namespaceId, input, name.Length);
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(rentedInput.AsSpan(0, inputByteLength));
-                ArrayPool<byte>.Shared.Return(rentedInput);
-            }
+        var rentedInput = ArrayPool<byte>.Shared.Rent(inputByteLength);
+
+        try
+        {
+            var input = rentedInput.AsSpan(0, inputByteLength);
+            name.CopyTo(input[NamespaceByteLength..]);
+            return CreateVersion5(namespaceId, input, name.Length);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(rentedInput.AsSpan(0, inputByteLength));
+            ArrayPool<byte>.Shared.Return(rentedInput);
         }
     }
 

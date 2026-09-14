@@ -133,13 +133,14 @@ public sealed class WorkloadCoordinatorConformanceTests
                         await ReleaseAsync(identity).ConfigureAwait(false);
                     foreach (var identity in current)
                     {
-                        if (active.ContainsKey(identity) || !duplicateOwners && !owners.TryAdd(identity, _owner))
+                        if (active.ContainsKey(identity) || (!duplicateOwners && !owners.TryAdd(identity, _owner)))
                             continue;
                         var cancellation = releaseBeforeStop
                             ? new CancellationTokenSource()
                             : CancellationTokenSource.CreateLinkedTokenSource(ct);
                         active.Add(identity, (cancellation, run(identity, cancellation.Token)));
                     }
+
                     await Task.Delay(TimeSpan.FromMilliseconds(5), ct).ConfigureAwait(false);
                 }
             }
@@ -158,6 +159,7 @@ public sealed class WorkloadCoordinatorConformanceTests
                     _ = owners.TryRemove(new KeyValuePair<WorkloadIdentity, object>(identity, _owner));
                     await Task.Delay(TimeSpan.FromMilliseconds(50), CancellationToken.None).ConfigureAwait(false);
                 }
+
                 await owned.Cancellation.CancelAsync().ConfigureAwait(false);
                 try
                 {
@@ -182,6 +184,7 @@ public sealed class WorkloadCoordinatorConformanceTests
         public TimeSpan ConvergenceTimeout => TimeSpan.FromMilliseconds(500);
         public TimeSpan StabilityWindow => TimeSpan.FromMilliseconds(100);
         public ValueTask ResetAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
+
         public ValueTask<IWorkloadCoordinatorConformanceWorker> OpenWorkerAsync(CancellationToken ct = default) =>
             ValueTask.FromResult<IWorkloadCoordinatorConformanceWorker>(new CoordinatorWorker(
                 Interlocked.Increment(ref _workers) == 1
@@ -194,6 +197,7 @@ public sealed class WorkloadCoordinatorConformanceTests
         public TimeSpan ConvergenceTimeout => TimeSpan.FromMilliseconds(500);
         public TimeSpan StabilityWindow => TimeSpan.FromMilliseconds(100);
         public ValueTask ResetAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
+
         public ValueTask<IWorkloadCoordinatorConformanceWorker> OpenWorkerAsync(CancellationToken ct = default) =>
             ValueTask.FromResult<IWorkloadCoordinatorConformanceWorker>(
                 new CoordinatorWorker(new InertCoordinator()));
@@ -242,6 +246,7 @@ public sealed class WorkloadCoordinatorConformanceTests
         int _workers;
         public TimeSpan ConvergenceTimeout => TimeSpan.FromMilliseconds(500);
         public TimeSpan StabilityWindow => TimeSpan.FromMilliseconds(100);
+
         public ValueTask ResetAsync(CancellationToken ct = default)
         {
             _workers = 0;
@@ -370,15 +375,9 @@ public sealed class WorkloadCoordinatorConformanceTests
     {
         readonly TaskCompletionSource _completion =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         readonly CancellationTokenSource _lifetime = new();
         Task? _callback;
-
-        public Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
-        {
-            _callback = run(Assert.Single(workloads()), _lifetime.Token);
-            return _completion.Task;
-        }
 
         public async ValueTask DisposeAsync()
         {
@@ -396,6 +395,13 @@ public sealed class WorkloadCoordinatorConformanceTests
 
             _completion.TrySetCanceled(_lifetime.Token);
             _lifetime.Dispose();
+        }
+
+        public Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
+        {
+            _callback = run(Assert.Single(workloads()), _lifetime.Token);
+            return _completion.Task;
         }
     }
 

@@ -25,7 +25,8 @@ sealed class TransientReloadFailureProjectionTarget : ITestProjectionRepository
             return ValueTask.FromException<ProjectionCheckpoint>(
                 new InvalidOperationException("Simulated transient checkpoint reload failure."));
         }
-        else if (LoadAttempts == 3)
+
+        if (LoadAttempts == 3)
         {
             _ = _checkpointReloaded.TrySetResult();
         }

@@ -124,7 +124,7 @@ public sealed class JsonMetadataCodeFixTests
 
         // Re-running the same fix over the already-corrected document is exactly what a fix-all that
         // revisits one context does; it must not append the root a second time.
-        var repeated = await FixAsync(await SingleDocumentTextAsync(once), "App.Query", expectDiagnostic: false);
+        var repeated = await FixAsync(await SingleDocumentTextAsync(once), "App.Query", false);
         var twice = repeated.Actions.Count == 0
             ? once
             : await ApplyAsync(once, repeated.Actions[0]);
@@ -143,17 +143,17 @@ public sealed class JsonMetadataCodeFixTests
     {
         var source = UnrootedRequestInBlockNamespace + """
 
-                                                      namespace App
-                                                      {
-                                                          [PortiaJsonContext]
-                                                          internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
-                                                      }
-                                                      namespace Other
-                                                      {
-                                                          [PortiaJsonContext]
-                                                          internal sealed partial class OtherJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
-                                                      }
-                                                      """;
+                                                       namespace App
+                                                       {
+                                                           [PortiaJsonContext]
+                                                           internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+                                                       }
+                                                       namespace Other
+                                                       {
+                                                           [PortiaJsonContext]
+                                                           internal sealed partial class OtherJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+                                                       }
+                                                       """;
 
         var (actions, _) = await FixAsync(source, "App.Query");
 
@@ -170,17 +170,17 @@ public sealed class JsonMetadataCodeFixTests
     {
         var source = UnrootedRequestInBlockNamespace + """
 
-                                                      namespace First
-                                                      {
-                                                          [PortiaJsonContext]
-                                                          internal sealed partial class FirstJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
-                                                      }
-                                                      namespace Second
-                                                      {
-                                                          [PortiaJsonContext]
-                                                          internal sealed partial class SecondJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
-                                                      }
-                                                      """;
+                                                       namespace First
+                                                       {
+                                                           [PortiaJsonContext]
+                                                           internal sealed partial class FirstJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+                                                       }
+                                                       namespace Second
+                                                       {
+                                                           [PortiaJsonContext]
+                                                           internal sealed partial class SecondJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+                                                       }
+                                                       """;
 
         var (actions, _) = await FixAsync(source, "App.Query");
 

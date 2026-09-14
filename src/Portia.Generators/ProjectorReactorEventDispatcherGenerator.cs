@@ -86,6 +86,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
                 processor.Location.ToLocation(), processor.DisplayName, unsupportedReason));
             return;
         }
+
         var invalidBatchHandler = processor.Handlers.FirstOrDefault(h => h.Batch && !processor.Batch);
         if (invalidBatchHandler is not null)
         {
@@ -147,7 +148,6 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
             var handler = processor.Handlers[i];
             if (!handler.Batch)
             {
-                continue;
             }
             else
             {
@@ -191,6 +191,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
                 : parent.IsValueType ? "struct" : "class";
             parents.Push($"partial {kind} @{parent.Name} {{");
         }
+
         return [.. parents];
     }
 
@@ -257,11 +258,17 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         public bool Projector { get; } = projector;
         public bool Batch { get; } = batch;
         public Handler[] Handlers { get; } = handlers;
+
         public bool Equals(Processor? other) => other is not null && Name == other.Name &&
-            DisplayName == other.DisplayName && Namespace == other.Namespace && HintName == other.HintName &&
-            Location.Equals(other.Location) && UnsupportedReason == other.UnsupportedReason && Partial == other.Partial &&
-            Projector == other.Projector && Batch == other.Batch && Parents.SequenceEqual(other.Parents) &&
-            Handlers.SequenceEqual(other.Handlers);
+                                                DisplayName == other.DisplayName && Namespace == other.Namespace &&
+                                                HintName == other.HintName &&
+                                                Location.Equals(other.Location) &&
+                                                UnsupportedReason == other.UnsupportedReason &&
+                                                Partial == other.Partial &&
+                                                Projector == other.Projector && Batch == other.Batch &&
+                                                Parents.SequenceEqual(other.Parents) &&
+                                                Handlers.SequenceEqual(other.Handlers);
+
         public override bool Equals(object? obj) => Equals(obj as Processor);
         public override int GetHashCode() => (Name, DisplayName, Namespace, HintName).GetHashCode();
     }

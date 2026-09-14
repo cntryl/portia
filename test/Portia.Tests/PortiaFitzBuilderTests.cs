@@ -1,4 +1,3 @@
-using Cntryl.Fitz;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -7,6 +6,118 @@ namespace Cntryl.Portia;
 /// <summary>Verifies deployment-level Fitz listener discovery from selected request handlers.</summary>
 public sealed class PortiaFitzBuilderTests
 {
+    /// <summary>An application-supplied coordinator owns workload identity independently of Fitz.</summary>
+    [Fact]
+    public async Task ShouldAllowCustomCoordinatorWorkloadsWithoutFitzFleetIdentity()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IWorkloadCoordinator, CustomCoordinator>();
+        _ = services.AddSingleton<IEventStore>(new InMemoryEventStore());
+        var application = services.AddPortia();
+        _ = application.AddProjector<TestProjector>("projection", WorkloadScope.Global);
+        _ = application.AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws"))).AddWorkers();
+        await using var provider = services.BuildServiceProvider();
+        var lifecycle = Assert.IsAssignableFrom<IHostedLifecycleService>(
+            Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
+
+        await lifecycle.StartingAsync(default);
+    }
+
+    /// <summary>Workloads using the effective Fitz coordinator still require a fleet identity.</summary>
+    [Fact]
+    public async Task ShouldRejectFitzCoordinatedWorkloadsWithoutFleetIdentity()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IEventStore>(new InMemoryEventStore());
+        var application = services.AddPortia();
+        _ = application.AddProjector<TestProjector>("projection", WorkloadScope.Global);
+        _ = application.AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws"))).AddWorkers();
+        await using var provider = services.BuildServiceProvider();
+        var lifecycle = Assert.IsAssignableFrom<IHostedLifecycleService>(
+            Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => lifecycle.StartingAsync(default));
+
+        Assert.Contains("Fitz:ApplicationName", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>Queue workers require an application terminal disposition policy before connecting.</summary>
+    [Fact]
+    public async Task ShouldRejectQueueWorkerStartupWithoutTerminalHandler()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IRequestActorValidator, TestRequestActorValidator>();
+        var application = services.AddPortia();
+        _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Queue]));
+        _ = application.AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")),
+            fitz => _ = fitz.AddQueueWorkers()).AddWorkers();
+        await using var provider = services.BuildServiceProvider();
+        var lifecycle = Assert.IsAssignableFrom<IHostedLifecycleService>(
+            Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => lifecycle.StartingAsync(default));
+
+        Assert.Contains(typeof(IQueuedRequestTerminalHandler).FullName!, error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A scoped terminal policy satisfies queue-worker startup validation.</summary>
+    [Fact]
+    public async Task ShouldAllowQueueWorkerStartupWithScopedTerminalHandler()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IRequestActorValidator, TestRequestActorValidator>();
+        _ = services.AddScoped<IQueuedRequestTerminalHandler, TestTerminalHandler>();
+        var application = services.AddPortia();
+        _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Queue]));
+        _ = application.AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")),
+            fitz => _ = fitz.AddQueueWorkers()).AddWorkers();
+        await using var provider = services.BuildServiceProvider();
+        var lifecycle = Assert.IsAssignableFrom<IHostedLifecycleService>(
+            Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
+
+        await lifecycle.StartingAsync(default);
+    }
+
+    /// <summary>Request listeners do not need workload fleet identity when no component is hosted.</summary>
+    [Fact]
+    public async Task ShouldAllowRequestOnlyWorkerStartupWithoutFleetIdentity()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IRequestActorValidator, TestRequestActorValidator>();
+        var application = services.AddPortia();
+        _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Callable]));
+        _ = application.AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")),
+            fitz => _ = fitz.AddRpcWorkers()).AddWorkers();
+        await using var provider = services.BuildServiceProvider();
+        var lifecycle = Assert.IsAssignableFrom<IHostedLifecycleService>(
+            Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
+
+        await lifecycle.StartingAsync(default);
+    }
+
+    /// <summary>Fitz 1.0 rejects terminal thresholds before connecting because attempts are unavailable.</summary>
+    [Fact]
+    public async Task ShouldRejectPositiveTerminalAttemptAtFitzStartup()
+    {
+        var services = new ServiceCollection();
+        _ = services.Configure<QueueRunnerOptions>(options => options.TerminalAttempt = 2);
+        var application = services.AddPortia();
+        _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Queue]));
+        _ = application.AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")),
+            fitz => _ = fitz.AddQueueWorkers()).AddWorkers();
+        await using var provider = services.BuildServiceProvider();
+        var lifecycle = Assert.IsAssignableFrom<IHostedLifecycleService>(
+            Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => lifecycle.StartingAsync(default));
+
+        Assert.Contains("does not expose durable attempt counts", error.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>The native schedule API is published from Portia's shared Fitz connection.</summary>
     [Fact]
     public void ShouldRegisterNativeScheduleClientAlias()
@@ -116,7 +227,10 @@ public sealed class PortiaFitzBuilderTests
         var services = new ServiceCollection();
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
-        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice, RequestTransportId.Schedule]));
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([
+            RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice,
+            RequestTransportId.Schedule
+        ]));
         _ = application.AddGeneratedRequest(Transport<FitzOutboundOnlyRequest>([RequestTransportId.Queue]));
         var fitz = new PortiaFitzBuilder(application);
 
@@ -170,7 +284,9 @@ public sealed class PortiaFitzBuilderTests
         var services = new ServiceCollection();
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
-        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice]));
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([
+            RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice
+        ]));
         var fitz = new PortiaFitzBuilder(application);
 
         _ = fitz.AddQueueWorkers().AddNoticeWorkers();
@@ -240,4 +356,17 @@ public sealed class PortiaFitzBuilderTests
         where TRequest : IRequestBase =>
         new(typeof(TRequest), transports, new RequestRouteAttribute("app", "accounts", "*", "run"),
             new DiscriminatorAttribute("test.fitz." + typeof(TRequest).Name));
+
+    sealed class TestTerminalHandler : IQueuedRequestTerminalHandler
+    {
+        public ValueTask HandleAsync(QueuedRequestFailureContext context, CancellationToken ct = default) =>
+            ValueTask.CompletedTask;
+    }
+
+    sealed class CustomCoordinator : IWorkloadCoordinator
+    {
+        public Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default) =>
+            Task.CompletedTask;
+    }
 }

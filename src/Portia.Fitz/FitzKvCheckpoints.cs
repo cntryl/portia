@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.Globalization;
 using System.Text;
 
 namespace Cntryl.Portia;
@@ -52,8 +54,8 @@ static class FitzKvCheckpoints
 
         if (value.Length == sizeof(ulong))
         {
-            var offset = System.Buffers.Binary.BinaryPrimitives.ReadUInt64BigEndian(value);
-            return new EventCursor(offset.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            var offset = BinaryPrimitives.ReadUInt64BigEndian(value);
+            return new EventCursor(offset.ToString(CultureInfo.InvariantCulture));
         }
 
         throw new InvalidDataException("The persisted Fitz checkpoint has an unknown encoding.");

@@ -40,7 +40,8 @@ public sealed class StartupValidationTests
     {
         var services = new ServiceCollection();
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => services.AddPortia()
-            .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global, options => options.FailureAttemptLimit = attempts));
+            .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
+                options => options.FailureAttemptLimit = attempts));
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 

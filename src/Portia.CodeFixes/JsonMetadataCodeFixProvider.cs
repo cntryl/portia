@@ -198,7 +198,7 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
             return namespaces[0];
         var defaultNamespace = project.DefaultNamespace;
         if (defaultNamespace is { Length: > 0 }
-            && SyntaxFactory.ParseName(defaultNamespace).ContainsDiagnostics == false)
+            && !SyntaxFactory.ParseName(defaultNamespace).ContainsDiagnostics)
         {
             return defaultNamespace;
         }

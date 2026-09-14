@@ -9,10 +9,15 @@ public sealed class McpStdioOptions
 {
     readonly IServiceCollection _services;
 
-    internal McpStdioOptions(IServiceCollection services) => _services = services;
+    internal McpStdioOptions(IServiceCollection services)
+    {
+        _services = services;
+    }
 
     /// <summary>Uses an application-owned actor provider for every stdio invocation.</summary>
-    public McpStdioOptions UseActorProvider<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProvider>() where TProvider : class, IMcpActorProvider
+    public McpStdioOptions UseActorProvider<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProvider>()
+        where TProvider : class, IMcpActorProvider
     {
         _ = _services.AddScoped<IMcpActorProvider, TProvider>();
         return this;

@@ -130,7 +130,10 @@ public sealed class ComponentRegistrationTests
 
         var sendWelcomeEmail = Assert.Single(registrations, r => r.RequestType == typeof(SendWelcomeEmail));
         Assert.True(sendWelcomeEmail.Transports.SetEquals(
-            [RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice, RequestTransportId.Schedule]));
+        [
+            RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice,
+            RequestTransportId.Schedule
+        ]));
         Assert.Equal("welcome", sendWelcomeEmail.Route.Operation);
 
         var custom = Assert.Single(registrations, r => r.RequestType == typeof(CustomTransportRequest));
@@ -153,6 +156,6 @@ public sealed class ComponentRegistrationTests
         var discriminator = new DiscriminatorAttribute("test.request.probe");
 
         _ = Assert.Throws<ArgumentException>(() => new RequestTransportRegistration(
-            typeof(CreateUser), [default(RequestTransportId)], route, discriminator));
+            typeof(CreateUser), [default], route, discriminator));
     }
 }

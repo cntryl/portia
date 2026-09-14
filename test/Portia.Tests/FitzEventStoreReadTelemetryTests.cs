@@ -59,13 +59,15 @@ public sealed class FitzEventStoreReadTelemetryTests
             if (pattern)
             {
                 await foreach (var _ in fixture.Store.ReadAsync(EventStreamPattern.ForPattern("test"),
-                                   ct: cancellation.Token))
-                { }
+                                   cancellation.Token))
+                {
+                }
             }
             else
             {
-                await foreach (var _ in fixture.Store.ReadAsync(fixture.Stream, ct: cancellation.Token))
-                { }
+                await foreach (var _ in fixture.Store.ReadAsync(fixture.Stream, cancellation.Token))
+                {
+                }
             }
         });
 
@@ -96,8 +98,8 @@ public sealed class FitzEventStoreReadTelemetryTests
                 (ulong)index + 1, DateTimeOffset.UtcNow));
             var record = new StreamRecord(stream.ToString(), (ulong)index, (ulong)index, (ulong)index,
                 (ulong)index, serializer.Serialize(ev).ToArray(), Encoding.UTF8.GetBytes(stream.ToString()), 0);
-            return new StreamReadItem(stream.ToString(), (StreamReadItemKind)0, record, (ulong)index,
-                (ulong)index, (ulong)index, null);
+            return new StreamReadItem(stream.ToString(), 0, record, (ulong)index,
+                (ulong)index, (ulong)index);
         }).ToArray();
         return new StreamReadPage(items,
             new StreamReadCursor((ulong)(count - 1), (ulong)(count - 1), (ulong)(count - 1),
@@ -142,7 +144,9 @@ public sealed class FitzEventStoreReadTelemetryTests
         readonly Exception? _failure = failure;
         readonly StreamReadPage? _page = page;
 
-        public Pages(StreamReadPage page) : this(null, page) { }
+        public Pages(StreamReadPage page) : this(null, page)
+        {
+        }
 
         public Task<StreamReadPage> ReadPageAsync(string route, ulong startOffset, ulong limit = 100,
             StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
@@ -151,13 +155,17 @@ public sealed class FitzEventStoreReadTelemetryTests
 
         public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null,
             CancellationToken ct = default) => throw new NotSupportedException();
+
         public IAsyncEnumerable<StreamRecord> ReadAsync(string route, ulong startOffset, ulong limit = 100,
             StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
             ulong? capturedWatermark = null, CancellationToken ct = default) => throw new NotSupportedException();
+
         public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
             throw new NotSupportedException();
+
         public Task<StreamMetadata> MetadataAsync(string route, CancellationToken ct = default) =>
             throw new NotSupportedException();
+
         public Task<StreamSubscription> SubscribeAsync(string pattern, CancellationToken ct = default) =>
             throw new NotSupportedException();
     }

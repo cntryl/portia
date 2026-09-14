@@ -19,7 +19,8 @@ public sealed class ReactorEffectPatternsTests
         Assert.Equal(ProjectionCheckpoint.Start,
             await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern)));
         bus.Outcome = Result.Success;
-        Assert.Equal("1", (await new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start)).Cursor.ToString());
+        Assert.Equal("1",
+            (await new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start)).Cursor.ToString());
     }
 
     [Fact]
@@ -47,10 +48,10 @@ public sealed class ReactorEffectPatternsTests
 
     sealed class OutcomeBus(Result outcome) : IRequestBus
     {
+        public Result Outcome { get; set; } = outcome;
 
         public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
             CancellationToken ct = default) => ValueTask.FromResult(Result.Success);
-        public Result Outcome { get; set; } = outcome;
 
         public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
             new(actor, metadata: metadata);
@@ -79,11 +80,9 @@ public sealed class ReactorEffectPatternsTests
             {
                 throw new InvalidOperationException("The direct effect lost its triggering context.");
             }
-            else
-            {
-                Receipts++;
-                return ValueTask.CompletedTask;
-            }
+
+            Receipts++;
+            return ValueTask.CompletedTask;
         }
     }
 

@@ -34,9 +34,9 @@ static class GeneratedTypeShape
             }
 
             if (requirePartialContainers && !SymbolEqualityComparer.Default.Equals(current, symbol)
-                                             && current.DeclaringSyntaxReferences.Any(reference =>
-                                                 reference.GetSyntax() is not TypeDeclarationSyntax declaration
-                                                 || !declaration.Modifiers.Any(SyntaxKind.PartialKeyword)))
+                                         && current.DeclaringSyntaxReferences.Any(reference =>
+                                             reference.GetSyntax() is not TypeDeclarationSyntax declaration
+                                             || !declaration.Modifiers.Any(SyntaxKind.PartialKeyword)))
             {
                 return $"enclosing type '{current.ToDisplayString()}' must be partial";
             }

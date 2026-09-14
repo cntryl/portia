@@ -76,7 +76,7 @@ sealed class FakeKvTransaction(FakeKvClient client, string route, KvDurability d
             ? new KvGetResult(true, staged)
             : client.Committed.TryGetValue(name, out var committed)
                 ? new KvGetResult(true, committed)
-                : new KvGetResult(false, null));
+                : new KvGetResult(false));
     }
 
     public Task PutAsync(ReadOnlyMemory<byte> key, ReadOnlyMemory<byte> value, CancellationToken ct = default)

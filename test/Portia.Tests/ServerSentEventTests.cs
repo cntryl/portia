@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
+using System.Text;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -73,7 +73,7 @@ public sealed class ServerSentEventTests : IAsyncDisposable
         await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
         using var reader = new StreamReader(stream);
         var buffer = new char[256];
-        var text = new System.Text.StringBuilder();
+        var text = new StringBuilder();
         while (!text.ToString().Contains(marker, StringComparison.Ordinal))
         {
             var read = await reader.ReadAsync(buffer.AsMemory(), deadline.Token);

@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -65,8 +67,8 @@ public sealed class RunnerClockTests
         lifetime.Cancel();
         await WaitForScheduledAsync(clock, timeout);
         clock.Advance(timeout);
-        var fault = await Assert.ThrowsAsync<FleetPartitionTerminationTimeoutException>(
-            () => run.WaitAsync(TimeSpan.FromSeconds(5)));
+        var fault = await Assert.ThrowsAsync<FleetPartitionTerminationTimeoutException>(() =>
+            run.WaitAsync(TimeSpan.FromSeconds(5)));
 
         Assert.Equal([partition], fault.Partitions);
         release.SetResult();
@@ -88,7 +90,7 @@ public sealed class RunnerClockTests
     sealed class SingleTenantDirectory : ITenantDirectory
     {
         public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync(
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+            [EnumeratorCancellation] CancellationToken ct = default)
         {
             await Task.CompletedTask;
             ct.ThrowIfCancellationRequested();
@@ -96,7 +98,7 @@ public sealed class RunnerClockTests
         }
 
         public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync(
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+            [EnumeratorCancellation] CancellationToken ct = default)
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             yield break;

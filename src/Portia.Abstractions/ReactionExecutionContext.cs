@@ -30,9 +30,6 @@ public sealed class ReactionExecutionContext : IReactorContext
         StartedAt = timeProvider.GetUtcNow();
     }
 
-    internal static ReactionExecutionContext FromSystemSnapshot(DomainEventRecord source,
-        ClaimsPrincipal actorSnapshot, TimeProvider timeProvider) => new(source, timeProvider, actorSnapshot);
-
     internal ClaimsPrincipal ActorSnapshot { get; }
 
     /// <inheritdoc />
@@ -52,6 +49,9 @@ public sealed class ReactionExecutionContext : IReactorContext
 
     /// <inheritdoc />
     public DomainEventRecord Source { get; }
+
+    internal static ReactionExecutionContext FromSystemSnapshot(DomainEventRecord source,
+        ClaimsPrincipal actorSnapshot, TimeProvider timeProvider) => new(source, timeProvider, actorSnapshot);
 
     static ClaimsPrincipal SnapshotSystemActor(ClaimsPrincipal actor)
     {

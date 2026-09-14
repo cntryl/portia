@@ -6,7 +6,7 @@
     <RootNamespace>Cntryl.Portia.McpContracts</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Using Remove="Xunit" />
-    <ProjectReference Include="../../src/Portia.Abstractions/Portia.Abstractions.csproj" />
+    <Using Remove="Xunit"/>
+    <ProjectReference Include="../../src/Portia.Abstractions/Portia.Abstractions.csproj"/>
   </ItemGroup>
 </Project>

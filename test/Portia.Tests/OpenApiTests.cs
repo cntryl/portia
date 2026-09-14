@@ -1,5 +1,7 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Json;
@@ -44,27 +46,29 @@ public sealed class OpenApiTests : IAsyncDisposable
     {
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
-        _ = builder.Services.Configure<JsonOptions>(options => options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
+        _ = builder.Services.Configure<JsonOptions>(options =>
+            options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
         _ = builder.Services.AddPortia().AddHttp()
             .AddRequestHandler<OpenApiContractHandler>()
             .AddRequestHandler<OpenApiContractStreamHandler>()
             .ConfigureJson(options =>
             {
-                options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter<DayOfWeek>());
+                options.Converters.Add(new JsonStringEnumConverter<DayOfWeek>());
                 options.Converters.Add(new OpenApiMoneyConverter());
             });
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaPost<OpenApiContractRequest, OpenApiContractNode>("/contract")
-            .WithMetadata(new Microsoft.AspNetCore.Http.ProducesResponseTypeMetadata(
+            .WithMetadata(new ProducesResponseTypeMetadata(
                 StatusCodes.Status400BadRequest, typeof(string), ["text/plain"]));
         _ = _app.MapPortiaGetStream<OpenApiContractStream, OpenApiContractNode>("/contract-stream");
-        _ = _app.MapGet("/ordinary-contract", () => new OpenApiContractNode("ordinary", "explicit", DayOfWeek.Monday, new HttpMoney("USD", 42)));
+        _ = _app.MapGet("/ordinary-contract",
+            () => new OpenApiContractNode("ordinary", "explicit", DayOfWeek.Monday, new HttpMoney("USD", 42)));
         await _app.StartAsync();
         using var client = _app.GetTestClient();
         using var response = await client.PostAsync("/contract", new StringContent(
             """{"payload":{"display_name":"nested","wire-name":"explicit","day_value":"Monday","custom_value":"42","next_node":{"display_name":"child","wire-name":"child","day_value":"Tuesday","custom_value":"43"}}}""",
-            System.Text.Encoding.UTF8, "application/json"));
+            Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
         using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("nested", payload.RootElement.GetProperty("display_name").GetString());
@@ -78,14 +82,17 @@ public sealed class OpenApiTests : IAsyncDisposable
         {
             var settings = new OpenApiReaderSettings();
             settings.AddYamlReader();
-            var parsed = OpenApiDocument.Parse(await client.GetStringAsync("/openapi/v1." + format), format == "yml" ? "yaml" : "json", settings);
+            var parsed = OpenApiDocument.Parse(await client.GetStringAsync("/openapi/v1." + format),
+                format == "yml" ? "yaml" : "json", settings);
             Assert.Empty(parsed.Diagnostic!.Errors);
             var document = parsed.Document!;
             var operation = document.Paths!["/contract"].Operations![HttpMethod.Post];
             Assert.Equal(JsonSchemaType.String, operation.Responses!["400"].Content!["text/plain"].Schema!.Type);
             var result = operation.Responses!["200"].Content!["application/json"].Schema!;
             var body = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
-            var item = document.Paths["/contract-stream"].Operations![HttpMethod.Get].Responses!["200"].Content!["application/json"].Schema!.Items!;
+            var item =
+                document.Paths["/contract-stream"].Operations![HttpMethod.Get].Responses!["200"].Content![
+                    "application/json"].Schema!.Items!;
             foreach (var schema in new[] { result, body, item })
             {
                 Assert.Contains("display_name", schema.Properties!.Keys);
@@ -98,7 +105,10 @@ public sealed class OpenApiTests : IAsyncDisposable
                 Assert.Contains("display_name", child.Properties!.Keys);
                 Assert.Contains("display_name", child.Properties["next_node"].Properties!.Keys);
             }
-            var appSchema = document.Paths["/ordinary-contract"].Operations![HttpMethod.Get].Responses!["200"].Content!["application/json"].Schema!;
+
+            var appSchema =
+                document.Paths["/ordinary-contract"].Operations![HttpMethod.Get].Responses!["200"].Content![
+                    "application/json"].Schema!;
             Assert.Contains("displayName", appSchema.Properties!.Keys);
             Assert.DoesNotContain("display_name", appSchema.Properties.Keys);
         }

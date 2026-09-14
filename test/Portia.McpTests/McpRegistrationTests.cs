@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 using Cntryl.Portia.McpContracts;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
@@ -172,7 +172,7 @@ public sealed class McpRegistrationTests
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
-        }, app.GetTestClient(), NullLoggerFactory.Instance, false);
+        }, app.GetTestClient(), NullLoggerFactory.Instance);
         await using var client = await McpClient.CreateAsync(transport);
 
         // Act
@@ -257,7 +257,7 @@ public sealed class McpRegistrationTests
         var endpoint = Assert.Single(((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints),
             candidate => candidate.DisplayName?.Contains("MCP", StringComparison.OrdinalIgnoreCase) == true);
         Assert.Equal(1_234, endpoint.Metadata.GetMetadata<IRequestSizeLimitMetadata>()?.MaxRequestBodySize);
-        Assert.Null(app.Services.GetService<Microsoft.AspNetCore.Http.IHttpContextAccessor>());
+        Assert.Null(app.Services.GetService<IHttpContextAccessor>());
     }
 
     [Fact]
@@ -309,7 +309,7 @@ public sealed class McpRegistrationTests
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
-        }, app.GetTestClient(), NullLoggerFactory.Instance, false);
+        }, app.GetTestClient(), NullLoggerFactory.Instance);
         await using var client = await McpClient.CreateAsync(transport);
 
         // Act
@@ -361,7 +361,7 @@ public sealed class McpRegistrationTests
         Assert.Equal("fault", receive.GetTagItem("portia.outcome"));
         Assert.Contains(receive.Events, activityEvent => activityEvent.Name == "exception");
         Assert.Contains(logs.Entries, entry => entry.Level == LogLevel.Error
-                                              && entry.Exception is JsonException);
+                                               && entry.Exception is JsonException);
     }
 
     [Fact]
@@ -437,7 +437,7 @@ public sealed class McpRegistrationTests
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
-        }, app.GetTestClient(), NullLoggerFactory.Instance, false);
+        }, app.GetTestClient(), NullLoggerFactory.Instance);
         await using var client = await McpClient.CreateAsync(transport);
 
         // Act
@@ -571,7 +571,7 @@ public sealed class McpRegistrationTests
         finally
         {
             if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
+                process.Kill(true);
         }
     }
 
@@ -594,7 +594,7 @@ public sealed class McpRegistrationTests
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
-        }, app.GetTestClient(), NullLoggerFactory.Instance, false);
+        }, app.GetTestClient(), NullLoggerFactory.Instance);
         await using var client = await McpClient.CreateAsync(transport);
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
@@ -617,7 +617,7 @@ public sealed class McpRegistrationTests
         using var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == PortiaTelemetry.SourceName,
-            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            Sample = static (ref _) => ActivitySamplingResult.AllData,
             ActivityStopped = stopped.Enqueue
         };
         ActivitySource.AddActivityListener(listener);
@@ -634,7 +634,7 @@ public sealed class McpRegistrationTests
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
-        }, app.GetTestClient(), NullLoggerFactory.Instance, false);
+        }, app.GetTestClient(), NullLoggerFactory.Instance);
         await using var client = await McpClient.CreateAsync(transport);
 
         // Act
@@ -646,7 +646,8 @@ public sealed class McpRegistrationTests
         Assert.Equal(receive.Id, execute.ParentId);
         Assert.Equal("mcp", receive.GetTagItem("portia.transport.name"));
         Assert.Equal("mcp", execute.GetTagItem("portia.transport.name"));
-        Assert.DoesNotContain(receive.TagObjects, tag => tag.Key.Contains("argument", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(receive.TagObjects,
+            tag => tag.Key.Contains("argument", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -675,6 +676,44 @@ public sealed class McpRegistrationTests
         Assert.Equal("actors.read", receive.GetTagItem("portia.request.name"));
         Assert.Equal("actors.read", execute.GetTagItem("portia.request.name"));
     }
+
+    static string StdioHostPath()
+    {
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name
+                            ?? throw new InvalidOperationException("The test configuration could not be determined.");
+        return Path.GetFullPath(
+            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net10.0/Portia.McpStdioHost.dll",
+            AppContext.BaseDirectory);
+    }
+
+    static ActivityListener Listen(ConcurrentQueue<Activity> stopped)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == PortiaTelemetry.SourceName,
+            Sample = static (ref _) => ActivitySamplingResult.AllData,
+            ActivityStopped = stopped.Enqueue
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
+    }
+
+    static async ValueTask<McpClient> HttpClientAsync(WebApplication app)
+    {
+        var transport = new HttpClientTransport(new HttpClientTransportOptions
+        {
+            Endpoint = new Uri("http://localhost/mcp")
+        }, app.GetTestClient(), NullLoggerFactory.Instance);
+        return await McpClient.CreateAsync(transport);
+    }
+
+    static void UseTestActor(WebApplication app, string name = "mcp-test-actor") =>
+        app.Use((context, next) =>
+        {
+            context.User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(ClaimTypes.Name, name)], "test"));
+            return next(context);
+        });
 
     /// <summary>Reads a greeting without changing application state.</summary>
     [Discriminator("greetings.read")]
@@ -711,7 +750,7 @@ public sealed class McpRegistrationTests
     }
 
     sealed class UnauthenticatedHandler(
-        Microsoft.Extensions.Options.IOptionsMonitor<AuthenticationSchemeOptions> options,
+        IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
@@ -856,44 +895,6 @@ public sealed class McpRegistrationTests
     }
 
     sealed record LogEntry(LogLevel Level, Exception? Exception, string Message);
-
-    static string StdioHostPath()
-    {
-        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name
-                            ?? throw new InvalidOperationException("The test configuration could not be determined.");
-        return Path.GetFullPath(
-            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net10.0/Portia.McpStdioHost.dll",
-            AppContext.BaseDirectory);
-    }
-
-    static ActivityListener Listen(ConcurrentQueue<Activity> stopped)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == PortiaTelemetry.SourceName,
-            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
-            ActivityStopped = stopped.Enqueue
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
-    }
-
-    static async ValueTask<McpClient> HttpClientAsync(WebApplication app)
-    {
-        var transport = new HttpClientTransport(new HttpClientTransportOptions
-        {
-            Endpoint = new Uri("http://localhost/mcp")
-        }, app.GetTestClient(), NullLoggerFactory.Instance, false);
-        return await McpClient.CreateAsync(transport);
-    }
-
-    static void UseTestActor(WebApplication app, string name = "mcp-test-actor") =>
-        app.Use((context, next) =>
-        {
-            context.User = new ClaimsPrincipal(new ClaimsIdentity(
-                [new Claim(ClaimTypes.Name, name)], "test"));
-            return next(context);
-        });
 }
 
 [PortiaJsonContext]

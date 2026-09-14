@@ -49,7 +49,7 @@ public static partial class PortiaTelemetry
     };
 
     static readonly Histogram<double> RequestDuration =
-        Meter.CreateHistogram<double>("portia.request.duration", "s", null, null, LatencyBuckets);
+        Meter.CreateHistogram("portia.request.duration", "s", null, null, LatencyBuckets);
 
     static readonly UpDownCounter<long> RequestActive =
         Meter.CreateUpDownCounter<long>("portia.request.active", "{request}");
@@ -58,34 +58,34 @@ public static partial class PortiaTelemetry
         Meter.CreateCounter<long>("portia.request.delivery.count", "{delivery}");
 
     static readonly Histogram<double> AuthorizationDuration =
-        Meter.CreateHistogram<double>("portia.authorization.duration", "s", null, null, LatencyBuckets);
+        Meter.CreateHistogram("portia.authorization.duration", "s", null, null, LatencyBuckets);
 
     static readonly Histogram<double> TransportDuration =
-        Meter.CreateHistogram<double>("portia.transport.operation.duration", "s", null, null, LatencyBuckets);
+        Meter.CreateHistogram("portia.transport.operation.duration", "s", null, null, LatencyBuckets);
 
     static readonly Counter<long> InvalidTraceContext =
         Meter.CreateCounter<long>("portia.transport.trace_context.invalid", "{request}");
 
     static readonly Histogram<double> AggregateDuration =
-        Meter.CreateHistogram<double>("portia.aggregate.operation.duration", "s", null, null, LatencyBuckets);
+        Meter.CreateHistogram("portia.aggregate.operation.duration", "s", null, null, LatencyBuckets);
 
     static readonly Counter<long>
         AggregateEvents = Meter.CreateCounter<long>("portia.aggregate.event.count", "{event}");
 
     static readonly Histogram<double> EventStoreDuration =
-        Meter.CreateHistogram<double>("portia.event_store.operation.duration", "s", null, null, LatencyBuckets);
+        Meter.CreateHistogram("portia.event_store.operation.duration", "s", null, null, LatencyBuckets);
 
     static readonly Counter<long> EventStoreEvents =
         Meter.CreateCounter<long>("portia.event_store.event.count", "{event}");
 
     static readonly Histogram<double> ProcessorDuration =
-        Meter.CreateHistogram<double>("portia.processor.batch.duration", "s", null, null, LatencyBuckets);
+        Meter.CreateHistogram("portia.processor.batch.duration", "s", null, null, LatencyBuckets);
 
     static readonly Counter<long>
         ProcessorEvents = Meter.CreateCounter<long>("portia.processor.event.count", "{event}");
 
     static readonly Histogram<double> ProcessorLag =
-        Meter.CreateHistogram<double>("portia.processor.lag", "s", null, null, LagBuckets);
+        Meter.CreateHistogram("portia.processor.lag", "s", null, null, LagBuckets);
 
     static readonly UpDownCounter<long> WorkloadActive =
         Meter.CreateUpDownCounter<long>("portia.workload.active", "{workload}");
@@ -102,7 +102,7 @@ public static partial class PortiaTelemetry
     /// <returns>The started activity, or <see langword="null" /> when no listener samples it.</returns>
     public static Activity? StartExecute(string requestName, string transport)
     {
-        var activity = ActivitySource.StartActivity(ExecuteActivityName, ActivityKind.Internal);
+        var activity = ActivitySource.StartActivity(ExecuteActivityName);
         if (activity?.IsAllDataRequested == true)
         {
             _ = activity.SetTag("portia.request.name", requestName);
@@ -444,7 +444,7 @@ public static partial class PortiaTelemetry
     };
 
     /// <summary>Maps a fault stage to its stable lowercase log vocabulary.</summary>
-    internal static string StageName(RunnerFaultStage stage) => stage switch
+    static string StageName(RunnerFaultStage stage) => stage switch
     {
         RunnerFaultStage.Acquisition => "acquisition",
         RunnerFaultStage.Renewal => "renewal",

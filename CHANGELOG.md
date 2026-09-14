@@ -1,26 +1,5 @@
 # Changelog
 
-## 0.2.0
-
-- Replaced projection scope offsets with backend-owned `EventCursor` values and structural checkpoint patterns.
-- Required stable, explicit IDs when registering projector and reactor workloads.
-- Replaced the closed request-transport enum with stable, extensible transport IDs discovered from
-  annotated marker interfaces, while preserving the built-in callable, queue, notice, and schedule
-  capabilities.
-- Made HTTP/OpenAPI activation explicit through `AddHttp()` and `MapPortiaOpenApi()`, removed
-  ambient `WebApplication` interception, stopped replacing ASP.NET Core's global JSON options, and
-  moved HTTP binding generation into the ASP.NET Core adapter package.
-- Fitz queue consumers reserve one item at a time, validate durable-attempt support inside
-  `QueueRunner`, and reject undeclared inbound transport capabilities before dispatch.
-- Projector and reactor pass limits now complete an already-started atomic batch before yielding.
-- Fitz projection batches now reject stale checkpoints inside the read/write transaction.
-- Fitz checkpoints now use a versioned UTF-8 representation while continuing to read the 0.1.x
-  eight-byte unsigned big-endian offset format.
-
-## 0.1.0
-
-- Initial public release of the request pipeline, event sourcing, projection/reactor runtime, Fitz, HTTP, telemetry, JWT, testing, analyzer, and generator packages.
-
 Notable changes to Portia. Entries call out anything that changes observable behavior for an
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
@@ -64,6 +43,36 @@ alerts are as breaking to change as an API.
   itself, and packing now fails if a packable project declares no license at all.
 
 ### Fixed
+
+- Queue workers reject a zero terminal attempt, and Fitz workers reject any configured terminal
+  threshold before connecting because Fitz 1.0 does not expose durable attempt counts. Malformed,
+  incomplete, wrong-kind, invalid-metadata, and invalid known-contract queued envelopes use
+  `DeserializationFailure` only when a terminal handler exists; otherwise they remain transport-owned.
+  Only structurally valid unsupported envelope versions, unknown contract/version pairs, and
+  unclassified read failures remain retryable,
+  reaching `RetryLimitReached` only at a durable threshold with a handler. Failed lazy fields are not reread.
+- Workload registration names are the stable hosted projector/reactor ownership, checkpoint, and
+  effect identities; constructor-selected names remain defaults for manually driven components.
+  Fitz requires an application name or explicit fleet configuration only when the effective
+  coordinator is Fitz, so request-only listeners and custom-coordinator workloads remain valid unnamed.
+- Scheduled Fitz workers require an application `IScheduledRequestActorValidator`, resolved from a
+  fresh dependency-injection scope for every attempt. Definite rejection drops the firing; thrown
+  and transient-result failures make at most three attempts with cancellable one- and two-second
+  host-clock delays. Each failed attempt is observable, exhaustion loses only that firing, and later
+  route notifications continue. Retries wait off the route's read loop (at most 32 pending per route),
+  so healthy firings are not delayed behind a retrying one and may be delivered ahead of it.
+  Asserted route, subject, and issuer values no longer mint a system principal directly.
+- Reactor checkpoint writes use a private compare-and-save path when backed by Fitz KV, preventing a
+  stale worker from overwriting newer progress without changing the public checkpoint contract.
+- Authenticated HTTP requests using `respond-async` require a portable Bearer credential. Synchronous
+  cookie/API-key requests, Bearer queue dispatch, and authorized anonymous queue dispatch retain
+  their existing behavior.
+- `PORTIA029` reports invalid custom transport IDs at compilation. Transport generator inputs compare
+  transport lists structurally, nullable null defaults are omitted from OpenAPI schemas, bare-root
+  recursive MCP references are rewritten, and the partial-component code fix preserves declaration
+  trivia under warnings-as-errors.
+- Publishing separates read-scoped verification and immutable package preparation from the
+  write-scoped tag/package job. The exact-SHA tag is established and read back before package push.
 
 - CI restores the locked dependency graph explicitly before formatting, and the lock files match
   the currently published `Cntryl.Fitz.Core` 1.0.0 package. The build SDK is exact so a newer patch
@@ -125,9 +134,15 @@ alerts are as breaking to change as an API.
   A flat one-second delay retried an entire fleet in lockstep against a broker that had just failed.
 - A queue reservation's renewal failure is published and read through `Volatile`, so acknowledging a
   reservation whose lease was already lost cannot miss it.
-- Fitz queue workers reject a positive `QueueRunnerOptions.TerminalAttempt` during startup. Fitz 1.0
-  reports `QueueItem.AttemptUnavailable` for every queue delivery, so accepting the threshold left
-  retryable failures in an unbounded redelivery loop that could never reach the configured attempt.
+- Fitz queue workers require an application `IQueuedRequestTerminalHandler` and reject a positive
+  `QueueRunnerOptions.TerminalAttempt` during startup, before connecting. Fitz 1.0 reports
+  `QueueItem.AttemptUnavailable` for every queue delivery, so accepting the threshold left retryable
+  failures in an unbounded redelivery loop that could never reach the configured attempt.
+- All queue runners now validate an application-selected terminal handler in a disposable scope before
+  transport enumeration and revalidate each delivery scope. Portia supplies no default policy that can
+  silently acknowledge poison messages.
+- Unsupported integer request-envelope versions are classified as retryable immediately after reading
+  `version`, without interpreting fields owned by that unsupported format.
 - Fleet partition and membership acquisition now fails fast on contention and uses Portia's bounded,
   jittered retry loop. Fitz serializes acquisitions per client, so waiting inside one contended acquire
   blocked every partition behind it and prevented healthy scale-out and takeover from converging.
@@ -444,3 +459,24 @@ alerts are as breaking to change as an API.
   re-filtered and re-allocated on every dispatch.
 - Workload hosting asks a descriptor whether it supports rebuild generations instead of testing
   its type, and Fitz worker definitions build their own runners instead of being switched on.
+## 0.2.0
+
+- Replaced projection scope offsets with backend-owned `EventCursor` values and structural checkpoint patterns.
+- Required stable, explicit IDs when registering projector and reactor workloads.
+- Replaced the closed request-transport enum with stable, extensible transport IDs discovered from
+  annotated marker interfaces, while preserving the built-in callable, queue, notice, and schedule
+  capabilities.
+- Made HTTP/OpenAPI activation explicit through `AddHttp()` and `MapPortiaOpenApi()`, removed
+  ambient `WebApplication` interception, stopped replacing ASP.NET Core's global JSON options, and
+  moved HTTP binding generation into the ASP.NET Core adapter package.
+- Fitz queue consumers reserve one item at a time, validate durable-attempt support inside
+  `QueueRunner`, and reject undeclared inbound transport capabilities before dispatch.
+- Projector and reactor pass limits now complete an already-started atomic batch before yielding.
+- Fitz projection batches now reject stale checkpoints inside the read/write transaction.
+- Fitz checkpoints now use a versioned UTF-8 representation while continuing to read the 0.1.x
+  eight-byte unsigned big-endian offset format.
+
+## 0.1.0
+
+- Initial public release of the request pipeline, event sourcing, projection/reactor runtime, Fitz,
+  HTTP, telemetry, JWT, testing, analyzer, and generator packages.

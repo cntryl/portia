@@ -1,4 +1,3 @@
-
 namespace Cntryl.Portia;
 
 /// <summary>A competitor whose every acquisition fails, standing in for an unreachable broker.</summary>

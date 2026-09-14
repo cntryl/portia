@@ -17,10 +17,8 @@ sealed partial class FlakyOnThirdAttemptReactor(IProjectionCheckpointStore? chec
             _hasFailedOnce = true;
             throw new InvalidOperationException("Simulated transient failure reacting to the third event.");
         }
-        else
-        {
-            HandledValues.Add(context.Trigger.Value);
-            return ValueTask.CompletedTask;
-        }
+
+        HandledValues.Add(context.Trigger.Value);
+        return ValueTask.CompletedTask;
     }
 }

@@ -46,6 +46,7 @@ public sealed class RequestRegistry
             transportRegistrations.Add(registration.RequestType, registration);
             _names.Add(registration.RequestType, registration.Discriminator.Name);
         }
+
         foreach (var registration in handlers)
         {
             if (_handlers.TryGetValue(registration.RequestType, out var existing) &&

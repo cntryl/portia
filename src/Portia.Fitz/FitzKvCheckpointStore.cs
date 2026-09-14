@@ -1,4 +1,3 @@
-
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -10,11 +9,16 @@ namespace Cntryl.Portia;
 /// </summary>
 /// <param name="client">The Fitz KV client to open transactions against.</param>
 /// <param name="route">The Fitz KV route this component's checkpoints live under.</param>
-public sealed class FitzKvCheckpointStore(IKvClient client, string route) : IProjectionCheckpointStore
+public sealed class FitzKvCheckpointStore(IKvClient client, string route) :
+    IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
 {
     readonly IKvClient _client = client ?? throw new ArgumentNullException(nameof(client));
 
     readonly string _route = FitzKvCheckpoints.Route(route, nameof(route));
+
+    async ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
+        ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        => await SaveCoreAsync(identity, expected, checkpoint, ct).ConfigureAwait(false);
 
     /// <inheritdoc />
     public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
@@ -26,6 +30,10 @@ public sealed class FitzKvCheckpointStore(IKvClient client, string route) : IPro
     /// <inheritdoc />
     public async ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
         CancellationToken ct = default)
+        => await SaveCoreAsync(identity, null, checkpoint, ct).ConfigureAwait(false);
+
+    async ValueTask SaveCoreAsync(CheckpointIdentity identity, ProjectionCheckpoint? expected,
+        ProjectionCheckpoint checkpoint, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(identity);
         var tx = await FitzKvCheckpoints
@@ -33,6 +41,17 @@ public sealed class FitzKvCheckpointStore(IKvClient client, string route) : IPro
         var failed = false;
         try
         {
+            if (expected is { } expectedCheckpoint)
+            {
+                var stored = await tx.GetAsync(FitzKvCheckpoints.Key(identity), ct).ConfigureAwait(false);
+                var actual = stored.Found
+                    ? new ProjectionCheckpoint(FitzKvCheckpoints.Decode(stored.Value!.Value.Span))
+                    : ProjectionCheckpoint.Start;
+                if (actual != expectedCheckpoint)
+                    throw new ProjectionConcurrencyException(
+                        $"Checkpoint for '{identity.ComponentName}' changed from the expected value before save.");
+            }
+
             await tx.PutAsync(FitzKvCheckpoints.Key(identity), FitzKvCheckpoints.Encode(checkpoint.Cursor), ct)
                 .ConfigureAwait(false);
             await tx.CommitAsync(ct).ConfigureAwait(false);

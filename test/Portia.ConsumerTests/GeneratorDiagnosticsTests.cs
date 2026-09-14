@@ -1,3 +1,7 @@
+using System.Globalization;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+
 namespace Cntryl.Portia.Consumer;
 
 public sealed class GeneratorDiagnosticsTests
@@ -29,11 +33,11 @@ public sealed class GeneratorDiagnosticsTests
         Assert.All(diagnostics, diagnostic =>
         {
             Assert.StartsWith("Projector 'Projection' takes known effect dependency '",
-                diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+                diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal);
             var location = source.Substring(diagnostic.Location.SourceSpan.Start,
                 diagnostic.Location.SourceSpan.Length);
             Assert.True(location is "bus" or "http" or "factory" or "smtp" or "stripe" or "db" or "connection"
-                or "rpc", $"Unexpected diagnostic location '{location}'.");
+                    or "rpc", $"Unexpected diagnostic location '{location}'.");
         });
     }
 
@@ -56,12 +60,12 @@ public sealed class GeneratorDiagnosticsTests
 
         Assert.Equal(4, diagnostics.Length);
         var invocation = Assert.Single(diagnostics, diagnostic => diagnostic
-            .GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .GetMessage(CultureInfo.InvariantCulture)
             .Contains("ActivatorUtilities.CreateInstance", StringComparison.Ordinal));
         Assert.Equal("ActivatorUtilities.CreateInstance<object>(provider)",
             source.Substring(invocation.Location.SourceSpan.Start, invocation.Location.SourceSpan.Length));
         Assert.All(diagnostics, diagnostic => Assert.StartsWith("'Projection' uses service location through '",
-            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal));
+            diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal));
     }
 
     [Fact]
@@ -99,7 +103,7 @@ public sealed class GeneratorDiagnosticsTests
 
         Assert.Equal("Processor 'Projection' must use a batch base to implement handler " +
                      "'Cntryl.Portia.IBatchProjectorHandler<Changed>'",
-            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+            diagnostic.GetMessage(CultureInfo.InvariantCulture));
         Assert.Equal("Projection", source.Substring(diagnostic.Location.SourceSpan.Start,
             diagnostic.Location.SourceSpan.Length));
     }
@@ -119,7 +123,7 @@ public sealed class GeneratorDiagnosticsTests
             new ProjectorReactorEventDispatcherGenerator()), item => item.Id == "PORTIA028");
 
         Assert.Equal("Processor 'Projection' selects both single and batch handling for event 'Changed'",
-            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+            diagnostic.GetMessage(CultureInfo.InvariantCulture));
         Assert.Equal("Projection", source.Substring(diagnostic.Location.SourceSpan.Start,
             diagnostic.Location.SourceSpan.Length));
     }
@@ -139,7 +143,7 @@ public sealed class GeneratorDiagnosticsTests
             new DomainEventCatalogGenerator()), item => item.Id == "PORTIA023");
 
         Assert.Equal("Domain-event CLR types 'Original' and 'Duplicate' both declare discriminator 'changed' " +
-                     "version 2", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+                     "version 2", diagnostic.GetMessage(CultureInfo.InvariantCulture));
         Assert.Equal("Duplicate", source.Substring(diagnostic.Location.SourceSpan.Start,
             diagnostic.Location.SourceSpan.Length));
     }
@@ -161,9 +165,45 @@ public sealed class GeneratorDiagnosticsTests
             new PortiaServiceRegistrationGenerator()), item => item.Id == "PORTIA022");
 
         Assert.Equal("Request CLR types 'Original' and 'Duplicate' both declare discriminator 'orders.create' " +
-                     "version 2", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+                     "version 2", diagnostic.GetMessage(CultureInfo.InvariantCulture));
         Assert.Equal("Duplicate", source.Substring(diagnostic.Location.SourceSpan.Start,
             diagnostic.Location.SourceSpan.Length));
+    }
+
+    [Fact]
+    public void DuplicateRequestDiagnosticMovesWithDeclarationOnIncrementalRerun()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              [RequestRoute("*", "orders", "order", "create")]
+                              [Discriminator("orders.create", 2)]
+                              public sealed record Original : IRequest, IQueuable;
+                              [RequestRoute("*", "orders", "order", "duplicate")]
+                              [Discriminator("orders.create", 2)]
+                              public sealed record Duplicate : IRequest, IQueuable;
+                              """;
+        var parseOptions = new CSharpParseOptions(
+            LanguageVersion.Preview);
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Append(typeof(Aggregate).Assembly.Location).Distinct(StringComparer.Ordinal)
+            .Select(path => MetadataReference.CreateFromFile(path));
+        var tree = CSharpSyntaxTree.ParseText(source, parseOptions, "Requests.cs");
+        var compilation = CSharpCompilation.Create("DiagnosticRelocation", [tree],
+            references, new CSharpCompilationOptions(
+                OutputKind.DynamicallyLinkedLibrary));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            [new PortiaServiceRegistrationGenerator().AsSourceGenerator()], parseOptions: parseOptions);
+        driver = driver.RunGenerators(compilation);
+
+        var movedSource = Environment.NewLine + source;
+        var movedTree = CSharpSyntaxTree.ParseText(movedSource, parseOptions,
+            "Requests.cs");
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, movedTree));
+
+        var diagnostic = Assert.Single(driver.GetRunResult().Diagnostics, item => item.Id == "PORTIA022");
+        Assert.Equal("Duplicate", movedSource.Substring(diagnostic.Location.SourceSpan.Start,
+            diagnostic.Location.SourceSpan.Length));
+        Assert.Equal(7, diagnostic.Location.GetLineSpan().StartLinePosition.Line);
     }
 
     [Fact]
@@ -183,7 +223,7 @@ public sealed class GeneratorDiagnosticsTests
         var diagnostic = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA015");
         Assert.Equal("Component 'Handler<T>' cannot be generated: generic component types are unsupported; " +
                      "use a closed, non-generic component class",
-            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+            diagnostic.GetMessage(CultureInfo.InvariantCulture));
     }
 
     [Fact]
@@ -197,6 +237,85 @@ public sealed class GeneratorDiagnosticsTests
                                                            """, new PortiaServiceRegistrationGenerator());
 
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA020");
+    }
+
+    [Theory]
+    [InlineData("PORTIA020",
+        "[RequestRoute(\"*\", \"orders\", \"order\", \"create\")]\npublic sealed record CreateOrder : IRequest, IQueuable;")]
+    [InlineData("PORTIA024",
+        "[RequestRoute(\"*\", \"bad/area\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IQueuable;")]
+    [InlineData("PORTIA029",
+        "[RequestRoute(\"*\", \"orders\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IBadTransport;\n[RequestTransport(\"bad/id\")] public interface IBadTransport;")]
+    public void PortiaDiagnosticsHonorPragmaSuppressionWithoutRetainingSyntaxTrees(string id, string declaration)
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics($$"""
+                                                             using Cntryl.Portia;
+                                                             #pragma warning disable {{id}}
+                                                             {{declaration}}
+                                                             #pragma warning restore {{id}}
+                                                             """, new PortiaServiceRegistrationGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == id);
+    }
+
+    [Theory]
+    [InlineData("PORTIA020",
+        "[RequestRoute(\"*\", \"orders\", \"order\", \"create\")]\npublic sealed record CreateOrder : IRequest, IQueuable;")]
+    [InlineData("PORTIA024",
+        "[RequestRoute(\"*\", \"bad/area\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IQueuable;")]
+    [InlineData("PORTIA029",
+        "[RequestRoute(\"*\", \"orders\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IBadTransport;\n[RequestTransport(\"bad/id\")] public interface IBadTransport;")]
+    public void PortiaDiagnosticsIgnoreInactivePragmaDisable(string id, string declaration)
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics($$"""
+                                                             using Cntryl.Portia;
+                                                             #if false
+                                                             #pragma warning disable {{id}}
+                                                             #endif
+                                                             {{declaration}}
+                                                             """, new PortiaServiceRegistrationGenerator());
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == id);
+    }
+
+    [Theory]
+    [InlineData("PORTIA020",
+        "[RequestRoute(\"*\", \"orders\", \"order\", \"create\")]\npublic sealed record CreateOrder : IRequest, IQueuable;")]
+    [InlineData("PORTIA024",
+        "[RequestRoute(\"*\", \"bad/area\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IQueuable;")]
+    [InlineData("PORTIA029",
+        "[RequestRoute(\"*\", \"orders\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IBadTransport;\n[RequestTransport(\"bad/id\")] public interface IBadTransport;")]
+    public void PortiaDiagnosticsIgnoreInactivePragmaRestore(string id, string declaration)
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics($$"""
+                                                             using Cntryl.Portia;
+                                                             #pragma warning disable {{id}}
+                                                             #if false
+                                                             #pragma warning restore {{id}}
+                                                             #endif
+                                                             {{declaration}}
+                                                             """, new PortiaServiceRegistrationGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == id);
+    }
+
+    [Theory]
+    [InlineData("PORTIA020",
+        "[RequestRoute(\"*\", \"orders\", \"order\", \"create\")]\npublic sealed record CreateOrder : IRequest, IQueuable;")]
+    [InlineData("PORTIA024",
+        "[RequestRoute(\"*\", \"bad/area\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IQueuable;")]
+    [InlineData("PORTIA029",
+        "[RequestRoute(\"*\", \"orders\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IBadTransport;\n[RequestTransport(\"bad/id\")] public interface IBadTransport;")]
+    public void PortiaDiagnosticsHonorSuppressMessageWithoutRetainingSymbols(string id, string declaration)
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics($$"""
+                                                             using Cntryl.Portia;
+                                                             using System.Diagnostics.CodeAnalysis;
+                                                             [SuppressMessage("Portia", "{{id}}")]
+                                                             {{declaration}}
+                                                             """, new PortiaServiceRegistrationGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == id);
     }
 
     [Fact]
@@ -223,6 +342,22 @@ public sealed class GeneratorDiagnosticsTests
                                                            """, new PortiaServiceRegistrationGenerator());
 
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA024");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("bad/id")]
+    public void Portia029ReportsInvalidTransportId(string id)
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics($$"""
+                                                             using Cntryl.Portia;
+                                                             [RequestTransport("{{id}}")] public interface IBadTransport;
+                                                             [RequestRoute("*", "orders", "order", "create")]
+                                                             [Discriminator("orders.create")]
+                                                             public sealed record CreateOrder : IRequest, IBadTransport;
+                                                             """, new PortiaServiceRegistrationGenerator());
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA029");
     }
 
     [Fact]

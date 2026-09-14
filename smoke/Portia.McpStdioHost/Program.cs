@@ -1,6 +1,5 @@
 using System.Text.Json.Serialization;
 using Cntryl.Portia;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
@@ -190,7 +191,7 @@ public sealed class PortiaBuilder
 
     /// <summary>Declares a durable scheduled request that worker hosts ensure on every startup.</summary>
     public PortiaBuilder AddRequestSchedule<TRequest>(TRequest request, RequestScheduleSpec spec,
-        RequestRouteValues routeValues, System.Security.Claims.ClaimsPrincipal actor)
+        RequestRouteValues routeValues, ClaimsPrincipal actor)
         where TRequest : IRequest, ISchedulable
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -205,12 +206,16 @@ public sealed class PortiaBuilder
 
     /// <summary>Registers one reactor with an explicitly selected execution scope.</summary>
     /// <typeparam name="TReactor">The concrete reactor type.</typeparam>
-    /// <param name="name">The stable explicit workload ID.</param>
+    /// <param name="name">The stable hosted ownership, checkpoint, and effect identity.</param>
     /// <param name="scope">Whether the reactor runs once globally or once per active tenant.</param>
-    /// <param name="configure">Adjusts the workload's polling and failure behavior, or <see langword="null" /> for the defaults.</param>
+    /// <param name="configure">
+    ///     Adjusts the workload's polling and failure behavior, or <see langword="null" /> for the
+    ///     defaults.
+    /// </param>
     /// <returns>This builder, for chaining.</returns>
     public PortiaBuilder AddReactor<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TReactor>(string name, WorkloadScope scope,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+    TReactor>(string name, WorkloadScope scope,
         Action<WorkloadOptions>? configure = null)
         where TReactor : Reactor
     {
@@ -221,12 +226,16 @@ public sealed class PortiaBuilder
 
     /// <summary>Registers one projector with an explicitly selected execution scope.</summary>
     /// <typeparam name="TProjector">The concrete projector type.</typeparam>
-    /// <param name="name">The stable explicit workload ID.</param>
+    /// <param name="name">The stable hosted ownership and checkpoint identity.</param>
     /// <param name="scope">Whether the projector runs once globally or once per active tenant.</param>
-    /// <param name="configure">Adjusts the workload's polling and failure behavior, or <see langword="null" /> for the defaults.</param>
+    /// <param name="configure">
+    ///     Adjusts the workload's polling and failure behavior, or <see langword="null" /> for the
+    ///     defaults.
+    /// </param>
     /// <returns>This builder, for chaining.</returns>
     public PortiaBuilder AddProjector<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProjector>(string name, WorkloadScope scope,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+    TProjector>(string name, WorkloadScope scope,
         Action<WorkloadOptions>? configure = null)
         where TProjector : Projector
     {
@@ -272,7 +281,7 @@ public sealed class PortiaBuilder
         static bool Equivalent(WorkloadRegistration left, WorkloadRegistration right)
         {
             return left.ComponentType == right.ComponentType && left.Scope == right.Scope && left.Name == right.Name
-                   && left.ExplicitName == right.ExplicitName && left.PollInterval == right.PollInterval
+                   && left.PollInterval == right.PollInterval
                    && left.FailureAttemptLimit == right.FailureAttemptLimit
                    && left.MaximumFailureDelay == right.MaximumFailureDelay
                    && left.Processing == right.Processing;

@@ -42,9 +42,19 @@ public class RequestTelemetryBenchmarks
 public class SampledRequestTelemetryBenchmarks : IDisposable
 {
     readonly QueueInvocation _invocation = new("queue://benchmark/request", 1) { MessagingSystem = "fitz" };
+
     readonly RequestTraceContext _propagated =
         new("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+
     ActivityListener? _listener;
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        _listener?.Dispose();
+        _listener = null;
+        GC.SuppressFinalize(this);
+    }
 
     /// <summary>Enables complete activity data for the sampled-path measurements.</summary>
     [GlobalSetup]
@@ -61,14 +71,6 @@ public class SampledRequestTelemetryBenchmarks : IDisposable
     /// <summary>Removes the process-wide listener after the benchmark case.</summary>
     [GlobalCleanup]
     public void Cleanup() => Dispose();
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        _listener?.Dispose();
-        _listener = null;
-        GC.SuppressFinalize(this);
-    }
 
     /// <summary>Measures one sampled execute activity.</summary>
     [Benchmark(Baseline = true)]

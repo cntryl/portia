@@ -14,13 +14,12 @@ namespace Cntryl.Portia;
 /// <summary>Binding primitives used by generated Portia HTTP endpoints.</summary>
 public static class PortiaHttpBinding
 {
-    static readonly ConditionalWeakTable<JsonSerializerOptions, OptionsBindingCache> BindingCaches = [];
-
     // Content-Length is the caller's claim, not a measurement. Sizing the buffer from it lets one
     // small request reserve the whole configured maximum, so the hint is capped: an ordinary body
     // still lands in a single allocation, and a dishonest header cannot reserve more than this.
     const int MaximumInitialBodyBytes = 64 * 1024;
     const int BodyChunkBytes = 16 * 1024;
+    static readonly ConditionalWeakTable<JsonSerializerOptions, OptionsBindingCache> BindingCaches = [];
 
     static readonly ReadOnlyMemory<byte> EmptyObjectUtf8 = "{}"u8.ToArray();
 
@@ -154,6 +153,19 @@ public static class PortiaHttpBinding
         return credential.IsEmpty || credential.Contains(' ')
             ? throw new BadHttpRequestException("Authorization must contain one Bearer credential.")
             : credential.ToString();
+    }
+
+    /// <summary>Rejects an authenticated identity that cannot be replayed by a durable worker.</summary>
+    public static string? ReadPortableBearerCredential(HttpContext context)
+    {
+        var credential = ReadBearerCredential(context);
+        if (credential is null && context.User.Identities.Any(identity => identity.IsAuthenticated))
+        {
+            throw new BadHttpRequestException(
+                "Asynchronous delivery of an authenticated request requires a Bearer credential.");
+        }
+
+        return credential;
     }
 
     /// <summary>Creates the asynchronous acceptance receipt.</summary>

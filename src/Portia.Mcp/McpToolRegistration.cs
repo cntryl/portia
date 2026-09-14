@@ -7,7 +7,6 @@ using System.Text.Json.Schema;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
-using ModelContextProtocol.Server;
 
 namespace Cntryl.Portia;
 
@@ -75,18 +74,20 @@ public abstract class McpToolRegistration
     {
         if (_protocolTool is not null)
             return _protocolTool;
-        var input = JsonSchemaExporter.GetJsonSchemaAsNode(json.GetTypeInfo(RequestType));
+        var input = json.GetTypeInfo(RequestType).GetJsonSchemaAsNode();
         if (input is JsonObject inputObject)
             inputObject["type"] = "object";
-        var result = ResultType is null ? null : JsonSchemaExporter.GetJsonSchemaAsNode(json.GetTypeInfo(ResultType));
+        var result = ResultType is null ? null : json.GetTypeInfo(ResultType).GetJsonSchemaAsNode();
         if (result is not null)
             RewriteResultReferences(result);
-        JsonNode? output = result is null ? null : new JsonObject
-        {
-            ["type"] = "object",
-            ["properties"] = new JsonObject { ["result"] = result },
-            ["required"] = new JsonArray("result")
-        };
+        JsonNode? output = result is null
+            ? null
+            : new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject { ["result"] = result },
+                ["required"] = new JsonArray("result")
+            };
         var tool = new Tool
         {
             Name = Name,
@@ -122,7 +123,7 @@ public abstract class McpToolRegistration
                     arguments[argument.Key] = JsonValue.Create(argument.Value);
             }
 
-            return (TRequest?)JsonSerializer.Deserialize(arguments, json.GetTypeInfo(typeof(TRequest)))
+            return (TRequest?)arguments.Deserialize(json.GetTypeInfo(typeof(TRequest)))
                    ?? throw new JsonException("The MCP tool input cannot be null.");
         }
         catch (JsonException exception)
@@ -207,9 +208,12 @@ public abstract class McpToolRegistration
             foreach (var property in objectNode.ToArray())
             {
                 if (property.Key == "$ref" && property.Value?.GetValue<string>() is { } reference
-                                           && reference.StartsWith("#/", StringComparison.Ordinal))
+                                           && (reference == "#" ||
+                                               reference.StartsWith("#/", StringComparison.Ordinal)))
                 {
-                    objectNode[property.Key] = string.Concat("#/properties/result", reference.AsSpan(1));
+                    objectNode[property.Key] = reference == "#"
+                        ? "#/properties/result"
+                        : string.Concat("#/properties/result", reference.AsSpan(1));
                 }
                 else if (property.Value is not null)
                 {
@@ -279,7 +283,7 @@ public sealed class McpToolRegistration<TRequest, TOut>(string name, string desc
         var bus = services.GetRequiredService<IRequestBus>();
         var context = new RequestDispatchContext(actor, Invocation,
             timeProvider: services.GetService<TimeProvider>());
-        var result = await bus.DispatchAsync<TOut>(request, context, ct).ConfigureAwait(false);
+        var result = await bus.DispatchAsync(request, context, ct).ConfigureAwait(false);
         if (!result.IsSuccess)
             return new McpToolInvocationResult(Failure(result.Error!), result.Error);
         var value = StructuredResult(result.Value, (JsonTypeInfo<TOut>)json.GetTypeInfo(typeof(TOut)));

@@ -44,7 +44,7 @@ public sealed class DomainEventSchemaResolverTests
         var (type, resolvedPayload) = resolver.Resolve("WidgetNamed", 1, payload);
 
         Assert.Equal(typeof(WidgetRenamed), type);
-        var displayName = Assert.IsType<JsonValue>(resolvedPayload["display_name"], exactMatch: false);
+        var displayName = Assert.IsType<JsonValue>(resolvedPayload["display_name"], false);
         Assert.Equal("Sprocket", displayName.GetValue<string>());
     }
 

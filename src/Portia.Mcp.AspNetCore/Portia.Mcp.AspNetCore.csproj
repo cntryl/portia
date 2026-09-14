@@ -4,12 +4,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="ModelContextProtocol.AspNetCore" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    <PackageReference Include="ModelContextProtocol.AspNetCore"/>
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../Portia.AspNetCore/Portia.AspNetCore.csproj" />
-    <ProjectReference Include="../Portia.Mcp/Portia.Mcp.csproj" />
+    <ProjectReference Include="../Portia.AspNetCore/Portia.AspNetCore.csproj"/>
+    <ProjectReference Include="../Portia.Mcp/Portia.Mcp.csproj"/>
   </ItemGroup>
 </Project>

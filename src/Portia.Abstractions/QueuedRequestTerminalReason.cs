@@ -13,5 +13,8 @@ public enum QueuedRequestTerminalReason
     ActorValidationFailure,
 
     /// <summary>The request did not declare the queue transport that delivered it.</summary>
-    InvalidTransport
+    InvalidTransport,
+
+    /// <summary>The queued envelope could not be deserialized into a request.</summary>
+    DeserializationFailure
 }

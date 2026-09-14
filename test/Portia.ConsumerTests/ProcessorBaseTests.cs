@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
@@ -154,7 +155,7 @@ public sealed class ProcessorBaseTests
             }
 
             Checkpoint = checkpoint;
-            Commits.Add(ulong.Parse(checkpoint.Cursor.Value!, System.Globalization.CultureInfo.InvariantCulture));
+            Commits.Add(ulong.Parse(checkpoint.Cursor.Value!, CultureInfo.InvariantCulture));
             return ValueTask.CompletedTask;
         }
     }
@@ -219,7 +220,7 @@ public sealed class ProcessorBaseTests
 
                 repository.Value += repository._pending;
                 repository.Checkpoint = checkpoint;
-                repository.Commits.Add(ulong.Parse(checkpoint.Cursor.Value!, System.Globalization.CultureInfo.InvariantCulture));
+                repository.Commits.Add(ulong.Parse(checkpoint.Cursor.Value!, CultureInfo.InvariantCulture));
                 return ValueTask.CompletedTask;
             }
 

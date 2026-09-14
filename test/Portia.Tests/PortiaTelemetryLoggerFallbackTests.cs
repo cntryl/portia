@@ -62,7 +62,8 @@ public sealed class PortiaTelemetryLoggerFallbackTests
             (1005, LogLevel.Warning),
             (1006, LogLevel.Warning)
         ], logger.Entries.Select(entry => (entry.EventId.Id, entry.Level)));
-        Assert.DoesNotContain(logger.Entries, entry => entry.Message.Contains("worker-secret", StringComparison.Ordinal));
+        Assert.DoesNotContain(logger.Entries,
+            entry => entry.Message.Contains("worker-secret", StringComparison.Ordinal));
         Assert.DoesNotContain(logger.Entries,
             entry => entry.Message.Contains("lease://secret/partition", StringComparison.Ordinal));
     }

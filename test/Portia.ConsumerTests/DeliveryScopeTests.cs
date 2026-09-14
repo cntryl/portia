@@ -20,6 +20,7 @@ public sealed class DeliveryScopeTests
         var services = ConsumerHost.CreateServices();
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, ScopeValidator>();
+        _ = services.AddScoped<IQueuedRequestTerminalHandler, TestTerminalHandler>();
         if (notification)
         {
             _ = services.AddSingleton<IRequestNotificationConsumer>(new Notifications(requests));
