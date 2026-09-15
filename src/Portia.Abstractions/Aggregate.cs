@@ -31,6 +31,7 @@ public abstract class Aggregate(
     readonly List<DomainEvent> _uncommittedEvents = [];
     EventStreamAddress? _auditSessionStream;
     int _operation;
+    bool _discarded;
     EventAttribution? _saveAttribution;
     bool _savePrepared;
 
@@ -256,8 +257,29 @@ public abstract class Aggregate(
     internal EventStreamAddress GetAuditSessionStream() =>
         _auditSessionStream ??= new EventStreamAddress(Stream.Realm, Stream.Area, Uuid.CreateVersion4().ToString());
 
+    // Discarding clears pending records. Raised events already changed in-memory state, so an instance
+    // that discarded any no longer matches its stream and refuses every later operation.
+    internal void DiscardPending()
+    {
+        if (_uncommittedEvents.Count == 0 && _uncommittedAudits.Count == 0)
+            return;
+        _uncommittedEvents.Clear();
+        _uncommittedAudits.Clear();
+        _auditSessionStream = null;
+        _savePrepared = false;
+        _saveAttribution = null;
+        _discarded = true;
+    }
+
     internal IDisposable BeginOperation()
     {
+        if (_discarded)
+        {
+            throw new InvalidOperationException(
+                "This aggregate instance's recorded changes were discarded, so its in-memory state no longer "
+                + "matches its stream. Construct a new instance for the next operation.");
+        }
+
         // This guards one aggregate operation at a time, and two different situations trip it:
         // a genuinely concurrent call from another thread, and — far more often — a re-entrant
         // one, where an On<TEvent> handler calls RaiseEvent or AuditEvent while the aggregate is

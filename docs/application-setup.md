@@ -186,16 +186,21 @@ await repository.HydrateAsync(account, ct);
 
 No aggregate factory registration or generated constructor wiring is needed.
 The developer owns ordinary construction, including constructor dependencies.
-`AddPortia()` registers the scoped repository once.
+`AddPortia()` registers the scoped repository once, together with `IAggregateReader` and
+`IAggregateWriter` views of that same instance and a scoped `IAggregateExecutor`.
 
 It also registers a startup validator in every host. Resolving the configured JSON options and
 `IDomainEventSerializer` at startup validates the default serializer's upcaster identities,
 duplicates, and transition chains before an API-only host serves a request; replacing the domain
 event serializer opts out of that JSON-specific policy.
 If any selected handler carries `[RequiresPermission]`, hosted startup also requires a registered
-`IPermissionEvaluator` and names every guarded request type when it is missing. The check examines
+`IPermissionEvaluator` and names every permission-protected request type when it is missing. The check examines
 the completed cross-assembly registration graph without constructing a scoped evaluator. Direct
 non-host composition is unchanged.
+When `RequireAuthorization()` is enabled, hosted startup also lists every registered request type
+that has no applicable authorizer, permission, or anonymous allowance, and rejects a custom
+`RequestRegistry` that would bypass the requirement. Dispatch enforces the same requirement in
+non-hosted compositions.
 
 Hydration returns the same instance. It starts at `CommittedStreamPosition`, checks
 contiguous offsets, identities, event versions, and duplicate event IDs, and applies

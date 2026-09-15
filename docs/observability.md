@@ -61,6 +61,7 @@ dimensions.
 | `portia.request.active` | `{request}` | `portia.request.name`, `portia.transport.name` |
 | `portia.request.delivery.count` | `{delivery}` | `portia.request.name`, `portia.transport.name`, `portia.outcome` |
 | `portia.authorization.duration` | `s` | `portia.component.name`, `portia.stage`, `portia.outcome` |
+| `portia.guard.duration` | `s` | `portia.component.name`, `portia.outcome` |
 | `portia.transport.operation.duration` | `s` | `portia.transport.name`, `portia.operation`, `portia.outcome` |
 | `portia.transport.trace_context.invalid` | `{request}` | `portia.transport.name` |
 | `portia.aggregate.operation.duration` | `s` | `portia.operation`, `portia.outcome` |

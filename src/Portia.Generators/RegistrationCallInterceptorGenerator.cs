@@ -113,6 +113,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
     static bool IsRegistrationName(SimpleNameSyntax name) => name.Identifier.ValueText is
         "AddPortia" or "AddRequestHandler" or "AddRequestAuthorizer" or "AddRequestPipelineBehavior"
+        or "AddRequestGuard"
         or "AddMcpTool"
         or "RegisterDynamicRequest" or "AddEvent";
 
@@ -177,6 +178,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             "handler" => PortiaComponentRoles.Is(i, PortiaComponentRoles.Handler),
             "authorizer" => PortiaComponentRoles.Is(i, PortiaComponentRoles.Authorizer),
             "behavior" => PortiaComponentRoles.Is(i, PortiaComponentRoles.Behavior),
+            "guard" => PortiaComponentRoles.Is(i, PortiaComponentRoles.Guard),
             _ => false
         }).ToArray();
 
@@ -239,6 +241,14 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 continue;
             }
 
+            if (role == "guard")
+            {
+                _ = body.Append(
+                        "_ = builder.AddGeneratedGuard(new global::Cntryl.Portia.RequestGuardRegistration<")
+                    .Append(Type(iface.TypeArguments[0])).Append(", ").Append(Type(type)).AppendLine(">());");
+                continue;
+            }
+
             var request = iface.TypeArguments[0];
             var diagnostic = PermissionDiagnostic(request, invocation.GetLocation());
             var descriptor = iface.OriginalDefinition.MetadataName == "IStreamRequestHandler`2"
@@ -279,6 +289,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                     "AddRequestHandler" => "handler",
                     "AddRequestAuthorizer" => "authorizer",
                     "AddRequestPipelineBehavior" => "behavior",
+                    "AddRequestGuard" => "guard",
                     "RegisterDynamicRequest" => "dynamic request",
                     "AddEvent" => "domain event",
                     _ => null

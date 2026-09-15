@@ -62,6 +62,24 @@ TAuthorizer>(
             .AuthorizeAsync((IRequestContext<TRequest>)context, ct);
 }
 
+/// <summary>Resolves and invokes one generated request guard in the current scope.</summary>
+/// <typeparam name="TRequest">The request type or request-family interface checked.</typeparam>
+/// <typeparam name="TGuard">The concrete guard.</typeparam>
+public sealed class RequestGuardRegistration<TRequest,
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+TGuard>()
+    : RequestGuardRegistration(typeof(TRequest), typeof(TGuard))
+    where TRequest : IRequestBase
+    where TGuard : class, IRequestGuard<TRequest>
+{
+    internal override ValueTask<Result> GuardAsync(IServiceProvider services, IRequestBase request,
+        IRequestContext context, CancellationToken ct)
+        => services.GetRequiredService<TGuard>()
+            .GuardAsync((IRequestContext<TRequest>)context, ct);
+
+    internal override void Register(IServiceCollection services) => services.TryAddScoped<TGuard>();
+}
+
 interface IRequestBehaviorInvocation<TOut>
 {
     ValueTask<Result<TOut>> InvokeAsync(IServiceProvider services, IRequest<TOut> request,

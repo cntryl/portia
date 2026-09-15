@@ -60,6 +60,9 @@ public static partial class PortiaTelemetry
     static readonly Histogram<double> AuthorizationDuration =
         Meter.CreateHistogram("portia.authorization.duration", "s", null, null, LatencyBuckets);
 
+    static readonly Histogram<double> GuardDuration =
+        Meter.CreateHistogram("portia.guard.duration", "s", null, null, LatencyBuckets);
+
     static readonly Histogram<double> TransportDuration =
         Meter.CreateHistogram("portia.transport.operation.duration", "s", null, null, LatencyBuckets);
 
@@ -230,6 +233,15 @@ public static partial class PortiaTelemetry
         AuthorizationDuration.Record(Seconds(started),
             new KeyValuePair<string, object?>("portia.component.name", policy),
             new KeyValuePair<string, object?>("portia.stage", stage),
+            new KeyValuePair<string, object?>("portia.outcome", outcome));
+
+    /// <summary>Records the duration and outcome of one request guard.</summary>
+    /// <param name="started">The value returned by <see cref="StartTimestamp" />.</param>
+    /// <param name="guard">The guard's startup-bounded component name.</param>
+    /// <param name="outcome">The bounded guard outcome.</param>
+    public static void GuardFinished(long started, string guard, string outcome) =>
+        GuardDuration.Record(Seconds(started),
+            new KeyValuePair<string, object?>("portia.component.name", guard),
             new KeyValuePair<string, object?>("portia.outcome", outcome));
 
     /// <summary>Records the duration and outcome of one transport operation.</summary>

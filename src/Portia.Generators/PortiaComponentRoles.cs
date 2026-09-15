@@ -19,12 +19,15 @@ static class PortiaComponentRoles
     /// <summary>Request authorizers.</summary>
     public static readonly string[] Authorizer = ["IRequestAuthorizer`1"];
 
+    /// <summary>Unary request guards.</summary>
+    public static readonly string[] Guard = ["IRequestGuard`1"];
+
     /// <summary>Request pipeline behaviors, including the streaming shape.</summary>
     public static readonly string[] Behavior =
         ["IRequestPipelineBehavior`1", "IRequestPipelineBehavior`2", "IStreamRequestPipelineBehavior`2"];
 
     /// <summary>Every role interface, for checks that apply to components generally.</summary>
-    public static readonly string[] All = [.. Handler, .. Authorizer, .. Behavior];
+    public static readonly string[] All = [.. Handler, .. Authorizer, .. Behavior, .. Guard];
 
     /// <summary>Reports whether an implemented interface is one of the supplied Portia roles.</summary>
     public static bool Is(INamedTypeSymbol iface, string[] roles)

@@ -14,7 +14,8 @@ sealed class PortiaWorkloadService(
     IDomainEventNotifier? notifier = null,
     TimeProvider? timeProvider = null,
     ILogger<PortiaWorkloadService>? logger = null,
-    ILogger<MultiTenantRunner>? tenantLogger = null) : BackgroundService, IHostedLifecycleService
+    ILogger<MultiTenantRunner>? tenantLogger = null,
+    PortiaStartupValidationRegistry? validations = null) : BackgroundService, IHostedLifecycleService
 {
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly ILogger<PortiaWorkloadService>? _logger = logger;
@@ -57,6 +58,8 @@ sealed class PortiaWorkloadService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (validations is not null)
+            await validations.WaitForEndpointValidationsAsync(stoppingToken).ConfigureAwait(false);
         if (_registrations.Length == 0)
         {
             return;

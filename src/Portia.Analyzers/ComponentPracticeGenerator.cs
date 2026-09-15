@@ -34,6 +34,16 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         "'{0}' catches Exception and returns a failed Result. Result describes failures a handler anticipates; an unrecognized failure must stay an exception so transports can tell 'this request is invalid' from 'this call broke'.",
         "Portia", DiagnosticSeverity.Warning, true);
 
+    static readonly DiagnosticDescriptor GuardEffect = new("PORTIA105",
+        "Request guard takes effect-capable dependency",
+        "Request guard '{0}' takes effect-capable dependency '{1}'; {2}. Guards are preflight checks that rerun on every retry and redelivery and must not change state.",
+        "Portia", DiagnosticSeverity.Warning, true);
+
+    static readonly DiagnosticDescriptor AuthorizerEffect = new("PORTIA106",
+        "Request authorizer takes effect-capable dependency",
+        "Request authorizer '{0}' takes effect-capable dependency '{1}'; {2}. Authorizers decide whether an actor may attempt a request and must not change state.",
+        "Portia", DiagnosticSeverity.Warning, true);
+
     // Anything that reaches outside the component's own unit of work.
     static readonly string[] EffectTypes =
     [
@@ -43,6 +53,8 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         "Cntryl.Portia.INoticeRequestSender",
         "Cntryl.Portia.IRequestScheduler",
         "Cntryl.Portia.IAggregateRepository",
+        "Cntryl.Portia.IAggregateWriter",
+        "Cntryl.Portia.IAggregateExecutor",
         "System.Net.Http.HttpClient",
         "System.Net.Http.IHttpClientFactory",
         "System.Net.Mail.SmtpClient",
@@ -63,8 +75,19 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
     [
         .. EffectTypes,
         .. LocatorTypes,
+        "Cntryl.Portia.IAggregateReader",
         "Cntryl.Portia.IEventStore",
         "Cntryl.Portia.IDomainEventReader",
+        "Cntryl.Portia.IDomainEventWriter",
+        "Cntryl.Portia.IProjectionStore",
+        "Cntryl.Portia.IProjectionCheckpointStore"
+    ];
+
+    // Guards and authorizers read; reads through IAggregateReader and IDomainEventReader stay allowed.
+    static readonly string[] PreflightForbiddenTypes =
+    [
+        .. EffectTypes,
+        "Cntryl.Portia.IEventStore",
         "Cntryl.Portia.IDomainEventWriter",
         "Cntryl.Portia.IProjectionStore",
         "Cntryl.Portia.IProjectionCheckpointStore"
@@ -94,6 +117,7 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         ReportProjectorEffects(findings, symbol);
         ReportServiceLocation(findings, symbol, node, context.SemanticModel);
         ReportAggregateServices(findings, symbol);
+        ReportPreflightEffects(findings, symbol);
         ReportMultipleHandlers(findings, symbol);
         ReportCaughtExceptionAsResult(findings, symbol, node, context.SemanticModel, ct);
         return [.. findings];
@@ -106,6 +130,28 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         foreach (var parameter in Parameters(symbol, EffectTypes))
         {
             findings.Add(Finding.Create(Kind.ProjectorEffect, Location(parameter), symbol.Name, Display(parameter)));
+        }
+    }
+
+    static void ReportPreflightEffects(List<Finding> findings, INamedTypeSymbol symbol)
+    {
+        var guard = symbol.AllInterfaces.Any(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Guard));
+        var authorizer =
+            symbol.AllInterfaces.Any(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Authorizer));
+        if (!guard && !authorizer)
+            return;
+        foreach (var parameter in Parameters(symbol, PreflightForbiddenTypes))
+        {
+            var remedy = Matches(parameter.Type, ["Cntryl.Portia.IAggregateRepository"])
+                ? "inject IAggregateReader to hydrate aggregates"
+                : Matches(parameter.Type, ["Cntryl.Portia.IEventStore"])
+                    ? "inject IDomainEventReader to read events"
+                    : "move the effect into the request handler";
+            if (guard)
+                findings.Add(Finding.Create(Kind.GuardEffect, Location(parameter), symbol.Name, Display(parameter), remedy));
+            if (authorizer)
+                findings.Add(Finding.Create(Kind.AuthorizerEffect, Location(parameter), symbol.Name, Display(parameter),
+                    remedy));
         }
     }
 
@@ -316,7 +362,10 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         Kind.ServiceLocation => ServiceLocation,
         Kind.AggregateService => AggregateService,
         Kind.MultipleHandlers => MultipleHandlers,
-        _ => CaughtExceptionAsResult
+        Kind.CaughtExceptionAsResult => CaughtExceptionAsResult,
+        Kind.GuardEffect => GuardEffect,
+        Kind.AuthorizerEffect => AuthorizerEffect,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
     enum Kind
@@ -325,7 +374,9 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         ServiceLocation,
         AggregateService,
         MultipleHandlers,
-        CaughtExceptionAsResult
+        CaughtExceptionAsResult,
+        GuardEffect,
+        AuthorizerEffect
     }
 
     sealed class Finding(Kind kind, SourceLocation location, object[] arguments) : IEquatable<Finding>

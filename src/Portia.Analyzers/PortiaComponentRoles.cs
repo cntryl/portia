@@ -10,12 +10,14 @@ static class PortiaComponentRoles
     public static readonly string[] Handler =
         ["IRequestHandler`1", "IRequestHandler`2", "IStreamRequestHandler`2"];
 
-    static readonly string[] Authorizer = ["IRequestAuthorizer`1"];
+    public static readonly string[] Authorizer = ["IRequestAuthorizer`1"];
+
+    public static readonly string[] Guard = ["IRequestGuard`1"];
 
     static readonly string[] Behavior =
         ["IRequestPipelineBehavior`1", "IRequestPipelineBehavior`2", "IStreamRequestPipelineBehavior`2"];
 
-    static readonly string[] All = [.. Handler, .. Authorizer, .. Behavior];
+    static readonly string[] All = [.. Handler, .. Authorizer, .. Behavior, .. Guard];
 
     public static bool Is(INamedTypeSymbol iface, string[] roles)
     {

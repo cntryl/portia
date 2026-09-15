@@ -269,7 +269,8 @@
       "Cntryl.Portia.Testing": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.2.0, )"
+          "Cntryl.Portia.Abstractions": "[0.2.0, )",
+          "Cntryl.Portia.Core": "[0.2.0, )"
         }
       },
       "consumer.contracts": {

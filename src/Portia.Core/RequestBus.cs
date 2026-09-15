@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +23,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         Validate(request, context, ct);
         var registration = registry.Handler(request.GetType());
         var policies = registry.Policies(registration.RequestType);
+        if (policies.IsUnprotected)
+            ThrowUnprotectedRequest(registration.RequestType);
         return policies.HasAuthorizers || registration.Permission is not null
             ? AuthorizeAsync(registration, policies, request, registration.CreateContext(request, context), ct)
             : ValueTask.FromResult(Result.Success);
@@ -119,8 +122,11 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         PortiaTelemetry.RequestStarted(policies.Name, transport);
         var outcome = "fault";
         var completed = false;
+        var guardFailure = policies.HasGuards ? new StrongBox<RequestError?>() : null;
         try
         {
+            if (policies.IsUnprotected)
+                ThrowUnprotectedRequest(registration.RequestType);
             var authorization =
                 await AuthorizeAsync(registration, policies, request, requestContext, ct).ConfigureAwait(false);
             if (!authorization.IsSuccess)
@@ -134,7 +140,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             }
 
             await foreach (var item in CatchStream(EnumerateStream(registration, policies, request, requestContext, ct),
-                               activity, ct).ConfigureAwait(false))
+                               activity, guardFailure, ct).ConfigureAwait(false))
             {
                 yield return item;
             }
@@ -145,6 +151,13 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         finally
         {
+            // A failed guard is a settled outcome like an authorization denial, not a fault.
+            if (!completed && guardFailure?.Value is { } guardError)
+            {
+                outcome = PortiaTelemetry.Outcome(false, guardError);
+                completed = true;
+            }
+
             if (!completed)
             {
                 if (ct.IsCancellationRequested)
@@ -171,14 +184,15 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     // A yield return cannot sit inside a try with a catch, so enumeration is wrapped in methods
     // that can, keeping mid-stream faults on the activity like the unary paths.
     static async IAsyncEnumerable<TOut> CatchStream<TOut>(IAsyncEnumerable<TOut> source, Activity? activity,
-        [EnumeratorCancellation] CancellationToken ct)
+        StrongBox<RequestError?>? guardFailure, [EnumeratorCancellation] CancellationToken ct)
     {
         var enumerator = source.GetAsyncEnumerator(ct);
         try
         {
             while (true)
             {
-                var (hasValue, value) = await MoveNextAsync(enumerator, activity, ct).ConfigureAwait(false);
+                var (hasValue, value) = await MoveNextAsync(enumerator, activity, guardFailure, ct)
+                    .ConfigureAwait(false);
                 if (!hasValue)
                 {
                     yield break;
@@ -196,13 +210,19 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     }
 
     static async ValueTask<(bool HasValue, TOut? Value)> MoveNextAsync<TOut>(IAsyncEnumerator<TOut> enumerator,
-        Activity? activity, CancellationToken ct)
+        Activity? activity, StrongBox<RequestError?>? guardFailure, CancellationToken ct)
     {
         try
         {
             return await enumerator.MoveNextAsync().ConfigureAwait(false)
                 ? (true, enumerator.Current)
                 : (false, default);
+        }
+        catch (RequestGuardException ex) when (guardFailure is not null)
+        {
+            guardFailure.Value = ex.Error;
+            PortiaTelemetry.RecordOutcome(activity, false, ex.Error);
+            throw;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -242,6 +262,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     ValueTask<Result> ExecuteAsync(RequestHandlerRegistration registration, RequestPolicies policies,
         IRequest request, RequestDispatchContext dispatchContext, CancellationToken ct)
     {
+        if (policies.IsUnprotected)
+            ThrowUnprotectedRequest(registration.RequestType);
         if (!policies.HasAuthorizers && registration.Permission is null && policies.Unary.IsEmpty)
             return InvokeHandlerAsync(registration, request, dispatchContext, ct);
         if (!policies.HasAuthorizers && registration.Permission is null)
@@ -264,6 +286,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     ValueTask<Result<TOut>> ExecuteAsync<TOut>(RequestHandlerRegistration registration, RequestPolicies policies,
         IRequest<TOut> request, RequestDispatchContext dispatchContext, CancellationToken ct)
     {
+        if (policies.IsUnprotected)
+            ThrowUnprotectedRequest(registration.RequestType);
         if (!policies.HasAuthorizers && registration.Permission is null && policies.Result<TOut>().IsEmpty)
             return InvokeHandlerAsync(registration, request, dispatchContext, ct);
         if (!policies.HasAuthorizers && registration.Permission is null)
@@ -444,6 +468,13 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
 
         return Result.Success;
     }
+
+    // An unprotected request under RequireAuthorization() is a composition mistake, not an access
+    // decision: throwing names the fix, where a Forbidden result would pass for a real denial.
+    [DoesNotReturn]
+    static void ThrowUnprotectedRequest(Type requestType) =>
+        throw new InvalidOperationException(
+            $"Request type '{requestType.FullName}' has no applicable request authorizer or [RequiresPermission], and RequireAuthorization() is enabled. Register an authorizer, declare a permission, or call RequireAuthorization(options => options.AllowAnonymous<{requestType.Name}>()).");
 
     // The context's constructor already rejected a null actor, so there is nothing left to check
     // about it here.

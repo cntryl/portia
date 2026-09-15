@@ -95,3 +95,60 @@ static Cntryl.Portia.ResultHttpExtensions.ToHttpResult<T>(this Cntryl.Portia.Res
 Cntryl.Portia.PortiaHttpOptions.ServerSentEventKeepAlive.get -> System.TimeSpan?
 Cntryl.Portia.PortiaHttpOptions.ServerSentEventKeepAlive.set -> void
 static readonly Cntryl.Portia.PortiaHttpOptions.DefaultServerSentEventKeepAlive -> System.TimeSpan
+Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>
+Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>.OnResult(System.Func<Microsoft.AspNetCore.Http.HttpContext!, Cntryl.Portia.Result<TOut>, Microsoft.AspNetCore.Http.IResult?>! handler) -> Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>!
+Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>.OnResult(System.Func<Microsoft.AspNetCore.Http.HttpContext!, Cntryl.Portia.Result<TOut>, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<Microsoft.AspNetCore.Http.IResult?>>! handler) -> Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>!
+Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>.PortiaEndpointConfiguration() -> void
+Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>.ResultHandler.get -> System.Func<Microsoft.AspNetCore.Http.HttpContext!, Cntryl.Portia.Result<TOut>, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<Microsoft.AspNetCore.Http.IResult?>>?
+Cntryl.Portia.PortiaEndpointConfiguration<TRequest>
+Cntryl.Portia.PortiaEndpointConfiguration<TRequest>.OnResult(System.Func<Microsoft.AspNetCore.Http.HttpContext!, Cntryl.Portia.Result, Microsoft.AspNetCore.Http.IResult?>! handler) -> Cntryl.Portia.PortiaEndpointConfiguration<TRequest>!
+Cntryl.Portia.PortiaEndpointConfiguration<TRequest>.OnResult(System.Func<Microsoft.AspNetCore.Http.HttpContext!, Cntryl.Portia.Result, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<Microsoft.AspNetCore.Http.IResult?>>! handler) -> Cntryl.Portia.PortiaEndpointConfiguration<TRequest>!
+Cntryl.Portia.PortiaEndpointConfiguration<TRequest>.PortiaEndpointConfiguration() -> void
+Cntryl.Portia.PortiaEndpointConfiguration<TRequest>.ResultHandler.get -> System.Func<Microsoft.AspNetCore.Http.HttpContext!, Cntryl.Portia.Result, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<Microsoft.AspNetCore.Http.IResult?>>?
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.Accepts<TBody>(string! contentType, bool isOptional = false, params string![]! additionalContentTypes) -> TConfiguration!
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.ApplyMetadata(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Microsoft.AspNetCore.Builder.IEndpointConventionBuilder! builder) -> void
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.Binder.get -> System.Func<Microsoft.AspNetCore.Http.HttpContext!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<TRequest>>?
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.HasBody.get -> bool
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.NoInput() -> TConfiguration!
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.OnBind(System.Func<Microsoft.AspNetCore.Http.HttpContext!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<TRequest>>! binder) -> TConfiguration!
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.OnBind(System.Func<Microsoft.AspNetCore.Http.HttpContext!, TRequest>! binder) -> TConfiguration!
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.Parameter<T>(string! name, Cntryl.Portia.PortiaHttpParameterLocation location, bool required = true) -> TConfiguration!
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.Produces(int statusCode) -> TConfiguration!
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.Produces<TBody>(int statusCode, string! contentType = "application/json") -> TConfiguration!
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.Validate(bool binderRequired = false, Cntryl.Portia.PortiaHttpMember![]? members = null) -> void
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.IsQueryMember(int index) -> bool
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.FromQuery<TMember>(System.Linq.Expressions.Expression<System.Func<TRequest, TMember>!>! member) -> TConfiguration!
+Cntryl.Portia.PortiaHttpParameterLocation
+Cntryl.Portia.PortiaHttpParameterLocation.Cookie = 3 -> Cntryl.Portia.PortiaHttpParameterLocation
+Cntryl.Portia.PortiaHttpParameterLocation.Header = 2 -> Cntryl.Portia.PortiaHttpParameterLocation
+Cntryl.Portia.PortiaHttpParameterLocation.Query = 1 -> Cntryl.Portia.PortiaHttpParameterLocation
+Cntryl.Portia.PortiaHttpParameterLocation.Route = 0 -> Cntryl.Portia.PortiaHttpParameterLocation
+Cntryl.Portia.PortiaStreamingEndpointConfiguration<TRequest>
+Cntryl.Portia.PortiaStreamingEndpointConfiguration<TRequest>.PortiaStreamingEndpointConfiguration() -> void
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaDelete<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Action<Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>!>! configure) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaDelete<TRequest>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Action<Cntryl.Portia.PortiaEndpointConfiguration<TRequest>!>! configure) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaGet<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Action<Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>!>! configure) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaGet<TRequest>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Action<Cntryl.Portia.PortiaEndpointConfiguration<TRequest>!>! configure) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaGetSse<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Action<Cntryl.Portia.PortiaStreamingEndpointConfiguration<TRequest>!>! configure) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaGetStream<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Action<Cntryl.Portia.PortiaStreamingEndpointConfiguration<TRequest>!>! configure) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPatch<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Action<Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>!>! configure) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPatch<TRequest>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Action<Cntryl.Portia.PortiaEndpointConfiguration<TRequest>!>! configure) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPost<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Action<Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>!>! configure) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPost<TRequest>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Action<Cntryl.Portia.PortiaEndpointConfiguration<TRequest>!>! configure) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPut<TRequest, TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Action<Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>!>! configure) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPut<TRequest>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Action<Cntryl.Portia.PortiaEndpointConfiguration<TRequest>!>! configure) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaHttpBinding.EnsureBodyWithinLimit(Microsoft.AspNetCore.Http.HttpContext! context) -> void
+Cntryl.Portia.PortiaFormBindableBody
+Cntryl.Portia.PortiaFormBindableBody.PortiaFormBindableBody() -> void
+static Cntryl.Portia.PortiaHttpBinding.HasFormBody(Microsoft.AspNetCore.Http.HttpContext! context) -> bool
+static Cntryl.Portia.PortiaHttpBinding.ReadForm(Microsoft.AspNetCore.Http.IFormCollection! form, string! name, bool emptyIsMissing) -> string?
+static Cntryl.Portia.PortiaHttpBinding.ReadFormBodyAsync(Microsoft.AspNetCore.Http.HttpContext! context, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask<Microsoft.AspNetCore.Http.IFormCollection!>
+static Cntryl.Portia.PortiaHttpBinding.TryParseFormBoolean(string? value, out bool result) -> bool
+static Cntryl.Portia.PortiaHttpBinding.HasBodyMember<TRequest, TValue>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, int memberIndex, string! fallbackName) -> bool
+Cntryl.Portia.PortiaHttpMember
+Cntryl.Portia.PortiaHttpMember.Name.get -> string!
+Cntryl.Portia.PortiaHttpMember.PortiaHttpMember(string! name, string! source, bool scalar) -> void
+Cntryl.Portia.PortiaHttpMember.Scalar.get -> bool
+Cntryl.Portia.PortiaHttpMember.Source.get -> string!
+static Cntryl.Portia.PortiaHttpBinding.ReadFormBoolean(Microsoft.AspNetCore.Http.IFormCollection! form, string! name) -> string?

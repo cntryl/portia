@@ -48,6 +48,26 @@ static class GeneratorCompilation
         return driver.GetRunResult().Diagnostics;
     }
 
+    public static IReadOnlyList<Diagnostic> OutputDiagnostics(string source,
+        params IIncrementalGenerator[] generators)
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
+            [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Append(typeof(Aggregate).Assembly.Location)
+            .Distinct(StringComparer.Ordinal)
+            .Select(path => MetadataReference.CreateFromFile(path));
+        var compilation = CSharpCompilation.Create("OutputDiagnostics",
+            [CSharpSyntaxTree.ParseText(source, parseOptions, "OutputDiagnosticScenario.cs")], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        GeneratorDriver driver =
+            CSharpGeneratorDriver.Create(generators.Select(generator => generator.AsSourceGenerator()),
+                parseOptions: parseOptions);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var generatorDiagnostics);
+        Assert.All(driver.GetRunResult().Results, result => Assert.Null(result.Exception));
+        return [.. generatorDiagnostics, .. output.GetDiagnostics()];
+    }
+
     public static Assembly Compile(string source, params IIncrementalGenerator[] generators)
         => Compile(source, null, generators);
 

@@ -34,6 +34,7 @@ public sealed class ObservabilityContractTests
             ("portia.event_store.event.count", "{event}"),
             ("portia.event_store.operation.duration", "s"),
             ("portia.fleet.assignment.active", "{assignment}"),
+            ("portia.guard.duration", "s"),
             ("portia.processor.batch.duration", "s"),
             ("portia.processor.event.count", "{event}"),
             ("portia.processor.lag", "s"),

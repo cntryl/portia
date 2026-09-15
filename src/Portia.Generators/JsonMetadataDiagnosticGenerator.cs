@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Cntryl.Portia;
 
@@ -8,6 +9,13 @@ namespace Cntryl.Portia;
 [Generator(LanguageNames.CSharp)]
 public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 {
+    static readonly HashSet<string> CandidateMethods = new(StringComparer.Ordinal)
+    {
+        "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "SendAsync", "StreamAsync", "DispatchAsync",
+        "DispatchStreamAsync", "EnqueueAsync", "PublishAsync", "ScheduleAsync", "EnsureAsync", "AddRequestSchedule",
+        "MapPortiaGet", "MapPortiaPost", "MapPortiaPut", "MapPortiaPatch", "MapPortiaDelete", "MapPortiaGetStream",
+        "MapPortiaGetSse", "Accepts", "Parameter", "Produces"
+    };
     static readonly DiagnosticDescriptor MissingMetadata = new(
         "PORTIA025", "Missing Portia JSON metadata",
         "Serializer root '{0}' must be explicitly registered with [JsonSerializable(typeof({0}))] on a [PortiaJsonContext]",
@@ -27,6 +35,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 
         var covered = ContextRoots(compilation).ToImmutableHashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var required = new Dictionary<ITypeSymbol, Location>(SymbolEqualityComparer.Default);
+        var streamType = compilation.GetTypeByMetadataName("System.IO.Stream");
 
         foreach (var type in Types(compilation.Assembly.GlobalNamespace))
         {
@@ -56,6 +65,16 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
             var model = compilation.GetSemanticModel(tree);
             foreach (var invocation in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
+                var syntaxName = invocation.Expression switch
+                {
+                    MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+                    IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+                    GenericNameSyntax generic => generic.Identifier.ValueText,
+                    MemberBindingExpressionSyntax binding => binding.Name.Identifier.ValueText,
+                    _ => string.Empty
+                };
+                if (!CandidateMethods.Contains(syntaxName))
+                    continue;
                 if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
                 {
                     continue;
@@ -104,20 +123,31 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                     method.TypeArguments.FirstOrDefault() is INamedTypeSymbol request)
                 {
                     var mutating = name is "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch";
-                    if (mutating)
+                    var operation = model.GetOperation(invocation) as IInvocationOperation;
+                    var pattern = operation?.Arguments.FirstOrDefault(argument => argument.Parameter?.Name == "pattern")
+                        ?.Value.ConstantValue is { HasValue: true, Value: string route } ? route : string.Empty;
+                    var constructor = HttpBindingShape.SinglePublicConstructor(request);
+                    if (mutating && constructor is not null && SupportsDefaultBinding(constructor, pattern))
                     {
-                        var pattern =
-                            model.GetConstantValue(invocation.ArgumentList.Arguments.First().Expression)
-                                .Value as string ?? string.Empty;
-                        foreach (var parameter in request.Constructors
-                                     .Where(c => c.DeclaredAccessibility == Accessibility.Public)
-                                     .SelectMany(c => c.Parameters))
+                        foreach (var parameter in constructor.Parameters)
                         {
-                            if (!pattern.Contains("{" + parameter.Name, StringComparison.OrdinalIgnoreCase))
+                            if (!HttpBindingShape.IsRouteParameter(pattern, parameter.Name))
                             {
                                 Add(UnwrapNullable(parameter.Type), invocation.GetLocation());
                             }
                         }
+                    }
+                }
+
+                if (name is "Accepts" or "Parameter" or "Produces" &&
+                    method.ContainingType.OriginalDefinition.ToDisplayString() ==
+                    "Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>")
+                {
+                    foreach (var argument in method.TypeArguments)
+                    {
+                        if (name is "Accepts" or "Produces" && IsOrDerivesFrom(argument, streamType))
+                            continue;
+                        Add(argument, invocation.GetLocation());
                     }
                 }
             }
@@ -168,6 +198,32 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 
     static bool IsPortiaContext(INamedTypeSymbol type) => type.GetAttributes().Any(a =>
         a.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonContextAttribute");
+
+    static bool SupportsDefaultBinding(IMethodSymbol constructor, string pattern)
+    {
+        foreach (var parameter in constructor.Parameters)
+        {
+            if (!HttpBindingShape.IsSupportedParameter(parameter,
+                    HttpBindingShape.IsRouteParameter(pattern, parameter.Name)))
+                return false;
+        }
+
+        return true;
+    }
+
+    static bool IsOrDerivesFrom(ITypeSymbol type, INamedTypeSymbol? baseType)
+    {
+        if (baseType is null || type is not INamedTypeSymbol current)
+            return false;
+        var candidate = (INamedTypeSymbol?)current;
+        for (; candidate is not null; candidate = candidate.BaseType)
+        {
+            if (SymbolEqualityComparer.Default.Equals(candidate, baseType))
+                return true;
+        }
+
+        return false;
+    }
 
     static bool IsHandlerInterface(INamedTypeSymbol type) => type.OriginalDefinition.ToDisplayString() is
         "Cntryl.Portia.IRequestHandler<TRequest>" or "Cntryl.Portia.IRequestHandler<TRequest, TOut>"
