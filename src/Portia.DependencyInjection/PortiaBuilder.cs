@@ -46,6 +46,25 @@ public sealed class PortiaBuilder
 
     internal JsonSerializerOptions BuildJsonOptions() => _json.Build();
 
+    /// <summary>
+    ///     Requires every registered request to be protected by an applicable request authorizer or
+    ///     <see cref="RequiresPermissionAttribute" /> unless it is allowed anonymous. Hosted startup lists
+    ///     unprotected requests, and dispatch refuses them. Repeated calls add to the same requirement.
+    /// </summary>
+    /// <param name="configure">Allows requests or request families to dispatch anonymously.</param>
+    /// <returns>This builder, for chaining.</returns>
+    public PortiaBuilder RequireAuthorization(Action<PortiaAuthorizationOptions>? configure = null)
+    {
+        _catalog.AuthorizationRequired = true;
+        configure?.Invoke(new PortiaAuthorizationOptions(_catalog.AnonymousRequests));
+        return this;
+    }
+
+    internal bool AuthorizationRequired => _catalog.AuthorizationRequired;
+
+    internal RequestAuthorizationRequirement? AuthorizationRequirement() =>
+        _catalog.AuthorizationRequired ? new RequestAuthorizationRequirement(_catalog.AnonymousRequests) : null;
+
     static InvalidOperationException MissingGeneratedRegistration(Type type, string role) => new(
         $"Portia.Generators did not intercept registration of {role} '{type}'. Ensure Portia.DependencyInjection's analyzer assets are enabled. "
         + "If the call is inside a generic method, the generator has no concrete type to emit a descriptor for; register each type at its own call site.");
@@ -123,6 +142,26 @@ public sealed class PortiaBuilder
         }
 
         _catalog.Authorizers[key] = registration.Stage;
+        _ = Services.AddSingleton(registration);
+        registration.Register(Services);
+        return this;
+    }
+
+    /// <summary>
+    ///     Adds a guard descriptor built by Portia.Generators at compile time. Application code
+    ///     calls <see cref="AddRequestGuard{TGuard}" /> instead of this method.
+    /// </summary>
+    /// <param name="registration">The generated descriptor.</param>
+    /// <returns>This builder, for chaining.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public PortiaBuilder AddGeneratedGuard(RequestGuardRegistration registration)
+    {
+        ArgumentNullException.ThrowIfNull(registration);
+        if (!_catalog.Guards.Add((registration.ScopeType, registration.GuardType)))
+        {
+            return this;
+        }
+
         _ = Services.AddSingleton(registration);
         registration.Register(Services);
         return this;
@@ -378,6 +417,13 @@ public sealed class PortiaBuilder
     /// <remarks>The generator is supplied by Portia.DependencyInjection. Lower orders execute outermost.</remarks>
     public PortiaBuilder AddRequestPipelineBehavior<TBehavior>(int order = 0) where TBehavior : class =>
         throw MissingGeneratedRegistration(typeof(TBehavior), $"request pipeline behavior at order '{order}'");
+
+    /// <summary>Registers a unary request guard through Portia.Generators' compile-time typed descriptor.</summary>
+    /// <typeparam name="TGuard">The concrete guard type, known at this call site.</typeparam>
+    /// <returns>This builder, for chaining.</returns>
+    /// <remarks>The generator is supplied by Portia.DependencyInjection.</remarks>
+    public PortiaBuilder AddRequestGuard<TGuard>() where TGuard : class =>
+        throw MissingGeneratedRegistration(typeof(TGuard), "request guard");
 
     /// <summary>Explicitly registers a request whose concrete type is hidden from compile-time dispatch analysis.</summary>
     /// <typeparam name="TRequest">The concrete request type, known at this call site.</typeparam>

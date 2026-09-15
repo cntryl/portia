@@ -98,6 +98,7 @@ public sealed class UninterceptedCallSiteTests
     [InlineData("AddRequestHandler<Handler>()", "request handler")]
     [InlineData("AddRequestAuthorizer<Authorizer>()", "request authorizer at stage 'ResourceAccess'")]
     [InlineData("AddRequestPipelineBehavior<Behavior>(3)", "request pipeline behavior at order '3'")]
+    [InlineData("AddRequestGuard<Guard>()", "request guard")]
     [InlineData("RegisterDynamicRequest<Command>()", "request")]
     [InlineData("AddEvent<Happened>()", "domain event")]
     public void UninterceptedRegistrationNamesTheTypeAndTheRoleItWasRegisteringAs(string call, string role)
@@ -124,6 +125,11 @@ public sealed class UninterceptedCallSiteTests
                                  {
                                      public ValueTask<Result> HandleAsync(IRequestContext<Command> c,
                                          RequestPipelineNext next, CancellationToken ct) => next(ct);
+                                 }
+                                 public sealed class Guard : IRequestGuard<Command>
+                                 {
+                                     public ValueTask<Result> GuardAsync(IRequestContext<Command> c, CancellationToken ct)
+                                         => ValueTask.FromResult(Result.Success);
                                  }
                                  public static class Scenario
                                  {

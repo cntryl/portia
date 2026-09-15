@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,6 +49,692 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<string>();
         Assert.Equal($"{widgetId} (archived: True)", body);
+    }
+
+    /// <inheritdoc/>
+    [Fact]
+    public async Task ShouldRunCustomBindingPipelineAndResultHook()
+    {
+        var client = await StartAsync(app => app.MapPortiaGet<HttpGetWidget, string>("/custom/{widget_id}", endpoint =>
+            endpoint
+                .Parameter<Uuid>("widget_id", PortiaHttpParameterLocation.Route)
+                .Parameter<bool>("archived", PortiaHttpParameterLocation.Header, required: false)
+                .OnBind(http => new HttpGetWidget(
+                    Uuid.Parse((string)http.Request.RouteValues["widget_id"]!, CultureInfo.InvariantCulture),
+                    bool.TryParse(http.Request.Headers["archived"], out var archived) && archived))
+                .Produces(StatusCodes.Status302Found)
+                .OnResult((_, result) => result.IsSuccess
+                    ? Results.Redirect("/done?value=" + Uri.EscapeDataString(result.Value))
+                    : null)));
+        var widgetId = Uuid.CreateVersion4();
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/custom/{widgetId}");
+        request.Headers.Add("archived", "true");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal($"/done?value={Uri.EscapeDataString($"{widgetId} (archived: True)")}",
+            response.Headers.Location?.OriginalString);
+    }
+
+    /// <summary>
+    ///     Verifies the escape hatch for a request shape the default binder rejects: a complex filter
+    ///     object on a GET is assembled by <c>OnBind</c> and still dispatched through the bus.
+    /// </summary>
+    [Fact]
+    public async Task ShouldBindShapeUnsupportedByDefaultBinderThroughOnBind()
+    {
+        var client = await StartAsync(app => app.MapPortiaGet<HttpSearchWidgets, string>("/search", endpoint => endpoint
+            .Parameter<string>("name", PortiaHttpParameterLocation.Query)
+            .Parameter<int>("limit", PortiaHttpParameterLocation.Query)
+            .OnBind(http => new HttpSearchWidgets(new HttpWidgetFilter(
+                http.Request.Query["name"].ToString(),
+                int.Parse(http.Request.Query["limit"].ToString(), CultureInfo.InvariantCulture))))));
+
+        var response = await client.GetAsync("/search?name=gear&limit=3");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("gear:3", await response.Content.ReadFromJsonAsync<string>());
+    }
+
+    /// <summary>
+    ///     Verifies a sign-in style flow: the default binder reads the form post, and after the
+    ///     business operation succeeds the result hook sets a cookie and a header and redirects.
+    /// </summary>
+    [Fact]
+    public async Task ShouldBindFormPostByDefaultThenSetCookieHeaderAndRedirect()
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/sign-in", endpoint => endpoint
+            .Produces(StatusCodes.Status302Found)
+            .OnResult((http, result) =>
+            {
+                if (!result.IsSuccess)
+                    return null;
+                http.Response.Cookies.Append("session", result.Value, new CookieOptions { HttpOnly = true });
+                http.Response.Headers["X-Signed-In"] = result.Value;
+                return Results.Redirect("/home");
+            })));
+
+        var response = await client.PostAsync("/sign-in", Form(("value", "jeff")));
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("/home", response.Headers.Location?.OriginalString);
+        Assert.Equal("jeff", response.Headers.GetValues("X-Signed-In").Single());
+        var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
+        Assert.StartsWith("session=jeff", cookie, StringComparison.Ordinal);
+        Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    ///     Verifies default binding cascades route, body, then query for each member: the body may be
+    ///     a URL-encoded form, a multipart form, or JSON, with the same wire names, scalar parsing,
+    ///     defaults, blank-field and checkbox handling, and a member the body omits comes from the query.
+    /// </summary>
+    [Fact]
+    public async Task ShouldBindRouteAndBodyFromFormOrJson()
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}"));
+        var widgetId = Uuid.CreateVersion4();
+
+        var urlEncoded = await client.PostAsync($"/widgets/{widgetId}?dry_run=true",
+            Form(("name", "gear"), ("quantity", "3"), ("active", "on"), ("priority", "")));
+        using var multipartContent = new MultipartFormDataContent
+        {
+            { new StringContent("cog"), "name" },
+            { new StringContent("4"), "quantity" },
+            { new StringContent("7"), "priority" }
+        };
+        var multipart = await client.PostAsync($"/widgets/{widgetId}", multipartContent);
+        var json = await client.PostAsJsonAsync($"/widgets/{widgetId}?dry_run=true",
+            new { name = "bolt", quantity = 5, active = true });
+        var bodyBeforeQuery = await client.PostAsJsonAsync($"/widgets/{widgetId}?dry_run=true&quantity=9",
+            new { name = "nut", quantity = 6, active = false, dry_run = false });
+        var formBeforeQuery = await client.PostAsync($"/widgets/{widgetId}?name=query",
+            Form(("name", "form"), ("quantity", "2")));
+        var queryOnly = await client.PostAsync($"/widgets/{widgetId}?name=washer&quantity=8&active=true", content: null);
+        // ASP.NET's checkbox helpers post the checkbox value followed by a hidden "false".
+        var helperChecked = await client.PostAsync($"/widgets/{widgetId}",
+            Form(("name", "pin"), ("quantity", "1"), ("active", "true"), ("active", "false")));
+        var helperUnchecked = await client.PostAsync($"/widgets/{widgetId}",
+            Form(("name", "pin"), ("quantity", "1"), ("active", "false")));
+        var jsonMissingActive = await client.PostAsJsonAsync($"/widgets/{widgetId}", new { name = "nut", quantity = 6 });
+
+        Assert.Equal($"{widgetId} gear 3 True none dry-run", await ReadSuccess(urlEncoded));
+        Assert.Equal($"{widgetId} cog 4 False 7", await ReadSuccess(multipart));
+        Assert.Equal($"{widgetId} bolt 5 True none dry-run", await ReadSuccess(json));
+        Assert.Equal($"{widgetId} nut 6 False none", await ReadSuccess(bodyBeforeQuery));
+        Assert.Equal($"{widgetId} form 2 False none", await ReadSuccess(formBeforeQuery));
+        Assert.Equal($"{widgetId} washer 8 True none", await ReadSuccess(queryOnly));
+        Assert.Equal($"{widgetId} pin 1 True none", await ReadSuccess(helperChecked));
+        Assert.Equal($"{widgetId} pin 1 False none", await ReadSuccess(helperUnchecked));
+        Assert.Equal(HttpStatusCode.BadRequest, jsonMissingActive.StatusCode);
+    }
+
+    /// <summary>
+    ///     Verifies <c>FromQuery</c> binds a request member only from the query string, for both JSON
+    ///     and form bodies, while the remaining members keep the route, body, query cascade.
+    /// </summary>
+    [Fact]
+    public async Task ShouldBindFromQueryMemberOnlyFromQueryString()
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}", endpoint => endpoint
+            .FromQuery(x => x.DryRun)
+            .FromQuery(x => x.Priority)));
+        var widgetId = Uuid.CreateVersion4();
+
+        var jsonQuery = await client.PostAsJsonAsync($"/widgets/{widgetId}?dry_run=true&priority=2",
+            new { name = "gear", quantity = 1, active = true, dry_run = false, priority = 9 });
+        var jsonBodyIgnored = await client.PostAsJsonAsync($"/widgets/{widgetId}",
+            new { name = "gear", quantity = 1, active = true, dry_run = true, priority = 9 });
+        var formQuery = await client.PostAsync($"/widgets/{widgetId}?dry_run=true",
+            Form(("name", "cog"), ("quantity", "2"), ("dry_run", "false"), ("priority", "9")));
+        var invalidQuery = await client.PostAsJsonAsync($"/widgets/{widgetId}?dry_run=maybe",
+            new { name = "gear", quantity = 1, active = true });
+
+        Assert.Equal($"{widgetId} gear 1 True 2 dry-run", await ReadSuccess(jsonQuery));
+        Assert.Equal($"{widgetId} gear 1 True none", await ReadSuccess(jsonBodyIgnored));
+        Assert.Equal($"{widgetId} cog 2 False none dry-run", await ReadSuccess(formQuery));
+        Assert.Equal(HttpStatusCode.BadRequest, invalidQuery.StatusCode);
+    }
+
+    /// <summary>Verifies a required <c>FromQuery</c> member is not satisfied by the body.</summary>
+    [Fact]
+    public async Task ShouldRequireFromQueryMemberInQueryString()
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/required-query/{widget_id}", endpoint => endpoint
+            .FromQuery(x => x.Quantity)));
+        var widgetId = Uuid.CreateVersion4();
+
+        var missing = await client.PostAsJsonAsync($"/required-query/{widgetId}", new { name = "gear", quantity = 1, active = true });
+        var supplied = await client.PostAsJsonAsync($"/required-query/{widgetId}?quantity=4", new { name = "gear", active = true });
+
+        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
+        Assert.Equal($"{widgetId} gear 4 True none", await ReadSuccess(supplied));
+    }
+
+    /// <summary>Verifies misdeclared <c>FromQuery</c> members fail when the route is mapped.</summary>
+    [Fact]
+    public void ShouldRejectInvalidFromQueryDeclarationsWhenMapping()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.Services.AddFrameworkTests();
+        _app = builder.Build();
+
+        var route = Assert.Throws<InvalidOperationException>(() => _app.MapPortiaPost<HttpUpdateWidget, string>(
+            "/route/{widget_id}", endpoint => endpoint.FromQuery(x => x.WidgetId)));
+        var complex = Assert.Throws<InvalidOperationException>(() => _app.MapPortiaPost<HttpCreateOrder, Uuid>(
+            "/complex", endpoint => endpoint.FromQuery(x => x.Lines)));
+        var custom = Assert.Throws<InvalidOperationException>(() => _app.MapPortiaPost<HttpOptionalBody, string>(
+            "/custom", endpoint => endpoint.FromQuery(x => x.Value).NoInput().OnBind(_ => new HttpOptionalBody())));
+        var nested = Assert.Throws<ArgumentException>(() => new PortiaEndpointConfiguration<HttpGetWidget, string>()
+            .FromQuery(x => x.WidgetId.ToString()));
+        var duplicate = Assert.Throws<InvalidOperationException>(() => new PortiaEndpointConfiguration<HttpGetWidget, string>()
+            .FromQuery(x => x.IncludeArchived).FromQuery(x => x.IncludeArchived));
+
+        Assert.Contains("already bound from the route", route.Message, StringComparison.Ordinal);
+        Assert.Contains("must be a string, enum, or TryParse scalar", complex.Message, StringComparison.Ordinal);
+        Assert.Contains("OnBind", custom.Message, StringComparison.Ordinal);
+        Assert.Contains("direct request member", nested.Message, StringComparison.Ordinal);
+        Assert.Contains("more than once", duplicate.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>Verifies form fields get the same validation as query values.</summary>
+    [Theory]
+    [InlineData("name=gear")]
+    [InlineData("name=gear&quantity=many")]
+    [InlineData("name=gear&quantity=")]
+    [InlineData("name=gear&quantity=1&quantity=2")]
+    [InlineData("name=gear&quantity=1&active=maybe")]
+    [InlineData("name=gear&quantity=1&active=true&active=maybe")]
+    public async Task ShouldRejectInvalidFormFields(string form)
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}"));
+
+        var response = await client.PostAsync($"/widgets/{Uuid.CreateVersion4()}",
+            new StringContent(form, Encoding.UTF8, "application/x-www-form-urlencoded"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>Verifies a body with complex members stays JSON-only.</summary>
+    [Fact]
+    public async Task ShouldRejectFormPostForComplexBody()
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpCreateOrder, Uuid>("/orders"));
+
+        var response = await client.PostAsync("/orders", Form(("lines", "x")));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    ///     Verifies a registered antiforgery service guards default form binding: a missing token is
+    ///     rejected, a valid token binds, JSON is unaffected, and an endpoint can opt out.
+    /// </summary>
+    [Fact]
+    public async Task ShouldValidateAntiforgeryForFormPostsWhenRegistered()
+    {
+        var client = await StartAsync(app =>
+        {
+            _ = app.MapGet("/token", (HttpContext http, Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery) =>
+            {
+                var tokens = antiforgery.GetAndStoreTokens(http);
+                return Results.Text($"{tokens.FormFieldName}={tokens.RequestToken}");
+            });
+            _ = app.MapPortiaPost<HttpOptionalBody, string>("/guarded-form");
+            _ = app.MapPortiaPost<HttpUpdateWidget, string>("/open-form/{widget_id}").DisableAntiforgery();
+        }, services => services.AddAntiforgery());
+
+        var missing = await client.PostAsync("/guarded-form", Form(("value", "x")));
+        var json = await client.PostAsJsonAsync("/guarded-form", new { value = "json" });
+        var widgetId = Uuid.CreateVersion4();
+        var optedOut = await client.PostAsync($"/open-form/{widgetId}", Form(("name", "open"), ("quantity", "1")));
+
+        var tokenResponse = await client.GetAsync("/token");
+        var field = (await tokenResponse.Content.ReadAsStringAsync()).Split('=', 2);
+        using var valid = new HttpRequestMessage(HttpMethod.Post, "/guarded-form")
+        {
+            Content = Form(("value", "valid"), (field[0], field[1]))
+        };
+        valid.Headers.Add("Cookie", tokenResponse.Headers.GetValues("Set-Cookie").Select(cookie => cookie.Split(';')[0]));
+        var accepted = await client.SendAsync(valid);
+
+        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
+        Assert.Equal("json", await ReadSuccess(json));
+        Assert.Equal($"{widgetId} open 1 False none", await ReadSuccess(optedOut));
+        Assert.Equal("valid", await ReadSuccess(accepted));
+    }
+
+    static FormUrlEncodedContent Form(params (string Name, string Value)[] fields) =>
+        new(fields.Select(field => new KeyValuePair<string, string>(field.Name, field.Value)));
+
+    static async Task<string?> ReadSuccess(HttpResponseMessage response)
+    {
+        Assert.True(response.IsSuccessStatusCode,
+            $"Expected success, received {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+        return await response.Content.ReadFromJsonAsync<string>();
+    }
+
+    /// <summary>
+    ///     Verifies a result hook can add headers and cookies around the default binding and default
+    ///     JSON response by returning <see langword="null" />.
+    /// </summary>
+    [Fact]
+    public async Task ShouldKeepDefaultBindingAndResponseWhenResultHookOnlyAddsHeadersAndCookies()
+    {
+        var client = await StartAsync(app => app.MapPortiaGet<HttpGetWidget, string>("/decorated/{widget_id}", endpoint => endpoint
+            .OnResult((http, result) =>
+            {
+                http.Response.Headers.CacheControl = "no-store";
+                http.Response.Cookies.Append("last_widget", result.Value);
+                return null;
+            })));
+        var widgetId = Uuid.CreateVersion4();
+
+        var response = await client.GetAsync($"/decorated/{widgetId}?include_archived=true");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal($"{widgetId} (archived: True)", await response.Content.ReadFromJsonAsync<string>());
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.StartsWith("last_widget=", Assert.Single(response.Headers.GetValues("Set-Cookie")), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     Verifies a custom-bound request still goes through authorization, and a no-result endpoint's
+    ///     hook can redirect a failure while adjusting cookies around the default success response.
+    /// </summary>
+    [Fact]
+    public async Task ShouldAuthorizeCustomBoundRequestAndLetResultHookHandleFailureAndSuccess()
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpGuardedAction>("/sign-out", endpoint => endpoint
+            .NoInput()
+            .OnBind(_ => new HttpGuardedAction())
+            .OnResult((http, result) =>
+            {
+                if (!result.IsSuccess)
+                    return result.Error.Kind == RequestErrorKind.Forbidden ? Results.Redirect("/login") : null;
+                http.Response.Cookies.Delete("session");
+                return null;
+            })));
+
+        var denied = await client.PostAsync("/sign-out", content: null);
+        using var permitted = new HttpRequestMessage(HttpMethod.Post, "/sign-out");
+        permitted.Headers.Add("X-Debug-Permission", "http:guarded");
+        var allowed = await client.SendAsync(permitted);
+
+        Assert.Equal(HttpStatusCode.Found, denied.StatusCode);
+        Assert.Equal("/login", denied.Headers.Location?.OriginalString);
+        Assert.False(denied.Headers.Contains("Set-Cookie"));
+        Assert.True(allowed.IsSuccessStatusCode, $"Expected success, received {(int)allowed.StatusCode}");
+        Assert.StartsWith("session=;", Assert.Single(allowed.Headers.GetValues("Set-Cookie")), StringComparison.Ordinal);
+    }
+
+    /// <inheritdoc/>
+    [Fact]
+    public async Task ShouldValidateCustomRouteParametersAgainstCompleteGroupedPattern()
+    {
+        var client = await StartAsync(app => app.MapGroup("/tenants/{tenant_id}")
+            .MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}", endpoint => endpoint
+                .Parameter<string>("tenant_id", PortiaHttpParameterLocation.Route)
+                .Parameter<Uuid>("widget_id", PortiaHttpParameterLocation.Route)
+                .OnBind(http => new HttpGetWidget(
+                    Uuid.Parse((string)http.Request.RouteValues["widget_id"]!, CultureInfo.InvariantCulture),
+                    false))));
+        var widgetId = Uuid.CreateVersion4();
+
+        var response = await client.GetAsync($"/tenants/acme/widgets/{widgetId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <inheritdoc/>
+    [Fact]
+    public void ShouldRejectDuplicateCustomBodyContentTypes()
+    {
+        var configuration = new PortiaEndpointConfiguration<HttpSendPing>();
+        Assert.Throws<InvalidOperationException>(() => configuration.Accepts<string>(
+            "application/json", additionalContentTypes: "APPLICATION/JSON"));
+    }
+
+    /// <inheritdoc/>
+    [Fact]
+    public async Task ShouldApplyBodyLimitBeforeCustomBinderRuns()
+    {
+        var binderCalled = false;
+        var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/custom-body", endpoint => endpoint
+                .Accepts<string>("text/plain")
+                .OnBind(_ => { binderCalled = true; return new HttpOptionalBody(); })),
+            services => services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 1));
+
+        var response = await client.PostAsync("/custom-body", new StringContent("too large"));
+
+        Assert.False(binderCalled);
+        Assert.True(response.StatusCode == HttpStatusCode.RequestEntityTooLarge,
+            $"Expected 413, received {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+    }
+
+    /// <summary>
+    ///     Verifies a chunked form body over the limit is a 413 when the server enforces the body size
+    ///     itself, as Kestrel does once Portia lowers <see cref="IHttpMaxRequestBodySizeFeature" />.
+    /// </summary>
+    [Fact]
+    public async Task ShouldReturnPayloadTooLargeWhenServerRejectsChunkedFormBody()
+    {
+        var client = await StartAsync(app =>
+            {
+                UseServerEnforcedBodyLimit(app, maximum: null);
+                _ = app.MapPortiaPost<HttpUpdateWidget, string>("/server-limited-form/{widget_id}");
+            },
+            services => services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 24));
+        var widgetId = Uuid.CreateVersion4();
+        using var small = new UnknownLengthContent("name=gear&quantity=1"u8.ToArray());
+        small.Headers.ContentType = new("application/x-www-form-urlencoded");
+        using var large = new UnknownLengthContent("name=gear&quantity=1&active=true"u8.ToArray());
+        large.Headers.ContentType = new("application/x-www-form-urlencoded");
+
+        using var accepted = await client.PostAsync($"/server-limited-form/{widgetId}", small);
+        using var rejected = await client.PostAsync($"/server-limited-form/{widgetId}", large);
+
+        Assert.Equal($"{widgetId} gear 1 False none", await ReadSuccess(accepted));
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, rejected.StatusCode);
+    }
+
+    /// <summary>An antiforgery form read must preserve an underlying unknown-length body-limit failure as 413.</summary>
+    [Fact]
+    public async Task ShouldPreservePayloadTooLargeWhenAntiforgeryReadsChunkedFormBody()
+    {
+        var client = await StartAsync(app =>
+            {
+                UseServerEnforcedBodyLimit(app, maximum: null);
+                _ = app.MapPortiaPost<HttpUpdateWidget, string>("/antiforgery-limited-form/{widget_id}");
+            },
+            services =>
+            {
+                _ = services.AddAntiforgery();
+                _ = services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 24);
+            });
+        using var large = new UnknownLengthContent("name=gear&quantity=1&active=true"u8.ToArray());
+        large.Headers.ContentType = new("application/x-www-form-urlencoded");
+
+        using var response = await client.PostAsync(
+            $"/antiforgery-limited-form/{Uuid.CreateVersion4()}", large);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+    }
+
+    /// <summary>Verifies a JSON body rejected by the server's own body size limit is a 413.</summary>
+    [Fact]
+    public async Task ShouldReturnPayloadTooLargeWhenServerRejectsJsonBody()
+    {
+        var client = await StartAsync(app =>
+        {
+            UseServerEnforcedBodyLimit(app, maximum: 8);
+            _ = app.MapPortiaPost<HttpUpdateWidget, string>("/server-limited-json/{widget_id}");
+        });
+        using var content = new UnknownLengthContent("""{"name":"gear","quantity":1,"active":true}"""u8.ToArray());
+        content.Headers.ContentType = new("application/json");
+
+        using var response = await client.PostAsync($"/server-limited-json/{Uuid.CreateVersion4()}", content);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+    }
+
+    // Emulates Kestrel: the transport itself throws a 413 BadHttpRequestException once the received
+    // body exceeds IHttpMaxRequestBodySizeFeature, before the excess bytes reach any wrapping stream.
+    static void UseServerEnforcedBodyLimit(IEndpointRouteBuilder app, long? maximum) =>
+        _ = ((IApplicationBuilder)app).Use(async (context, next) =>
+        {
+            var feature = new TestMaxRequestBodySizeFeature(maximum, readOnly: false);
+            context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
+            context.Request.Body = new ServerLimitedStream(context.Request.Body, feature);
+            await next(context);
+        });
+
+    /// <inheritdoc/>
+    [Fact]
+    public async Task ShouldApplyBodyLimitToChunkedCustomBinderReads()
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/custom-chunked", endpoint => endpoint
+                .Accepts<Stream>("application/octet-stream")
+                .OnBind(async (http, ct) =>
+                {
+                    using var reader = new StreamReader(http.Request.Body);
+                    _ = await reader.ReadToEndAsync(ct);
+                    return new HttpOptionalBody();
+                })),
+            services => services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 8));
+
+        using var response = await client.PostAsync("/custom-chunked", new UnknownLengthContent(new byte[9]));
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+    }
+
+    /// <summary>Verifies unread chunked data cannot bypass the declared custom-body limit.</summary>
+    [Fact]
+    public async Task ShouldRejectChunkedCustomBodyBeforePartiallyReadingBinderRuns()
+    {
+        var binderCalled = false;
+        var resultCalled = false;
+        var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/custom-chunked-prefix", endpoint => endpoint
+                .Accepts<Stream>("application/octet-stream")
+                .OnBind(async (http, ct) =>
+                {
+                    binderCalled = true;
+                    var prefix = new byte[1];
+                    _ = await http.Request.Body.ReadAsync(prefix, ct);
+                    return new HttpOptionalBody();
+                })
+                .OnResult((_, _) =>
+                {
+                    resultCalled = true;
+                    return null;
+                })),
+            services => services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 8));
+
+        using var response = await client.PostAsync("/custom-chunked-prefix", new UnknownLengthContent(new byte[9]));
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        Assert.False(binderCalled);
+        Assert.False(resultCalled);
+    }
+
+    /// <inheritdoc/>
+    [Fact]
+    public async Task ShouldAllowChunkedCustomBodyAtLimit()
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/custom-chunked-limit", endpoint => endpoint
+                .Accepts<Stream>("application/octet-stream")
+                .OnBind(async (http, ct) =>
+                {
+                    using var reader = new StreamReader(http.Request.Body);
+                    _ = await reader.ReadToEndAsync(ct);
+                    return new HttpOptionalBody();
+                })),
+            services => services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 8));
+
+        using var response = await client.PostAsync("/custom-chunked-limit", new UnknownLengthContent(new byte[8]));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>Portia tightens, but never relaxes, the web server's request-body limit.</summary>
+    [Theory]
+    [InlineData(null, false, 8L)]
+    [InlineData(16L, false, 8L)]
+    [InlineData(4L, false, 4L)]
+    [InlineData(16L, true, 16L)]
+    public void ShouldRespectStricterOrReadOnlyServerBodyLimit(long? serverMaximum, bool readOnly, long expected)
+    {
+        using var services = new ServiceCollection()
+            .Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 8)
+            .BuildServiceProvider();
+        var context = new DefaultHttpContext { RequestServices = services };
+        var feature = new TestMaxRequestBodySizeFeature(serverMaximum, readOnly);
+        context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
+
+        PortiaHttpBinding.EnsureBodyWithinLimit(context);
+
+        Assert.Equal(expected, feature.MaxRequestBodySize);
+    }
+
+    /// <inheritdoc/>
+    [Fact]
+    public async Task ShouldMapCustomFormatFailureToBadRequest()
+    {
+        var client = await StartAsync(app => app.MapPortiaGet<HttpGetWidget, string>("/custom-format/{widget_id}", endpoint => endpoint
+            .Parameter<Uuid>("widget_id", PortiaHttpParameterLocation.Route)
+            .OnBind(http => new HttpGetWidget(
+                Uuid.Parse((string)http.Request.RouteValues["widget_id"]!, CultureInfo.InvariantCulture), false))));
+
+        var response = await client.GetAsync("/custom-format/not-a-uuid");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <inheritdoc/>
+    [Fact]
+    public void ShouldFreezeConfigurationAfterMapping()
+    {
+        PortiaEndpointConfiguration<HttpOptionalBody, string>? captured = null;
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.Services.AddFrameworkTests();
+        _app = builder.Build();
+        _ = _app.MapPortiaPost<HttpOptionalBody, string>("/frozen", endpoint =>
+        {
+            captured = endpoint;
+            _ = endpoint.NoInput().OnBind(_ => new HttpOptionalBody());
+        });
+
+        var configuration = Assert.IsType<PortiaEndpointConfiguration<HttpOptionalBody, string>>(captured);
+        foreach (var mutation in new Action[]
+                 {
+                     () => configuration.OnBind(_ => new HttpOptionalBody()),
+                     () => configuration.OnResult((_, _) => null),
+                     () => configuration.Accepts<string>("text/plain"),
+                     () => configuration.Parameter<string>("value", PortiaHttpParameterLocation.Query),
+                     () => configuration.NoInput(),
+                     () => configuration.Produces(StatusCodes.Status201Created)
+                 })
+        {
+            var error = Assert.Throws<InvalidOperationException>(mutation);
+            Assert.Equal("Endpoint configuration cannot be changed after mapping.", error.Message);
+        }
+    }
+
+    /// <inheritdoc/>
+    [Fact]
+    public async Task ShouldRequireResultHookToHonorDeclaredSuccessResponse()
+    {
+        var configuration = new PortiaEndpointConfiguration<HttpOptionalBody, string>();
+        _ = configuration.Produces(StatusCodes.Status302Found).OnResult((_, _) => null);
+        configuration.Validate();
+
+        var handler = Assert.IsType<Func<HttpContext, Result<string>, CancellationToken, ValueTask<IResult?>>>(
+            configuration.ResultHandler);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await handler(new DefaultHttpContext(), Result<string>.Success("done"), default));
+        var failureResponse = await handler(new DefaultHttpContext(), Result<string>.Failure(
+            new RequestError(RequestErrorKind.NotFound, "missing")), default);
+
+        Assert.Equal(
+            "OnResult must return a response for a successful result when a custom success response is declared.",
+            error.Message);
+        Assert.Null(failureResponse);
+    }
+
+    /// <inheritdoc/>
+    [Fact]
+    public async Task ShouldRejectInvalidGroupedCustomRouteAtStartup()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddFrameworkTests();
+        var scheduler = new RecordingStartupScheduler();
+        _ = builder.Services.AddSingleton<IRequestScheduler>(scheduler);
+        _ = builder.Services.AddPortia()
+            .AddRequestSchedule(new FitzHostedRequest(), new RequestScheduleSpec("0 0 * * *"),
+                new RequestRouteValues("started"), RequestActor.System)
+            .AddWorkers();
+        _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
+        _app = builder.Build();
+        _ = _app.MapGroup("/tenants/{tenant_id}")
+            .MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}", endpoint => endpoint
+                .Parameter<Uuid>("widget_id", PortiaHttpParameterLocation.Route)
+                .OnBind(http => new HttpGetWidget(
+                    Uuid.Parse((string)http.Request.RouteValues["widget_id"]!, CultureInfo.InvariantCulture), false)));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _app.StartAsync());
+
+        Assert.Contains("Custom route parameters must exactly match", error.Message, StringComparison.Ordinal);
+        Assert.Empty(scheduler.Requests);
+    }
+
+    /// <summary>Root route sources are validated before a Portia startup schedule can run.</summary>
+    [Fact]
+    public async Task ShouldRejectInvalidRootCustomRouteBeforeStartupSchedule()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddFrameworkTests();
+        var scheduler = new RecordingStartupScheduler();
+        _ = builder.Services.AddSingleton<IRequestScheduler>(scheduler);
+        _ = builder.Services.AddPortia()
+            .AddRequestSchedule(new FitzHostedRequest(), new RequestScheduleSpec("0 0 * * *"),
+                new RequestRouteValues("started"), RequestActor.System)
+            .AddWorkers();
+        _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
+        _app = builder.Build();
+        _ = _app.MapPortiaGet<HttpGetWidget, string>(
+            "/tenants/{tenant_id}/widgets/{widget_id}", endpoint => endpoint
+                .Parameter<Uuid>("widget_id", PortiaHttpParameterLocation.Route)
+                .OnBind(http => new HttpGetWidget(
+                    Uuid.Parse((string)http.Request.RouteValues["widget_id"]!, CultureInfo.InvariantCulture), false)));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _app.StartAsync());
+
+        Assert.Contains("Custom route parameters must exactly match", error.Message, StringComparison.Ordinal);
+        Assert.Empty(scheduler.Requests);
+    }
+
+    /// <summary>A valid grouped route releases deferred startup schedules after its complete pattern is validated.</summary>
+    [Fact]
+    public async Task ShouldRunStartupScheduleAfterValidGroupedRouteValidation()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddFrameworkTests();
+        var scheduler = new RecordingStartupScheduler();
+        _ = builder.Services.AddSingleton<IRequestScheduler>(scheduler);
+        _ = builder.Services.AddPortia()
+            .AddRequestSchedule(new FitzHostedRequest(), new RequestScheduleSpec("0 0 * * *"),
+                new RequestRouteValues("started"), RequestActor.System)
+            .AddWorkers();
+        _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
+        _app = builder.Build();
+        _ = _app.MapGroup("/tenants/{tenant_id}")
+            .MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}", endpoint => endpoint
+                .Parameter<string>("tenant_id", PortiaHttpParameterLocation.Route)
+                .Parameter<Uuid>("widget_id", PortiaHttpParameterLocation.Route)
+                .OnBind(http => new HttpGetWidget(
+                    Uuid.Parse((string)http.Request.RouteValues["widget_id"]!, CultureInfo.InvariantCulture), false)));
+
+        await _app.StartAsync();
+
+        Assert.Equal(["started"], scheduler.Requests);
+    }
+
+    /// <inheritdoc/>
+    [Fact]
+    public async Task ShouldMapCustomJsonBindingFailureToBadRequest()
+    {
+        var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/custom-json", endpoint => endpoint
+            .Accepts<string>("application/json")
+            .OnBind(_ => throw new JsonException("truncated"))));
+
+        var response = await client.PostAsync("/custom-json",
+            new StringContent("{", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     /// <summary>
@@ -161,6 +848,64 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.NotEqual(Uuid.Empty, Uuid.Parse(requestId, CultureInfo.InvariantCulture));
         _ = Assert.Single(publisher.Enqueued);
         _ = Assert.IsType<HttpSendPing>(publisher.Enqueued[0]);
+    }
+
+    /// <summary>
+    ///     Verifies a result hook keeps a queuable endpoint synchronous: <c>Prefer: respond-async</c>
+    ///     is not honored, so the hook runs after the operation instead of a 202 bypassing it.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRunResultHookInsteadOfQueueingWhenRespondAsyncIsPreferred()
+    {
+        var publisher = new RecordingRequestQueuePublisher();
+        var client = await StartAsync(app => app.MapPortiaPost<HttpSendPing>("/queued-sign-in", endpoint => endpoint
+                .Produces(StatusCodes.Status302Found)
+                .OnResult((_, result) => result.IsSuccess ? Results.Redirect("/home") : null)),
+            services => services.AddSingleton<IRequestQueuePublisher>(publisher));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/queued-sign-in") { Content = JsonContent.Create(new { }) };
+        request.Headers.Add("Prefer", "respond-async");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("/home", response.Headers.Location?.OriginalString);
+        Assert.False(response.Headers.Contains("Preference-Applied"));
+        Assert.Empty(publisher.Enqueued);
+    }
+
+    /// <summary>Verifies configuring a queuable endpoint without a result hook still honors respond-async.</summary>
+    [Fact]
+    public async Task ShouldStillQueueConfiguredEndpointWithoutResultHookWhenRespondAsyncIsPreferred()
+    {
+        var publisher = new RecordingRequestQueuePublisher();
+        var client = await StartAsync(app => app.MapPortiaPost<HttpSendPing>("/configured-ping", endpoint => endpoint
+                .Produces(StatusCodes.Status409Conflict)),
+            services => services.AddSingleton<IRequestQueuePublisher>(publisher));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/configured-ping") { Content = JsonContent.Create(new { }) };
+        request.Headers.Add("Prefer", "respond-async");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        _ = Assert.Single(publisher.Enqueued);
+    }
+
+    /// <summary>Verifies a result hook sees an authorization failure even when respond-async is preferred.</summary>
+    [Fact]
+    public async Task ShouldRunResultHookForForbiddenQueueableRequestWhenRespondAsyncIsPreferred()
+    {
+        var publisher = new RecordingRequestQueuePublisher();
+        var client = await StartAsync(app => app.MapPortiaPost<HttpGuardedQueueAction>("/queued-guarded", endpoint => endpoint
+                .OnResult((_, result) => result.IsSuccess ? null : Results.Redirect("/login"))),
+            services => services.AddSingleton<IRequestQueuePublisher>(publisher));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/queued-guarded") { Content = JsonContent.Create(new { }) };
+        request.Headers.Add("Prefer", "respond-async");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("/login", response.Headers.Location?.OriginalString);
+        Assert.Empty(publisher.Enqueued);
     }
 
     /// <summary>Preference names are matched as tokens rather than substrings.</summary>
@@ -417,6 +1162,38 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Equal(["a", "b"], items);
     }
 
+    /// <summary>A failed stream guard is a problem response, because no JSON array was written yet.</summary>
+    [Fact]
+    public async Task ShouldReturnGuardProblemBeforeJsonStreamWhenStreamGuardFails()
+    {
+        var client = await StartAsync(app => app.MapPortiaGetStream<HttpListWidgets, string>("/guarded-widgets"),
+            AddConflictStreamGuard);
+
+        await AssertGuardConflictAsync(await client.GetAsync("/guarded-widgets"));
+    }
+
+    /// <summary>A failed stream guard is a problem response, because no event was written yet.</summary>
+    [Fact]
+    public async Task ShouldReturnGuardProblemBeforeServerSentEventsWhenStreamGuardFails()
+    {
+        var client = await StartAsync(app => app.MapPortiaGetSse<HttpListWidgets, string>("/guarded-widget-events"),
+            AddConflictStreamGuard);
+
+        await AssertGuardConflictAsync(await client.GetAsync("/guarded-widget-events"));
+    }
+
+    static void AddConflictStreamGuard(IServiceCollection services) => _ = services
+        .AddScoped<ConflictStreamGuard>()
+        .AddSingleton<RequestGuardRegistration>(new RequestGuardRegistration<HttpListWidgets, ConflictStreamGuard>());
+
+    static async Task AssertGuardConflictAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("widgets are being rebuilt", problem.RootElement.GetProperty("detail").GetString());
+    }
+
     /// <summary>
     ///     Verifies streaming as Server-Sent Events, driven by the exact same
     ///     <see cref="IStreamRequestHandler{TRequest,TOut}" /> as the JSON-array mapping above.
@@ -536,4 +1313,62 @@ public sealed class HttpBindingTests : IAsyncDisposable
             return ValueTask.CompletedTask;
         }
     }
+
+    internal sealed class ConflictStreamGuard : IRequestGuard<HttpListWidgets>
+    {
+        public ValueTask<Result> GuardAsync(IRequestContext<HttpListWidgets> context, CancellationToken ct) =>
+            ValueTask.FromResult(Result.Failure(new RequestError(RequestErrorKind.Conflict, "widgets are being rebuilt")));
+    }
+
+    sealed class UnknownLengthContent(byte[] content) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            stream.WriteAsync(content).AsTask();
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
+
+    sealed class ServerLimitedStream(Stream inner, IHttpMaxRequestBodySizeFeature limit) : Stream
+    {
+        long _received;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => _received;
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => Receive(inner.Read(buffer, offset, count));
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            Receive(await inner.ReadAsync(buffer, cancellationToken));
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        int Receive(int read)
+        {
+            _received += read;
+            return limit.MaxRequestBodySize is { } maximum && _received > maximum
+                ? throw new BadHttpRequestException("Request body too large.", StatusCodes.Status413PayloadTooLarge)
+                : read;
+        }
+    }
+
+    sealed class TestMaxRequestBodySizeFeature(long? maximum, bool readOnly) : IHttpMaxRequestBodySizeFeature
+    {
+        public bool IsReadOnly { get; } = readOnly;
+        public long? MaxRequestBodySize { get; set; } = maximum;
+    }
+
 }

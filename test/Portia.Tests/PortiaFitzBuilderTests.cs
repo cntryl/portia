@@ -80,6 +80,32 @@ public sealed class PortiaFitzBuilderTests
         await lifecycle.StartingAsync(default);
     }
 
+    /// <summary>Fitz workers do not begin consuming before grouped HTTP endpoint validation completes.</summary>
+    [Fact]
+    public async Task ShouldDeferFitzWorkersUntilEndpointValidationCompletes()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IRequestActorValidator, TestRequestActorValidator>();
+        _ = services.AddScoped<IQueuedRequestTerminalHandler, TestTerminalHandler>();
+        var application = services.AddPortia();
+        _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Queue]));
+        await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
+        _ = application.UseFitzClient(client, fitz => _ = fitz.AddQueueWorkers()).AddWorkers();
+        await using var provider = services.BuildServiceProvider();
+        var validation = provider.GetRequiredService<PortiaStartupValidationRegistry>().BeginEndpointValidation();
+        var worker = Assert.IsType<FitzApplicationWorkers>(
+            Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
+
+        await worker.StartAsync(default);
+
+        Assert.Null(worker.ExecuteTask);
+        validation.Complete();
+        await worker.StartedAsync(default);
+        Assert.NotNull(worker.ExecuteTask);
+        await worker.StopAsync(default);
+    }
+
     /// <summary>Request listeners do not need workload fleet identity when no component is hosted.</summary>
     [Fact]
     public async Task ShouldAllowRequestOnlyWorkerStartupWithoutFleetIdentity()

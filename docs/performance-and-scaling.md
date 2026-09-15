@@ -164,9 +164,10 @@ transport acknowledgment. Those operations are not atomic, so the handler must t
 The Fitz adapter retains delivery ownership when either terminal callback setup or execution
 faults; Portia does not claim a broker-independent durable dead-letter transaction.
 
-HTTP input remains an object JSON body buffered in full and bounded to 10 MiB by default. Oversize
-bodies return 413. Multipart, form, binary, and streaming request bodies are unsupported transport
-shapes.
+HTTP input is buffered in full and bounded to 10 MiB by default, including unknown-length bodies
+declared for a custom `OnBind` binder. Oversize bodies return 413 before binding or dispatch. The
+default binder accepts object JSON or, for scalar-only bodies, an HTML form; binary bodies need a
+custom binder and are replayed from the start after bounded buffering.
 
 ## Capability matrix
 
@@ -176,11 +177,11 @@ shapes.
 | `IProjectionStore` | `FitzKvProjectionStore` is an abstract Fitz-KV base | `ProjectionStoreConformance` | Supply the projection data operations and atomic checkpoint commit |
 | `IProjectionCheckpointStore` | `FitzKvCheckpointStore` | `InMemoryProjectionCheckpointStore` | Supply durable reactor progress without Fitz |
 | `IWorkloadCoordinator` | Fitz fleet coordination; `SingleProcessWorkloadCoordinator` for one replica only | `WorkloadCoordinatorConformance` | Run distributed conformance before scaling a custom coordinator beyond one replica |
-| `IPermissionEvaluator` | None | `TestPermissionEvaluator` | Register the application's permission policy when any guarded request is selected |
+| `IPermissionEvaluator` | None | `TestPermissionEvaluator` | Register the application's permission policy when any permission-protected request is selected |
 | `ITenantDirectory` | `EventSourcedTenantDirectory<TStartEvent,TStopEvent>`; also supports resumable cursors | In-process fakes in the test suites | Define authoritative membership events, mapping, and registration |
 
-Hosted startup rejects guarded request registrations when `IPermissionEvaluator` is unavailable
-and reports the guarded CLR types in stable order. This belongs at the composed-host boundary:
+Hosted startup rejects permission-protected request registrations when `IPermissionEvaluator` is
+unavailable and reports those CLR types in stable order. This belongs at the composed-host boundary:
 handlers and registrations can arrive from multiple feature assemblies, so no analyzer examining
 one compilation can prove that the final service graph supplies an evaluator. Direct, non-hosted
 composition remains available for focused tests.
@@ -190,7 +191,10 @@ dependency transparency. `PORTIA100` recognizes Portia dispatch/effect APIs, `Ht
 `IHttpClientFactory`, `SmtpClient`, Stripe clients, EF Core contexts, ADO.NET connections, and
 generated gRPC client ancestry. `PORTIA101` recognizes DI service-provider/scope dependencies and
 semantic `ActivatorUtilities` calls. An application-defined gateway without one of those known
-markers remains intentionally unreported and still needs architectural review.
+markers remains intentionally unreported and still needs architectural review. `PORTIA105` and
+`PORTIA106` apply the same best-effort recognition to request guards and authorizers, additionally
+recognizing `IAggregateRepository`, `IAggregateWriter`, `IAggregateExecutor`, event stores, and
+projection stores, while `IAggregateReader` and `IDomainEventReader` remain allowed.
 # Bounded processor passes
 
 Projector and reactor workers enumerate at most `ProjectionRunOptions.MaxEventsPerPass` records per

@@ -10,29 +10,9 @@ namespace Cntryl.Portia;
 ///         a new backing store, implement <see cref="IEventStore" /> instead; it is a complete public
 ///         contract, and <c>EventStoreConformance</c> in <c>Portia.Testing</c> verifies it.
 ///     </para>
+///     <para>
+///         Depend on <see cref="IAggregateReader" /> where a component must not persist, and on
+///         <see cref="IAggregateWriter" /> where it only saves.
+///     </para>
 /// </summary>
-public interface IAggregateRepository
-{
-    /// <summary>
-    ///     Applies raised events after the aggregate's committed stream position and returns that same instance.
-    ///     An absent stream leaves the instance unchanged. Construction and dependencies belong to the caller.
-    ///     Save pending changes first. Do not use the instance concurrently during hydration.
-    ///     Discard the instance if a domain event handler throws during replay.
-    /// </summary>
-    /// <typeparam name="TAggregate">The concrete aggregate type.</typeparam>
-    /// <param name="aggregate">The caller-constructed aggregate.</param>
-    /// <param name="ct">Cancels reading before replay begins.</param>
-    /// <returns>The supplied instance, hydrated from its own stream address.</returns>
-    ValueTask<TAggregate> HydrateAsync<TAggregate>(TAggregate aggregate, CancellationToken ct = default)
-        where TAggregate : Aggregate;
-
-    /// <summary>Stamps pending raised events or audits with execution attribution, frozen across save retries.</summary>
-    /// <typeparam name="TAggregate">The concrete aggregate type.</typeparam>
-    /// <param name="aggregate">The aggregate whose pending events are appended.</param>
-    /// <param name="context">The execution that attributes the appended events.</param>
-    /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>A task that completes once the events are committed.</returns>
-    /// <exception cref="EventStreamConcurrencyException">The stream moved on since the aggregate was hydrated.</exception>
-    ValueTask SaveAsync<TAggregate>(TAggregate aggregate, IExecutionContext context, CancellationToken ct = default)
-        where TAggregate : Aggregate;
-}
+public interface IAggregateRepository : IAggregateReader, IAggregateWriter;

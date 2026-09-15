@@ -75,3 +75,47 @@ static Cntryl.Portia.Testing.ReactionDeduplicationConformance.VerifyAsync(Cntryl
 static Cntryl.Portia.Testing.TestPermissionEvaluator.AllowAll() -> Cntryl.Portia.Testing.TestPermissionEvaluator!
 static Cntryl.Portia.Testing.TestPermissionEvaluator.DenyAll() -> Cntryl.Portia.Testing.TestPermissionEvaluator!
 static Cntryl.Portia.Testing.WorkloadCoordinatorConformance.VerifyAsync(Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe! probe, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.RequestExpectations
+Cntryl.Portia.Testing.RequestExpectations.AsTask() -> System.Threading.Tasks.Task<Cntryl.Portia.Result>!
+Cntryl.Portia.Testing.RequestExpectations.ExpectAuthorized() -> Cntryl.Portia.Testing.RequestExpectations!
+Cntryl.Portia.Testing.RequestExpectations.ExpectDenied(Cntryl.Portia.RequestErrorKind? kind = null) -> Cntryl.Portia.Testing.RequestExpectations!
+Cntryl.Portia.Testing.RequestExpectations.ExpectFailure(Cntryl.Portia.RequestErrorKind? kind = null) -> Cntryl.Portia.Testing.RequestExpectations!
+Cntryl.Portia.Testing.RequestExpectations.ExpectGuardFailed<TGuard>(Cntryl.Portia.RequestErrorKind? kind = null) -> Cntryl.Portia.Testing.RequestExpectations!
+Cntryl.Portia.Testing.RequestExpectations.ExpectGuardPassed<TGuard>() -> Cntryl.Portia.Testing.RequestExpectations!
+Cntryl.Portia.Testing.RequestExpectations.ExpectHandled() -> Cntryl.Portia.Testing.RequestExpectations!
+Cntryl.Portia.Testing.RequestExpectations.ExpectNotHandled() -> Cntryl.Portia.Testing.RequestExpectations!
+Cntryl.Portia.Testing.RequestExpectations.ExpectSuccess() -> Cntryl.Portia.Testing.RequestExpectations!
+Cntryl.Portia.Testing.RequestExpectations.GetAwaiter() -> System.Runtime.CompilerServices.TaskAwaiter<Cntryl.Portia.Result>
+Cntryl.Portia.Testing.RequestExpectations<TOut>
+Cntryl.Portia.Testing.RequestExpectations<TOut>.AsTask() -> System.Threading.Tasks.Task<Cntryl.Portia.Result<TOut>>!
+Cntryl.Portia.Testing.RequestExpectations<TOut>.ExpectAuthorized() -> Cntryl.Portia.Testing.RequestExpectations<TOut>!
+Cntryl.Portia.Testing.RequestExpectations<TOut>.ExpectDenied(Cntryl.Portia.RequestErrorKind? kind = null) -> Cntryl.Portia.Testing.RequestExpectations<TOut>!
+Cntryl.Portia.Testing.RequestExpectations<TOut>.ExpectFailure(Cntryl.Portia.RequestErrorKind? kind = null) -> Cntryl.Portia.Testing.RequestExpectations<TOut>!
+Cntryl.Portia.Testing.RequestExpectations<TOut>.ExpectGuardFailed<TGuard>(Cntryl.Portia.RequestErrorKind? kind = null) -> Cntryl.Portia.Testing.RequestExpectations<TOut>!
+Cntryl.Portia.Testing.RequestExpectations<TOut>.ExpectGuardPassed<TGuard>() -> Cntryl.Portia.Testing.RequestExpectations<TOut>!
+Cntryl.Portia.Testing.RequestExpectations<TOut>.ExpectHandled() -> Cntryl.Portia.Testing.RequestExpectations<TOut>!
+Cntryl.Portia.Testing.RequestExpectations<TOut>.ExpectNotHandled() -> Cntryl.Portia.Testing.RequestExpectations<TOut>!
+Cntryl.Portia.Testing.RequestExpectations<TOut>.ExpectSuccess() -> Cntryl.Portia.Testing.RequestExpectations<TOut>!
+Cntryl.Portia.Testing.RequestExpectations<TOut>.ExpectSuccess(TOut expected) -> Cntryl.Portia.Testing.RequestExpectations<TOut>!
+Cntryl.Portia.Testing.RequestExpectations<TOut>.GetAwaiter() -> System.Runtime.CompilerServices.TaskAwaiter<Cntryl.Portia.Result<TOut>>
+Cntryl.Portia.Testing.RequestScenario
+Cntryl.Portia.Testing.RequestScenario.GivenActor(System.Security.Claims.ClaimsPrincipal! actor) -> Cntryl.Portia.Testing.RequestScenario!
+Cntryl.Portia.Testing.RequestScenario.GivenMetadata(Cntryl.Portia.RequestMetadata! metadata) -> Cntryl.Portia.Testing.RequestScenario!
+Cntryl.Portia.Testing.RequestScenario.When(Cntryl.Portia.IRequest! request) -> Cntryl.Portia.Testing.RequestExpectations!
+Cntryl.Portia.Testing.RequestScenario.When<TOut>(Cntryl.Portia.IRequest<TOut>! request) -> Cntryl.Portia.Testing.RequestExpectations<TOut>!
+Cntryl.Portia.Testing.RequestScenario.When<TOut>(Cntryl.Portia.IStreamRequest<TOut>! request) -> Cntryl.Portia.Testing.StreamRequestExpectations<TOut>!
+Cntryl.Portia.Testing.ScenarioExpectationException
+Cntryl.Portia.Testing.ScenarioExpectationException.ScenarioExpectationException(string! message) -> void
+Cntryl.Portia.Testing.StreamRequestExpectations<TOut>
+Cntryl.Portia.Testing.StreamRequestExpectations<TOut>.AsTask() -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<TOut>!>!
+Cntryl.Portia.Testing.StreamRequestExpectations<TOut>.ExpectAuthorized() -> Cntryl.Portia.Testing.StreamRequestExpectations<TOut>!
+Cntryl.Portia.Testing.StreamRequestExpectations<TOut>.ExpectDenied(Cntryl.Portia.RequestErrorKind? kind = null) -> Cntryl.Portia.Testing.StreamRequestExpectations<TOut>!
+Cntryl.Portia.Testing.StreamRequestExpectations<TOut>.ExpectFailure(Cntryl.Portia.RequestErrorKind? kind = null) -> Cntryl.Portia.Testing.StreamRequestExpectations<TOut>!
+Cntryl.Portia.Testing.StreamRequestExpectations<TOut>.ExpectGuardFailed<TGuard>(Cntryl.Portia.RequestErrorKind? kind = null) -> Cntryl.Portia.Testing.StreamRequestExpectations<TOut>!
+Cntryl.Portia.Testing.StreamRequestExpectations<TOut>.ExpectGuardPassed<TGuard>() -> Cntryl.Portia.Testing.StreamRequestExpectations<TOut>!
+Cntryl.Portia.Testing.StreamRequestExpectations<TOut>.ExpectHandled() -> Cntryl.Portia.Testing.StreamRequestExpectations<TOut>!
+Cntryl.Portia.Testing.StreamRequestExpectations<TOut>.ExpectItems(params TOut[]! expected) -> Cntryl.Portia.Testing.StreamRequestExpectations<TOut>!
+Cntryl.Portia.Testing.StreamRequestExpectations<TOut>.ExpectNotHandled() -> Cntryl.Portia.Testing.StreamRequestExpectations<TOut>!
+Cntryl.Portia.Testing.StreamRequestExpectations<TOut>.ExpectSuccess() -> Cntryl.Portia.Testing.StreamRequestExpectations<TOut>!
+Cntryl.Portia.Testing.StreamRequestExpectations<TOut>.GetAwaiter() -> System.Runtime.CompilerServices.TaskAwaiter<System.Collections.Generic.IReadOnlyList<TOut>!>
+static Cntryl.Portia.Testing.RequestScenario.For(System.IServiceProvider! services) -> Cntryl.Portia.Testing.RequestScenario!

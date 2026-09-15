@@ -41,9 +41,19 @@ public static class PortiaApplicationServiceCollectionExtensions
 
         services.TryAddScoped<IAggregateRepository>(provider =>
             new AggregateRepository(provider.GetRequiredService<IEventStore>()));
+        // Scoped forwarders, never singletons: they must follow whichever scoped repository is registered.
+        services.TryAddScoped<IAggregateReader>(static provider => provider.GetRequiredService<IAggregateRepository>());
+        services.TryAddScoped<IAggregateWriter>(static provider => provider.GetRequiredService<IAggregateRepository>());
+        services.TryAddScoped<IAggregateExecutor>(static provider => new AggregateExecutor(
+            provider.GetRequiredService<IAggregateReader>(), provider.GetRequiredService<IAggregateWriter>()));
         services.TryAddScoped<WorkloadContext>();
         services.TryAddScoped<IRequestBus, RequestBus>();
-        services.TryAddSingleton<RequestRegistry>();
+        services.TryAddSingleton(static provider => new RequestRegistry(
+            provider.GetServices<RequestHandlerRegistration>(), provider.GetServices<RequestAuthorizerRegistration>(),
+            provider.GetServices<RequestPipelineBehaviorRegistration>(), provider.GetServices<RequestGuardRegistration>(),
+            provider.GetServices<RequestTransportRegistration>(),
+            provider.GetRequiredService<PortiaBuilder>().AuthorizationRequirement()));
+        services.TryAddSingleton<PortiaStartupValidationRegistry>();
         services.TryAddSingleton(provider => provider.GetRequiredService<PortiaBuilder>().BuildJsonOptions());
         services.TryAddSingleton(PortiaEventServiceCollectionExtensions.BuildCatalog);
         services.TryAddSingleton<IDomainEventSerializer>(provider => new JsonDomainEventSerializer(

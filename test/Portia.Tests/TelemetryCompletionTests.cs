@@ -33,6 +33,118 @@ public sealed class TelemetryCompletionTests
         Assert.Equal(expectedOutcome, measurements.SingleOutcome("portia.authorization.duration"));
     }
 
+    /// <summary>Every guard that runs records its duration with its component name and outcome.</summary>
+    /// <param name="fails">Whether the guard fails with a conflict.</param>
+    /// <param name="expectedOutcome">The bounded telemetry outcome.</param>
+    [Theory]
+    [InlineData(false, "success")]
+    [InlineData(true, "conflict")]
+    public async Task ShouldRecordGuardDurationWithComponentNameAndOutcome(bool fails, string expectedOutcome)
+    {
+        using var measurements = new OutcomeMeasurements();
+        var bus = GuardBus(new GuardBehavior(fails ? GuardAction.Conflict : GuardAction.Pass),
+            new RequestGuardRegistration<GuardTelemetryProbe, TelemetryOutcomeGuard>());
+
+        _ = await bus.DispatchAsync(new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System));
+
+        Assert.Equal(expectedOutcome, measurements.SingleOutcome("portia.guard.duration",
+            "portia.component.name", nameof(TelemetryOutcomeGuard)));
+    }
+
+    /// <summary>A guard records both requested and unexpected cancellation exactly once.</summary>
+    /// <param name="requested">Whether the guard requests caller cancellation before throwing.</param>
+    /// <param name="expectedOutcome">The bounded telemetry outcome.</param>
+    [Theory]
+    [InlineData(false, "fault")]
+    [InlineData(true, "canceled")]
+    public async Task ShouldCompleteGuardTelemetryGivenCancellation(bool requested, string expectedOutcome)
+    {
+        using var measurements = new OutcomeMeasurements();
+        using var cancellation = new CancellationTokenSource();
+        var bus = GuardBus(new GuardBehavior(GuardAction.Cancel, cancellation, requested),
+            new RequestGuardRegistration<GuardTelemetryProbe, TelemetryCancelingGuard>());
+
+        _ = await Assert.ThrowsAsync<OperationCanceledException>(() => bus.DispatchAsync(
+            new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System), cancellation.Token).AsTask());
+
+        Assert.Equal(expectedOutcome, measurements.SingleOutcome("portia.guard.duration",
+            "portia.component.name", nameof(TelemetryCancelingGuard)));
+    }
+
+    /// <summary>A guard returning an uninitialized result is recorded as a fault.</summary>
+    [Fact]
+    public async Task ShouldRecordFaultGuardTelemetryGivenUninitializedResult()
+    {
+        using var measurements = new OutcomeMeasurements();
+        var bus = GuardBus(new GuardBehavior(GuardAction.Uninitialized),
+            new RequestGuardRegistration<GuardTelemetryProbe, TelemetryUninitializedGuard>());
+
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => bus.DispatchAsync(
+            new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System)).AsTask());
+
+        Assert.Equal("fault", measurements.SingleOutcome("portia.guard.duration",
+            "portia.component.name", nameof(TelemetryUninitializedGuard)));
+    }
+
+    /// <summary>Guards after the first failure never run, so they record nothing.</summary>
+    [Fact]
+    public async Task ShouldNotRecordGuardTelemetryForGuardsAfterFirstFailure()
+    {
+        using var measurements = new OutcomeMeasurements();
+        var bus = GuardBus(new GuardBehavior(GuardAction.Conflict),
+            new RequestGuardRegistration<GuardTelemetryProbe, TelemetryOutcomeGuard>(),
+            new RequestGuardRegistration<GuardTelemetryProbe, TelemetrySkippedGuard>());
+
+        _ = await bus.DispatchAsync(new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System));
+
+        Assert.Equal("conflict", measurements.SingleOutcome("portia.guard.duration",
+            "portia.component.name", nameof(TelemetryOutcomeGuard)));
+        Assert.Equal(0, measurements.Count("portia.guard.duration", "portia.component.name",
+            nameof(TelemetrySkippedGuard)));
+    }
+
+    /// <summary>A stream ended by a failed guard reports the guard's error as the request outcome.</summary>
+    [Fact]
+    public async Task ShouldRecordStreamGuardFailureAsRequestOutcome()
+    {
+        using var measurements = new OutcomeMeasurements();
+        var services = new ServiceCollection()
+            .AddSingleton(new GuardBehavior(GuardAction.Conflict))
+            .AddSingleton<GuardTelemetryStreamHandler>()
+            .AddSingleton<TelemetryStreamGuard>()
+            .BuildServiceProvider();
+        var bus = new RequestBus(services, new RequestRegistry(
+            [new StreamRequestRegistration<GuardTelemetryStream, GuardTelemetryStreamHandler, int>()], [], [],
+            [new RequestGuardRegistration<GuardTelemetryStream, TelemetryStreamGuard>()], []));
+
+        _ = await Assert.ThrowsAsync<RequestGuardException>(async () =>
+        {
+            await foreach (var _ in bus.DispatchStreamAsync(new GuardTelemetryStream(),
+                               bus.CreateContext(RequestActor.System)))
+            {
+            }
+        });
+
+        Assert.Equal("conflict", measurements.SingleOutcome("portia.request.duration",
+            "portia.request.name", nameof(GuardTelemetryStream)));
+        Assert.Equal("conflict", measurements.SingleOutcome("portia.guard.duration",
+            "portia.component.name", nameof(TelemetryStreamGuard)));
+    }
+
+    static RequestBus GuardBus(GuardBehavior behavior, params RequestGuardRegistration[] guards)
+    {
+        var services = new ServiceCollection()
+            .AddSingleton(behavior)
+            .AddSingleton<GuardTelemetryProbeHandler>()
+            .AddSingleton<TelemetryOutcomeGuard>()
+            .AddSingleton<TelemetryCancelingGuard>()
+            .AddSingleton<TelemetryUninitializedGuard>()
+            .AddSingleton<TelemetrySkippedGuard>()
+            .BuildServiceProvider();
+        return new RequestBus(services, new RequestRegistry(
+            [new RequestRegistration<GuardTelemetryProbe, GuardTelemetryProbeHandler>()], [], [], guards, []));
+    }
+
     /// <summary>An event reader's unrelated cancellation exception is an aggregate fault.</summary>
     [Fact]
     public async Task ShouldReportFaultGivenUnrequestedAggregateCancellation()
@@ -118,6 +230,85 @@ public sealed class TelemetryCompletionTests
     }
 
     internal sealed record AuthorizationFailure(CancellationTokenSource Source, bool Requested);
+
+    internal sealed record GuardTelemetryProbe : IRequest;
+
+    internal sealed class GuardTelemetryProbeHandler : IRequestHandler<GuardTelemetryProbe>
+    {
+        public ValueTask<Result> HandleAsync(IRequestContext<GuardTelemetryProbe> context, CancellationToken ct) =>
+            ValueTask.FromResult(Result.Success);
+    }
+
+    internal enum GuardAction
+    {
+        Pass,
+        Conflict,
+        Cancel,
+        Uninitialized
+    }
+
+    internal sealed record GuardBehavior(GuardAction Action, CancellationTokenSource? Source = null,
+        bool Requested = false)
+    {
+        public ValueTask<Result> RunAsync(CancellationToken ct)
+        {
+            switch (Action)
+            {
+                case GuardAction.Conflict:
+                    return ValueTask.FromResult(Result.Failure(new RequestError(RequestErrorKind.Conflict, "taken")));
+                case GuardAction.Cancel:
+                    if (Requested)
+                        Source!.Cancel();
+                    return ValueTask.FromException<Result>(new OperationCanceledException(ct));
+                case GuardAction.Uninitialized:
+                    return ValueTask.FromResult(default(Result));
+                default:
+                    return ValueTask.FromResult(Result.Success);
+            }
+        }
+    }
+
+    internal sealed class TelemetryOutcomeGuard(GuardBehavior behavior) : IRequestGuard<GuardTelemetryProbe>
+    {
+        public ValueTask<Result> GuardAsync(IRequestContext<GuardTelemetryProbe> context, CancellationToken ct) =>
+            behavior.RunAsync(ct);
+    }
+
+    internal sealed class TelemetryCancelingGuard(GuardBehavior behavior) : IRequestGuard<GuardTelemetryProbe>
+    {
+        public ValueTask<Result> GuardAsync(IRequestContext<GuardTelemetryProbe> context, CancellationToken ct) =>
+            behavior.RunAsync(ct);
+    }
+
+    internal sealed class TelemetryUninitializedGuard(GuardBehavior behavior) : IRequestGuard<GuardTelemetryProbe>
+    {
+        public ValueTask<Result> GuardAsync(IRequestContext<GuardTelemetryProbe> context, CancellationToken ct) =>
+            behavior.RunAsync(ct);
+    }
+
+    internal sealed record GuardTelemetryStream : IStreamRequest<int>;
+
+    internal sealed class GuardTelemetryStreamHandler : IStreamRequestHandler<GuardTelemetryStream, int>
+    {
+        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<GuardTelemetryStream> context,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            yield return 1;
+            await Task.CompletedTask;
+        }
+    }
+
+    internal sealed class TelemetryStreamGuard(GuardBehavior behavior) : IRequestGuard<GuardTelemetryStream>
+    {
+        public ValueTask<Result> GuardAsync(IRequestContext<GuardTelemetryStream> context, CancellationToken ct) =>
+            behavior.RunAsync(ct);
+    }
+
+    internal sealed class TelemetrySkippedGuard : IRequestGuard<GuardTelemetryProbe>
+    {
+        public ValueTask<Result> GuardAsync(IRequestContext<GuardTelemetryProbe> context, CancellationToken ct) =>
+            ValueTask.FromResult(Result.Success);
+    }
 
     internal sealed class CancelingAuthorizer(AuthorizationFailure failure) : IRequestAuthorizer<AuthorizationProbe>
     {
@@ -253,6 +444,18 @@ public sealed class TelemetryCompletionTests
         }
 
         public void Dispose() => _listener.Dispose();
+
+        public string SingleOutcome(string name, string tagKey, string tagValue)
+        {
+            var measurement = Assert.Single(_measurements, item => item.Name == name &&
+                                                                   item.Tags.Any(tag => tag.Key == tagKey &&
+                                                                       Equals(tag.Value, tagValue)));
+            return Assert.IsType<string>(Assert.Single(measurement.Tags,
+                tag => tag.Key == "portia.outcome").Value);
+        }
+
+        public int Count(string name, string tagKey, string tagValue) => _measurements.Count(item =>
+            item.Name == name && item.Tags.Any(tag => tag.Key == tagKey && Equals(tag.Value, tagValue)));
 
         public string SingleOutcome(string name, string? runner = null)
         {

@@ -14,6 +14,8 @@ static class PortiaOpenApiSchemaGenerator
 {
     public static IOpenApiSchema Create(Type type, JsonSerializerOptions options, OpenApiDocument document)
     {
+        if (typeof(Stream).IsAssignableFrom(type))
+            return new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" };
         var node = options.GetTypeInfo(type).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
         {
             // The OpenAPI reader expects object nodes for entries in a properties map.

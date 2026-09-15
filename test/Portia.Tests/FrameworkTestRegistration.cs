@@ -29,6 +29,8 @@ static class FrameworkTestRegistration
         _ = portia.AddRequestHandler<HttpCreateOrderHandler>();
         _ = portia.AddRequestHandler<HttpSendPingHandler>();
         _ = portia.AddRequestHandler<HttpOptionalBodyHandler>();
+        _ = portia.AddRequestHandler<HttpSearchWidgetsHandler>();
+        _ = portia.AddRequestHandler<HttpUpdateWidgetHandler>();
         _ = portia.AddRequestHandler<HttpGuardedActionHandler>();
         _ = portia.AddRequestHandler<HttpGuardedQueueActionHandler>();
         _ = portia.AddRequestHandler<AllocationProbeActionHandler>();

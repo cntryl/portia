@@ -31,6 +31,25 @@ public sealed class RegistrationConflictTests
     }
 
     /// <summary>
+    ///     Verifies that one type cannot be both a request authorizer and a request guard: authorization
+    ///     and preflight are separate responsibilities that run at different lifecycle phases.
+    /// </summary>
+    [Fact]
+    public void ShouldRejectTypeRegisteredAsBothAuthorizerAndGuard()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => new RequestRegistry(
+            [new RequestRegistration<UniversalAction, UniversalActionHandler>()],
+            [new RequestAuthorizerRegistration<UniversalAction, DualRoleComponent>()],
+            [],
+            [new RequestGuardRegistration<UniversalAction, DualRoleComponent>()],
+            []));
+
+        Assert.Contains(typeof(DualRoleComponent).FullName!, error.Message, StringComparison.Ordinal);
+        Assert.Contains("request authorizer", error.Message, StringComparison.Ordinal);
+        Assert.Contains("request guard", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     ///     Verifies that the same handler registered twice is not a conflict — a feature assembly whose
     ///     registrations are composed more than once must still start.
     /// </summary>
@@ -308,4 +327,14 @@ sealed class CountingBehavior : IRequestPipelineBehavior<UniversalAction>
 {
     public ValueTask<Result> HandleAsync(IRequestContext<UniversalAction> context, RequestPipelineNext next,
         CancellationToken ct) => next(ct);
+}
+
+// A component that wrongly claims both the authorizer and the guard role.
+sealed class DualRoleComponent : IRequestAuthorizer<UniversalAction>, IRequestGuard<UniversalAction>
+{
+    public ValueTask<Result> AuthorizeAsync(IRequestContext<UniversalAction> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result.Success);
+
+    public ValueTask<Result> GuardAsync(IRequestContext<UniversalAction> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result.Success);
 }

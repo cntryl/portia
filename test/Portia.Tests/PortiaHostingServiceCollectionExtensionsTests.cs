@@ -109,9 +109,9 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         Assert.Equal("broker unavailable", error.Message);
     }
 
-    /// <summary>Hosted composition fails before serving when guarded requests have no evaluator.</summary>
+    /// <summary>Hosted composition fails before serving when permission-protected requests have no evaluator.</summary>
     [Fact]
-    public async Task ShouldRequirePermissionEvaluatorForGuardedRequestsAtStartup()
+    public async Task ShouldRequirePermissionEvaluatorForPermissionProtectedRequestsAtStartup()
     {
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddFrameworkTests();
@@ -119,20 +119,21 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
-        Assert.Contains(nameof(IPermissionEvaluator), failure.Message, StringComparison.Ordinal);
-        var guarded = new[]
+        Assert.StartsWith("IPermissionEvaluator is required by permission-protected request types: ",
+            failure.Message, StringComparison.Ordinal);
+        var permissionProtected = new[]
         {
             typeof(GetOrder), typeof(GuardedAction), typeof(GuardedAndAuthorizedAction), typeof(GuardedQuery),
             typeof(GuardedSequence), typeof(HttpGuardedAction), typeof(HttpGuardedQueueAction),
             typeof(TelemetryGuardedAction), typeof(TelemetryGuardedSequence)
         }.Select(type => type.FullName!).Order(StringComparer.Ordinal).ToArray();
-        Assert.Equal(guarded, failure.Message[(failure.Message.IndexOf(':') + 1)..].TrimEnd('.').Trim()
+        Assert.Equal(permissionProtected, failure.Message[(failure.Message.IndexOf(':') + 1)..].TrimEnd('.').Trim()
             .Split(", "));
     }
 
     /// <summary>A registered evaluator satisfies hosted startup without constructing it eagerly.</summary>
     [Fact]
-    public async Task ShouldAcceptGuardedRequestsGivenPermissionEvaluatorAtStartup()
+    public async Task ShouldAcceptPermissionProtectedRequestsGivenPermissionEvaluatorAtStartup()
     {
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddFrameworkTests();
@@ -144,9 +145,9 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         await host.StopAsync();
     }
 
-    /// <summary>An unguarded composition has no permission-evaluator requirement.</summary>
+    /// <summary>A composition without permission-protected requests has no permission-evaluator requirement.</summary>
     [Fact]
-    public async Task ShouldNotRequirePermissionEvaluatorWithoutGuardedRequests()
+    public async Task ShouldNotRequirePermissionEvaluatorWithoutPermissionProtectedRequests()
     {
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia();

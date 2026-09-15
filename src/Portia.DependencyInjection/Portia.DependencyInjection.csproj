@@ -5,6 +5,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Portia.Fitz"/>
+    <InternalsVisibleTo Include="Portia.AspNetCore"/>
     <InternalsVisibleTo Include="Portia.Tests"/>
   </ItemGroup>
 

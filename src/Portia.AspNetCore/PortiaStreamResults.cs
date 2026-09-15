@@ -35,6 +35,10 @@ public static class PortiaStreamResults
             {
                 await Result.Failure(ex.Error).ToHttpResult().ExecuteAsync(httpContext).ConfigureAwait(false);
             }
+            catch (RequestGuardException ex) when (!httpContext.Response.HasStarted)
+            {
+                await Result.Failure(ex.Error).ToHttpResult().ExecuteAsync(httpContext).ConfigureAwait(false);
+            }
             catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
             {
                 httpContext.Abort();
