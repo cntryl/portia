@@ -4,14 +4,14 @@ namespace Cntryl.Portia;
 
 /// <summary>
 ///     Verifies <see cref="AggregateCapabilities" /> and the <c>Aggregates()</c> extension combine the scope's
-///     <see cref="IAggregateReader" /> and <see cref="IAggregateWriter" /> into one double for tests that seed
-///     or assert on aggregate state directly.
+///     <see cref="IAggregateReader" />, <see cref="IAggregateWriter" />, and <see cref="IAggregateExecutor" />
+///     into one double for tests that seed, execute against, or assert on aggregate state directly.
 /// </summary>
 public sealed class AggregateCapabilitiesTests
 {
-    /// <summary>The combined double is both an <see cref="IAggregateReader" /> and an <see cref="IAggregateWriter" />.</summary>
+    /// <summary>The combined double exposes all three aggregate capabilities.</summary>
     [Fact]
-    public async Task ShouldExposeBothReaderAndWriterCapabilities()
+    public async Task ShouldExposeReaderWriterAndExecutorCapabilities()
     {
         await using var provider = Provider();
         await using var scope = provider.CreateAsyncScope();
@@ -20,6 +20,30 @@ public sealed class AggregateCapabilitiesTests
 
         Assert.IsAssignableFrom<IAggregateReader>(capabilities);
         Assert.IsAssignableFrom<IAggregateWriter>(capabilities);
+        Assert.IsAssignableFrom<IAggregateExecutor>(capabilities);
+    }
+
+    /// <summary>State committed through the executor hydrates back through the same double.</summary>
+    [Fact]
+    public async Task ShouldHydrateStateCommittedThroughExecutor()
+    {
+        await using var provider = Provider();
+        var id = Uuid.CreateVersion4();
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var capabilities = scope.ServiceProvider.Aggregates();
+            await capabilities.ExecuteAsync(new TestAggregate(id), aggregate =>
+            {
+                aggregate.ChangeValue(5);
+                return AggregateOutcome.Commit(Result.Success);
+            }, new RequestDispatchContext(RequestActor.System));
+        }
+
+        await using var reading = provider.CreateAsyncScope();
+        var hydrated = await reading.ServiceProvider.Aggregates().HydrateAsync(new TestAggregate(id));
+
+        Assert.Equal(5, hydrated.Value);
     }
 
     /// <summary>State saved through the combined double hydrates back through the same double.</summary>
