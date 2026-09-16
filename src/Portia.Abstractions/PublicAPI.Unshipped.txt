@@ -1,1 +1,8 @@
 #nullable enable
+Cntryl.Portia.EventStreamPattern.IsTenantTemplate.get -> bool
+Cntryl.Portia.PortiaJsonRootAttribute
+Cntryl.Portia.PortiaJsonRootAttribute.ContextType.get -> System.Type!
+Cntryl.Portia.PortiaJsonRootAttribute.FactoryType.get -> System.Type!
+Cntryl.Portia.PortiaJsonRootAttribute.PortiaJsonRootAttribute(System.Type! rootType, System.Type! contextType, System.Type! factoryType) -> void
+Cntryl.Portia.PortiaJsonRootAttribute.RootType.get -> System.Type!
+static Cntryl.Portia.EventStreamPattern.ForTenant(string? area = null, string? resource = null) -> Cntryl.Portia.EventStreamPattern!

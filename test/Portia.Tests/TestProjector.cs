@@ -1,7 +1,7 @@
 namespace Cntryl.Portia;
 
-sealed partial class TestProjector(ITestProjectionRepository target)
-    : BatchProjector(target, EventStreamPattern.ForPattern("test", "projectors"), "test-projector"),
+sealed partial class TestProjector(ITestProjectionRepository target, EventStreamPattern? pattern = null)
+    : BatchProjector(target, pattern ?? EventStreamPattern.ForPattern("test", "projectors"), "test-projector"),
         IProjectorHandler<ValueChanged>,
         IProjectorHandler<ValueIncremented>
 {

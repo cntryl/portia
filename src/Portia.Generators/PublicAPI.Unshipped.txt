@@ -1,1 +1,4 @@
 #nullable enable
+Cntryl.Portia.JsonRootMarkerGenerator
+Cntryl.Portia.JsonRootMarkerGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Cntryl.Portia.JsonRootMarkerGenerator.JsonRootMarkerGenerator() -> void

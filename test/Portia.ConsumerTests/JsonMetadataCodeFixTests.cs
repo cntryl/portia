@@ -18,12 +18,17 @@ public sealed class JsonMetadataCodeFixTests
                                    using System.Threading;
                                    using System.Threading.Tasks;
                                    using Cntryl.Portia;
+                                   using Microsoft.Extensions.DependencyInjection;
                                    namespace App;
                                    public sealed record Query : IRequest<Answer>;
                                    public sealed record Answer;
                                    public sealed class Handler : IRequestHandler<Query, Answer>
                                    {
                                        public ValueTask<Result<Answer>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
+                                   }
+                                   public static class Registration
+                                   {
+                                       public static void Add(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();
                                    }
                                    """;
 
@@ -32,6 +37,7 @@ public sealed class JsonMetadataCodeFixTests
                                                    using System.Threading;
                                                    using System.Threading.Tasks;
                                                    using Cntryl.Portia;
+                                                   using Microsoft.Extensions.DependencyInjection;
                                                    namespace App
                                                    {
                                                        public sealed record Query : IRequest<Answer>;
@@ -39,6 +45,10 @@ public sealed class JsonMetadataCodeFixTests
                                                        public sealed class Handler : IRequestHandler<Query, Answer>
                                                        {
                                                            public ValueTask<Result<Answer>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
+                                                       }
+                                                       public static class Registration
+                                                       {
+                                                           public static void Add(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();
                                                        }
                                                    }
                                                    """;

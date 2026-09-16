@@ -13,4 +13,5 @@ namespace Cntryl.Portia.Consumer;
 [JsonSerializable(typeof(ScopeRequest))]
 [JsonSerializable(typeof(NestedScopeRequest))]
 [JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(ReferencedContractJsonPayload))]
 sealed partial class ConsumerContractsJsonContext : JsonSerializerContext;

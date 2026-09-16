@@ -1,9 +1,35 @@
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia.Consumer;
 
 public sealed class StartupValidationTests
 {
+    [Fact]
+    public void AddPortiaComposesJsonContextOwnedByReferencedAssembly()
+    {
+        var services = new ServiceCollection();
+        _ = ReferencedJsonComposition.Add(services);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.True(provider.GetRequiredService<JsonSerializerOptions>()
+            .TryGetTypeInfo(typeof(ReferencedContractJsonPayload), out _));
+    }
+
+    [Fact]
+    public async Task AdvertisedUsageStillFailsStartupWhenNoComposedContextResolvesTheRoot()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        _ = builder.Services.AddPortia()
+            .AddGeneratedHandler(new RequestRegistration<MissingJsonMetadataRequest, MissingJsonMetadataHandler>());
+        using var host = builder.Build();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+
+        Assert.Contains(typeof(MissingJsonMetadataRequest).FullName!, error.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(0, null)]
     [InlineData(-1, null)]
@@ -63,5 +89,13 @@ public sealed class StartupValidationTests
             services.AddPortia().AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global,
                 o => o.Processing = new ProjectionRunOptions { RebuildId = "repair" }));
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
+    }
+
+    sealed record MissingJsonMetadataRequest : IRequest;
+
+    sealed class MissingJsonMetadataHandler : IRequestHandler<MissingJsonMetadataRequest>
+    {
+        public ValueTask<Result> HandleAsync(IRequestContext<MissingJsonMetadataRequest> context,
+            CancellationToken ct) => ValueTask.FromResult(Result.Success);
     }
 }

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Framework-independent real-client testing helpers for Portia Streamable HTTP MCP tools.</Description>
+    <RootNamespace>Cntryl.Portia.Testing</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol"/>
+  </ItemGroup>
+</Project>

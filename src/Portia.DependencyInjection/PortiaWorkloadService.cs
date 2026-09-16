@@ -21,11 +21,11 @@ sealed class PortiaWorkloadService(
     readonly ILogger<PortiaWorkloadService>? _logger = logger;
     readonly WorkloadRegistration[] _registrations = [.. registrations];
 
-    public Task StartingAsync(CancellationToken cancellationToken)
+    public async Task StartingAsync(CancellationToken cancellationToken)
     {
         if (_registrations.Length == 0)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         Require(typeof(IDomainEventReader));
@@ -34,7 +34,30 @@ sealed class PortiaWorkloadService(
             Require(typeof(ITenantDirectory));
         }
 
-        return Task.CompletedTask;
+        foreach (var registration in _registrations)
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            var validationIdentity = registration.Scope == WorkloadScope.PerTenant
+                ? new WorkloadIdentity(registration.Name, new TenantId("portia-startup-validation"))
+                : new WorkloadIdentity(registration.Name);
+            scope.ServiceProvider.GetRequiredService<WorkloadContext>()
+                .Initialize(validationIdentity, registration.Name);
+            var pattern = registration.Descriptor.Pattern(scope.ServiceProvider);
+            var valid = registration.Scope == WorkloadScope.PerTenant
+                ? pattern.IsTenantTemplate
+                : !pattern.IsTenantTemplate;
+            if (!valid)
+            {
+                var expected = registration.Scope == WorkloadScope.PerTenant
+                    ? "EventStreamPattern.ForTenant(...)"
+                    : "EventStreamPattern.ForPattern(...)";
+                throw new InvalidOperationException(
+                    $"Workload '{registration.Name}' uses scope '{registration.Scope}' but pattern '{pattern}'. " +
+                    $"Use {expected} for this scope.");
+            }
+        }
+
+        return;
 
         void Require(Type type)
         {

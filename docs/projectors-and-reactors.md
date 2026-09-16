@@ -51,7 +51,7 @@ public sealed class AccountRepository : IAccountRepository, IProjectionStore
 }
 
 public sealed partial class AccountProjector(IAccountRepository accounts, IProjectionStore store)
-    : BatchProjector(store, EventStreamPattern.ForPattern("accounts", "balances")),
+    : BatchProjector(store, EventStreamPattern.ForTenant("balances")),
       IProjectorHandler<MoneyDeposited>
 {
     public ValueTask HandleAsync(
@@ -79,8 +79,9 @@ double for it has to implement `BeginAsync`.
 
 `Cntryl.Portia.DependencyInjection` supplies the generator for typed dispatch.
 `IProjectorContext` contains checkpoint identity and rebuild metadata, never application
-services. `WorkloadScope.PerTenant` replaces the declared pattern's realm with the active tenant ID;
-`WorkloadScope.Global` keeps the declared realm. Hosted workloads require an explicit stable ID in
+services. `WorkloadScope.PerTenant` requires `EventStreamPattern.ForTenant(...)` and binds its realm
+to the active tenant ID before checkpoints or reads; `WorkloadScope.Global` requires an exact
+`ForPattern(...)` realm. Hosted workloads require an explicit stable ID in
 `AddProjector` or `AddReactor`; that ID is also their checkpoint component name.
 
 `IProjectionStore` exposes `LoadCheckpointAsync(identity, ct)` and

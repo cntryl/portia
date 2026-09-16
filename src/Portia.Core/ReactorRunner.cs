@@ -46,6 +46,11 @@ public sealed class ReactorRunner(
         ProjectionRunOptions options, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(reactor);
+        if (reactor.Pattern.IsTenantTemplate)
+        {
+            throw new InvalidOperationException(
+                "An unbound tenant stream template cannot be run manually. Register it as a PerTenant workload.");
+        }
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
         var actor = PrincipalSnapshot.Copy(_principals.GetPrincipal(reactor));

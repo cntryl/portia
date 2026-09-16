@@ -1,7 +1,8 @@
 namespace Cntryl.Portia;
 
-sealed partial class TestReactor(RecordingAggregateRepository repository, IProjectionCheckpointStore? checkpoints = null)
-    : Reactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test", "reactors"),
+sealed partial class TestReactor(RecordingAggregateRepository repository, IProjectionCheckpointStore? checkpoints = null,
+    EventStreamPattern? pattern = null)
+    : Reactor(checkpoints ?? new InMemoryProjectionCheckpointStore(), pattern ?? EventStreamPattern.ForPattern("test", "reactors"),
             "test-reactor"),
         IReactorHandler<ValueChanged>,
         IReactorHandler<ValueIncremented>

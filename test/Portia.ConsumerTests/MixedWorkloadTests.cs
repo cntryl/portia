@@ -21,11 +21,11 @@ public sealed class MixedWorkloadTests
         _ = builder.Services.AddSingleton<IWorkloadCoordinator>(coordinator);
         _ = builder.Services.AddSingleton<ITenantDirectory>(tenants);
         _ = builder.Services.AddPortia()
-            .AddProjector<FirstProjector>("accounts", WorkloadScope.PerTenant,
+            .AddProjector<TenantFirstProjector>("accounts", WorkloadScope.PerTenant,
                 o => { o.PollInterval = TimeSpan.FromMilliseconds(10); })
             .AddProjector<SecondProjector>("summary", WorkloadScope.Global,
                 o => { o.PollInterval = TimeSpan.FromMilliseconds(10); })
-            .AddReactor<FirstReactor>("reaction", WorkloadScope.PerTenant,
+            .AddReactor<TenantFirstReactor>("reaction", WorkloadScope.PerTenant,
                 o => { o.PollInterval = TimeSpan.FromMilliseconds(10); })
             .AddWorkers();
         using var host = builder.Build();

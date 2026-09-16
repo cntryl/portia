@@ -157,6 +157,43 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         await host.StopAsync();
     }
 
+    /// <summary>A global workload must declare an exact realm rather than a tenant template.</summary>
+    [Fact]
+    public async Task ShouldRejectTenantTemplateForGlobalWorkloadAtStartup()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        _ = builder.Services.AddSingleton<IDomainEventReader, InMemoryEventStore>();
+        _ = builder.Services.AddSingleton(new TestProjector(new RecordingProjectionTarget(),
+            EventStreamPattern.ForTenant("orders")));
+        _ = builder.Services.AddPortia()
+            .AddProjector<TestProjector>("orders", WorkloadScope.Global)
+            .AddWorkers();
+        using var host = builder.Build();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+
+        Assert.Contains("ForPattern", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A per-tenant workload must declare a tenant template rather than an exact realm.</summary>
+    [Fact]
+    public async Task ShouldRejectExactPatternForPerTenantWorkloadAtStartup()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        _ = builder.Services.AddSingleton<IDomainEventReader, InMemoryEventStore>();
+        _ = builder.Services.AddSingleton<ITenantDirectory>(new HostingFakeTenantDirectory([]));
+        _ = builder.Services.AddSingleton(new TestProjector(new RecordingProjectionTarget(),
+            EventStreamPattern.ForPattern("placeholder", "orders")));
+        _ = builder.Services.AddPortia()
+            .AddProjector<TestProjector>("orders", WorkloadScope.PerTenant)
+            .AddWorkers();
+        using var host = builder.Build();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+
+        Assert.Contains("ForTenant", error.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>A failing worker contribution leaves the target collection unchanged.</summary>
     [Fact]
     public void ShouldStageAllWorkerRegistrationsBeforeApplyingAny()

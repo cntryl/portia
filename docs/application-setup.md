@@ -223,9 +223,10 @@ portia.AddReactor<AccountReactor>("AccountReactor", WorkloadScope.PerTenant);
 ```
 
 `WorkloadScope.PerTenant` creates an independently owned workload for each active `ITenantDirectory`
-entry. Portia replaces the component pattern's realm with the tenant ID, retaining its
-area and resource filters. `WorkloadScope.Global` creates one logical workload and retains the
-component's declared pattern. It does not grant cross-tenant access or scan every realm.
+entry. Its component must declare `EventStreamPattern.ForTenant(...)`; Portia binds that template
+to the tenant ID before constructing a checkpoint or reading, retaining its area and resource
+filters. `WorkloadScope.Global` requires `EventStreamPattern.ForPattern(...)` and retains that exact
+realm. Either mismatch fails startup, and an unbound template cannot be driven manually.
 
 An omitted ID or scope, an invalid scope, a conflicting registration, or duplicate workload ID
 fails during configuration. Repeating an identical registration is idempotent. The

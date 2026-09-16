@@ -79,6 +79,10 @@ services.AddPortia()
     .AddFitz(configuration.GetSection("Fitz"));
 ```
 
+Per-tenant projectors and reactors declare their source with
+`EventStreamPattern.ForTenant(area, resource)`; Portia binds the actual tenant realm before reading.
+Global workloads use an exact `EventStreamPattern.ForPattern(realm, area, resource)`.
+
 An API host explicitly maps HTTP endpoints. A worker host calls the same application setup and adds `.AddWorkers()`. The
 handler and domain model do not change when the operation is sent over RPC, placed on a queue, or invoked in-process.
 
@@ -113,6 +117,7 @@ is modeled honestly as an at-least-once reactor effect instead.
 - [Performance and scaling](docs/performance-and-scaling.md): measured hot paths and scaling model
 - [NativeAOT](docs/native-aot.md): trimming and source-generated JSON setup
 - [Model Context Protocol](docs/mcp.md): generated tools over stdio and Streamable HTTP
+- [Migrating to Portia 0.4](docs/migration-0.4.md): JSON ownership, tenant templates, and MCP tests
 
 ## Development
 

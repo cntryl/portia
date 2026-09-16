@@ -79,6 +79,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             .Where(static model => model is not null)
             .Select(static (model, _) => model!)
             .Collect();
+        var referencedJsonContexts = context.CompilationProvider.Select(static (compilation, _) =>
+            ReferencedJsonContexts(compilation));
         var declaredEvents = context.SyntaxProvider.CreateSyntaxProvider(
                 static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
                 static (ctx, _) => DeclaredEventModel(ctx))
@@ -91,8 +93,9 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             .Where(static model => model is not null)
             .Select(static (model, _) => model!)
             .Collect();
-        var shared = jsonContexts.Combine(declaredEvents).Combine(referencedEvents)
-            .Select(static (input, _) => SharedRegistrations(input.Left.Left, input.Left.Right, input.Right))
+        var shared = jsonContexts.Combine(referencedJsonContexts).Combine(declaredEvents).Combine(referencedEvents)
+            .Select(static (input, _) => SharedRegistrations(
+                input.Left.Left.Left.AddRange(input.Left.Left.Right), input.Left.Right, input.Right))
             .WithTrackingName("PortiaSharedRegistrations");
         context.RegisterSourceOutput(calls.Combine(dispatchedRequests).Combine(shared),
             static (ctx, pair) => Generate(ctx, pair.Left.Left, pair.Left.Right, pair.Right));
@@ -446,6 +449,25 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             : null;
     }
 
+    static ImmutableArray<JsonContextModelRecord> ReferencedJsonContexts(Compilation compilation)
+    {
+        var contexts = ImmutableArray.CreateBuilder<JsonContextModelRecord>();
+        foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
+        {
+            foreach (var attribute in assembly.GetAttributes().Where(candidate =>
+                         candidate.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonRootAttribute"))
+            {
+                if (attribute.ConstructorArguments.Length > 2
+                    && attribute.ConstructorArguments[2].Value is INamedTypeSymbol factory)
+                {
+                    contexts.Add(new JsonContextModelRecord(factory.ToDisplayString(), Type(factory) + ".Create"));
+                }
+            }
+        }
+
+        return contexts.ToImmutable();
+    }
+
     static EventModelRecord? DeclaredEventModel(GeneratorSyntaxContext context)
     {
         var declaration = (TypeDeclarationSyntax)context.Node;
@@ -492,8 +514,11 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         var contexts = new StringBuilder();
         foreach (var context in Unique(jsonContexts, model => model.DisplayName))
         {
-            _ = contexts.Append("_ = builder.AddGeneratedJsonContext(static options => new ")
-                .Append(context.TypeName).AppendLine("(options));");
+            _ = contexts.Append("_ = builder.AddGeneratedJsonContext(static options => ");
+            if (context.TypeName.EndsWith(".Create", StringComparison.Ordinal))
+                _ = contexts.Append(context.TypeName).AppendLine("(options));");
+            else
+                _ = contexts.Append("new ").Append(context.TypeName).AppendLine("(options));");
         }
 
         var events = new StringBuilder();
