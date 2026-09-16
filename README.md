@@ -11,7 +11,7 @@ semantics regardless of how it arrives.
 HTTP / RPC / queue / schedule / local
                     │
                     ▼
- request → authorization → behaviors → handler → aggregate → Fitz event log
+ request → authorization → behaviors → guards → handler → aggregate → Fitz event log
                                                            │
                                            ┌───────────────┴───────────────┐
                                            ▼                               ▼
@@ -38,6 +38,8 @@ The unit of value is not `command → handler → route`. It is the complete pat
 - **Compile-time wiring.** Registration, transport descriptors, HTTP binding, and JSON roots are source-generated and
   checked by Portia analyzers. The supported runtime path uses no assembly scanning or reflection and is exercised as a
   packed NativeAOT application in CI.
+- **Reusable request preflight.** Scoped asynchronous guards run at the unary handler boundary, can target one request
+  or an application-owned request family, and short-circuit with the ordinary `Result` contract.
 
 ## A vertical slice
 
@@ -53,20 +55,17 @@ public sealed record Deposit(Uuid AccountId, int Amount)
 Its handler contains the application decision, not HTTP or queue plumbing:
 
 ```csharp
-public sealed class DepositHandler(IAggregateRepository aggregates)
+public sealed class DepositHandler(IAggregateExecutor aggregates)
     : IRequestHandler<Deposit>
 {
-    public async ValueTask<Result> HandleAsync(
+    public ValueTask<Result> HandleAsync(
         IRequestContext<Deposit> context,
-        CancellationToken ct)
-    {
-        var account = await aggregates.HydrateAsync(
-            new Account(context.Request.AccountId), ct);
-
-        account.Deposit(context.Request.Amount);
-        await aggregates.SaveAsync(account, context, ct);
-        return Result.Success;
-    }
+        CancellationToken ct) =>
+        aggregates.ExecuteAsync(
+            new Account(context.Request.AccountId),
+            account => AggregateOutcome.Commit(account.Deposit(context.Request.Amount)),
+            context,
+            ct);
 }
 ```
 
@@ -108,6 +107,7 @@ is modeled honestly as an at-least-once reactor effect instead.
 - [Shared application setup](docs/application-setup.md): API and worker deployments from one composition
 - [Projectors and reactors](docs/projectors-and-reactors.md): native repositories and durable processing
 - [Request context](docs/request-context.md): actor, correlation, and causation
+- [Request guards](docs/request-guards.md): authorization, reusable asynchronous preflight, and authoritative invariants
 - [Platform vision](docs/platform-vision.md): the fixed Fitz–Portia–Cassie boundary
 - [Scope](docs/scope.md) and [design decisions](docs/design-decisions.md): guarantees and deliberate limits
 - [Performance and scaling](docs/performance-and-scaling.md): measured hot paths and scaling model

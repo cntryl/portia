@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -130,8 +131,24 @@ public sealed class OpenApiTests : IAsyncDisposable
         _ = group.MapPortiaPost<HttpCreateOrder, Uuid>("/orders")
             .WithSummary("Create an order")
             .WithDescription("Creates one order.");
-        _ = group.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");
+        _ = group.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}", endpoint => endpoint
+            .Parameter<Uuid>("widget_id", PortiaHttpParameterLocation.Route)
+            .Parameter<bool>("archived", PortiaHttpParameterLocation.Header, required: false)
+            .OnBind(http => new HttpGetWidget(
+                Uuid.Parse((string)http.Request.RouteValues["widget_id"]!, CultureInfo.InvariantCulture), false))
+            .Produces(StatusCodes.Status302Found)
+            .OnResult((_, result) => result.IsSuccess ? Results.Redirect("/widgets/current") : null));
+        _ = group.MapPortiaPost<HttpOptionalBody, string>("/upload", endpoint => endpoint
+            .Accepts<Stream>("application/octet-stream")
+            .OnBind(_ => new HttpOptionalBody())
+            .Produces<Stream>(StatusCodes.Status200OK, "application/octet-stream")
+            .OnResult((_, result) => result.IsSuccess ? Results.Stream(Stream.Null) : null));
+        _ = group.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}/update", endpoint => endpoint
+            .FromQuery(x => x.DryRun));
         _ = group.MapPortiaPost<HttpSendPing>("/ping");
+        _ = group.MapPortiaPost<HttpGuardedQueueAction>("/guarded-queue", endpoint => endpoint
+            .Produces(StatusCodes.Status302Found)
+            .OnResult((_, result) => result.IsSuccess ? Results.Redirect("/done") : null));
         _ = group.MapPortiaGetStream<HttpListWidgets, string>("/widgets");
         _ = group.MapPortiaGetSse<HttpListWidgets, string>("/widget-events").ExcludeFromDescription();
         _ = _app.MapGet("/health", () => Results.Ok(new { status = "ok" })).WithName("health");
@@ -173,13 +190,53 @@ public sealed class OpenApiTests : IAsyncDisposable
             parameter.GetProperty("name").GetString() == "widget_id" &&
             parameter.GetProperty("in").GetString() == "path");
         Assert.Contains(get.GetProperty("parameters").EnumerateArray(), parameter =>
-            parameter.GetProperty("name").GetString() == "include_archived" &&
-            parameter.GetProperty("in").GetString() == "query");
-        Assert.Contains(get.GetProperty("parameters").EnumerateArray(), parameter =>
-            parameter.GetProperty("name").GetString() == "include_archived"
-            && parameter.GetProperty("schema").GetProperty("default").ValueKind == JsonValueKind.False);
+            parameter.GetProperty("name").GetString() == "archived" &&
+            parameter.GetProperty("in").GetString() == "header" &&
+            (!parameter.TryGetProperty("required", out var required) || !required.GetBoolean()));
+        var getResponses = get.GetProperty("responses");
+        Assert.True(getResponses.TryGetProperty("302", out _));
+        Assert.False(getResponses.TryGetProperty("200", out _));
+        var createContent = create.GetProperty("requestBody").GetProperty("content");
+        Assert.False(createContent.TryGetProperty("application/x-www-form-urlencoded", out _));
+        var updateContent = paths.GetProperty("/api/widgets/{widget_id}/update").GetProperty("post")
+            .GetProperty("requestBody").GetProperty("content");
+        foreach (var mediaType in new[] { "application/json", "application/x-www-form-urlencoded", "multipart/form-data" })
+        {
+            var schema = updateContent.GetProperty(mediaType).GetProperty("schema");
+            var properties = schema.GetProperty("properties");
+            Assert.True(properties.TryGetProperty("quantity", out _), mediaType);
+            Assert.False(properties.TryGetProperty("dry_run", out _), mediaType);
+            var required = schema.GetProperty("required").EnumerateArray()
+                .Select(item => item.GetString()).ToArray();
+            Assert.Contains("name", required);
+            Assert.Contains("quantity", required);
+            if (mediaType == "application/json")
+                Assert.Contains("active", required);
+            else
+                Assert.DoesNotContain("active", required);
+        }
+        var dryRun = Assert.Single(paths.GetProperty("/api/widgets/{widget_id}/update").GetProperty("post")
+            .GetProperty("parameters").EnumerateArray(), parameter => parameter.GetProperty("name").GetString() == "dry_run");
+        Assert.Equal("query", dryRun.GetProperty("in").GetString());
+        Assert.False(dryRun.TryGetProperty("required", out var dryRunRequired) && dryRunRequired.GetBoolean());
+        Assert.Equal("boolean", dryRun.GetProperty("schema").GetProperty("type").GetString());
+        var uploadOperation = paths.GetProperty("/api/upload").GetProperty("post");
+        var upload = uploadOperation.GetProperty("requestBody");
+        var binary = upload.GetProperty("content").GetProperty("application/octet-stream").GetProperty("schema");
+        Assert.Equal("string", binary.GetProperty("type").GetString());
+        Assert.Equal("binary", binary.GetProperty("format").GetString());
+        var binaryResponse = uploadOperation.GetProperty("responses").GetProperty("200").GetProperty("content")
+            .GetProperty("application/octet-stream").GetProperty("schema");
+        Assert.Equal("string", binaryResponse.GetProperty("type").GetString());
+        Assert.Equal("binary", binaryResponse.GetProperty("format").GetString());
         Assert.True(paths.GetProperty("/api/ping").GetProperty("post").GetProperty("responses")
             .TryGetProperty("202", out _));
+        var guardedQueue = paths.GetProperty("/api/guarded-queue").GetProperty("post");
+        Assert.False(guardedQueue.GetProperty("responses").TryGetProperty("202", out _));
+        Assert.True(guardedQueue.GetProperty("responses").TryGetProperty("302", out _));
+        Assert.DoesNotContain(guardedQueue.TryGetProperty("parameters", out var guardedParameters)
+            ? guardedParameters.EnumerateArray().ToArray()
+            : [], parameter => parameter.GetProperty("name").GetString() == "Prefer");
         var responses = create.GetProperty("responses");
         var problemSchema = responses.GetProperty("400").GetProperty("content")
             .GetProperty("application/problem+json").GetProperty("schema");

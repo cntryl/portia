@@ -9,3 +9,5 @@ PORTIA101 | Portia | Warning | Portia components should not use known service-lo
 PORTIA102 | Portia | Warning | Aggregates must not depend on services
 PORTIA103 | Portia | Warning | A type should handle only one request
 PORTIA104 | Portia | Warning | Unexpected failures must stay exceptions, not become a failed Result
+PORTIA105 | Portia | Warning | Request guards should not take known effect-capable dependencies; recognized type ancestry is a best-effort heuristic
+PORTIA106 | Portia | Warning | Request authorizers should not take known effect-capable dependencies; recognized type ancestry is a best-effort heuristic

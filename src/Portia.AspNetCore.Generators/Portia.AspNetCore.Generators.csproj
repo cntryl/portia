@@ -13,6 +13,7 @@
   <ItemGroup>
     <Compile Include="../Portia.Generators/DiagnosticLocation.cs" Link="DiagnosticLocation.cs"/>
     <Compile Include="../Portia.Generators/GeneratedTypeShape.cs" Link="GeneratedTypeShape.cs"/>
+    <Compile Include="../Portia.Generators/HttpBindingShape.cs" Link="HttpBindingShape.cs"/>
     <Compile Include="../Portia.Generators/InterceptableLocationModel.cs" Link="InterceptableLocationModel.cs"/>
     <Compile Include="../Portia.Generators/IsExternalInit.cs" Link="IsExternalInit.cs"/>
     <Compile Include="../Portia.Generators/RequestHttpBindingGenerator.cs" Link="RequestHttpBindingGenerator.cs"/>

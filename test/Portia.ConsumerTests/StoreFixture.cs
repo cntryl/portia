@@ -18,12 +18,12 @@ sealed class StoreFixture : IAsyncDisposable
         _provider = services.BuildServiceProvider(new ServiceProviderOptions
         { ValidateScopes = true, ValidateOnBuild = true });
         _scope = _provider.CreateAsyncScope();
-        Repository = _scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
+        Repository = _scope.ServiceProvider.Aggregates();
     }
 
     public IEventStore Store { get; }
 
-    public IAggregateRepository Repository { get; }
+    public AggregateCapabilities Repository { get; }
 
     public async ValueTask DisposeAsync()
     {

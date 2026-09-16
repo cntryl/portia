@@ -36,7 +36,7 @@ public sealed class ComponentRegistrationTests
     public void ShouldResolveReactorAfterExplicitRegistration()
     {
         var services = new ServiceCollection();
-        _ = services.AddSingleton<IAggregateRepository>(new RecordingAggregateRepository());
+        _ = services.AddSingleton(new RecordingAggregateRepository());
         _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
 
@@ -69,7 +69,7 @@ public sealed class ComponentRegistrationTests
     public void ShouldResolveReactorThroughReactorRegistration()
     {
         var services = new ServiceCollection();
-        _ = services.AddSingleton<IAggregateRepository>(new RecordingAggregateRepository());
+        _ = services.AddSingleton(new RecordingAggregateRepository());
         _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
 
@@ -115,7 +115,7 @@ public sealed class ComponentRegistrationTests
     public void ShouldRegisterTransportIdsMatchingDeclaredMarkers()
     {
         var services = new ServiceCollection();
-        _ = services.AddSingleton<IAggregateRepository>(new RecordingAggregateRepository());
+        _ = services.AddSingleton(new RecordingAggregateRepository());
         _ = services.AddSingleton<ITestProjectionRepository>(new UnusedProjectionTarget());
         _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();

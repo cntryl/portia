@@ -129,13 +129,14 @@ public sealed class AggregatePersistenceTests
                                                                 ValidateScopes = true, ValidateOnBuild = true,
                                                             });
                                                             await using var scope = provider.CreateAsyncScope();
-                                                            var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
+                                                            var reader = scope.ServiceProvider.GetRequiredService<IAggregateReader>();
+                                                            var writer = scope.ServiceProvider.GetRequiredService<IAggregateWriter>();
                                                             var account = new Account(Uuid.CreateVersion4());
-                                                            if ((await repository.HydrateAsync(new Account(account.Id))).CommittedStreamPosition != 0)
+                                                            if ((await reader.HydrateAsync(new Account(account.Id))).CommittedStreamPosition != 0)
                                                                 throw new Exception("An absent stream must leave the constructed instance unchanged.");
                                                             account.Deposit(12);
-                                                            await repository.SaveAsync(account, new RequestDispatchContext(RequestActor.System));
-                                                            var loaded = await repository.HydrateAsync(new Account(account.Id));
+                                                            await writer.SaveAsync(account, new RequestDispatchContext(RequestActor.System));
+                                                            var loaded = await reader.HydrateAsync(new Account(account.Id));
                                                             return loaded?.Balance ?? -1;
                                                         }
                                                     }

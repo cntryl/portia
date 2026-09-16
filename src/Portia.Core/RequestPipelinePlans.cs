@@ -83,16 +83,19 @@ sealed class UnaryRequestPipelinePlan
     static readonly AsyncLocal<RequestPipelineFrame<IRequest>?> Current = new();
     readonly (IRequestBehaviorInvocation Invocation, Type Owner)[] _behaviors;
     readonly RequestPipelineNext[] _continuations;
+    readonly RequestGuardRegistration[] _guards;
 
-    internal UnaryRequestPipelinePlan(IEnumerable<RequestPipelineBehaviorRegistration> registrations)
+    internal UnaryRequestPipelinePlan(IEnumerable<RequestPipelineBehaviorRegistration> registrations,
+        RequestGuardRegistration[] guards)
     {
         _behaviors = registrations.Reverse()
             .Where(registration => registration is IRequestBehaviorInvocation)
             .Select(registration => ((IRequestBehaviorInvocation)registration, registration.BehaviorType)).ToArray();
         _continuations = Enumerable.Range(0, _behaviors.Length).Select(CreateContinuation).ToArray();
+        _guards = guards;
     }
 
-    internal bool IsEmpty => _behaviors.Length == 0;
+    internal bool IsEmpty => _behaviors.Length == 0 && _guards.Length == 0;
 
     internal ValueTask<Result> InvokeAsync(IServiceProvider services, RequestHandlerRegistration registration,
         IRequest request, IRequestContext context, CancellationToken ct)
@@ -153,12 +156,25 @@ sealed class UnaryRequestPipelinePlan
     {
         if (position == _behaviors.Length)
         {
-            return ValidateAsync(((IRequestInvocation)frame.Registration)
-                .InvokeAsync(frame.Services, frame.Request, frame.Context, ct), frame.Registration.HandlerType,
-                "request handler");
+            return _guards.Length == 0
+                ? ValidateAsync(((IRequestInvocation)frame.Registration)
+                        .InvokeAsync(frame.Services, frame.Request, frame.Context, ct), frame.Registration.HandlerType,
+                    "request handler")
+                : InvokeGuardedHandlerAsync(frame, ct);
         }
 
         return InvokeBehaviorAsync(frame, position, ct);
+    }
+
+    async ValueTask<Result> InvokeGuardedHandlerAsync(RequestPipelineFrame<IRequest> frame, CancellationToken ct)
+    {
+        var guarded = await RequestGuardRunner.RunAsync(frame.Services, _guards, frame.Request, frame.Context, ct)
+            .ConfigureAwait(false);
+        if (!guarded.IsSuccess)
+            return guarded;
+        return await ValidateAsync(((IRequestInvocation)frame.Registration)
+                .InvokeAsync(frame.Services, frame.Request, frame.Context, ct), frame.Registration.HandlerType,
+            "request handler").ConfigureAwait(false);
     }
 
     ValueTask<Result> InvokeBehaviorAsync(RequestPipelineFrame<IRequest> frame, int position,
@@ -236,17 +252,20 @@ sealed class ResultRequestPipelinePlan<TOut>
     static readonly AsyncLocal<RequestPipelineFrame<IRequest<TOut>>?> Current = new();
     readonly (IRequestBehaviorInvocation<TOut> Invocation, Type Owner)[] _behaviors;
     readonly RequestPipelineNext<TOut>[] _continuations;
+    readonly RequestGuardRegistration[] _guards;
 
-    internal ResultRequestPipelinePlan(IEnumerable<RequestPipelineBehaviorRegistration> registrations)
+    internal ResultRequestPipelinePlan(IEnumerable<RequestPipelineBehaviorRegistration> registrations,
+        RequestGuardRegistration[] guards)
     {
         _behaviors = registrations.Reverse()
             .Where(registration => registration is IRequestBehaviorInvocation<TOut>)
             .Select(registration => ((IRequestBehaviorInvocation<TOut>)registration, registration.BehaviorType))
             .ToArray();
         _continuations = Enumerable.Range(0, _behaviors.Length).Select(CreateContinuation).ToArray();
+        _guards = guards;
     }
 
-    internal bool IsEmpty => _behaviors.Length == 0;
+    internal bool IsEmpty => _behaviors.Length == 0 && _guards.Length == 0;
 
     internal ValueTask<Result<TOut>> InvokeAsync(IServiceProvider services,
         RequestHandlerRegistration registration, IRequest<TOut> request, IRequestContext context,
@@ -309,12 +328,26 @@ sealed class ResultRequestPipelinePlan<TOut>
     {
         if (position == _behaviors.Length)
         {
-            return ValidateAsync(((IRequestInvocation<TOut>)frame.Registration)
-                .InvokeAsync(frame.Services, frame.Request, frame.Context, ct), frame.Registration.HandlerType,
-                "request handler");
+            return _guards.Length == 0
+                ? ValidateAsync(((IRequestInvocation<TOut>)frame.Registration)
+                        .InvokeAsync(frame.Services, frame.Request, frame.Context, ct), frame.Registration.HandlerType,
+                    "request handler")
+                : InvokeGuardedHandlerAsync(frame, ct);
         }
 
         return InvokeBehaviorAsync(frame, position, ct);
+    }
+
+    async ValueTask<Result<TOut>> InvokeGuardedHandlerAsync(RequestPipelineFrame<IRequest<TOut>> frame,
+        CancellationToken ct)
+    {
+        var guarded = await RequestGuardRunner.RunAsync(frame.Services, _guards, frame.Request, frame.Context, ct)
+            .ConfigureAwait(false);
+        if (!guarded.IsSuccess)
+            return Result<TOut>.Failure(guarded.Error);
+        return await ValidateAsync(((IRequestInvocation<TOut>)frame.Registration)
+                .InvokeAsync(frame.Services, frame.Request, frame.Context, ct), frame.Registration.HandlerType,
+            "request handler").ConfigureAwait(false);
     }
 
     ValueTask<Result<TOut>> InvokeBehaviorAsync(RequestPipelineFrame<IRequest<TOut>> frame, int position,
@@ -393,9 +426,12 @@ sealed class StreamRequestPipelinePlan<TOut>
     static readonly AsyncLocal<RequestPipelineFrame<IStreamRequest<TOut>>?> Current = new();
     readonly IStreamRequestBehaviorInvocation<TOut>[] _behaviors;
     readonly StreamRequestPipelineNext<TOut>[] _continuations;
+    readonly RequestGuardRegistration[] _guards;
 
-    internal StreamRequestPipelinePlan(IEnumerable<RequestPipelineBehaviorRegistration> registrations)
+    internal StreamRequestPipelinePlan(IEnumerable<RequestPipelineBehaviorRegistration> registrations,
+        RequestGuardRegistration[] guards)
     {
+        _guards = guards;
         _behaviors = registrations.OfType<IStreamRequestBehaviorInvocation<TOut>>().Reverse().ToArray();
         _continuations = Enumerable.Range(0, _behaviors.Length).Select(CreateContinuation).ToArray();
     }
@@ -420,9 +456,26 @@ sealed class StreamRequestPipelinePlan<TOut>
     IAsyncEnumerable<TOut> InvokeAt(RequestPipelineFrame<IStreamRequest<TOut>> frame, int position,
         CancellationToken ct) =>
         position == _behaviors.Length
-            ? ((IStreamRequestInvocation<TOut>)frame.Registration)
-            .Invoke(frame.Services, frame.Request, frame.Context, ct)
+            ? _guards.Length == 0
+                ? ((IStreamRequestInvocation<TOut>)frame.Registration)
+                .Invoke(frame.Services, frame.Request, frame.Context, ct)
+                : EnumerateGuardedHandler(frame, ct)
             : EnumerateBehavior(frame, position, ct);
+
+    // Guards sit innermost, exactly as for unary requests: behaviors wrap them, and a failure ends
+    // the stream before the handler runs or any item is produced.
+    async IAsyncEnumerable<TOut> EnumerateGuardedHandler(RequestPipelineFrame<IStreamRequest<TOut>> frame,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        var guarded = await RequestGuardRunner.RunAsync(frame.Services, _guards, frame.Request, frame.Context, ct)
+            .ConfigureAwait(false);
+        if (!guarded.IsSuccess)
+            throw new RequestGuardException(guarded.Error);
+        await foreach (var item in ((IStreamRequestInvocation<TOut>)frame.Registration)
+                           .Invoke(frame.Services, frame.Request, frame.Context, ct).WithCancellation(ct)
+                           .ConfigureAwait(false))
+            yield return item;
+    }
 
     async IAsyncEnumerable<TOut> EnumerateBehavior(RequestPipelineFrame<IStreamRequest<TOut>> frame, int position,
         [EnumeratorCancellation] CancellationToken ct)

@@ -134,9 +134,10 @@ Cntryl.Portia.HttpInvocation.RequestIdentifier.get -> string!
 Cntryl.Portia.HttpInvocation.RequestIdentifier.init -> void
 Cntryl.Portia.HttpInvocation.RoutePattern.get -> string?
 Cntryl.Portia.HttpInvocation.RoutePattern.init -> void
-Cntryl.Portia.IAggregateRepository
-Cntryl.Portia.IAggregateRepository.HydrateAsync<TAggregate>(TAggregate! aggregate, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TAggregate!>
-Cntryl.Portia.IAggregateRepository.SaveAsync<TAggregate>(TAggregate! aggregate, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.IAggregateReader
+Cntryl.Portia.IAggregateReader.HydrateAsync<TAggregate>(TAggregate! aggregate, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TAggregate!>
+Cntryl.Portia.IAggregateWriter
+Cntryl.Portia.IAggregateWriter.SaveAsync<TAggregate>(TAggregate! aggregate, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Cntryl.Portia.IBatchProjectorHandler<TEvent>
 Cntryl.Portia.IBatchProjectorHandler<TEvent>.HandleAsync(System.Collections.Generic.IReadOnlyList<TEvent!>! events, Cntryl.Portia.IProjectorContext! context, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask
 Cntryl.Portia.IBatchReactorHandler<TEvent>
@@ -231,6 +232,8 @@ Cntryl.Portia.IRequestContext.Invocation.get -> Cntryl.Portia.RequestInvocation!
 Cntryl.Portia.IRequestContext.RequestId.get -> Cntryl.Portia.Uuid
 Cntryl.Portia.IRequestContext<TRequest>
 Cntryl.Portia.IRequestContext<TRequest>.Request.get -> TRequest
+Cntryl.Portia.IRequestGuard<TRequest>
+Cntryl.Portia.IRequestGuard<TRequest>.GuardAsync(Cntryl.Portia.IRequestContext<TRequest>! context, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
 Cntryl.Portia.IRequestDeserializer
 Cntryl.Portia.IRequestDeserializer.DeserializeEnvelope(System.ReadOnlyMemory<byte> data) -> Cntryl.Portia.DeserializedRequest!
 Cntryl.Portia.IRequestHandler<TRequest, TOut>
@@ -791,6 +794,7 @@ static Cntryl.Portia.NoticeInvocation.operator ==(Cntryl.Portia.NoticeInvocation
 static Cntryl.Portia.PortiaTelemetry.ActivitySource.get -> System.Diagnostics.ActivitySource!
 static Cntryl.Portia.PortiaTelemetry.AggregateFinished(long started, string! operation, string! outcome, int eventCount = 0) -> void
 static Cntryl.Portia.PortiaTelemetry.AuthorizationFinished(long started, string! policy, string! stage, string! outcome) -> void
+static Cntryl.Portia.PortiaTelemetry.GuardFinished(long started, string! guard, string! outcome) -> void
 static Cntryl.Portia.PortiaTelemetry.CaptureTraceContext() -> Cntryl.Portia.RequestTraceContext?
 static Cntryl.Portia.PortiaTelemetry.EventStoreFinished(long started, string! operation, string! scope, string! outcome, int eventCount = 0) -> void
 static Cntryl.Portia.PortiaTelemetry.Meter.get -> System.Diagnostics.Metrics.Meter!
@@ -925,3 +929,24 @@ virtual Cntryl.Portia.StreamRequestPipelineNext<TOut>.Invoke(System.Threading.Ca
 ~override Cntryl.Portia.TenantLifecycleChange.Equals(object obj) -> bool
 ~override Cntryl.Portia.TenantLifecycleChange.ToString() -> string
 ~override Cntryl.Portia.Uuid.Equals(object obj) -> bool
+Cntryl.Portia.RequestGuardException
+Cntryl.Portia.RequestGuardException.Error.get -> Cntryl.Portia.RequestError!
+Cntryl.Portia.RequestGuardException.RequestGuardException(Cntryl.Portia.RequestError! error) -> void
+Cntryl.Portia.AggregateOutcome
+Cntryl.Portia.AggregateOutcome.AggregateOutcome() -> void
+Cntryl.Portia.AggregateOutcome.Disposition.get -> Cntryl.Portia.AggregateDisposition
+Cntryl.Portia.AggregateOutcome.Result.get -> Cntryl.Portia.Result
+Cntryl.Portia.AggregateOutcome<TOut>
+Cntryl.Portia.AggregateOutcome<TOut>.AggregateOutcome() -> void
+Cntryl.Portia.AggregateOutcome<TOut>.Disposition.get -> Cntryl.Portia.AggregateDisposition
+Cntryl.Portia.AggregateOutcome<TOut>.Result.get -> Cntryl.Portia.Result<TOut>
+Cntryl.Portia.AggregateDisposition
+Cntryl.Portia.AggregateDisposition.Discard = 2 -> Cntryl.Portia.AggregateDisposition
+Cntryl.Portia.AggregateDisposition.Commit = 1 -> Cntryl.Portia.AggregateDisposition
+Cntryl.Portia.IAggregateExecutor
+Cntryl.Portia.IAggregateExecutor.ExecuteAsync<TAggregate, TOut>(TAggregate! aggregate, System.Func<TAggregate!, Cntryl.Portia.AggregateOutcome<TOut>>! operation, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result<TOut>>
+Cntryl.Portia.IAggregateExecutor.ExecuteAsync<TAggregate>(TAggregate! aggregate, System.Func<TAggregate!, Cntryl.Portia.AggregateOutcome>! operation, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
+static Cntryl.Portia.AggregateOutcome.Discard(Cntryl.Portia.Result result) -> Cntryl.Portia.AggregateOutcome
+static Cntryl.Portia.AggregateOutcome.Discard<TOut>(Cntryl.Portia.Result<TOut> result) -> Cntryl.Portia.AggregateOutcome<TOut>
+static Cntryl.Portia.AggregateOutcome.Commit(Cntryl.Portia.Result result) -> Cntryl.Portia.AggregateOutcome
+static Cntryl.Portia.AggregateOutcome.Commit<TOut>(Cntryl.Portia.Result<TOut> result) -> Cntryl.Portia.AggregateOutcome<TOut>

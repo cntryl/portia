@@ -42,6 +42,111 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
+    public void Portia100ReportsProjectorAggregateWriterAndExecutorButNotReader()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              public sealed class Projection(IAggregateWriter writer, IAggregateExecutor executor, IAggregateReader reader)
+                                  : Projector(null!, EventStreamPattern.ForPattern("events"));
+                              """;
+
+        var locations = Locations(source, GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator())
+            .Where(diagnostic => diagnostic.Id == "PORTIA100"));
+
+        Assert.Equal(["executor", "writer"], locations);
+    }
+
+    [Fact]
+    public void Portia102ReportsAggregateReaderWriterAndExecutorDependencies()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              public sealed class Account(IAggregateReader reader, IAggregateWriter writer, IAggregateExecutor executor)
+                                  : Aggregate(Uuid.CreateVersion4(), new EventStreamAddress("bank", "accounts", "one"));
+                              """;
+
+        var locations = Locations(source, GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator())
+            .Where(diagnostic => diagnostic.Id == "PORTIA102"));
+
+        Assert.Equal(["executor", "reader", "writer"], locations);
+    }
+
+    [Theory]
+    [InlineData("PORTIA105", "IRequestGuard<Command>", "public ValueTask<Result> GuardAsync(IRequestContext<Command> context, CancellationToken ct) => default;", "Request guard 'Component' takes effect-capable dependency '")]
+    [InlineData("PORTIA106", "IRequestAuthorizer<Command>", "public ValueTask<Result> AuthorizeAsync(IRequestContext<Command> context, CancellationToken ct) => default;", "Request authorizer 'Component' takes effect-capable dependency '")]
+    public void Portia105And106ReportPreflightEffectCapableDependencies(string id, string role, string member,
+        string messagePrefix)
+    {
+        var source = $$"""
+                       using System.Net.Http;
+                       using System.Threading;
+                       using System.Threading.Tasks;
+                       using Cntryl.Portia;
+                       public sealed record Command : IRequest;
+                       public sealed class Component(
+                           IRequestBus bus, IAggregateWriter writer, IAggregateExecutor executor,
+                           IEventStore store, IDomainEventWriter events, IProjectionStore projections,
+                           IProjectionCheckpointStore checkpoints, IRequestScheduler scheduler, HttpClient http) : {{role}}
+                       {
+                           {{member}}
+                       }
+                       """;
+
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator())
+            .Where(diagnostic => diagnostic.Id == id).ToArray();
+
+        Assert.Equal(["bus", "checkpoints", "events", "executor", "http", "projections", "scheduler", "store", "writer"],
+            Locations(source, diagnostics));
+        Assert.All(diagnostics, diagnostic => Assert.StartsWith(messagePrefix,
+            diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal));
+        Assert.Contains("IAggregateReader", MessageAt(source, diagnostics, "writer"), StringComparison.Ordinal);
+        Assert.Contains("IDomainEventReader", MessageAt(source, diagnostics, "store"), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("IRequestGuard<Command>", "public ValueTask<Result> GuardAsync(IRequestContext<Command> context, CancellationToken ct) => default;")]
+    [InlineData("IRequestAuthorizer<Command>", "public ValueTask<Result> AuthorizeAsync(IRequestContext<Command> context, CancellationToken ct) => default;")]
+    public void Portia105And106AllowReadOnlyDependencies(string role, string member)
+    {
+        var source = $$"""
+                       using System.Threading;
+                       using System.Threading.Tasks;
+                       using Cntryl.Portia;
+                       public interface ITenantDirectory;
+                       public sealed record Command : IRequest;
+                       public sealed class Component(IAggregateReader aggregates, IDomainEventReader events, ITenantDirectory tenants) : {{role}}
+                       {
+                           {{member}}
+                       }
+                       """;
+
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "PORTIA105" or "PORTIA106");
+    }
+
+    [Fact]
+    public void Portia105And106IgnoreTypesThatAreNotGuardsOrAuthorizers()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using Cntryl.Portia;
+                                                           public sealed class ApplicationService(IRequestBus bus, IAggregateWriter writer);
+                                                           """, new ComponentPracticeGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "PORTIA105" or "PORTIA106");
+    }
+
+    static string[] Locations(string source, IEnumerable<Diagnostic> diagnostics) =>
+    [
+        .. diagnostics.Select(diagnostic => source.Substring(diagnostic.Location.SourceSpan.Start,
+            diagnostic.Location.SourceSpan.Length)).Order(StringComparer.Ordinal)
+    ];
+
+    static string MessageAt(string source, IEnumerable<Diagnostic> diagnostics, string parameter) =>
+        diagnostics.Single(diagnostic => source.Substring(diagnostic.Location.SourceSpan.Start,
+            diagnostic.Location.SourceSpan.Length) == parameter).GetMessage(CultureInfo.InvariantCulture);
+
+    [Fact]
     public void Portia101ReportsConstructorAndActivatorUtilitiesServiceLocationAtUse()
     {
         const string source = """

@@ -19,12 +19,31 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
         cancellationToken.ThrowIfCancellationRequested();
         operation.Responses ??= [];
-        var explicitStatuses = context.Description.ActionDescriptor.EndpointMetadata?
+        var endpointMetadata = context.Description.ActionDescriptor.EndpointMetadata ?? [];
+        var explicitResponses = endpointMetadata
             .OfType<IProducesResponseTypeMetadata>()
+            .Select(item => new DeclaredResponse(item.StatusCode, item.Type, item.ContentTypes.ToArray(), false))
+            .Concat(endpointMetadata.OfType<PortiaStreamProducesMetadata>()
+                .Select(item => new DeclaredResponse(item.StatusCode, item.Type, item.ContentTypes, true)))
+            .ToArray();
+        var explicitStatuses = explicitResponses
             .Select(item => item.StatusCode.ToString(CultureInfo.InvariantCulture))
+            .ToHashSet(StringComparer.Ordinal);
+        var customResult = endpointMetadata
+            .OfType<PortiaCustomHttpResult>().SingleOrDefault();
+        var customStatuses = customResult?.DeclaredStatusCodes
+            .Select(status => status.ToString(CultureInfo.InvariantCulture))
             .ToHashSet(StringComparer.Ordinal) ?? [];
+        var replacesDefaultSuccess = customResult?.DeclaredStatusCodes.Any(status => status is >= 200 and < 400) == true;
         foreach (var status in operation.Responses.Keys.Where(status => !explicitStatuses.Contains(status)).ToArray())
             _ = operation.Responses.Remove(status);
+        if (replacesDefaultSuccess)
+        {
+            if (!customStatuses.Contains("200"))
+                _ = operation.Responses.Remove("200");
+            if (!customStatuses.Contains("204"))
+                _ = operation.Responses.Remove("204");
+        }
 
         void SetDefaultResponse(string status, IOpenApiResponse response)
         {
@@ -35,7 +54,51 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         operation.OperationId = metadata.OperationId;
         operation.Parameters = [];
         var jsonOptions = context.ApplicationServices.GetRequiredService<JsonSerializerOptions>();
-        foreach (var parameter in metadata.Parameters.Where(parameter => parameter.Source != "body"))
+        foreach (var responseMetadata in explicitResponses)
+        {
+            var status = responseMetadata.StatusCode.ToString(CultureInfo.InvariantCulture);
+            if (replacesDefaultSuccess && (status == "200" || status == "204") &&
+                !customStatuses.Contains(status))
+                continue;
+            if (!responseMetadata.ReplaceExisting && operation.Responses.ContainsKey(status))
+                continue;
+            var response = new OpenApiResponse { Description = "Response" };
+            if (responseMetadata.Type is not null && responseMetadata.ContentTypes.Any())
+            {
+                response.Content = responseMetadata.ContentTypes.Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(contentType => contentType,
+                        _ => new OpenApiMediaType
+                        {
+                            Schema = PortiaOpenApiSchemaGenerator.Create(responseMetadata.Type, jsonOptions,
+                                context.Document!)
+                        }, StringComparer.Ordinal);
+            }
+            operation.Responses[status] = response;
+        }
+        var custom = endpointMetadata.OfType<PortiaCustomHttpContract>()
+            .SingleOrDefault();
+        foreach (var parameter in custom?.Parameters ?? [])
+        {
+            operation.Parameters.Add(new OpenApiParameter
+            {
+                Name = parameter.Name,
+                In = parameter.Location switch
+                {
+                    PortiaHttpParameterLocation.Route => ParameterLocation.Path,
+                    PortiaHttpParameterLocation.Query => ParameterLocation.Query,
+                    PortiaHttpParameterLocation.Header => ParameterLocation.Header,
+                    PortiaHttpParameterLocation.Cookie => ParameterLocation.Cookie,
+                    _ => throw new InvalidOperationException("Unknown Portia HTTP parameter location.")
+                },
+                Required = parameter.Location == PortiaHttpParameterLocation.Route || parameter.Required,
+                Schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!)
+            });
+        }
+        var queryMembers = endpointMetadata.OfType<PortiaQueryMembers>()
+            .SingleOrDefault()?.Names ?? [];
+        bool IsBody(PortiaOpenApiParameter parameter) => parameter.Source == "body" &&
+            !queryMembers.Contains(parameter.ClrName, StringComparer.OrdinalIgnoreCase);
+        foreach (var parameter in custom is null ? metadata.Parameters.Where(parameter => !IsBody(parameter)) : [])
         {
             var schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!);
             if (parameter.HasDefault && parameter.DefaultValue is not null && schema is OpenApiSchema concreteSchema)
@@ -54,32 +117,74 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             });
         }
 
-        var body = metadata.Parameters.Where(parameter => parameter.Source == "body").ToArray();
+        var accepts = endpointMetadata.OfType<PortiaStreamAcceptsMetadata>()
+            .Select(item => new DeclaredAccepts(item.RequestType, item.IsOptional, item.ContentTypes))
+            .SingleOrDefault() ?? endpointMetadata.OfType<IAcceptsMetadata>()
+            .Select(item => new DeclaredAccepts(item.RequestType, item.IsOptional, item.ContentTypes.ToArray()))
+            .LastOrDefault();
+        var body = custom is null ? metadata.Parameters.Where(IsBody).ToArray() : [];
+        if (custom is not null && accepts?.RequestType is not null)
+        {
+            operation.RequestBody = new OpenApiRequestBody
+            {
+                Required = !accepts.IsOptional,
+                Content = accepts.ContentTypes.Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(contentType => contentType,
+                    _ => new OpenApiMediaType
+                    {
+                        Schema = PortiaOpenApiSchemaGenerator.Create(accepts.RequestType, jsonOptions, context.Document!)
+                    }, StringComparer.Ordinal)
+            };
+        }
         if (body.Length > 0)
         {
-            var schema = new OpenApiSchema
-            { Type = JsonSchemaType.Object, Properties = new Dictionary<string, IOpenApiSchema>() };
+            var properties = new Dictionary<string, IOpenApiSchema>();
+            var jsonRequired = new HashSet<string>();
+            var formRequired = new HashSet<string>();
             foreach (var parameter in body)
             {
                 var name = parameter.WireName ?? jsonOptions.PropertyNamingPolicy?.ConvertName(parameter.ClrName) ??
                     parameter.ClrName;
-                schema.Properties[name] =
-                    PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!);
+                properties[name] = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!);
                 if (parameter.Required)
                 {
-                    schema.Required ??= new HashSet<string>();
-                    _ = schema.Required.Add(name);
+                    _ = jsonRequired.Add(name);
+                    if (parameter.Type != typeof(bool))
+                        _ = formRequired.Add(name);
                 }
+            }
+
+            var schema = new OpenApiSchema
+            {
+                Type = JsonSchemaType.Object,
+                Properties = properties,
+                Required = jsonRequired.Count == 0 ? null : jsonRequired
+            };
+            var content = new Dictionary<string, OpenApiMediaType> { ["application/json"] = new() { Schema = schema } };
+            if (endpointMetadata.OfType<PortiaFormBindableBody>().Any())
+            {
+                var formSchema = new OpenApiSchema
+                {
+                    Type = JsonSchemaType.Object,
+                    Properties = properties,
+                    Required = formRequired.Count == 0 ? null : formRequired
+                };
+                content["application/x-www-form-urlencoded"] = new() { Schema = formSchema };
+                content["multipart/form-data"] = new() { Schema = formSchema };
             }
 
             operation.RequestBody = new OpenApiRequestBody
             {
                 Required = body.Any(parameter => parameter.Required),
-                Content = new Dictionary<string, OpenApiMediaType> { ["application/json"] = new() { Schema = schema } }
+                Content = content
             };
         }
 
-        if (metadata.JsonStream || metadata.ServerSentEvents)
+        if (replacesDefaultSuccess)
+        {
+            // The configured result hook owns the declared success response. Portia's normal
+            // failure responses remain available, but its JSON/no-content success does not.
+        }
+        else if (metadata.JsonStream || metadata.ServerSentEvents)
         {
             var item = PortiaOpenApiSchemaGenerator.Create(metadata.ResultType!, jsonOptions, context.Document!);
             var schema = metadata.JsonStream
@@ -98,7 +203,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             SetDefaultResponse("200", Response("OK", "application/json", schema));
         }
 
-        if (metadata.QueueCapable)
+        if (metadata.QueueCapable && customResult is null)
         {
             operation.Parameters.Add(new OpenApiParameter
             {
@@ -171,4 +276,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         Description = description,
         Content = new Dictionary<string, OpenApiMediaType> { [mediaType] = new() { Schema = schema } }
     };
+
+    sealed record DeclaredAccepts(Type? RequestType, bool IsOptional, IReadOnlyList<string> ContentTypes);
+    sealed record DeclaredResponse(int StatusCode, Type? Type, IReadOnlyList<string> ContentTypes,
+        bool ReplaceExisting);
 }

@@ -16,5 +16,6 @@
     <InternalsVisibleTo Include="Portia.ConsumerTests"/>
     <InternalsVisibleTo Include="Portia.DependencyInjection"/>
     <InternalsVisibleTo Include="Portia.Fitz"/>
+    <InternalsVisibleTo Include="Portia.Testing"/>
   </ItemGroup>
 </Project>

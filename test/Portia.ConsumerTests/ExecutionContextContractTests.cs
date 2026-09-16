@@ -63,12 +63,13 @@ public sealed class ExecutionContextContractTests
                                                             services.AddPortia();
                                                             await using var provider = services.BuildServiceProvider();
                                                             await using var scope = provider.CreateAsyncScope();
-                                                            var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
+                                                            var reader = scope.ServiceProvider.GetRequiredService<IAggregateReader>();
+                                                            var writer = scope.ServiceProvider.GetRequiredService<IAggregateWriter>();
                                                             var id = Uuid.CreateVersion4();
                                                             var context = new RequestContext<DepositAccount>(new DepositAccount(id, 10), RequestActor.System);
-                                                            var account = await repository.HydrateAsync(new Account(id));
+                                                            var account = await reader.HydrateAsync(new Account(id));
                                                             account.Deposit(10);
-                                                            await repository.SaveAsync(account, context);
+                                                            await writer.SaveAsync(account, context);
                                                             await foreach (var record in provider.GetRequiredService<IEventStore>().ReadAsync(account.Stream))
                                                             {
                                                                 var metadata = record.Event.Metadata;

@@ -8,6 +8,46 @@ alerts are as breaking to change as an API.
 
 ### Added
 
+- `IRequestGuard<TRequest>` adds reusable asynchronous preflight for commands and result-bearing
+  queries. Generated `AddRequestGuard<T>()` registrations are scoped and reflection-free, match
+  concrete requests or application-owned request-family interfaces by assignability, and execute
+  in registration order inside pipeline behaviors immediately before the handler. The first
+  ordinary `Result` failure short-circuits handling; query failures retain the same `RequestError`,
+  successful guards preserve the handler result, and fresh queue redeliveries rerun fresh scoped
+  guards. Streamed requests run matching guards before their first item and end with
+  `RequestGuardException` on failure, which HTTP streaming maps to a problem response. Each guard
+  records `portia.guard.duration`, and one type cannot be both an authorizer and a guard.
+
+- `PortiaBuilder.RequireAuthorization()` makes authorization fail closed at the composition root.
+  Every registered request then needs an applicable authorizer, `[RequiresPermission]`, or
+  `AllowAnonymous<T>()` (concrete request or family). Hosted startup lists unprotected requests and
+  dispatch refuses them; applications that do not opt in are unchanged.
+
+- `IAggregateExecutor` executes one operation against one hydrated aggregate. The handler returns
+  `AggregateOutcome.Commit(result)` or `AggregateOutcome.Discard(result)`, deciding the caller's result
+  and the persistence of everything the operation produced independently; Portia hydrates, invokes,
+  and commits atomically, never retries conflicts, and invalidates an instance whose pending records
+  were discarded. `IAggregateReader` and `IAggregateWriter` expose the repository's read and write
+  capabilities, and `AddPortia()` registers all of them.
+
+- `PORTIA105` and `PORTIA106` warn when a request guard or authorizer takes a known effect-capable
+  dependency, and `PORTIA100`/`PORTIA102` recognize the new aggregate writer, reader, and executor.
+
+- `RequestScenario` in `Cntryl.Portia.Testing` runs a request through the real lifecycle and asserts
+  authorization, guards, handling, results, values, and stream items with an immutable, awaitable
+  expectation chain. `Cntryl.Portia.Testing` now depends on `Cntryl.Portia.Core`.
+
+- Generated HTTP endpoints bind each request member by cascading route, body, then query string,
+  so POST/PUT/PATCH members the body omits can come from the query without request-type attributes.
+  Scalar-only bodies bind from `application/x-www-form-urlencoded` and `multipart/form-data` forms
+  as well as JSON, using the JSON wire names, and OpenAPI describes both form content types. A POST
+  whose scalar members all arrive in the query no longer requires a body. `FromQuery(x => x.Member)`
+  on the mapping binds a member only from the query string and documents it as a query parameter. Form posts validate antiforgery tokens when the application registers
+  antiforgery. `MapPortia*` `configure` overloads add an `OnBind` escape hatch for custom request
+  binding and an `OnResult` hook for post-operation HTTP handling such as cookies, headers, and
+  redirects; a queuable endpoint with `OnResult` stays synchronous and ignores `Prefer: respond-async`.
+  Declared custom bodies are completely size-validated before `OnBind`, including chunked requests.
+
 - Optional `Cntryl.Portia.Mcp` and `Cntryl.Portia.Mcp.AspNetCore` packages expose explicitly
   selected `ICallable` requests as generated MCP tools over stdio or stateless Streamable HTTP.
   `AddMcpTool<TRequest>()` stays in the shared Portia composition root, derives names, descriptions,
@@ -44,6 +84,13 @@ alerts are as breaking to change as an API.
 
 ### Fixed
 
+- Oversized unknown-length form bodies still return 413 when antiforgery performs the first form
+  read and wraps the body-limit exception. Configured HTTP routes validate the route builder's
+  actual endpoint sources before Portia startup schedules and workers can act; route groups retain
+  their complete ancestor prefix during validation.
+- `PORTIA018` rejects guards scoped directly to `IStreamRequest<T>` as well as concrete and
+  application-owned stream-only request types, instead of accepting a guard that streaming
+  dispatch can never execute.
 - Queue workers reject a zero terminal attempt, and Fitz workers reject any configured terminal
   threshold before connecting because Fitz 1.0 does not expose durable attempt counts. Malformed,
   incomplete, wrong-kind, invalid-metadata, and invalid known-contract queued envelopes use
@@ -148,6 +195,15 @@ alerts are as breaking to change as an API.
   blocked every partition behind it and prevented healthy scale-out and takeover from converging.
 
 ### Changed
+
+- Remove the combined `IAggregateRepository` contract and public `AggregateRepository`
+  implementation. Inject `IAggregateReader`, `IAggregateWriter`, or `IAggregateExecutor` according
+  to the capability a component needs; `AddPortia()` backs the reader and writer with the same
+  scoped internal repository. Source and binaries that referenced either removed type must migrate
+  and be recompiled.
+
+- The hosted startup error for a missing `IPermissionEvaluator` now says "permission-protected request
+  types" instead of "guarded request types", so it no longer suggests `IRequestGuard`.
 
 - **Telemetry 2.0.0:** replace the unreleased request telemetry schema without compatibility
   aliases. Request activities now use `portia.request.name`, `portia.transport.name`, and

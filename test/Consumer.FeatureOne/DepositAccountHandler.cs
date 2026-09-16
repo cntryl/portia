@@ -1,7 +1,7 @@
 namespace Cntryl.Portia.Consumer;
 
 public sealed class DepositAccountHandler(
-    IAggregateRepository repository,
+    IAggregateExecutor aggregates,
     IConsumerEffects effects,
     IConsumerScope scope)
     : IRequestHandler<DepositAccount>
@@ -9,17 +9,23 @@ public sealed class DepositAccountHandler(
     public async ValueTask<Result> HandleAsync(IRequestContext<DepositAccount> context, CancellationToken ct)
     {
         var request = context.Request;
-        var account = await repository.HydrateAsync(new Account(request.Id), ct);
-        if (request.Amount <= 0)
+        var result = await aggregates.ExecuteAsync(new Account(request.Id), account =>
         {
-            account.Audit(new Declined("Deposit must be positive."));
-            await repository.SaveAsync(account, context, ct);
-            return Result.Failure(new RequestError(RequestErrorKind.Validation, "Deposit must be positive."));
+            if (request.Amount <= 0)
+            {
+                account.Audit(new Declined("Deposit must be positive."));
+                return AggregateOutcome.Commit(Result.Failure(
+                    new RequestError(RequestErrorKind.Validation, "Deposit must be positive.")));
+            }
+
+            account.Deposit(request.Amount);
+            return AggregateOutcome.Commit(Result.Success);
+        }, context, ct);
+        if (result.IsSuccess)
+        {
+            effects.Record("business", request.Id, request.Amount, scope.Id);
         }
 
-        account.Deposit(request.Amount);
-        await repository.SaveAsync(account, context, ct);
-        effects.Record("business", account.Id, request.Amount, scope.Id);
-        return Result.Success;
+        return result;
     }
 }

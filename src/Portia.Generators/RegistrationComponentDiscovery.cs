@@ -6,7 +6,7 @@ namespace Cntryl.Portia;
 /// <summary>Discovers component type names that contribute generated registration methods.</summary>
 static class RegistrationComponentDiscovery
 {
-    /// <summary>Gets the fully qualified name of a handler, authorizer, or pipeline behavior.</summary>
+    /// <summary>Gets the fully qualified name of a handler, authorizer, guard, or pipeline behavior.</summary>
     public static string? GetComponentTypeName(GeneratorSyntaxContext context)
         => context.Node is ClassDeclarationSyntax declaration
            && context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol { IsAbstract: false } symbol

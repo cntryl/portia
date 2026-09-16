@@ -19,7 +19,7 @@ public sealed class CallerOwnedHydrationTests
         _ = services.AddPortia();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await using var scope = provider.CreateAsyncScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
+        var repository = scope.ServiceProvider.Aggregates();
         var id = Uuid.CreateVersion4();
         var original = new Account(id);
         Assert.Same(original, await repository.HydrateAsync(original));

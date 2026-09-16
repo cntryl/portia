@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
 using Cntryl.Portia.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
 
@@ -11,7 +12,7 @@ namespace Cntryl.Portia;
 public class AggregateRepositoryBenchmarks
 {
     Uuid _aggregateId;
-    AggregateRepository _repository = null!;
+    IAggregateReader _reader = null!;
     BenchmarkEventStore _store = null!;
     EventStreamAddress _stream = null!;
 
@@ -35,13 +36,22 @@ public class AggregateRepositoryBenchmarks
                     new EventCursor((index + 1).ToString(CultureInfo.InvariantCulture)));
             }).ToArray()
         };
-        _repository = new AggregateRepository(_store);
+        _reader = Reader(_store);
     }
 
     /// <summary>Constructs and hydrates one aggregate from its complete history.</summary>
     [Benchmark]
     public ValueTask<BenchmarkAggregate> Hydrate() =>
-        _repository.HydrateAsync(new BenchmarkAggregate(_aggregateId, _stream));
+        _reader.HydrateAsync(new BenchmarkAggregate(_aggregateId, _stream));
+
+    // Benchmarks compose the reader exactly as an application does, through AddPortia.
+    internal static IAggregateReader Reader(IEventStore store)
+    {
+        var services = new ServiceCollection();
+        _ = services.AddSingleton(store);
+        _ = services.AddPortia();
+        return services.BuildServiceProvider().CreateScope().ServiceProvider.GetRequiredService<IAggregateReader>();
+    }
 
     internal sealed class BenchmarkEventStore : IEventStore
     {
@@ -88,7 +98,7 @@ public class AggregateRepositoryBenchmarks
 public class LargeAggregateRepositoryBenchmarks
 {
     Uuid _aggregateId;
-    AggregateRepository _repository = null!;
+    IAggregateReader _reader = null!;
     EventStreamAddress _stream = null!;
 
     /// <summary>Gets or sets the large aggregate history length.</summary>
@@ -111,11 +121,11 @@ public class LargeAggregateRepositoryBenchmarks
                     new EventCursor((index + 1).ToString(CultureInfo.InvariantCulture)));
             }).ToArray()
         };
-        _repository = new AggregateRepository(store);
+        _reader = AggregateRepositoryBenchmarks.Reader(store);
     }
 
     /// <summary>Constructs and hydrates one aggregate from the configured large history.</summary>
     [Benchmark]
     public ValueTask<AggregateRepositoryBenchmarks.BenchmarkAggregate> Hydrate() =>
-        _repository.HydrateAsync(new AggregateRepositoryBenchmarks.BenchmarkAggregate(_aggregateId, _stream));
+        _reader.HydrateAsync(new AggregateRepositoryBenchmarks.BenchmarkAggregate(_aggregateId, _stream));
 }

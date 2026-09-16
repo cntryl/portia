@@ -68,8 +68,9 @@ chooses a different convention or adds converters.
 remains the defensive fallback for roots and resolver combinations that cross compilation
 boundaries or otherwise cannot be proven statically.
 
-Reference `Cntryl.Portia.DependencyInjection` in each assembly that registers handlers, authorizers, pipeline behaviors,
-or routed requests. The generator and interceptor configuration arrive with that package.
+Reference `Cntryl.Portia.DependencyInjection` in each assembly that registers handlers, authorizers,
+request guards, pipeline behaviors, or routed requests. The generator and interceptor configuration
+arrive with that package.
 Because libraries and applications can compose components across assemblies, Portia cannot prove
 that every declared handler has been registered; the application composition root owns that
 selection.
@@ -81,8 +82,9 @@ to intercept in those forms, and the call throws at startup (`PORTIA019` catches
 can see at compile time). Grouping registrations in an ordinary extension method is fine; it is
 only forwarding the *generic argument* that does not work.
 
-Select handlers, authorizers, and pipeline behaviors through the stable generic methods
-`AddRequestHandler<T>()`, `AddRequestAuthorizer<T>()`, and `AddRequestPipelineBehavior<T>(order)`.
+Select handlers, authorizers, guards, and pipeline behaviors through the stable generic methods
+`AddRequestHandler<T>()`, `AddRequestAuthorizer<T>()`, `AddRequestGuard<T>()`, and
+`AddRequestPipelineBehavior<T>(order)`.
 The generator replaces each call
 with its typed descriptor and reports a compile error when the type does not implement that role.
 Projectors and reactors are selected with
@@ -104,8 +106,8 @@ services.AddPortia();
 ```
 
 Repeated identical registrations are idempotent; conflicting selected handlers or conflicting
-stages for the same authorizer fail during registration. Multiple applicable authorizers compose
-as an all-of pipeline. Unselected types are not added to the application.
+stages for the same authorizer fail during registration. Multiple applicable authorizers and guards
+each compose as an all-of pipeline. Unselected types are not added to the application.
 
 Generated descriptors retain typed dispatch and permission expressions. There is no runtime
 assembly scanning or reflection—the call-site generator emits concrete generic descriptors, so
@@ -114,10 +116,11 @@ the whole registration path is visible to the compiler and to trimming.
 Applications may keep feature-specific `IServiceCollection` extensions as ordinary composition
 helpers, but Portia no longer requires assembly wrappers around generated method names.
 
-A scoped `IRequestBus` resolves the selected handler and authorizer from the current
+A scoped `IRequestBus` resolves the selected handler, authorizers, and guards from the current
 scope. A handler may inject that bus to dispatch a different request. Principal policies run
 first; declarative permission checks begin resource access, followed by resource and step-up
-authorizers, then the handler. No application bus or runtime assembly scan is required.
+authorizers, pipeline behaviors, guards, then the handler. No application bus or runtime assembly
+scan is required.
 
 Authorization is independently composable. An `IRequestAuthorizer<TScope>` may target one
 concrete request, a request-family interface, or `IRequestBase`; every selected authorizer whose
@@ -143,6 +146,49 @@ Here `ActiveUserAuthorizer` implements `IRequestAuthorizer<IRequestBase>`, the a
 implements `IRequestAuthorizer<IAccountRequest>`, and the MFA policy implements
 `IRequestAuthorizer<IMfaConfirmedRequest>`. Registration order breaks ties within a stage;
 authorization policy should otherwise avoid order-dependent side effects.
+
+Request guards are asynchronous preflight for commands and result-bearing queries. Implement
+`IRequestGuard<TScope>` for one concrete request, a request-family interface, or `IRequestBase`, and
+select it with `AddRequestGuard<T>()`. Applicable guards run sequentially in registration order at
+the innermost point of the behavior chain. The first failure skips the handler; query dispatch maps
+the same `RequestError` into `Result<T>.Failure`. Successful guards do not replace or alter the
+handler's result.
+
+```csharp
+public interface IClaimsTenantSlug : IRequestBase
+{
+    string TenantSlug { get; }
+}
+
+public sealed record CreateTenant(string TenantSlug) : IRequest, IClaimsTenantSlug;
+public sealed record RenameTenant(Uuid TenantId, string TenantSlug) : IRequest, IClaimsTenantSlug;
+
+public sealed class AvailableTenantSlugGuard(ITenantSlugDirectory directory)
+    : IRequestGuard<IClaimsTenantSlug>
+{
+    public async ValueTask<Result> GuardAsync(
+        IRequestContext<IClaimsTenantSlug> context,
+        CancellationToken ct) =>
+        await directory.IsAvailableAsync(context.Request.TenantSlug, ct)
+            ? Result.Success
+            : Result.Failure(new RequestError(RequestErrorKind.Conflict,
+                "That tenant slug appears to be occupied."));
+}
+
+services.AddPortia()
+    .AddRequestHandler<CreateTenantHandler>()
+    .AddRequestHandler<RenameTenantHandler>()
+    .AddRequestGuard<AvailableTenantSlugGuard>();
+```
+
+Guards resolve from the current dependency-injection scope on every fresh dispatch or queue
+redelivery. Cancellation and exceptions propagate. An uninitialized guard result throws an error
+naming the guard. Streamed requests run guards before their first item. `AuthorizeAsync` does not
+run guards. A behavior that
+short-circuits without invoking its continuation skips guards because no handler executes. See
+[request guards](request-guards.md) for complete compilable recipes covering actor authorization,
+permissions stored outside JWTs, reusable permission families, and stale read-model checks versus
+authoritative aggregate invariants.
 
 Pipeline behaviors wrap handler execution after every applicable authorization policy succeeds.
 Implement `IRequestPipelineBehavior<TRequest>` for commands,
@@ -197,10 +243,15 @@ public sealed class Account : Aggregate
     }
 
     public int Balance { get; private set; }
-    public void Deposit(int amount) => RaiseEvent(new Deposited(amount));
+    public Result Deposit(int amount)
+    {
+        if (amount <= 0)
+            return Result.Failure(new RequestError(RequestErrorKind.Validation, "Deposit a positive amount."));
+        RaiseEvent(new Deposited(amount));
+        return Result.Success;
+    }
 
-    // Audits live in their own stream and cannot be committed in the same transaction as
-    // raised events, so save one before emitting the other.
+    // An operation either changes state or records an audit, never both.
     public void Decline(string reason) => AuditEvent(new Declined(reason));
 }
 ```
@@ -213,13 +264,43 @@ services.AddPortia()
     .AddFitz(configuration.GetSection("Fitz"));
 ```
 
-Inject `IAggregateRepository` into a handler and construct the aggregate normally:
+Inject the aggregate capabilities into a handler and construct the aggregate normally. `IAggregateReader` hydrates and `IAggregateWriter` persists:
 
 ```csharp
-var account = await repository.HydrateAsync(new Account(id), ct);
-account.Deposit(amount);
-await repository.SaveAsync(account, context, ct);
+var account = await reader.HydrateAsync(new Account(id), ct);
+if (account.Deposit(amount) is { IsSuccess: false } rejected)
+    return rejected;
+await writer.SaveAsync(account, context, ct);
 ```
+
+`IAggregateExecutor` owns those mechanics so a handler only states intent. Aggregate methods decide
+what happened and return a `Result`; the handler's operation makes one decision for everything the
+operation produced — `AggregateOutcome.Commit(result)` or `AggregateOutcome.Discard(result)` — and
+Portia hydrates, invokes, and carries out that decision atomically:
+
+```csharp
+public sealed class DepositAccountHandler(IAggregateExecutor aggregates)
+    : IRequestHandler<DepositAccount>
+{
+    public ValueTask<Result> HandleAsync(IRequestContext<DepositAccount> context, CancellationToken ct) =>
+        aggregates.ExecuteAsync(new Account(context.Request.AccountId), account =>
+        {
+            var deposit = account.Deposit(context.Request.Amount);
+            return deposit.IsSuccess
+                ? AggregateOutcome.Commit(deposit)
+                : AggregateOutcome.Discard(deposit);
+        }, context, ct);
+}
+```
+
+The result and the disposition are independent, so all four combinations are valid: commit a
+successful change, commit a denied operation's audit, discard an idempotent no-op, or discard a
+rejected input. Committing when nothing is pending writes nothing. A commit failure — including an
+optimistic-concurrency conflict — propagates instead of the proposed result, and is never retried.
+After a discard the instance's pending records are cleared; if it had recorded any, its in-memory
+state no longer matches its stream, so Portia refuses further use of that instance. Two durability
+boundaries are two executions. Guards and authorizers take `IAggregateReader`, which hydrates but
+cannot persist.
 
 The same instance can be hydrated again later. Reads start at its committed stream
 position and apply only newer raised events. A missing stream leaves it unchanged.
@@ -308,17 +389,69 @@ app.MapPortiaPost<DepositAccount>("/accounts/{id}");
 app.Run();
 ```
 
-A constructor parameter matching a route token binds from that route. Remaining
-parameters bind from the query for GET/DELETE, or an object JSON body for
-POST/PUT/PATCH. Missing nullable parameters become null, omitted optional parameters
-use their declared default, and missing required values return 400. Explicit JSON
-null requires a nullable parameter. Invalid root/value kinds return 400.
+Request types carry no binding attributes; the binder looks for each constructor parameter in
+turn and uses the first place that supplies it:
 
-An absent body is treated as `{}` only when every body member is optional. JSON bodies
-are bounded to 10 MiB by default; configure `PortiaHttpOptions.MaxJsonBodyBytes` through
-standard options registration. Exceeding the bound returns `413 application/problem+json`.
-Bodies are buffered completely and must be JSON objects; multipart, form, binary, and streaming
-request-body shapes are unsupported.
+1. **Route** — a parameter matching a route token.
+2. **Body** (POST/PUT/PATCH) — an object JSON body, or, when every body member is a string, enum,
+   or `TryParse` scalar, an `application/x-www-form-urlencoded` or `multipart/form-data` form.
+3. **Query** — the query string, for any string, enum, or `TryParse` scalar.
+
+Body and query names are the JSON wire names. A value the body supplies — including an explicit
+JSON null — wins over the query, so `POST /orders/{id}?dry_run=true` with a JSON or form body
+works without changing the request type. Complex members bind only from a JSON body. Missing
+nullable parameters become null, omitted optional parameters use their declared default, and
+missing required values return 400. Explicit JSON null requires a nullable parameter. A blank form
+field counts as missing for non-string members, a form Boolean accepts a checkbox's `on`, and an
+absent required form Boolean is `false` because browsers omit unchecked checkboxes. Repeated values
+for a form Boolean bind `true` when any is set, matching the hidden `false` field ASP.NET's
+checkbox helpers add. Invalid
+root/value kinds and repeated query or form values return 400.
+
+The cascade is lenient at runtime, but OpenAPI describes body members as body members. When a
+member belongs in the query string on a POST/PUT/PATCH — an option such as `dry_run` — declare it
+where the route is mapped, and the request type stays unchanged:
+
+```csharp
+app.MapPortiaPost<UpdateWidget, string>("/widgets/{widget_id}", endpoint => endpoint
+    .FromQuery(x => x.DryRun));
+```
+
+A `FromQuery` member binds only from the query string, is left out of the body schema, and is
+described as a query parameter. The member must be a string, enum, or `TryParse` scalar that the
+route does not already bind, and `FromQuery` cannot be combined with `OnBind`; mapping the route
+throws otherwise.
+
+An absent body is treated as `{}` unless a required complex member needs it. Bodies are bounded
+to 10 MiB by default; configure `PortiaHttpOptions.MaxJsonBodyBytes` through standard options
+registration. Exceeding the bound returns `413 application/problem+json`. When the application
+registers antiforgery (`AddAntiforgery()`), form posts must carry a valid token or return 400;
+JSON bodies are unaffected, and `.DisableAntiforgery()` opts an endpoint out. Binary and
+streaming request bodies, and bodies mixing complex members with form posts, are unsupported by
+default binding.
+
+Use the `configure` overload when a route needs more than default binding. `OnBind` is an
+escape hatch that builds the request from `HttpContext`; declare what it reads with `Parameter`,
+`Accepts`, or `NoInput` so OpenAPI stays accurate. `OnResult` runs after the business operation
+and can set cookies or headers and return `null` to keep Portia's response, or return any
+`IResult` (a redirect, say) to replace it. Declare replacement statuses with `Produces`:
+
+```csharp
+app.MapPortiaPost<SignIn, SessionToken>("/sign-in", endpoint => endpoint
+    .Produces(StatusCodes.Status302Found)
+    .OnResult((http, result) =>
+    {
+        if (!result.IsSuccess)
+            return null;
+        http.Response.Cookies.Append("session", result.Value.Value, new CookieOptions { HttpOnly = true });
+        return Results.Redirect("/home");
+    }));
+```
+
+The request still dispatches through `IRequestBus`, so authorization, pipeline behaviors, and
+telemetry are unchanged; `OnResult` also sees failures. Because the hook shapes the response to the
+completed operation, an `IQueuable` endpoint with `OnResult` always runs synchronously: it does not
+honor `Prefer: respond-async` or advertise a 202 in OpenAPI.
 Problem responses contain RFC 9457 `type`, `title`, `status`, `detail`, and `instance` members.
 Expected request failures also include a Boolean `transient` extension and matching
 `Portia-Transient` response header, preserving `RequestError.IsTransient` without inventing a
@@ -517,9 +650,26 @@ Use `[RequiresPermission("orders:{OrderId}:read")]` and register an
 `IPermissionEvaluator`. Add `IRequestAuthorizer<T>` for entity-specific decisions.
 Every direct bus call supplies its actor explicitly; HTTP supplies `HttpContext.User`.
 Transport actor validation happens inside the delivery scope.
-Hosted startup fails before serving work if guarded handlers are selected without an evaluator,
-including guarded handlers contributed by another feature assembly. A host with no guarded
-request does not require one.
+Hosted startup fails before serving work if permission-protected handlers are selected without an
+evaluator, including handlers contributed by another feature assembly. A host with no
+permission-protected request does not require one.
+
+Authorization is opt-in per request by default. To make it fail closed, require it at the
+composition root and name the requests — or request families — that are deliberately public:
+
+```csharp
+services.AddPortia()
+    .RequireAuthorization(options => options
+        .AllowAnonymous<PublicCatalogQuery>()
+        .AllowAnonymous<IHealthRequest>());
+```
+
+Every registered request, including streamed requests, then needs an applicable
+`IRequestAuthorizer<T>`, a `[RequiresPermission]`, or an anonymous allowance. Hosted startup lists
+every unprotected request type in stable order before serving work, and dispatch refuses an
+unprotected request with an exception that names the fix, so a missing allowance is never mistaken
+for a real denial. A principal-stage `IRequestAuthorizer<IRequestBase>` protects every request.
+Request types stay free of authorization attributes.
 
 `MapPortiaGetStream<TRequest, TOut>` writes an incremental JSON array;
 `MapPortiaGetSse<TRequest, TOut>` writes SSE. Both enumerate once and check the first

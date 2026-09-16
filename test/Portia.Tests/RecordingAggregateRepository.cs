@@ -1,6 +1,6 @@
 namespace Cntryl.Portia;
 
-sealed class RecordingAggregateRepository : IAggregateRepository
+sealed class RecordingAggregateRepository : IAggregateReader, IAggregateWriter
 {
     public List<TestAggregate> SavedAggregates { get; } = [];
 

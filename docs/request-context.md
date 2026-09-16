@@ -8,7 +8,8 @@ account.Deposit(context.Request.Amount);
 await repository.SaveAsync(account, context, ct);
 ```
 
-Portia supplies context to handlers and authorizers. Applications construct aggregates
+Portia supplies the same typed context to authorizers, pipeline behaviors, request guards, and
+handlers. Applications construct aggregates
 normally, including any constructor dependencies. No aggregate registration is required.
 Saves require explicit context; they cannot accidentally omit attribution.
 
@@ -30,7 +31,7 @@ Request context additionally provides `Request`, `RequestId`, `CausationId`, and
 `CauseId` identifies the request itself. A root request uses its own ID as its correlation
 ID. An HTTP trace identifier is an ingress fact, not a trusted Portia correlation ID.
 
-Authorization and handling see the same execution identity and start time. Streams
+Authorization, unary guards, and handling see the same execution identity and start time. Streams
 retain that execution throughout enumeration. Cancellation remains an explicit
 `CancellationToken`, including transport disconnect and lost queue reservation.
 
@@ -88,7 +89,9 @@ The JSON envelope is version 2 and requires an explicit discriminator name/versi
 empty identities, and unsupported versions are rejected. Receiver execution IDs,
 start times, and invocation facts are never accepted from the envelope.
 
-Queue redeliveries reuse the envelope's request ID but create a fresh execution ID.
+Queue redeliveries reuse the envelope's request ID but create a fresh execution ID and dependency-
+injection scope. Matching scoped request guards are resolved and run again before each fresh
+handler attempt; no prior guard outcome is cached.
 A recurring schedule is a template: each observed firing gets a new request ID,
 inherits the template's correlation ID, and names the template request as its cause.
 Without a broker occurrence ID, duplicate scheduled deliveries cannot be recognized

@@ -7,13 +7,16 @@ namespace Cntryl.Portia;
 sealed class RequestNotificationRunnerHostedService(
     RequestNotificationRunner runner,
     TimeProvider? timeProvider = null,
-    ILogger<RequestNotificationRunnerHostedService>? logger = null) : BackgroundService
+    ILogger<RequestNotificationRunnerHostedService>? logger = null,
+    PortiaStartupValidationRegistry? validations = null) : BackgroundService
 {
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly RequestNotificationRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (validations is not null)
+            await validations.WaitForEndpointValidationsAsync(stoppingToken).ConfigureAwait(false);
         while (!stoppingToken.IsCancellationRequested)
         {
             try

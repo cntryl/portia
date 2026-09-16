@@ -19,7 +19,8 @@ sealed class FitzApplicationWorkers(
     ILogger<FitzNoticeRequestConsumer>? noticeLogger = null,
     ILogger<FitzScheduledRequestConsumer>? scheduleLogger = null,
     ILogger<QueueRunner>? runnerLogger = null,
-    ILogger<RequestNotificationRunner>? notificationLogger = null)
+    ILogger<RequestNotificationRunner>? notificationLogger = null,
+    PortiaStartupValidationRegistry? validations = null)
     : BackgroundService, IHostedLifecycleService, IAsyncDisposable
 {
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
@@ -27,6 +28,7 @@ sealed class FitzApplicationWorkers(
     readonly IReadOnlyList<FitzWorkerDefinition> _workers = configuration.Workers;
     readonly WorkloadRegistration[] _workloads = [.. workloads];
     IAsyncDisposable? _rpc;
+    bool _deferredStart;
 
     public async ValueTask DisposeAsync()
     {
@@ -81,6 +83,17 @@ sealed class FitzApplicationWorkers(
     {
         // Also validate for callers that start the hosted service directly.
         await StartingAsync(cancellationToken).ConfigureAwait(false);
+        if (validations?.HasPendingEndpointValidations is true)
+        {
+            _deferredStart = true;
+            return;
+        }
+
+        await StartWorkersAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    async Task StartWorkersAsync(CancellationToken cancellationToken)
+    {
         await connection.StartAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -111,7 +124,14 @@ sealed class FitzApplicationWorkers(
         }
     }
 
-    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public async Task StartedAsync(CancellationToken cancellationToken)
+    {
+        if (!_deferredStart)
+            return;
+        _deferredStart = false;
+        await validations!.WaitForEndpointValidationsAsync(cancellationToken).ConfigureAwait(false);
+        await StartWorkersAsync(cancellationToken).ConfigureAwait(false);
+    }
     public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 

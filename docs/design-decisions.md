@@ -58,6 +58,49 @@ carried credential when work executes. Both then dispatch through `IRequestBus`,
 permission and authorizer pipeline runs. Adapters may authenticate differently but cannot define
 an alternative authorization path.
 
+## Guards are preflight; aggregates remain authoritative
+
+Authorization decides whether the actor may attempt an operation. Pipeline behaviors wrap an
+operation. A unary `IRequestGuard<TRequest>` instead checks asynchronous surrounding state at the
+innermost handler boundary and can return an ordinary expected failure. Keeping those roles
+separate makes the execution order explicit: authorization, behaviors, guards, then handler.
+
+A guard may use a read model to reject work cheaply, but that read can become stale immediately.
+Domain policies therefore remain in application aggregates and value objects, and optimistic
+concurrency remains authoritative. Portia supplies no domain-policy DSL and does not cache guard
+outcomes across retries. Streamed requests run the same guard stage before their first item; an
+outer behavior that does not invoke its continuation skips both guards and the handler.
+
+## Audits are a separate durability boundary
+
+An audit records that something was attempted or refused; it changes no aggregate state. Audits
+append to their own session stream so they never compete with commands for optimistic concurrency,
+and Portia does not offer atomic commits across streams. One operation therefore changes state or
+audits, never both, and two durability boundaries are two executions.
+
+That boundary also answers where soft policies live. A lockout window, rate limit, or cooldown is a
+time-bounded question answered from history, not an invariant: the aggregate audits the attempt, a
+projection computes the window, and a guard reads it before the handler runs. A stale read lets one
+extra attempt through, which is what a soft policy tolerates. Aggregate state is for invariants that
+must never be violated, such as an account disabled until an administrator re-enables it.
+
+## Fail-closed authorization is a composition decision
+
+`RequireAuthorization()` is opt-in at the composition root, so existing applications keep their
+behavior and request contracts stay free of authorization attributes. Public requests are named
+there with `AllowAnonymous<T>()`, which accepts request families. An unprotected request under the
+requirement is a composition mistake rather than an access decision, so hosted startup rejects it and
+dispatch throws instead of returning `Forbidden`, which would disguise the mistake as a denial.
+
+## The executor owns mechanics; the handler owns the decision
+
+Aggregate methods decide what happened and produce pending records. The handler's operation chooses
+the caller's `Result` and, independently, whether everything the operation produced commits or is
+discarded. `IAggregateExecutor` hydrates, invokes, and carries out that one decision atomically; it
+never selects the aggregate, interprets the result, retries a conflict, or coordinates aggregates.
+An operation either changes state or audits, never both, so each commit is one atomic stream write.
+The repository stays a persistence abstraction.
+
 ## MCP is another Portia ingress, not another application model
 
 Applications declare an MCP tool beside the request handler with `AddMcpTool<TRequest>()` and
