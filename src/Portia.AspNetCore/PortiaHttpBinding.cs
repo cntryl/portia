@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
@@ -13,7 +14,12 @@ using Microsoft.Extensions.Options;
 
 namespace Cntryl.Portia;
 
-/// <summary>Binding primitives used by generated Portia HTTP endpoints.</summary>
+/// <summary>
+///     Binding primitives called by Portia's generated endpoint code. Public because the generated
+///     code lives in the consuming assembly, not because these members are meant to be called
+///     directly. Map endpoints with <see cref="PortiaEndpointRouteBuilderExtensions" /> instead.
+/// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public static class PortiaHttpBinding
 {
     // Content-Length is the caller's claim, not a measurement. Sizing the buffer from it lets one
