@@ -29,11 +29,16 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Read package version
+        id: version
+        run: echo "package-version=$(dotnet msbuild src/Portia.AspNetCore/Portia.AspNetCore.csproj -getProperty:PackageVersion -nologo)" >> "$GITHUB_OUTPUT"
+
       - name: Pack packages
         run: >-
           dotnet pack Portia.slnx
           --configuration Release
           --output artifacts/packages
+          -p:PackageVersion="${{ steps.version.outputs.package-version }}"
 
       - name: Publish packages
         run: >-
@@ -41,3 +46,10 @@ jobs:
           --api-key "$NUGET_AUTH_TOKEN"
           --source "$PACKAGE_SOURCE"
           --skip-duplicate
+
+      - name: Tag release
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package-version }}
+        run: |
+          git tag "v${PACKAGE_VERSION}"
+          git push origin "refs/tags/v${PACKAGE_VERSION}"
