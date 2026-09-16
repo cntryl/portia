@@ -40,4 +40,31 @@ public sealed class StoreFixtureTests
 
         Assert.Equal(3, hydrated.Value);
     }
+
+    /// <summary>The fixture's repository is also usable as the executor a handler-like class under test depends on.</summary>
+    [Fact]
+    public async Task ShouldExecuteAndHydrateThroughRepository()
+    {
+        await using var fixture = new StoreFixture();
+        var id = Uuid.CreateVersion4();
+
+        await fixture.Repository.ExecuteAsync(new TestAggregate(id), aggregate =>
+        {
+            aggregate.ChangeValue(6);
+            return AggregateOutcome.Commit(Result.Success);
+        }, new RequestDispatchContext(RequestActor.System));
+
+        var hydrated = await fixture.Repository.HydrateAsync(new TestAggregate(id));
+
+        Assert.Equal(6, hydrated.Value);
+    }
+
+    /// <summary>Anything else <c>AddPortia()</c> registers is reachable through the fixture's scope.</summary>
+    [Fact]
+    public async Task ShouldResolveAggregateExecutorFromServices()
+    {
+        await using var fixture = new StoreFixture();
+
+        Assert.NotNull(fixture.Services.GetService(typeof(IAggregateExecutor)));
+    }
 }

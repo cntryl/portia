@@ -28,6 +28,9 @@ public sealed class StoreFixture : IAsyncDisposable
     /// <summary>Gets the fixture's event store.</summary>
     public IEventStore Store { get; }
 
+    /// <summary>Gets the fixture's scoped service provider, for resolving anything <c>AddPortia()</c> registers.</summary>
+    public IServiceProvider Services => _scope.ServiceProvider;
+
     /// <summary>Gets the scope's combined aggregate read/write capabilities.</summary>
     public AggregateCapabilities Repository { get; }
 
