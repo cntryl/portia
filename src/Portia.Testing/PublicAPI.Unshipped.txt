@@ -1,1 +1,12 @@
 #nullable enable
+Cntryl.Portia.Testing.AggregateCapabilities
+Cntryl.Portia.Testing.AggregateCapabilities.AggregateCapabilities(Cntryl.Portia.IAggregateReader! reader, Cntryl.Portia.IAggregateWriter! writer) -> void
+Cntryl.Portia.Testing.AggregateCapabilities.HydrateAsync<TAggregate>(TAggregate! aggregate, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TAggregate!>
+Cntryl.Portia.Testing.AggregateCapabilities.SaveAsync<TAggregate>(TAggregate! aggregate, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.AggregateCapabilityExtensions
+Cntryl.Portia.Testing.StoreFixture
+Cntryl.Portia.Testing.StoreFixture.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.StoreFixture.Repository.get -> Cntryl.Portia.Testing.AggregateCapabilities!
+Cntryl.Portia.Testing.StoreFixture.Store.get -> Cntryl.Portia.IEventStore!
+Cntryl.Portia.Testing.StoreFixture.StoreFixture(Cntryl.Portia.IEventStore? store = null) -> void
+static Cntryl.Portia.Testing.AggregateCapabilityExtensions.Aggregates(this System.IServiceProvider! services) -> Cntryl.Portia.Testing.AggregateCapabilities!

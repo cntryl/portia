@@ -73,7 +73,7 @@
       "Cntryl.Portia.Core": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.1.0, )",
+          "Cntryl.Portia.Abstractions": "[0.3.0, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.11, )"
         }
       },
