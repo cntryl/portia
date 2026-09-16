@@ -8,6 +8,19 @@ alerts are as breaking to change as an API.
 
 ### Added
 
+- `PORTIA025` is registration-driven and accepts JSON roots advertised by referenced assemblies.
+  `[PortiaJsonContext]` now emits editor-hidden assembly markers and AOT-safe context factories, so
+  endpoints and MCP tools can reuse contract metadata without duplicating `[JsonSerializable]` roots;
+  runtime composition still rejects any advertised root that the composed resolver chain cannot serve.
+
+- `EventStreamPattern.ForTenant(area, resource)` declares an unbound tenant workload template.
+  Per-tenant workloads require templates, global workloads require exact patterns, the reserved
+  template realm cannot be recreated through `ForPattern`, and manual runners reject unbound templates.
+
+- `Cntryl.Portia.Mcp.Testing` provides an assertion-framework-neutral `McpScenario` over the official
+  Streamable HTTP client. It snapshots tool catalogs, schemas, hints, metadata, text, and structured
+  results while preserving authentication on the caller-owned `HttpClient`.
+
 - `IRequestGuard<TRequest>` adds reusable asynchronous preflight for commands and result-bearing
   queries. Generated `AddRequestGuard<T>()` registrations are scoped and reflection-free, match
   concrete requests or application-owned request-family interfaces by assignability, and execute

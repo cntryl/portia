@@ -136,7 +136,7 @@ static class GeneratorCompilation
             driver.GetRunResult().GeneratedTrees.Select(tree => tree.GetText().ToString()));
     }
 
-    public static MetadataReference Reference(string source)
+    public static MetadataReference Reference(string source, params IIncrementalGenerator[] generators)
     {
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
@@ -147,6 +147,15 @@ static class GeneratorCompilation
             [CSharpSyntaxTree.ParseText(source)],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        if (generators.Length != 0)
+        {
+            GeneratorDriver driver = CSharpGeneratorDriver.Create(
+                generators.Select(generator => generator.AsSourceGenerator()));
+            driver.RunGeneratorsAndUpdateCompilation(compilation, out var generated, out var diagnostics);
+            Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            compilation = (CSharpCompilation)generated;
+        }
+
         using var stream = new MemoryStream();
         var result = compilation.Emit(stream);
         Assert.True(result.Success, string.Join(Environment.NewLine, result.Diagnostics));

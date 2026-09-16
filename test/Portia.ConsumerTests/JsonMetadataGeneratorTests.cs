@@ -5,7 +5,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class JsonMetadataGeneratorTests
 {
     [Fact]
-    public void ReportsRequestResultAndEventRootsOnce()
+    public void IgnoresUnregisteredHandlersButStillCatalogsDomainEvents()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
@@ -24,7 +24,117 @@ public sealed class JsonMetadataGeneratorTests
                                                            }
                                                            """, new JsonMetadataDiagnosticGenerator());
 
-        Assert.Equal(["Answer", "Created", "Query"], diagnostics.Where(d => d.Id == "PORTIA025")
+        Assert.Equal(["Created"], diagnostics.Where(d => d.Id == "PORTIA025")
+            .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void RegisteredHandlerRequiresRequestAndResultRoots()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using Cntryl.Portia;
+                                                           using Microsoft.Extensions.DependencyInjection;
+                                                           public sealed record Query : IRequest<Answer>;
+                                                           public sealed record Answer;
+                                                           public sealed class Handler : IRequestHandler<Query, Answer>
+                                                           {
+                                                               public ValueTask<Result<Answer>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
+                                                           }
+                                                           public static class Scenario
+                                                           {
+                                                               public static void Configure(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();
+                                                           }
+                                                           """, new JsonMetadataDiagnosticGenerator());
+
+        Assert.Equal(["Answer", "Query"], diagnostics.Where(d => d.Id == "PORTIA025")
+            .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void EndpointAcceptsRootAdvertisedByReferencedAssembly()
+    {
+        var contracts = GeneratorCompilation.Reference("""
+                                                       using System;
+                                                       using System.Text.Json;
+                                                       using System.Text.Json.Serialization;
+                                                       using System.Text.Json.Serialization.Metadata;
+                                                       using Cntryl.Portia;
+                                                       namespace Contracts;
+                                                       public sealed record Query : IRequest, ICallable;
+                                                       [PortiaJsonContext]
+                                                       [JsonSerializable(typeof(Query))]
+                                                       internal sealed class ContractsJsonContext : JsonSerializerContext
+                                                       {
+                                                           public ContractsJsonContext(JsonSerializerOptions options) : base(options) { }
+                                                           protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                                                           public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                                                       }
+                                                       """, new JsonRootMarkerGenerator());
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using Cntryl.Portia;
+                                                           using Contracts;
+                                                           using Microsoft.AspNetCore.Routing;
+                                                           public static class Endpoints
+                                                           {
+                                                               public static void Map(IEndpointRouteBuilder routes) => routes.MapPortiaPost<Query>("/query");
+                                                           }
+                                                           """, [contracts], new JsonMetadataDiagnosticGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
+    }
+
+    [Fact]
+    public void AddPortiaComposesReferencedContextFactory()
+    {
+        var contracts = GeneratorCompilation.Reference("""
+                                                       using System;
+                                                       using System.Text.Json;
+                                                       using System.Text.Json.Serialization;
+                                                       using System.Text.Json.Serialization.Metadata;
+                                                       using Cntryl.Portia;
+                                                       namespace Contracts;
+                                                       public sealed record Query : IRequest;
+                                                       [PortiaJsonContext]
+                                                       [JsonSerializable(typeof(Query))]
+                                                       internal sealed class ContractsJsonContext : JsonSerializerContext
+                                                       {
+                                                           public ContractsJsonContext(JsonSerializerOptions options) : base(options) { }
+                                                           protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                                                           public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                                                       }
+                                                       """, new JsonRootMarkerGenerator());
+
+        var generated = GeneratorCompilation.GeneratedSource("""
+                                                             using Cntryl.Portia;
+                                                             using Microsoft.Extensions.DependencyInjection;
+                                                             public static class App
+                                                             {
+                                                                 public static void Configure(IServiceCollection services) => services.AddPortia();
+                                                             }
+                                                             """, [contracts], new RegistrationCallInterceptorGenerator());
+
+        Assert.Contains("_Contracts_ContractsJsonContext.Create(options)", generated,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void McpToolRequiresRequestAndResultRoots()
+    {
+        var mcp = Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(
+            typeof(PortiaMcpApplicationExtensions).Assembly.Location);
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using Cntryl.Portia;
+                                                           using Microsoft.Extensions.DependencyInjection;
+                                                           [Discriminator("queries.read")]
+                                                           public sealed record Query : IRequest<Answer>, ICallable;
+                                                           public sealed record Answer;
+                                                           public static class Scenario
+                                                           {
+                                                               public static void Configure(IServiceCollection services) => services.AddPortia().AddMcpTool<Query>();
+                                                           }
+                                                           """, [mcp], new JsonMetadataDiagnosticGenerator());
+
+        Assert.Equal(["Answer", "Query"], diagnostics.Where(d => d.Id == "PORTIA025")
             .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
     }
 

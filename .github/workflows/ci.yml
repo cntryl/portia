@@ -94,6 +94,14 @@ jobs:
             --configuration Release \
             --no-restore \
             -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-mcp-testing-packages" dotnet restore \
+            smoke/Portia.Mcp.Testing.PackageConsumer/Portia.Mcp.Testing.PackageConsumer.csproj \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-mcp-testing-packages" dotnet run \
+            --project smoke/Portia.Mcp.Testing.PackageConsumer/Portia.Mcp.Testing.PackageConsumer.csproj \
+            --configuration Release \
+            --no-restore \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
 
       - name: Test full broker integration
         env:

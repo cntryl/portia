@@ -94,6 +94,26 @@ retrying is appropriate. Binding, missing-actor, and unexpected failures use sta
 `Unauthorized`, and `Internal` envelopes. Portia does not disclose stack traces, claims, tokens,
 routes, exception messages, or internal event data.
 
+## Real consumer tests
+
+Reference `Cntryl.Portia.Mcp.Testing` and connect through the same authenticated `HttpClient` your
+application test owns:
+
+```csharp
+await using var mcp = await McpScenario.ConnectAsync(client, new Uri("http://localhost/mcp"));
+var tools = await mcp.ListTools().ExpectExactly("accounts.get", "accounts.deposit");
+var result = await mcp.When("accounts.get", new Dictionary<string, object?>
+{
+    ["account_id"] = accountId
+}).ExpectSuccess();
+```
+
+The scenario owns the official MCP client and transport but never disposes `client`. Catalog and
+call snapshots contain detached schemas, hints, metadata, text, and structured JSON for ordinary
+assertions. `ExpectFailure(kind)` checks Portia's structured failure kind. Authentication is not a
+scenario shortcut: configure it on the supplied HTTP client so ASP.NET authorization and Portia
+actor resolution stay inside the test.
+
 ## Deliberate first-release boundary
 
 The supported surface is unary tools. Portia does not currently map MCP resources, prompts,

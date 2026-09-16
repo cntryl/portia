@@ -622,7 +622,8 @@ services.AddPortia()
 ```
 
 Fitz coordinates these registrations across replicas. `WorkloadScope.PerTenant` requires an
-`ITenantDirectory`; `WorkloadScope.Global` retains the component's declared realm and filters.
+`ITenantDirectory` and a component pattern created by `EventStreamPattern.ForTenant(...)`;
+`WorkloadScope.Global` requires `ForPattern(...)` and retains its exact realm and filters.
 See [shared application setup](application-setup.md) for application identity and fleet coordination.
 
 Inject ordinary application repositories into your processors. Projectors pass a repository

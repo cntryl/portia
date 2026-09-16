@@ -30,6 +30,11 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(projector);
+        if (projector.Pattern.IsTenantTemplate)
+        {
+            throw new InvalidOperationException(
+                "An unbound tenant stream template cannot be run manually. Register it as a PerTenant workload.");
+        }
         options ??= ProjectionRunOptions.Default;
         options.Validate();
 

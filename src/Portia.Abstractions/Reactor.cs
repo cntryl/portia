@@ -74,7 +74,7 @@ public abstract class Reactor
 
         if (identity.Tenant is { } tenant)
         {
-            Pattern = EventStreamPattern.ForPattern(tenant.Value, Pattern.Area, Pattern.Resource);
+            Pattern = Pattern.BindTenant(tenant);
         }
     }
 

@@ -117,7 +117,7 @@ public sealed class SharedDeploymentTests
             builder.Services.Add(descriptor);
         _ = builder.Services.AddAccounts();
         _ = builder.Services.AddPortia()
-            .AddProjector<FirstProjector>("first-projector", WorkloadScope.PerTenant)
+            .AddProjector<TenantFirstProjector>("first-projector", WorkloadScope.PerTenant)
             .AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), fitz => fitz.UseFleet(
                 new FleetRunOptions { MembershipSelector = "lease://validation/tenants/*" }))
             .AddWorkers();

@@ -31,7 +31,7 @@ public sealed class WorkerStartupRequirementTests
         var builder = Host.CreateApplicationBuilder();
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
-        _ = builder.Services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.PerTenant)
+        _ = builder.Services.AddPortia().AddProjector<TenantFirstProjector>("first-projector", WorkloadScope.PerTenant)
             .AddWorkers();
         using var host = builder.Build();
 

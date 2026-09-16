@@ -7,6 +7,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Cntryl.Portia.McpContracts;
+using Cntryl.Portia.Testing;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -23,6 +24,7 @@ using ModelContextProtocol.Server;
 
 namespace Cntryl.Portia.Tests;
 
+[Collection("MCP HTTP integration")]
 public sealed class McpRegistrationTests
 {
     [Fact]
@@ -514,10 +516,12 @@ public sealed class McpRegistrationTests
         await app.StartAsync();
 
         // Act
-        using var response = await app.GetTestClient().PostAsJsonAsync("/mcp", new { });
+        using var http = app.GetTestClient();
+        var error = await Assert.ThrowsAsync<HttpRequestException>(async () =>
+            await McpScenario.ConnectAsync(http, new Uri("http://localhost/mcp")));
 
         // Assert
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, error.StatusCode);
     }
 
     [Fact]

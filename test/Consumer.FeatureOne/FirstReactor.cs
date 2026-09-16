@@ -1,10 +1,11 @@
 namespace Cntryl.Portia.Consumer;
 
-public sealed partial class FirstReactor(
+public partial class FirstReactor(
     IConsumerEffects effects,
     IConsumerScope scope,
-    IProjectionCheckpointStore checkpoints)
-    : Reactor(checkpoints, ConsumerStreams.AccountsPattern, "first-reactor"),
+    IProjectionCheckpointStore checkpoints,
+    EventStreamPattern? pattern = null)
+    : Reactor(checkpoints, pattern ?? ConsumerStreams.AccountsPattern, "first-reactor"),
         IReactorHandler<Deposited>, IReactorHandler<Declined>
 {
     public ValueTask HandleAsync(IReactorContext<Declined> context, CancellationToken ct)
@@ -19,3 +20,9 @@ public sealed partial class FirstReactor(
         return ValueTask.CompletedTask;
     }
 }
+
+public sealed partial class TenantFirstReactor(
+    IConsumerEffects effects,
+    IConsumerScope scope,
+    IProjectionCheckpointStore checkpoints)
+    : FirstReactor(effects, scope, checkpoints, EventStreamPattern.ForTenant(ConsumerStreams.Accounts));

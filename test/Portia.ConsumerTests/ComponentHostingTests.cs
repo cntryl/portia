@@ -238,7 +238,9 @@ public sealed partial class ComponentHostingTests
         }
 
         Assert.True(reader.Disposed);
-        Assert.True(Assert.Single(provider.GetRequiredService<ConsumerHost.Effects>().Scopes).Value);
+        var scopes = provider.GetRequiredService<ConsumerHost.Effects>().Scopes;
+        Assert.Equal(2, scopes.Count); // Startup validation and the active pass each own a scope.
+        Assert.All(scopes.Values, Assert.True);
     }
 
     [Theory]
@@ -444,7 +446,7 @@ public sealed partial class ComponentHostingTests
         int _created;
 
         public EventStreamPattern Next() => EventStreamPattern.ForPattern(
-            Interlocked.Increment(ref _created) == 1 ? "first-pattern" : "second-pattern");
+            Interlocked.Increment(ref _created) <= 2 ? "first-pattern" : "second-pattern");
     }
 
     sealed class ChangingPatternProjector(IAccountRepository target, PatternSequence patterns)

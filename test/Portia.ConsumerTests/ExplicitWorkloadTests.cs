@@ -56,7 +56,7 @@ public sealed class ExplicitWorkloadTests
             }
 
             var portia = services.AddPortia().AddWorkers();
-            _ = portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.PerTenant);
+            _ = portia.AddProjector<TenantFirstProjector>("first-projector", WorkloadScope.PerTenant);
             _ = portia.AddProjector<SecondProjector>("second-projector", WorkloadScope.Global);
             if (!infrastructureFirst)
             {
@@ -78,21 +78,21 @@ public sealed class ExplicitWorkloadTests
     {
         var services = new ServiceCollection();
         var portia = services.AddPortia()
-            .AddProjector<FirstProjector>("first-projector", WorkloadScope.PerTenant)
+            .AddProjector<TenantFirstProjector>("first-projector", WorkloadScope.PerTenant)
             .AddProjector<SecondProjector>("second-projector", WorkloadScope.Global)
-            .AddReactor<FirstReactor>("first-reactor", WorkloadScope.PerTenant);
+            .AddReactor<TenantFirstReactor>("first-reactor", WorkloadScope.PerTenant);
         var workloads = services.Where(service => service.ServiceType == typeof(WorkloadRegistration))
             .Select(service => Assert.IsType<WorkloadRegistration>(service.ImplementationInstance)).ToArray();
         Assert.Equal(3, workloads.Length);
         Assert.Equal(WorkloadScope.PerTenant,
-            workloads.Single(item => item.ComponentType == typeof(FirstProjector)).Scope);
+            workloads.Single(item => item.ComponentType == typeof(TenantFirstProjector)).Scope);
         Assert.Equal(WorkloadScope.Global,
             workloads.Single(item => item.ComponentType == typeof(SecondProjector)).Scope);
         Assert.DoesNotContain(services, service => service.ServiceType == typeof(IHostedService)
                                                    && service.ImplementationType is not null
                                                    && typeof(BackgroundService).IsAssignableFrom(
                                                        service.ImplementationType));
-        _ = portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.PerTenant);
+        _ = portia.AddProjector<TenantFirstProjector>("first-projector", WorkloadScope.PerTenant);
         Assert.Equal(3, services.Count(service => service.ServiceType == typeof(WorkloadRegistration)));
     }
 
@@ -120,10 +120,10 @@ public sealed class ExplicitWorkloadTests
         _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
             portia.AddProjector<FirstProjector>("first-projector", (WorkloadScope)42));
         Assert.Equal(count, services.Count);
-        _ = portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.PerTenant);
+        _ = portia.AddProjector<TenantFirstProjector>("first-projector", WorkloadScope.PerTenant);
         count = services.Count;
         _ = Assert.Throws<InvalidOperationException>(() =>
-            portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global));
+            portia.AddProjector<TenantFirstProjector>("first-projector", WorkloadScope.Global));
         Assert.Equal(count, services.Count);
     }
 

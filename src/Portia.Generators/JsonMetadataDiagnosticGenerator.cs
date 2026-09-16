@@ -11,7 +11,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 {
     static readonly HashSet<string> CandidateMethods = new(StringComparer.Ordinal)
     {
-        "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "SendAsync", "StreamAsync", "DispatchAsync",
+        "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "AddMcpTool", "SendAsync", "StreamAsync", "DispatchAsync",
         "DispatchStreamAsync", "EnqueueAsync", "PublishAsync", "ScheduleAsync", "EnsureAsync", "AddRequestSchedule",
         "MapPortiaGet", "MapPortiaPost", "MapPortiaPut", "MapPortiaPatch", "MapPortiaDelete", "MapPortiaGetStream",
         "MapPortiaGetSse", "Accepts", "Parameter", "Produces"
@@ -44,20 +44,6 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                 Add(type, type.Locations.FirstOrDefault());
             }
 
-            foreach (var iface in type.AllInterfaces)
-            {
-                var definition = iface.OriginalDefinition.ToDisplayString();
-                if (definition is "Cntryl.Portia.IRequestHandler<TRequest>"
-                    or "Cntryl.Portia.IRequestHandler<TRequest, TOut>"
-                    or "Cntryl.Portia.IStreamRequestHandler<TRequest, TOut>")
-                {
-                    Add(iface.TypeArguments[0], type.Locations.FirstOrDefault());
-                    if (iface.TypeArguments.Length == 2)
-                    {
-                        Add(iface.TypeArguments[1], type.Locations.FirstOrDefault());
-                    }
-                }
-            }
         }
 
         foreach (var tree in compilation.SyntaxTrees)
@@ -99,6 +85,16 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                             Add(iface.TypeArguments[1], invocation.GetLocation());
                         }
                     }
+                }
+
+                if (name == "AddMcpTool" && IsPortiaMcpRegistration(method)
+                    && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol mcpRequest)
+                {
+                    Add(mcpRequest, invocation.GetLocation());
+                    var requestContract = mcpRequest.AllInterfaces.FirstOrDefault(iface =>
+                        iface.OriginalDefinition.ToDisplayString() == "Cntryl.Portia.IRequest<TOut>");
+                    if (requestContract is not null)
+                        Add(requestContract.TypeArguments[0], invocation.GetLocation());
                 }
 
                 if (IsPortiaDispatch(method))
@@ -194,6 +190,17 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                 }
             }
         }
+
+
+        foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
+        {
+            foreach (var attribute in assembly.GetAttributes().Where(a =>
+                         a.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonRootAttribute"))
+            {
+                if (attribute.ConstructorArguments.FirstOrDefault().Value is ITypeSymbol type)
+                    yield return type;
+            }
+        }
     }
 
     static bool IsPortiaContext(INamedTypeSymbol type) => type.GetAttributes().Any(a =>
@@ -251,6 +258,12 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
     {
         var owner = method.ReducedFrom?.ContainingType ?? method.ContainingType;
         return owner.ToDisplayString() == "Cntryl.Portia.PortiaBuilder";
+    }
+
+    static bool IsPortiaMcpRegistration(IMethodSymbol method)
+    {
+        var owner = method.ReducedFrom?.ContainingType ?? method.ContainingType;
+        return owner.ToDisplayString() == "Cntryl.Portia.PortiaMcpApplicationExtensions";
     }
 
     static bool IsPortiaEndpointMapping(IMethodSymbol method)
