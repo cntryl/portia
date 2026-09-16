@@ -1,5 +1,1 @@
 #nullable enable
-Cntryl.Portia.HttpUnsupportedMediaTypeException
-Cntryl.Portia.HttpUnsupportedMediaTypeException.HttpUnsupportedMediaTypeException(string! message) -> void
-static Cntryl.Portia.PortiaHttpBinding.RejectCrossOrigin(Microsoft.AspNetCore.Http.HttpContext! context) -> Microsoft.AspNetCore.Http.IResult?
-static Cntryl.Portia.PortiaHttpBinding.RequireHttpServices(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app) -> void
