@@ -2,7 +2,7 @@ namespace Cntryl.Portia;
 
 /// <summary>Hydrates caller-constructed aggregates and persists their events.</summary>
 /// <param name="store">The aggregate event store.</param>
-public sealed class AggregateRepository(IEventStore store) : IAggregateRepository
+sealed class AggregateRepository(IEventStore store) : IAggregateReader, IAggregateWriter
 {
     /// <inheritdoc />
     public async ValueTask<TAggregate> HydrateAsync<TAggregate>(TAggregate aggregate, CancellationToken ct = default)

@@ -8,35 +8,34 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class AggregateRepositoryRegistrationTests
 {
-    /// <summary>The reader, writer, and repository are one scoped instance.</summary>
+    /// <summary>The reader and writer are the one scoped repository instance.</summary>
     [Fact]
-    public async Task ShouldResolveReaderAndWriterAsSameScopedRepositoryInstance()
+    public async Task ShouldResolveReaderAndWriterAsSameScopedInstance()
     {
         await using var provider = Provider(services => services.AddPortia());
         await using var first = provider.CreateAsyncScope();
         await using var second = provider.CreateAsyncScope();
 
-        var repository = first.ServiceProvider.GetRequiredService<IAggregateRepository>();
+        var reader = first.ServiceProvider.GetRequiredService<IAggregateReader>();
 
-        Assert.Same(repository, first.ServiceProvider.GetRequiredService<IAggregateReader>());
-        Assert.Same(repository, first.ServiceProvider.GetRequiredService<IAggregateWriter>());
-        Assert.NotSame(repository, second.ServiceProvider.GetRequiredService<IAggregateReader>());
+        Assert.Same(reader, first.ServiceProvider.GetRequiredService<IAggregateWriter>());
+        Assert.NotSame(reader, second.ServiceProvider.GetRequiredService<IAggregateReader>());
     }
 
-    /// <summary>A replaced repository is what the reader and writer resolve to.</summary>
+    /// <summary>Application-registered capabilities replace Portia's.</summary>
     [Fact]
-    public async Task ShouldForwardReaderAndWriterToReplacedRepository()
+    public async Task ShouldPreserveApplicationRegisteredWriter()
     {
         var replacement = new RecordingAggregateRepository();
         await using var provider = Provider(services =>
         {
-            _ = services.AddSingleton<IAggregateRepository>(replacement);
+            _ = services.AddSingleton<IAggregateWriter>(replacement);
             _ = services.AddPortia();
         });
         await using var scope = provider.CreateAsyncScope();
 
-        Assert.Same(replacement, scope.ServiceProvider.GetRequiredService<IAggregateReader>());
         Assert.Same(replacement, scope.ServiceProvider.GetRequiredService<IAggregateWriter>());
+        Assert.NotSame(replacement, scope.ServiceProvider.GetRequiredService<IAggregateReader>());
     }
 
     /// <summary>An application-registered reader is kept.</summary>

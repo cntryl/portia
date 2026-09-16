@@ -44,7 +44,7 @@ public sealed class SharedDeploymentTests
                     new DepositAccount(id, 5), new RequestRouteValues(Resource: id.ToString()), null);
                 Assert.True(response.IsSuccess);
                 await using var scope = api.Services.CreateAsyncScope();
-                var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
+                var repository = scope.ServiceProvider.Aggregates();
                 Assert.Equal(8, (await repository.HydrateAsync(new Account(id))).Balance);
                 var store = api.Services.GetRequiredService<IEventStore>();
                 Assert.Same(store, api.Services.GetRequiredService<IDomainEventReader>());
@@ -83,7 +83,7 @@ public sealed class SharedDeploymentTests
             Assert.Same(
                 scope.ServiceProvider.GetRequiredService<IEventStore>(),
                 scope.ServiceProvider.GetRequiredService<IDomainEventNotifier>());
-            var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
+            var repository = scope.ServiceProvider.Aggregates();
             var account = new Account(Uuid.CreateVersion4());
             account.Deposit(10);
             await repository.SaveAsync(account, _saveContext);

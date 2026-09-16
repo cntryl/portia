@@ -85,20 +85,20 @@ public sealed class Account : Aggregate
     }
 }
 
-public sealed class OpenAccountHandler(IAggregateRepository repository)
+public sealed class OpenAccountHandler(IAggregateReader reader, IAggregateWriter writer)
     : IRequestHandler<OpenAccount>
 {
     public async ValueTask<Result> HandleAsync(
         IRequestContext<OpenAccount> context,
         CancellationToken ct)
     {
-        var account = await repository.HydrateAsync(
+        var account = await reader.HydrateAsync(
             new Account(context.Request.AccountId), ct);
         var result = account.Open(context.Request.InitialBalance);
         if (!result.IsSuccess)
             return result;
 
-        await repository.SaveAsync(account, context, ct);
+        await writer.SaveAsync(account, context, ct);
         return result;
     }
 }
@@ -159,6 +159,91 @@ public static class TenantSlugFeature
 
 Portia matches `IClaimsTenantSlug` by assignability, so the guard serves all three requests. New
 requests opt in by implementing the interface; the guard does not enumerate concrete types.
+
+## Soft rolling windows: "have you failed too many sign-ins?"
+
+Rate limits, cooldowns, and lockout windows are the case guards fit best. They are time-bounded
+questions answered from history, not invariants an aggregate can enforce, and a slightly stale
+answer only ever lets one extra attempt through.
+
+The aggregate records what happened. A failed sign-in changes no state, so it audits:
+
+```csharp
+using Cntryl.Portia;
+
+[Discriminator("identity.sign-in.failed")]
+public sealed record SignInFailed(string Reason) : DomainEvent;
+
+public sealed record AuthenticatedIdentity(Uuid UserId);
+
+public sealed class UserIdentity : Aggregate
+{
+    public UserIdentity(Uuid id)
+        : base(id, new EventStreamAddress("identity", "users", id.ToString()))
+    {
+    }
+
+    public Result<AuthenticatedIdentity> Authenticate(string secret)
+    {
+        if (Verify(secret))
+            return Result<AuthenticatedIdentity>.Success(new AuthenticatedIdentity(Id));
+        AuditEvent(new SignInFailed("bad-secret"));
+        return Result<AuthenticatedIdentity>.Failure(
+            new RequestError(RequestErrorKind.Unauthorized, "Those credentials did not match."));
+    }
+
+    bool Verify(string secret) => secret.Length > 0;
+}
+```
+
+The handler commits either way, so the rejected attempt keeps its audit:
+
+```csharp
+public sealed record SignIn(Uuid UserId, string Secret) : IRequest<AuthenticatedIdentity>, ICallable;
+
+public sealed class SignInHandler(IAggregateExecutor aggregates)
+    : IRequestHandler<SignIn, AuthenticatedIdentity>
+{
+    public ValueTask<Result<AuthenticatedIdentity>> HandleAsync(
+        IRequestContext<SignIn> context,
+        CancellationToken ct) =>
+        aggregates.ExecuteAsync(
+            new UserIdentity(context.Request.UserId),
+            identity => AggregateOutcome.Commit(identity.Authenticate(context.Request.Secret)),
+            context,
+            ct);
+}
+```
+
+A projection turns those audits into the window, and the guard reads it:
+
+```csharp
+public interface ISignInAttempts
+{
+    ValueTask<int> FailuresSinceAsync(Uuid userId, DateTimeOffset since, CancellationToken ct);
+}
+
+public sealed class SignInWindowGuard(ISignInAttempts attempts, TimeProvider time)
+    : IRequestGuard<SignIn>
+{
+    public async ValueTask<Result> GuardAsync(
+        IRequestContext<SignIn> context,
+        CancellationToken ct) =>
+        await attempts.FailuresSinceAsync(
+            context.Request.UserId, time.GetUtcNow().AddMinutes(-15), ct) < 5
+            ? Result.Success
+            : Result.Failure(new RequestError(RequestErrorKind.Forbidden,
+                "Too many recent sign-in attempts. Try again later."));
+}
+```
+
+The guard runs before the handler, so a locked-out caller never reaches credential verification.
+The count is eventually consistent, and that is the right trade here: the window is a soft policy,
+not a hard invariant, so the aggregate stays free of attempt counters and the check costs one read.
+
+Model it as aggregate state only when it becomes a real invariant — an account disabled until an
+administrator re-enables it. That changes state, so the operation raises an event instead of
+auditing, and the aggregate rejects the attempt authoritatively.
 
 ## String permissions resolved outside the JWT
 
@@ -329,7 +414,7 @@ public sealed class TenantSlug : Aggregate
     }
 }
 
-public sealed class ClaimTenantSlugHandler(IAggregateRepository repository)
+public sealed class ClaimTenantSlugHandler(IAggregateReader reader, IAggregateWriter writer)
     : IRequestHandler<ClaimTenantSlug>
 {
     public async ValueTask<Result> HandleAsync(
@@ -337,12 +422,12 @@ public sealed class ClaimTenantSlugHandler(IAggregateRepository repository)
         CancellationToken ct)
     {
         var request = context.Request;
-        var ownership = await repository.HydrateAsync(new TenantSlug(request.SlugId), ct);
+        var ownership = await reader.HydrateAsync(new TenantSlug(request.SlugId), ct);
         var result = ownership.Claim(request.TenantId, request.Slug);
         if (!result.IsSuccess)
             return result;
 
-        await repository.SaveAsync(ownership, context, ct);
+        await writer.SaveAsync(ownership, context, ct);
         return result;
     }
 }
@@ -429,7 +514,7 @@ Each guard records `portia.guard.duration` with its component name and outcome.
 Guards and authorizers read; they never change state. Take `IAggregateReader` to hydrate an
 aggregate and `IDomainEventReader` to read events. Portia's practice analyzers report `PORTIA105`
 for a guard, and `PORTIA106` for an authorizer, that takes a known effect-capable dependency such as
-`IRequestBus`, a scheduler or queue publisher, `IAggregateRepository`, `IAggregateWriter`,
+`IRequestBus`, a scheduler or queue publisher, `IAggregateWriter`,
 `IAggregateExecutor`, or an event or projection store.
 
 Every direct dispatch is a fresh attempt. Queue retry or redelivery creates a fresh dependency-

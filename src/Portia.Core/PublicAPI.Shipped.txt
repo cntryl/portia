@@ -1,8 +1,4 @@
 #nullable enable
-Cntryl.Portia.AggregateRepository
-Cntryl.Portia.AggregateRepository.AggregateRepository(Cntryl.Portia.IEventStore! store) -> void
-Cntryl.Portia.AggregateRepository.HydrateAsync<TAggregate>(TAggregate! aggregate, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TAggregate!>
-Cntryl.Portia.AggregateRepository.SaveAsync<TAggregate>(TAggregate! aggregate, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Cntryl.Portia.EventSourcedTenantDirectory<TStartEvent, TStopEvent>
 Cntryl.Portia.EventSourcedTenantDirectory<TStartEvent, TStopEvent>.EventSourcedTenantDirectory(Cntryl.Portia.IDomainEventReader! reader, Cntryl.Portia.EventStreamPattern! pattern, System.Func<Cntryl.Portia.DomainEvent!, Cntryl.Portia.TenantId>! getTenantId, System.TimeSpan? pollInterval = null, System.TimeProvider? timeProvider = null, Cntryl.Portia.IDomainEventNotifier? notifier = null) -> void
 Cntryl.Portia.EventSourcedTenantDirectory<TStartEvent, TStopEvent>.GetActiveTenantsAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.TenantId>!

@@ -25,7 +25,7 @@ public sealed class FitzPersistenceFailureTests
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
         { ValidateScopes = true, ValidateOnBuild = true });
         await using var scope = provider.CreateAsyncScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
+        var repository = scope.ServiceProvider.Aggregates();
         var account = new Account(Uuid.CreateVersion4());
         var payload = new Declined("failure contract");
         account.Audit(payload);

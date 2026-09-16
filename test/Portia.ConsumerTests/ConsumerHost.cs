@@ -15,7 +15,11 @@ static class ConsumerHost
     {
         var services = new ServiceCollection();
         _ = services.AddScoped<IQueuedRequestTerminalHandler, TestTerminalHandler>();
-        _ = services.AddScoped<IAggregateRepository, AggregateRepository>();
+        _ = services.AddScoped<AggregateRepository>();
+        _ = services.AddScoped<IAggregateReader>(provider => provider.GetRequiredService<AggregateRepository>());
+        _ = services.AddScoped<IAggregateWriter>(provider => provider.GetRequiredService<AggregateRepository>());
+        _ = services.AddScoped<IAggregateExecutor>(provider => new AggregateExecutor(
+            provider.GetRequiredService<IAggregateReader>(), provider.GetRequiredService<IAggregateWriter>()));
         _ = services.AddSingleton<Effects>();
         _ = services.AddSingleton<IConsumerEffects>(provider => provider.GetRequiredService<Effects>());
         _ = services.AddSingleton<ProjectionStorage>();

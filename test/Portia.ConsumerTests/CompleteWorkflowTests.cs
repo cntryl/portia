@@ -94,7 +94,7 @@ public sealed class CompleteWorkflowTests
                 var declined = await scope.ServiceProvider.GetRequiredService<IRequestBus>()
                     .SendAsync(new DepositAccount(id, -1), RequestActor.System);
                 Assert.False(declined.IsSuccess);
-                var account = await scope.ServiceProvider.GetRequiredService<IAggregateRepository>()
+                var account = await scope.ServiceProvider.Aggregates()
                     .HydrateAsync(new Account(id));
                 Assert.NotNull(account);
                 Assert.Equal(36, account.Balance);

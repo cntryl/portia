@@ -84,7 +84,7 @@ public sealed class GeneratorDiagnosticsTests
                        using Cntryl.Portia;
                        public sealed record Command : IRequest;
                        public sealed class Component(
-                           IRequestBus bus, IAggregateRepository repository, IAggregateWriter writer, IAggregateExecutor executor,
+                           IRequestBus bus, IAggregateWriter writer, IAggregateExecutor executor,
                            IEventStore store, IDomainEventWriter events, IProjectionStore projections,
                            IProjectionCheckpointStore checkpoints, IRequestScheduler scheduler, HttpClient http) : {{role}}
                        {
@@ -95,11 +95,11 @@ public sealed class GeneratorDiagnosticsTests
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator())
             .Where(diagnostic => diagnostic.Id == id).ToArray();
 
-        Assert.Equal(["bus", "checkpoints", "events", "executor", "http", "projections", "repository", "scheduler", "store", "writer"],
+        Assert.Equal(["bus", "checkpoints", "events", "executor", "http", "projections", "scheduler", "store", "writer"],
             Locations(source, diagnostics));
         Assert.All(diagnostics, diagnostic => Assert.StartsWith(messagePrefix,
             diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal));
-        Assert.Contains("IAggregateReader", MessageAt(source, diagnostics, "repository"), StringComparison.Ordinal);
+        Assert.Contains("IAggregateReader", MessageAt(source, diagnostics, "writer"), StringComparison.Ordinal);
         Assert.Contains("IDomainEventReader", MessageAt(source, diagnostics, "store"), StringComparison.Ordinal);
     }
 

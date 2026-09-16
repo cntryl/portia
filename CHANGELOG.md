@@ -196,10 +196,11 @@ alerts are as breaking to change as an API.
 
 ### Changed
 
-- `IAggregateRepository` now combines `IAggregateReader` and `IAggregateWriter`, which declare
-  `HydrateAsync` and `SaveAsync`. Callers and implicit implementations compile unchanged; binaries
-  compiled against 0.2.0 must be recompiled, and explicit interface implementations must name the new
-  base interfaces.
+- Remove the combined `IAggregateRepository` contract and public `AggregateRepository`
+  implementation. Inject `IAggregateReader`, `IAggregateWriter`, or `IAggregateExecutor` according
+  to the capability a component needs; `AddPortia()` backs the reader and writer with the same
+  scoped internal repository. Source and binaries that referenced either removed type must migrate
+  and be recompiled.
 
 - The hosted startup error for a missing `IPermissionEvaluator` now says "permission-protected request
   types" instead of "guarded request types", so it no longer suggests `IRequestGuard`.

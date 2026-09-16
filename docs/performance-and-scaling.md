@@ -193,7 +193,7 @@ generated gRPC client ancestry. `PORTIA101` recognizes DI service-provider/scope
 semantic `ActivatorUtilities` calls. An application-defined gateway without one of those known
 markers remains intentionally unreported and still needs architectural review. `PORTIA105` and
 `PORTIA106` apply the same best-effort recognition to request guards and authorizers, additionally
-recognizing `IAggregateRepository`, `IAggregateWriter`, `IAggregateExecutor`, event stores, and
+recognizing `IAggregateWriter`, `IAggregateExecutor`, event stores, and
 projection stores, while `IAggregateReader` and `IDomainEventReader` remain allowed.
 # Bounded processor passes
 

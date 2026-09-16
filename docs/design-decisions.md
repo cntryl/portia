@@ -71,6 +71,19 @@ concurrency remains authoritative. Portia supplies no domain-policy DSL and does
 outcomes across retries. Streamed requests run the same guard stage before their first item; an
 outer behavior that does not invoke its continuation skips both guards and the handler.
 
+## Audits are a separate durability boundary
+
+An audit records that something was attempted or refused; it changes no aggregate state. Audits
+append to their own session stream so they never compete with commands for optimistic concurrency,
+and Portia does not offer atomic commits across streams. One operation therefore changes state or
+audits, never both, and two durability boundaries are two executions.
+
+That boundary also answers where soft policies live. A lockout window, rate limit, or cooldown is a
+time-bounded question answered from history, not an invariant: the aggregate audits the attempt, a
+projection computes the window, and a guard reads it before the handler runs. A stale read lets one
+extra attempt through, which is what a soft policy tolerates. Aggregate state is for invariants that
+must never be violated, such as an account disabled until an administrator re-enables it.
+
 ## Fail-closed authorization is a composition decision
 
 `RequireAuthorization()` is opt-in at the composition root, so existing applications keep their

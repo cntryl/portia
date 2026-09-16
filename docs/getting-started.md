@@ -264,13 +264,13 @@ services.AddPortia()
     .AddFitz(configuration.GetSection("Fitz"));
 ```
 
-Inject `IAggregateRepository` into a handler and construct the aggregate normally:
+Inject the aggregate capabilities into a handler and construct the aggregate normally. `IAggregateReader` hydrates and `IAggregateWriter` persists:
 
 ```csharp
-var account = await repository.HydrateAsync(new Account(id), ct);
+var account = await reader.HydrateAsync(new Account(id), ct);
 if (account.Deposit(amount) is { IsSuccess: false } rejected)
     return rejected;
-await repository.SaveAsync(account, context, ct);
+await writer.SaveAsync(account, context, ct);
 ```
 
 `IAggregateExecutor` owns those mechanics so a handler only states intent. Aggregate methods decide

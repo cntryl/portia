@@ -20,9 +20,10 @@ public sealed class ApplicationSetupTests
                                                             services.AddPortia();
                                                             await using var provider = services.BuildServiceProvider();
                                                             await using var scope = provider.CreateAsyncScope();
-                                                            var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
+                                                            var reader = scope.ServiceProvider.GetRequiredService<IAggregateReader>();
+                                                            var writer = scope.ServiceProvider.GetRequiredService<IAggregateWriter>();
                                                             var account = new Account(Uuid.CreateVersion4());
-                                                            if (!object.ReferenceEquals(account, await repository.HydrateAsync(account))) throw new System.Exception("Hydration replaced the caller instance");
+                                                            if (!object.ReferenceEquals(account, await reader.HydrateAsync(account))) throw new System.Exception("Hydration replaced the caller instance");
                                                         }
                                                     }
                                                     """);

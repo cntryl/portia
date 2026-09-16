@@ -136,7 +136,6 @@ Cntryl.Portia.HttpInvocation.RoutePattern.get -> string?
 Cntryl.Portia.HttpInvocation.RoutePattern.init -> void
 Cntryl.Portia.IAggregateReader
 Cntryl.Portia.IAggregateReader.HydrateAsync<TAggregate>(TAggregate! aggregate, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TAggregate!>
-Cntryl.Portia.IAggregateRepository
 Cntryl.Portia.IAggregateWriter
 Cntryl.Portia.IAggregateWriter.SaveAsync<TAggregate>(TAggregate! aggregate, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Cntryl.Portia.IBatchProjectorHandler<TEvent>

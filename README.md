@@ -55,20 +55,17 @@ public sealed record Deposit(Uuid AccountId, int Amount)
 Its handler contains the application decision, not HTTP or queue plumbing:
 
 ```csharp
-public sealed class DepositHandler(IAggregateRepository aggregates)
+public sealed class DepositHandler(IAggregateExecutor aggregates)
     : IRequestHandler<Deposit>
 {
-    public async ValueTask<Result> HandleAsync(
+    public ValueTask<Result> HandleAsync(
         IRequestContext<Deposit> context,
-        CancellationToken ct)
-    {
-        var account = await aggregates.HydrateAsync(
-            new Account(context.Request.AccountId), ct);
-
-        account.Deposit(context.Request.Amount);
-        await aggregates.SaveAsync(account, context, ct);
-        return Result.Success;
-    }
+        CancellationToken ct) =>
+        aggregates.ExecuteAsync(
+            new Account(context.Request.AccountId),
+            account => AggregateOutcome.Commit(account.Deposit(context.Request.Amount)),
+            context,
+            ct);
 }
 ```
 

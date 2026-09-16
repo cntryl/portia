@@ -39,11 +39,10 @@ public static class PortiaApplicationServiceCollectionExtensions
             }
         }
 
-        services.TryAddScoped<IAggregateRepository>(provider =>
-            new AggregateRepository(provider.GetRequiredService<IEventStore>()));
-        // Scoped forwarders, never singletons: they must follow whichever scoped repository is registered.
-        services.TryAddScoped<IAggregateReader>(static provider => provider.GetRequiredService<IAggregateRepository>());
-        services.TryAddScoped<IAggregateWriter>(static provider => provider.GetRequiredService<IAggregateRepository>());
+        services.TryAddScoped(provider => new AggregateRepository(provider.GetRequiredService<IEventStore>()));
+        // Scoped, never singleton: both capabilities are the one repository instance for this scope.
+        services.TryAddScoped<IAggregateReader>(static provider => provider.GetRequiredService<AggregateRepository>());
+        services.TryAddScoped<IAggregateWriter>(static provider => provider.GetRequiredService<AggregateRepository>());
         services.TryAddScoped<IAggregateExecutor>(static provider => new AggregateExecutor(
             provider.GetRequiredService<IAggregateReader>(), provider.GetRequiredService<IAggregateWriter>()));
         services.TryAddScoped<WorkloadContext>();

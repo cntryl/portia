@@ -52,7 +52,6 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         "Cntryl.Portia.IRequestQueuePublisher",
         "Cntryl.Portia.INoticeRequestSender",
         "Cntryl.Portia.IRequestScheduler",
-        "Cntryl.Portia.IAggregateRepository",
         "Cntryl.Portia.IAggregateWriter",
         "Cntryl.Portia.IAggregateExecutor",
         "System.Net.Http.HttpClient",
@@ -142,7 +141,7 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
             return;
         foreach (var parameter in Parameters(symbol, PreflightForbiddenTypes))
         {
-            var remedy = Matches(parameter.Type, ["Cntryl.Portia.IAggregateRepository"])
+            var remedy = Matches(parameter.Type, ["Cntryl.Portia.IAggregateWriter", "Cntryl.Portia.IAggregateExecutor"])
                 ? "inject IAggregateReader to hydrate aggregates"
                 : Matches(parameter.Type, ["Cntryl.Portia.IEventStore"])
                     ? "inject IDomainEventReader to read events"

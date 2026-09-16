@@ -16,7 +16,7 @@ public sealed class AggregateSaveConcurrencyTests
         var store = new ControlledStore { BlockFirstAppend = true };
         await using var provider = CreateProvider(store);
         await using var scope = provider.CreateAsyncScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
+        var repository = scope.ServiceProvider.Aggregates();
         var aggregate = new Account(Uuid.CreateVersion4());
         if (operation == "audit")
             aggregate.Audit(new Declined("first"));
@@ -52,7 +52,7 @@ public sealed class AggregateSaveConcurrencyTests
         var store = new ControlledStore { FailAppend = true };
         await using var provider = CreateProvider(store);
         await using var scope = provider.CreateAsyncScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository>();
+        var repository = scope.ServiceProvider.Aggregates();
         var aggregate = new Account(Uuid.CreateVersion4());
         var scenario = new AggregateScenario<Account>(aggregate);
         var payload = new Deposited(7);
@@ -101,7 +101,7 @@ public sealed class AggregateSaveConcurrencyTests
         var store = new ControlledStore { FailAppend = true };
         await using var provider = CreateProvider(store);
         await using var scope = provider.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<IAggregateRepository>()
+        await scope.ServiceProvider.Aggregates()
             .SaveAsync(new Account(Uuid.CreateVersion4()), _saveContext);
         Assert.Equal(0, store.AppendCalls);
     }

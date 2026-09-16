@@ -16,7 +16,7 @@ public sealed class ReactorExecutionContractTests
                                                     using Cntryl.Portia.Testing;
                                                     using Cntryl.Portia.Consumer;
                                                     using Microsoft.Extensions.DependencyInjection;
-                                                    public sealed partial class Reaction(IAggregateRepository repository, Account account, Uuid sourceId)
+                                                    public sealed partial class Reaction(IAggregateWriter repository, Account account, Uuid sourceId)
                                                         : Reactor(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("reaction", "inputs", sourceId.ToString()), "reaction"), IReactorHandler<Deposited>
                                                     {
                                                         public async ValueTask HandleAsync(IReactorContext<Deposited> context, CancellationToken ct)
@@ -42,7 +42,7 @@ public sealed class ReactorExecutionContractTests
                                                             await using var provider = services.BuildServiceProvider();
                                                             await using var scope = provider.CreateAsyncScope();
                                                             var account = new Account(Uuid.CreateVersion4());
-                                                            var reaction = new Reaction(scope.ServiceProvider.GetRequiredService<IAggregateRepository>(), account, id);
+                                                            var reaction = new Reaction(scope.ServiceProvider.GetRequiredService<IAggregateWriter>(), account, id);
                                                             await new ReactorRunner(store).RunAsync(reaction, ProjectionCheckpoint.Start);
                                                             await foreach(var output in store.ReadAsync(account.Stream))
                                                                 if (output.Event.Metadata.CausationId != ev.Metadata.EventId || output.Event.Metadata.CorrelationId != correlation
