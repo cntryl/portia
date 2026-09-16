@@ -22,7 +22,7 @@ public sealed class TransportExecutionContextTests
         _ = builder.WebHost.UseTestServer();
         var bus = new RecordingBus();
         _ = builder.Services.AddSingleton<IRequestBus>(bus);
-        _ = builder.Services.AddPortia();
+        _ = builder.Services.AddPortia().AddHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaPost<TransportCommand>("/context/{amount}");
         await app.StartAsync();

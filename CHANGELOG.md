@@ -42,8 +42,10 @@ alerts are as breaking to change as an API.
   Scalar-only bodies bind from `application/x-www-form-urlencoded` and `multipart/form-data` forms
   as well as JSON, using the JSON wire names, and OpenAPI describes both form content types. A POST
   whose scalar members all arrive in the query no longer requires a body. `FromQuery(x => x.Member)`
-  on the mapping binds a member only from the query string and documents it as a query parameter. Form posts validate antiforgery tokens when the application registers
-  antiforgery. `MapPortia*` `configure` overloads add an `OnBind` escape hatch for custom request
+  on the mapping binds a member only from the query string and documents it as a query parameter. Form posts validate antiforgery tokens, and without a
+  registered antiforgery service they return 415 and OpenAPI omits the form content types unless
+  the endpoint calls `DisableAntiforgery()`, so default form binding cannot open a cross-site
+  request forgery path. `MapPortia*` `configure` overloads add an `OnBind` escape hatch for custom request
   binding and an `OnResult` hook for post-operation HTTP handling such as cookies, headers, and
   redirects; a queuable endpoint with `OnResult` stays synchronous and ignores `Prefer: respond-async`.
   Declared custom bodies are completely size-validated before `OnBind`, including chunked requests.
@@ -195,6 +197,26 @@ alerts are as breaking to change as an API.
   blocked every partition behind it and prevented healthy scale-out and takeover from converging.
 
 ### Changed
+
+- Generated HTTP endpoints and the MCP Streamable HTTP endpoint refuse `POST`, `PUT`, `PATCH`, and
+  `DELETE` requests that a browser reports as cross-origin (`Sec-Fetch-Site`, or without it an
+  `Origin` that does not match the request host) with `403 application/problem+json` before
+  binding, unless the application's ASP.NET Core CORS pipeline allows that origin for the endpoint.
+  Portia records the decision the CORS service makes, so `UseCors("policy")`, `RequireCors`, the
+  default policy, and `[DisableCors]` apply as configured. Requests without browser origin headers
+  are unaffected. Browser applications served from another origin, including a subdomain, must now
+  be allowed by a CORS policy.
+
+- `MapPortiaGet`, `MapPortiaPost`, `MapPortiaPut`, `MapPortiaPatch`, `MapPortiaDelete`, and the
+  streaming variants require `AddHttp()` and throw while mapping without it.
+
+- Default HTTP body binding reads JSON only from requests that declare a JSON media type
+  (`application/json` or a `+json` type). A `text/plain` or other non-JSON body, a form posted to a
+  body with complex members, an empty body declaring a non-JSON type, or a body without a content
+  type now returns `415 application/problem+json` instead of binding, and OpenAPI documents the 415
+  response. Browsers send those bodies cross-site without a CORS preflight, so a page could forge a
+  JSON request around antiforgery. Clients must send `Content-Type: application/json`; requests
+  without a body are unaffected.
 
 - Remove the combined `IAggregateRepository` contract and public `AggregateRepository`
   implementation. Inject `IAggregateReader`, `IAggregateWriter`, or `IAggregateExecutor` according

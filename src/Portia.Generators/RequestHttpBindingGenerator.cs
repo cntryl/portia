@@ -355,7 +355,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 ? $", global::System.Action<{configurationType}> configure"
                 : string.Empty)
             .AppendLine(")")
-            .AppendLine("    {");
+            .AppendLine("    {")
+            .AppendLine("        global::Cntryl.Portia.PortiaHttpBinding.RequireHttpServices(app);");
         if (call.Configured)
         {
             _ = source.Append("        var configuration = new ").Append(configurationType).AppendLine("();")
@@ -438,7 +439,19 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 "        async global::System.Threading.Tasks.Task Dispatch(global::Microsoft.AspNetCore.Http.HttpContext httpContext)")
             .AppendLine("        {")
             .AppendLine("            try")
-            .AppendLine("            {")
+            .AppendLine("            {");
+        if (!string.Equals(call.Verb, "Get", StringComparison.Ordinal))
+        {
+            // A state-changing request is refused before binding reads anything from it.
+            _ = source
+                .AppendLine("                if (global::Cntryl.Portia.PortiaHttpBinding.RejectCrossOrigin(httpContext) is { } crossOrigin)")
+                .AppendLine("                {")
+                .AppendLine("                    await crossOrigin.ExecuteAsync(httpContext).ConfigureAwait(false);")
+                .AppendLine("                    return;")
+                .AppendLine("                }");
+        }
+
+        _ = source
             .AppendLine(
                 "                var bus = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestBus>(httpContext.RequestServices);");
         if (call.Kind == CallKind.Queue)
@@ -461,6 +474,12 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .AppendLine("            {")
             .AppendLine(
                 "                await global::Cntryl.Portia.PortiaHttpBinding.Problem(413, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
+            .AppendLine("            }")
+            .AppendLine(
+                "            catch (global::Cntryl.Portia.HttpUnsupportedMediaTypeException ex) when (!httpContext.Response.HasStarted)")
+            .AppendLine("            {")
+            .AppendLine(
+                "                await global::Cntryl.Portia.PortiaHttpBinding.Problem(415, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
             .AppendLine("            }")
             .AppendLine(
                 "            catch (global::Microsoft.AspNetCore.Antiforgery.AntiforgeryValidationException) when (!httpContext.Response.HasStarted)")
@@ -663,6 +682,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
             _ = source.AppendLine("            }")
                 .AppendLine("            catch (global::Cntryl.Portia.HttpPayloadTooLargeException)")
+                .AppendLine("            {")
+                .AppendLine("                throw;")
+                .AppendLine("            }")
+                .AppendLine("            catch (global::Cntryl.Portia.HttpUnsupportedMediaTypeException)")
                 .AppendLine("            {")
                 .AppendLine("                throw;")
                 .AppendLine("            }")

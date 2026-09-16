@@ -41,7 +41,7 @@ public sealed class CompleteWorkflowTests
             builder.Services.Add(descriptor);
         _ = builder.Services.AddReporting();
         _ = builder.Services.AddAccounts();
-        _ = builder.Services.AddPortia();
+        _ = builder.Services.AddPortia().AddHttp();
         if (fitzStore)
         {
             _ = builder.Services.AddSingleton<IEventStore>(provider =>

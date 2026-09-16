@@ -28,7 +28,17 @@ public static class PortiaMcpEndpointRouteBuilderExtensions
                       ?? PortiaHttpOptions.DefaultMaxJsonBodyBytes;
         if (maximum <= 0)
             throw new InvalidOperationException($"{nameof(PortiaHttpOptions.MaxJsonBodyBytes)} must be positive.");
-        return endpoints.MapMcp(pattern).WithMetadata(new McpRequestSizeLimit(maximum));
+        var builder = endpoints.MapMcp(pattern).WithMetadata(new McpRequestSizeLimit(maximum));
+        // Streamable HTTP must validate the browser origin; the MCP endpoints share Portia's rule.
+        builder.Finally(endpoint =>
+        {
+            if (endpoint.RequestDelegate is not { } next)
+                return;
+            endpoint.RequestDelegate = context => PortiaHttpBinding.RejectCrossOrigin(context) is { } rejection
+                ? rejection.ExecuteAsync(context)
+                : next(context);
+        });
+        return builder;
     }
 
     sealed record McpRequestSizeLimit(long? MaxRequestBodySize) : IRequestSizeLimitMetadata;

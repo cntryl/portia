@@ -9,18 +9,21 @@ _ = builder.Services.AddPortia()
     .AddMcpStdio(options => options.UseLocalDevelopmentActor("stdio-test-actor"));
 await builder.Build().RunAsync();
 
-/// <summary>Reads a greeting and the explicitly configured stdio actor.</summary>
-[Discriminator("stdio.greetings.read")]
-sealed record StdioGreeting(string Name) : IRequest<string>, ICallable;
-
-sealed class StdioGreetingHandler : IRequestHandler<StdioGreeting, string>
+namespace Cntryl.Portia
 {
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<StdioGreeting> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result<string>.Success(
-            $"Hello, {context.Request.Name}, from {context.Actor.Identity?.Name}."));
-}
+    /// <summary>Reads a greeting and the explicitly configured stdio actor.</summary>
+    [Discriminator("stdio.greetings.read")]
+    sealed record StdioGreeting(string Name) : IRequest<string>, ICallable;
 
-[PortiaJsonContext]
-[JsonSerializable(typeof(StdioGreeting))]
-[JsonSerializable(typeof(string))]
-sealed partial class StdioJsonContext : JsonSerializerContext;
+    sealed class StdioGreetingHandler : IRequestHandler<StdioGreeting, string>
+    {
+        public ValueTask<Result<string>> HandleAsync(IRequestContext<StdioGreeting> context, CancellationToken ct) =>
+            ValueTask.FromResult(Result<string>.Success(
+                $"Hello, {context.Request.Name}, from {context.Actor.Identity?.Name}."));
+    }
+
+    [PortiaJsonContext]
+    [JsonSerializable(typeof(StdioGreeting))]
+    [JsonSerializable(typeof(string))]
+    sealed partial class StdioJsonContext : JsonSerializerContext;
+}

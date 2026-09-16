@@ -21,6 +21,7 @@ public static class PortiaHttpBinding
     // still lands in a single allocation, and a dishonest header cannot reserve more than this.
     const int MaximumInitialBodyBytes = 64 * 1024;
     const int BodyChunkBytes = 16 * 1024;
+    const string JsonMediaTypeRequired = "Request bodies must declare a JSON content type.";
     static readonly object BodyLimitAppliedKey = new();
     static readonly ConditionalWeakTable<JsonSerializerOptions, OptionsBindingCache> BindingCaches = [];
 
@@ -58,6 +59,31 @@ public static class PortiaHttpBinding
         context.Items.Add(BodyLimitAppliedKey, null);
     }
 
+    /// <summary>
+    ///     Refuses a state-changing browser request from another origin unless the application's CORS
+    ///     pipeline allows that origin.
+    /// </summary>
+    /// <param name="context">The current HTTP request.</param>
+    /// <returns>A 403 problem result, or <see langword="null" /> when the request may proceed.</returns>
+    public static IResult? RejectCrossOrigin(HttpContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return PortiaCrossOrigin.IsAllowed(context)
+            ? null
+            : Problem(StatusCodes.Status403Forbidden, "Cross-origin request rejected.");
+    }
+
+    /// <summary>Ensures <c>AddHttp()</c> registered Portia's HTTP services before an endpoint is mapped.</summary>
+    /// <param name="app">The endpoint route builder.</param>
+    /// <exception cref="InvalidOperationException"><c>AddHttp()</c> was not called.</exception>
+    public static void RequireHttpServices(IEndpointRouteBuilder app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        if (app.ServiceProvider.GetService<PortiaHttpExtensions.PortiaOpenApiMarker>() is null)
+            throw new InvalidOperationException(
+                "Portia HTTP endpoints require AddHttp() in the shared Portia application composition.");
+    }
+
     /// <summary>Reports whether the request carries an HTML form body.</summary>
     /// <param name="context">The current HTTP request.</param>
     /// <returns><see langword="true" /> for <c>application/x-www-form-urlencoded</c> or <c>multipart/form-data</c>.</returns>
@@ -67,12 +93,18 @@ public static class PortiaHttpBinding
         return context.Request.HasFormContentType;
     }
 
-    /// <summary>Reads a bounded HTML form body, validating antiforgery when the application registers it.</summary>
+    /// <summary>
+    ///     Reads a bounded HTML form body after antiforgery validation. Without a registered antiforgery
+    ///     service, forms are refused unless the endpoint disables antiforgery.
+    /// </summary>
     /// <param name="context">The current HTTP request.</param>
     /// <param name="ct">A token that can cancel the read.</param>
     /// <returns>The parsed form.</returns>
     /// <exception cref="HttpPayloadTooLargeException">The body exceeds <c>PortiaHttpOptions.MaxJsonBodyBytes</c>.</exception>
     /// <exception cref="AntiforgeryValidationException">The antiforgery token is missing or invalid.</exception>
+    /// <exception cref="HttpUnsupportedMediaTypeException">
+    ///     Antiforgery is not registered and the endpoint does not disable it.
+    /// </exception>
     public static async ValueTask<IFormCollection> ReadFormBodyAsync(HttpContext context, CancellationToken ct)
     {
         EnsureBodyWithinLimit(context);
@@ -153,8 +185,19 @@ public static class PortiaHttpBinding
         return bool.TryParse(value, out result);
     }
 
-    // A form post can be forged cross-site where a JSON post cannot, so a registered antiforgery
-    // service is honoured; endpoints opt out with DisableAntiforgery().
+    /// <summary>Reports whether default binding accepts HTML form bodies for an endpoint.</summary>
+    /// <param name="endpointMetadata">The endpoint's metadata.</param>
+    /// <param name="services">The application services.</param>
+    /// <returns>
+    ///     <see langword="true" /> when the application registers antiforgery or the endpoint opts out of it.
+    /// </returns>
+    internal static bool AcceptsFormBody(IEnumerable<object> endpointMetadata, IServiceProvider services) =>
+        endpointMetadata.OfType<IAntiforgeryMetadata>().LastOrDefault() is { RequiresValidation: false } ||
+        services.GetService<IAntiforgery>() is not null;
+
+    // A form post can be forged cross-site where a JSON post cannot, so default form binding fails
+    // closed: forms are refused unless antiforgery is registered to validate them or the endpoint
+    // explicitly opts out with DisableAntiforgery().
     static async ValueTask ValidateAntiforgeryAsync(HttpContext context)
     {
         if (context.GetEndpoint()?.Metadata.GetMetadata<IAntiforgeryMetadata>() is { RequiresValidation: false })
@@ -166,8 +209,9 @@ public static class PortiaHttpBinding
             return;
         }
 
-        if (context.RequestServices.GetService<IAntiforgery>() is { } antiforgery)
-            await antiforgery.ValidateRequestAsync(context).ConfigureAwait(false);
+        if (context.RequestServices.GetService<IAntiforgery>() is not { } antiforgery)
+            throw new HttpUnsupportedMediaTypeException("Form bodies require antiforgery validation.");
+        await antiforgery.ValidateRequestAsync(context).ConfigureAwait(false);
     }
 
     /// <summary>Reads one bounded JSON object request body.</summary>
@@ -176,10 +220,19 @@ public static class PortiaHttpBinding
     /// <param name="ct">A token that can cancel the read.</param>
     /// <returns>The parsed body, or an empty object when the body was empty and optional.</returns>
     /// <exception cref="HttpPayloadTooLargeException">The body exceeds <c>PortiaHttpOptions.MaxJsonBodyBytes</c>.</exception>
+    /// <exception cref="HttpUnsupportedMediaTypeException">
+    ///     The request declares a non-JSON content type, or carries a body without declaring one.
+    /// </exception>
     public static async ValueTask<JsonDocument> ReadJsonBodyAsync(HttpContext context, bool bodyRequired,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(context);
+        // A cross-site page can send a text/plain or untyped body without a CORS preflight, and that
+        // body can still be valid JSON, so only a declared JSON media type is read as JSON. A request
+        // without a content type is accepted only when it carries no body.
+        var declaresJson = context.Request.HasJsonContentType();
+        if (!declaresJson && (context.Request.ContentType is not null || context.Request.ContentLength > 0))
+            throw new HttpUnsupportedMediaTypeException(JsonMediaTypeRequired);
         var maximum = MaximumBodyBytes(context);
 
         if (context.Request.ContentLength > 0 && context.Request.ContentLength > maximum)
@@ -221,6 +274,9 @@ public static class PortiaHttpBinding
                 ? throw new BadHttpRequestException("Missing required request body.")
                 : JsonDocument.Parse(EmptyObjectUtf8);
         }
+
+        if (!declaresJson)
+            throw new HttpUnsupportedMediaTypeException(JsonMediaTypeRequired);
 
         buffer.Position = 0;
         var json = GetJsonOptions(context);
