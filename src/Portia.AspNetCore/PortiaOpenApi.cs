@@ -14,7 +14,10 @@ public static class PortiaHttpExtensions
 
     static readonly string[] Get = ["GET"];
 
-    /// <summary>Adds Portia's HTTP and OpenAPI services.</summary>
+    /// <summary>
+    ///     Adds Portia's HTTP and OpenAPI services. Every generated HTTP endpoint requires them, and they let
+    ///     cross-origin protection honor the application's CORS pipeline.
+    /// </summary>
     /// <param name="builder">The Portia composition root.</param>
     /// <param name="configure">Optional HTTP-boundary configuration.</param>
     /// <returns>The same builder, for chaining.</returns>
@@ -29,6 +32,7 @@ public static class PortiaHttpExtensions
             return builder;
 
         _ = services.AddSingleton<PortiaOpenApiMarker>();
+        PortiaCrossOrigin.AddCorsDecisions(services);
         _ = services.AddSingleton(provider => new PortiaOpenApiDocumentCache(provider, DocumentName));
         _ = services.AddOpenApi(DocumentName, options =>
         {
@@ -73,5 +77,5 @@ public static class PortiaHttpExtensions
         return app;
     }
 
-    sealed class PortiaOpenApiMarker;
+    internal sealed class PortiaOpenApiMarker;
 }

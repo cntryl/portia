@@ -113,7 +113,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
                 http.Response.Cookies.Append("session", result.Value, new CookieOptions { HttpOnly = true });
                 http.Response.Headers["X-Signed-In"] = result.Value;
                 return Results.Redirect("/home");
-            })));
+            })).DisableAntiforgery());
 
         var response = await client.PostAsync("/sign-in", Form(("value", "jeff")));
 
@@ -133,7 +133,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
     [Fact]
     public async Task ShouldBindRouteAndBodyFromFormOrJson()
     {
-        var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}"));
+        var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}")
+            .DisableAntiforgery());
         var widgetId = Uuid.CreateVersion4();
 
         var urlEncoded = await client.PostAsync($"/widgets/{widgetId}?dry_run=true",
@@ -179,7 +180,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     {
         var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}", endpoint => endpoint
             .FromQuery(x => x.DryRun)
-            .FromQuery(x => x.Priority)));
+            .FromQuery(x => x.Priority)).DisableAntiforgery());
         var widgetId = Uuid.CreateVersion4();
 
         var jsonQuery = await client.PostAsJsonAsync($"/widgets/{widgetId}?dry_run=true&priority=2",
@@ -248,7 +249,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
     [InlineData("name=gear&quantity=1&active=true&active=maybe")]
     public async Task ShouldRejectInvalidFormFields(string form)
     {
-        var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}"));
+        var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}")
+            .DisableAntiforgery());
 
         var response = await client.PostAsync($"/widgets/{Uuid.CreateVersion4()}",
             new StringContent(form, Encoding.UTF8, "application/x-www-form-urlencoded"));
@@ -256,7 +258,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    /// <summary>Verifies a body with complex members stays JSON-only.</summary>
+    /// <summary>Verifies a body with complex members stays JSON-only, refusing a form as an unsupported media type.</summary>
     [Fact]
     public async Task ShouldRejectFormPostForComplexBody()
     {
@@ -264,7 +266,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         var response = await client.PostAsync("/orders", Form(("lines", "x")));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
     }
 
     /// <summary>
@@ -303,6 +305,71 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Equal("json", await ReadSuccess(json));
         Assert.Equal($"{widgetId} open 1 False none", await ReadSuccess(optedOut));
         Assert.Equal("valid", await ReadSuccess(accepted));
+    }
+
+    /// <summary>
+    ///     Verifies default form binding fails closed without an antiforgery service: a cross-site
+    ///     forgeable form post is rejected as an unsupported media type, JSON still binds, and an
+    ///     endpoint that calls <c>DisableAntiforgery()</c> accepts forms explicitly.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRejectFormPostsWhenAntiforgeryIsNotRegistered()
+    {
+        var client = await StartAsync(app =>
+        {
+            _ = app.MapPortiaPost<HttpOptionalBody, string>("/unguarded-form");
+            _ = app.MapPortiaPost<HttpUpdateWidget, string>("/open-form/{widget_id}").DisableAntiforgery();
+        });
+        var widgetId = Uuid.CreateVersion4();
+
+        var urlEncoded = await client.PostAsync("/unguarded-form", Form(("value", "x")));
+        using var multipartContent = new MultipartFormDataContent { { new StringContent("x"), "value" } };
+        var multipart = await client.PostAsync("/unguarded-form", multipartContent);
+        var json = await client.PostAsJsonAsync("/unguarded-form", new { value = "json" });
+        var optedOut = await client.PostAsync($"/open-form/{widgetId}", Form(("name", "open"), ("quantity", "1")));
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, urlEncoded.StatusCode);
+        Assert.Equal("application/problem+json", urlEncoded.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, multipart.StatusCode);
+        Assert.Equal("json", await ReadSuccess(json));
+        Assert.Equal($"{widgetId} open 1 False none", await ReadSuccess(optedOut));
+    }
+
+    /// <summary>
+    ///     Verifies default JSON binding refuses every body a cross-site page can send without a CORS
+    ///     preflight, even where antiforgery guards forms: a <c>text/plain</c> body holding valid JSON,
+    ///     an empty <c>text/plain</c> body on an optional request, and an untyped JSON body of known or
+    ///     unknown length are 415,
+    ///     while declared JSON media types and bodiless posts still bind.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRejectBodiesBrowsersSendCrossSiteWithoutPreflight()
+    {
+        var client = await StartAsync(app =>
+        {
+            _ = app.MapPortiaPost<HttpOptionalBody, string>("/optional");
+            _ = app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}");
+        }, services => services.AddAntiforgery());
+        var widgetId = Uuid.CreateVersion4();
+
+        var plainJson = await client.PostAsync($"/widgets/{widgetId}", new StringContent(
+            /*lang=json,strict*/ """{"name":"gear","quantity":1,"active":true}""", Encoding.UTF8, "text/plain"));
+        var plainEmpty = await client.PostAsync("/optional", new StringContent("", Encoding.UTF8, "text/plain"));
+        var untypedJson = await client.PostAsync("/optional",
+            new ByteArrayContent(/*lang=json,strict*/ """{"value":"untyped"}"""u8.ToArray()));
+        using var untypedChunkedContent = new UnknownLengthContent(/*lang=json,strict*/ """{"value":"chunked"}"""u8.ToArray());
+        var untypedChunked = await client.PostAsync("/optional", untypedChunkedContent);
+        var suffixJson = await client.PostAsync("/optional", new StringContent(
+            /*lang=json,strict*/ """{"value":"suffix"}""", Encoding.UTF8, "application/merge-patch+json"));
+        var bodiless = await client.PostAsync("/optional", content: null);
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, plainJson.StatusCode);
+        Assert.Equal("application/problem+json", plainJson.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, plainEmpty.StatusCode);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, untypedJson.StatusCode);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, untypedChunked.StatusCode);
+        Assert.Equal("suffix", await ReadSuccess(suffixJson));
+        Assert.Equal("fallback", await ReadSuccess(bodiless));
     }
 
     static FormUrlEncodedContent Form(params (string Name, string Value)[] fields) =>
@@ -423,7 +490,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var client = await StartAsync(app =>
             {
                 UseServerEnforcedBodyLimit(app, maximum: null);
-                _ = app.MapPortiaPost<HttpUpdateWidget, string>("/server-limited-form/{widget_id}");
+                _ = app.MapPortiaPost<HttpUpdateWidget, string>("/server-limited-form/{widget_id}").DisableAntiforgery();
             },
             services => services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 24));
         var widgetId = Uuid.CreateVersion4();

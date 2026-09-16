@@ -324,7 +324,8 @@ Do not emit or save concurrently on one aggregate instance. An OCC conflict thro
 
 ## Map HTTP endpoints
 
-Call `AddHttp()` during composition and `MapPortiaOpenApi()` after building to expose OpenAPI 3.1 at
+Call `AddHttp()` during composition; every `MapPortia*` endpoint requires it and mapping throws
+without it. Call `MapPortiaOpenApi()` after building to expose OpenAPI 3.1 at
 `/openapi/v1.json` and `/openapi/v1.yml`. Portia does not intercept ambient application creation.
 Portia describes generated bindings while ordinary minimal-API endpoints remain governed by
 Microsoft's standard generator. To download YAML:
@@ -332,6 +333,38 @@ Microsoft's standard generator. To download YAML:
 ```sh
 curl http://localhost:5000/openapi/v1.yml --output openapi.yml
 ```
+
+### Cross-origin requests
+
+Browsers attach cookies to requests that another site starts, so Portia refuses a state-changing
+request from another browser origin before it binds anything:
+
+- `POST`, `PUT`, `PATCH`, and `DELETE` endpoints return `403 application/problem+json` when the
+  browser reports the request as cross-origin, unless the application's ASP.NET Core CORS pipeline
+  allows that origin for the endpoint. `GET` endpoints are unaffected.
+- The browser's `Sec-Fetch-Site` header decides: `same-origin` and `none` are accepted. Without it,
+  the `Origin` header must match the request's host and port. A request with neither header does
+  not come from a browser and is accepted.
+- CORS applies exactly as the pipeline configures it: `app.UseCors("policy")`, `RequireCors`, the
+  default policy, and `[DisableCors]` decide trust the same way they decide response headers. A
+  policy that allows any origin trusts every origin, so do not combine `AllowAnyOrigin()` with
+  cookie authentication.
+
+```csharp
+builder.Services.AddCors(options => options.AddPolicy("spa", policy => policy
+    .WithOrigins("https://app.example.com")
+    .AllowCredentials()
+    .AllowAnyHeader()
+    .AllowAnyMethod()));
+builder.Services.AddPortia().AddHttp();
+
+var app = builder.Build();
+app.UseCors("spa");
+app.MapPortiaPost<DepositAccount>("/accounts/{id}");
+```
+
+A subdomain is a different origin, so it needs a CORS policy too. Behind a proxy that rewrites the
+host, use `UseForwardedHeaders` so the `Origin` comparison sees the host the browser used.
 
 ### Server-sent event streams
 
@@ -424,9 +457,15 @@ throws otherwise.
 
 An absent body is treated as `{}` unless a required complex member needs it. Bodies are bounded
 to 10 MiB by default; configure `PortiaHttpOptions.MaxJsonBodyBytes` through standard options
-registration. Exceeding the bound returns `413 application/problem+json`. When the application
-registers antiforgery (`AddAntiforgery()`), form posts must carry a valid token or return 400;
-JSON bodies are unaffected, and `.DisableAntiforgery()` opts an endpoint out. Binary and
+registration. Exceeding the bound returns `413 application/problem+json`. A body must declare a JSON
+media type (`application/json` or a `+json` type) or, for scalar-only bodies, a form type; any
+other declared type, or a body without a content type, returns 415. Browsers send JSON media types
+cross-site only after a CORS preflight, but send forms and `text/plain` without one, so form
+binding also requires antiforgery: when the application registers it (`AddAntiforgery()`), form
+posts must carry a valid token or return 400, and without it form posts return 415 and OpenAPI
+describes only JSON. An endpoint that authenticates without ambient credentials such as cookies
+can accept forms without a token by calling `.DisableAntiforgery()`. These rules apply after the
+[cross-origin check](#cross-origin-requests). Binary and
 streaming request bodies, and bodies mixing complex members with form posts, are unsupported by
 default binding.
 

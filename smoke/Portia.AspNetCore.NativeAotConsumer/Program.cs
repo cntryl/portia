@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text;
@@ -11,7 +12,9 @@ _ = builder.Services.AddPortia().ConfigureJson(options => options.PropertyNaming
     .AddRequestHandler<SmokeRequestHandler>()
     .AddRequestHandler<SmokeUploadHandler>()
     .AddRequestGuard<SmokeRequestGuard>();
+_ = builder.Services.AddCors(options => options.AddPolicy("smoke", policy => policy.WithOrigins("https://trusted.example")));
 var app = builder.Build();
+_ = app.UseCors("smoke");
 _ = app.MapPortiaOpenApi();
 _ = app.MapPortiaGet<SmokeRequest, SmokePayload>("/smoke");
 _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
@@ -73,6 +76,27 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     var guardProbe = app.Services.GetRequiredService<SmokeGuardProbe>();
     if (guardProbe.Calls != 2)
         throw new InvalidOperationException($"Expected the family-scoped request guard twice, but saw {guardProbe.Calls} calls.");
+
+    // Cross-origin protection trusts exactly the origins the CORS pipeline allows, which the native
+    // build decides through the CORS service Portia wraps at startup.
+    foreach (var (origin, expected) in new[]
+             {
+                 ("https://trusted.example", HttpStatusCode.OK),
+                 ("https://attacker.example", HttpStatusCode.Forbidden)
+             })
+    {
+        using var crossOrigin = new HttpRequestMessage(HttpMethod.Post, "/smoke-upload")
+        {
+            Content = new ByteArrayContent([1])
+        };
+        crossOrigin.Content.Headers.ContentType = new("application/octet-stream");
+        crossOrigin.Headers.Add("Sec-Fetch-Site", "cross-site");
+        crossOrigin.Headers.Add("Origin", origin);
+        using var rejection = await client.SendAsync(crossOrigin);
+        if (rejection.StatusCode != expected)
+            throw new InvalidOperationException(
+                $"Cross-origin upload from {origin} returned {(int)rejection.StatusCode}, expected {(int)expected}.");
+    }
 }
 await app.StopAsync();
 

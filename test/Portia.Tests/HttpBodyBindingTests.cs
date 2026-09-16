@@ -56,6 +56,7 @@ public sealed class HttpBodyBindingTests
     static DefaultHttpContext Context(AsyncServiceScope scope, long contentLength)
     {
         var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        context.Request.ContentType = "application/json";
         context.Request.ContentLength = contentLength;
         context.Request.Body = new MemoryStream("{}"u8.ToArray());
         return context;

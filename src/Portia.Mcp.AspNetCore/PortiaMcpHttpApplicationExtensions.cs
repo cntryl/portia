@@ -25,6 +25,7 @@ public static class PortiaMcpHttpApplicationExtensions
             })
             .AddAuthorizationFilters();
         _ = application.Services.AddSingleton<PortiaMcpHttpMarker>();
+        PortiaCrossOrigin.AddCorsDecisions(application.Services);
         return application;
     }
 }

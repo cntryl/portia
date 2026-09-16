@@ -46,6 +46,7 @@ public sealed class HttpAsyncRouteTests
                                                             var builder = WebApplication.CreateBuilder();
                                                             builder.WebHost.UseTestServer();
                                                             builder.Services.AddPortia()
+                                                                .AddHttp()
                                                                 .ConfigureJson(options => options.TypeInfoResolver = new DefaultJsonTypeInfoResolver())
                                                                 .AddRequestHandler<Handler>();
                                                             builder.Services.AddSingleton<IRequestQueuePublisher, Publisher>();

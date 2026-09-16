@@ -45,7 +45,7 @@ static class HttpConsumerScenario
                                               {
                                                   var builder = WebApplication.CreateBuilder();
                                                   builder.WebHost.UseTestServer();
-                                                  builder.Services.AddPortia().AddRequestHandler<Handler>();
+                                                  builder.Services.AddPortia().AddHttp().AddRequestHandler<Handler>();
                                                   builder.Services.AddPortia().ConfigureJson(options =>
                                                   {
                                                       options.TypeInfoResolver = new DefaultJsonTypeInfoResolver();

@@ -188,6 +188,53 @@ public sealed class McpRegistrationTests
         Assert.Equal("Hello, Portia.", result.StructuredContent?.GetProperty("result").GetString());
     }
 
+    /// <summary>
+    ///     Streamable HTTP must validate the browser origin; the MCP endpoint applies Portia's cross-origin
+    ///     rule, trusting exactly the origins the application's CORS pipeline allows.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRejectCrossOriginMcpRequestsUnlessCorsAllowsTheOrigin()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        _ = builder.Services.AddCors(options =>
+            options.AddPolicy("agents", policy => policy.WithOrigins("https://agent.example")));
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .AddMcpTool<ReadGreeting>(tool => tool.ReadOnly())
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        UseTestActor(app);
+        _ = app.UseCors("agents");
+        _ = app.MapPortiaMcp();
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+
+        // Act
+        using var rejected = await client.SendAsync(CrossOriginListTools("https://attacker.example"));
+        using var allowed = await client.SendAsync(CrossOriginListTools("https://agent.example"));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Forbidden, rejected.StatusCode);
+        Assert.Equal("application/problem+json", rejected.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+    }
+
+    static HttpRequestMessage CrossOriginListTools(string origin)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
+        {
+            Content = new StringContent(/*lang=json,strict*/ """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""",
+                System.Text.Encoding.UTF8, "application/json")
+        };
+        request.Headers.Accept.ParseAdd("application/json");
+        request.Headers.Accept.ParseAdd("text/event-stream");
+        request.Headers.Add("Sec-Fetch-Site", "cross-site");
+        request.Headers.Add("Origin", origin);
+        return request;
+    }
+
     [Fact]
     public void ShouldRejectConflictingDeclarations()
     {

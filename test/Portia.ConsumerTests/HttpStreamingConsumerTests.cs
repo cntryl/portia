@@ -91,6 +91,7 @@ public sealed class HttpStreamingConsumerTests
                 builder.WebHost.UseTestServer();
                 builder.Services.AddSingleton<Stats>();
                 builder.Services.AddPortia()
+                    .AddHttp()
                     .ConfigureJson(options => options.TypeInfoResolver = new DefaultJsonTypeInfoResolver())
                     .AddRequestHandler<Handler>()
                     .AddRequestAuthorizer<Authorizer>();

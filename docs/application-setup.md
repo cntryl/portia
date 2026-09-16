@@ -91,8 +91,9 @@ can execute a command directly or publish work. Merely sharing the application
 setup starts no queue, RPC, projector, or reactor worker. Configure HTTP authentication
 and authorization using the application's normal ASP.NET setup.
 
-`AddHttp()` explicitly registers Microsoft's `v1` OpenAPI 3.1 document before the provider is
-built. `MapPortiaOpenApi()` explicitly maps `/openapi/v1.json` and `/openapi/v1.yml`; omit it or map
+`AddHttp()` registers the HTTP services every `MapPortia*` endpoint requires, including the CORS
+integration behind [cross-origin protection](getting-started.md#cross-origin-requests), and
+explicitly registers Microsoft's `v1` OpenAPI 3.1 document before the provider is built. `MapPortiaOpenApi()` explicitly maps `/openapi/v1.json` and `/openapi/v1.yml`; omit it or map
 ASP.NET Core's document on another path when the schema should not be public. See
 [getting started](getting-started.md#choosing-where-the-document-is-served).
 Registration and mapping are idempotent across

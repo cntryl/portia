@@ -160,7 +160,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 Required = jsonRequired.Count == 0 ? null : jsonRequired
             };
             var content = new Dictionary<string, OpenApiMediaType> { ["application/json"] = new() { Schema = schema } };
-            if (endpointMetadata.OfType<PortiaFormBindableBody>().Any())
+            if (endpointMetadata.OfType<PortiaFormBindableBody>().Any() &&
+                PortiaHttpBinding.AcceptsFormBody(endpointMetadata, context.ApplicationServices))
             {
                 var formSchema = new OpenApiSchema
                 {
@@ -225,7 +226,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             }));
         }
 
-        foreach (var status in new[] { "400", "401", "403", "404", "409", "413", "500" })
+        foreach (var status in new[] { "400", "401", "403", "404", "409", "413", "415", "500" })
         {
             var response = status == "401"
                 ? new OpenApiResponse

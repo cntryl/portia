@@ -7,7 +7,7 @@ static class FrameworkTestRegistration
 {
     public static IServiceCollection AddFrameworkTests(this IServiceCollection services)
     {
-        var portia = services.AddPortia();
+        var portia = services.AddPortia().AddHttp();
         _ = portia.AddRequestHandler<RpcGetValueHandler>();
         _ = portia.AddRequestHandler<RpcChangeValueHandler>();
         _ = portia.AddRequestHandler<TelemetrySuccessActionHandler>();

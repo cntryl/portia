@@ -59,6 +59,7 @@ public sealed class HttpBindingShapeTests
                                                             var builder = WebApplication.CreateBuilder();
                                                             builder.WebHost.UseTestServer();
                                                             builder.Services.AddPortia()
+                                                                .AddHttp()
                                                                 .ConfigureJson(options => options.TypeInfoResolver = new DefaultJsonTypeInfoResolver())
                                                                 .AddRequestHandler<MethodHandler>()
                                                                 .AddRequestHandler<LambdaHandler>();
@@ -95,7 +96,9 @@ public sealed class HttpBindingShapeTests
                                                     {
                                                         public static string Run()
                                                         {
-                                                            var app = WebApplication.CreateBuilder().Build();
+                                                            var builder = WebApplication.CreateBuilder();
+                                                            builder.Services.AddPortia().AddHttp();
+                                                            var app = builder.Build();
                                                             try
                                                             {
                                                                 app.MapPortiaPost<Unbindable>("/missing", endpoint => endpoint.NoInput());
@@ -144,6 +147,7 @@ public sealed class HttpBindingShapeTests
                                                             var builder = WebApplication.CreateBuilder();
                                                             builder.WebHost.UseTestServer();
                                                             builder.Services.AddPortia()
+                                                                .AddHttp()
                                                                 .ConfigureJson(options => options.TypeInfoResolver = new DefaultJsonTypeInfoResolver())
                                                                 .AddRequestHandler<Handler>();
                                                             await using var app = builder.Build();

@@ -124,6 +124,7 @@ public sealed class OpenApiTests : IAsyncDisposable
         _ = builder.Services.AddFrameworkTests();
         _ = builder.Services.AddPortia().AddHttp();
         _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
+        _ = builder.Services.AddAntiforgery();
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
 
@@ -245,6 +246,8 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.False(problemSchema.GetProperty("properties").TryGetProperty("message", out _));
         Assert.True(responses.GetProperty("400").GetProperty("headers")
             .TryGetProperty(ResultHttpExtensions.TransientHeaderName, out _));
+        Assert.True(responses.GetProperty("415").GetProperty("content")
+            .TryGetProperty("application/problem+json", out _));
         Assert.True(responses.GetProperty("401").GetProperty("headers").TryGetProperty("WWW-Authenticate", out _));
         Assert.True(paths.TryGetProperty("/health", out _));
         Assert.False(paths.TryGetProperty("/api/widget-events", out _));
@@ -303,6 +306,39 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.Equal("3.1.1", raw.RootElement.GetProperty("openapi").GetString());
         Assert.Equal("httpGetWidget", raw.RootElement.GetProperty("paths")
             .GetProperty("/widgets/{widget_id}").GetProperty("get").GetProperty("operationId").GetString());
+    }
+
+    /// <summary>
+    ///     Without an antiforgery service, default binding rejects form posts, so the document describes
+    ///     only JSON for those bodies; an endpoint that disables antiforgery still describes form content.
+    /// </summary>
+    [Fact]
+    public async Task ShouldDescribeFormContentOnlyWhenFormPostsAreAccepted()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddFrameworkTests();
+        _ = builder.Services.AddPortia().AddHttp();
+        _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+        _ = _app.MapPortiaPost<HttpOptionalBody, string>("/unguarded");
+        _ = _app.MapPortiaPost<HttpUpdateWidget, string>("/opted-out/{widget_id}").DisableAntiforgery();
+        await _app.StartAsync();
+
+        var json = await _app.GetTestClient().GetStringAsync("/openapi/v1.json");
+
+        using var raw = JsonDocument.Parse(json);
+        var paths = raw.RootElement.GetProperty("paths");
+        var unguarded = paths.GetProperty("/unguarded").GetProperty("post").GetProperty("requestBody")
+            .GetProperty("content");
+        var optedOut = paths.GetProperty("/opted-out/{widget_id}").GetProperty("post").GetProperty("requestBody")
+            .GetProperty("content");
+        Assert.True(unguarded.TryGetProperty("application/json", out _), json);
+        Assert.False(unguarded.TryGetProperty("application/x-www-form-urlencoded", out _), json);
+        Assert.False(unguarded.TryGetProperty("multipart/form-data", out _), json);
+        Assert.True(optedOut.TryGetProperty("application/x-www-form-urlencoded", out _), json);
+        Assert.True(optedOut.TryGetProperty("multipart/form-data", out _), json);
     }
 
     /// <summary>Cross-generator operation ID collisions fail document generation deterministically.</summary>
