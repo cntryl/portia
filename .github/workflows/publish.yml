@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PACKAGE_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
 
