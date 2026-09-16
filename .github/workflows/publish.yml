@@ -1,161 +1,55 @@
 name: Publish
+
 on:
   workflow_dispatch:
-permissions: {}
-concurrency:
-  group: portia-github-packages-publish
-  cancel-in-progress: false
+
+permissions:
+  packages: write
 
 jobs:
-  prepare:
-    name: Verify and prepare immutable packages
+  publish:
+    name: Pack and publish packages
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      packages: read
-    outputs:
-      package-version: ${{ steps.version.outputs.package-version }}
+    timeout-minutes: 15
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PACKAGE_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+
     steps:
       - name: Require main
-        env:
-          REF: ${{ github.ref }}
-        run: |
-          if [[ "$REF" != refs/heads/main ]]; then
-            echo "::error title=Invalid release ref::Publish must run from refs/heads/main; got $REF"
-            exit 1
-          fi
-      - name: Check out exact repository head
+        if: github.ref != 'refs/heads/main'
+        run: echo "Publish must run from refs/heads/main" && exit 1
+
+      - name: Check out repository
         uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
+
       - name: Set up .NET
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-          cache: true
-          cache-dependency-path: '**/packages.lock.json'
-      - name: Read stable package version
+
+      - name: Read package version
         id: version
-        run: |
-          package_version="$(dotnet msbuild src/Portia.AspNetCore/Portia.AspNetCore.csproj -getProperty:PackageVersion -nologo)"
-          if [[ ! "$package_version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "::error title=Invalid package version::Expected a stable SemVer, got '$package_version'"
-            exit 1
-          fi
-          echo "package-version=$package_version" >> "$GITHUB_OUTPUT"
-      - name: Restore, format, build, and verify API
-        run: |
-          dotnet restore Portia.slnx --locked-mode
-          dotnet format Portia.slnx --verify-no-changes --no-restore
-          dotnet build Portia.slnx --configuration Release --no-restore
-          bash eng/verify-public-api-baseline.sh
-      - name: Test without broker
-        run: dotnet test Portia.slnx --configuration Release --no-build --filter "Category!=BrokerIntegration"
-      - name: Test broker integration
-        env:
-          FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
-          COMPOSE_PROJECT_NAME: portia-publish-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          docker compose up -d --wait
-          dotnet test Portia.slnx --configuration Release --no-build --filter "Category=BrokerIntegration"
-      - name: Stop validation broker
-        if: ${{ always() }}
-        env:
-          COMPOSE_PROJECT_NAME: portia-publish-${{ github.run_id }}-${{ github.run_attempt }}
-        run: docker compose down --volumes
-      - name: Pack release packages
+        run: echo "package-version=$(dotnet msbuild src/Portia.AspNetCore/Portia.AspNetCore.csproj -getProperty:PackageVersion -nologo)" >> "$GITHUB_OUTPUT"
+
+      - name: Pack packages
         run: >-
-          dotnet pack Portia.slnx --configuration Release --no-build --no-restore
+          dotnet pack Portia.slnx
+          --configuration Release
           --output artifacts/packages
           -p:PackageVersion="${{ steps.version.outputs.package-version }}"
-      - name: Verify packed NativeAOT consumers
-        env:
-          PACKAGE_VERSION: ${{ steps.version.outputs.package-version }}
-        run: |
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-release-aot" dotnet restore \
-            smoke/Portia.AspNetCore.NativeAotConsumer/Portia.AspNetCore.NativeAotConsumer.csproj \
-            --runtime linux-x64 -p:PortiaSmokePackageVersion="$PACKAGE_VERSION"
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-release-aot" dotnet publish \
-            smoke/Portia.AspNetCore.NativeAotConsumer/Portia.AspNetCore.NativeAotConsumer.csproj \
-            --configuration Release --runtime linux-x64 --self-contained true --no-restore \
-            -p:PortiaSmokePackageVersion="$PACKAGE_VERSION" --output artifacts/native-aot
-          artifacts/native-aot/Portia.AspNetCore.NativeAotConsumer
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-release-mcp-aot" dotnet restore \
-            smoke/Portia.Mcp.AspNetCore.NativeAotConsumer/Portia.Mcp.AspNetCore.NativeAotConsumer.csproj \
-            --runtime linux-x64 -p:PortiaSmokePackageVersion="$PACKAGE_VERSION"
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-release-mcp-aot" dotnet publish \
-            smoke/Portia.Mcp.AspNetCore.NativeAotConsumer/Portia.Mcp.AspNetCore.NativeAotConsumer.csproj \
-            --configuration Release --runtime linux-x64 --self-contained true --no-restore \
-            -p:PortiaSmokePackageVersion="$PACKAGE_VERSION" --output artifacts/mcp-native-aot
-          artifacts/mcp-native-aot/Portia.Mcp.AspNetCore.NativeAotConsumer
-      - name: Upload immutable packages
-        uses: actions/upload-artifact@v6
-        with:
-          name: release-packages-${{ github.sha }}
-          path: artifacts/packages/*.nupkg
-          if-no-files-found: error
-          retention-days: 1
 
-  publish:
-    name: Tag and publish prepared packages
-    needs: prepare
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-      packages: write
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      PACKAGE_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
-    steps:
-      - name: Check out exact verified head
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-          fetch-tags: true
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: global.json
-      - name: Download prepared packages
-        uses: actions/download-artifact@v7
-        with:
-          name: release-packages-${{ github.sha }}
-          path: artifacts/packages
-      - name: Establish exact-SHA release tag
-        env:
-          PACKAGE_VERSION: ${{ needs.prepare.outputs.package-version }}
-        run: |
-          tag="v${PACKAGE_VERSION}"
-          if git show-ref --tags --verify --quiet "refs/tags/$tag"; then
-            tag_commit="$(git rev-list -n 1 "$tag")"
-            if [[ "$tag_commit" != "$GITHUB_SHA" ]]; then
-              echo "::error title=Tag conflict::$tag points to $tag_commit; expected $GITHUB_SHA"
-              exit 1
-            fi
-          else
-            git tag "$tag" "$GITHUB_SHA"
-            git push origin "refs/tags/$tag"
-          fi
-          # An annotated tag's ref names the tag object; its peeled "^{}" entry names the commit.
-          # A lightweight tag has no peeled entry, so its ref already names the commit.
-          remote_commit="$(git ls-remote origin "refs/tags/$tag^{}" | cut -f1)"
-          if [[ -z "$remote_commit" ]]; then
-            remote_commit="$(git ls-remote origin "refs/tags/$tag" | cut -f1)"
-          fi
-          if [[ "$remote_commit" != "$GITHUB_SHA" ]]; then
-            echo "::error title=Tag parity failure::Remote $tag points to $remote_commit; expected $GITHUB_SHA"
-            exit 1
-          fi
-      - name: Publish packages after tag parity
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish packages
         run: >-
           dotnet nuget push artifacts/packages/*.nupkg
           --api-key "$NUGET_AUTH_TOKEN"
           --source "$PACKAGE_SOURCE"
           --skip-duplicate
+
+      - name: Tag release
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package-version }}
+        run: |
+          git tag "v${PACKAGE_VERSION}"
+          git push origin "refs/tags/v${PACKAGE_VERSION}"

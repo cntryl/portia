@@ -152,3 +152,7 @@ Cntryl.Portia.PortiaHttpMember.PortiaHttpMember(string! name, string! source, bo
 Cntryl.Portia.PortiaHttpMember.Scalar.get -> bool
 Cntryl.Portia.PortiaHttpMember.Source.get -> string!
 static Cntryl.Portia.PortiaHttpBinding.ReadFormBoolean(Microsoft.AspNetCore.Http.IFormCollection! form, string! name) -> string?
+Cntryl.Portia.HttpUnsupportedMediaTypeException
+Cntryl.Portia.HttpUnsupportedMediaTypeException.HttpUnsupportedMediaTypeException(string! message) -> void
+static Cntryl.Portia.PortiaHttpBinding.RejectCrossOrigin(Microsoft.AspNetCore.Http.HttpContext! context) -> Microsoft.AspNetCore.Http.IResult?
+static Cntryl.Portia.PortiaHttpBinding.RequireHttpServices(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app) -> void
