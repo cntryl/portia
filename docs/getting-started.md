@@ -275,8 +275,9 @@ await writer.SaveAsync(account, context, ct);
 
 `IAggregateExecutor` owns those mechanics so a handler only states intent. Aggregate methods decide
 what happened and return a `Result`; the handler's operation makes one decision for everything the
-operation produced — `AggregateOutcome.Commit(result)` or `AggregateOutcome.Discard(result)` — and
-Portia hydrates, invokes, and carries out that decision atomically:
+operation produced. `AggregateOutcome.CommitOnSuccess(result)` covers the common policy, while
+`AggregateOutcome.Commit(result)` and `AggregateOutcome.Discard(result)` express policies independent
+of whether the result succeeded. Portia hydrates, invokes, and carries out that decision atomically:
 
 ```csharp
 public sealed class DepositAccountHandler(IAggregateExecutor aggregates)
@@ -286,14 +287,12 @@ public sealed class DepositAccountHandler(IAggregateExecutor aggregates)
         aggregates.ExecuteAsync(new Account(context.Request.AccountId), account =>
         {
             var deposit = account.Deposit(context.Request.Amount);
-            return deposit.IsSuccess
-                ? AggregateOutcome.Commit(deposit)
-                : AggregateOutcome.Discard(deposit);
+            return AggregateOutcome.CommitOnSuccess(deposit);
         }, context, ct);
 }
 ```
 
-The result and the disposition are independent, so all four combinations are valid: commit a
+The result and the disposition remain independent, so all four combinations are valid: commit a
 successful change, commit a denied operation's audit, discard an idempotent no-op, or discard a
 rejected input. Committing when nothing is pending writes nothing. A commit failure — including an
 optimistic-concurrency conflict — propagates instead of the proposed result, and is never retried.
