@@ -265,15 +265,15 @@
       "Cntryl.Portia.Core": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.4.3, )",
+          "Cntryl.Portia.Abstractions": "[0.4.4, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.11, )"
         }
       },
       "Cntryl.Portia.DependencyInjection": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.4.3, )",
-          "Cntryl.Portia.Core": "[0.4.3, )",
+          "Cntryl.Portia.Abstractions": "[0.4.4, )",
+          "Cntryl.Portia.Core": "[0.4.4, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.11, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.11, )"
         }
@@ -281,7 +281,7 @@
       "Cntryl.Portia.Mcp": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.DependencyInjection": "[0.4.3, )",
+          "Cntryl.Portia.DependencyInjection": "[0.4.4, )",
           "Microsoft.Extensions.Logging.Console": "[10.0.11, )",
           "ModelContextProtocol": "[2.2.0, )"
         }

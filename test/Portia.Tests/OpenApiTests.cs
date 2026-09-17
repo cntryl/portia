@@ -64,11 +64,12 @@ public sealed class OpenApiTests : IAsyncDisposable
                 StatusCodes.Status400BadRequest, typeof(string), ["text/plain"]));
         _ = _app.MapPortiaGetStream<OpenApiContractStream, OpenApiContractNode>("/contract-stream");
         _ = _app.MapGet("/ordinary-contract",
-            () => new OpenApiContractNode("ordinary", "explicit", DayOfWeek.Monday, new HttpMoney("USD", 42)));
+            () => new OpenApiContractNode("ordinary", "explicit", DayOfWeek.Monday, new HttpMoney("USD", 42),
+                Uuid.CreateVersion4(), null));
         await _app.StartAsync();
         using var client = _app.GetTestClient();
         using var response = await client.PostAsync("/contract", new StringContent(
-            """{"payload":{"display_name":"nested","wire-name":"explicit","day_value":"Monday","custom_value":"42","next_node":{"display_name":"child","wire-name":"child","day_value":"Tuesday","custom_value":"43"}}}""",
+            """{"payload":{"display_name":"nested","wire-name":"explicit","day_value":"Monday","custom_value":"42","team_id":"21f7f8de-8051-5b89-8680-0195ef798b6a","parent_team_id":null,"next_node":{"display_name":"child","wire-name":"child","day_value":"Tuesday","custom_value":"43","team_id":"6ba7b811-9dad-11d1-80b4-00c04fd430c8","parent_team_id":null}}}""",
             Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
         using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -101,6 +102,11 @@ public sealed class OpenApiTests : IAsyncDisposable
                 Assert.Contains("display_name", schema.Required!);
                 Assert.Contains(schema.Properties["day_value"].Enum!, value => value!.GetValue<string>() == "Monday");
                 Assert.Null(schema.Properties["custom_value"].Type);
+                Assert.Equal(JsonSchemaType.String, schema.Properties["team_id"].Type);
+                Assert.Equal("uuid", schema.Properties["team_id"].Format);
+                Assert.True(schema.Properties["parent_team_id"].Type!.Value.HasFlag(JsonSchemaType.String));
+                Assert.True(schema.Properties["parent_team_id"].Type!.Value.HasFlag(JsonSchemaType.Null));
+                Assert.Equal("uuid", schema.Properties["parent_team_id"].Format);
                 var child = schema.Properties["next_node"];
                 Assert.True(child.Type!.Value.HasFlag(JsonSchemaType.Null));
                 Assert.Contains("display_name", child.Properties!.Keys);
@@ -187,9 +193,11 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.True(create.GetProperty("requestBody").GetProperty("content").GetProperty("application/json")
             .GetProperty("schema").GetProperty("properties").TryGetProperty("lines", out _));
         var get = paths.GetProperty("/api/widgets/{widget_id}").GetProperty("get");
-        Assert.Contains(get.GetProperty("parameters").EnumerateArray(), parameter =>
+        var widgetId = Assert.Single(get.GetProperty("parameters").EnumerateArray(), parameter =>
             parameter.GetProperty("name").GetString() == "widget_id" &&
             parameter.GetProperty("in").GetString() == "path");
+        Assert.Equal("string", widgetId.GetProperty("schema").GetProperty("type").GetString());
+        Assert.Equal("uuid", widgetId.GetProperty("schema").GetProperty("format").GetString());
         Assert.Contains(get.GetProperty("parameters").EnumerateArray(), parameter =>
             parameter.GetProperty("name").GetString() == "archived" &&
             parameter.GetProperty("in").GetString() == "header" &&
@@ -239,6 +247,10 @@ public sealed class OpenApiTests : IAsyncDisposable
             ? guardedParameters.EnumerateArray().ToArray()
             : [], parameter => parameter.GetProperty("name").GetString() == "Prefer");
         var responses = create.GetProperty("responses");
+        var createdId = responses.GetProperty("200").GetProperty("content")
+            .GetProperty("application/json").GetProperty("schema");
+        Assert.Equal("string", createdId.GetProperty("type").GetString());
+        Assert.Equal("uuid", createdId.GetProperty("format").GetString());
         var problemSchema = responses.GetProperty("400").GetProperty("content")
             .GetProperty("application/problem+json").GetProperty("schema");
         Assert.True(problemSchema.GetProperty("properties").TryGetProperty("status", out _));
