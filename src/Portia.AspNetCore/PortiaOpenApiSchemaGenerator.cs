@@ -19,12 +19,14 @@ static class PortiaOpenApiSchemaGenerator
         var node = options.GetTypeInfo(type).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
         {
             // The OpenAPI reader expects object nodes for entries in a properties map.
-            TransformSchemaNode = (_, schema) => schema.GetValueKind() switch
-            {
-                JsonValueKind.True => new JsonObject(),
-                JsonValueKind.False => new JsonObject { ["not"] = new JsonObject() },
-                _ => schema
-            }
+            TransformSchemaNode = (context, schema) => context.TypeInfo.Type == typeof(Uuid)
+                ? new JsonObject { ["type"] = "string", ["format"] = "uuid" }
+                : schema.GetValueKind() switch
+                {
+                    JsonValueKind.True => new JsonObject(),
+                    JsonValueKind.False => new JsonObject { ["not"] = new JsonObject() },
+                    _ => schema
+                }
         });
         var nodes = new Dictionary<string, JsonNode>(StringComparer.Ordinal);
         var references = new List<(JsonObject Node, string Target)>();

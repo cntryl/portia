@@ -6,6 +6,19 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+## 0.4.4 - 2026-09-17
+
+### Fixed
+
+- OpenAPI schemas now describe Portia `Uuid` values as strings with the `uuid` format, including
+  nested request and response properties, route parameters, and direct response values. Generated
+  clients no longer encounter empty, untyped schemas for UUID-backed fields.
+
+### Changed
+
+- Updated the Portia Fitz adapter and packed integration consumer to the synchronized Cntryl.Fitz
+  1.3.0 package family.
+
 ## 0.4.3 - 2026-09-17
 
 ### Changed
