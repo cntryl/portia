@@ -13,6 +13,10 @@ current, deliberate boundary.
 - The pinned Cntryl.Fitz packages advertise `IsAotCompatible`; NativeAOT compatibility for an
   application that uses `Cntryl.Portia.Fitz` still depends on its own serializers, converters, and other
   dependencies.
+- Portia and Fitz do not impose a KV key schema. Applications that use `Cntryl.LexKey` can pass its
+  allocation-free `LexKey.AsMemory()` view directly to Fitz; neither Portia nor Fitz takes an
+  unnecessary dependency on the encoding package. CI proves this composition through a freshly
+  packed external consumer using `Cntryl.Portia.Fitz`, `Cntryl.Fitz.Testing`, and `Cntryl.LexKey`.
 - Aggregate snapshotting is not supported and is not planned. Aggregates are expected to stay
   bounded enough to rehydrate directly from their event streams. Prefix truncation is also
   unsupported: readers must continue to expose original contiguous physical offsets.

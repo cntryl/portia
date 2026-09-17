@@ -32,7 +32,7 @@ public sealed class FitzNoticeRequestConsumer(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         // A Fitz notice subscription is itself a pull-based IAsyncEnumerable (as of
-        // Cntryl.Fitz.Abstractions 0.1.1) — no callback bridging needed here anymore.
+        // Cntryl.Fitz.Abstractions) — no callback bridging needed here anymore.
         await using var subscription = await _notice.SubscribeAsync(_route, ct).ConfigureAwait(false);
 
         await foreach (var message in subscription.WithCancellation(ct).ConfigureAwait(false))

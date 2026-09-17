@@ -86,7 +86,7 @@ public sealed class FitzScheduledRequestConsumer(
         try
         {
             // A Fitz schedule subscription is itself a pull-based IAsyncEnumerable (as of
-            // Cntryl.Fitz.Abstractions 0.1.1) — no callback bridging needed here anymore.
+            // Cntryl.Fitz.Abstractions) — no callback bridging needed here anymore.
             await using (var subscription = await _schedule.SubscribeAsync(_route, ct).ConfigureAwait(false))
             {
                 await foreach (var notification in subscription.WithCancellation(ct).ConfigureAwait(false))
