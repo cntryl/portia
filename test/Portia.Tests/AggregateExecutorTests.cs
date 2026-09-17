@@ -216,6 +216,40 @@ public sealed class AggregateExecutorTests
         _ = Assert.Throws<ArgumentException>(() => AggregateOutcome.Discard(default(Result<int>)));
     }
 
+    /// <summary>The common policy commits a successful untyped result and discards a failed one.</summary>
+    [Fact]
+    public void ShouldCommitUntypedResultOnlyWhenSuccessful()
+    {
+        var success = AggregateOutcome.CommitOnSuccess(Result.Success);
+        var failure = AggregateOutcome.CommitOnSuccess(Result.Failure(Rejected));
+
+        Assert.Equal(AggregateDisposition.Commit, success.Disposition);
+        Assert.True(success.Result.IsSuccess);
+        Assert.Equal(AggregateDisposition.Discard, failure.Disposition);
+        Assert.Same(Rejected, failure.Result.Error);
+    }
+
+    /// <summary>The common policy preserves typed values and errors while choosing the disposition.</summary>
+    [Fact]
+    public void ShouldCommitTypedResultOnlyWhenSuccessful()
+    {
+        var success = AggregateOutcome.CommitOnSuccess(Result<int>.Success(42));
+        var failure = AggregateOutcome.CommitOnSuccess(Result<int>.Failure(Rejected));
+
+        Assert.Equal(AggregateDisposition.Commit, success.Disposition);
+        Assert.Equal(42, success.Result.Value);
+        Assert.Equal(AggregateDisposition.Discard, failure.Disposition);
+        Assert.Same(Rejected, failure.Result.Error);
+    }
+
+    /// <summary>The convenience policy rejects default results just like the explicit factories.</summary>
+    [Fact]
+    public void ShouldRejectUninitializedResultInCommitOnSuccess()
+    {
+        _ = Assert.Throws<ArgumentException>(() => AggregateOutcome.CommitOnSuccess(default(Result)));
+        _ = Assert.Throws<ArgumentException>(() => AggregateOutcome.CommitOnSuccess(default(Result<int>)));
+    }
+
     /// <summary>
     ///     Discarding clears the instance's pending records and invalidates it: its in-memory state no longer
     ///     matches the store, so any later use is refused.

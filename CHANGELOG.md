@@ -6,6 +6,15 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+## 0.4.2 - 2026-09-17
+
+### Added
+
+- `AggregateOutcome.CommitOnSuccess(result)` removes the routine commit/discard ternary by committing
+  successful results and discarding failed results. Untyped and value-returning operations are both
+  supported; exceptional policies such as committing a failed audited operation remain explicit through
+  `AggregateOutcome.Commit(result)`.
+
 ## 0.4.1 - 2026-09-17
 
 ### Changed

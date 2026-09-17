@@ -29,6 +29,20 @@ public readonly struct AggregateOutcome
     /// <returns>The outcome.</returns>
     public static AggregateOutcome Discard(Result result) => new(Initialized(result), AggregateDisposition.Discard);
 
+    /// <summary>Commits a successful result and discards a failed result.</summary>
+    /// <param name="result">The result the caller receives.</param>
+    /// <returns>The outcome.</returns>
+    /// <remarks>
+    ///     Use <see cref="Commit(Result)" /> explicitly when a failed operation produced records, such as an audit,
+    ///     that must still be persisted.
+    /// </remarks>
+    public static AggregateOutcome CommitOnSuccess(Result result)
+    {
+        var initialized = Initialized(result);
+        return new(initialized,
+            initialized.IsSuccess ? AggregateDisposition.Commit : AggregateDisposition.Discard);
+    }
+
     /// <summary>Commits everything the operation produced and returns <paramref name="result" />.</summary>
     /// <typeparam name="TOut">The type of the value on success.</typeparam>
     /// <param name="result">The result the caller receives.</param>
@@ -42,6 +56,21 @@ public readonly struct AggregateOutcome
     /// <returns>The outcome.</returns>
     public static AggregateOutcome<TOut> Discard<TOut>(Result<TOut> result) =>
         new(Initialized(result), AggregateDisposition.Discard);
+
+    /// <summary>Commits a successful result and discards a failed result.</summary>
+    /// <typeparam name="TOut">The type of the value on success.</typeparam>
+    /// <param name="result">The result the caller receives.</param>
+    /// <returns>The outcome.</returns>
+    /// <remarks>
+    ///     Use <see cref="Commit{TOut}(Result{TOut})" /> explicitly when a failed operation produced records,
+    ///     such as an audit, that must still be persisted.
+    /// </remarks>
+    public static AggregateOutcome<TOut> CommitOnSuccess<TOut>(Result<TOut> result)
+    {
+        var initialized = Initialized(result);
+        return new(initialized,
+            initialized.IsSuccess ? AggregateDisposition.Commit : AggregateDisposition.Discard);
+    }
 
     static Result Initialized(Result result)
     {
