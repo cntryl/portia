@@ -16,11 +16,11 @@
       },
       "Cntryl.Fitz.Core": {
         "type": "Direct",
-        "requested": "[1.1.0, )",
-        "resolved": "1.1.0",
-        "contentHash": "AEiojffHMpQ8XDI2TRCJFoFH2K4ggxGFdA7L1TQgVXOIFoqBI5wM//HpcZzHoRDGKCm/c59tJhpxPsWTdkiKaA==",
+        "requested": "[1.2.0, )",
+        "resolved": "1.2.0",
+        "contentHash": "m/Yc7zBUHCakB9B7+OnPspQW1LalFpf7JAh+EoGdI+0Isvh49Mnk1s/6AkUQEHzW7d13UU5ZLTijOc/NRt3B5Q==",
         "dependencies": {
-          "Cntryl.Fitz.Abstractions": "1.1.0"
+          "Cntryl.Fitz.Abstractions": "1.2.0"
         }
       },
       "coverlet.collector": {
@@ -243,8 +243,8 @@
       "Cntryl.Portia.AspNetCore": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.4.1, )",
-          "Cntryl.Portia.DependencyInjection": "[0.4.1, )",
+          "Cntryl.Portia.Abstractions": "[0.4.3, )",
+          "Cntryl.Portia.DependencyInjection": "[0.4.3, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.11, )",
           "Microsoft.OpenApi": "[2.12.0, )"
         }
@@ -258,22 +258,22 @@
       "Cntryl.Portia.Core": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.4.1, )"
+          "Cntryl.Portia.Abstractions": "[0.4.3, )"
         }
       },
       "Cntryl.Portia.DependencyInjection": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.4.1, )",
-          "Cntryl.Portia.Core": "[0.4.1, )"
+          "Cntryl.Portia.Abstractions": "[0.4.3, )",
+          "Cntryl.Portia.Core": "[0.4.3, )"
         }
       },
       "Cntryl.Portia.Fitz": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Fitz.Core": "[1.1.0, )",
-          "Cntryl.Portia.Abstractions": "[0.4.1, )",
-          "Cntryl.Portia.DependencyInjection": "[0.4.1, )"
+          "Cntryl.Fitz.Core": "[1.2.0, )",
+          "Cntryl.Portia.Abstractions": "[0.4.3, )",
+          "Cntryl.Portia.DependencyInjection": "[0.4.3, )"
         }
       },
       "Cntryl.Portia.Generators": {
@@ -282,43 +282,43 @@
       "Cntryl.Portia.Mcp": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.DependencyInjection": "[0.4.1, )",
+          "Cntryl.Portia.DependencyInjection": "[0.4.3, )",
           "ModelContextProtocol": "[2.2.0, )"
         }
       },
       "Cntryl.Portia.Testing": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.4.1, )",
-          "Cntryl.Portia.Core": "[0.4.1, )",
-          "Cntryl.Portia.DependencyInjection": "[0.4.1, )"
+          "Cntryl.Portia.Abstractions": "[0.4.3, )",
+          "Cntryl.Portia.Core": "[0.4.3, )",
+          "Cntryl.Portia.DependencyInjection": "[0.4.3, )"
         }
       },
       "consumer.contracts": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.DependencyInjection": "[0.4.1, )"
+          "Cntryl.Portia.DependencyInjection": "[0.4.3, )"
         }
       },
       "consumer.featureone": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.DependencyInjection": "[0.4.1, )",
-          "Consumer.Contracts": "[0.4.1, )"
+          "Cntryl.Portia.DependencyInjection": "[0.4.3, )",
+          "Consumer.Contracts": "[0.4.3, )"
         }
       },
       "consumer.featuretwo": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.DependencyInjection": "[0.4.1, )",
-          "Consumer.Contracts": "[0.4.1, )"
+          "Cntryl.Portia.DependencyInjection": "[0.4.3, )",
+          "Consumer.Contracts": "[0.4.3, )"
         }
       },
       "Cntryl.Fitz.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[1.1.0, )",
-        "resolved": "1.1.0",
-        "contentHash": "ypWyaYe/bfuzyVOi51nFkF7gFeRKFhYhrNCpC4+YMdQudgME8bJ6XGhlf1ax7U11PS32/yH8p1s3IpB40iiHYg=="
+        "requested": "[1.2.0, )",
+        "resolved": "1.2.0",
+        "contentHash": "DwPb4xYrhecb4icQeCqYv6iziS+mdjnglzfwscs0jqBmYtoBGrFMnro8I7d3z/hM+IIxgGvdZdl23Howxn/OIA=="
       },
       "Microsoft.AspNetCore.OpenApi": {
         "type": "CentralTransitive",

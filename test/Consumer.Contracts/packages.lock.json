@@ -42,15 +42,15 @@
       "Cntryl.Portia.Core": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.4.1, )",
+          "Cntryl.Portia.Abstractions": "[0.4.3, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.11, )"
         }
       },
       "Cntryl.Portia.DependencyInjection": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.4.1, )",
-          "Cntryl.Portia.Core": "[0.4.1, )",
+          "Cntryl.Portia.Abstractions": "[0.4.3, )",
+          "Cntryl.Portia.Core": "[0.4.3, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.11, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.11, )"
         }
