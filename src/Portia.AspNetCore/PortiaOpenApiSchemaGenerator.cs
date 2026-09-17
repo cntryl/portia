@@ -19,14 +19,17 @@ static class PortiaOpenApiSchemaGenerator
         var node = options.GetTypeInfo(type).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
         {
             // The OpenAPI reader expects object nodes for entries in a properties map.
-            TransformSchemaNode = (context, schema) => context.TypeInfo.Type == typeof(Uuid)
-                ? new JsonObject { ["type"] = "string", ["format"] = "uuid" }
-                : schema.GetValueKind() switch
+            TransformSchemaNode = (context, schema) => context.TypeInfo.Type switch
+            {
+                var uuid when uuid == typeof(Uuid) => UuidSchema(false),
+                var nullableUuid when nullableUuid == typeof(Uuid?) => UuidSchema(true),
+                _ => schema.GetValueKind() switch
                 {
                     JsonValueKind.True => new JsonObject(),
                     JsonValueKind.False => new JsonObject { ["not"] = new JsonObject() },
                     _ => schema
                 }
+            }
         });
         var nodes = new Dictionary<string, JsonNode>(StringComparer.Ordinal);
         var references = new List<(JsonObject Node, string Target)>();
@@ -94,5 +97,13 @@ static class PortiaOpenApiSchemaGenerator
                 }
             }
         }
+
+        static JsonObject UuidSchema(bool nullable) => new()
+        {
+            ["type"] = nullable
+                ? new JsonArray(JsonValue.Create("string"), JsonValue.Create("null"))
+                : JsonValue.Create("string"),
+            ["format"] = "uuid"
+        };
     }
 }

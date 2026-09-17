@@ -12,6 +12,7 @@ sealed record OpenApiContractNode(
     DayOfWeek DayValue,
     HttpMoney CustomValue,
     Uuid TeamId,
+    Uuid? ParentTeamId,
     OpenApiContractNode? NextNode = null);
 
 [Discriminator("test.openapi.contract")]
@@ -35,7 +36,7 @@ sealed class OpenApiContractStreamHandler : IStreamRequestHandler<OpenApiContrac
         [EnumeratorCancellation] CancellationToken ct)
     {
         yield return new OpenApiContractNode("stream", "explicit", DayOfWeek.Monday, new HttpMoney("USD", 42),
-            Uuid.CreateVersion4());
+            Uuid.CreateVersion4(), null);
         await Task.CompletedTask;
     }
 }

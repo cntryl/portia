@@ -65,11 +65,11 @@ public sealed class OpenApiTests : IAsyncDisposable
         _ = _app.MapPortiaGetStream<OpenApiContractStream, OpenApiContractNode>("/contract-stream");
         _ = _app.MapGet("/ordinary-contract",
             () => new OpenApiContractNode("ordinary", "explicit", DayOfWeek.Monday, new HttpMoney("USD", 42),
-                Uuid.CreateVersion4()));
+                Uuid.CreateVersion4(), null));
         await _app.StartAsync();
         using var client = _app.GetTestClient();
         using var response = await client.PostAsync("/contract", new StringContent(
-            """{"payload":{"display_name":"nested","wire-name":"explicit","day_value":"Monday","custom_value":"42","team_id":"21f7f8de-8051-5b89-8680-0195ef798b6a","next_node":{"display_name":"child","wire-name":"child","day_value":"Tuesday","custom_value":"43","team_id":"6ba7b811-9dad-11d1-80b4-00c04fd430c8"}}}""",
+            """{"payload":{"display_name":"nested","wire-name":"explicit","day_value":"Monday","custom_value":"42","team_id":"21f7f8de-8051-5b89-8680-0195ef798b6a","parent_team_id":null,"next_node":{"display_name":"child","wire-name":"child","day_value":"Tuesday","custom_value":"43","team_id":"6ba7b811-9dad-11d1-80b4-00c04fd430c8","parent_team_id":null}}}""",
             Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
         using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -104,6 +104,9 @@ public sealed class OpenApiTests : IAsyncDisposable
                 Assert.Null(schema.Properties["custom_value"].Type);
                 Assert.Equal(JsonSchemaType.String, schema.Properties["team_id"].Type);
                 Assert.Equal("uuid", schema.Properties["team_id"].Format);
+                Assert.True(schema.Properties["parent_team_id"].Type!.Value.HasFlag(JsonSchemaType.String));
+                Assert.True(schema.Properties["parent_team_id"].Type!.Value.HasFlag(JsonSchemaType.Null));
+                Assert.Equal("uuid", schema.Properties["parent_team_id"].Format);
                 var child = schema.Properties["next_node"];
                 Assert.True(child.Type!.Value.HasFlag(JsonSchemaType.Null));
                 Assert.Contains("display_name", child.Properties!.Keys);
