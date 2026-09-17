@@ -108,7 +108,7 @@ jobs:
             -p:PublishAot=true \
             -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
           NUGET_PACKAGES="$RUNNER_TEMP/portia-fitz-lexkey-packages" dotnet publish \
-            --project smoke/Portia.Fitz.LexKey.PackageConsumer/Portia.Fitz.LexKey.PackageConsumer.csproj \
+            smoke/Portia.Fitz.LexKey.PackageConsumer/Portia.Fitz.LexKey.PackageConsumer.csproj \
             --configuration Release \
             --runtime linux-x64 \
             --self-contained true \
