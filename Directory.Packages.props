@@ -7,8 +7,8 @@
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="Cntryl.Conventions.Testing.Analyzers" Version="1.0.0" />
     <PackageVersion Include="Cntryl.Conventions.Testing.CodeFixes" Version="1.0.0" />
-    <PackageVersion Include="Cntryl.Fitz.Core" Version="1.0.0" />
-    <PackageVersion Include="Cntryl.Fitz.Abstractions" Version="1.0.0" />
+    <PackageVersion Include="Cntryl.Fitz.Core" Version="1.1.0" />
+    <PackageVersion Include="Cntryl.Fitz.Abstractions" Version="1.1.0" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.11" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />

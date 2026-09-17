@@ -117,8 +117,8 @@
       "Cntryl.Portia.AspNetCore": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.3.0, )",
-          "Cntryl.Portia.DependencyInjection": "[0.3.0, )",
+          "Cntryl.Portia.Abstractions": "[0.4.1, )",
+          "Cntryl.Portia.DependencyInjection": "[0.4.1, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.11, )",
           "Microsoft.OpenApi": "[2.12.0, )"
         }
@@ -126,22 +126,22 @@
       "Cntryl.Portia.Core": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.3.0, )"
+          "Cntryl.Portia.Abstractions": "[0.4.1, )"
         }
       },
       "Cntryl.Portia.DependencyInjection": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.3.0, )",
-          "Cntryl.Portia.Core": "[0.3.0, )"
+          "Cntryl.Portia.Abstractions": "[0.4.1, )",
+          "Cntryl.Portia.Core": "[0.4.1, )"
         }
       },
       "Cntryl.Portia.Testing": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.3.0, )",
-          "Cntryl.Portia.Core": "[0.3.0, )",
-          "Cntryl.Portia.DependencyInjection": "[0.3.0, )"
+          "Cntryl.Portia.Abstractions": "[0.4.1, )",
+          "Cntryl.Portia.Core": "[0.4.1, )",
+          "Cntryl.Portia.DependencyInjection": "[0.4.1, )"
         }
       },
       "Microsoft.AspNetCore.OpenApi": {

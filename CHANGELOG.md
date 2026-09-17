@@ -6,6 +6,16 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+## 0.4.1 - 2026-09-17
+
+### Changed
+
+- Updated the Portia Fitz adapter to the synchronized Cntryl.Fitz 1.1.0 package family. Fitz
+  remains byte-oriented; applications can pair it with Cntryl.LexKey 0.1.2 and pass
+  `LexKey.AsMemory()` without copying.
+
+## 0.4.0 - 2026-09-16
+
 ### Added
 
 - `PORTIA025` is registration-driven and accepts JSON roots advertised by referenced assemblies.

@@ -102,6 +102,21 @@ jobs:
             --configuration Release \
             --no-restore \
             -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-fitz-lexkey-packages" dotnet restore \
+            smoke/Portia.Fitz.LexKey.PackageConsumer/Portia.Fitz.LexKey.PackageConsumer.csproj \
+            --runtime linux-x64 \
+            -p:PublishAot=true \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-fitz-lexkey-packages" dotnet publish \
+            --project smoke/Portia.Fitz.LexKey.PackageConsumer/Portia.Fitz.LexKey.PackageConsumer.csproj \
+            --configuration Release \
+            --runtime linux-x64 \
+            --self-contained true \
+            --no-restore \
+            -p:PublishAot=true \
+            --output artifacts/fitz-lexkey-native-aot \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          artifacts/fitz-lexkey-native-aot/Portia.Fitz.LexKey.PackageConsumer
 
       - name: Test full broker integration
         env:

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <IsAotCompatible>true</IsAotCompatible>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <ILLinkTreatWarningsAsErrors>true</ILLinkTreatWarningsAsErrors>
+    <PortiaSmokePackageVersion Condition="'$(PortiaSmokePackageVersion)' == ''">1.0.0-smoke</PortiaSmokePackageVersion>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(PublishAot)' == 'true'">
+    <TrimmerRootAssembly Include="Portia.Fitz" />
+    <TrimmerRootAssembly Include="Cntryl.Fitz.Testing" />
+    <TrimmerRootAssembly Include="Cntryl.LexKey" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Cntryl.Portia.Fitz" Version="$(PortiaSmokePackageVersion)" />
+    <PackageReference Include="Cntryl.Fitz.Testing" Version="1.1.0" />
+    <PackageReference Include="Cntryl.LexKey" Version="0.1.2" />
+  </ItemGroup>
+</Project>
