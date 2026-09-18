@@ -167,6 +167,44 @@ public sealed class FitzKvCheckpointStoreTests
     }
 
     /// <summary>
+    ///     Verifies that every tenant of one per-tenant reactor gets its own Fitz KV resource. Tenant
+    ///     instances share a component name and run concurrently, so a route derived from the name
+    ///     alone would make every tenant contend for one lock — contention that grows with tenant count.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRouteTenantsOfOneComponentToDifferentFitzKvResources()
+    {
+        var client = new FakeKvClient();
+        var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
+
+        await store.SaveAsync(new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-a", "orders")),
+            new ProjectionCheckpoint(new EventCursor("1")));
+        await store.SaveAsync(new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-b", "orders")),
+            new ProjectionCheckpoint(new EventCursor("1")));
+
+        Assert.Equal(2, client.Transactions.Select(tx => tx.Route).Distinct().Count());
+    }
+
+    /// <summary>
+    ///     Verifies that one tenant's in-flight checkpoint write never blocks another tenant's save of
+    ///     the same reactor against a broker that locks a whole resource per read-write transaction.
+    /// </summary>
+    [Fact]
+    public async Task ShouldSaveOneTenantWhileAnotherTenantHoldsItsResource()
+    {
+        var client = new FakeKvClient();
+        var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
+        var tenantA = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-a", "orders"));
+        var tenantB = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-b", "orders"));
+        await store.SaveAsync(tenantA, new ProjectionCheckpoint(new EventCursor("1")));
+        await using var held = await client.BeginAsync(client.LastTransaction.Route, KvDurability.Sync);
+
+        await store.SaveAsync(tenantB, new ProjectionCheckpoint(new EventCursor("1")));
+
+        Assert.Equal("1", (await store.LoadAsync(tenantB)).Cursor.ToString());
+    }
+
+    /// <summary>
     ///     Verifies that a Fitz KV isolation conflict becomes <see cref="ProjectionConcurrencyException" />
     ///     so one catch covers every checkpoint store, with the broker's own exception kept as the inner
     ///     cause and the losing write rolled back rather than left staged.

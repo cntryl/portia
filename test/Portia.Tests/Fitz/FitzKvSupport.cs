@@ -29,10 +29,22 @@ sealed class FakeKvClient : IKvClient
 
     public FakeKvTransaction LastTransaction => Transactions[^1];
 
+    /// <summary>
+    ///     Routes currently held by an undisposed ReadWrite transaction. Fitz KV locks a whole resource
+    ///     at BEGIN for a ReadWrite transaction's lifetime, so a second writer is rejected rather than
+    ///     queued — modeled here so a test can see two components contending for one resource.
+    /// </summary>
+    internal HashSet<string> WriteLocks { get; } = new(StringComparer.Ordinal);
+
     public Task<IKvTransaction> BeginAsync(string route, KvDurability durability, KvMode mode = KvMode.ReadWrite,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (mode == KvMode.ReadWrite && !WriteLocks.Add(route))
+            return Task.FromException<IKvTransaction>(new KvException(
+                $"'{route}' is locked by another read-write transaction.", "TX_CONFLICT",
+                domainCode: FitzErrorCodes.KvIsolationConflict));
+
         var transaction = new FakeKvTransaction(this, route, durability, mode);
         Transactions.Add(transaction);
         return Task.FromResult<IKvTransaction>(transaction);
@@ -130,6 +142,8 @@ sealed class FakeKvTransaction(FakeKvClient client, string route, KvDurability d
     public ValueTask DisposeAsync()
     {
         Disposals++;
+        if (mode == KvMode.ReadWrite)
+            _ = client.WriteLocks.Remove(route);
         return client.DisposeFailure is { } failure
             ? ValueTask.FromException(failure)
             : ValueTask.CompletedTask;

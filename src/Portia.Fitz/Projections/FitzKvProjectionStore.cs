@@ -9,8 +9,15 @@ namespace Cntryl.Portia;
 ///     calls against <see cref="Transaction" /> while a batch is open; Portia commits both the
 ///     repository's writes and the checkpoint in that same Fitz KV transaction.
 /// </summary>
+/// <remarks>
+///     The configured route is a base, not the resource every batch transacts against. Fitz KV locks a
+///     resource exclusively for a ReadWrite transaction's whole lifetime, so each workload — one
+///     projector in one realm, and so each tenant of a per-tenant projector — gets its own derived
+///     resource; two workloads can never contend for one lock however the routes are configured.
+///     Query-side reads find that resource through <see cref="RouteFor" />.
+/// </remarks>
 /// <param name="client">The Fitz KV client to open transactions against.</param>
-/// <param name="route">The Fitz KV route this repository's data and checkpoint live under.</param>
+/// <param name="route">The Fitz KV base route this repository's per-workload resources derive from.</param>
 public abstract class FitzKvProjectionStore(IKvClient client, string route) : IProjectionStore
 {
     readonly IKvClient _client = client ?? throw new ArgumentNullException(nameof(client));
@@ -20,11 +27,35 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
     IKvTransaction? _open;
 
     /// <summary>
+    ///     Gets the Fitz KV resource one projector workload's data and checkpoint live in, so an
+    ///     application's query-side reads — which run outside any batch — open their transaction where
+    ///     the projector wrote.
+    /// </summary>
+    /// <param name="route">The base route the repository was constructed with.</param>
+    /// <param name="componentName">The projector's registered workload name.</param>
+    /// <param name="realm">
+    ///     The realm the projector reads: the tenant ID for a <c>PerTenant</c> projector, otherwise
+    ///     the realm of its <see cref="EventStreamPattern" />.
+    /// </param>
+    /// <returns>The derived <c>kv://{realm}/{area}/{resource}</c> route.</returns>
+    /// <exception cref="ArgumentException">
+    ///     The route is not an exact three-segment Fitz KV route, or the component name or realm is blank.
+    /// </exception>
+    public static string RouteFor(string route, string componentName, string realm)
+    {
+        var validated = FitzKvCheckpoints.Route(route, nameof(route));
+        ArgumentException.ThrowIfNullOrWhiteSpace(componentName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(realm);
+        return FitzKvCheckpoints.WorkloadRoute(validated, componentName, realm);
+    }
+
+    /// <summary>
     ///     Gets the transaction the current unit of work writes through. Only valid between
     ///     <see cref="BeginAsync" /> and the returned batch's commit or disposal — a derived
     ///     repository's own domain write methods use this so their writes land in the same atomic
-    ///     commit as the checkpoint. Never open a second transaction against the same route while
-    ///     this one is in flight; Fitz KV isolation conflicts, it does not merge concurrent writers.
+    ///     commit as the checkpoint. Never open a second read-write transaction against this
+    ///     workload's resource while this one is in flight; Fitz KV isolation conflicts, it does not
+    ///     merge concurrent writers.
     /// </summary>
     /// <exception cref="InvalidOperationException">
     ///     No projection batch is open. Reading this outside a batch would otherwise hand back the
@@ -40,7 +71,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(identity);
-        return FitzKvCheckpoints.LoadAsync(_client, _route, identity, ct);
+        return FitzKvCheckpoints.LoadAsync(_client, FitzKvCheckpoints.WorkloadRoute(_route, identity), identity, ct);
     }
 
     /// <inheritdoc />
@@ -55,7 +86,8 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
         }
 
         var transaction = await FitzKvCheckpoints
-            .BeginAsync(_client, _route, KvMode.ReadWrite, "Projection batch", context.Identity, ct)
+            .BeginAsync(_client, FitzKvCheckpoints.WorkloadRoute(_route, context.Identity), KvMode.ReadWrite,
+                "Projection batch", context.Identity, ct)
             .ConfigureAwait(false);
         _open = transaction;
         try

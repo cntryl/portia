@@ -132,8 +132,9 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var identity = new CheckpointIdentity(
             "malformed", EventStreamPattern.ForPattern("portia-integration", "projection-cleanup"));
         var key = FitzKvCheckpoints.Key(identity);
+        var resource = FitzKvProjectionStore.RouteFor(route, identity.ComponentName, identity.Pattern.Realm);
 
-        await using (var seed = await originalClient.Kv.BeginAsync(route, KvDurability.Sync))
+        await using (var seed = await originalClient.Kv.BeginAsync(resource, KvDurability.Sync))
         {
             await seed.PutAsync(key, new byte[] { 1, 2, 3 });
             await seed.CommitAsync();
@@ -143,7 +144,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         _ = await Assert.ThrowsAsync<InvalidDataException>(async () =>
             await store.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)));
 
-        await using (var repair = await repairClient.Kv.BeginAsync(route, KvDurability.Sync))
+        await using (var repair = await repairClient.Kv.BeginAsync(resource, KvDurability.Sync))
         {
             await repair.PutAsync(key, FitzKvCheckpoints.Encode(EventCursor.Start));
             await repair.CommitAsync();
@@ -186,6 +187,29 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         await store.SaveAsync(live, new ProjectionCheckpoint(new EventCursor("43")));
 
         Assert.Equal("43", (await store.LoadAsync(live)).Cursor.ToString());
+    }
+
+    /// <summary>
+    ///     Verifies against the real broker that tenants of one reactor never contend. Fitz KV allows one
+    ///     read-write transaction per resource per session, and an app shares one client across every
+    ///     workload — so while tenant A's checkpoint write is in flight on that client, tenant B's save
+    ///     must land on a different resource instead of failing at BEGIN, the collision that crashed a
+    ///     host once every tenant's reactor shared one route.
+    /// </summary>
+    [Fact]
+    public async Task ShouldSaveOneTenantsReactorCheckpointWhileAnotherTenantsIsInFlight()
+    {
+        await using var client = await _broker.CreateClientAsync();
+        var route = "kv://portia-integration/conformance/" + Uuid.CreateVersion4();
+        var store = new FitzKvCheckpointStore(client.Kv, route);
+        var tenantA = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-a", "reactions"));
+        var tenantB = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-b", "reactions"));
+        await using var inFlight = await client.Kv.BeginAsync(
+            FitzKvCheckpoints.WorkloadRoute(route, tenantA), KvDurability.Sync);
+
+        await store.SaveAsync(tenantB, new ProjectionCheckpoint(new EventCursor("7")));
+
+        Assert.Equal("7", (await store.LoadAsync(tenantB)).Cursor.ToString());
     }
 
     /// <summary>
@@ -740,9 +764,12 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         public Task StageAsync(CheckpointIdentity identity, string value, CancellationToken ct) =>
             Transaction.PutAsync(ValueKey(identity), Encoding.UTF8.GetBytes(value), ct);
 
+        // A query-side read runs outside any batch, so it finds the workload's resource the same way
+        // an application's read model would: through the store's published route helper.
         public async ValueTask<string?> ReadAsync(CheckpointIdentity identity, CancellationToken ct)
         {
-            await using var tx = await _kv.BeginAsync(_route, KvDurability.Sync, KvMode.ReadOnly, ct);
+            var resource = RouteFor(_route, identity.ComponentName, identity.Pattern.Realm);
+            await using var tx = await _kv.BeginAsync(resource, KvDurability.Sync, KvMode.ReadOnly, ct);
             var result = await tx.GetAsync(ValueKey(identity), ct);
             return result.Found ? Encoding.UTF8.GetString(result.Value!.Value.Span) : null;
         }

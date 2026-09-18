@@ -1,1 +1,2 @@
 #nullable enable
+static Cntryl.Portia.FitzKvProjectionStore.RouteFor(string! route, string! componentName, string! realm) -> string!

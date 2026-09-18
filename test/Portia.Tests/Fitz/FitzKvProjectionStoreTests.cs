@@ -420,6 +420,71 @@ public sealed class FitzKvProjectionStoreTests
         Assert.Empty(client.Transactions);
     }
 
+    /// <summary>
+    ///     Verifies that the configured route is a base, not one shared resource: each tenant of a
+    ///     per-tenant projector, and each projector sharing a base route, transacts against its own
+    ///     derived Fitz KV resource, so none of them can contend for another's lock.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRouteEachWorkloadToItsOwnFitzKvResource()
+    {
+        var client = new FakeKvClient();
+        CheckpointIdentity[] workloads =
+        [
+            new("orders", EventStreamPattern.ForPattern("tenant-a", "orders")),
+            new("orders", EventStreamPattern.ForPattern("tenant-b", "orders")),
+            new("invoices", EventStreamPattern.ForPattern("tenant-a", "orders"))
+        ];
+
+        foreach (var workload in workloads)
+        {
+            await using var batch = await new TotalsRepository(client, "kv://portia/state/orders")
+                .BeginAsync(new ProjectionBatchContext(workload, ProjectionCheckpoint.Start));
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+        }
+
+        var routes = client.Transactions.Select(tx => tx.Route).Distinct().ToArray();
+        Assert.Equal(workloads.Length, routes.Length);
+        Assert.All(routes, route => Assert.StartsWith("kv://portia/state/orders-", route, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///     Verifies that one tenant's open projection batch never blocks another tenant's batch for the
+    ///     same projector against a broker that locks a whole resource per read-write transaction.
+    /// </summary>
+    [Fact]
+    public async Task ShouldBeginOneTenantsBatchWhileAnotherTenantsBatchIsOpen()
+    {
+        var client = new FakeKvClient();
+        var tenantA = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-a", "orders"));
+        var tenantB = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-b", "orders"));
+        await using var open = await new TotalsRepository(client, "kv://portia/state/orders")
+            .BeginAsync(new ProjectionBatchContext(tenantA, ProjectionCheckpoint.Start));
+
+        await using var other = await new TotalsRepository(client, "kv://portia/state/orders")
+            .BeginAsync(new ProjectionBatchContext(tenantB, ProjectionCheckpoint.Start));
+        await other.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+    }
+
+    /// <summary>
+    ///     Verifies that the published route helper names exactly the resource a batch and a checkpoint
+    ///     load use, so an application's query-side reads find the data its projector wrote.
+    /// </summary>
+    [Fact]
+    public async Task ShouldExposeTheRouteABatchAndCheckpointLoadUse()
+    {
+        var client = new FakeKvClient();
+        var store = new TotalsRepository(client, "kv://portia/state/orders");
+        var identity = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-a", "orders"));
+
+        await using (var batch = await store.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)))
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+        _ = await store.LoadCheckpointAsync(identity);
+
+        var expected = FitzKvProjectionStore.RouteFor("kv://portia/state/orders", "orders", "tenant-a");
+        Assert.All(client.Transactions, tx => Assert.Equal(expected, tx.Route));
+    }
+
     // A minimal derived repository: it writes its own domain keys through the shared transaction,
     // exactly as a real projection repository is meant to.
     sealed class TotalsRepository(IKvClient client, string route) : FitzKvProjectionStore(client, route)

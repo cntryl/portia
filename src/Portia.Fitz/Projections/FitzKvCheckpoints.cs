@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace Cntryl.Portia;
 
@@ -96,21 +97,32 @@ static class FitzKvCheckpoints
     }
 
     /// <summary>
-    ///     Derives the Fitz KV resource one reactor's checkpoint transacts against from the app's
-    ///     configured base route. Fitz KV locks a resource exclusively for a ReadWrite transaction's
-    ///     whole lifetime rather than the keys it touches, and <see cref="FitzKvCheckpointStore" />
-    ///     is the one durable store an app can register only once for every reactor it has — so without
-    ///     this, two unrelated reactors saving at the same instant would contend for the same lock
-    ///     purely because the app pointed them both at one base route. The suffix is a stable hash
-    ///     rather than the raw component name, since a component name is not guaranteed to be a legal
-    ///     route segment on its own.
+    ///     Derives the Fitz KV resource one workload — a component in one realm — transacts against
+    ///     from a configured base route. Fitz KV locks a resource exclusively for a ReadWrite
+    ///     transaction's whole lifetime rather than the keys it touches, so any two workloads sharing a
+    ///     resource contend for that one lock purely because they were pointed at one route: different
+    ///     reactors behind the app's single checkpoint store, different projectors given the same route,
+    ///     or — since every tenant instance of a per-tenant component shares its name and runs
+    ///     concurrently — every tenant of one component. Deriving the resource from the component and
+    ///     realm makes that sharing impossible to configure. The suffix is a stable hash rather than
+    ///     the raw values, since neither is guaranteed to be a legal route segment on its own.
     /// </summary>
-    public static string ComponentRoute(string route, string componentName)
+    public static string WorkloadRoute(string route, string componentName, string realm)
     {
         var segments = route[5..].Split('/');
-        var suffix = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(componentName)))[..16];
+        var identity = JsonSerializer.SerializeToUtf8Bytes([componentName, realm],
+            FitzJsonContext.Default.StringArray);
+        var suffix = Convert.ToHexStringLower(SHA256.HashData(identity))[..16];
         return $"kv://{segments[0]}/{segments[1]}/{segments[2]}-{suffix}";
     }
+
+    /// <summary>
+    ///     Derives the resource for the workload a checkpoint belongs to. A bound per-tenant pattern's
+    ///     realm is its tenant, so each tenant resolves separately; the rebuild generation is left out
+    ///     so a rebuild writes where query-side reads already look, its checkpoint key kept apart.
+    /// </summary>
+    public static string WorkloadRoute(string route, CheckpointIdentity identity) =>
+        WorkloadRoute(route, identity.ComponentName, identity.Pattern.Realm);
 
     /// <summary>Builds the shared conflict failure, so BEGIN and COMMIT conflicts read alike.</summary>
     public static ProjectionConcurrencyException Conflict(string subject, CheckpointIdentity identity,
