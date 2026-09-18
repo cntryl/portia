@@ -20,6 +20,12 @@ reusing it across suites.
 Mark every test that opens a real Fitz connection with `[Trait("Category", "BrokerIntegration")]`.
 Broker fakes and configuration-only tests remain in the broker-free suite.
 
+`dotnet format` is the only tool that decides formatting. Rider's formatter disagrees with it on one
+construct — the brace of an initializer that wrapped onto its own line, which Rider indents one
+level further than Roslyn does — so turn off **Settings → Tools → Actions on Save → Reformat code**
+and clear **Reformat code** in the commit dialog. `IDE0055` is an error here, so Rider's version of
+that brace fails the build outright — `dotnet format Portia.slnx` is the fix if you hit it.
+
 Every packable project under `src/` participates in public API tracking. When adding one, create
 `PublicAPI.Shipped.txt` and `PublicAPI.Unshipped.txt` beside the project file, each initially
 containing `#nullable enable`. Add new, unreleased symbols to `PublicAPI.Unshipped.txt`; move them
