@@ -1,6 +1,11 @@
+using System.Runtime.CompilerServices;
+
 namespace Cntryl.Portia.Testing;
 
-/// <summary>Lifecycle expectations for a request with no result. Each <c>Expect…</c> returns new expectations; awaiting runs the request once.</summary>
+/// <summary>
+///     Lifecycle expectations for a request with no result. Each <c>Expect…</c> returns new expectations; awaiting
+///     runs the request once.
+/// </summary>
 public sealed class RequestExpectations
 {
     readonly ScenarioDefinition<Result> _definition;
@@ -18,7 +23,8 @@ public sealed class RequestExpectations
 
     /// <summary>Expects authorization to have run and allowed the request.</summary>
     /// <returns>New expectations that include this one.</returns>
-    public RequestExpectations ExpectAuthorized() => With((observation, _) => ScenarioExpectations.Authorized(observation));
+    public RequestExpectations ExpectAuthorized() =>
+        With((observation, _) => ScenarioExpectations.Authorized(observation));
 
     /// <summary>Expects authorization to have denied the request before any behavior, guard, or handler ran.</summary>
     /// <param name="kind">The expected error kind, or <see langword="null" /> for any denial.</param>
@@ -45,7 +51,8 @@ public sealed class RequestExpectations
 
     /// <summary>Expects the request's handler not to have run.</summary>
     /// <returns>New expectations that include this one.</returns>
-    public RequestExpectations ExpectNotHandled() => With((observation, _) => ScenarioExpectations.NotHandled(observation));
+    public RequestExpectations ExpectNotHandled() =>
+        With((observation, _) => ScenarioExpectations.NotHandled(observation));
 
     /// <summary>Expects the request to have succeeded.</summary>
     /// <returns>New expectations that include this one.</returns>
@@ -64,7 +71,7 @@ public sealed class RequestExpectations
 
     /// <summary>Runs the request once and asserts every expectation when awaited.</summary>
     /// <returns>An awaiter for <see cref="AsTask" />.</returns>
-    public System.Runtime.CompilerServices.TaskAwaiter<Result> GetAwaiter() => AsTask().GetAwaiter();
+    public TaskAwaiter<Result> GetAwaiter() => AsTask().GetAwaiter();
 
     RequestExpectations With(Func<ScenarioObservation, Result, string?> expectation) =>
         new(_definition, [.. _expectations, expectation]);

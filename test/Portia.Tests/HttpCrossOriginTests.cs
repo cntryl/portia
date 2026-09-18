@@ -160,10 +160,14 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
             }),
             corsRegisteredFirst);
 
-        using var trusted = await client.SendAsync(Request(HttpMethod.Post, "/middleware-policy", "cross-site", Trusted));
-        using var attacker = await client.SendAsync(Request(HttpMethod.Post, "/middleware-policy", "cross-site", Attacker));
-        using var endpointTrusted = await client.SendAsync(Request(HttpMethod.Put, "/endpoint-policy", "cross-site", Admin));
-        using var endpointOverridden = await client.SendAsync(Request(HttpMethod.Put, "/endpoint-policy", "cross-site", Trusted));
+        using var trusted =
+            await client.SendAsync(Request(HttpMethod.Post, "/middleware-policy", "cross-site", Trusted));
+        using var attacker =
+            await client.SendAsync(Request(HttpMethod.Post, "/middleware-policy", "cross-site", Attacker));
+        using var endpointTrusted =
+            await client.SendAsync(Request(HttpMethod.Put, "/endpoint-policy", "cross-site", Admin));
+        using var endpointOverridden =
+            await client.SendAsync(Request(HttpMethod.Put, "/endpoint-policy", "cross-site", Trusted));
         using var disabled = await client.SendAsync(Request(HttpMethod.Patch, "/cors-disabled", "cross-site", Trusted));
 
         Assert.Equal(HttpStatusCode.OK, trusted.StatusCode);

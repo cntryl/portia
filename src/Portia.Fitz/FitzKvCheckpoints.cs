@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Cntryl.Portia;
@@ -7,7 +8,7 @@ namespace Cntryl.Portia;
 /// <summary>
 ///     Encodes a <see cref="CheckpointIdentity" /> and <see cref="ProjectionCheckpoint" /> as Fitz KV
 ///     key/value bytes, shared by <see cref="FitzKvCheckpointStore" /> and <see cref="FitzKvProjectionStore" />
-///     so both encode identically and can be pointed at the same route.
+///     so both encode identically and can be pointed at the same base route.
 /// </summary>
 static class FitzKvCheckpoints
 {
@@ -92,6 +93,23 @@ static class FitzKvCheckpoints
         {
             throw Conflict(subject, identity, ex);
         }
+    }
+
+    /// <summary>
+    ///     Derives the Fitz KV resource one reactor's checkpoint transacts against from the app's
+    ///     configured base route. Fitz KV locks a resource exclusively for a ReadWrite transaction's
+    ///     whole lifetime rather than the keys it touches, and <see cref="FitzKvCheckpointStore" />
+    ///     is the one durable store an app can register only once for every reactor it has — so without
+    ///     this, two unrelated reactors saving at the same instant would contend for the same lock
+    ///     purely because the app pointed them both at one base route. The suffix is a stable hash
+    ///     rather than the raw component name, since a component name is not guaranteed to be a legal
+    ///     route segment on its own.
+    /// </summary>
+    public static string ComponentRoute(string route, string componentName)
+    {
+        var segments = route[5..].Split('/');
+        var suffix = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(componentName)))[..16];
+        return $"kv://{segments[0]}/{segments[1]}/{segments[2]}-{suffix}";
     }
 
     /// <summary>Builds the shared conflict failure, so BEGIN and COMMIT conflicts read alike.</summary>

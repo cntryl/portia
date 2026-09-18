@@ -87,6 +87,7 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// <returns>A builder for applying further endpoint conventions.</returns>
     public static IEndpointConventionBuilder MapPortiaPost<TRequest>(this IEndpointRouteBuilder app, string pattern)
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
+
     /// <summary>Maps a configurable no-result POST endpoint.</summary>
     public static IEndpointConventionBuilder MapPortiaPost<TRequest>(this IEndpointRouteBuilder app, string pattern,
         Action<PortiaEndpointConfiguration<TRequest>> configure)
@@ -103,6 +104,7 @@ public static class PortiaEndpointRouteBuilderExtensions
     public static IEndpointConventionBuilder MapPortiaPost<TRequest, TOut>(this IEndpointRouteBuilder app,
         string pattern)
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
+
     /// <summary>Maps a configurable result-bearing POST endpoint.</summary>
     public static IEndpointConventionBuilder MapPortiaPost<TRequest, TOut>(this IEndpointRouteBuilder app,
         string pattern, Action<PortiaEndpointConfiguration<TRequest, TOut>> configure)
@@ -117,6 +119,7 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// <returns>A builder for applying further endpoint conventions.</returns>
     public static IEndpointConventionBuilder MapPortiaPut<TRequest>(this IEndpointRouteBuilder app, string pattern)
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
+
     /// <summary>Maps a configurable no-result PUT endpoint.</summary>
     public static IEndpointConventionBuilder MapPortiaPut<TRequest>(this IEndpointRouteBuilder app, string pattern,
         Action<PortiaEndpointConfiguration<TRequest>> configure)
@@ -133,6 +136,7 @@ public static class PortiaEndpointRouteBuilderExtensions
     public static IEndpointConventionBuilder MapPortiaPut<TRequest, TOut>(this IEndpointRouteBuilder app,
         string pattern)
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
+
     /// <summary>Maps a configurable result-bearing PUT endpoint.</summary>
     public static IEndpointConventionBuilder MapPortiaPut<TRequest, TOut>(this IEndpointRouteBuilder app,
         string pattern, Action<PortiaEndpointConfiguration<TRequest, TOut>> configure)
@@ -147,6 +151,7 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// <returns>A builder for applying further endpoint conventions.</returns>
     public static IEndpointConventionBuilder MapPortiaPatch<TRequest>(this IEndpointRouteBuilder app, string pattern)
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
+
     /// <summary>Maps a configurable no-result PATCH endpoint.</summary>
     public static IEndpointConventionBuilder MapPortiaPatch<TRequest>(this IEndpointRouteBuilder app, string pattern,
         Action<PortiaEndpointConfiguration<TRequest>> configure)
@@ -163,6 +168,7 @@ public static class PortiaEndpointRouteBuilderExtensions
     public static IEndpointConventionBuilder MapPortiaPatch<TRequest, TOut>(this IEndpointRouteBuilder app,
         string pattern)
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
+
     /// <summary>Maps a configurable result-bearing PATCH endpoint.</summary>
     public static IEndpointConventionBuilder MapPortiaPatch<TRequest, TOut>(this IEndpointRouteBuilder app,
         string pattern, Action<PortiaEndpointConfiguration<TRequest, TOut>> configure)
@@ -177,6 +183,7 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// <returns>A builder for applying further endpoint conventions.</returns>
     public static IEndpointConventionBuilder MapPortiaDelete<TRequest>(this IEndpointRouteBuilder app, string pattern)
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
+
     /// <summary>Maps a configurable no-result DELETE endpoint.</summary>
     public static IEndpointConventionBuilder MapPortiaDelete<TRequest>(this IEndpointRouteBuilder app, string pattern,
         Action<PortiaEndpointConfiguration<TRequest>> configure)
@@ -193,6 +200,7 @@ public static class PortiaEndpointRouteBuilderExtensions
     public static IEndpointConventionBuilder MapPortiaDelete<TRequest, TOut>(this IEndpointRouteBuilder app,
         string pattern)
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
+
     /// <summary>Maps a configurable result-bearing DELETE endpoint.</summary>
     public static IEndpointConventionBuilder MapPortiaDelete<TRequest, TOut>(this IEndpointRouteBuilder app,
         string pattern, Action<PortiaEndpointConfiguration<TRequest, TOut>> configure)
@@ -213,6 +221,7 @@ public static class PortiaEndpointRouteBuilderExtensions
     public static IEndpointConventionBuilder MapPortiaGetStream<TRequest, TOut>(this IEndpointRouteBuilder app,
         string pattern)
         where TRequest : IStreamRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
+
     /// <summary>Maps a configurable JSON-stream endpoint.</summary>
     public static IEndpointConventionBuilder MapPortiaGetStream<TRequest, TOut>(this IEndpointRouteBuilder app,
         string pattern, Action<PortiaStreamingEndpointConfiguration<TRequest>> configure)
@@ -235,6 +244,7 @@ public static class PortiaEndpointRouteBuilderExtensions
     public static IEndpointConventionBuilder MapPortiaGetSse<TRequest, TOut>(this IEndpointRouteBuilder app,
         string pattern)
         where TRequest : IStreamRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
+
     /// <summary>Maps a configurable server-sent-events endpoint.</summary>
     public static IEndpointConventionBuilder MapPortiaGetSse<TRequest, TOut>(this IEndpointRouteBuilder app,
         string pattern, Action<PortiaStreamingEndpointConfiguration<TRequest>> configure)

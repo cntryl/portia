@@ -112,14 +112,14 @@ public sealed class RequestGuardQueueTests
 
     sealed class Queued(IRequest request, uint attempt) : IQueuedRequest
     {
+        public bool Completed { get; private set; }
+        public bool Abandoned { get; private set; }
         public IRequest Request { get; } = request;
         public RequestMetadata Metadata { get; } = RequestMetadata.Create();
         public RequestInvocation Invocation => new QueueInvocation("queue://test/guards/redelivery", Attempt);
         public uint Attempt { get; } = attempt;
         public bool SupportsDurableAttempts => true;
         public string? ActorToken => null;
-        public bool Completed { get; private set; }
-        public bool Abandoned { get; private set; }
 
         public ValueTask CompleteAsync(CancellationToken ct = default)
         {

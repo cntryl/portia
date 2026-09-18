@@ -187,7 +187,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         var parameters = primaryConstructor.Parameters
             .Select(parameter =>
             {
-                var routeToken = routeTokens.FirstOrDefault(token => HttpBindingShape.Normalize(token) == HttpBindingShape.Normalize(parameter.Name));
+                var routeToken = routeTokens.FirstOrDefault(token =>
+                    HttpBindingShape.Normalize(token) == HttpBindingShape.Normalize(parameter.Name));
                 var source = routeToken is not null
                     ? ParameterSource.Route
                     : bodyCapable
@@ -219,7 +220,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     jsonName,
                     underlying.TypeKind == TypeKind.Enum,
                     HttpBindingShape.GetTextParseKind(underlying),
-                    HttpBindingShape.IsSupportedParameter(parameter, textBound: true));
+                    HttpBindingShape.IsSupportedParameter(parameter, true));
             })
             .ToArray();
 
@@ -375,6 +376,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
             _ = source.AppendLine("        });");
         }
+
         _ = source
             // Mapping the handler as a RequestDelegate keeps RequestDelegateFactory — and the
             // reflection it needs to bind parameters — out of the consumer's AOT build. That
@@ -444,7 +446,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         {
             // A state-changing request is refused before binding reads anything from it.
             _ = source
-                .AppendLine("                if (global::Cntryl.Portia.PortiaHttpBinding.RejectCrossOrigin(httpContext) is { } crossOrigin)")
+                .AppendLine(
+                    "                if (global::Cntryl.Portia.PortiaHttpBinding.RejectCrossOrigin(httpContext) is { } crossOrigin)")
                 .AppendLine("                {")
                 .AppendLine("                    await crossOrigin.ExecuteAsync(httpContext).ConfigureAwait(false);")
                 .AppendLine("                    return;")
@@ -523,65 +526,80 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 .AppendLine("                {")
                 .AppendLine("                    if (configuration.HasBody)")
                 .AppendLine("                    {")
-                .AppendLine("                        global::Cntryl.Portia.PortiaHttpBinding.EnsureBodyWithinLimit(httpContext);")
-                .AppendLine("                        global::Microsoft.AspNetCore.Http.HttpRequestRewindExtensions.EnableBuffering(httpContext.Request);")
+                .AppendLine(
+                    "                        global::Cntryl.Portia.PortiaHttpBinding.EnsureBodyWithinLimit(httpContext);")
+                .AppendLine(
+                    "                        global::Microsoft.AspNetCore.Http.HttpRequestRewindExtensions.EnableBuffering(httpContext.Request);")
                 .AppendLine("                        try")
                 .AppendLine("                        {")
-                .AppendLine("                            await httpContext.Request.Body.CopyToAsync(global::System.IO.Stream.Null, ct).ConfigureAwait(false);")
+                .AppendLine(
+                    "                            await httpContext.Request.Body.CopyToAsync(global::System.IO.Stream.Null, ct).ConfigureAwait(false);")
                 .AppendLine("                        }")
-                .AppendLine("                        catch (global::Microsoft.AspNetCore.Http.BadHttpRequestException ex) when (ex.StatusCode == 413)")
+                .AppendLine(
+                    "                        catch (global::Microsoft.AspNetCore.Http.BadHttpRequestException ex) when (ex.StatusCode == 413)")
                 .AppendLine("                        {")
-                .AppendLine("                            throw new global::Cntryl.Portia.HttpPayloadTooLargeException();")
+                .AppendLine(
+                    "                            throw new global::Cntryl.Portia.HttpPayloadTooLargeException();")
                 .AppendLine("                        }")
                 .AppendLine("                        httpContext.Request.Body.Position = 0;")
                 .AppendLine("                    }")
-                .AppendLine("                    request = await configuration.Binder(httpContext, ct).ConfigureAwait(false);")
-                .AppendLine("                    if ((object?)request is null) throw new global::System.InvalidOperationException(\"OnBind returned null.\");")
+                .AppendLine(
+                    "                    request = await configuration.Binder(httpContext, ct).ConfigureAwait(false);")
+                .AppendLine(
+                    "                    if ((object?)request is null) throw new global::System.InvalidOperationException(\"OnBind returned null.\");")
                 .AppendLine("                }")
                 .AppendLine("                catch (global::System.Text.Json.JsonException)")
                 .AppendLine("                {")
-                .AppendLine("                    throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Malformed request.\");")
+                .AppendLine(
+                    "                    throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Malformed request.\");")
                 .AppendLine("                }")
                 .AppendLine("                catch (global::System.FormatException)")
                 .AppendLine("                {")
-                .AppendLine("                    throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Malformed request.\");")
+                .AppendLine(
+                    "                    throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Malformed request.\");")
                 .AppendLine("                }")
                 .AppendLine("                catch (global::System.OverflowException)")
                 .AppendLine("                {")
-                .AppendLine("                    throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Malformed request.\");")
+                .AppendLine(
+                    "                    throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Malformed request.\");")
                 .AppendLine("                }")
                 .AppendLine("            }")
                 .AppendLine("            else")
                 .AppendLine("            {");
         }
+
         if (call.HasDefaultBinder)
         {
             foreach (var (parameter, i) in call.Parameters.Select((p, i) => (p, i)))
                 _ = source.Append("            ").Append(parameter.Type).Append(" value").Append(i).AppendLine(";");
             _ = source.AppendLine("            try").AppendLine("            {");
-            var jsonBody = "using var body = await global::Cntryl.Portia.PortiaHttpBinding.ReadJsonBodyAsync(httpContext, " +
-                           (bodyParameters.Any(parameter => !parameter.FormBindable && !parameter.Nullable && parameter.Default is null)
-                               ? "true"
-                               : "false") + ", ct).ConfigureAwait(false);";
+            var jsonBody =
+                "using var body = await global::Cntryl.Portia.PortiaHttpBinding.ReadJsonBodyAsync(httpContext, " +
+                (bodyParameters.Any(parameter =>
+                    !parameter.FormBindable && !parameter.Nullable && parameter.Default is null)
+                    ? "true"
+                    : "false") + ", ct).ConfigureAwait(false);";
             if (formBindable)
             {
                 // Scalar-only bodies also accept HTML forms; the JSON wire names name the fields.
-                _ = source.AppendLine("                if (global::Cntryl.Portia.PortiaHttpBinding.HasFormBody(httpContext))")
+                _ = source.AppendLine(
+                        "                if (global::Cntryl.Portia.PortiaHttpBinding.HasFormBody(httpContext))")
                     .AppendLine("                {")
-                    .AppendLine("                    var form = await global::Cntryl.Portia.PortiaHttpBinding.ReadFormBodyAsync(httpContext, ct).ConfigureAwait(false);");
-                AppendValues(form: true, "                    ");
+                    .AppendLine(
+                        "                    var form = await global::Cntryl.Portia.PortiaHttpBinding.ReadFormBodyAsync(httpContext, ct).ConfigureAwait(false);");
+                AppendValues(true, "                    ");
                 _ = source.AppendLine("                }")
                     .AppendLine("                else")
                     .AppendLine("                {")
                     .Append("                    ").AppendLine(jsonBody);
-                AppendValues(form: false, "                    ");
+                AppendValues(false, "                    ");
                 _ = source.AppendLine("                }");
             }
             else
             {
                 if (hasBody)
                     _ = source.Append("                ").AppendLine(jsonBody);
-                AppendValues(form: false, "                ");
+                AppendValues(false, "                ");
             }
 
             void AppendValues(bool form, string indent)
@@ -604,21 +622,24 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                                 .Append(call.Configured ? $"if (!configuration.IsQueryMember({i}) && " : "if (")
                                 .Append("global::Cntryl.Portia.PortiaHttpBinding.HasBodyMember<")
                                 .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
-                                .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ").Append(name).AppendLine("))")
+                                .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ").Append(name)
+                                .AppendLine("))")
                                 .Append(pad).AppendLine("{");
                         }
 
                         _ = source.Append(cascade ? pad + "    " : pad).Append("value").Append(i)
                             .Append(" = global::Cntryl.Portia.PortiaHttpBinding.ReadBody<")
                             .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
-                            .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ").Append(Literal(parameter.Name))
+                            .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ")
+                            .Append(Literal(parameter.Name))
                             .Append(", ").Append(name)
                             .Append(parameter.Nullable ? ", true" : ", false")
                             .Append(parameter.Default is not null ? ", true, " : ", false, ")
                             .Append(parameter.Default ?? "default!").AppendLine(");");
                         if (!cascade)
                             continue;
-                        _ = source.Append(pad).AppendLine("}").Append(pad).AppendLine("else").Append(pad).AppendLine("{");
+                        _ = source.Append(pad).AppendLine("}").Append(pad).AppendLine("else").Append(pad)
+                            .AppendLine("{");
                         pad += "    ";
                     }
 
@@ -629,25 +650,32 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                             $"(httpContext.Request.RouteValues[{Literal(parameter.RouteToken!)}] is null ? null : global::System.Convert.ToString(httpContext.Request.RouteValues[{Literal(parameter.RouteToken!)}], global::System.Globalization.CultureInfo.InvariantCulture))",
                         // An empty form field is how a browser submits a blank non-text input.
                         ParameterSource.Body when form && IsBoolean(parameter.UnderlyingType) =>
-                            (call.Configured ? $"configuration.IsQueryMember({i}) ? global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name}) : " : string.Empty) +
+                            (call.Configured
+                                ? $"configuration.IsQueryMember({i}) ? global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name}) : "
+                                : string.Empty) +
                             $"(global::Cntryl.Portia.PortiaHttpBinding.ReadFormBoolean(form, {name}) ?? global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name}))",
                         ParameterSource.Body when form =>
-                            (call.Configured ? $"configuration.IsQueryMember({i}) ? global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name}) : " : string.Empty) +
+                            (call.Configured
+                                ? $"configuration.IsQueryMember({i}) ? global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name}) : "
+                                : string.Empty) +
                             $"(global::Cntryl.Portia.PortiaHttpBinding.ReadForm(form, {name}, {(IsString(parameter.UnderlyingType) ? "false" : "true")}) ?? global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name}))",
                         _ => $"global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name})"
                     };
 
                     // Browsers omit an unchecked checkbox, so an absent required form Boolean is false.
-                    var formBoolean = form && parameter.Source == ParameterSource.Body && IsBoolean(parameter.UnderlyingType);
+                    var formBoolean = form && parameter.Source == ParameterSource.Body &&
+                                      IsBoolean(parameter.UnderlyingType);
                     _ = source.Append(pad).Append("var raw").Append(i).Append(" = ").Append(raw).AppendLine(";")
                         .Append(pad).Append("if (raw").Append(i).AppendLine(" is null)")
                         .Append(pad).AppendLine("{");
-                    const string missing = "throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Missing required value.\");";
+                    const string missing =
+                        "throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Missing required value.\");";
                     _ = parameter.Default is not null || parameter.Nullable
                         ? source.Append(pad).Append("    value").Append(i).Append(" = ")
                             .Append(parameter.Default ?? "default").AppendLine(";")
                         : formBoolean && call.Configured
-                            ? source.Append(pad).Append("    if (configuration.IsQueryMember(").Append(i).Append(")) ").AppendLine(missing)
+                            ? source.Append(pad).Append("    if (configuration.IsQueryMember(").Append(i).Append(")) ")
+                                .AppendLine(missing)
                                 .Append(pad).Append("    value").Append(i).AppendLine(" = false;")
                             : formBoolean
                                 ? source.Append(pad).Append("    value").Append(i).AppendLine(" = false;")
@@ -702,8 +730,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         }
         else if (call.Configured)
         {
-            _ = source.AppendLine("                throw new global::System.InvalidOperationException(\"This request shape requires OnBind.\");");
+            _ = source.AppendLine(
+                "                throw new global::System.InvalidOperationException(\"This request shape requires OnBind.\");");
         }
+
         if (call.Configured)
             _ = source.AppendLine("            }");
 

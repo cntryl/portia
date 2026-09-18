@@ -9,9 +9,9 @@ namespace Cntryl.Portia.Testing;
 /// </summary>
 public sealed class RequestScenario
 {
-    readonly IServiceProvider _services;
     readonly ClaimsPrincipal _actor;
     readonly RequestMetadata? _metadata;
+    readonly IServiceProvider _services;
 
     RequestScenario(IServiceProvider services, ClaimsPrincipal actor, RequestMetadata? metadata)
     {
@@ -91,11 +91,11 @@ public sealed class RequestScenario
             }
             catch (RequestAuthorizationException ex)
             {
-                return (ScenarioOutcome.From(false, ex.Error), (IReadOnlyList<TOut>)items);
+                return (ScenarioOutcome.From(false, ex.Error), items);
             }
             catch (RequestGuardException ex)
             {
-                return (ScenarioOutcome.From(false, ex.Error), (IReadOnlyList<TOut>)items);
+                return (ScenarioOutcome.From(false, ex.Error), items);
             }
 
             return (ScenarioOutcome.From(true, null), (IReadOnlyList<TOut>)items);

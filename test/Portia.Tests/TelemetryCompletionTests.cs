@@ -1,4 +1,5 @@
 using System.Diagnostics.Metrics;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
@@ -247,7 +248,9 @@ public sealed class TelemetryCompletionTests
         Uninitialized
     }
 
-    internal sealed record GuardBehavior(GuardAction Action, CancellationTokenSource? Source = null,
+    internal sealed record GuardBehavior(
+        GuardAction Action,
+        CancellationTokenSource? Source = null,
         bool Requested = false)
     {
         public ValueTask<Result> RunAsync(CancellationToken ct)
@@ -291,7 +294,7 @@ public sealed class TelemetryCompletionTests
     internal sealed class GuardTelemetryStreamHandler : IStreamRequestHandler<GuardTelemetryStream, int>
     {
         public async IAsyncEnumerable<int> HandleAsync(IRequestContext<GuardTelemetryStream> context,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+            [EnumeratorCancellation] CancellationToken ct)
         {
             yield return 1;
             await Task.CompletedTask;

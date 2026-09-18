@@ -18,7 +18,8 @@ sealed record HttpCrossOriginCustom(string Value = "custom") : IRequest<string>,
 
 sealed class HttpCrossOriginReplaceHandler : IRequestHandler<HttpCrossOriginReplace, string>
 {
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<HttpCrossOriginReplace> context, CancellationToken ct) =>
+    public ValueTask<Result<string>>
+        HandleAsync(IRequestContext<HttpCrossOriginReplace> context, CancellationToken ct) =>
         ValueTask.FromResult(Result<string>.Success(context.Request.Value));
 }
 
@@ -30,12 +31,14 @@ sealed class HttpCrossOriginPatchHandler : IRequestHandler<HttpCrossOriginPatch,
 
 sealed class HttpCrossOriginRemoveHandler : IRequestHandler<HttpCrossOriginRemove, string>
 {
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<HttpCrossOriginRemove> context, CancellationToken ct) =>
+    public ValueTask<Result<string>>
+        HandleAsync(IRequestContext<HttpCrossOriginRemove> context, CancellationToken ct) =>
         ValueTask.FromResult(Result<string>.Success(context.Request.Value));
 }
 
 sealed class HttpCrossOriginCustomHandler : IRequestHandler<HttpCrossOriginCustom, string>
 {
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<HttpCrossOriginCustom> context, CancellationToken ct) =>
+    public ValueTask<Result<string>>
+        HandleAsync(IRequestContext<HttpCrossOriginCustom> context, CancellationToken ct) =>
         ValueTask.FromResult(Result<string>.Success(context.Request.Value));
 }

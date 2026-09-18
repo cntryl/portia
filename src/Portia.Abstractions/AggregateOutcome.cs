@@ -39,7 +39,7 @@ public readonly struct AggregateOutcome
     public static AggregateOutcome CommitOnSuccess(Result result)
     {
         var initialized = Initialized(result);
-        return new(initialized,
+        return new AggregateOutcome(initialized,
             initialized.IsSuccess ? AggregateDisposition.Commit : AggregateDisposition.Discard);
     }
 
@@ -68,7 +68,7 @@ public readonly struct AggregateOutcome
     public static AggregateOutcome<TOut> CommitOnSuccess<TOut>(Result<TOut> result)
     {
         var initialized = Initialized(result);
-        return new(initialized,
+        return new AggregateOutcome<TOut>(initialized,
             initialized.IsSuccess ? AggregateDisposition.Commit : AggregateDisposition.Discard);
     }
 
@@ -102,7 +102,8 @@ public readonly struct AggregateOutcome
 /// <summary>
 ///     The handler's decision for one value-returning aggregate operation: the result the caller receives and,
 ///     independently, whether everything the operation produced is committed or discarded. Create it with
-///     <see cref="AggregateOutcome.Commit{TOut}(Result{TOut})" /> or <see cref="AggregateOutcome.Discard{TOut}(Result{TOut})" />.
+///     <see cref="AggregateOutcome.Commit{TOut}(Result{TOut})" /> or
+///     <see cref="AggregateOutcome.Discard{TOut}(Result{TOut})" />.
 /// </summary>
 /// <typeparam name="TOut">The type of the value on success.</typeparam>
 public readonly struct AggregateOutcome<TOut>

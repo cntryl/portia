@@ -72,8 +72,12 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Theory]
-    [InlineData("PORTIA105", "IRequestGuard<Command>", "public ValueTask<Result> GuardAsync(IRequestContext<Command> context, CancellationToken ct) => default;", "Request guard 'Component' takes effect-capable dependency '")]
-    [InlineData("PORTIA106", "IRequestAuthorizer<Command>", "public ValueTask<Result> AuthorizeAsync(IRequestContext<Command> context, CancellationToken ct) => default;", "Request authorizer 'Component' takes effect-capable dependency '")]
+    [InlineData("PORTIA105", "IRequestGuard<Command>",
+        "public ValueTask<Result> GuardAsync(IRequestContext<Command> context, CancellationToken ct) => default;",
+        "Request guard 'Component' takes effect-capable dependency '")]
+    [InlineData("PORTIA106", "IRequestAuthorizer<Command>",
+        "public ValueTask<Result> AuthorizeAsync(IRequestContext<Command> context, CancellationToken ct) => default;",
+        "Request authorizer 'Component' takes effect-capable dependency '")]
     public void Portia105And106ReportPreflightEffectCapableDependencies(string id, string role, string member,
         string messagePrefix)
     {
@@ -95,7 +99,8 @@ public sealed class GeneratorDiagnosticsTests
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator())
             .Where(diagnostic => diagnostic.Id == id).ToArray();
 
-        Assert.Equal(["bus", "checkpoints", "events", "executor", "http", "projections", "scheduler", "store", "writer"],
+        Assert.Equal(
+            ["bus", "checkpoints", "events", "executor", "http", "projections", "scheduler", "store", "writer"],
             Locations(source, diagnostics));
         Assert.All(diagnostics, diagnostic => Assert.StartsWith(messagePrefix,
             diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal));
@@ -104,8 +109,10 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Theory]
-    [InlineData("IRequestGuard<Command>", "public ValueTask<Result> GuardAsync(IRequestContext<Command> context, CancellationToken ct) => default;")]
-    [InlineData("IRequestAuthorizer<Command>", "public ValueTask<Result> AuthorizeAsync(IRequestContext<Command> context, CancellationToken ct) => default;")]
+    [InlineData("IRequestGuard<Command>",
+        "public ValueTask<Result> GuardAsync(IRequestContext<Command> context, CancellationToken ct) => default;")]
+    [InlineData("IRequestAuthorizer<Command>",
+        "public ValueTask<Result> AuthorizeAsync(IRequestContext<Command> context, CancellationToken ct) => default;")]
     public void Portia105And106AllowReadOnlyDependencies(string role, string member)
     {
         var source = $$"""

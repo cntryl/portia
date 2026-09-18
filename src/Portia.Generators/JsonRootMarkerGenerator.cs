@@ -48,15 +48,19 @@ public sealed class JsonRootMarkerGenerator : IIncrementalGenerator
         foreach (var root in roots.Distinct().OrderBy(model => model.RootType, StringComparer.Ordinal))
         {
             _ = source.Append("[assembly: global::Cntryl.Portia.PortiaJsonRootAttribute(typeof(")
-                .Append(root.RootType).Append("), typeof(").Append(root.ContextType).Append("), typeof(global::Cntryl.Portia.Generated.")
+                .Append(root.RootType).Append("), typeof(").Append(root.ContextType)
+                .Append("), typeof(global::Cntryl.Portia.Generated.")
                 .Append(root.FactoryName).AppendLine("))]");
         }
+
         foreach (var contextGroup in roots.Distinct().GroupBy(model => model.ContextType, StringComparer.Ordinal))
         {
             var first = contextGroup.First();
-            _ = source.Append("namespace Cntryl.Portia.Generated { [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)] public static class ")
+            _ = source.Append(
+                    "namespace Cntryl.Portia.Generated { [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)] public static class ")
                 .Append(first.FactoryName)
-                .Append(" { public static global::System.Text.Json.Serialization.JsonSerializerContext Create(global::System.Text.Json.JsonSerializerOptions options) => new ")
+                .Append(
+                    " { public static global::System.Text.Json.Serialization.JsonSerializerContext Create(global::System.Text.Json.JsonSerializerOptions options) => new ")
                 .Append(first.ContextType).AppendLine("(options); } }");
         }
 
@@ -64,8 +68,10 @@ public sealed class JsonRootMarkerGenerator : IIncrementalGenerator
     }
 
     static string FactoryName(INamedTypeSymbol context) => "PortiaJsonContextFactory_" +
-        string.Concat((context.ContainingAssembly.Name + "_" + context.ToDisplayString())
-            .Select(character => char.IsLetterOrDigit(character) ? character : '_'));
+                                                           string.Concat((context.ContainingAssembly.Name + "_" +
+                                                                          context.ToDisplayString())
+                                                               .Select(character =>
+                                                                   char.IsLetterOrDigit(character) ? character : '_'));
 
     sealed record RootModel(string RootType, string ContextType, string FactoryName);
 }

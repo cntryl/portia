@@ -98,12 +98,15 @@ static class PortiaOpenApiSchemaGenerator
             }
         }
 
-        static JsonObject UuidSchema(bool nullable) => new()
+        static JsonObject UuidSchema(bool nullable)
         {
-            ["type"] = nullable
-                ? new JsonArray(JsonValue.Create("string"), JsonValue.Create("null"))
-                : JsonValue.Create("string"),
-            ["format"] = "uuid"
-        };
+            return new JsonObject
+            {
+                ["type"] = nullable
+                    ? new JsonArray(JsonValue.Create("string"), JsonValue.Create("null"))
+                    : JsonValue.Create("string"),
+                ["format"] = "uuid"
+            };
+        }
     }
 }

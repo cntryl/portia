@@ -27,8 +27,8 @@ sealed class FitzApplicationWorkers(
     readonly ILogger<FitzApplicationWorkers>? _logger = logger;
     readonly IReadOnlyList<FitzWorkerDefinition> _workers = configuration.Workers;
     readonly WorkloadRegistration[] _workloads = [.. workloads];
-    IAsyncDisposable? _rpc;
     bool _deferredStart;
+    IAsyncDisposable? _rpc;
 
     public async ValueTask DisposeAsync()
     {
@@ -92,26 +92,6 @@ sealed class FitzApplicationWorkers(
         await StartWorkersAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    async Task StartWorkersAsync(CancellationToken cancellationToken)
-    {
-        await connection.StartAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            if (_workers.OfType<FitzRpcWorkerDefinition>().Any())
-            {
-                _rpc = await new FitzRpcRequestServer(connection.Client.Rpc, scopes, catalog)
-                    .RegisterRequestsAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            await base.StartAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            await ReleaseRpcAsync().ConfigureAwait(false);
-            throw;
-        }
-    }
-
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         try
@@ -132,8 +112,29 @@ sealed class FitzApplicationWorkers(
         await validations!.WaitForEndpointValidationsAsync(cancellationToken).ConfigureAwait(false);
         await StartWorkersAsync(cancellationToken).ConfigureAwait(false);
     }
+
     public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    async Task StartWorkersAsync(CancellationToken cancellationToken)
+    {
+        await connection.StartAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_workers.OfType<FitzRpcWorkerDefinition>().Any())
+            {
+                _rpc = await new FitzRpcRequestServer(connection.Client.Rpc, scopes, catalog)
+                    .RegisterRequestsAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await base.StartAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await ReleaseRpcAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {

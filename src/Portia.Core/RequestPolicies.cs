@@ -33,7 +33,6 @@ sealed class RequestPolicies(
     RequestGuardRegistration[] guards,
     bool isUnprotected = false)
 {
-    readonly RequestPipelineBehaviorRegistration[] _behaviors = behaviorsInnermostFirst;
     readonly ConcurrentDictionary<Type, object> _results = new();
     readonly ConcurrentDictionary<Type, object> _streams = new();
 
@@ -47,7 +46,8 @@ sealed class RequestPolicies(
     internal bool HasAuthorizers => PrincipalAuthorizers.Length != 0 || ResourceAuthorizers.Length != 0;
     internal bool HasGuards => guards.Length != 0;
     internal RequestGuardRegistration[] Guards => guards;
-    internal RequestPipelineBehaviorRegistration[] Behaviors => _behaviors;
+    internal RequestPipelineBehaviorRegistration[] Behaviors { get; } = behaviorsInnermostFirst;
+
     internal bool IsUnprotected { get; } = isUnprotected;
     internal UnaryRequestPipelinePlan Unary => _unary.Value;
 
@@ -57,10 +57,10 @@ sealed class RequestPolicies(
     internal ResultRequestPipelinePlan<TOut> Result<TOut>() =>
         (ResultRequestPipelinePlan<TOut>)_results.GetOrAdd(typeof(TOut),
             static (_, state) => new ResultRequestPipelinePlan<TOut>(state.Behaviors, state.Guards),
-            (Behaviors: _behaviors, Guards: guards));
+            (Behaviors, Guards: guards));
 
     internal StreamRequestPipelinePlan<TOut> Stream<TOut>() =>
         (StreamRequestPipelinePlan<TOut>)_streams.GetOrAdd(typeof(TOut),
             static (_, state) => new StreamRequestPipelinePlan<TOut>(state.Behaviors, state.Guards),
-            (Behaviors: _behaviors, Guards: guards));
+            (Behaviors, Guards: guards));
 }

@@ -65,7 +65,8 @@ public sealed class ReactorTests
     [Fact]
     public void ShouldCreateStableDistinctEffectIdsGivenReactionContextWhenNamingEffects()
     {
-        var reactor = new TestReactor(new RecordingAggregateRepository(), pattern: EventStreamPattern.ForTenant("reactors"));
+        var reactor = new TestReactor(new RecordingAggregateRepository(),
+            pattern: EventStreamPattern.ForTenant("reactors"));
         var ev = Committed(new ValueChanged(42), Uuid.CreateVersion4(), 1);
         var record = new DomainEventRecord(new EventStreamAddress("test", "reactors", "one"), ev, 0,
             new EventCursor("1"));
@@ -83,7 +84,8 @@ public sealed class ReactorTests
     public void ShouldPreservePersistedEffectIdGivenExistingReactionIdentity(
         string? workloadName, string? tenantValue, string expectedId)
     {
-        var reactor = new TestReactor(new RecordingAggregateRepository(), pattern: EventStreamPattern.ForTenant("reactors"));
+        var reactor = new TestReactor(new RecordingAggregateRepository(),
+            pattern: EventStreamPattern.ForTenant("reactors"));
         if (workloadName is not null)
         {
             TenantId? tenant = tenantValue is null ? null : new TenantId(tenantValue);
@@ -109,7 +111,8 @@ public sealed class ReactorTests
     [Fact]
     public void ShouldRejectDifferentIdentityGivenAlreadyBoundReactorWhenBindingAgain()
     {
-        var reactor = new TestReactor(new RecordingAggregateRepository(), pattern: EventStreamPattern.ForTenant("reactors"));
+        var reactor = new TestReactor(new RecordingAggregateRepository(),
+            pattern: EventStreamPattern.ForTenant("reactors"));
         var first = new WorkloadIdentity("test-reactor", new TenantId("one"));
         reactor.BindWorkload(first, null);
         reactor.BindWorkload(first, null);

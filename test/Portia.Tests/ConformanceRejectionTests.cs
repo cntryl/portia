@@ -30,6 +30,19 @@ public sealed class ConformanceRejectionTests
         ForgetsAfterReopen
     }
 
+    /// <summary>How a hand-written projection store coordinates two writers of one checkpoint.</summary>
+    public enum ProjectionStoreShape
+    {
+        /// <summary>Refuses the stale writer but rolls the winner's committed batch back too.</summary>
+        DiscardsWinner,
+
+        /// <summary>Compares the expected checkpoint when a batch opens and never again at commit.</summary>
+        ChecksCheckpointOnlyAtBegin,
+
+        /// <summary>A conformant store that holds an exclusive lock from opening a batch until it ends.</summary>
+        LocksAtBegin
+    }
+
     /// <summary>The single event-store invariant a defective probe breaks.</summary>
     public enum StoreDefect
     {
@@ -408,34 +421,21 @@ public sealed class ConformanceRejectionTests
             throw new InvalidOperationException("The suite must reject the identities before opening a session.");
     }
 
-    /// <summary>How a hand-written projection store coordinates two writers of one checkpoint.</summary>
-    public enum ProjectionStoreShape
-    {
-        /// <summary>Refuses the stale writer but rolls the winner's committed batch back too.</summary>
-        DiscardsWinner,
-
-        /// <summary>Compares the expected checkpoint when a batch opens and never again at commit.</summary>
-        ChecksCheckpointOnlyAtBegin,
-
-        /// <summary>A conformant store that holds an exclusive lock from opening a batch until it ends.</summary>
-        LocksAtBegin
-    }
-
     sealed class ShapedProjectionProbe(ProjectionStoreShape shape) : IProjectionStoreConformanceProbe, IDisposable
     {
         readonly Lock _gate = new();
-        readonly SemaphoreSlim _writer = new(1, 1);
         readonly Dictionary<CheckpointIdentity, (string? Value, ProjectionCheckpoint Checkpoint)> _states = [];
+        readonly SemaphoreSlim _writer = new(1, 1);
+
+        ProjectionStoreShape Shape => shape;
+
+        public void Dispose() => _writer.Dispose();
 
         public CheckpointIdentity LiveIdentity { get; } = new(
             "conformance", EventStreamPattern.ForPattern("testing", "projection"));
 
         public CheckpointIdentity RebuildIdentity { get; } = new(
             "conformance", EventStreamPattern.ForPattern("testing", "projection"), "rebuild-1");
-
-        ProjectionStoreShape Shape => shape;
-
-        public void Dispose() => _writer.Dispose();
 
         public ValueTask ResetAsync(CancellationToken ct = default)
         {

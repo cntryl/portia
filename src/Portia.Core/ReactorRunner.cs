@@ -51,6 +51,7 @@ public sealed class ReactorRunner(
             throw new InvalidOperationException(
                 "An unbound tenant stream template cannot be run manually. Register it as a PerTenant workload.");
         }
+
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
         var actor = PrincipalSnapshot.Copy(_principals.GetPrincipal(reactor));

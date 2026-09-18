@@ -7,8 +7,18 @@ namespace Cntryl.Portia;
 ///     <see cref="FitzKvProjectionStore" />, which commits them atomically with projection data; this type
 ///     is for reactors, whose checkpoint and effects are never part of one transaction.
 /// </summary>
+/// <remarks>
+///     One instance of this store serves every reactor the app registers, because
+///     <see cref="PortiaFitzBuilder.UseKvCheckpoints" /> resolves to a single
+///     <see cref="IProjectionCheckpointStore" /> for the whole app. Fitz KV locks a resource
+///     exclusively for a ReadWrite transaction's whole lifetime rather than the keys it touches, so
+///     transacting against the configured route directly would make any two reactors' saves contend
+///     for that one lock purely because they share this store — not because they touch the same
+///     data. Every transaction here instead targets <see cref="FitzKvCheckpoints.ComponentRoute" />,
+///     so two reactors never share a resource lock.
+/// </remarks>
 /// <param name="client">The Fitz KV client to open transactions against.</param>
-/// <param name="route">The Fitz KV route this component's checkpoints live under.</param>
+/// <param name="route">The Fitz KV base route this store's reactor checkpoints live under.</param>
 public sealed class FitzKvCheckpointStore(IKvClient client, string route) :
     IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
 {
@@ -24,7 +34,8 @@ public sealed class FitzKvCheckpointStore(IKvClient client, string route) :
     public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(identity);
-        return FitzKvCheckpoints.LoadAsync(_client, _route, identity, ct);
+        return FitzKvCheckpoints.LoadAsync(_client, FitzKvCheckpoints.ComponentRoute(_route, identity.ComponentName),
+            identity, ct);
     }
 
     /// <inheritdoc />
@@ -36,8 +47,9 @@ public sealed class FitzKvCheckpointStore(IKvClient client, string route) :
         ProjectionCheckpoint checkpoint, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(identity);
+        var componentRoute = FitzKvCheckpoints.ComponentRoute(_route, identity.ComponentName);
         var tx = await FitzKvCheckpoints
-            .BeginAsync(_client, _route, KvMode.ReadWrite, "Checkpoint", identity, ct).ConfigureAwait(false);
+            .BeginAsync(_client, componentRoute, KvMode.ReadWrite, "Checkpoint", identity, ct).ConfigureAwait(false);
         var failed = false;
         try
         {

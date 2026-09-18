@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia;
@@ -138,7 +139,7 @@ public sealed class RequestGuardTests
         var calls = new List<string>();
         using var provider = Provider(calls,
             [new RequestRegistration<GuardedCommand, CommandHandler>()],
-            authorizers: [new RequestAuthorizerRegistration<GuardedCommand, RecordingAuthorizer>()],
+            [new RequestAuthorizerRegistration<GuardedCommand, RecordingAuthorizer>()],
             guards: [new RequestGuardRegistration<GuardedCommand, RecordingCommandGuard>()]);
         var bus = Bus(provider);
         var request = new GuardedCommand();
@@ -215,10 +216,10 @@ public sealed class RequestGuardTests
     {
         var calls = new List<string>();
         using var provider = Provider(calls,
-            [
-                new RequestRegistration<GuardedCommand, CommandHandler>(),
-                new RequestRegistration<FamilyQuery, FamilyQueryHandler, int>()
-            ], guards: [new RequestGuardRegistration<IGuardedFamily, FirstFamilyGuard>()]);
+        [
+            new RequestRegistration<GuardedCommand, CommandHandler>(),
+            new RequestRegistration<FamilyQuery, FamilyQueryHandler, int>()
+        ], guards: [new RequestGuardRegistration<IGuardedFamily, FirstFamilyGuard>()]);
         var bus = Bus(provider);
 
         var command = await bus.SendAsync(new GuardedCommand(), RequestActor.System);
@@ -392,7 +393,7 @@ public sealed class RequestGuardTests
     internal sealed class StreamHandler(List<string> calls) : IStreamRequestHandler<GuardedStream, int>
     {
         public async IAsyncEnumerable<int> HandleAsync(IRequestContext<GuardedStream> context,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+            [EnumeratorCancellation] CancellationToken ct)
         {
             calls.Add("stream-handler");
             yield return 4;
@@ -467,10 +468,11 @@ public sealed class RequestGuardTests
         }
     }
 
-    internal sealed class RecordingStreamBehavior(List<string> calls) : IStreamRequestPipelineBehavior<GuardedStream, int>
+    internal sealed class RecordingStreamBehavior(List<string> calls)
+        : IStreamRequestPipelineBehavior<GuardedStream, int>
     {
         public async IAsyncEnumerable<int> HandleAsync(IRequestContext<GuardedStream> context,
-            StreamRequestPipelineNext<int> next, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+            StreamRequestPipelineNext<int> next, [EnumeratorCancellation] CancellationToken ct)
         {
             calls.Add("stream-behavior-before");
             await foreach (var item in next(ct).WithCancellation(ct))

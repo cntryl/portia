@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.CodeAnalysis;
 
 namespace Cntryl.Portia.Consumer;
 
@@ -111,7 +112,8 @@ public sealed class JsonMetadataGeneratorTests
                                                              {
                                                                  public static void Configure(IServiceCollection services) => services.AddPortia();
                                                              }
-                                                             """, [contracts], new RegistrationCallInterceptorGenerator());
+                                                             """, [contracts],
+            new RegistrationCallInterceptorGenerator());
 
         Assert.Contains("_Contracts_ContractsJsonContext.Create(options)", generated,
             StringComparison.Ordinal);
@@ -120,7 +122,7 @@ public sealed class JsonMetadataGeneratorTests
     [Fact]
     public void McpToolRequiresRequestAndResultRoots()
     {
-        var mcp = Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(
+        var mcp = MetadataReference.CreateFromFile(
             typeof(PortiaMcpApplicationExtensions).Assembly.Location);
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
@@ -239,7 +241,7 @@ public sealed class JsonMetadataGeneratorTests
                                                            """, new JsonMetadataDiagnosticGenerator());
 
         Assert.DoesNotContain(diagnostics,
-            diagnostic => diagnostic.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
+            diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
     [Fact]
@@ -278,24 +280,24 @@ public sealed class JsonMetadataGeneratorTests
     public void CatchAllAndDefaultRouteTokensAreNotBodyRoots(string route)
     {
         var diagnostics = GeneratorCompilation.Diagnostics($$""""
-                                                            using System;
-                                                            using System.Text.Json.Serialization;
-                                                            using Cntryl.Portia;
-                                                            using Microsoft.AspNetCore.Routing;
-                                                            public readonly record struct FilePath(string Value)
-                                                            {
-                                                                public static bool TryParse(string value, out FilePath result) { result = new(value); return true; }
-                                                            }
-                                                            public sealed record Upload(FilePath Path, string Name) : IRequest, ICallable;
-                                                            public static class Scenario
-                                                            {
-                                                                public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Upload>("{{route}}");
-                                                            }
-                                                            [PortiaJsonContext]
-                                                            [JsonSerializable(typeof(Upload))]
-                                                            [JsonSerializable(typeof(string))]
-                                                            internal sealed partial class AppJsonContext : JsonSerializerContext;
-                                                            """", new JsonMetadataDiagnosticGenerator());
+                                                             using System;
+                                                             using System.Text.Json.Serialization;
+                                                             using Cntryl.Portia;
+                                                             using Microsoft.AspNetCore.Routing;
+                                                             public readonly record struct FilePath(string Value)
+                                                             {
+                                                                 public static bool TryParse(string value, out FilePath result) { result = new(value); return true; }
+                                                             }
+                                                             public sealed record Upload(FilePath Path, string Name) : IRequest, ICallable;
+                                                             public static class Scenario
+                                                             {
+                                                                 public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Upload>("{{route}}");
+                                                             }
+                                                             [PortiaJsonContext]
+                                                             [JsonSerializable(typeof(Upload))]
+                                                             [JsonSerializable(typeof(string))]
+                                                             internal sealed partial class AppJsonContext : JsonSerializerContext;
+                                                             """", new JsonMetadataDiagnosticGenerator());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
@@ -314,7 +316,8 @@ public sealed class JsonMetadataGeneratorTests
                                                            """, new JsonMetadataDiagnosticGenerator());
 
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA025" &&
-                                                   diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains("'Ping'"));
+                                                   diagnostic.GetMessage(CultureInfo.InvariantCulture)
+                                                       .Contains("'Ping'"));
     }
 
     [Fact]

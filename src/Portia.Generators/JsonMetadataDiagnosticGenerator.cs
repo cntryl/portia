@@ -11,11 +11,13 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 {
     static readonly HashSet<string> CandidateMethods = new(StringComparer.Ordinal)
     {
-        "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "AddMcpTool", "SendAsync", "StreamAsync", "DispatchAsync",
+        "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "AddMcpTool", "SendAsync", "StreamAsync",
+        "DispatchAsync",
         "DispatchStreamAsync", "EnqueueAsync", "PublishAsync", "ScheduleAsync", "EnsureAsync", "AddRequestSchedule",
         "MapPortiaGet", "MapPortiaPost", "MapPortiaPut", "MapPortiaPatch", "MapPortiaDelete", "MapPortiaGetStream",
         "MapPortiaGetSse", "Accepts", "Parameter", "Produces"
     };
+
     static readonly DiagnosticDescriptor MissingMetadata = new(
         "PORTIA025", "Missing Portia JSON metadata",
         "Serializer root '{0}' must be explicitly registered with [JsonSerializable(typeof({0}))] on a [PortiaJsonContext]",
@@ -43,7 +45,6 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
             {
                 Add(type, type.Locations.FirstOrDefault());
             }
-
         }
 
         foreach (var tree in compilation.SyntaxTrees)
@@ -88,7 +89,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                 }
 
                 if (name == "AddMcpTool" && IsPortiaMcpRegistration(method)
-                    && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol mcpRequest)
+                                         && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol mcpRequest)
                 {
                     Add(mcpRequest, invocation.GetLocation());
                     var requestContract = mcpRequest.AllInterfaces.FirstOrDefault(iface =>
@@ -121,7 +122,9 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                     var mutating = name is "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch";
                     var operation = model.GetOperation(invocation) as IInvocationOperation;
                     var pattern = operation?.Arguments.FirstOrDefault(argument => argument.Parameter?.Name == "pattern")
-                        ?.Value.ConstantValue is { HasValue: true, Value: string route } ? route : string.Empty;
+                        ?.Value.ConstantValue is { HasValue: true, Value: string route }
+                        ? route
+                        : string.Empty;
                     var constructor = HttpBindingShape.SinglePublicConstructor(request);
                     if (mutating && constructor is not null && SupportsDefaultBinding(constructor, pattern))
                     {

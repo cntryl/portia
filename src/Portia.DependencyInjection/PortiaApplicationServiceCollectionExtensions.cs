@@ -49,7 +49,8 @@ public static class PortiaApplicationServiceCollectionExtensions
         services.TryAddScoped<IRequestBus, RequestBus>();
         services.TryAddSingleton(static provider => new RequestRegistry(
             provider.GetServices<RequestHandlerRegistration>(), provider.GetServices<RequestAuthorizerRegistration>(),
-            provider.GetServices<RequestPipelineBehaviorRegistration>(), provider.GetServices<RequestGuardRegistration>(),
+            provider.GetServices<RequestPipelineBehaviorRegistration>(),
+            provider.GetServices<RequestGuardRegistration>(),
             provider.GetServices<RequestTransportRegistration>(),
             provider.GetRequiredService<PortiaBuilder>().AuthorizationRequirement()));
         services.TryAddSingleton<PortiaStartupValidationRegistry>();

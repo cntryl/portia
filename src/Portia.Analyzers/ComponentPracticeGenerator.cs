@@ -147,7 +147,8 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
                     ? "inject IDomainEventReader to read events"
                     : "move the effect into the request handler";
             if (guard)
-                findings.Add(Finding.Create(Kind.GuardEffect, Location(parameter), symbol.Name, Display(parameter), remedy));
+                findings.Add(Finding.Create(Kind.GuardEffect, Location(parameter), symbol.Name, Display(parameter),
+                    remedy));
             if (authorizer)
                 findings.Add(Finding.Create(Kind.AuthorizerEffect, Location(parameter), symbol.Name, Display(parameter),
                     remedy));

@@ -139,13 +139,14 @@ public sealed class PortiaFitzBuilder
 
     /// <summary>
     ///     Persists reactor progress in Fitz KV instead of requiring a second persistence technology.
-    ///     One route holds every reactor's checkpoint: the stored key is derived from the complete
-    ///     <see cref="CheckpointIdentity" />, so components, tenants, and rebuild generations already
-    ///     separate within it. Projector progress is not registered here — a projector commits its
-    ///     checkpoint inside its own repository's transaction, which is what
-    ///     <see cref="FitzKvProjectionStore" /> exists to share.
+    ///     This route is a base, not the literal resource every reactor transacts against:
+    ///     <see cref="FitzKvCheckpointStore" /> derives one resource per reactor from it, because this
+    ///     one store instance serves every reactor the app registers. Projector progress is not
+    ///     registered here — a projector commits its checkpoint inside its own repository's own
+    ///     dedicated-route transaction, which is what <see cref="FitzKvProjectionStore" /> exists to
+    ///     share, and never needs this per-component split.
     /// </summary>
-    /// <param name="route">The <c>kv://{realm}/{area}/{resource}</c> route checkpoints are written to.</param>
+    /// <param name="route">The <c>kv://{realm}/{area}/{resource}</c> base route checkpoints are written under.</param>
     /// <returns>This builder, for chaining.</returns>
     /// <exception cref="ArgumentException">The route is not an exact three-segment Fitz KV route.</exception>
     /// <exception cref="InvalidOperationException">The application already selected a different route.</exception>

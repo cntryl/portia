@@ -2,12 +2,6 @@ using System.Runtime.CompilerServices;
 
 namespace Cntryl.Portia;
 
-enum RequestEnvelopeFailureKind
-{
-    Permanent,
-    Retryable
-}
-
 static class RequestEnvelopeFailure
 {
     static readonly ConditionalWeakTable<Exception, Classification> Kinds = [];

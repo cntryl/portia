@@ -16,7 +16,8 @@ public sealed class McpStdioOptions
 
     /// <summary>Uses an application-owned actor provider for every stdio invocation.</summary>
     public McpStdioOptions UseActorProvider<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProvider>()
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+    TProvider>()
         where TProvider : class, IMcpActorProvider
     {
         _ = _services.AddScoped<IMcpActorProvider, TProvider>();

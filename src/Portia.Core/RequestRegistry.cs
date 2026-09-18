@@ -43,7 +43,7 @@ public sealed class RequestRegistry
         IEnumerable<RequestAuthorizerRegistration> authorizers,
         IEnumerable<RequestPipelineBehaviorRegistration> behaviors,
         IEnumerable<RequestGuardRegistration> guards, IEnumerable<RequestTransportRegistration> requests)
-        : this(handlers, authorizers, behaviors, guards, requests, authorization: null)
+        : this(handlers, authorizers, behaviors, guards, requests, null)
     {
     }
 
@@ -136,6 +136,7 @@ public sealed class RequestRegistry
             throw new InvalidOperationException(
                 $"'{dualRole}' is registered as both a request authorizer and a request guard. Authorization and preflight run at different lifecycle phases; split it into two types.");
         }
+
         PermissionRequestTypes = _handlers.Values
             .Where(registration => registration.Permission is not null)
             .Select(registration => registration.RequestType)

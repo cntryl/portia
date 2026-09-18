@@ -1,8 +1,8 @@
+using System.Net;
 using System.Security.Claims;
 using Cntryl.Portia.Testing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Tests;
 
@@ -58,7 +58,7 @@ public sealed class McpScenarioTests
         }
 
         using var response = await http.GetAsync("/not-found");
-        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }
 

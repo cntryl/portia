@@ -259,7 +259,11 @@ public sealed class FitzScheduledRequestConsumer(
 
     readonly record struct ValidationAttempt(ClaimsPrincipal? Actor, bool Retry);
 
-    sealed record ScheduledFiring(string Route, string Subject, string Issuer, IRequest Request,
+    sealed record ScheduledFiring(
+        string Route,
+        string Subject,
+        string Issuer,
+        IRequest Request,
         DeserializedRequest Envelope)
     {
         public RequestNotification Deliver(ClaimsPrincipal actor) =>

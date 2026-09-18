@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Cntryl.Portia;
 
 sealed class HttpUpdateWidgetHandler : IRequestHandler<HttpUpdateWidget, string>
@@ -6,6 +8,6 @@ sealed class HttpUpdateWidgetHandler : IRequestHandler<HttpUpdateWidget, string>
     {
         var request = context.Request;
         return ValueTask.FromResult(Result<string>.Success(
-            $"{request.WidgetId} {request.Name} {request.Quantity} {request.Active} {request.Priority?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "none"}{(request.DryRun ? " dry-run" : string.Empty)}"));
+            $"{request.WidgetId} {request.Name} {request.Quantity} {request.Active} {request.Priority?.ToString(CultureInfo.InvariantCulture) ?? "none"}{(request.DryRun ? " dry-run" : string.Empty)}"));
     }
 }

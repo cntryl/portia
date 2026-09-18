@@ -129,6 +129,44 @@ public sealed class FitzKvCheckpointStoreTests
     }
 
     /// <summary>
+    ///     Verifies that two components never contend for the same Fitz KV resource lock even though
+    ///     the app configured one shared base route: each component's checkpoint transactions resolve
+    ///     to a distinct derived route, so a broker that locks a resource per BEGIN never sees one
+    ///     reactor's save block or conflict with another reactor's or projector's.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRouteDifferentComponentsToDifferentFitzKvResources()
+    {
+        var client = new FakeKvClient();
+        var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
+        var pattern = EventStreamPattern.ForPattern("tenant", "orders");
+
+        await store.SaveAsync(new CheckpointIdentity("reactor-a", pattern),
+            new ProjectionCheckpoint(new EventCursor("1")));
+        await store.SaveAsync(new CheckpointIdentity("reactor-b", pattern),
+            new ProjectionCheckpoint(new EventCursor("1")));
+
+        var routes = client.Transactions.Select(tx => tx.Route).Distinct().ToArray();
+        Assert.Equal(2, routes.Length);
+        Assert.All(routes,
+            route => Assert.StartsWith("kv://portia/state/checkpoints-", route, StringComparison.Ordinal));
+    }
+
+    /// <summary>Verifies that the same component always resolves back to the same derived route.</summary>
+    [Fact]
+    public async Task ShouldRouteTheSameComponentToTheSameFitzKvResourceAcrossCalls()
+    {
+        var client = new FakeKvClient();
+        var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
+
+        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1")));
+        _ = await store.LoadAsync(Identity);
+
+        Assert.Equal(2, client.Transactions.Count);
+        Assert.Equal(client.Transactions[0].Route, client.Transactions[1].Route);
+    }
+
+    /// <summary>
     ///     Verifies that a Fitz KV isolation conflict becomes <see cref="ProjectionConcurrencyException" />
     ///     so one catch covers every checkpoint store, with the broker's own exception kept as the inner
     ///     cause and the losing write rolled back rather than left staged.

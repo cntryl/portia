@@ -1,6 +1,11 @@
+using System.Runtime.CompilerServices;
+
 namespace Cntryl.Portia.Testing;
 
-/// <summary>Lifecycle expectations for a request with a result. Each <c>Expect…</c> returns new expectations; awaiting runs the request once.</summary>
+/// <summary>
+///     Lifecycle expectations for a request with a result. Each <c>Expect…</c> returns new expectations; awaiting
+///     runs the request once.
+/// </summary>
 /// <typeparam name="TOut">The type of the value on success.</typeparam>
 public sealed class RequestExpectations<TOut>
 {
@@ -19,7 +24,8 @@ public sealed class RequestExpectations<TOut>
 
     /// <summary>Expects authorization to have run and allowed the request.</summary>
     /// <returns>New expectations that include this one.</returns>
-    public RequestExpectations<TOut> ExpectAuthorized() => With((observation, _) => ScenarioExpectations.Authorized(observation));
+    public RequestExpectations<TOut> ExpectAuthorized() =>
+        With((observation, _) => ScenarioExpectations.Authorized(observation));
 
     /// <summary>Expects authorization to have denied the request before any behavior, guard, or handler ran.</summary>
     /// <param name="kind">The expected error kind, or <see langword="null" /> for any denial.</param>
@@ -42,15 +48,18 @@ public sealed class RequestExpectations<TOut>
 
     /// <summary>Expects the request's handler to have run.</summary>
     /// <returns>New expectations that include this one.</returns>
-    public RequestExpectations<TOut> ExpectHandled() => With((observation, _) => ScenarioExpectations.Handled(observation));
+    public RequestExpectations<TOut> ExpectHandled() =>
+        With((observation, _) => ScenarioExpectations.Handled(observation));
 
     /// <summary>Expects the request's handler not to have run.</summary>
     /// <returns>New expectations that include this one.</returns>
-    public RequestExpectations<TOut> ExpectNotHandled() => With((observation, _) => ScenarioExpectations.NotHandled(observation));
+    public RequestExpectations<TOut> ExpectNotHandled() =>
+        With((observation, _) => ScenarioExpectations.NotHandled(observation));
 
     /// <summary>Expects the request to have succeeded.</summary>
     /// <returns>New expectations that include this one.</returns>
-    public RequestExpectations<TOut> ExpectSuccess() => With((observation, _) => ScenarioExpectations.Success(observation));
+    public RequestExpectations<TOut> ExpectSuccess() =>
+        With((observation, _) => ScenarioExpectations.Success(observation));
 
     /// <summary>Expects the request to have failed.</summary>
     /// <param name="kind">The expected error kind, or <see langword="null" /> for any failure.</param>
@@ -73,7 +82,7 @@ public sealed class RequestExpectations<TOut>
 
     /// <summary>Runs the request once and asserts every expectation when awaited.</summary>
     /// <returns>An awaiter for <see cref="AsTask" />.</returns>
-    public System.Runtime.CompilerServices.TaskAwaiter<Result<TOut>> GetAwaiter() => AsTask().GetAwaiter();
+    public TaskAwaiter<Result<TOut>> GetAwaiter() => AsTask().GetAwaiter();
 
     RequestExpectations<TOut> With(Func<ScenarioObservation, Result<TOut>, string?> expectation) =>
         new(_definition, [.. _expectations, expectation]);

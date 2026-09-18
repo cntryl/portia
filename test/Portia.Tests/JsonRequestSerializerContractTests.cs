@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Cntryl.Portia;
@@ -36,7 +37,7 @@ public sealed class JsonRequestSerializerContractTests
     {
         var serializer = TestJson.Serializer(typeof(UniversalAction));
 
-        var error = Assert.ThrowsAny<System.Text.Json.JsonException>(() =>
+        var error = Assert.ThrowsAny<JsonException>(() =>
             serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes("{")));
 
         Assert.Equal(RequestEnvelopeFailureKind.Permanent, RequestEnvelopeFailure.GetKind(error));
@@ -207,7 +208,7 @@ public sealed class JsonRequestSerializerContractTests
         var error = Record.Exception(() => serializer.DeserializeEnvelope(input));
 
         Assert.NotNull(error);
-        Assert.True(error is System.Text.Json.JsonException || RequestEnvelopeFailure.GetKind(error) is not null,
+        Assert.True(error is JsonException || RequestEnvelopeFailure.GetKind(error) is not null,
             $"{cellId} produced unclassified {error.GetType().FullName}: {error.Message}");
     }
 

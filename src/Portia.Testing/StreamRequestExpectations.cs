@@ -1,6 +1,11 @@
+using System.Runtime.CompilerServices;
+
 namespace Cntryl.Portia.Testing;
 
-/// <summary>Lifecycle expectations for a streamed request. Each <c>Expect…</c> returns new expectations; awaiting runs the request once and collects every item.</summary>
+/// <summary>
+///     Lifecycle expectations for a streamed request. Each <c>Expect…</c> returns new expectations; awaiting runs the
+///     request once and collects every item.
+/// </summary>
 /// <typeparam name="TOut">The type of each item.</typeparam>
 public sealed class StreamRequestExpectations<TOut>
 {
@@ -19,7 +24,8 @@ public sealed class StreamRequestExpectations<TOut>
 
     /// <summary>Expects authorization to have run and allowed the request.</summary>
     /// <returns>New expectations that include this one.</returns>
-    public StreamRequestExpectations<TOut> ExpectAuthorized() => With((observation, _) => ScenarioExpectations.Authorized(observation));
+    public StreamRequestExpectations<TOut> ExpectAuthorized() =>
+        With((observation, _) => ScenarioExpectations.Authorized(observation));
 
     /// <summary>Expects authorization to have denied the request before any behavior, guard, or handler ran.</summary>
     /// <param name="kind">The expected error kind, or <see langword="null" /> for any denial.</param>
@@ -37,20 +43,24 @@ public sealed class StreamRequestExpectations<TOut>
     /// <typeparam name="TGuard">A guard registered for the request.</typeparam>
     /// <param name="kind">The expected error kind, or <see langword="null" /> for any failure.</param>
     /// <returns>New expectations that include this one.</returns>
-    public StreamRequestExpectations<TOut> ExpectGuardFailed<TGuard>(RequestErrorKind? kind = null) where TGuard : class =>
+    public StreamRequestExpectations<TOut> ExpectGuardFailed<TGuard>(RequestErrorKind? kind = null)
+        where TGuard : class =>
         With((observation, _) => ScenarioExpectations.GuardFailed(observation, typeof(TGuard), kind));
 
     /// <summary>Expects the request's handler to have run.</summary>
     /// <returns>New expectations that include this one.</returns>
-    public StreamRequestExpectations<TOut> ExpectHandled() => With((observation, _) => ScenarioExpectations.Handled(observation));
+    public StreamRequestExpectations<TOut> ExpectHandled() =>
+        With((observation, _) => ScenarioExpectations.Handled(observation));
 
     /// <summary>Expects the request's handler not to have run.</summary>
     /// <returns>New expectations that include this one.</returns>
-    public StreamRequestExpectations<TOut> ExpectNotHandled() => With((observation, _) => ScenarioExpectations.NotHandled(observation));
+    public StreamRequestExpectations<TOut> ExpectNotHandled() =>
+        With((observation, _) => ScenarioExpectations.NotHandled(observation));
 
     /// <summary>Expects the request to have succeeded.</summary>
     /// <returns>New expectations that include this one.</returns>
-    public StreamRequestExpectations<TOut> ExpectSuccess() => With((observation, _) => ScenarioExpectations.Success(observation));
+    public StreamRequestExpectations<TOut> ExpectSuccess() =>
+        With((observation, _) => ScenarioExpectations.Success(observation));
 
     /// <summary>Expects the request to have failed.</summary>
     /// <param name="kind">The expected error kind, or <see langword="null" /> for any failure.</param>
@@ -73,7 +83,7 @@ public sealed class StreamRequestExpectations<TOut>
 
     /// <summary>Runs the request once and asserts every expectation when awaited.</summary>
     /// <returns>An awaiter for <see cref="AsTask" />.</returns>
-    public System.Runtime.CompilerServices.TaskAwaiter<IReadOnlyList<TOut>> GetAwaiter() => AsTask().GetAwaiter();
+    public TaskAwaiter<IReadOnlyList<TOut>> GetAwaiter() => AsTask().GetAwaiter();
 
     StreamRequestExpectations<TOut> With(Func<ScenarioObservation, IReadOnlyList<TOut>, string?> expectation) =>
         new(_definition, [.. _expectations, expectation]);

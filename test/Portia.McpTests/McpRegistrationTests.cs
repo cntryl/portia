@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
-using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -227,8 +227,8 @@ public sealed class McpRegistrationTests
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
         {
-            Content = new StringContent(/*lang=json,strict*/ """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""",
-                System.Text.Encoding.UTF8, "application/json")
+            Content = new StringContent( /*lang=json,strict*/ """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""",
+                Encoding.UTF8, "application/json")
         };
         request.Headers.Accept.ParseAdd("application/json");
         request.Headers.Accept.ParseAdd("text/event-stream");

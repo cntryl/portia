@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -32,7 +33,7 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldPassWhenGuardFailsWithExpectedKindAndRequestIsNotHandled()
     {
-        await using var provider = Provider(guardFailure: RequestErrorKind.Conflict);
+        await using var provider = Provider(RequestErrorKind.Conflict);
 
         await RequestScenario.For(provider)
             .GivenActor(Member)
@@ -47,7 +48,7 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldReportLifecycleTraceWhenExpectHandledButGuardFails()
     {
-        await using var provider = Provider(guardFailure: RequestErrorKind.Conflict);
+        await using var provider = Provider(RequestErrorKind.Conflict);
 
         var error = await Assert.ThrowsAsync<ScenarioExpectationException>(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand()).ExpectHandled());
@@ -89,7 +90,7 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldNotTreatForbiddenGuardFailureAsDenied()
     {
-        await using var provider = Provider(guardFailure: RequestErrorKind.Forbidden);
+        await using var provider = Provider(RequestErrorKind.Forbidden);
 
         var error = await Assert.ThrowsAsync<ScenarioExpectationException>(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand()).ExpectDenied());
@@ -144,7 +145,7 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldLeaveEarlierExpectationsUnchangedWhenExtended()
     {
-        await using var provider = Provider(guardFailure: RequestErrorKind.Conflict);
+        await using var provider = Provider(RequestErrorKind.Conflict);
         var failing = RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand());
 
         _ = failing.ExpectHandled();
@@ -196,7 +197,7 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldReportAllUnmetExpectationsTogether()
     {
-        await using var provider = Provider(guardFailure: RequestErrorKind.Conflict);
+        await using var provider = Provider(RequestErrorKind.Conflict);
 
         var error = await Assert.ThrowsAsync<ScenarioExpectationException>(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand())
@@ -213,14 +214,15 @@ public sealed class RequestScenarioTests
         await using var provider = Provider();
 
         _ = await Assert.ThrowsAsync<DivideByZeroException>(async () =>
-            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioExplodingCommand()).ExpectHandled());
+            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioExplodingCommand())
+                .ExpectHandled());
     }
 
     /// <summary>Pipeline behaviors run between authorization and guards, and count as proceeding past authorization.</summary>
     [Fact]
     public async Task ShouldTreatBehaviorsAsProceedingPastAuthorization()
     {
-        await using var provider = Provider(guardFailure: RequestErrorKind.Conflict);
+        await using var provider = Provider(RequestErrorKind.Conflict);
 
         await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand())
             .ExpectAuthorized()
@@ -259,7 +261,7 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldReportStreamGuardFailure()
     {
-        await using var provider = Provider(guardFailure: RequestErrorKind.Conflict);
+        await using var provider = Provider(RequestErrorKind.Conflict);
 
         var items = await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioStream())
             .ExpectGuardFailed<SlugGuard>(RequestErrorKind.Conflict)
@@ -286,20 +288,28 @@ public sealed class RequestScenarioTests
         _ = services.AddScoped<SlugGuard>();
         _ = services.AddScoped<OpenCommandGuard>();
         _ = services.AddScoped<ScenarioBehavior>();
-        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<ScenarioCommand, ScenarioCommandHandler>());
-        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<ScenarioOpenCommand, ScenarioOpenCommandHandler>());
         _ = services.AddSingleton<RequestHandlerRegistration>(
-            new RequestRegistration<ScenarioPermissionCommand, ScenarioPermissionCommandHandler>(_ => "scenario:permission"));
-        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<ScenarioQuery, ScenarioQueryHandler, int>());
-        _ = services.AddSingleton<RequestHandlerRegistration>(new StreamRequestRegistration<ScenarioStream, ScenarioStreamHandler, int>());
+            new RequestRegistration<ScenarioCommand, ScenarioCommandHandler>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<ScenarioOpenCommand, ScenarioOpenCommandHandler>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<ScenarioPermissionCommand, ScenarioPermissionCommandHandler>(_ =>
+                "scenario:permission"));
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<ScenarioQuery, ScenarioQueryHandler, int>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new StreamRequestRegistration<ScenarioStream, ScenarioStreamHandler, int>());
         _ = services.AddSingleton<RequestHandlerRegistration>(
             new RequestRegistration<ScenarioExplodingCommand, ScenarioExplodingCommandHandler>());
-        _ = services.AddSingleton<RequestAuthorizerRegistration>(new RequestAuthorizerRegistration<IScenarioFamily, ScenarioAuthorizer>());
+        _ = services.AddSingleton<RequestAuthorizerRegistration>(
+            new RequestAuthorizerRegistration<IScenarioFamily, ScenarioAuthorizer>());
         _ = services.AddSingleton<RequestGuardRegistration>(new RequestGuardRegistration<IScenarioFamily, SlugGuard>());
-        _ = services.AddSingleton<RequestGuardRegistration>(new RequestGuardRegistration<ScenarioOpenCommand, OpenCommandGuard>());
+        _ = services.AddSingleton<RequestGuardRegistration>(
+            new RequestGuardRegistration<ScenarioOpenCommand, OpenCommandGuard>());
         _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
             new RequestPipelineBehaviorRegistration<ScenarioCommand, ScenarioBehavior>(0));
-        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        return services.BuildServiceProvider(new ServiceProviderOptions
+        { ValidateScopes = true, ValidateOnBuild = true });
     }
 
     internal sealed class ScenarioLog
@@ -345,7 +355,8 @@ public sealed class RequestScenarioTests
 
     internal sealed class ScenarioPermissionCommandHandler : IRequestHandler<ScenarioPermissionCommand>
     {
-        public ValueTask<Result> HandleAsync(IRequestContext<ScenarioPermissionCommand> context, CancellationToken ct) =>
+        public ValueTask<Result> HandleAsync(IRequestContext<ScenarioPermissionCommand> context,
+            CancellationToken ct) =>
             ValueTask.FromResult(Result.Success);
     }
 
@@ -358,7 +369,7 @@ public sealed class RequestScenarioTests
     internal sealed class ScenarioStreamHandler : IStreamRequestHandler<ScenarioStream, int>
     {
         public async IAsyncEnumerable<int> HandleAsync(IRequestContext<ScenarioStream> context,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+            [EnumeratorCancellation] CancellationToken ct)
         {
             yield return 1;
             await Task.Yield();

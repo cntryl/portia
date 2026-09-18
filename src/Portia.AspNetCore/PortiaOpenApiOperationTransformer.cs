@@ -34,7 +34,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         var customStatuses = customResult?.DeclaredStatusCodes
             .Select(status => status.ToString(CultureInfo.InvariantCulture))
             .ToHashSet(StringComparer.Ordinal) ?? [];
-        var replacesDefaultSuccess = customResult?.DeclaredStatusCodes.Any(status => status is >= 200 and < 400) == true;
+        var replacesDefaultSuccess =
+            customResult?.DeclaredStatusCodes.Any(status => status is >= 200 and < 400) == true;
         foreach (var status in operation.Responses.Keys.Where(status => !explicitStatuses.Contains(status)).ToArray())
             _ = operation.Responses.Remove(status);
         if (replacesDefaultSuccess)
@@ -73,8 +74,10 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                                 context.Document!)
                         }, StringComparer.Ordinal);
             }
+
             operation.Responses[status] = response;
         }
+
         var custom = endpointMetadata.OfType<PortiaCustomHttpContract>()
             .SingleOrDefault();
         foreach (var parameter in custom?.Parameters ?? [])
@@ -94,10 +97,16 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 Schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!)
             });
         }
+
         var queryMembers = endpointMetadata.OfType<PortiaQueryMembers>()
             .SingleOrDefault()?.Names ?? [];
-        bool IsBody(PortiaOpenApiParameter parameter) => parameter.Source == "body" &&
-            !queryMembers.Contains(parameter.ClrName, StringComparer.OrdinalIgnoreCase);
+
+        bool IsBody(PortiaOpenApiParameter parameter)
+        {
+            return parameter.Source == "body" &&
+                   !queryMembers.Contains(parameter.ClrName, StringComparer.OrdinalIgnoreCase);
+        }
+
         foreach (var parameter in custom is null ? metadata.Parameters.Where(parameter => !IsBody(parameter)) : [])
         {
             var schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!);
@@ -128,13 +137,16 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             operation.RequestBody = new OpenApiRequestBody
             {
                 Required = !accepts.IsOptional,
-                Content = accepts.ContentTypes.Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(contentType => contentType,
+                Content = accepts.ContentTypes.Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(
+                    contentType => contentType,
                     _ => new OpenApiMediaType
                     {
-                        Schema = PortiaOpenApiSchemaGenerator.Create(accepts.RequestType, jsonOptions, context.Document!)
+                        Schema = PortiaOpenApiSchemaGenerator.Create(accepts.RequestType, jsonOptions,
+                            context.Document!)
                     }, StringComparer.Ordinal)
             };
         }
+
         if (body.Length > 0)
         {
             var properties = new Dictionary<string, IOpenApiSchema>();
@@ -169,8 +181,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     Properties = properties,
                     Required = formRequired.Count == 0 ? null : formRequired
                 };
-                content["application/x-www-form-urlencoded"] = new() { Schema = formSchema };
-                content["multipart/form-data"] = new() { Schema = formSchema };
+                content["application/x-www-form-urlencoded"] = new OpenApiMediaType { Schema = formSchema };
+                content["multipart/form-data"] = new OpenApiMediaType { Schema = formSchema };
             }
 
             operation.RequestBody = new OpenApiRequestBody
@@ -279,6 +291,10 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
     };
 
     sealed record DeclaredAccepts(Type? RequestType, bool IsOptional, IReadOnlyList<string> ContentTypes);
-    sealed record DeclaredResponse(int StatusCode, Type? Type, IReadOnlyList<string> ContentTypes,
+
+    sealed record DeclaredResponse(
+        int StatusCode,
+        Type? Type,
+        IReadOnlyList<string> ContentTypes,
         bool ReplaceExisting);
 }

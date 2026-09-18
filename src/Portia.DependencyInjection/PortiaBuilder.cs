@@ -23,6 +23,8 @@ public sealed class PortiaBuilder
     /// <summary>Gets the application's service collection.</summary>
     public IServiceCollection Services { get; }
 
+    internal bool AuthorizationRequired => _catalog.AuthorizationRequired;
+
     /// <summary>Configures Portia-owned JSON options before generated contexts are created.</summary>
     /// <param name="configure">Applied to the options before any generated context is created.</param>
     /// <returns>This builder, for chaining.</returns>
@@ -59,8 +61,6 @@ public sealed class PortiaBuilder
         configure?.Invoke(new PortiaAuthorizationOptions(_catalog.AnonymousRequests));
         return this;
     }
-
-    internal bool AuthorizationRequired => _catalog.AuthorizationRequired;
 
     internal RequestAuthorizationRequirement? AuthorizationRequirement() =>
         _catalog.AuthorizationRequired ? new RequestAuthorizationRequirement(_catalog.AnonymousRequests) : null;

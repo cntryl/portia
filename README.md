@@ -80,8 +80,8 @@ services.AddPortia()
 ```
 
 Per-tenant projectors and reactors declare their source with
-`EventStreamPattern.ForTenant(area, resource)`; Portia binds the actual tenant realm before reading.
-Global workloads use an exact `EventStreamPattern.ForPattern(realm, area, resource)`.
+`EventStreamPattern.ForTenant(area, resource)`; Portia binds the actual tenant realm before reading. Global workloads
+use an exact `EventStreamPattern.ForPattern(realm, area, resource)`.
 
 An API host explicitly maps HTTP endpoints. A worker host calls the same application setup and adds `.AddWorkers()`. The
 handler and domain model do not change when the operation is sent over RPC, placed on a queue, or invoked in-process.

@@ -5,7 +5,10 @@ public sealed class PortiaAuthorizationOptions
 {
     readonly HashSet<Type> _anonymous;
 
-    internal PortiaAuthorizationOptions(HashSet<Type> anonymous) => _anonymous = anonymous;
+    internal PortiaAuthorizationOptions(HashSet<Type> anonymous)
+    {
+        _anonymous = anonymous;
+    }
 
     /// <summary>
     ///     Allows a request, or every request in a request family, to dispatch without an applicable

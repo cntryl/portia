@@ -1,33 +1,6 @@
-using System.Security.Claims;
 using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia;
-
-interface IRequestScheduleDeclaration
-{
-    void Validate();
-    ValueTask<string> EnsureAsync(IRequestScheduler scheduler, CancellationToken ct);
-}
-
-sealed class RequestScheduleDeclaration<TRequest>(
-    TRequest request,
-    RequestScheduleSpec spec,
-    RequestRouteValues routeValues,
-    ClaimsPrincipal actor) : IRequestScheduleDeclaration
-    where TRequest : IRequest, ISchedulable
-{
-    public void Validate()
-    {
-        if (!RequestActor.IsSystem(actor) || actor.FindFirst(ClaimTypes.NameIdentifier) is null)
-        {
-            throw new InvalidOperationException(
-                $"Startup schedule for '{typeof(TRequest)}' requires an explicit Portia system actor with a subject.");
-        }
-    }
-
-    public ValueTask<string> EnsureAsync(IRequestScheduler scheduler, CancellationToken ct) =>
-        scheduler.EnsureAsync(request, spec, routeValues, actor, ct);
-}
 
 sealed class RequestScheduleStartupService(
     IEnumerable<IRequestScheduleDeclaration> declarations,
@@ -61,13 +34,13 @@ sealed class RequestScheduleStartupService(
         await EnsureAsync(_scheduler!, cancellationToken).ConfigureAwait(false);
     }
 
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
     async Task EnsureAsync(IRequestScheduler scheduler, CancellationToken cancellationToken)
     {
         foreach (var declaration in declarations)
             _ = await declaration.EnsureAsync(scheduler, cancellationToken).ConfigureAwait(false);
     }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

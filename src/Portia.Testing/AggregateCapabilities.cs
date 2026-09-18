@@ -1,5 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-
 namespace Cntryl.Portia.Testing;
 
 /// <summary>The scope's aggregate read, write, and execute capabilities, for tests that exercise persistence directly.</summary>
@@ -20,7 +18,8 @@ public sealed class AggregateCapabilities(IAggregateReader reader, IAggregateWri
     // analyzer just doesn't re-check API that shipped before this rule applied to it.
 #pragma warning disable RS0026
     /// <inheritdoc />
-    public ValueTask<Result> ExecuteAsync<TAggregate>(TAggregate aggregate, Func<TAggregate, AggregateOutcome> operation,
+    public ValueTask<Result> ExecuteAsync<TAggregate>(TAggregate aggregate,
+        Func<TAggregate, AggregateOutcome> operation,
         IExecutionContext context, CancellationToken ct = default)
         where TAggregate : Aggregate => executor.ExecuteAsync(aggregate, operation, context, ct);
 
@@ -29,15 +28,4 @@ public sealed class AggregateCapabilities(IAggregateReader reader, IAggregateWri
         Func<TAggregate, AggregateOutcome<TOut>> operation, IExecutionContext context, CancellationToken ct = default)
         where TAggregate : Aggregate => executor.ExecuteAsync(aggregate, operation, context, ct);
 #pragma warning restore RS0026
-}
-
-/// <summary>Extensions for resolving <see cref="AggregateCapabilities" /> from a service provider.</summary>
-public static class AggregateCapabilityExtensions
-{
-    /// <summary>Combines the scope's <see cref="IAggregateReader" />, <see cref="IAggregateWriter" />, and <see cref="IAggregateExecutor" />.</summary>
-    /// <param name="services">The service provider or scope to resolve from.</param>
-    /// <returns>The combined double.</returns>
-    public static AggregateCapabilities Aggregates(this IServiceProvider services) =>
-        new(services.GetRequiredService<IAggregateReader>(), services.GetRequiredService<IAggregateWriter>(),
-            services.GetRequiredService<IAggregateExecutor>());
 }

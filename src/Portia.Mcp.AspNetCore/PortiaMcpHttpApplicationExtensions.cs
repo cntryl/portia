@@ -29,5 +29,3 @@ public static class PortiaMcpHttpApplicationExtensions
         return application;
     }
 }
-
-sealed class PortiaMcpHttpMarker;

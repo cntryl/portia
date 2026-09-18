@@ -236,13 +236,6 @@ public abstract class McpToolRegistration
     }
 }
 
-readonly record struct McpToolInvocationResult(CallToolResult Result, RequestError? Error);
-
-sealed class McpBindingException(Exception innerException)
-    : Exception("The MCP tool input is invalid.", innerException);
-
-sealed class McpActorRequiredException(string message) : Exception(message);
-
 /// <summary>Generated descriptor for a no-result MCP request.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class McpToolRegistration<TRequest>(string name, string description, McpToolOptions options)

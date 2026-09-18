@@ -646,7 +646,7 @@ public sealed class QueueRunnerTests
     {
         using var busHost = TestRequestBus.Create();
         var scopes = new RecordingQueueScopeFactory(busHost.Bus, new TestRequestActorValidator(),
-            includeHandler: _ => true);
+            _ => true);
         var queued = new FakeQueuedRequest(new ChangeValue(1));
 
         await new QueueRunner(new FakeQueueConsumer([queued]), scopes).RunAsync();
@@ -663,7 +663,7 @@ public sealed class QueueRunnerTests
     {
         using var busHost = TestRequestBus.Create();
         var scopes = new RecordingQueueScopeFactory(busHost.Bus, new TestRequestActorValidator(),
-            includeHandler: index => index == 0);
+            index => index == 0);
         var queued = new FakeQueuedRequest(new ChangeValue(1));
 
         _ = await Assert.ThrowsAsync<QueueConfigurationException>(() =>
@@ -736,7 +736,7 @@ public sealed class QueueRunnerTests
             _ => new FakeQueuedRequest(new ChangeValue(1), transportMismatch: true)
         };
         var next = new FakeQueuedRequest(new ChangeValue(9));
-        var terminal = new RecordingTerminalHandler(throws: true);
+        var terminal = new RecordingTerminalHandler(true);
         using var deliveries = ListenToDeliveries(out var outcomes);
         using var faults = ListenToRunnerFaults(out var recordedFaults);
         var runner = new QueueRunner(new FakeQueueConsumer([failed, next]), RequestDeliveryScopes.FixedQueue(
@@ -857,12 +857,12 @@ public sealed class QueueRunnerTests
         IRequestActorValidator validator,
         IQueuedRequestTerminalHandler? terminalHandler) : IQueueDeliveryScope
     {
+        public bool Disposed { get; private set; }
         public IRequestBus Bus { get; } = bus;
         public IRequestActorValidator ActorValidator { get; } = validator;
         public TimeProvider? TimeProvider => null;
         public QueueRunnerOptions Options { get; } = new();
         public IQueuedRequestTerminalHandler? TerminalHandler { get; } = terminalHandler;
-        public bool Disposed { get; private set; }
 
         public ValueTask DisposeAsync()
         {

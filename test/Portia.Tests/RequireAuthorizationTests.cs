@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -136,7 +137,7 @@ public sealed class RequireAuthorizationTests
     [Fact]
     public async Task ShouldDispatchUnprotectedRequestWhenAuthorizationIsNotRequired()
     {
-        var (bus, calls) = Bus(requirement: null);
+        var (bus, calls) = Bus(null);
 
         var result = await bus.DispatchAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System));
 
@@ -149,11 +150,14 @@ public sealed class RequireAuthorizationTests
     public void ShouldExposeUnprotectedRequestTypesOnlyWhenAuthorizationIsRequired()
     {
         var required = Registry(Required);
-        var optional = Registry(requirement: null);
+        var optional = Registry(null);
 
         Assert.True(required.RequiresAuthorization);
         Assert.Equal(
-            [typeof(UnprotectedCommand).FullName!, typeof(UnprotectedQuery).FullName!, typeof(UnprotectedStream).FullName!],
+            [
+                typeof(UnprotectedCommand).FullName!, typeof(UnprotectedQuery).FullName!,
+                typeof(UnprotectedStream).FullName!
+            ],
             required.UnprotectedRequestTypes.Select(type => type.FullName!).Order(StringComparer.Ordinal));
         Assert.False(optional.RequiresAuthorization);
         Assert.Empty(optional.UnprotectedRequestTypes);
@@ -267,8 +271,10 @@ public sealed class RequireAuthorizationTests
         configure(services.AddPortia());
         _ = services
             .AddSingleton(new List<string>())
-            .AddSingleton<RequestHandlerRegistration>(new RequestRegistration<UnprotectedCommand, UnprotectedCommandHandler>())
-            .AddSingleton<RequestHandlerRegistration>(new RequestRegistration<AnonymousQuery, AnonymousQueryHandler, string>())
+            .AddSingleton<RequestHandlerRegistration>(
+                new RequestRegistration<UnprotectedCommand, UnprotectedCommandHandler>())
+            .AddSingleton<RequestHandlerRegistration>(
+                new RequestRegistration<AnonymousQuery, AnonymousQueryHandler, string>())
             .AddSingleton<UnprotectedCommandHandler>()
             .AddSingleton<AnonymousQueryHandler>();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
@@ -278,7 +284,8 @@ public sealed class RequireAuthorizationTests
     [Fact]
     public async Task ShouldFailHostedStartupListingUnprotectedRequestTypesInOrdinalOrder()
     {
-        using var host = Hosted(portia => portia.RequireAuthorization(options => options.AllowAnonymous<AnonymousQuery>()));
+        using var host = Hosted(portia =>
+            portia.RequireAuthorization(options => options.AllowAnonymous<AnonymousQuery>()));
 
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
@@ -337,13 +344,18 @@ public sealed class RequireAuthorizationTests
         _ = builder.Services
             .AddSingleton(new List<string>())
             .AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll())
-            .AddSingleton<RequestHandlerRegistration>(new RequestRegistration<UnprotectedCommand, UnprotectedCommandHandler>())
-            .AddSingleton<RequestHandlerRegistration>(new StreamRequestRegistration<UnprotectedStream, UnprotectedStreamHandler, int>())
-            .AddSingleton<RequestHandlerRegistration>(new RequestRegistration<AnonymousQuery, AnonymousQueryHandler, string>())
-            .AddSingleton<RequestHandlerRegistration>(new RequestRegistration<AuthorizedCommand, AuthorizedCommandHandler>())
+            .AddSingleton<RequestHandlerRegistration>(
+                new RequestRegistration<UnprotectedCommand, UnprotectedCommandHandler>())
+            .AddSingleton<RequestHandlerRegistration>(
+                new StreamRequestRegistration<UnprotectedStream, UnprotectedStreamHandler, int>())
+            .AddSingleton<RequestHandlerRegistration>(
+                new RequestRegistration<AnonymousQuery, AnonymousQueryHandler, string>())
+            .AddSingleton<RequestHandlerRegistration>(
+                new RequestRegistration<AuthorizedCommand, AuthorizedCommandHandler>())
             .AddSingleton<RequestHandlerRegistration>(
                 new RequestRegistration<PermissionCommand, PermissionCommandHandler>(_ => "commands:permission"))
-            .AddSingleton<RequestAuthorizerRegistration>(new RequestAuthorizerRegistration<AuthorizedCommand, ConcreteAuthorizer>());
+            .AddSingleton<RequestAuthorizerRegistration>(
+                new RequestAuthorizerRegistration<AuthorizedCommand, ConcreteAuthorizer>());
         return builder.Build();
     }
 
@@ -432,7 +444,7 @@ public sealed class RequireAuthorizationTests
     internal sealed class UnprotectedStreamHandler(List<string> calls) : IStreamRequestHandler<UnprotectedStream, int>
     {
         public async IAsyncEnumerable<int> HandleAsync(IRequestContext<UnprotectedStream> context,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+            [EnumeratorCancellation] CancellationToken ct)
         {
             calls.Add("unprotected-stream-handler");
             yield return 1;

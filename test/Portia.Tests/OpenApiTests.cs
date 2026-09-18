@@ -140,9 +140,9 @@ public sealed class OpenApiTests : IAsyncDisposable
             .WithDescription("Creates one order.");
         _ = group.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}", endpoint => endpoint
             .Parameter<Uuid>("widget_id", PortiaHttpParameterLocation.Route)
-            .Parameter<bool>("archived", PortiaHttpParameterLocation.Header, required: false)
+            .Parameter<bool>("archived", PortiaHttpParameterLocation.Header, false)
             .OnBind(http => new HttpGetWidget(
-                Uuid.Parse((string)http.Request.RouteValues["widget_id"]!, CultureInfo.InvariantCulture), false))
+                Uuid.Parse((string)http.Request.RouteValues["widget_id"]!, CultureInfo.InvariantCulture)))
             .Produces(StatusCodes.Status302Found)
             .OnResult((_, result) => result.IsSuccess ? Results.Redirect("/widgets/current") : null));
         _ = group.MapPortiaPost<HttpOptionalBody, string>("/upload", endpoint => endpoint
@@ -209,7 +209,8 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.False(createContent.TryGetProperty("application/x-www-form-urlencoded", out _));
         var updateContent = paths.GetProperty("/api/widgets/{widget_id}/update").GetProperty("post")
             .GetProperty("requestBody").GetProperty("content");
-        foreach (var mediaType in new[] { "application/json", "application/x-www-form-urlencoded", "multipart/form-data" })
+        foreach (var mediaType in new[]
+                     { "application/json", "application/x-www-form-urlencoded", "multipart/form-data" })
         {
             var schema = updateContent.GetProperty(mediaType).GetProperty("schema");
             var properties = schema.GetProperty("properties");
@@ -224,8 +225,10 @@ public sealed class OpenApiTests : IAsyncDisposable
             else
                 Assert.DoesNotContain("active", required);
         }
+
         var dryRun = Assert.Single(paths.GetProperty("/api/widgets/{widget_id}/update").GetProperty("post")
-            .GetProperty("parameters").EnumerateArray(), parameter => parameter.GetProperty("name").GetString() == "dry_run");
+                .GetProperty("parameters").EnumerateArray(),
+            parameter => parameter.GetProperty("name").GetString() == "dry_run");
         Assert.Equal("query", dryRun.GetProperty("in").GetString());
         Assert.False(dryRun.TryGetProperty("required", out var dryRunRequired) && dryRunRequired.GetBoolean());
         Assert.Equal("boolean", dryRun.GetProperty("schema").GetProperty("type").GetString());

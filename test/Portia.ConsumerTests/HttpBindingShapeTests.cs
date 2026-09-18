@@ -171,42 +171,43 @@ public sealed class HttpBindingShapeTests
 
     [Fact]
     public void ConfiguredUnaryAndStreamingMappingsAreIntercepted() => _ = GeneratorCompilation.Compile("""
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           using Microsoft.AspNetCore.Http;
-                                                           using Microsoft.AspNetCore.Routing;
-                                                           using System.Threading.Tasks;
-                                                           public sealed record Query(string Value) : IRequest<string>, ICallable;
-                                                           public sealed record StreamQuery(string Value) : IStreamRequest<string>, ICallable;
-                                                           public static class Scenario
-                                                           {
-                                                               public static void Map(IEndpointRouteBuilder app)
-                                                               {
-                                                                   app.MapPortiaGet<Query, string>("/query", endpoint => endpoint.NoInput()
-                                                                       .OnBind(_ => new Query("custom"))
-                                                                       .OnResult((_, result) => result.IsSuccess ? Results.Ok() : null));
-                                                                   app.MapPortiaGetStream<StreamQuery, string>("/stream", endpoint => endpoint.NoInput()
-                                                                       .OnBind((_, _) => ValueTask.FromResult(new StreamQuery("custom"))));
-                                                               }
-                                                           }
-                                                           """, new RequestHttpBindingGenerator());
+        using Cntryl.Portia;
+        using Cntryl.Portia.Testing;
+        using Microsoft.AspNetCore.Http;
+        using Microsoft.AspNetCore.Routing;
+        using System.Threading.Tasks;
+        public sealed record Query(string Value) : IRequest<string>, ICallable;
+        public sealed record StreamQuery(string Value) : IStreamRequest<string>, ICallable;
+        public static class Scenario
+        {
+            public static void Map(IEndpointRouteBuilder app)
+            {
+                app.MapPortiaGet<Query, string>("/query", endpoint => endpoint.NoInput()
+                    .OnBind(_ => new Query("custom"))
+                    .OnResult((_, result) => result.IsSuccess ? Results.Ok() : null));
+                app.MapPortiaGetStream<StreamQuery, string>("/stream", endpoint => endpoint.NoInput()
+                    .OnBind((_, _) => ValueTask.FromResult(new StreamQuery("custom"))));
+            }
+        }
+        """, new RequestHttpBindingGenerator());
 
     [Fact]
-    public void CustomBinderSupportsShapesRejectedByGeneratedBindingIncludingStructs() => _ = GeneratorCompilation.Compile("""
-                                         using Cntryl.Portia;
-                                         using Cntryl.Portia.Testing;
-                                         using Microsoft.AspNetCore.Routing;
-                                         public sealed class PrivateRequest : IRequest, ICallable { private PrivateRequest() { } public static PrivateRequest Create() => new(); }
-                                         public readonly record struct StructRequest(int Value) : IRequest, ICallable;
-                                         public static class Scenario
+    public void CustomBinderSupportsShapesRejectedByGeneratedBindingIncludingStructs() => _ =
+        GeneratorCompilation.Compile("""
+                                     using Cntryl.Portia;
+                                     using Cntryl.Portia.Testing;
+                                     using Microsoft.AspNetCore.Routing;
+                                     public sealed class PrivateRequest : IRequest, ICallable { private PrivateRequest() { } public static PrivateRequest Create() => new(); }
+                                     public readonly record struct StructRequest(int Value) : IRequest, ICallable;
+                                     public static class Scenario
+                                     {
+                                         public static void Map(IEndpointRouteBuilder app)
                                          {
-                                             public static void Map(IEndpointRouteBuilder app)
-                                             {
-                                                 app.MapPortiaPost<PrivateRequest>("/private", endpoint => endpoint.NoInput().OnBind(_ => PrivateRequest.Create()));
-                                                 app.MapPortiaPost<StructRequest>("/struct", endpoint => endpoint.NoInput().OnBind(_ => new StructRequest(1)));
-                                             }
+                                             app.MapPortiaPost<PrivateRequest>("/private", endpoint => endpoint.NoInput().OnBind(_ => PrivateRequest.Create()));
+                                             app.MapPortiaPost<StructRequest>("/struct", endpoint => endpoint.NoInput().OnBind(_ => new StructRequest(1)));
                                          }
-                                         """, new RequestHttpBindingGenerator());
+                                     }
+                                     """, new RequestHttpBindingGenerator());
 
     [Fact]
     public void StreamingConfigurationDoesNotExposeOnResult()
@@ -240,18 +241,19 @@ public sealed class HttpBindingShapeTests
     public async Task ValidSimpleTryParseWinsOverInvalidProviderOverload()
     {
         var assembly = HttpConsumerScenario.Compile("""
-            public sealed record Scalar(string Text)
-            {
-                public static bool TryParse(string value, out Scalar result)
-                {
-                    result = new Scalar(value);
-                    return true;
-                }
-                public static bool TryParse(string value, IFormatProvider provider, out int result)
-                    => int.TryParse(value, provider, out result);
-            }
-            public sealed record Binding(Scalar Value) : IRequest<string>, ICallable;
-            """, "request.Value.Text", "app.MapPortiaPost<Binding, string>(\"/binding\");");
+                                                    public sealed record Scalar(string Text)
+                                                    {
+                                                        public static bool TryParse(string value, out Scalar result)
+                                                        {
+                                                            result = new Scalar(value);
+                                                            return true;
+                                                        }
+                                                        public static bool TryParse(string value, IFormatProvider provider, out int result)
+                                                            => int.TryParse(value, provider, out result);
+                                                    }
+                                                    public sealed record Binding(Scalar Value) : IRequest<string>, ICallable;
+                                                    """, "request.Value.Text",
+            "app.MapPortiaPost<Binding, string>(\"/binding\");");
 
         var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding", """{"value":{"text":"json"}}""");
 
@@ -438,9 +440,10 @@ public sealed class HttpBindingShapeTests
     static async Task AssertJsonOnlyTryParseShape(string scalarDeclaration)
     {
         var assembly = HttpConsumerScenario.Compile($$"""
-            {{scalarDeclaration}}
-            public sealed record Binding(Scalar Value) : IRequest<string>, ICallable;
-            """, "request.Value.Text", "app.MapPortiaPost<Binding, string>(\"/binding\");");
+                                                      {{scalarDeclaration}}
+                                                      public sealed record Binding(Scalar Value) : IRequest<string>, ICallable;
+                                                      """, "request.Value.Text",
+            "app.MapPortiaPost<Binding, string>(\"/binding\");");
 
         var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding", """{"value":{"text":"json"}}""");
 

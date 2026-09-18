@@ -200,7 +200,7 @@ public sealed class AggregateExecutorTests
             new TestAggregate(Uuid.CreateVersion4()), aggregate =>
             {
                 aggregate.ChangeValue(1);
-                return default(AggregateOutcome);
+                return default;
             }, Context()).AsTask());
 
         Assert.Contains(nameof(AggregateOutcome), error.Message, StringComparison.Ordinal);
@@ -212,7 +212,7 @@ public sealed class AggregateExecutorTests
     [Fact]
     public void ShouldRejectUninitializedResultInOutcome()
     {
-        _ = Assert.Throws<ArgumentException>(() => AggregateOutcome.Commit(default(Result)));
+        _ = Assert.Throws<ArgumentException>(() => AggregateOutcome.Commit(default));
         _ = Assert.Throws<ArgumentException>(() => AggregateOutcome.Discard(default(Result<int>)));
     }
 
@@ -246,7 +246,7 @@ public sealed class AggregateExecutorTests
     [Fact]
     public void ShouldRejectUninitializedResultInCommitOnSuccess()
     {
-        _ = Assert.Throws<ArgumentException>(() => AggregateOutcome.CommitOnSuccess(default(Result)));
+        _ = Assert.Throws<ArgumentException>(() => AggregateOutcome.CommitOnSuccess(default));
         _ = Assert.Throws<ArgumentException>(() => AggregateOutcome.CommitOnSuccess(default(Result<int>)));
     }
 
@@ -376,12 +376,6 @@ public sealed class AggregateExecutorTests
         public int Appends { get; private set; }
         public List<DomainEvent> Appended { get; } = [];
 
-        public void Reset()
-        {
-            Appends = 0;
-            Appended.Clear();
-        }
-
         public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
             CancellationToken ct) => _inner.ReadAsync(stream, fromOffset, ct);
 
@@ -396,6 +390,12 @@ public sealed class AggregateExecutorTests
                 throw new EventStreamConcurrencyException("The stream moved on.");
             Appended.AddRange(events);
             return _inner.AppendAsync(stream, expectedStreamPosition, events, ct);
+        }
+
+        public void Reset()
+        {
+            Appends = 0;
+            Appended.Clear();
         }
     }
 }

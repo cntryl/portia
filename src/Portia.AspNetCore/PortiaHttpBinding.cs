@@ -321,54 +321,6 @@ public static class PortiaHttpBinding
             : throw new InvalidOperationException($"{nameof(PortiaHttpOptions.MaxJsonBodyBytes)} must be positive.");
     }
 
-    sealed class LimitedRequestBodyStream(Stream inner, long maximum) : Stream
-    {
-        long _read;
-
-        public override bool CanRead => inner.CanRead;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => throw new NotSupportedException();
-        public override long Position
-        {
-            get => _read;
-            set => throw new NotSupportedException();
-        }
-
-        public override void Flush() { }
-        public override int Read(byte[] buffer, int offset, int count) => Count(inner.Read(buffer, offset, count));
-        public override int Read(Span<byte> buffer) => Count(inner.Read(buffer));
-        public override int ReadByte()
-        {
-            var value = inner.ReadByte();
-            if (value >= 0)
-                _ = Count(1);
-            return value;
-        }
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
-            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
-            CancellationToken cancellationToken = default) =>
-            Count(await inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false));
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-
-
-        int Count(int read)
-        {
-            _read += read;
-            return _read <= maximum ? read : throw new HttpPayloadTooLargeException();
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-                inner.Dispose();
-            base.Dispose(disposing);
-        }
-    }
-
     /// <summary>Reports whether an exact RFC 7240 preference token requests asynchronous handling.</summary>
     /// <param name="context">The current HTTP request.</param>
     /// <returns><see langword="true" /> when the caller sent <c>Prefer: respond-async</c>.</returns>
@@ -593,6 +545,63 @@ public static class PortiaHttpBinding
         }
 
         return false;
+    }
+
+    sealed class LimitedRequestBodyStream(Stream inner, long maximum) : Stream
+    {
+        long _read;
+
+        public override bool CanRead => inner.CanRead;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => _read;
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => Count(inner.Read(buffer, offset, count));
+        public override int Read(Span<byte> buffer) => Count(inner.Read(buffer));
+
+        public override int ReadByte()
+        {
+            var value = inner.ReadByte();
+            if (value >= 0)
+                _ = Count(1);
+            return value;
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count,
+            CancellationToken cancellationToken) =>
+            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
+            CancellationToken cancellationToken = default) =>
+            Count(await inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false));
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+
+        int Count(int read)
+        {
+            _read += read;
+            return _read <= maximum ? read : throw new HttpPayloadTooLargeException();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                inner.Dispose();
+            base.Dispose(disposing);
+        }
     }
 
     sealed class AcceptedReceiptResult(Uuid requestId, string propertyName) : IResult

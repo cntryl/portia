@@ -30,8 +30,8 @@ public abstract class Aggregate(
     readonly List<DomainEvent> _uncommittedAudits = [];
     readonly List<DomainEvent> _uncommittedEvents = [];
     EventStreamAddress? _auditSessionStream;
-    int _operation;
     bool _discarded;
+    int _operation;
     EventAttribution? _saveAttribution;
     bool _savePrepared;
 

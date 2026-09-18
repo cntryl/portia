@@ -1,5 +1,6 @@
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -173,11 +174,11 @@ public sealed class FitzNotificationPoisonMessageTests
     {
         public int Calls { get; private set; }
 
-        public ValueTask<Result<System.Security.Claims.ClaimsPrincipal>> ValidateAsync(string route, string subject,
+        public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string route, string subject,
             string issuer, CancellationToken ct = default)
         {
             Calls++;
-            return ValueTask.FromResult(Result<System.Security.Claims.ClaimsPrincipal>.Success(RequestActor.System));
+            return ValueTask.FromResult(Result<ClaimsPrincipal>.Success(RequestActor.System));
         }
     }
 
