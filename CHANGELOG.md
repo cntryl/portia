@@ -6,6 +6,15 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+## 0.4.5 - 2026-09-18
+
+### Changed
+
+- Reorganized source, test, benchmark, and smoke-consumer projects by capability, with shared
+  global usings and clearer project boundaries. This release does not change runtime behavior or
+  public API contracts.
+- Documented the formatter requirements used by the repository and CI.
+
 ## 0.4.4 - 2026-09-17
 
 ### Fixed
