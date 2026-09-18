@@ -132,7 +132,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var identity = new CheckpointIdentity(
             "malformed", EventStreamPattern.ForPattern("portia-integration", "projection-cleanup"));
         var key = FitzKvCheckpoints.Key(identity);
-        var resource = FitzKvProjectionStore.RouteFor(route, identity.ComponentName, identity.Pattern.Realm);
+        var resource = FitzKvCheckpoints.WorkloadRoute(route, identity);
 
         await using (var seed = await originalClient.Kv.BeginAsync(resource, KvDurability.Sync))
         {
@@ -140,7 +140,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             await seed.CommitAsync();
         }
 
-        var store = new FitzKvValueRepository(originalClient.Kv, route);
+        var store = new FitzKvValueRepository(originalClient.Kv, route, identity.ComponentName);
         _ = await Assert.ThrowsAsync<InvalidDataException>(async () =>
             await store.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)));
 
@@ -688,7 +688,8 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             var client = await broker.CreateClientAsync();
             try
             {
-                return new FitzKvProjectionSession(client, new FitzKvValueRepository(client.Kv, _route));
+                return new FitzKvProjectionSession(client,
+                    new FitzKvValueRepository(client.Kv, _route, LiveIdentity.ComponentName));
             }
             catch
             {
@@ -756,20 +757,17 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
     // A real FitzKvProjectionStore subclass that writes one application value through the shared
     // transaction, so the suite's atomicity checks cover domain data and checkpoint together.
-    sealed class FitzKvValueRepository(IKvClient kv, string route) : FitzKvProjectionStore(kv, route)
+    sealed class FitzKvValueRepository(IKvClient kv, string route, string componentName)
+        : FitzKvProjectionStore(kv, route, componentName)
     {
-        readonly IKvClient _kv = kv;
-        readonly string _route = route;
-
         public Task StageAsync(CheckpointIdentity identity, string value, CancellationToken ct) =>
             Transaction.PutAsync(ValueKey(identity), Encoding.UTF8.GetBytes(value), ct);
 
         // A query-side read runs outside any batch, so it finds the workload's resource the same way
-        // an application's read model would: through the store's published route helper.
+        // an application's read model would: through the store's own read transaction for that realm.
         public async ValueTask<string?> ReadAsync(CheckpointIdentity identity, CancellationToken ct)
         {
-            var resource = RouteFor(_route, identity.ComponentName, identity.Pattern.Realm);
-            await using var tx = await _kv.BeginAsync(resource, KvDurability.Sync, KvMode.ReadOnly, ct);
+            await using var tx = await BeginReadAsync(identity.Pattern.Realm, ct);
             var result = await tx.GetAsync(ValueKey(identity), ct);
             return result.Found ? Encoding.UTF8.GetString(result.Value!.Value.Span) : null;
         }
