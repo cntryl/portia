@@ -1,4 +1,1 @@
 #nullable enable
-*REMOVED*Cntryl.Portia.FitzKvProjectionStore.FitzKvProjectionStore(Cntryl.Fitz.IKvClient! client, string! route) -> void
-Cntryl.Portia.FitzKvProjectionStore.BeginReadAsync(string! realm, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Fitz.IKvTransaction!>
-Cntryl.Portia.FitzKvProjectionStore.FitzKvProjectionStore(Cntryl.Fitz.IKvClient! client, string! route, string! componentName) -> void

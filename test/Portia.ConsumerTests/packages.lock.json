@@ -16,11 +16,11 @@
       },
       "Cntryl.Fitz.Core": {
         "type": "Direct",
-        "requested": "[1.3.1, )",
-        "resolved": "1.3.1",
-        "contentHash": "GrEPGuE+kOc6zDjqvSXhySbGIy5xvJqbwBfLVhIoITfowAdnc4CKKoNk96S9NKxtPU1BDPVezchp654/9Lhh4w==",
+        "requested": "[1.4.0, )",
+        "resolved": "1.4.0",
+        "contentHash": "ERSeCnXzleJ9LfPQnrXDMPRno89qauzMFymXbbw1MswzTDzTjpN2OYQB3ejl6lOEKuxrNoQWiz/UjbkpDRlkug==",
         "dependencies": {
-          "Cntryl.Fitz.Abstractions": "1.3.1"
+          "Cntryl.Fitz.Abstractions": "1.4.0"
         }
       },
       "coverlet.collector": {
@@ -271,7 +271,7 @@
       "Cntryl.Portia.Fitz": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Fitz.Core": "[1.3.1, )",
+          "Cntryl.Fitz.Core": "[1.4.0, )",
           "Cntryl.Portia.Abstractions": "[0.5.1, )",
           "Cntryl.Portia.DependencyInjection": "[0.5.1, )"
         }
@@ -316,9 +316,9 @@
       },
       "Cntryl.Fitz.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[1.3.1, )",
-        "resolved": "1.3.1",
-        "contentHash": "hx0MZxGg7F9Zc6IKPYJLsgT3n0tRIVOYK0w03dR0+LT0FS8GWd6h7m18Fiqm2lyFs5hkuVN9MgKt2+fBcCnDzA=="
+        "requested": "[1.4.0, )",
+        "resolved": "1.4.0",
+        "contentHash": "EoezlfU+/Gl8JR/T/hZQl2yjbByqso8bLPB930L8bpBkzMo7ntW7CWl+xQDUCGjUrrooOkOUGAWtAw7jah+LBw=="
       },
       "Microsoft.AspNetCore.OpenApi": {
         "type": "CentralTransitive",

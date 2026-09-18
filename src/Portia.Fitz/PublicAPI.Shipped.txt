@@ -16,7 +16,8 @@ Cntryl.Portia.FitzKvConcurrencyException
 Cntryl.Portia.FitzKvConcurrencyException.FitzKvConcurrencyException(string! message, System.Exception? innerException = null) -> void
 Cntryl.Portia.FitzKvProjectionStore
 Cntryl.Portia.FitzKvProjectionStore.BeginAsync(Cntryl.Portia.ProjectionBatchContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.IProjectionBatch!>
-Cntryl.Portia.FitzKvProjectionStore.FitzKvProjectionStore(Cntryl.Fitz.IKvClient! client, string! route) -> void
+Cntryl.Portia.FitzKvProjectionStore.BeginReadAsync(string! realm, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Fitz.IKvTransaction!>
+Cntryl.Portia.FitzKvProjectionStore.FitzKvProjectionStore(Cntryl.Fitz.IKvClient! client, string! route, string! componentName) -> void
 Cntryl.Portia.FitzKvProjectionStore.LoadCheckpointAsync(Cntryl.Portia.CheckpointIdentity! identity, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>
 Cntryl.Portia.FitzKvProjectionStore.Transaction.get -> Cntryl.Fitz.IKvTransaction!
 Cntryl.Portia.FitzNoticeRequestConsumer

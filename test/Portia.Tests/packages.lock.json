@@ -16,11 +16,21 @@
       },
       "Cntryl.Fitz.Core": {
         "type": "Direct",
-        "requested": "[1.3.1, )",
-        "resolved": "1.3.1",
-        "contentHash": "GrEPGuE+kOc6zDjqvSXhySbGIy5xvJqbwBfLVhIoITfowAdnc4CKKoNk96S9NKxtPU1BDPVezchp654/9Lhh4w==",
+        "requested": "[1.4.0, )",
+        "resolved": "1.4.0",
+        "contentHash": "ERSeCnXzleJ9LfPQnrXDMPRno89qauzMFymXbbw1MswzTDzTjpN2OYQB3ejl6lOEKuxrNoQWiz/UjbkpDRlkug==",
         "dependencies": {
-          "Cntryl.Fitz.Abstractions": "1.3.1"
+          "Cntryl.Fitz.Abstractions": "1.4.0"
+        }
+      },
+      "Cntryl.Fitz.Extensions": {
+        "type": "Direct",
+        "requested": "[1.4.0, )",
+        "resolved": "1.4.0",
+        "contentHash": "jjygQPK04flUIUwe1xAcQtnpmi6n91YHUUIid4DKOwZII7jCEfF2xXktv1p9ZY8kZj+f0b4Nho+TUep+8BseLg==",
+        "dependencies": {
+          "Cntryl.Fitz.Abstractions": "1.4.0",
+          "Cntryl.LexKey": "0.1.2"
         }
       },
       "coverlet.collector": {
@@ -86,6 +96,11 @@
         "requested": "[4.0.0, )",
         "resolved": "4.0.0",
         "contentHash": "kzLFyBYUnoidpGOXvpNOfIo8C92gVgVR6X8ncHwhcrDYugiOut5rrhDkr0L3cWHd7J2pKXf6LgaeXoBBDlx1ag=="
+      },
+      "Cntryl.LexKey": {
+        "type": "Transitive",
+        "resolved": "0.1.2",
+        "contentHash": "L7rKtCZ0uutLR42abYXFMHLSmOGzup+NPljB9D4qHLjkbuuXnuE0edpN5OWIB4UoA4e8FpU+TyBY4YrRW3CIFQ=="
       },
       "Microsoft.Bcl.Cryptography": {
         "type": "Transitive",
@@ -226,7 +241,7 @@
       "Cntryl.Portia.Fitz": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Fitz.Core": "[1.3.1, )",
+          "Cntryl.Fitz.Core": "[1.4.0, )",
           "Cntryl.Portia.Abstractions": "[0.5.1, )",
           "Cntryl.Portia.DependencyInjection": "[0.5.1, )"
         }
@@ -255,9 +270,9 @@
       },
       "Cntryl.Fitz.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[1.3.1, )",
-        "resolved": "1.3.1",
-        "contentHash": "hx0MZxGg7F9Zc6IKPYJLsgT3n0tRIVOYK0w03dR0+LT0FS8GWd6h7m18Fiqm2lyFs5hkuVN9MgKt2+fBcCnDzA=="
+        "requested": "[1.4.0, )",
+        "resolved": "1.4.0",
+        "contentHash": "EoezlfU+/Gl8JR/T/hZQl2yjbByqso8bLPB930L8bpBkzMo7ntW7CWl+xQDUCGjUrrooOkOUGAWtAw7jah+LBw=="
       },
       "Microsoft.AspNetCore.OpenApi": {
         "type": "CentralTransitive",

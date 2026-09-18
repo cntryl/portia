@@ -1,4 +1,11 @@
 #nullable enable
+Cntryl.Portia.Testing.AggregateCapabilities
+Cntryl.Portia.Testing.AggregateCapabilities.AggregateCapabilities(Cntryl.Portia.IAggregateReader! reader, Cntryl.Portia.IAggregateWriter! writer, Cntryl.Portia.IAggregateExecutor! executor) -> void
+Cntryl.Portia.Testing.AggregateCapabilities.ExecuteAsync<TAggregate, TOut>(TAggregate! aggregate, System.Func<TAggregate!, Cntryl.Portia.AggregateOutcome<TOut>>! operation, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result<TOut>>
+Cntryl.Portia.Testing.AggregateCapabilities.ExecuteAsync<TAggregate>(TAggregate! aggregate, System.Func<TAggregate!, Cntryl.Portia.AggregateOutcome>! operation, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
+Cntryl.Portia.Testing.AggregateCapabilities.HydrateAsync<TAggregate>(TAggregate! aggregate, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TAggregate!>
+Cntryl.Portia.Testing.AggregateCapabilities.SaveAsync<TAggregate>(TAggregate! aggregate, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.AggregateCapabilityExtensions
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.Aggregate.get -> TAggregate!
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.AggregateScenario(TAggregate! aggregate) -> void
@@ -53,6 +60,12 @@ Cntryl.Portia.Testing.InMemoryProjectionCheckpointStore.LoadAsync(Cntryl.Portia.
 Cntryl.Portia.Testing.InMemoryProjectionCheckpointStore.SaveAsync(Cntryl.Portia.CheckpointIdentity! identity, Cntryl.Portia.ProjectionCheckpoint checkpoint, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Cntryl.Portia.Testing.ProjectionStoreConformance
 Cntryl.Portia.Testing.ReactionDeduplicationConformance
+Cntryl.Portia.Testing.StoreFixture
+Cntryl.Portia.Testing.StoreFixture.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.StoreFixture.Repository.get -> Cntryl.Portia.Testing.AggregateCapabilities!
+Cntryl.Portia.Testing.StoreFixture.Services.get -> System.IServiceProvider!
+Cntryl.Portia.Testing.StoreFixture.Store.get -> Cntryl.Portia.IEventStore!
+Cntryl.Portia.Testing.StoreFixture.StoreFixture(Cntryl.Portia.IEventStore? store = null) -> void
 Cntryl.Portia.Testing.TestPermissionEvaluator
 Cntryl.Portia.Testing.TestPermissionEvaluator.EvaluateAsync(System.Security.Claims.ClaimsPrincipal! actor, string! permission, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
 Cntryl.Portia.Testing.TestPermissionEvaluator.EvaluatedPermissions.get -> System.Collections.Generic.List<string!>!
@@ -66,6 +79,7 @@ override Cntryl.Portia.Testing.ConformanceEvent.Equals(object? obj) -> bool
 override Cntryl.Portia.Testing.ConformanceEvent.GetHashCode() -> int
 override Cntryl.Portia.Testing.ConformanceEvent.ToString() -> string!
 override sealed Cntryl.Portia.Testing.ConformanceEvent.Equals(Cntryl.Portia.DomainEvent? other) -> bool
+static Cntryl.Portia.Testing.AggregateCapabilityExtensions.Aggregates(this System.IServiceProvider! services) -> Cntryl.Portia.Testing.AggregateCapabilities!
 static Cntryl.Portia.Testing.ConformanceEvent.operator !=(Cntryl.Portia.Testing.ConformanceEvent? left, Cntryl.Portia.Testing.ConformanceEvent? right) -> bool
 static Cntryl.Portia.Testing.ConformanceEvent.operator ==(Cntryl.Portia.Testing.ConformanceEvent? left, Cntryl.Portia.Testing.ConformanceEvent? right) -> bool
 static Cntryl.Portia.Testing.DomainEventSeed.Attach<TEvent>(TEvent! ev, Cntryl.Portia.Uuid aggregateId, ulong aggregateVersion, bool isAudit = false, Cntryl.Portia.Uuid? eventId = null, System.DateTimeOffset? occurredOn = null) -> TEvent!

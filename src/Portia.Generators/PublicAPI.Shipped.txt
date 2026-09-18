@@ -5,6 +5,9 @@ Cntryl.Portia.DomainEventCatalogGenerator.Initialize(Microsoft.CodeAnalysis.Incr
 Cntryl.Portia.JsonMetadataDiagnosticGenerator
 Cntryl.Portia.JsonMetadataDiagnosticGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
 Cntryl.Portia.JsonMetadataDiagnosticGenerator.JsonMetadataDiagnosticGenerator() -> void
+Cntryl.Portia.JsonRootMarkerGenerator
+Cntryl.Portia.JsonRootMarkerGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Cntryl.Portia.JsonRootMarkerGenerator.JsonRootMarkerGenerator() -> void
 Cntryl.Portia.PortiaServiceRegistrationGenerator
 Cntryl.Portia.PortiaServiceRegistrationGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
 Cntryl.Portia.PortiaServiceRegistrationGenerator.PortiaServiceRegistrationGenerator() -> void

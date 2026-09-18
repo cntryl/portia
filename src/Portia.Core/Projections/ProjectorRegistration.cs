@@ -45,6 +45,12 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
 
     EventStreamPattern IWorkloadDescriptor.Pattern(IServiceProvider services) => _resolve(services).Pattern;
 
+    void IWorkloadDescriptor.Validate(IServiceProvider services, string componentName)
+    {
+        if (_resolve(services).Store is IProjectorBoundStore store)
+            store.EnsureServes(componentName);
+    }
+
     async ValueTask<ProjectionPassResult> IWorkloadDescriptor.RunPass(IServiceProvider services,
         ProjectionRunOptions options, CancellationToken ct)
     {

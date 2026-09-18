@@ -1,1 +1,28 @@
 #nullable enable
+Cntryl.Portia.Testing.McpCallExpectations
+Cntryl.Portia.Testing.McpCallExpectations.ExpectFailure(string? kind = null) -> Cntryl.Portia.Testing.McpCallExpectations!
+Cntryl.Portia.Testing.McpCallExpectations.ExpectSuccess() -> Cntryl.Portia.Testing.McpCallExpectations!
+Cntryl.Portia.Testing.McpCallExpectations.GetAwaiter() -> System.Runtime.CompilerServices.TaskAwaiter<Cntryl.Portia.Testing.McpCallSnapshot!>
+Cntryl.Portia.Testing.McpCallSnapshot
+Cntryl.Portia.Testing.McpCallSnapshot.IsError.get -> bool
+Cntryl.Portia.Testing.McpCallSnapshot.StructuredJson.get -> System.Text.Json.JsonElement?
+Cntryl.Portia.Testing.McpCallSnapshot.Text.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Cntryl.Portia.Testing.McpScenario
+Cntryl.Portia.Testing.McpScenario.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.McpScenario.ListTools(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Cntryl.Portia.Testing.McpToolListExpectations!
+Cntryl.Portia.Testing.McpScenario.When(string! toolName, System.Collections.Generic.IReadOnlyDictionary<string!, object?>? arguments = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Cntryl.Portia.Testing.McpCallExpectations!
+Cntryl.Portia.Testing.McpToolListExpectations
+Cntryl.Portia.Testing.McpToolListExpectations.ExpectExactly(params string![]! toolNames) -> Cntryl.Portia.Testing.McpToolListExpectations!
+Cntryl.Portia.Testing.McpToolListExpectations.GetAwaiter() -> System.Runtime.CompilerServices.TaskAwaiter<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpToolSnapshot!>!>
+Cntryl.Portia.Testing.McpToolSnapshot
+Cntryl.Portia.Testing.McpToolSnapshot.Description.get -> string?
+Cntryl.Portia.Testing.McpToolSnapshot.Destructive.get -> bool?
+Cntryl.Portia.Testing.McpToolSnapshot.Idempotent.get -> bool?
+Cntryl.Portia.Testing.McpToolSnapshot.InputSchema.get -> System.Text.Json.JsonElement
+Cntryl.Portia.Testing.McpToolSnapshot.Metadata.get -> System.Text.Json.JsonElement?
+Cntryl.Portia.Testing.McpToolSnapshot.Name.get -> string!
+Cntryl.Portia.Testing.McpToolSnapshot.OpenWorld.get -> bool?
+Cntryl.Portia.Testing.McpToolSnapshot.OutputSchema.get -> System.Text.Json.JsonElement?
+Cntryl.Portia.Testing.McpToolSnapshot.ReadOnly.get -> bool?
+Cntryl.Portia.Testing.McpToolSnapshot.Title.get -> string?
+static Cntryl.Portia.Testing.McpScenario.ConnectAsync(System.Net.Http.HttpClient! httpClient, System.Uri! endpoint, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Testing.McpScenario!>
