@@ -718,7 +718,7 @@ Cancellation and failures dispose the enumerator and its scope.
 
 ## Use the maintained consumer fixture
 
-[CompleteWorkflowTests](../test/Portia.ConsumerTests/CompleteWorkflowTests.cs) assembles
+[CompleteWorkflowTests](../test/Portia.ConsumerTests/Requests/CompleteWorkflowTests.cs) assembles
 two feature assemblies, scoped persistence, two reactors and two projectors. The
 same business handler runs through direct dispatch, generated HTTP, real Fitz RPC
 and queue delivery. It checks aggregate state, durable source and audit streams,

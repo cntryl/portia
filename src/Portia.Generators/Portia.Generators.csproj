@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="RequestHttpBindingGenerator.cs"/>
+    <Compile Remove="Http/RequestHttpBindingGenerator.cs"/>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all"/>
   </ItemGroup>
 

@@ -7,7 +7,4 @@
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Using Include="Xunit"/>
-  </ItemGroup>
 </Project>

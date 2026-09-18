@@ -87,7 +87,7 @@ An API host explicitly maps HTTP endpoints. A worker host calls the same applica
 handler and domain model do not change when the operation is sent over RPC, placed on a queue, or invoked in-process.
 
 The
-[complete consumer fixture](test/Portia.ConsumerTests/CompleteWorkflowTests.cs)
+[complete consumer fixture](test/Portia.ConsumerTests/Requests/CompleteWorkflowTests.cs)
 executes one business handler through direct dispatch, HTTP, RPC, and a real Fitz queue, then proves that the resulting
 events retain actor and causal metadata and drive projectors and reactors.
 
