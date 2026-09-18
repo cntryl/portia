@@ -17,6 +17,14 @@ interface IWorkloadDescriptor
     void Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName);
     EventStreamPattern Pattern(IServiceProvider services);
 
+    /// <summary>
+    ///     Checks at host startup, without binding anything, that the component resolved in
+    ///     <paramref name="services" /> can run under <paramref name="componentName" />.
+    /// </summary>
+    /// <param name="services">A validation scope.</param>
+    /// <param name="componentName">The name the component is registered under.</param>
+    void Validate(IServiceProvider services, string componentName);
+
     ValueTask<ProjectionPassResult> RunPass(IServiceProvider services, ProjectionRunOptions options,
         CancellationToken ct);
 

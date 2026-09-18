@@ -14,6 +14,8 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(OrderPlacedV1))]
 [JsonSerializable(typeof(OrderPlacedV2))]
 [JsonSerializable(typeof(WidgetNamed))]
+[JsonSerializable(typeof(TeamCreated))]
+[JsonSerializable(typeof(TeamRenamed))]
 [JsonSerializable(typeof(WidgetRenamed))]
 [JsonSerializable(typeof(NoWorkerRegisteredPing))]
 [JsonSerializable(typeof(RpcChangeValue))]

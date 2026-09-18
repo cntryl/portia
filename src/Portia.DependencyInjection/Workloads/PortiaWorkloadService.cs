@@ -55,6 +55,8 @@ sealed class PortiaWorkloadService(
                     $"Workload '{registration.Name}' uses scope '{registration.Scope}' but pattern '{pattern}'. " +
                     $"Use {expected} for this scope.");
             }
+
+            registration.Descriptor.Validate(scope.ServiceProvider, registration.Name);
         }
 
         return;

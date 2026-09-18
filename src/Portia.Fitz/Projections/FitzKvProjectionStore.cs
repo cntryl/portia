@@ -21,10 +21,11 @@ namespace Cntryl.Portia;
 /// <param name="client">The Fitz KV client to open transactions against.</param>
 /// <param name="route">The Fitz KV base route this repository's per-workload resources derive from.</param>
 /// <param name="componentName">
-///     The workload name of the projector this repository serves: the name it is registered under,
-///     or, when the registration names none, the name the projector passes to its own constructor.
+///     The workload name of the projector this repository serves: the ID it is registered under with
+///     <c>AddProjector</c>, which is also its checkpoint name.
 /// </param>
-public abstract class FitzKvProjectionStore(IKvClient client, string route, string componentName) : IProjectionStore
+public abstract class FitzKvProjectionStore(IKvClient client, string route, string componentName)
+    : IProjectionStore, IProjectorBoundStore
 {
     readonly IKvClient _client = client ?? throw new ArgumentNullException(nameof(client));
 
@@ -151,16 +152,20 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
         return componentName;
     }
 
+    void IProjectorBoundStore.EnsureServes(string componentName) => EnsureServes(componentName);
+
+    void EnsureOwnProjector(CheckpointIdentity identity) => EnsureServes(identity.ComponentName);
+
     // Reads derive their resource from this repository's projector name, so a batch for any other
-    // component would commit where no read ever looks: the typical cause is a registration that names
-    // the projector differently, or not at all, from the name given here.
-    void EnsureOwnProjector(CheckpointIdentity identity)
+    // component would commit where no read ever looks: the cause is a projector registered under a
+    // different name from the one this repository was constructed with.
+    void EnsureServes(string componentName)
     {
-        if (!string.Equals(identity.ComponentName, _componentName, StringComparison.Ordinal))
+        if (!string.Equals(componentName, _componentName, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 $"Repository '{GetType().FullName}' serves projector '{_componentName}' but was given workload "
-                + $"'{identity.ComponentName}'. Register the projector under the name this repository is "
+                + $"'{componentName}'. Register the projector under the name this repository is "
                 + "constructed with, so its query-side reads find the data it writes.");
         }
     }

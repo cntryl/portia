@@ -6,7 +6,41 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
-## 0.5.1 - Unreleased
+### Changed
+
+- A hosted projector whose `FitzKvProjectionStore` repository was constructed for a different
+  projector name now stops the host when it starts, naming both, instead of failing its first
+  checkpoint load and retrying until the consecutive-failure limit. A repository driven outside
+  hosting still throws on its first checkpoint load.
+- Updated the Portia Fitz adapter and its packed integration consumer to the synchronized Cntryl.Fitz
+  1.4.0 package family. Fitz 1.4.0 adds `IKvTransaction.Route` and a
+  `KvDirectory<T, TKey>.QueryAsync` overload that takes an open transaction, so a
+  `FitzKvProjectionStore` repository can page a `Cntryl.Fitz.Extensions` directory through the
+  transaction `BeginReadAsync` returns. An application that references `Cntryl.Fitz.Extensions`
+  1.4.0 must also run `Cntryl.Fitz.Core` 1.4.0 — the 1.3.x transaction does not report its route,
+  so that overload throws `NotSupportedException` — which this update supplies transitively.
+
+## 0.5.1 - 2026-09-18
+
+### Breaking
+
+- `FitzKvProjectionStore` is now constructed with the name of the one projector it serves — the ID
+  the projector is registered under with `AddProjector` — and throws on a checkpoint load or batch
+  for any other workload name. A repository whose projector is registered under a different name now
+  fails on its first checkpoint load instead of committing to a resource its reads never open.
+- Removed `FitzKvProjectionStore.RouteFor`, added in 0.5.0. Hand-supplied component names and realms
+  silently derived an empty resource on any mismatch. Query-side reads now open their transaction
+  through the protected `BeginReadAsync(realm)`, which derives the resource from the repository's own
+  projector name.
+
+### Added
+
+- `FitzKvProjectionStore.BeginReadAsync(realm)`, which opens a read-only transaction on the resource
+  the repository's projector writes for one realm. It throws while a batch is open on the same
+  instance, because it cannot see that batch's staged writes; reads during a batch go through
+  `Transaction`.
+
+## 0.5.0 - 2026-09-18
 
 ### Breaking
 
@@ -19,20 +53,13 @@ alerts are as breaking to change as an API.
   stopped the host. There is no migration: after upgrading, every reactor replays from the start of
   its pattern once and every projection rebuilds once, so reactor effects must be replay-safe before
   you upgrade.
-- `FitzKvProjectionStore` is now constructed with the name of the one projector it serves, and
-  throws on a checkpoint load or batch for any other workload name. A repository whose projector is
-  registered under a different name — including a registration that names none, so the projector's
-  own default name applies — now fails on its first checkpoint load instead of committing to a
-  resource its reads never open.
 - Query-side reads of a `FitzKvProjectionStore` repository's data must now open their transaction
-  through the protected `BeginReadAsync(realm)` instead of on the base route.
+  on `FitzKvProjectionStore.RouteFor(route, componentName, realm)` instead of the base route.
 
 ### Added
 
-- `FitzKvProjectionStore.BeginReadAsync(realm)`, which opens a read-only transaction on the resource
-  the repository's projector writes for one realm. It throws while a batch is open on the same
-  instance, because it cannot see that batch's staged writes; reads during a batch go through
-  `Transaction`.
+- `FitzKvProjectionStore.RouteFor`, which names the resource a projector workload's data and
+  checkpoint live in.
 
 ### Changed
 

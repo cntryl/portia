@@ -281,10 +281,14 @@ pattern — which is always read-only, so a query never holds the lock the proje
 It is refused while a batch is open on the same repository instance: that read would see only
 committed data, never the batch's staged writes, so a write method reads through `Transaction`, as
 `IncrementBalanceAsync` does above.
-The name must match the one the projector is registered under (or, when the registration names
-none, the name the projector passes to its own constructor): a repository given any other
-projector's workload throws on its first checkpoint load, rather than committing data to a resource
-its reads never open.
+The name must be the ID the projector is registered under with `AddProjector`, which is also its
+checkpoint name. A hosted projector whose repository was built for any other name stops the host
+when it starts, and a repository driven outside hosting throws on its first checkpoint load, rather
+than committing data to a resource its reads never open.
+
+A read opens one realm, so a `PerTenant` projector's data is only ever read one tenant at a time.
+A view across tenants is a different query with its own projector: register a global projector that
+builds that read model, rather than opening every tenant's resource in turn.
 
 `UseKvCheckpoints` covers reactors instead. Their effects can never join a transaction, so their
 progress is an independent durable write. Its route is a base as well: one checkpoint store serves
@@ -303,6 +307,102 @@ Fitz KV locks a route at BEGIN rather than detecting the conflict at COMMIT, so 
 rejected before staging anything. Both stores translate that into the adapter-neutral
 `ProjectionConcurrencyException` a hosted component already knows to treat as retryable, whether it
 surfaces at begin or at commit.
+
+### Paged directories
+
+A read model that callers list, sort, and page — teams, members, documents — fits
+`Cntryl.Fitz.Extensions`' `KvDirectory<T, TKey>`: its declared covering indexes make each page one
+bounded range scan with a keyset cursor. Every directory operation takes an open `IKvTransaction`,
+so it composes with both halves of the repository: the projector writes through `Transaction`, and
+queries read through `BeginReadAsync`.
+
+```csharp
+// Like every domain event, both are also [JsonSerializable] roots on the application's [PortiaJsonContext].
+[Discriminator("team.created")]
+public sealed record TeamCreated(string Name) : DomainEvent;
+
+[Discriminator("team.renamed")]
+public sealed record TeamRenamed(string Name) : DomainEvent;
+
+public sealed record Team(Uuid Id, string Name);
+
+[JsonSerializable(typeof(Team))]
+sealed partial class TeamJsonContext : JsonSerializerContext;
+
+public interface ITeamDirectory
+{
+    ValueTask<Team?> GetAsync(TenantId tenant, Uuid id, CancellationToken ct);
+    ValueTask<Page<Team>> ListAsync(TenantId tenant, int take, string? cursor, CancellationToken ct);
+}
+
+public sealed class TeamRepository(IKvClient kv)
+    : FitzKvProjectionStore(kv, "kv://directory/teams/projection", Projector), ITeamDirectory
+{
+    public const string Projector = "TeamProjector";
+
+    static readonly KvDirectoryIndex<Team> ByName = new(
+        "by_name", 1, static team => [team.Name.ToUpperInvariant()]);
+
+    static readonly KvDirectory<Team, Uuid> Teams = new(
+        "teams", TeamJsonContext.Default.Team, static team => team.Id, static id => [id.ToGuid()], [ByName]);
+
+    // Projector side: every write joins the batch's transaction, so it commits with the checkpoint.
+    public ValueTask AddAsync(Team team, CancellationToken ct) => Teams.InsertAsync(Transaction, team, ct);
+
+    public async ValueTask RenameAsync(Uuid id, string name, CancellationToken ct)
+    {
+        // The previous value names the index rows to replace. It is read through Transaction, not
+        // BeginReadAsync, which is refused mid-batch because it cannot see the batch's own writes.
+        var current = await Teams.GetAsync(Transaction, id, ct)
+            ?? throw new InvalidOperationException($"Team '{id}' was renamed before it was created.");
+        await Teams.ReplaceAsync(Transaction, current, current with { Name = name }, ct);
+    }
+
+    // Query side: one read-only transaction per call, on the resource the projector writes for this tenant.
+    public async ValueTask<Team?> GetAsync(TenantId tenant, Uuid id, CancellationToken ct)
+    {
+        await using var tx = await BeginReadAsync(tenant.Value, ct);
+        return await Teams.GetAsync(tx, id, ct);
+    }
+
+    public async ValueTask<Page<Team>> ListAsync(TenantId tenant, int take, string? cursor, CancellationToken ct)
+    {
+        await using var tx = await BeginReadAsync(tenant.Value, ct);
+        return await Teams.QueryAsync(tx, ByName.Query().Take(take).After(cursor), ct);
+    }
+}
+
+public sealed partial class TeamProjector(TeamRepository teams)
+    : BatchProjector(teams, EventStreamPattern.ForTenant("teams")),
+      IProjectorHandler<TeamCreated>, IProjectorHandler<TeamRenamed>
+{
+    public ValueTask HandleAsync(TeamCreated ev, IProjectorContext context, CancellationToken ct)
+        => teams.AddAsync(new Team(ev.Metadata.AggregateId, ev.Name), ct);
+
+    public ValueTask HandleAsync(TeamRenamed ev, IProjectorContext context, CancellationToken ct)
+        => teams.RenameAsync(ev.Metadata.AggregateId, ev.Name, ct);
+}
+```
+
+```csharp
+services.AddScoped<TeamRepository>();
+services.AddScoped<ITeamDirectory>(sp => sp.GetRequiredService<TeamRepository>());
+services.AddPortia()
+    .AddFitz(configuration)
+    .AddProjector<TeamProjector>(TeamRepository.Projector, WorkloadScope.PerTenant);
+```
+
+`FitzKvDirectoryProjectionTests` runs this example against a real broker — only the base route is
+injected, so each run writes its own resources — from appended events through the projector pass
+to paged reads.
+
+The projector takes the concrete repository and passes it as its own store, so its writes and its
+checkpoint share one instance without a forwarding registration; query callers depend only on
+`ITeamDirectory` and never see the checkpoint API. A page's `NextCursor` goes back to the caller as
+an opaque string. It is bound to the tenant's resource, so a cursor from one tenant's list is
+rejected with `KvDirectoryQueryError.CursorMismatch` on another's rather than paging from a foreign
+key. The caller-owned `QueryAsync` overload needs `Cntryl.Fitz.Extensions` 1.4.0 or later with
+`Cntryl.Fitz.Core` 1.4.0 or later, which `Cntryl.Portia.Fitz` supplies.
 
 ## Storage implementations
 

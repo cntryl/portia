@@ -31,6 +31,11 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
 
     EventStreamPattern IWorkloadDescriptor.Pattern(IServiceProvider services) => _resolve(services).Pattern;
 
+    // A reactor's checkpoint store serves every reactor, so there is no per-component binding to check.
+    void IWorkloadDescriptor.Validate(IServiceProvider services, string componentName)
+    {
+    }
+
     async ValueTask<ProjectionPassResult> IWorkloadDescriptor.RunPass(IServiceProvider services,
         ProjectionRunOptions options, CancellationToken ct)
     {
