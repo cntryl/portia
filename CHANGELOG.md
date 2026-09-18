@@ -6,6 +6,8 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+## 0.5.2 - 2026-09-18
+
 ### Changed
 
 - A hosted projector whose `FitzKvProjectionStore` repository was constructed for a different
