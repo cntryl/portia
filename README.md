@@ -80,14 +80,14 @@ services.AddPortia()
 ```
 
 Per-tenant projectors and reactors declare their source with
-`EventStreamPattern.ForTenant(area, resource)`; Portia binds the actual tenant realm before reading.
-Global workloads use an exact `EventStreamPattern.ForPattern(realm, area, resource)`.
+`EventStreamPattern.ForTenant(area, resource)`; Portia binds the actual tenant realm before reading. Global workloads
+use an exact `EventStreamPattern.ForPattern(realm, area, resource)`.
 
 An API host explicitly maps HTTP endpoints. A worker host calls the same application setup and adds `.AddWorkers()`. The
 handler and domain model do not change when the operation is sent over RPC, placed on a queue, or invoked in-process.
 
 The
-[complete consumer fixture](test/Portia.ConsumerTests/CompleteWorkflowTests.cs)
+[complete consumer fixture](test/Portia.ConsumerTests/Requests/CompleteWorkflowTests.cs)
 executes one business handler through direct dispatch, HTTP, RPC, and a real Fitz queue, then proves that the resulting
 events retain actor and causal metadata and drive projectors and reactors.
 

@@ -6,6 +6,33 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+## 0.5.0 - Unreleased
+
+### Breaking
+
+- `FitzKvCheckpointStore` and `FitzKvProjectionStore` now treat their configured route as a base and
+  transact against one derived Fitz KV resource per workload: one component in one realm, so each
+  tenant of a `PerTenant` reactor or projector has its own resource. Fitz KV locks a whole resource
+  for a read-write transaction's lifetime, so before this change every reactor behind
+  `UseKvCheckpoints`, every tenant of one per-tenant component, and every projector given the same
+  route contended for one lock. Under load those conflicts reached the consecutive-failure limit and
+  stopped the host. There is no migration: after upgrading, every reactor replays from the start of
+  its pattern once and every projection rebuilds once, so reactor effects must be replay-safe before
+  you upgrade.
+- Query-side reads of a `FitzKvProjectionStore` repository's data must now open their transaction
+  on `FitzKvProjectionStore.RouteFor(route, componentName, realm)` instead of the base route.
+
+### Added
+
+- `FitzKvProjectionStore.RouteFor`, which names the resource a projector workload's data and
+  checkpoint live in.
+
+### Changed
+
+- Reorganized source, test, benchmark, and smoke-consumer projects by capability, with shared
+  global usings and clearer project boundaries.
+- Documented the formatter requirements used by the repository and CI.
+
 ## 0.4.4 - 2026-09-17
 
 ### Fixed

@@ -225,10 +225,12 @@ property is the open unit of work the repository's own operations write through:
 
 ```csharp
 public sealed class AccountRepository(IKvClient kv)
-    : FitzKvProjectionStore(kv, "kv://accounts/balances/projection"), IAccountRepository
+    : FitzKvProjectionStore(kv, BaseRoute), IAccountRepository
 {
+    const string BaseRoute = "kv://accounts/balances/projection";
+
     // Key and value encoding belong to the projection, not the framework: Portia stores only its
-    // own checkpoint in this route and never interprets the application's keys.
+    // own checkpoint alongside them and never interprets the application's keys.
     public async ValueTask IncrementBalanceAsync(Uuid accountId, int amount, CancellationToken ct)
     {
         var key = Encoding.UTF8.GetBytes($"balance\0{accountId}");
@@ -237,6 +239,16 @@ public sealed class AccountRepository(IKvClient kv)
         var next = new byte[sizeof(long)];
         BinaryPrimitives.WriteInt64BigEndian(next, balance + amount);
         await Transaction.PutAsync(key, next, ct);
+    }
+
+    // Query-side reads run outside any batch, so they open their own read-only transaction on the
+    // resource the projector writes for this tenant.
+    public async ValueTask<long> GetBalanceAsync(TenantId tenant, Uuid accountId, CancellationToken ct)
+    {
+        var route = RouteFor(BaseRoute, "AccountProjector", tenant.Value);
+        await using var tx = await kv.BeginAsync(route, KvDurability.Sync, KvMode.ReadOnly, ct);
+        var current = await tx.GetAsync(Encoding.UTF8.GetBytes($"balance\0{accountId}"), ct);
+        return current.Found ? BinaryPrimitives.ReadInt64BigEndian(current.Value!.Value.Span) : 0;
     }
 }
 ```
@@ -257,13 +269,20 @@ both the projection write and the checkpoint commit belong to. One store instanc
 transaction, so a second `BeginAsync` before the first batch commits or disposes is rejected rather
 than silently retargeting the first one's writes.
 
+The route a repository is constructed with is a base, not the resource every batch writes. Fitz KV
+locks a whole resource for a read-write transaction's lifetime, not just the keys it touches, so
+Portia derives one resource per workload — one projector in one realm, and so one per tenant of a
+`PerTenant` projector — and no two workloads can contend for a lock however the routes are
+configured. Reads outside a batch find that resource with `FitzKvProjectionStore.RouteFor`, passing
+the base route, the projector's registered name, and the realm it reads (the tenant ID for a
+`PerTenant` projector).
+
 `UseKvCheckpoints` covers reactors instead. Their effects can never join a transaction, so their
-progress is an independent durable write, and one route holds all of it — the stored key derives
-from the complete `CheckpointIdentity`, so components, tenants, and rebuild generations already
-separate within a route. It is an explicit selection rather than a default: a reactor that silently
+progress is an independent durable write. Its route is a base as well: one checkpoint store serves
+every reactor, and each reactor in each tenant gets its own derived resource, so one tenant's save
+never waits on another's. It is an explicit selection rather than a default: a reactor that silently
 fell back to an in-memory checkpoint would reissue its entire backlog of external effects after
-every restart. Applications that want per-tenant routes register their own scoped
-`FitzKvCheckpointStore` from `WorkloadContext` instead of calling this.
+every restart.
 
 Checkpoint values use a fixed format prefix followed by the backend-owned cursor as UTF-8. Readers
 also accept the Portia 0.1.x representation—exactly eight bytes containing an unsigned big-endian
