@@ -438,7 +438,8 @@ public sealed class FitzKvProjectionStoreTests
 
         foreach (var workload in workloads)
         {
-            await using var batch = await new TotalsRepository(client, "kv://portia/state/orders")
+            await using var batch = await new TotalsRepository(client, "kv://portia/state/orders",
+                    workload.ComponentName)
                 .BeginAsync(new ProjectionBatchContext(workload, ProjectionCheckpoint.Start));
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
         }
@@ -467,32 +468,133 @@ public sealed class FitzKvProjectionStoreTests
     }
 
     /// <summary>
-    ///     Verifies that the published route helper names exactly the resource a batch and a checkpoint
-    ///     load use, so an application's query-side reads find the data its projector wrote.
+    ///     Verifies that a query-side read opens a read-only transaction on exactly the resource the
+    ///     projector's batch wrote for that realm, so it sees the committed data without ever taking the
+    ///     write lock the projector needs.
     /// </summary>
     [Fact]
-    public async Task ShouldExposeTheRouteABatchAndCheckpointLoadUse()
+    public async Task ShouldReadWhereTheProjectorWroteWithoutTakingItsWriteLock()
     {
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
         var identity = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-a", "orders"));
-
         await using (var batch = await store.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)))
+        {
+            await store.AddAsync("widgets", 12);
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
-        _ = await store.LoadCheckpointAsync(identity);
+        }
 
-        var expected = FitzKvProjectionStore.RouteFor("kv://portia/state/orders", "orders", "tenant-a");
-        Assert.All(client.Transactions, tx => Assert.Equal(expected, tx.Route));
+        var total = await store.ReadTotalAsync("tenant-a", "widgets");
+
+        Assert.Equal("12", total);
+        Assert.Equal(client.Transactions[0].Route, client.LastTransaction.Route);
+        Assert.Equal(KvMode.ReadOnly, client.LastTransaction.Mode);
+    }
+
+    /// <summary>
+    ///     Verifies that each realm's read opens that realm's own resource — the one the projector's batch
+    ///     for that realm writes — rather than another realm's.
+    /// </summary>
+    [Fact]
+    public async Task ShouldReadEachRealmFromItsOwnResource()
+    {
+        var client = new FakeKvClient();
+        var store = new TotalsRepository(client, "kv://portia/state/orders");
+        var tenantB = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-b", "orders"));
+        await using (var batch = await store.BeginAsync(new ProjectionBatchContext(tenantB, ProjectionCheckpoint.Start)))
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+
+        _ = await store.ReadTotalAsync("tenant-a", "widgets");
+        var tenantARoute = client.LastTransaction.Route;
+        _ = await store.ReadTotalAsync("tenant-b", "widgets");
+
+        Assert.NotEqual(client.Transactions[0].Route, tenantARoute);
+        Assert.Equal(client.Transactions[0].Route, client.LastTransaction.Route);
+    }
+
+    /// <summary>
+    ///     Verifies that a query-side read is refused while a batch is open on the same store. It would
+    ///     see only committed data, never the batch's staged writes, so a repository computing a write
+    ///     from it — a read-modify-write through the query path — would silently lose updates; reads
+    ///     during a batch belong on the batch's own transaction.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRejectAQueryReadWhileABatchIsOpen()
+    {
+        var client = new FakeKvClient();
+        var store = new TotalsRepository(client, "kv://portia/state/orders");
+        await using var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.ReadTotalAsync("tenant", "widgets"));
+
+        Assert.Contains("Transaction", error.Message, StringComparison.Ordinal);
+        _ = Assert.Single(client.Transactions);
+    }
+
+    /// <summary>
+    ///     Verifies that a repository refuses to load or begin for any projector but the one it was
+    ///     constructed for, before opening a transaction. Its reads derive their resource from that
+    ///     name, so accepting another component's batches would put the data where no read looks.
+    /// </summary>
+    /// <param name="beginning"><see langword="true" /> to check the begin path; otherwise the load path.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldRejectAWorkloadForAnotherProjector(bool beginning)
+    {
+        var client = new FakeKvClient();
+        var store = new TotalsRepository(client, "kv://portia/state/orders");
+        var other = new CheckpointIdentity("Shop.OrdersProjector", EventStreamPattern.ForPattern("tenant", "orders"));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            if (beginning)
+            {
+                _ = await store.BeginAsync(new ProjectionBatchContext(other, ProjectionCheckpoint.Start));
+            }
+            else
+            {
+                _ = await store.LoadCheckpointAsync(other);
+            }
+        });
+
+        Assert.Contains("'orders'", error.Message, StringComparison.Ordinal);
+        Assert.Contains("'Shop.OrdersProjector'", error.Message, StringComparison.Ordinal);
+        Assert.Empty(client.Transactions);
+    }
+
+    /// <summary>Verifies that a blank projector name or read realm is rejected up front.</summary>
+    [Fact]
+    public async Task ShouldRejectBlankComponentNameOrRealm()
+    {
+        _ = Assert.Throws<ArgumentException>(() =>
+            new TotalsRepository(new FakeKvClient(), "kv://portia/state/orders", " "));
+        _ = Assert.Throws<ArgumentNullException>(() =>
+            new TotalsRepository(new FakeKvClient(), "kv://portia/state/orders", null!));
+
+        var client = new FakeKvClient();
+        _ = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await new TotalsRepository(client, "kv://portia/state/orders").ReadTotalAsync(" ", "widgets"));
+        Assert.Empty(client.Transactions);
     }
 
     // A minimal derived repository: it writes its own domain keys through the shared transaction,
     // exactly as a real projection repository is meant to.
-    sealed class TotalsRepository(IKvClient client, string route) : FitzKvProjectionStore(client, route)
+    sealed class TotalsRepository(IKvClient client, string route, string componentName = "orders")
+        : FitzKvProjectionStore(client, route, componentName)
     {
         public static ReadOnlyMemory<byte> DataKey(string name) => Encoding.UTF8.GetBytes("total\0" + name);
 
         public Task AddAsync(string name, int amount) =>
             Transaction.PutAsync(DataKey(name),
                 Encoding.UTF8.GetBytes(amount.ToString(CultureInfo.InvariantCulture)));
+
+        public async Task<string?> ReadTotalAsync(string realm, string name)
+        {
+            await using var tx = await BeginReadAsync(realm);
+            var result = await tx.GetAsync(DataKey(name));
+            return result.Found ? Encoding.UTF8.GetString(result.Value!.Value.Span) : null;
+        }
     }
 }

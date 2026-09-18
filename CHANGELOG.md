@@ -6,7 +6,7 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
-## 0.5.0 - Unreleased
+## 0.5.1 - Unreleased
 
 ### Breaking
 
@@ -19,13 +19,20 @@ alerts are as breaking to change as an API.
   stopped the host. There is no migration: after upgrading, every reactor replays from the start of
   its pattern once and every projection rebuilds once, so reactor effects must be replay-safe before
   you upgrade.
+- `FitzKvProjectionStore` is now constructed with the name of the one projector it serves, and
+  throws on a checkpoint load or batch for any other workload name. A repository whose projector is
+  registered under a different name — including a registration that names none, so the projector's
+  own default name applies — now fails on its first checkpoint load instead of committing to a
+  resource its reads never open.
 - Query-side reads of a `FitzKvProjectionStore` repository's data must now open their transaction
-  on `FitzKvProjectionStore.RouteFor(route, componentName, realm)` instead of the base route.
+  through the protected `BeginReadAsync(realm)` instead of on the base route.
 
 ### Added
 
-- `FitzKvProjectionStore.RouteFor`, which names the resource a projector workload's data and
-  checkpoint live in.
+- `FitzKvProjectionStore.BeginReadAsync(realm)`, which opens a read-only transaction on the resource
+  the repository's projector writes for one realm. It throws while a batch is open on the same
+  instance, because it cannot see that batch's staged writes; reads during a batch go through
+  `Transaction`.
 
 ### Changed
 

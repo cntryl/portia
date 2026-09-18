@@ -43,7 +43,8 @@ public sealed class FitzKvProjectionStoreLifetimeTests
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() => store.AddAsync("total", 12));
     }
 
-    sealed class StrayWriteRepository(IKvClient client, string route) : FitzKvProjectionStore(client, route)
+    sealed class StrayWriteRepository(IKvClient client, string route)
+        : FitzKvProjectionStore(client, route, "orders")
     {
         public Task AddAsync(string name, int amount) =>
             Transaction.PutAsync(Encoding.UTF8.GetBytes("total\0" + name),

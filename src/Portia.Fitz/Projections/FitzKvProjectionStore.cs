@@ -14,39 +14,57 @@ namespace Cntryl.Portia;
 ///     resource exclusively for a ReadWrite transaction's whole lifetime, so each workload — one
 ///     projector in one realm, and so each tenant of a per-tenant projector — gets its own derived
 ///     resource; two workloads can never contend for one lock however the routes are configured.
-///     Query-side reads find that resource through <see cref="RouteFor" />.
+///     A repository serves the one projector it names at construction, so its query-side reads
+///     derive that resource from the realm alone through <see cref="BeginReadAsync" />, and a
+///     projector registered under any other name is rejected rather than writing where no read looks.
 /// </remarks>
 /// <param name="client">The Fitz KV client to open transactions against.</param>
 /// <param name="route">The Fitz KV base route this repository's per-workload resources derive from.</param>
-public abstract class FitzKvProjectionStore(IKvClient client, string route) : IProjectionStore
+/// <param name="componentName">
+///     The workload name of the projector this repository serves: the name it is registered under,
+///     or, when the registration names none, the name the projector passes to its own constructor.
+/// </param>
+public abstract class FitzKvProjectionStore(IKvClient client, string route, string componentName) : IProjectionStore
 {
     readonly IKvClient _client = client ?? throw new ArgumentNullException(nameof(client));
 
     readonly string _route = FitzKvCheckpoints.Route(route, nameof(route));
 
+    readonly string _componentName = RequireName(componentName);
+
     IKvTransaction? _open;
 
     /// <summary>
-    ///     Gets the Fitz KV resource one projector workload's data and checkpoint live in, so an
-    ///     application's query-side reads — which run outside any batch — open their transaction where
-    ///     the projector wrote.
+    ///     Opens a read-only transaction on the resource this repository's projector writes for one
+    ///     realm, so a query-side read — which runs outside any batch — sees what the projector
+    ///     committed. It is read-only so a query never holds the write lock the projector needs.
     /// </summary>
-    /// <param name="route">The base route the repository was constructed with.</param>
-    /// <param name="componentName">The projector's registered workload name.</param>
     /// <param name="realm">
-    ///     The realm the projector reads: the tenant ID for a <c>PerTenant</c> projector, otherwise
-    ///     the realm of its <see cref="EventStreamPattern" />.
+    ///     The realm to read: the tenant ID for a <c>PerTenant</c> projector, otherwise the realm of its
+    ///     <see cref="EventStreamPattern" />.
     /// </param>
-    /// <returns>The derived <c>kv://{realm}/{area}/{resource}</c> route.</returns>
-    /// <exception cref="ArgumentException">
-    ///     The route is not an exact three-segment Fitz KV route, or the component name or realm is blank.
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>A transaction the caller disposes when the read is finished.</returns>
+    /// <exception cref="ArgumentException">The realm is blank.</exception>
+    /// <exception cref="InvalidOperationException">
+    ///     A batch is open on this store. This transaction would see only committed data, never the
+    ///     batch's staged writes, so a write computed from it would silently lose updates; reads during a
+    ///     batch go through <see cref="Transaction" />.
     /// </exception>
-    public static string RouteFor(string route, string componentName, string realm)
+    protected async ValueTask<IKvTransaction> BeginReadAsync(string realm, CancellationToken ct = default)
     {
-        var validated = FitzKvCheckpoints.Route(route, nameof(route));
-        ArgumentException.ThrowIfNullOrWhiteSpace(componentName);
         ArgumentException.ThrowIfNullOrWhiteSpace(realm);
-        return FitzKvCheckpoints.WorkloadRoute(validated, componentName, realm);
+        if (_open is not null)
+        {
+            throw new InvalidOperationException(
+                "A projection batch is open on this store, and a query-side read cannot see its staged writes. "
+                + "Read through Transaction while a batch is open.");
+        }
+
+        return await _client
+            .BeginAsync(FitzKvCheckpoints.WorkloadRoute(_route, _componentName, realm), KvDurability.Sync,
+                KvMode.ReadOnly, ct)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -71,6 +89,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(identity);
+        EnsureOwnProjector(identity);
         return FitzKvCheckpoints.LoadAsync(_client, FitzKvCheckpoints.WorkloadRoute(_route, identity), identity, ct);
     }
 
@@ -78,6 +97,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
     public async ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(context);
+        EnsureOwnProjector(context.Identity);
         if (_open is not null)
         {
             throw new InvalidOperationException(
@@ -122,6 +142,26 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route) : IP
             }
 
             throw;
+        }
+    }
+
+    static string RequireName(string componentName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(componentName);
+        return componentName;
+    }
+
+    // Reads derive their resource from this repository's projector name, so a batch for any other
+    // component would commit where no read ever looks: the typical cause is a registration that names
+    // the projector differently, or not at all, from the name given here.
+    void EnsureOwnProjector(CheckpointIdentity identity)
+    {
+        if (!string.Equals(identity.ComponentName, _componentName, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Repository '{GetType().FullName}' serves projector '{_componentName}' but was given workload "
+                + $"'{identity.ComponentName}'. Register the projector under the name this repository is "
+                + "constructed with, so its query-side reads find the data it writes.");
         }
     }
 
