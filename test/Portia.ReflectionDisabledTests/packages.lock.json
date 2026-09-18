@@ -148,13 +148,13 @@
         "type": "CentralTransitive",
         "requested": "[1.3.1, )",
         "resolved": "1.3.1",
-        "contentHash": "Ya42LVRggcD1xFgAuezA69s3BsG4AQVuLPeYjd1tJHQhWXQpKhTm34fAeNcbztHi78NyOW4eYow5ZqgYJpL8yg=="
+        "contentHash": "hx0MZxGg7F9Zc6IKPYJLsgT3n0tRIVOYK0w03dR0+LT0FS8GWd6h7m18Fiqm2lyFs5hkuVN9MgKt2+fBcCnDzA=="
       },
       "Cntryl.Fitz.Core": {
         "type": "CentralTransitive",
         "requested": "[1.3.1, )",
         "resolved": "1.3.1",
-        "contentHash": "syNs+FG4Ictz5xmD5T8ds41ROOiK6AzoL9o7Xzk7j6nNLX2I/FHPtXqzw88i0tfVhNoVd4OhY8PrgMISsneIZw==",
+        "contentHash": "GrEPGuE+kOc6zDjqvSXhySbGIy5xvJqbwBfLVhIoITfowAdnc4CKKoNk96S9NKxtPU1BDPVezchp654/9Lhh4w==",
         "dependencies": {
           "Cntryl.Fitz.Abstractions": "1.3.1"
         }
