@@ -163,7 +163,7 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         var (name, version) = GetSchemaIdentity(symbol);
         return name is null
             ? null
-            : new EventModel(symbol.ToDisplayString(), name, version,
+            : new EventModel(GetTypeName(symbol), name, version,
                 DiagnosticLocation.From(declaration.Identifier.GetLocation()));
     }
 
@@ -182,9 +182,15 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         var (name, version) = GetSchemaIdentity(symbol);
         return name is null
             ? null
-            : new EventModel(symbol.ToDisplayString(), name, version,
+            : new EventModel(GetTypeName(symbol), name, version,
                 DiagnosticLocation.From(syntax.GetLocation()));
     }
+
+    // Roslyn annotates the type inferred for `var` independently from the same type as written in
+    // an object creation. Nullable reference annotations do not identify different CLR event types,
+    // so normalize the top-level annotation before de-duplicating discriminator declarations.
+    static string GetTypeName(INamedTypeSymbol symbol) =>
+        symbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString();
 
     static InvalidEventDiscriminator? GetInvalidEventDiscriminator(GeneratorSyntaxContext context)
     {

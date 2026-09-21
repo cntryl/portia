@@ -57,6 +57,14 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
+        catch (EventStreamConcurrencyException)
+        {
+            var error = ConcurrencyError();
+            PortiaTelemetry.RecordOutcome(activity, false, error);
+            outcome = PortiaTelemetry.Outcome(false, error);
+            completed = true;
+            throw;
+        }
         catch (Exception ex)
         {
             PortiaTelemetry.RecordFault(activity, ex);
@@ -95,6 +103,14 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
+        catch (EventStreamConcurrencyException)
+        {
+            var error = ConcurrencyError();
+            PortiaTelemetry.RecordOutcome(activity, false, error);
+            outcome = PortiaTelemetry.Outcome(false, error);
+            completed = true;
+            throw;
+        }
         catch (Exception ex)
         {
             PortiaTelemetry.RecordFault(activity, ex);
@@ -122,7 +138,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         PortiaTelemetry.RequestStarted(policies.Name, transport);
         var outcome = "fault";
         var completed = false;
-        var guardFailure = policies.HasGuards ? new StrongBox<RequestError?>() : null;
+        var streamFailure = new StrongBox<RequestError?>();
         try
         {
             if (policies.IsUnprotected)
@@ -140,7 +156,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             }
 
             await foreach (var item in CatchStream(EnumerateStream(registration, policies, request, requestContext, ct),
-                               activity, guardFailure, ct).ConfigureAwait(false))
+                               activity, streamFailure, policies.HasGuards, ct).ConfigureAwait(false))
             {
                 yield return item;
             }
@@ -151,10 +167,10 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         finally
         {
-            // A failed guard is a settled outcome like an authorization denial, not a fault.
-            if (!completed && guardFailure?.Value is { } guardError)
+            // A failed guard or commit-time concurrency race is a settled request outcome, not a fault.
+            if (!completed && streamFailure.Value is { } streamError)
             {
-                outcome = PortiaTelemetry.Outcome(false, guardError);
+                outcome = PortiaTelemetry.Outcome(false, streamError);
                 completed = true;
             }
 
@@ -181,17 +197,20 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     static string Finish(bool completed, string outcome, CancellationToken ct) =>
         completed ? outcome : ct.IsCancellationRequested ? "canceled" : "fault";
 
+    static RequestError ConcurrencyError() => new(RequestErrorKind.Conflict,
+        "The request conflicted with a concurrent update.", true);
+
     // A yield return cannot sit inside a try with a catch, so enumeration is wrapped in methods
     // that can, keeping mid-stream faults on the activity like the unary paths.
     static async IAsyncEnumerable<TOut> CatchStream<TOut>(IAsyncEnumerable<TOut> source, Activity? activity,
-        StrongBox<RequestError?>? guardFailure, [EnumeratorCancellation] CancellationToken ct)
+        StrongBox<RequestError?> streamFailure, bool hasGuards, [EnumeratorCancellation] CancellationToken ct)
     {
         var enumerator = source.GetAsyncEnumerator(ct);
         try
         {
             while (true)
             {
-                var (hasValue, value) = await MoveNextAsync(enumerator, activity, guardFailure, ct)
+                var (hasValue, value) = await MoveNextAsync(enumerator, activity, streamFailure, hasGuards, ct)
                     .ConfigureAwait(false);
                 if (!hasValue)
                 {
@@ -205,12 +224,12 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         finally
         {
-            await DisposeAsync(enumerator, activity, ct).ConfigureAwait(false);
+            await DisposeAsync(enumerator, activity, streamFailure, ct).ConfigureAwait(false);
         }
     }
 
     static async ValueTask<(bool HasValue, TOut? Value)> MoveNextAsync<TOut>(IAsyncEnumerator<TOut> enumerator,
-        Activity? activity, StrongBox<RequestError?>? guardFailure, CancellationToken ct)
+        Activity? activity, StrongBox<RequestError?> streamFailure, bool hasGuards, CancellationToken ct)
     {
         try
         {
@@ -218,10 +237,17 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
                 ? (true, enumerator.Current)
                 : (false, default);
         }
-        catch (RequestGuardException ex) when (guardFailure is not null)
+        catch (RequestGuardException ex) when (hasGuards)
         {
-            guardFailure.Value = ex.Error;
+            streamFailure.Value = ex.Error;
             PortiaTelemetry.RecordOutcome(activity, false, ex.Error);
+            throw;
+        }
+        catch (EventStreamConcurrencyException)
+        {
+            var error = ConcurrencyError();
+            streamFailure.Value = error;
+            PortiaTelemetry.RecordOutcome(activity, false, error);
             throw;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -237,7 +263,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     }
 
     static async ValueTask DisposeAsync<TOut>(IAsyncEnumerator<TOut> enumerator, Activity? activity,
-        CancellationToken ct)
+        StrongBox<RequestError?> streamFailure, CancellationToken ct)
     {
         try
         {
@@ -245,11 +271,20 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            streamFailure.Value = null;
             PortiaTelemetry.RecordCanceled(activity);
+            throw;
+        }
+        catch (EventStreamConcurrencyException)
+        {
+            var error = ConcurrencyError();
+            streamFailure.Value = error;
+            PortiaTelemetry.RecordOutcome(activity, false, error);
             throw;
         }
         catch (Exception ex)
         {
+            streamFailure.Value = null;
             PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }

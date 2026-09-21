@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
@@ -132,6 +134,67 @@ public sealed class TelemetryCompletionTests
             "portia.component.name", nameof(TelemetryStreamGuard)));
     }
 
+    /// <summary>A commit-time concurrency exception is a settled conflict while still propagating.</summary>
+    [Fact]
+    public async Task ShouldRecordCommitConcurrencyAsRequestConflict()
+    {
+        using var measurements = new OutcomeMeasurements();
+        var handler = new ConcurrencyTelemetryHandler();
+        var services = new ServiceCollection()
+            .AddSingleton(handler)
+            .BuildServiceProvider();
+        var bus = new RequestBus(services, new RequestRegistry(
+            [new RequestRegistration<ConcurrencyTelemetryProbe, ConcurrencyTelemetryHandler>()], [], [], []));
+
+        var error = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() => bus.DispatchAsync(
+            new ConcurrencyTelemetryProbe(), bus.CreateContext(RequestActor.System)).AsTask());
+
+        Assert.Contains("sensitive", error.Message, StringComparison.Ordinal);
+        Assert.Equal(1, handler.Attempts);
+        Assert.Equal("conflict", measurements.SingleOutcome("portia.request.duration",
+            "portia.request.name", nameof(ConcurrencyTelemetryProbe)));
+    }
+
+    /// <summary>A stream commit race remains a non-disclosing conflict during move or disposal.</summary>
+    /// <param name="onDispose">Whether the stream reports the conflict while being disposed.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldRecordStreamCommitConcurrencyAsRequestConflict(bool onDispose)
+    {
+        using var measurements = new OutcomeMeasurements();
+        using var listener = ListenToActivities(out var stopped);
+        var services = new ServiceCollection()
+            .AddSingleton(new StreamConcurrencyBehavior(onDispose))
+            .AddSingleton<ConcurrencyTelemetryStreamHandler>()
+            .BuildServiceProvider();
+        var bus = new RequestBus(services, new RequestRegistry(
+            [new StreamRequestRegistration<ConcurrencyTelemetryStream, ConcurrencyTelemetryStreamHandler, int>()],
+            [], [], [], []));
+
+        var observed = 0;
+        var error = await Assert.ThrowsAsync<EventStreamConcurrencyException>(async () =>
+        {
+            await foreach (var _ in bus.DispatchStreamAsync(new ConcurrencyTelemetryStream(),
+                               bus.CreateContext(RequestActor.System)))
+            {
+                observed++;
+                if (onDispose)
+                    break;
+            }
+        });
+
+        Assert.Contains("sensitive", error.Message, StringComparison.Ordinal);
+        Assert.Equal(onDispose ? 1 : 0, observed);
+        Assert.Equal("conflict", measurements.SingleOutcome("portia.request.duration",
+            "portia.request.name", nameof(ConcurrencyTelemetryStream)));
+        var execute = Assert.Single(stopped, activity =>
+            activity.OperationName == PortiaTelemetry.ExecuteActivityName &&
+            Equals(activity.GetTagItem("portia.request.name"), nameof(ConcurrencyTelemetryStream)));
+        Assert.Equal("conflict", execute.GetTagItem("portia.outcome"));
+        Assert.DoesNotContain(execute.Events, activityEvent => activityEvent.Name == "exception");
+    }
+
     static RequestBus GuardBus(GuardBehavior behavior, params RequestGuardRegistration[] guards)
     {
         var services = new ServiceCollection()
@@ -233,6 +296,58 @@ public sealed class TelemetryCompletionTests
     internal sealed record AuthorizationFailure(CancellationTokenSource Source, bool Requested);
 
     internal sealed record GuardTelemetryProbe : IRequest;
+
+    internal sealed record ConcurrencyTelemetryProbe : IRequest;
+
+    internal sealed class ConcurrencyTelemetryHandler : IRequestHandler<ConcurrencyTelemetryProbe>
+    {
+        public int Attempts { get; private set; }
+
+        public ValueTask<Result> HandleAsync(IRequestContext<ConcurrencyTelemetryProbe> context,
+            CancellationToken ct)
+        {
+            Attempts++;
+            throw new EventStreamConcurrencyException("sensitive stream address");
+        }
+    }
+
+    internal sealed record ConcurrencyTelemetryStream : IStreamRequest<int>;
+
+    internal sealed record StreamConcurrencyBehavior(bool OnDispose);
+
+    internal sealed class ConcurrencyTelemetryStreamHandler(StreamConcurrencyBehavior behavior)
+        : IStreamRequestHandler<ConcurrencyTelemetryStream, int>
+    {
+        public IAsyncEnumerable<int> HandleAsync(IRequestContext<ConcurrencyTelemetryStream> context,
+            CancellationToken ct) => new ConcurrencyTelemetryStreamEnumerable(behavior.OnDispose);
+    }
+
+    sealed class ConcurrencyTelemetryStreamEnumerable(bool onDispose)
+        : IAsyncEnumerable<int>, IAsyncEnumerator<int>
+    {
+        bool _moved;
+
+        public int Current => 1;
+
+        public IAsyncEnumerator<int> GetAsyncEnumerator(CancellationToken ct = default) => this;
+
+        public ValueTask<bool> MoveNextAsync()
+        {
+            if (!onDispose)
+                return ValueTask.FromException<bool>(Conflict());
+            if (_moved)
+                return ValueTask.FromResult(false);
+            _moved = true;
+            return ValueTask.FromResult(true);
+        }
+
+        public ValueTask DisposeAsync() => onDispose
+            ? ValueTask.FromException(Conflict())
+            : ValueTask.CompletedTask;
+
+        static EventStreamConcurrencyException Conflict() =>
+            new("sensitive Fitz stream address");
+    }
 
     internal sealed class GuardTelemetryProbeHandler : IRequestHandler<GuardTelemetryProbe>
     {
@@ -469,5 +584,19 @@ public sealed class TelemetryCompletionTests
             return Assert.IsType<string>(Assert.Single(measurement.Tags,
                 tag => tag.Key == "portia.outcome").Value);
         }
+    }
+
+    static ActivityListener ListenToActivities(out ConcurrentQueue<Activity> stopped)
+    {
+        var activities = new ConcurrentQueue<Activity>();
+        stopped = activities;
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == PortiaTelemetry.SourceName,
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ActivityStopped = activities.Enqueue
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
     }
 }

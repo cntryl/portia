@@ -16,6 +16,9 @@ sealed class PortiaMcpServerTool(
     static readonly CallToolResult UnauthorizedFailure = McpToolRegistration.IngressFailure(
         "Unauthorized", "An authenticated actor is required.");
 
+    static readonly CallToolResult ConcurrencyFailure = McpToolRegistration.IngressFailure(
+        "Conflict", "The request conflicted with a concurrent update.", true);
+
     static readonly CallToolResult InternalFailure = McpToolRegistration.IngressFailure(
         "Internal", "The tool could not be completed.");
 
@@ -51,6 +54,13 @@ sealed class PortiaMcpServerTool(
             PortiaTelemetry.RecordOutcome(receive, false,
                 new RequestError(RequestErrorKind.Unauthorized, "An authenticated actor is required."));
             return UnauthorizedFailure;
+        }
+        catch (EventStreamConcurrencyException)
+        {
+            PortiaTelemetry.RecordOutcome(receive, false,
+                new RequestError(RequestErrorKind.Conflict,
+                    "The request conflicted with a concurrent update.", true));
+            return ConcurrencyFailure;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

@@ -27,6 +27,9 @@ namespace Cntryl.Portia.Tests;
 [Collection("MCP HTTP integration")]
 public sealed class McpRegistrationTests
 {
+    static readonly int[] NestedInputValues = [2, 3, 5];
+    static readonly int[] MalformedInputValues = [1];
+
     [Fact]
     public void ShouldAddToolToExistingApplicationBuilder()
     {
@@ -465,6 +468,122 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
+    public async Task ShouldBindNestedObjectArrayScalarAndNullArgumentsWithRegisteredMetadata()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton<InvocationProbe>();
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<InspectNestedInputHandler>()
+            .AddMcpTool<InspectNestedInput>()
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        UseTestActor(app);
+        _ = app.MapPortiaMcp();
+        await app.StartAsync();
+        await using var client = await HttpClientAsync(app);
+
+        var result = await client.CallToolAsync("inputs.inspect", new Dictionary<string, object?>
+        {
+            ["payload"] = new { source_record_id = "single-1", name = "Nested" },
+            ["rows"] = new[]
+            {
+                new { source_record_id = "app-1", name = "Payroll" },
+                new { source_record_id = "app-2", name = "Benefits" }
+            },
+            ["values"] = NestedInputValues,
+            ["label"] = "scalar",
+            ["note"] = null
+        });
+
+        Assert.False(result.IsError);
+        Assert.Equal("single-1:Nested|app-1:Payroll,app-2:Benefits|2,3,5|scalar|null",
+            result.StructuredContent?.GetProperty("result").GetString());
+    }
+
+    [Fact]
+    public async Task ShouldRejectMalformedNestedInputBeforeResolvingActorOrInvokingHandler()
+    {
+        var actor = new CountingActorProvider();
+        var probe = new InvocationProbe();
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton<IMcpActorProvider>(actor);
+        builder.Services.AddSingleton(probe);
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<InspectNestedInputHandler>()
+            .AddMcpTool<InspectNestedInput>()
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        _ = app.MapPortiaMcp();
+        await app.StartAsync();
+        await using var client = await HttpClientAsync(app);
+
+        var result = await client.CallToolAsync("inputs.inspect", new Dictionary<string, object?>
+        {
+            ["payload"] = "not-an-object",
+            ["rows"] = new[] { new { source_record_id = "app-1", name = "Payroll" } },
+            ["values"] = MalformedInputValues,
+            ["label"] = "malformed",
+            ["note"] = null
+        });
+
+        Assert.True(result.IsError);
+        Assert.Equal("Binding", result.StructuredContent?.GetProperty("kind").GetString());
+        Assert.Equal(0, actor.Invocations);
+        Assert.Equal(0, probe.Invocations);
+    }
+
+    [Fact]
+    public async Task ShouldMapCommitConcurrencyToSafeTransientConflictWithoutRetry()
+    {
+        var probe = new ConcurrencyProbe();
+        var stopped = new ConcurrentQueue<Activity>();
+        using var listener = Listen(stopped);
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton(probe);
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<CommitGreetingHandler>()
+            .AddMcpTool<CommitGreeting>()
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        UseTestActor(app);
+        _ = app.MapPortiaMcp();
+        await app.StartAsync();
+        await using var client = await HttpClientAsync(app);
+
+        var firstCall = client.CallToolAsync("greetings.commit", new Dictionary<string, object?>
+        {
+            ["expectedVersion"] = 0
+        });
+        var secondCall = client.CallToolAsync("greetings.commit", new Dictionary<string, object?>
+        {
+            ["expectedVersion"] = 0
+        });
+        var responses = new[] { await firstCall, await secondCall };
+        var winner = Assert.Single(responses, result => result.IsError != true);
+        var conflict = Assert.Single(responses, result => result.IsError == true);
+
+        Assert.False(winner.IsError);
+        Assert.True(conflict.IsError);
+        Assert.Equal("Conflict", conflict.StructuredContent?.GetProperty("kind").GetString());
+        Assert.Equal("The request conflicted with a concurrent update.",
+            conflict.StructuredContent?.GetProperty("message").GetString());
+        Assert.True(conflict.StructuredContent?.GetProperty("isTransient").GetBoolean());
+        Assert.DoesNotContain("Fitz", conflict.StructuredContent?.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret/tenant-stream", conflict.StructuredContent?.GetRawText(),
+            StringComparison.Ordinal);
+        Assert.Equal(2, probe.Attempts);
+        Assert.Equal(1, probe.Commits);
+        Assert.Equal(2, probe.Validated);
+        Assert.Contains(stopped, activity => activity.OperationName == PortiaTelemetry.ProcessActivityName
+                                             && Equals(activity.GetTagItem("portia.outcome"), "conflict"));
+        Assert.Contains(stopped, activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName
+                                             && Equals(activity.GetTagItem("portia.outcome"), "conflict"));
+    }
+
+    [Fact]
     public async Task ShouldUseHttpPrincipalAsPortiaActor()
     {
         // Arrange
@@ -788,6 +907,92 @@ public sealed class McpRegistrationTests
                 new RequestError(RequestErrorKind.Conflict, "Greeting already exists.", true)));
     }
 
+    /// <summary>Inspects structured MCP input.</summary>
+    [Discriminator("inputs.inspect")]
+    public sealed record InspectNestedInput(NestedInput Payload, IReadOnlyList<NestedInput> Rows, int[] Values,
+        string Label, string? Note)
+        : IRequest<string>, ICallable;
+
+    public sealed record NestedInput(string SourceRecordId, string Name);
+
+    public sealed class InspectNestedInputHandler(InvocationProbe probe)
+        : IRequestHandler<InspectNestedInput, string>
+    {
+        public ValueTask<Result<string>> HandleAsync(IRequestContext<InspectNestedInput> context,
+            CancellationToken ct)
+        {
+            probe.Invoked();
+            return ValueTask.FromResult(Result<string>.Success(
+                $"{context.Request.Payload.SourceRecordId}:{context.Request.Payload.Name}|" +
+                $"{string.Join(',', context.Request.Rows.Select(row => $"{row.SourceRecordId}:{row.Name}"))}|" +
+                $"{string.Join(',', context.Request.Values)}|" +
+                $"{context.Request.Label}|{context.Request.Note ?? "null"}"));
+        }
+    }
+
+    public sealed class InvocationProbe
+    {
+        int _invocations;
+        public int Invocations => Volatile.Read(ref _invocations);
+        public void Invoked() => Interlocked.Increment(ref _invocations);
+    }
+
+    public sealed class CountingActorProvider : IMcpActorProvider
+    {
+        int _invocations;
+        public int Invocations => Volatile.Read(ref _invocations);
+
+        public ValueTask<ClaimsPrincipal> GetActorAsync(CancellationToken ct = default)
+        {
+            Interlocked.Increment(ref _invocations);
+            return ValueTask.FromResult(new ClaimsPrincipal(new ClaimsIdentity("test")));
+        }
+    }
+
+    /// <summary>Commits a greeting at an expected version.</summary>
+    [Discriminator("greetings.commit")]
+    public sealed record CommitGreeting(int ExpectedVersion) : IRequest, ICallable;
+
+    public sealed class CommitGreetingHandler(ConcurrencyProbe probe) : IRequestHandler<CommitGreeting>
+    {
+        public async ValueTask<Result> HandleAsync(IRequestContext<CommitGreeting> context, CancellationToken ct)
+        {
+            if (!await probe.TryCommitAsync(context.Request.ExpectedVersion, ct))
+            {
+                throw new EventStreamConcurrencyException("Fitz 2001 for secret/tenant-stream");
+            }
+
+            return Result.Success;
+        }
+    }
+
+    public sealed class ConcurrencyProbe
+    {
+        int _version;
+        int _attempts;
+        int _commits;
+        int _validated;
+        readonly TaskCompletionSource _bothValidated = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int Attempts => Volatile.Read(ref _attempts);
+        public int Commits => Volatile.Read(ref _commits);
+        public int Validated => Volatile.Read(ref _validated);
+
+        public async ValueTask<bool> TryCommitAsync(int expectedVersion, CancellationToken ct)
+        {
+            Interlocked.Increment(ref _attempts);
+            if (Volatile.Read(ref _version) != expectedVersion)
+                return false;
+            if (Interlocked.Increment(ref _validated) == 2)
+                _bothValidated.TrySetResult();
+            await _bothValidated.Task.WaitAsync(ct);
+            if (Interlocked.CompareExchange(ref _version, expectedVersion + 1, expectedVersion) != expectedVersion)
+                return false;
+            Interlocked.Increment(ref _commits);
+            return true;
+        }
+    }
+
     /// <summary>Returns the authenticated Portia actor name.</summary>
     [Discriminator("actors.read")]
     [RequestRoute("public", "actors", "actor", "read")]
@@ -951,6 +1156,9 @@ public sealed class McpRegistrationTests
 [PortiaJsonContext]
 [JsonSerializable(typeof(McpRegistrationTests.ReadGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.RejectGreeting))]
+[JsonSerializable(typeof(McpRegistrationTests.InspectNestedInput))]
+[JsonSerializable(typeof(McpRegistrationTests.NestedInput))]
+[JsonSerializable(typeof(McpRegistrationTests.CommitGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.ReadActor))]
 [JsonSerializable(typeof(McpRegistrationTests.WaitForCancellation))]
 [JsonSerializable(typeof(string))]

@@ -13,7 +13,8 @@ sealed record OpenApiContractNode(
     HttpMoney CustomValue,
     Uuid TeamId,
     Uuid? ParentTeamId,
-    OpenApiContractNode? NextNode = null);
+    OpenApiContractNode? NextNode = null,
+    Uuid? OperatorUserId = null);
 
 [Discriminator("test.openapi.contract")]
 [RequestRoute("test", "openapi", "contract", "echo")]
