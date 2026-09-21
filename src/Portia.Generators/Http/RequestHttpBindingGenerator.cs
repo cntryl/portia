@@ -496,6 +496,12 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .AppendLine(
                 "                await global::Cntryl.Portia.PortiaHttpBinding.Problem(400, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
             .AppendLine("            }")
+            .AppendLine(
+                "            catch (global::Cntryl.Portia.EventStreamConcurrencyException) when (!httpContext.Response.HasStarted)")
+            .AppendLine("            {")
+            .AppendLine(
+                "                await global::Cntryl.Portia.ResultHttpExtensions.ToHttpResult(global::Cntryl.Portia.Result.Failure(new global::Cntryl.Portia.RequestError(global::Cntryl.Portia.RequestErrorKind.Conflict, \"The request conflicted with a concurrent update.\", true))).ExecuteAsync(httpContext).ConfigureAwait(false);")
+            .AppendLine("            }")
             .AppendLine("            catch (global::System.Exception ex) when (!httpContext.Response.HasStarted)")
             .AppendLine("            {")
             .AppendLine(

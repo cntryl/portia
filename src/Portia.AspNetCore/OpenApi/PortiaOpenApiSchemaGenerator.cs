@@ -19,10 +19,11 @@ static class PortiaOpenApiSchemaGenerator
         var node = options.GetTypeInfo(type).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
         {
             // The OpenAPI reader expects object nodes for entries in a properties map.
-            TransformSchemaNode = (context, schema) => context.TypeInfo.Type switch
+            TransformSchemaNode = (context, schema) =>
+                (context.PropertyInfo?.PropertyType ?? context.TypeInfo.Type) switch
             {
-                var uuid when uuid == typeof(Uuid) => UuidSchema(false),
-                var nullableUuid when nullableUuid == typeof(Uuid?) => UuidSchema(true),
+                var uuid when uuid == typeof(Uuid) => UuidSchema(schema, false),
+                var nullableUuid when nullableUuid == typeof(Uuid?) => UuidSchema(schema, true),
                 _ => schema.GetValueKind() switch
                 {
                     JsonValueKind.True => new JsonObject(),
@@ -31,6 +32,7 @@ static class PortiaOpenApiSchemaGenerator
                 }
             }
         });
+        ApplyUuidPropertySchemas(node, options.GetTypeInfo(type));
         var nodes = new Dictionary<string, JsonNode>(StringComparer.Ordinal);
         var references = new List<(JsonObject Node, string Target)>();
         Visit(node, "#");
@@ -98,15 +100,38 @@ static class PortiaOpenApiSchemaGenerator
             }
         }
 
-        static JsonObject UuidSchema(bool nullable)
+        static JsonObject UuidSchema(JsonNode schema, bool nullable)
         {
-            return new JsonObject
+            // Preserve exporter-owned keywords such as a constructor parameter's default. The
+            // property context is also authoritative for nullable value types: TypeInfo can be the
+            // underlying Uuid when an optional record parameter defaults to null.
+            var result = schema as JsonObject ?? [];
+            result["type"] = nullable
+                ? new JsonArray(JsonValue.Create("string"), JsonValue.Create("null"))
+                : JsonValue.Create("string");
+            result["format"] = "uuid";
+            return result;
+        }
+
+        void ApplyUuidPropertySchemas(JsonNode schema, System.Text.Json.Serialization.Metadata.JsonTypeInfo typeInfo)
+        {
+            if (schema is not JsonObject schemaObject || schemaObject["properties"] is not JsonObject properties)
+                return;
+
+            foreach (var property in typeInfo.Properties)
             {
-                ["type"] = nullable
-                    ? new JsonArray(JsonValue.Create("string"), JsonValue.Create("null"))
-                    : JsonValue.Create("string"),
-                ["format"] = "uuid"
-            };
+                if (properties[property.Name] is not JsonObject propertySchema)
+                    continue;
+                if (property.PropertyType == typeof(Uuid) || property.PropertyType == typeof(Uuid?))
+                {
+                    _ = UuidSchema(propertySchema, property.PropertyType == typeof(Uuid?));
+                    continue;
+                }
+
+                var nestedType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+                if (propertySchema.ContainsKey("properties"))
+                    ApplyUuidPropertySchemas(propertySchema, options.GetTypeInfo(nestedType));
+            }
         }
     }
 }

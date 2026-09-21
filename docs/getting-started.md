@@ -320,6 +320,13 @@ session UUID. An audit before the first raised event leaves aggregate loading ab
 
 Do not emit or save concurrently on one aggregate instance. An OCC conflict throws
 `EventStreamConcurrencyException`; Portia does not rerun business commands.
+Generated HTTP and MCP ingress treat that commit-time exception as a safe, transient conflict:
+HTTP returns 409 and MCP returns its structured `Conflict` result, both with a fixed message that
+does not disclose stream addresses or storage errors. Clients should reload before deciding whether
+to retry. When a caller needs the current aggregate version or revision, the application may catch
+the exception in its handler, reload a fresh authorized aggregate, and return a transient
+`RequestErrorKind.Conflict` with those application-safe details. It must not rerun the original
+business command automatically or copy the event-store exception text into the response.
 
 ## Map HTTP endpoints
 

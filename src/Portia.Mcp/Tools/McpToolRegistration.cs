@@ -120,7 +120,7 @@ public abstract class McpToolRegistration
             if (call.Arguments is not null)
             {
                 foreach (var argument in call.Arguments)
-                    arguments[argument.Key] = JsonValue.Create(argument.Value);
+                    arguments[argument.Key] = JsonNode.Parse(argument.Value.GetRawText());
             }
 
             return (TRequest?)arguments.Deserialize(json.GetTypeInfo(typeof(TRequest)))

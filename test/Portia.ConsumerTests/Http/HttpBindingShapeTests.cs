@@ -5,6 +5,118 @@ namespace Cntryl.Portia.Consumer;
 public sealed class HttpBindingShapeTests
 {
     [Fact]
+    public async Task GeneratedHttpMapsCommitConcurrencyToSafeTransientConflictWithoutRetry()
+    {
+        var assembly = GeneratorCompilation.Compile("""
+                                                    using System.Net.Http;
+                                                    using System.Linq;
+                                                    using System.Text;
+                                                    using System.Text.Json.Serialization.Metadata;
+                                                    using System.Threading;
+                                                    using System.Threading.Tasks;
+                                                    using Cntryl.Portia;
+                                                    using Cntryl.Portia.Testing;
+                                                    using Microsoft.AspNetCore.Builder;
+                                                    using Microsoft.AspNetCore.Hosting;
+                                                    using Microsoft.AspNetCore.TestHost;
+                                                    using Microsoft.Extensions.DependencyInjection;
+                                                    public sealed record ConcurrentWrite(int ExpectedVersion) : IRequest, ICallable;
+                                                    public sealed class WriteProbe
+                                                    {
+                                                        public int Version;
+                                                        public int Attempts;
+                                                        public int Commits;
+                                                        public int Validated;
+                                                        public TaskCompletionSource BothValidated = new(
+                                                            TaskCreationOptions.RunContinuationsAsynchronously);
+
+                                                        public async ValueTask<bool> TryCommitAsync(
+                                                            int expectedVersion, CancellationToken ct)
+                                                        {
+                                                            Interlocked.Increment(ref Attempts);
+                                                            if (Volatile.Read(ref Version) != expectedVersion)
+                                                                return false;
+                                                            if (Interlocked.Increment(ref Validated) == 2)
+                                                                BothValidated.TrySetResult();
+                                                            await BothValidated.Task.WaitAsync(ct);
+                                                            if (Interlocked.CompareExchange(ref Version,
+                                                                    expectedVersion + 1,
+                                                                    expectedVersion) != expectedVersion)
+                                                                return false;
+                                                            Interlocked.Increment(ref Commits);
+                                                            return true;
+                                                        }
+                                                    }
+                                                    public sealed class Handler(WriteProbe probe) : IRequestHandler<ConcurrentWrite>
+                                                    {
+                                                        public async ValueTask<Result> HandleAsync(IRequestContext<ConcurrentWrite> context, CancellationToken ct)
+                                                        {
+                                                            if (!await probe.TryCommitAsync(
+                                                                    context.Request.ExpectedVersion, ct))
+                                                            {
+                                                                throw new EventStreamConcurrencyException(
+                                                                    "Fitz 2001 for secret/tenant-stream");
+                                                            }
+
+                                                            return Result.Success;
+                                                        }
+                                                    }
+                                                    public static class Scenario
+                                                    {
+                                                        public static async Task<(int, int, string?, string, int, int, int)> Run()
+                                                        {
+                                                            var builder = WebApplication.CreateBuilder();
+                                                            builder.WebHost.UseTestServer();
+                                                            builder.Services.AddSingleton<WriteProbe>();
+                                                            builder.Services.AddPortia()
+                                                                .AddHttp()
+                                                                .ConfigureJson(options => options.TypeInfoResolver = new DefaultJsonTypeInfoResolver())
+                                                                .AddRequestHandler<Handler>();
+                                                            await using var app = builder.Build();
+                                                            app.MapPortiaPost<ConcurrentWrite>("/write");
+                                                            await app.StartAsync();
+                                                            using var client = app.GetTestClient();
+                                                            var firstCall = client.PostAsync("/write",
+                                                                new StringContent("{\"expected_version\":0}", Encoding.UTF8, "application/json"));
+                                                            var secondCall = client.PostAsync("/write",
+                                                                new StringContent("{\"expected_version\":0}", Encoding.UTF8, "application/json"));
+                                                            using var firstResponse = await firstCall;
+                                                            using var secondResponse = await secondCall;
+                                                            var responses = new[] { firstResponse, secondResponse };
+                                                            var winner = responses.Single(response => (int)response.StatusCode == 204);
+                                                            var conflict = responses.Single(response => (int)response.StatusCode == 409);
+                                                            var body = await conflict.Content.ReadAsStringAsync();
+                                                            var probe = app.Services.GetRequiredService<WriteProbe>();
+                                                            var transient = conflict.Headers.TryGetValues(
+                                                                    ResultHttpExtensions.TransientHeaderName, out var values)
+                                                                ? values.SingleOrDefault()
+                                                                : null;
+                                                            return ((int)winner.StatusCode, (int)conflict.StatusCode,
+                                                                transient, body, probe.Attempts, probe.Commits,
+                                                                probe.Validated);
+                                                        }
+                                                    }
+                                                    """, new RegistrationCallInterceptorGenerator(),
+            new RequestHttpBindingGenerator());
+
+        var result = await (Task<(int Winner, int Conflict, string? Transient, string Body, int Attempts, int Commits,
+                int Validated)>)
+            assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, null)!;
+
+        Assert.Equal(204, result.Winner);
+        Assert.Equal(409, result.Conflict);
+        Assert.Equal("true", result.Transient);
+        Assert.Contains("\"transient\":true", result.Body, StringComparison.Ordinal);
+        Assert.Contains("The request conflicted with a concurrent update.", result.Body,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("Fitz", result.Body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret/tenant-stream", result.Body, StringComparison.Ordinal);
+        Assert.Equal(2, result.Attempts);
+        Assert.Equal(1, result.Commits);
+        Assert.Equal(2, result.Validated);
+    }
+
+    [Fact]
     public async Task HelperConfiguredBindersSupportOtherwiseUnbindableRequests()
     {
         var assembly = GeneratorCompilation.Compile("""

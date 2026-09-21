@@ -84,7 +84,8 @@ public sealed class OpenApiTests : IAsyncDisposable
         {
             var settings = new OpenApiReaderSettings();
             settings.AddYamlReader();
-            var parsed = OpenApiDocument.Parse(await client.GetStringAsync("/openapi/v1." + format),
+            var serialized = await client.GetStringAsync("/openapi/v1." + format);
+            var parsed = OpenApiDocument.Parse(serialized,
                 format == "yml" ? "yaml" : "json", settings);
             Assert.Empty(parsed.Diagnostic!.Errors);
             var document = parsed.Document!;
@@ -107,10 +108,30 @@ public sealed class OpenApiTests : IAsyncDisposable
                 Assert.True(schema.Properties["parent_team_id"].Type!.Value.HasFlag(JsonSchemaType.String));
                 Assert.True(schema.Properties["parent_team_id"].Type!.Value.HasFlag(JsonSchemaType.Null));
                 Assert.Equal("uuid", schema.Properties["parent_team_id"].Format);
+                var operatorUserId = schema.Properties["operator_user_id"];
+                Assert.True(operatorUserId.Type.HasValue, serialized);
+                Assert.True(operatorUserId.Type.Value.HasFlag(JsonSchemaType.String));
+                Assert.True(operatorUserId.Type!.Value.HasFlag(JsonSchemaType.Null));
+                Assert.Equal("uuid", operatorUserId.Format);
                 var child = schema.Properties["next_node"];
                 Assert.True(child.Type!.Value.HasFlag(JsonSchemaType.Null));
                 Assert.Contains("display_name", child.Properties!.Keys);
                 Assert.Contains("display_name", child.Properties["next_node"].Properties!.Keys);
+            }
+
+            if (format == "json")
+            {
+                using var raw = JsonDocument.Parse(serialized);
+                var operatorSchema = raw.RootElement.GetProperty("components").GetProperty("schemas")
+                    .EnumerateObject().Select(component => component.Value)
+                    .First(schema => schema.TryGetProperty("properties", out var properties) &&
+                                     properties.TryGetProperty("operator_user_id", out _))
+                    .GetProperty("properties").GetProperty("operator_user_id");
+                Assert.True(new HashSet<string>(operatorSchema.GetProperty("type").EnumerateArray()
+                    .Select(item => item.GetString()!), StringComparer.Ordinal).SetEquals(["string", "null"]));
+                Assert.Equal("uuid", operatorSchema.GetProperty("format").GetString());
+                Assert.True(operatorSchema.TryGetProperty("default", out var declaredDefault), serialized);
+                Assert.Equal(JsonValueKind.Null, declaredDefault.ValueKind);
             }
 
             var appSchema =

@@ -13,6 +13,15 @@ sealed class ManualTestClock : TimeProvider
     readonly Channel<TimeSpan> _scheduled = Channel.CreateUnbounded<TimeSpan>();
     readonly List<ClockTimer> _timers = [];
     DateTimeOffset _now = DateTimeOffset.UnixEpoch;
+    long _timestamp;
+
+    public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+    public override long GetTimestamp()
+    {
+        lock (_gate)
+            return _timestamp;
+    }
 
     public override DateTimeOffset GetUtcNow()
     {
@@ -38,6 +47,7 @@ sealed class ManualTestClock : TimeProvider
         lock (_gate)
         {
             _now += duration;
+            _timestamp += duration.Ticks;
             ready = [.. _timers.Where(timer => timer.Due <= _now)];
             foreach (var timer in ready)
                 timer.Due = timer.Period > TimeSpan.Zero ? _now + timer.Period : DateTimeOffset.MaxValue;

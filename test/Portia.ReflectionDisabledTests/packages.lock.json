@@ -139,24 +139,24 @@
       "Cntryl.Portia.Fitz": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Fitz.Core": "[1.4.0, )",
+          "Cntryl.Fitz.Core": "[1.4.1, )",
           "Cntryl.Portia.Abstractions": "[0.5.2, )",
           "Cntryl.Portia.DependencyInjection": "[0.5.2, )"
         }
       },
       "Cntryl.Fitz.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[1.4.0, )",
-        "resolved": "1.4.0",
-        "contentHash": "EoezlfU+/Gl8JR/T/hZQl2yjbByqso8bLPB930L8bpBkzMo7ntW7CWl+xQDUCGjUrrooOkOUGAWtAw7jah+LBw=="
+        "requested": "[1.4.1, )",
+        "resolved": "1.4.1",
+        "contentHash": "jmG9Ef5auBUsyBelLquz1hEyE/bzhXmaX1x8yF1xjofpASihwgp4TuYf6BWRnCz8jW2wFP64OuokQV4S5hyprg=="
       },
       "Cntryl.Fitz.Core": {
         "type": "CentralTransitive",
-        "requested": "[1.4.0, )",
-        "resolved": "1.4.0",
-        "contentHash": "ERSeCnXzleJ9LfPQnrXDMPRno89qauzMFymXbbw1MswzTDzTjpN2OYQB3ejl6lOEKuxrNoQWiz/UjbkpDRlkug==",
+        "requested": "[1.4.1, )",
+        "resolved": "1.4.1",
+        "contentHash": "+MsCAudp2+1vT5VUBNlp9RNHeXeQmZxrH8WKN1zVyA9Vp06AHixu7HKOOLTz7q8XVUYi0UeER8zpJam7TS5hiw==",
         "dependencies": {
-          "Cntryl.Fitz.Abstractions": "1.4.0"
+          "Cntryl.Fitz.Abstractions": "1.4.1"
         }
       },
       "Microsoft.AspNetCore.OpenApi": {

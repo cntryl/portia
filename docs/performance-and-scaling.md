@@ -137,6 +137,25 @@ independently. Cursor progress is not persisted across process restarts. Legacy
 `ITenantDirectory` implementations continue to use a complete active-membership enumeration plus
 live watch.
 
+`EventSourcedTenantDirectory` reports each bounded read pass through
+`portia.tenant_directory.operation.duration`, `portia.tenant_directory.event.count`, and
+`portia.tenant_directory.active.count`. The bounded `portia.operation` tag identifies a snapshot,
+legacy watch, or resumable cursor; `portia.phase` distinguishes the initial `replay` from later
+`catch_up` passes; and `portia.outcome` distinguishes success, cancellation, interruption, and a
+reader fault. Duration includes only time spent advancing the durable reader; downstream lifecycle
+consumer and workload backpressure is excluded. Tenant identities, stream addresses, and cursor
+values are deliberately excluded.
+
+Use these measurements with `portia.workload.active` and `portia.processor.lag` when startup is
+slow. A long successful replay whose event count grows with lifecycle history indicates replay
+cost; compare its active-tenant count with workload-active growth to expose per-tenant fan-out. A
+faulting pass that repeatedly stops at the same event count points to an unreadable or poison
+lifecycle event. Successful catch-up passes while processor lag remains flat or rises instead point
+to processor checkpoint progress, not tenant discovery. No duration by itself proves a stalled
+checkpoint: confirm that event counts and processor lag fail to advance across repeated samples.
+Directory cursors remain in-process only; these diagnostics do not add a durable tenant snapshot or
+checkpoint.
+
 Normal tenant removal has one `MultiTenantRunnerOptions.TenantStopTimeout` deadline shared by
 workload cancellation and the stop callback. Ignoring that deadline faults the runner with
 `TenantStopTimeoutException`; host shutdown continues to use the shared `ShutdownGrace` budget.

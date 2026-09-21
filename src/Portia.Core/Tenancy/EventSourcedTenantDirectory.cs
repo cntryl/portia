@@ -43,7 +43,8 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var active = new HashSet<TenantId>();
-        await foreach (var record in _reader.ReadAsync(_pattern, EventCursor.Start, ct).WithCancellation(ct)
+        await foreach (var record in ReadPassAsync(EventCursor.Start, active, "snapshot", "replay", ct)
+                           .WithCancellation(ct)
                            .ConfigureAwait(false))
             _ = Apply(active, record.Event);
         foreach (var tenantId in active)
@@ -65,7 +66,8 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
         {
             ct.ThrowIfCancellationRequested();
             var sawAny = false;
-            await foreach (var record in _reader.ReadAsync(_pattern, cursor, ct).WithCancellation(ct)
+            await foreach (var record in ReadPassAsync(cursor, active, "watch", initial ? "replay" : "catch_up", ct)
+                               .WithCancellation(ct)
                                .ConfigureAwait(false))
             {
                 cursor = record.NextCursor;
@@ -95,6 +97,55 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
             {
                 await Task.Delay(_pollInterval, _clock, ct).ConfigureAwait(false);
             }
+        }
+    }
+
+    async IAsyncEnumerable<DomainEventRecord> ReadPassAsync(EventCursor cursor, HashSet<TenantId> active,
+        string operation, string phase, [EnumeratorCancellation] CancellationToken ct)
+    {
+        var readDuration = TimeSpan.Zero;
+        var eventCount = 0;
+        var outcome = "interrupted";
+        try
+        {
+            await using var records = _reader.ReadAsync(_pattern, cursor, ct).GetAsyncEnumerator(ct);
+            while (true)
+            {
+                bool hasNext;
+                var readStarted = _clock.GetTimestamp();
+                try
+                {
+                    hasNext = await records.MoveNextAsync().ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    outcome = "canceled";
+                    throw;
+                }
+                catch
+                {
+                    outcome = "fault";
+                    throw;
+                }
+                finally
+                {
+                    readDuration += _clock.GetElapsedTime(readStarted);
+                }
+
+                if (!hasNext)
+                {
+                    outcome = "success";
+                    break;
+                }
+
+                eventCount++;
+                yield return records.Current;
+            }
+        }
+        finally
+        {
+            PortiaTelemetry.TenantDirectoryReadFinished(readDuration, operation, phase, outcome, eventCount,
+                active.Count);
         }
     }
 
@@ -177,7 +228,8 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                     }
 
                     var sawAny = false;
-                    await foreach (var record in directory._reader.ReadAsync(directory._pattern, _nextCursor, ct)
+                    await foreach (var record in directory.ReadPassAsync(_nextCursor, _active, "cursor",
+                                           _initial ? "replay" : "catch_up", ct)
                                        .WithCancellation(ct).ConfigureAwait(false))
                     {
                         _nextCursor = record.NextCursor;

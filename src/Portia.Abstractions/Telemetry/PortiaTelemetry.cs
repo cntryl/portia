@@ -90,6 +90,15 @@ public static partial class PortiaTelemetry
     static readonly Histogram<double> ProcessorLag =
         Meter.CreateHistogram("portia.processor.lag", "s", null, null, LagBuckets);
 
+    static readonly Histogram<double> TenantDirectoryDuration =
+        Meter.CreateHistogram("portia.tenant_directory.operation.duration", "s", null, null, LatencyBuckets);
+
+    static readonly Counter<long> TenantDirectoryEvents =
+        Meter.CreateCounter<long>("portia.tenant_directory.event.count", "{event}");
+
+    static readonly Histogram<long> TenantDirectoryActive =
+        Meter.CreateHistogram<long>("portia.tenant_directory.active.count", "{tenant}");
+
     static readonly UpDownCounter<long> WorkloadActive =
         Meter.CreateUpDownCounter<long>("portia.workload.active", "{workload}");
 
@@ -319,6 +328,22 @@ public static partial class PortiaTelemetry
                 new KeyValuePair<string, object?>("portia.component.name", component),
                 new KeyValuePair<string, object?>("portia.runner.name", runner));
         }
+    }
+
+    /// <summary>Records one bounded tenant-directory read pass without tenant or cursor identities.</summary>
+    internal static void TenantDirectoryReadFinished(TimeSpan duration, string operation, string phase,
+        string outcome, int eventCount, int activeTenantCount)
+    {
+        var tags = new TagList
+        {
+            { "portia.operation", operation },
+            { "portia.phase", phase },
+            { "portia.outcome", outcome }
+        };
+        TenantDirectoryDuration.Record(Math.Max(0, duration.TotalSeconds), tags);
+        if (eventCount > 0)
+            TenantDirectoryEvents.Add(eventCount, tags);
+        TenantDirectoryActive.Record(activeTenantCount, tags);
     }
 
     /// <summary>Records a balanced workload lifecycle transition and optional information log.</summary>

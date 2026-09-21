@@ -261,6 +261,98 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
+    public void InferredExternalDomainEventLocalsDoNotReportDuplicateDiscriminator()
+    {
+        var contracts = GeneratorCompilation.Reference("""
+                                                       using Cntryl.Portia;
+                                                       namespace Contracts;
+                                                       [Discriminator("boundary.draft.created", 1)]
+                                                       public sealed record BoundaryDraftCreated : DomainEvent;
+                                                       [Discriminator("boundary.draft.revised", 1)]
+                                                       public sealed record BoundaryDraftRevised : DomainEvent;
+                                                       """);
+        const string source = """
+                              #nullable enable
+                              using Contracts;
+                              public static class Scenario
+                              {
+                                  public static void Run()
+                                  {
+                                      var created = new BoundaryDraftCreated();
+                                      var revised = new BoundaryDraftRevised();
+                                  }
+                              }
+                              """;
+
+        var diagnostics = GeneratorCompilation.Diagnostics(source, [contracts],
+            new DomainEventCatalogGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA023");
+    }
+
+    [Fact]
+    public void ExplicitBaseTypedExternalDomainEventLocalsDoNotReportDuplicateDiscriminator()
+    {
+        var contracts = GeneratorCompilation.Reference("""
+                                                       using Cntryl.Portia;
+                                                       namespace Contracts;
+                                                       [Discriminator("boundary.draft.created", 1)]
+                                                       public sealed record BoundaryDraftCreated : DomainEvent;
+                                                       [Discriminator("boundary.draft.revised", 1)]
+                                                       public sealed record BoundaryDraftRevised : DomainEvent;
+                                                       """);
+        const string source = """
+                              using Cntryl.Portia;
+                              using Contracts;
+                              public static class Scenario
+                              {
+                                  public static void Run()
+                                  {
+                                      DomainEvent created = new BoundaryDraftCreated();
+                                      DomainEvent revised = new BoundaryDraftRevised();
+                                  }
+                              }
+                              """;
+
+        var diagnostics = GeneratorCompilation.Diagnostics(source, [contracts],
+            new DomainEventCatalogGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA023");
+    }
+
+    [Fact]
+    public void DistinctExternalDomainEventTypesStillReportDuplicateDiscriminator()
+    {
+        var contracts = GeneratorCompilation.Reference("""
+                                                       using Cntryl.Portia;
+                                                       namespace Contracts;
+                                                       [Discriminator("boundary.draft.changed", 1)]
+                                                       public sealed record BoundaryDraftCreated : DomainEvent;
+                                                       [Discriminator("boundary.draft.changed", 1)]
+                                                       public sealed record BoundaryDraftRevised : DomainEvent;
+                                                       """);
+        const string source = """
+                              #nullable enable
+                              using Contracts;
+                              public static class Scenario
+                              {
+                                  public static void Run()
+                                  {
+                                      var created = new BoundaryDraftCreated();
+                                      var revised = new BoundaryDraftRevised();
+                                  }
+                              }
+                              """;
+
+        var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics(source, [contracts],
+            new DomainEventCatalogGenerator()), item => item.Id == "PORTIA023");
+
+        Assert.Equal("Domain-event CLR types 'Contracts.BoundaryDraftCreated' and " +
+                     "'Contracts.BoundaryDraftRevised' both declare discriminator 'boundary.draft.changed' version 1",
+            diagnostic.GetMessage(CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
     public void DuplicateRequestNamesBothClrTypesAtDuplicateDeclaration()
     {
         const string source = """
