@@ -6,6 +6,27 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+## 0.5.3 - 2026-09-21
+
+### Added
+
+- Tenant-directory replay, catch-up, and cursor diagnostics report bounded read duration, event
+  volume, active-tenant counts, and safe outcome tags without exposing tenant or cursor identities.
+
+### Fixed
+
+- OpenAPI export preserves the type, UUID format, nullability, and null default of optional nullable
+  UUID record parameters.
+- Domain-event duplicate-discriminator analysis no longer treats nullable and non-nullable spellings
+  of one CLR event type as separate registrations.
+- Commit-time aggregate concurrency conflicts now remain safe transient conflicts across HTTP and MCP
+  ingress, without automatic command retries or storage-detail disclosure.
+- MCP tools now bind nested object and array arguments through their source-generated request metadata.
+
+### Changed
+
+- Refreshed compatible direct NuGet dependencies and lock files.
+
 ## 0.5.2 - 2026-09-18
 
 ### Changed

@@ -42,15 +42,15 @@
       "Cntryl.Portia.Core": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.5.2, )",
+          "Cntryl.Portia.Abstractions": "[0.5.3, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.12, )"
         }
       },
       "Cntryl.Portia.DependencyInjection": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.5.2, )",
-          "Cntryl.Portia.Core": "[0.5.2, )",
+          "Cntryl.Portia.Abstractions": "[0.5.3, )",
+          "Cntryl.Portia.Core": "[0.5.3, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.12, )"
         }
@@ -58,7 +58,7 @@
       "consumer.contracts": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.DependencyInjection": "[0.5.2, )"
+          "Cntryl.Portia.DependencyInjection": "[0.5.3, )"
         }
       },
       "Microsoft.Extensions.Configuration.Abstractions": {
