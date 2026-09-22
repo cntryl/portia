@@ -262,7 +262,17 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                 return;
             }
 
-            var session = await _streams.BeginAsync(stream.ToString(), ct: ct).ConfigureAwait(false);
+            IStreamSession session;
+            try
+            {
+                session = await _streams.BeginAsync(stream.ToString(), ct: ct).ConfigureAwait(false);
+            }
+            catch (StreamException ex) when (
+                ex.DomainCode == FitzErrorCodes.StreamSessionAlreadyActive)
+            {
+                throw new EventStreamConcurrencyException(
+                    $"Stream '{stream}' already has an active append session.", ex);
+            }
             var failed = false;
             try
             {
@@ -287,7 +297,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                 failed = true;
                 await RollbackAsync(session).ConfigureAwait(false);
 
-                if (ex is StreamException { DomainCode: 2001 })
+                if (ex is StreamException { DomainCode: FitzErrorCodes.StreamConcurrencyConflict })
                 {
                     throw new EventStreamConcurrencyException(
                         $"Stream '{stream}' is not at the expected physical stream position.", ex);

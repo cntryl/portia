@@ -2,9 +2,10 @@ namespace Cntryl.Portia;
 
 /// <summary>
 ///     Thrown by <see cref="IDomainEventWriter.AppendAsync" /> when a stream is not at the expected
-///     physical position. Raised-event saves use the aggregate's committed event-stream position;
-///     audits use independent session streams. Reloading and re-evaluating a command after a
-///     conflict is an application decision; Portia never automatically reruns business commands.
+///     physical position or another append session currently owns the stream. Raised-event saves use
+///     the aggregate's committed event-stream position; audits use independent session streams.
+///     Reloading and re-evaluating a command after either contention condition is an application
+///     decision; Portia never automatically reruns business commands.
 /// </summary>
 /// <param name="message">A description of the conflict.</param>
 /// <param name="innerException">
