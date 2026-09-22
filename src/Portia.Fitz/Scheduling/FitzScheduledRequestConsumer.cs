@@ -197,14 +197,35 @@ public sealed class FitzScheduledRequestConsumer(
                               "A fired Fitz schedule entry deserialized to a result-bearing request; only no-result requests can be scheduled.");
             if (!_catalog.Get(request.GetType()).Transports.Contains(RequestTransportId.Schedule))
                 throw new InvalidRequestTransportException(request, RequestTransportId.Schedule);
+            // The validator approves a system identity per fired route, so the request must be one that
+            // declares this route; otherwise an entry could run another route's request as this principal.
+            if (!DeclaresRoute(request, notification.Route))
+                throw new UndeclaredScheduleRouteException();
             return new ScheduledFiring(notification.Route, scheduled.SystemSubject, scheduled.SystemIssuer, request,
                 envelope);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            // Only the failure's type is reported: the route and payload can carry tenant data.
+            PortiaTelemetry.RecordRunnerFault(nameof(FitzScheduledRequestConsumer), RunnerFaultStage.Validation,
+                new UntranslatableScheduledRequestException(ex), logger);
             RecordLost();
             return null;
         }
+    }
+
+    // Resolves the request's own schedule route with the fired route's segments as values, so only
+    // the request type's wildcarded segments can vary.
+    bool DeclaresRoute(IRequest request, string firedRoute)
+    {
+        const string prefix = "schedule://";
+        if (!firedRoute.StartsWith(prefix, StringComparison.Ordinal))
+            return false;
+        var segments = firedRoute[prefix.Length..].Split('/');
+        return segments.Length == 4 && string.Equals(firedRoute,
+            FitzRouting.ResolveScheduleRoute(_catalog, request,
+                new RequestRouteValues(segments[0], segments[1], segments[2], segments[3])),
+            StringComparison.Ordinal);
     }
 
     // One validator call in a fresh scope. A definite rejection loses the firing; a thrown or transient
@@ -285,4 +306,10 @@ public sealed class FitzScheduledRequestConsumer(
 
     sealed class ScheduledActorValidationException(RequestError error) : Exception(
         $"Scheduled actor validation transiently failed with kind '{error.Kind}': {error.Message}");
+
+    sealed class UndeclaredScheduleRouteException() : InvalidOperationException(
+        "A fired schedule's request does not declare the fired route.");
+
+    sealed class UntranslatableScheduledRequestException(Exception cause) : Exception(
+        $"A fired schedule entry could not be translated ({cause.GetType().Name}) and was dropped.");
 }
