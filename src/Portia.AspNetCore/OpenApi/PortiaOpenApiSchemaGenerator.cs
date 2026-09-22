@@ -125,7 +125,7 @@ static class PortiaOpenApiSchemaGenerator
             if (schemaType == typeof(Uuid) || schemaType == typeof(Uuid?))
                 return UuidSchema(schemaObject, schemaType == typeof(Uuid?));
 
-            if (GetEnumerableElementType(schemaType) is { } elementType)
+            if (options.GetTypeInfo(schemaType).ElementType is { } elementType)
             {
                 schemaObject["items"] = ApplyUuidSchemas(
                     schemaObject["items"] ?? new JsonObject(), elementType);
@@ -145,13 +145,5 @@ static class PortiaOpenApiSchemaGenerator
             return schemaObject;
         }
 
-        static Type? GetEnumerableElementType(Type type)
-        {
-            if (type.IsArray)
-                return type.GetElementType();
-
-            var genericArguments = type.IsGenericType ? type.GetGenericArguments() : [];
-            return genericArguments.Length == 1 ? genericArguments[0] : null;
-        }
     }
 }
