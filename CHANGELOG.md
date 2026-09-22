@@ -6,6 +6,19 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+## 0.5.4 - 2026-09-21
+
+### Fixed
+
+- `FitzEventStore` now normalizes Fitz append-session admission contention into
+  `EventStreamConcurrencyException` before a session is acquired. Stale-position contention after
+  acquisition remains separately classified, and Portia does not retry business commands.
+
+### Changed
+
+- Updated the synchronized Cntryl.Fitz package family to 1.4.2, which exposes named constants for
+  stale stream positions and active append-session contention.
+
 ## 0.5.3 - 2026-09-21
 
 ### Added
