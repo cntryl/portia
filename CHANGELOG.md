@@ -32,6 +32,12 @@ alerts are as breaking to change as an API.
 - `ProjectionStoreConformance` now derives identities for the live projector in another realm and
   another area and fails a store whose checkpoints or data are not independent across them, such as
   one keyed by component and rebuild generation only. Probes must accept those identities.
+- An unauthenticated caller of the MCP Streamable HTTP endpoint now runs as an anonymous actor, so
+  Portia's request authorization fails closed. Previously a registered `IMcpActorProvider` supplied
+  its actor to such callers; the provider now applies only to stdio.
+- MCP tool binding now rejects a missing or `null` argument for a constructor member that is
+  neither nullable nor defaulted with a `Binding` failure, matching generated HTTP binding.
+  Previously the handler received `null` or the type's default value.
 
 ## 0.5.5 - 2026-09-22
 

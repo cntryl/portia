@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -14,6 +15,7 @@ namespace Cntryl.Portia;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public abstract class McpToolRegistration
 {
+    static readonly ConditionalWeakTable<JsonSerializerOptions, JsonSerializerOptions> BindingOptions = [];
     Tool? _protocolTool;
 
     internal McpToolRegistration(Type requestType, Type? resultType, string name, string description,
@@ -123,12 +125,35 @@ public abstract class McpToolRegistration
                     arguments[argument.Key] = JsonNode.Parse(argument.Value.GetRawText());
             }
 
-            return (TRequest?)arguments.Deserialize(json.GetTypeInfo(typeof(TRequest)))
+            return (TRequest?)arguments.Deserialize(Strict(json).GetTypeInfo(typeof(TRequest)))
                    ?? throw new JsonException("The MCP tool input cannot be null.");
         }
         catch (JsonException exception)
         {
             throw new McpBindingException(exception);
+        }
+    }
+
+    // Mirrors generated HTTP binding: a constructor member that is neither nullable nor defaulted must
+    // be present and non-null.
+    static JsonSerializerOptions Strict(JsonSerializerOptions json) =>
+        BindingOptions.GetValue(json, static current =>
+        {
+            var options = new JsonSerializerOptions(current)
+            {
+                RespectNullableAnnotations = true,
+                TypeInfoResolver = current.TypeInfoResolver?.WithAddedModifier(RequireNonNullableMembers)
+            };
+            options.MakeReadOnly();
+            return options;
+        });
+
+    static void RequireNonNullableMembers(JsonTypeInfo typeInfo)
+    {
+        foreach (var property in typeInfo.Properties)
+        {
+            if (property.AssociatedParameter is { HasDefaultValue: false, IsNullable: false })
+                property.IsRequired = true;
         }
     }
 
@@ -140,6 +165,10 @@ public abstract class McpToolRegistration
         if (call.User is not null)
             return call.User;
         var services = call.Services ?? throw new InvalidOperationException("The MCP request has no service scope.");
+        // HTTP authentication owns identity: the SDK omits an unauthenticated caller's principal, so it
+        // stays anonymous and the request bus fails closed. The actor provider is a stdio-only policy.
+        if (services.GetService<PortiaMcpHttpMarker>() is not null)
+            return new ClaimsPrincipal(new ClaimsIdentity());
         var provider = services.GetService<IMcpActorProvider>()
                        ?? throw new McpActorRequiredException(
                            "MCP ingress has no authenticated principal or registered IMcpActorProvider.");

@@ -63,7 +63,8 @@ The default endpoint is `/mcp` and the default HTTP mode is stateless Streamable
 overwriting it later during `Build()`. Standard
 ASP.NET Core endpoint conventions remain authoritative for authentication, authorization, host
 filtering, and CORS. Portia uses the authenticated `HttpContext.User`; MCP arguments and metadata
-cannot replace that principal. Authorization still runs inside `IRequestBus` on every invocation.
+cannot replace that principal. An unauthenticated caller stays anonymous: `IMcpActorProvider`
+applies only to stdio. Authorization still runs inside `IRequestBus` on every invocation.
 The endpoint also honors `PortiaHttpOptions.MaxJsonBodyBytes`. As with generated HTTP endpoints, a
 `POST` or `DELETE` from another browser origin returns 403 unless the CORS pipeline allows that
 origin; see [cross-origin requests](getting-started.md#cross-origin-requests).

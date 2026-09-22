@@ -555,11 +555,11 @@ public sealed class McpRegistrationTests
 
         var firstCall = client.CallToolAsync("greetings.commit", new Dictionary<string, object?>
         {
-            ["expectedVersion"] = 0
+            ["expected_version"] = 0
         });
         var secondCall = client.CallToolAsync("greetings.commit", new Dictionary<string, object?>
         {
-            ["expectedVersion"] = 0
+            ["expected_version"] = 0
         });
         var responses = new[] { await firstCall, await secondCall };
         var winner = Assert.Single(responses, result => result.IsError != true);
@@ -613,6 +613,92 @@ public sealed class McpRegistrationTests
 
         // Assert
         Assert.Equal("authenticated-agent|mcp|actors.read",
+            result.StructuredContent?.GetProperty("result").GetString());
+    }
+
+    [Fact]
+    public async Task ShouldNotConsultStdioActorProviderForAnonymousHttpCaller()
+    {
+        // Arrange
+        var actor = new NamedActorProvider("provider-actor");
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton<IMcpActorProvider>(actor);
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<ReadActorHandler>()
+            .AddMcpTool<ReadActor>()
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        _ = app.MapPortiaMcp();
+        await app.StartAsync();
+        await using var client = await HttpClientAsync(app);
+
+        // Act
+        var result = await client.CallToolAsync("actors.read", new Dictionary<string, object?>());
+
+        // Assert
+        Assert.Equal(0, actor.Invocations);
+        Assert.DoesNotContain("provider-actor", result.StructuredContent?.GetRawText(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldRejectMissingOrNullNonNullableArgumentAsBinding(bool explicitNull)
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .AddMcpTool<ReadGreeting>()
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        UseTestActor(app);
+        _ = app.MapPortiaMcp();
+        await app.StartAsync();
+        await using var client = await HttpClientAsync(app);
+        var arguments = new Dictionary<string, object?>();
+        if (explicitNull)
+            arguments["name"] = null;
+
+        // Act
+        var result = await client.CallToolAsync("greetings.read", arguments);
+
+        // Assert
+        Assert.True(result.IsError);
+        Assert.Equal("Binding", result.StructuredContent?.GetProperty("kind").GetString());
+    }
+
+    [Fact]
+    public async Task ShouldBindOmittedNullableArgumentAsNull()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton<InvocationProbe>();
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<InspectNestedInputHandler>()
+            .AddMcpTool<InspectNestedInput>()
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        UseTestActor(app);
+        _ = app.MapPortiaMcp();
+        await app.StartAsync();
+        await using var client = await HttpClientAsync(app);
+
+        // Act
+        var result = await client.CallToolAsync("inputs.inspect", new Dictionary<string, object?>
+        {
+            ["payload"] = new { source_record_id = "single-1", name = "Nested" },
+            ["rows"] = Array.Empty<object>(),
+            ["values"] = NestedInputValues,
+            ["label"] = "scalar"
+        });
+
+        // Assert
+        Assert.False(result.IsError);
+        Assert.Equal("single-1:Nested||2,3,5|scalar|null",
             result.StructuredContent?.GetProperty("result").GetString());
     }
 
@@ -1070,6 +1156,19 @@ public sealed class McpRegistrationTests
     {
         public ValueTask<Result<string>> HandleAsync(IRequestContext<InheritedGreeting> context,
             CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+    }
+
+    public sealed class NamedActorProvider(string name) : IMcpActorProvider
+    {
+        int _invocations;
+        public int Invocations => Volatile.Read(ref _invocations);
+
+        public ValueTask<ClaimsPrincipal> GetActorAsync(CancellationToken ct = default)
+        {
+            Interlocked.Increment(ref _invocations);
+            return ValueTask.FromResult(new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(ClaimTypes.Name, name)], "test")));
+        }
     }
 
     public sealed class ScopedActorProvider : IMcpActorProvider
