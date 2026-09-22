@@ -63,6 +63,58 @@ public sealed class FitzNotificationPoisonMessageTests
     }
 
     /// <summary>
+    ///     A wildcard segment only admits the fired route's value for that segment; a literal segment
+    ///     that differs still loses the firing before validation.
+    /// </summary>
+    [Fact]
+    public async Task ShouldDropScheduleGivenWildcardRequestWhoseLiteralSegmentDiffers()
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var validator = new CountingScheduledValidator();
+        using var meter = ListenToLost(out var lost);
+        var consumer = new FitzScheduledRequestConsumer(
+            new ScriptedScheduleClient([ScheduleEnvelope(serializer)]), serializer,
+            "schedule://t1/billing/action/run", WildcardRealmCatalog(), validator);
+
+        Assert.Empty(await ReadAllAsync(consumer));
+        Assert.Equal(0, validator.Calls);
+        Assert.Equal(["schedule"], lost);
+    }
+
+    /// <summary>A fired route that differs from the declared route only in case is not the declared route.</summary>
+    [Fact]
+    public async Task ShouldDropScheduleGivenFiredRouteThatDiffersOnlyInCase()
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var validator = new CountingScheduledValidator();
+        using var meter = ListenToLost(out var lost);
+        var consumer = new FitzScheduledRequestConsumer(
+            new ScriptedScheduleClient([ScheduleEnvelope(serializer)]), serializer,
+            "schedule://test/Shared/action/run",
+            TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)), validator);
+
+        Assert.Empty(await ReadAllAsync(consumer));
+        Assert.Equal(0, validator.Calls);
+        Assert.Equal(["schedule"], lost);
+    }
+
+    /// <summary>A firing lost to a route mismatch records a runner fault, so the loss has a logged reason.</summary>
+    [Fact]
+    public async Task ShouldRecordARunnerFaultGivenScheduleRequestDeclaredForAnotherRoute()
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var logger = new CapturingLogger<FitzScheduledRequestConsumer>();
+        var consumer = new FitzScheduledRequestConsumer(
+            new ScriptedScheduleClient([ScheduleEnvelope(serializer)]), serializer,
+            "schedule://test/billing/invoices/generate",
+            TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)),
+            new AllowScheduledRequestActorValidator(), logger);
+
+        Assert.Empty(await ReadAllAsync(consumer));
+        Assert.Equal([(1002, LogLevel.Error), (1004, LogLevel.Warning)], logger.Entries);
+    }
+
+    /// <summary>
     ///     Verifies a notice whose body is not a Portia envelope is skipped and the next notice on
     ///     the same subscription still arrives.
     /// </summary>
@@ -102,7 +154,7 @@ public sealed class FitzNotificationPoisonMessageTests
 
         _ = Assert.Single(delivered);
         _ = Assert.IsType<UniversalAction>(delivered[0].Request);
-        Assert.Equal((1004, LogLevel.Warning), Assert.Single(logger.Entries));
+        Assert.Equal([(1002, LogLevel.Error), (1004, LogLevel.Warning)], logger.Entries);
     }
 
     /// <summary>F2: A retryable notice envelope is currently lost and the next notice continues.</summary>
@@ -147,6 +199,12 @@ public sealed class FitzNotificationPoisonMessageTests
             delivered.Add(notification);
         return delivered;
     }
+
+    static RequestTransportCatalog WildcardRealmCatalog() => new([
+        new RequestTransportRegistration(typeof(UniversalAction), [RequestTransportId.Schedule],
+            new RequestRouteAttribute("*", "shared", "action", "run"),
+            new DiscriminatorAttribute("test.shared.universal-action"))
+    ]);
 
     static ReadOnlyMemory<byte> Envelope(JsonRequestSerializer serializer) =>
         serializer.Serialize(new UniversalAction(1), null, RequestMetadata.Create(), null);

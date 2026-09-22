@@ -200,13 +200,15 @@ public sealed class FitzScheduledRequestConsumer(
             // The validator approves a system identity per fired route, so the request must be one that
             // declares this route; otherwise an entry could run another route's request as this principal.
             if (!DeclaresRoute(request, notification.Route))
-                throw new InvalidOperationException(
-                    $"A fired schedule's request does not declare its route '{notification.Route}'.");
+                throw new UndeclaredScheduleRouteException();
             return new ScheduledFiring(notification.Route, scheduled.SystemSubject, scheduled.SystemIssuer, request,
                 envelope);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            // Only the failure's type is reported: the route and payload can carry tenant data.
+            PortiaTelemetry.RecordRunnerFault(nameof(FitzScheduledRequestConsumer), RunnerFaultStage.Validation,
+                new UntranslatableScheduledRequestException(ex), logger);
             RecordLost();
             return null;
         }
@@ -304,4 +306,10 @@ public sealed class FitzScheduledRequestConsumer(
 
     sealed class ScheduledActorValidationException(RequestError error) : Exception(
         $"Scheduled actor validation transiently failed with kind '{error.Kind}': {error.Message}");
+
+    sealed class UndeclaredScheduleRouteException() : InvalidOperationException(
+        "A fired schedule's request does not declare the fired route.");
+
+    sealed class UntranslatableScheduledRequestException(Exception cause) : Exception(
+        $"A fired schedule entry could not be translated ({cause.GetType().Name}) and was dropped.");
 }

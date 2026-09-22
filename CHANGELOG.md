@@ -19,6 +19,9 @@ alerts are as breaking to change as an API.
   identity or dispatching it, when the embedded request's declared schedule route does not resolve
   to the fired route. Previously an entry could run another route's schedulable request as the
   principal approved for the fired route.
+- A fired schedule entry that `FitzScheduledRequestConsumer` cannot translate now also records a
+  `validation`-stage runner fault naming only the failure type, so every lost firing has a logged
+  reason. Previously only the generic lost-delivery warning was emitted.
 - Disposing a Fitz event-store subscription whose pending wait faulted now releases the Fitz
   subscription instead of rethrowing that fault and leaking it.
 - `FitzEventStore` pattern reads now fault on a record whose stream metadata disagrees with the
