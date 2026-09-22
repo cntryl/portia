@@ -32,7 +32,7 @@ static class PortiaOpenApiSchemaGenerator
                 }
             }
         });
-        ApplyUuidPropertySchemas(node, options.GetTypeInfo(type));
+        node = ApplyUuidSchemas(node, type);
         var nodes = new Dictionary<string, JsonNode>(StringComparer.Ordinal);
         var references = new List<(JsonObject Node, string Target)>();
         Visit(node, "#");
@@ -113,25 +113,45 @@ static class PortiaOpenApiSchemaGenerator
             return result;
         }
 
-        void ApplyUuidPropertySchemas(JsonNode schema, System.Text.Json.Serialization.Metadata.JsonTypeInfo typeInfo)
+        JsonNode ApplyUuidSchemas(JsonNode schema, Type schemaType)
         {
-            if (schema is not JsonObject schemaObject || schemaObject["properties"] is not JsonObject properties)
-                return;
+            if (schema is not JsonObject schemaObject)
+            {
+                return schemaType == typeof(Uuid) || schemaType == typeof(Uuid?)
+                    ? UuidSchema(schema, schemaType == typeof(Uuid?))
+                    : schema;
+            }
 
+            if (schemaType == typeof(Uuid) || schemaType == typeof(Uuid?))
+                return UuidSchema(schemaObject, schemaType == typeof(Uuid?));
+
+            if (GetEnumerableElementType(schemaType) is { } elementType)
+            {
+                schemaObject["items"] = ApplyUuidSchemas(
+                    schemaObject["items"] ?? new JsonObject(), elementType);
+                return schemaObject;
+            }
+
+            if (schemaObject["properties"] is not JsonObject properties)
+                return schemaObject;
+
+            var typeInfo = options.GetTypeInfo(schemaType);
             foreach (var property in typeInfo.Properties)
             {
-                if (properties[property.Name] is not JsonObject propertySchema)
+                if (properties[property.Name] is not { } propertySchema)
                     continue;
-                if (property.PropertyType == typeof(Uuid) || property.PropertyType == typeof(Uuid?))
-                {
-                    _ = UuidSchema(propertySchema, property.PropertyType == typeof(Uuid?));
-                    continue;
-                }
-
-                var nestedType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-                if (propertySchema.ContainsKey("properties"))
-                    ApplyUuidPropertySchemas(propertySchema, options.GetTypeInfo(nestedType));
+                properties[property.Name] = ApplyUuidSchemas(propertySchema, property.PropertyType);
             }
+            return schemaObject;
+        }
+
+        static Type? GetEnumerableElementType(Type type)
+        {
+            if (type.IsArray)
+                return type.GetElementType();
+
+            var genericArguments = type.IsGenericType ? type.GetGenericArguments() : [];
+            return genericArguments.Length == 1 ? genericArguments[0] : null;
         }
     }
 }

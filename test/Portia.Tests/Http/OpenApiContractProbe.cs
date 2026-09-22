@@ -14,7 +14,8 @@ sealed record OpenApiContractNode(
     Uuid TeamId,
     Uuid? ParentTeamId,
     OpenApiContractNode? NextNode = null,
-    Uuid? OperatorUserId = null);
+    Uuid? OperatorUserId = null,
+    IReadOnlyList<Uuid> CandidateApplicationIds = null!);
 
 [Discriminator("test.openapi.contract")]
 [RequestRoute("test", "openapi", "contract", "echo")]
