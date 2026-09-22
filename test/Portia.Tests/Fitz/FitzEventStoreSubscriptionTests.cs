@@ -61,6 +61,32 @@ public sealed class FitzEventStoreSubscriptionTests
         Assert.Equal(1, client.Unsubscribes);
     }
 
+    /// <summary>
+    ///     Verifies disposal after a retained wait faulted still releases the underlying subscription
+    ///     and does not rethrow the fault the caller already observed from that wait.
+    /// </summary>
+    [Fact]
+    public async Task ShouldReleaseTheUnderlyingSubscriptionOnDisposalAfterAFaultedWait()
+    {
+        var commits = Channel.CreateUnbounded<StreamCommitEvent>();
+        var client = new SubscribingStreamClient(commits.Reader);
+        var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
+        var subscription = await store.SubscribeAsync(Pattern);
+
+        using (var backstop = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))
+        {
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+                await subscription.WaitAsync(backstop.Token));
+        }
+
+        _ = commits.Writer.TryComplete(new IOException("broker connection lost"));
+        _ = await Assert.ThrowsAsync<IOException>(async () => await subscription.WaitAsync());
+
+        await subscription.DisposeAsync();
+
+        Assert.Equal(1, client.Unsubscribes);
+    }
+
     sealed class SubscribingStreamClient(ChannelReader<StreamCommitEvent> commits) : IStreamClient
     {
         int _unsubscribes;

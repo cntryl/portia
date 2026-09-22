@@ -79,6 +79,28 @@ public sealed class FitzEventStoreReadTelemetryTests
         Assert.Empty(measurements.Counts);
     }
 
+    /// <summary>
+    ///     A pattern read faults on a record whose writer-supplied stream metadata names a different
+    ///     stream than the broker-authoritative route it was stored under.
+    /// </summary>
+    [Fact]
+    public async Task ShouldFaultAPatternReadGivenMetadataThatDisagreesWithTheRecordRoute()
+    {
+        var measurements = new Measurements();
+        using var listener = measurements.Listen();
+        var fixture = CreateStore(new Pages(CreatePage(1, new EventStreamAddress("test", "events", "other"))));
+
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (var _ in fixture.Store.ReadAsync(EventStreamPattern.ForPattern("test")))
+            {
+            }
+        });
+
+        Assert.Equal("fault", Assert.Single(measurements.Durations).Outcome);
+        Assert.Empty(measurements.Counts);
+    }
+
     static (FitzEventStore Store, EventStreamAddress Stream) CreateStore(IStreamClient pages)
     {
         var serializer = TestJson.DomainSerializer(
@@ -86,7 +108,7 @@ public sealed class FitzEventStoreReadTelemetryTests
         return (new FitzEventStore(pages, serializer), new EventStreamAddress("test", "events", "one"));
     }
 
-    static StreamReadPage CreatePage(int count)
+    static StreamReadPage CreatePage(int count, EventStreamAddress? metadataStream = null)
     {
         var stream = new EventStreamAddress("test", "events", "one");
         var serializer = TestJson.DomainSerializer(
@@ -97,7 +119,7 @@ public sealed class FitzEventStoreReadTelemetryTests
             ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(),
                 (ulong)index + 1, DateTimeOffset.UtcNow));
             var record = new StreamRecord(stream.ToString(), (ulong)index, (ulong)index, (ulong)index,
-                (ulong)index, serializer.Serialize(ev).ToArray(), Encoding.UTF8.GetBytes(stream.ToString()), 0);
+                (ulong)index, serializer.Serialize(ev).ToArray(), Encoding.UTF8.GetBytes((metadataStream ?? stream).ToString()), 0);
             return new StreamReadItem(stream.ToString(), 0, record, (ulong)index,
                 (ulong)index, (ulong)index);
         }).ToArray();
