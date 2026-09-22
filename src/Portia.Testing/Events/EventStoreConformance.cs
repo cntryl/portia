@@ -96,9 +96,22 @@ public static class EventStoreConformance
 
         // A second writer that still believes the stream is empty. Every implementation must
         // surface this as the one stable exception type applications catch.
+        await RequireConflictAsync(store, stream, 0, Event(id, 1),
+            "A stale append succeeded; the expected stream position was not enforced.", ct).ConfigureAwait(false);
+
+        // A writer expecting a position the stream has not reached must be refused too, not
+        // appended at the actual end or left with a gap.
+        await RequireConflictAsync(store, stream, 5, Event(id, 6),
+            "An append expecting a position ahead of the stream succeeded; the expected stream position was not enforced.",
+            ct).ConfigureAwait(false);
+    }
+
+    static async ValueTask RequireConflictAsync(IEventStore store, EventStreamAddress stream,
+        ulong expectedStreamPosition, DomainEvent domainEvent, string message, CancellationToken ct)
+    {
         try
         {
-            await store.AppendAsync(stream, 0, [Event(id, 1)], ct).ConfigureAwait(false);
+            await store.AppendAsync(stream, expectedStreamPosition, [domainEvent], ct).ConfigureAwait(false);
         }
         catch (EventStreamConcurrencyException)
         {
@@ -114,8 +127,7 @@ public static class EventStoreConformance
                 $"A stale append threw '{ex.GetType().FullName}'; it must throw {nameof(EventStreamConcurrencyException)} so one catch covers every adapter.");
         }
 
-        throw new ConformanceViolationException(
-            "A stale append succeeded; the expected stream position was not enforced.");
+        throw new ConformanceViolationException(message);
     }
 
     static async ValueTask VerifyConflictLeavesStreamUnchangedAsync(IEventStoreConformanceProbe probe,
@@ -134,8 +146,24 @@ public static class EventStoreConformance
     static async ValueTask VerifyPatternReadCoversStreamsAsync(IEventStoreConformanceProbe probe, CancellationToken ct)
     {
         var store = await probe.OpenAsync(ct).ConfigureAwait(false);
+
+        // Same-named streams in another realm (another tenant) and another area of this realm must
+        // stay out of the probe area's pattern read.
+        var id = Uuid.CreateVersion4();
+        await store.AppendAsync(new EventStreamAddress(probe.Realm + "-other", probe.Area, "ordered"), 0,
+            [Event(id, 1)], ct).ConfigureAwait(false);
+        await store.AppendAsync(new EventStreamAddress(probe.Realm, probe.Area + "-other", "ordered"), 0,
+            [Event(id, 1)], ct).ConfigureAwait(false);
+
         var pattern = EventStreamPattern.ForPattern(probe.Realm, probe.Area);
         var records = await ReadAsync(store, pattern, EventCursor.Start, ct).ConfigureAwait(false);
+        if (records.FirstOrDefault(record =>
+                record.Stream.Realm != probe.Realm || record.Stream.Area != probe.Area) is { } foreign)
+        {
+            throw new ConformanceViolationException(
+                $"A pattern read for '{pattern}' returned a record from stream '{foreign.Stream}' outside the pattern; it must never return another realm's or area's events.");
+        }
+
         var streams = records.Select(record => record.Stream.Resource).Distinct().ToArray();
         if (!streams.Contains("ordered") || !streams.Contains("conflict"))
         {

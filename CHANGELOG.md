@@ -26,6 +26,12 @@ alerts are as breaking to change as an API.
   subscription instead of rethrowing that fault and leaking it.
 - `FitzEventStore` pattern reads now fault on a record whose stream metadata disagrees with the
   broker-reported record route.
+- `EventStoreConformance` now writes same-named streams in another realm and another area and
+  fails a store whose pattern read returns them, and rejects an append that expects a position
+  ahead of the stream as well as behind it.
+- `ProjectionStoreConformance` now derives identities for the live projector in another realm and
+  another area and fails a store whose checkpoints or data are not independent across them, such as
+  one keyed by component and rebuild generation only. Probes must accept those identities.
 
 ## 0.5.5 - 2026-09-22
 

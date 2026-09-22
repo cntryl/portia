@@ -433,9 +433,10 @@ and ambiguous commit responses against the chosen backend.
 
 - `ProjectionStoreConformance` verifies atomic data/checkpoint commits, rollback, optimistic
   conflicts reported as the adapter-neutral `ProjectionConcurrencyException`, authoritative
-  reloads, and rebuild isolation.
-- `EventStoreConformance` verifies append ordering, offset resumption, and that a stale append
-  fails with `EventStreamConcurrencyException` and writes nothing.
+  reloads, rebuild isolation, and that checkpoints for another realm or area are independent.
+- `EventStoreConformance` verifies append ordering, offset resumption, that an append expecting
+  a position behind or ahead of the stream fails with `EventStreamConcurrencyException` and
+  writes nothing, and that a pattern read excludes other realms and areas.
 - `ReactionDeduplicationConformance` verifies an optional application deduplication primitive.
   It cannot prove crash atomicity between an external effect and its bookkeeping; use an
   idempotent sink or an integration-specific transactional inbox/outbox when that guarantee is
