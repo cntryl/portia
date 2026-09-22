@@ -20,6 +20,7 @@ public static class ProjectionStoreConformance
         await VerifyFailedCommitRollbackAsync(probe, ct).ConfigureAwait(false);
         await VerifyStaleCheckpointAsync(probe, ct).ConfigureAwait(false);
         await VerifyGenerationIsolationAsync(probe, ct).ConfigureAwait(false);
+        await VerifyPatternIsolationAsync(probe, ct).ConfigureAwait(false);
     }
 
     static async ValueTask VerifyDisposalRollbackAsync(IProjectionStoreConformanceProbe probe, CancellationToken ct)
@@ -156,6 +157,40 @@ public static class ProjectionStoreConformance
             "writing a rebuild generation", ct).ConfigureAwait(false);
         await RequireStateAsync(probe, probe.RebuildIdentity, "rebuild", new ProjectionCheckpoint(new EventCursor("7")),
             "reloading a rebuild generation", ct).ConfigureAwait(false);
+    }
+
+    // The same component consuming another realm (another tenant) or another area is a separate
+    // workload, so a store keyed by component and generation alone must fail here. The component
+    // stays fixed: a store may legitimately be bound to the one projector it serves.
+    static async ValueTask VerifyPatternIsolationAsync(IProjectionStoreConformanceProbe probe, CancellationToken ct)
+    {
+        var live = probe.LiveIdentity;
+        CheckpointIdentity[] others =
+        [
+            new(live.ComponentName, EventStreamPattern.ForPattern(live.Pattern.Realm + "-other", live.Pattern.Area,
+                live.Pattern.Resource)),
+            new(live.ComponentName, EventStreamPattern.ForPattern(live.Pattern.Realm,
+                (live.Pattern.Area ?? "area") + "-other", live.Pattern.Resource))
+        ];
+
+        foreach (var other in others)
+        {
+            await RequireStateAsync(probe, other, null, ProjectionCheckpoint.Start,
+                $"loading independent identity {other.Pattern}", ct).ConfigureAwait(false);
+            await using (var session = await probe.OpenSessionAsync(ct).ConfigureAwait(false))
+            {
+                await using var batch = await session.Store
+                    .BeginAsync(new ProjectionBatchContext(other, ProjectionCheckpoint.Start), ct)
+                    .ConfigureAwait(false);
+                await session.StageValueAsync("other", ct).ConfigureAwait(false);
+                await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("9")), ct).ConfigureAwait(false);
+            }
+
+            await RequireStateAsync(probe, live, "winner", new ProjectionCheckpoint(new EventCursor("2")),
+                $"writing independent identity {other.Pattern}", ct).ConfigureAwait(false);
+            await RequireStateAsync(probe, other, "other", new ProjectionCheckpoint(new EventCursor("9")),
+                $"reloading independent identity {other.Pattern}", ct).ConfigureAwait(false);
+        }
     }
 
     static async ValueTask RequireStateAsync(IProjectionStoreConformanceProbe probe, CheckpointIdentity identity,

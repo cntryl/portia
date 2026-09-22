@@ -183,6 +183,9 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                         var metadata = record.Metadata ?? throw new InvalidOperationException(
                             "A Portia Fitz record does not contain its concrete stream route.");
                         var stream = EventStreamAddress.Parse(Encoding.UTF8.GetString(metadata.Span));
+                        if (stream != EventStreamAddress.Parse(record.Route))
+                            throw new InvalidOperationException(
+                                $"Record metadata stream '{stream}' does not match its Fitz route '{record.Route}'.");
                         if (!FitzEventStreamPatternOffsets.Matches(stream, pattern))
                             throw new InvalidOperationException(
                                 $"Stream '{stream}' does not match pattern '{pattern}'.");
@@ -376,20 +379,34 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
         public async ValueTask DisposeAsync()
         {
             await _stop.CancelAsync().ConfigureAwait(false);
-            if (_pending is not null)
+            try
+            {
+                if (_pending is not null)
+                {
+                    try
+                    {
+                        _ = await _pending.ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // The wait's cancellation or fault belongs to WaitAsync's caller; disposal
+                        // only has to release the subscription.
+                    }
+                }
+
+                await _notifications.DisposeAsync().ConfigureAwait(false);
+            }
+            finally
             {
                 try
                 {
-                    _ = await _pending.ConfigureAwait(false);
+                    await _subscription.DisposeAsync().ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (_stop.IsCancellationRequested)
+                finally
                 {
+                    _stop.Dispose();
                 }
             }
-
-            await _notifications.DisposeAsync().ConfigureAwait(false);
-            await _subscription.DisposeAsync().ConfigureAwait(false);
-            _stop.Dispose();
         }
     }
 }
