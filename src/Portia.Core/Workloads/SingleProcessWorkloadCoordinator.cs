@@ -60,17 +60,8 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
 
                 // A callback that ended on its own either failed unrecoverably, which ends
                 // coordination, or completed and is restarted below.
-                foreach (var identity in owned.Keys.ToArray())
-                {
-                    var workload = owned[identity];
-                    if (!workload.Run.IsCompleted)
-                    {
-                    }
-                    else
-                    {
-                        await ReleaseAsync(owned, identity).ConfigureAwait(false);
-                    }
-                }
+                foreach (var identity in owned.Keys.Where(identity => owned[identity].Run.IsCompleted).ToArray())
+                    await ReleaseAsync(owned, identity).ConfigureAwait(false);
 
                 foreach (var identity in current)
                 {
@@ -86,19 +77,28 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
                 await Task.Delay(_reconcileInterval, _clock, ct).ConfigureAwait(false);
             }
         }
-        finally
+        catch (Exception failure)
         {
+            // Every remaining workload is cancelled and awaited, whatever ended coordination.
+            List<Exception> faults = [];
             foreach (var identity in owned.Keys.ToArray())
             {
                 try
                 {
                     await ReleaseAsync(owned, identity).ConfigureAwait(false);
                 }
-                catch (Exception) when (ct.IsCancellationRequested)
+                catch (Exception ex)
                 {
-                    // Shutdown must release every remaining workload, not stop at the first fault.
+                    faults.Add(ex);
                 }
             }
+
+            // Faults raised while shutting down on request are not a coordination failure, but a
+            // fault that ends coordination keeps every other fault that ended with it.
+            if (faults.Count == 0 || (failure is OperationCanceledException && ct.IsCancellationRequested))
+                throw;
+            faults.Insert(0, failure);
+            throw new AggregateException(faults);
         }
     }
 

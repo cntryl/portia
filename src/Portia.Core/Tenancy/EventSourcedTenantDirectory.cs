@@ -10,7 +10,10 @@ namespace Cntryl.Portia;
 /// <param name="getTenantId">Extracts the explicit tenant identity.</param>
 /// <param name="pollInterval">Positive idle delay; defaults to one second.</param>
 /// <param name="timeProvider">Schedules polling delays.</param>
-/// <param name="notifier">Optional commit notifications used instead of idle polling.</param>
+/// <param name="notifier">
+///     Optional commit notifications that wake the directory early; it still re-reads after each
+///     poll interval in case a notification was lost.
+/// </param>
 public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
     IDomainEventReader reader,
     EventStreamPattern pattern,
@@ -91,12 +94,29 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
 
             if (subscription is not null)
             {
-                await subscription.WaitAsync(ct).ConfigureAwait(false);
+                await WaitForCommitAsync(subscription, ct).ConfigureAwait(false);
             }
             else if (!sawAny)
             {
                 await Task.Delay(_pollInterval, _clock, ct).ConfigureAwait(false);
             }
+        }
+    }
+
+    async Task WaitForCommitAsync(IDomainEventSubscription subscription, CancellationToken ct)
+    {
+        // CreateLinkedTokenSource takes no TimeProvider, so the poll deadline is its own source
+        // scheduled on the directory clock and the linked one only combines it with the caller's token.
+        using var deadline = new CancellationTokenSource(_pollInterval, _clock);
+        using var backstop = CancellationTokenSource.CreateLinkedTokenSource(ct, deadline.Token);
+        try
+        {
+            await subscription.WaitAsync(backstop.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && deadline.IsCancellationRequested)
+        {
+            // A notification is only a wakeup. Periodically re-read durable state in case a
+            // reconnect or bounded subscription buffer lost the signal.
         }
     }
 
@@ -251,7 +271,7 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
 
                     if (subscription is not null)
                     {
-                        await subscription.WaitAsync(ct).ConfigureAwait(false);
+                        await directory.WaitForCommitAsync(subscription, ct).ConfigureAwait(false);
                     }
                     else if (!sawAny)
                     {

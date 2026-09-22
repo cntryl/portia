@@ -6,6 +6,16 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+### Fixed
+
+- `SingleProcessWorkloadCoordinator` now cancels and awaits every remaining workload when a
+  workload faults. When more than one workload faults together, `RunAsync` fails with an
+  `AggregateException` holding every fault instead of only the last one; a single fault is still
+  rethrown as-is.
+- `EventSourcedTenantDirectory` bounds each commit-notification wait by its poll interval, so a
+  notification lost to a reconnect or bounded subscription buffer no longer stalls tenant discovery
+  until the next lifecycle commit.
+
 ## 0.5.5 - 2026-09-22
 
 ### Fixed

@@ -87,6 +87,49 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     }
 
     /// <summary>
+    ///     Workloads that fault together end coordination with every fault, and the workloads still
+    ///     running are cancelled and awaited rather than abandoned by the second fault.
+    /// </summary>
+    [Fact]
+    public async Task ShouldSurfaceEveryFaultAndReleaseRemainingWorkloadsWhenWorkloadsFaultTogether()
+    {
+        var coordinator = new SingleProcessWorkloadCoordinator(TimeSpan.FromMilliseconds(10));
+        var running = new ConcurrentDictionary<string, bool>();
+        var fault = new TaskCompletionSource();
+        var survivorStopped = false;
+
+        var run = coordinator.RunAsync(
+            () => [new WorkloadIdentity("a"), new WorkloadIdentity("b"), new WorkloadIdentity("c")],
+            async (identity, ct) =>
+            {
+                running[identity.Name] = true;
+                if (identity.Name != "c")
+                {
+                    await fault.Task;
+                    throw new InvalidOperationException($"fault {identity.Name}");
+                }
+
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                }
+                finally
+                {
+                    survivorStopped = true;
+                }
+            });
+
+        await WaitUntilAsync(() => running.Count == 3);
+        // Completes both faulting callbacks synchronously, before the next reconcile observes either.
+        fault.SetResult();
+
+        var error = await Assert.ThrowsAsync<AggregateException>(() => run.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(["fault a", "fault b"],
+            error.InnerExceptions.Select(inner => inner.Message).Order(StringComparer.Ordinal));
+        Assert.True(survivorStopped);
+    }
+
+    /// <summary>
     ///     The explicit registration name is the hosted checkpoint identity. The constructor name
     ///     remains the default only when the component is driven manually outside hosting.
     /// </summary>
