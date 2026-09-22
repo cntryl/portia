@@ -283,9 +283,8 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     ///     <see cref="EventStreamConcurrencyException" /> — the same type
     ///     <see cref="InMemoryEventStore" /> throws for the identical situation — rather than an
     ///     unnormalized, Fitz-specific exception a caller has no stable way to catch and retry on.
-    ///     Retained as an acceptance gate: the pinned Fitz 0.1.1 client currently supplies no
-    ///     DomainCode for APPEND, so strict structured classification leaves this assertion failing
-    ///     until the upstream protocol/client carries code 2001. Do not reintroduce wording matching.
+    ///     Strict structured classification relies on Fitz's stale-position code. Do not reintroduce
+    ///     wording matching.
     /// </summary>
     [Fact]
     public async Task ShouldThrowConcurrencyExceptionWhenAppendingWithStaleExpectedVersion()
@@ -305,6 +304,43 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
         _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() =>
             store.AppendAsync(stream, 0, [stale]).AsTask());
+    }
+
+    /// <summary>
+    ///     Verifies that session admission contention from another real client is normalized before
+    ///     an event-store session exists, then the stream becomes writable after that client releases
+    ///     its session.
+    /// </summary>
+    [Fact]
+    public async Task ShouldThrowConcurrencyExceptionGivenAnotherClientOwnsAppendSession()
+    {
+        // Arrange
+        await using var blockingClient = await _broker.CreateClientAsync();
+        await using var writerClient = await _broker.CreateClientAsync();
+        var serializer =
+            TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<ValueChanged>(1, "test.value.changed"));
+        var store = new FitzEventStore(writerClient.Stream, serializer);
+        var aggregateId = Uuid.CreateVersion4();
+        var stream = new EventStreamAddress("portia-integration", "event-store-session-contention",
+            aggregateId.ToString());
+        await using var blocker = await blockingClient.Stream.BeginAsync(stream.ToString());
+        var blocked = new ValueChanged(1);
+        blocked.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, 1,
+            DateTimeOffset.UtcNow));
+
+        // Act
+        var error = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() =>
+            store.AppendAsync(stream, 0, [blocked]).AsTask());
+
+        // Assert
+        var fitz = Assert.IsType<StreamException>(error.InnerException);
+        Assert.Equal(FitzErrorCodes.StreamSessionAlreadyActive, fitz.DomainCode);
+
+        await blocker.RollbackAsync();
+        var accepted = new ValueChanged(2);
+        accepted.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, 1,
+            DateTimeOffset.UtcNow));
+        await store.AppendAsync(stream, 0, [accepted]);
     }
 
     /// <summary>

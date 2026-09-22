@@ -9,7 +9,10 @@ public interface IAggregateWriter
     /// <param name="context">The execution that attributes the appended events.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task that completes once the events are committed.</returns>
-    /// <exception cref="EventStreamConcurrencyException">The stream moved on since the aggregate was hydrated.</exception>
+    /// <exception cref="EventStreamConcurrencyException">
+    ///     The stream position changed or another append session is active. Reload and re-evaluate the
+    ///     operation; Portia does not retry it automatically.
+    /// </exception>
     ValueTask SaveAsync<TAggregate>(TAggregate aggregate, IExecutionContext context, CancellationToken ct = default)
         where TAggregate : Aggregate;
 }

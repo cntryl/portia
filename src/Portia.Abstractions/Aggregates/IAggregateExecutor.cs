@@ -16,7 +16,10 @@ public interface IAggregateExecutor
     /// <param name="context">The execution that attributes committed records.</param>
     /// <param name="ct">A token that can cancel hydration or the commit.</param>
     /// <returns>The operation's result.</returns>
-    /// <exception cref="EventStreamConcurrencyException">The stream moved on since the aggregate was hydrated.</exception>
+    /// <exception cref="EventStreamConcurrencyException">
+    ///     The stream position changed or another append session is active. Reload and re-evaluate the
+    ///     operation; Portia does not retry it automatically.
+    /// </exception>
     ValueTask<Result> ExecuteAsync<TAggregate>(TAggregate aggregate, Func<TAggregate, AggregateOutcome> operation,
         IExecutionContext context, CancellationToken ct = default)
         where TAggregate : Aggregate;
@@ -29,7 +32,10 @@ public interface IAggregateExecutor
     /// <param name="context">The execution that attributes committed records.</param>
     /// <param name="ct">A token that can cancel hydration or the commit.</param>
     /// <returns>The operation's result.</returns>
-    /// <exception cref="EventStreamConcurrencyException">The stream moved on since the aggregate was hydrated.</exception>
+    /// <exception cref="EventStreamConcurrencyException">
+    ///     The stream position changed or another append session is active. Reload and re-evaluate the
+    ///     operation; Portia does not retry it automatically.
+    /// </exception>
     ValueTask<Result<TOut>> ExecuteAsync<TAggregate, TOut>(TAggregate aggregate,
         Func<TAggregate, AggregateOutcome<TOut>> operation, IExecutionContext context, CancellationToken ct = default)
         where TAggregate : Aggregate;

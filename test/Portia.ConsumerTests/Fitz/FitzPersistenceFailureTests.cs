@@ -53,9 +53,9 @@ public sealed class FitzPersistenceFailureTests
     }
 
     [Theory]
-    [InlineData("append", 2001u, "unrelated wording", true)]
-    [InlineData("commit", 2001u, "unrelated wording", true)]
-    [InlineData("append", 2002u, "concurrency conflict", false)]
+    [InlineData("append", FitzErrorCodes.StreamConcurrencyConflict, "unrelated wording", true)]
+    [InlineData("commit", FitzErrorCodes.StreamConcurrencyConflict, "unrelated wording", true)]
+    [InlineData("append", FitzErrorCodes.StreamSessionAlreadyActive, "concurrency conflict", false)]
     [InlineData("commit", null, "concurrency conflict", false)]
     public async Task OnlyStructuredConflictCodeIsTranslatedDespiteCleanupFailures(string failureAt, uint? code,
         string message, bool conflict)
@@ -82,6 +82,31 @@ public sealed class FitzPersistenceFailureTests
         Assert.Same(payload, Assert.Single(new AggregateScenario<Account>(account).PendingAudits));
         Assert.Equal(1, session.Rollbacks);
         Assert.True(session.Disposed);
+    }
+
+    [Fact]
+    public async Task ShouldTranslateConcurrencyExceptionGivenFitzRejectsAppendSessionAdmission()
+    {
+        // Arrange
+        var original = new StreamException("append session already active", "BEGIN_FAILED",
+            domainCode: FitzErrorCodes.StreamSessionAlreadyActive);
+        var session = new Session("success", false);
+        var store = new FitzEventStore(new Streams(session, original),
+            ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Declined>(1, "Declined")));
+        var repository = new AggregateRepository(store);
+        var account = new Account(Uuid.CreateVersion4());
+        var payload = new Declined("pending");
+        account.Audit(payload);
+
+        // Act
+        var error = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() =>
+            repository.SaveAsync(account, _saveContext).AsTask());
+
+        // Assert
+        Assert.Same(original, error.InnerException);
+        Assert.Same(payload, Assert.Single(new AggregateScenario<Account>(account).PendingAudits));
+        Assert.Equal(0, session.Rollbacks);
+        Assert.False(session.Disposed);
     }
 
     sealed class Session(string failureAt, bool cleanupFails) : IStreamSession
@@ -112,7 +137,7 @@ public sealed class FitzPersistenceFailureTests
         }
     }
 
-    sealed class Streams(IStreamSession session) : IStreamClient
+    sealed class Streams(IStreamSession session, Exception? beginFailure = null) : IStreamClient
     {
         public string? Route { get; private set; }
 
@@ -120,6 +145,8 @@ public sealed class FitzPersistenceFailureTests
             CancellationToken ct = default)
         {
             Route = route;
+            if (beginFailure is not null)
+                return Task.FromException<IStreamSession>(beginFailure);
             return Task.FromResult(session);
         }
 
