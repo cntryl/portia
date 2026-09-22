@@ -15,6 +15,12 @@ alerts are as breaking to change as an API.
 - `EventSourcedTenantDirectory` bounds each commit-notification wait by its poll interval, so a
   notification lost to a reconnect or bounded subscription buffer no longer stalls tenant discovery
   until the next lifecycle commit.
+- An unauthenticated caller of the MCP Streamable HTTP endpoint now runs as an anonymous actor, so
+  Portia's request authorization fails closed. Previously a registered `IMcpActorProvider` supplied
+  its actor to such callers; the provider now applies only to stdio.
+- MCP tool binding now rejects a missing or `null` argument for a constructor member that is
+  neither nullable nor defaulted with a `Binding` failure, matching generated HTTP binding.
+  Previously the handler received `null` or the type's default value.
 
 ## 0.5.5 - 2026-09-22
 
