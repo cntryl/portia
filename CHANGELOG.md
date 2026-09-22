@@ -15,6 +15,12 @@ alerts are as breaking to change as an API.
 - `EventSourcedTenantDirectory` bounds each commit-notification wait by its poll interval, so a
   notification lost to a reconnect or bounded subscription buffer no longer stalls tenant discovery
   until the next lifecycle commit.
+- `EventStoreConformance` now writes same-named streams in another realm and another area and
+  fails a store whose pattern read returns them, and rejects an append that expects a position
+  ahead of the stream as well as behind it.
+- `ProjectionStoreConformance` now derives identities for the live projector in another realm and
+  another area and fails a store whose checkpoints or data are not independent across them, such as
+  one keyed by component and rebuild generation only. Probes must accept those identities.
 
 ## 0.5.5 - 2026-09-22
 

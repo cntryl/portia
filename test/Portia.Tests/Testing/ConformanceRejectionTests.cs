@@ -40,7 +40,10 @@ public sealed class ConformanceRejectionTests
         ChecksCheckpointOnlyAtBegin,
 
         /// <summary>A conformant store that holds an exclusive lock from opening a batch until it ends.</summary>
-        LocksAtBegin
+        LocksAtBegin,
+
+        /// <summary>Keys data and checkpoints by component and generation only, ignoring the stream pattern.</summary>
+        KeysByComponentAndGeneration
     }
 
     /// <summary>The single event-store invariant a defective probe breaks.</summary>
@@ -70,6 +73,9 @@ public sealed class ConformanceRejectionTests
         /// <summary>Appends regardless of the expected stream position.</summary>
         AcceptsStaleAppend,
 
+        /// <summary>Rejects an expected position behind the stream but appends at one ahead of it.</summary>
+        AcceptsAppendAheadOfStream,
+
         /// <summary>Rejects a stale append with its own exception type instead of the shared one.</summary>
         ThrowsAdapterExceptionOnConflict,
 
@@ -83,7 +89,13 @@ public sealed class ConformanceRejectionTests
         PatternReadOmitsAreaOffset,
 
         /// <summary>Returns pattern records whose scope offsets do not ascend.</summary>
-        PatternReadIsUnordered
+        PatternReadIsUnordered,
+
+        /// <summary>Returns another realm's streams in the same area from a pattern read.</summary>
+        PatternReadIgnoresRealm,
+
+        /// <summary>Returns every area in the realm from a pattern read that names one area.</summary>
+        PatternReadIgnoresArea
     }
 
     /// <summary>
@@ -102,11 +114,14 @@ public sealed class ConformanceRejectionTests
     [InlineData(StoreDefect.ReportsForeignStream, "reported stream")]
     [InlineData(StoreDefect.IgnoresFromOffset, "records at and after it")]
     [InlineData(StoreDefect.AcceptsStaleAppend, "stale append succeeded")]
+    [InlineData(StoreDefect.AcceptsAppendAheadOfStream, "ahead of the stream")]
     [InlineData(StoreDefect.ThrowsAdapterExceptionOnConflict, "EventStreamConcurrencyException")]
     [InlineData(StoreDefect.WritesDespiteConflict, "must write nothing")]
     [InlineData(StoreDefect.PatternReadMissesStreams, "every stream in the area")]
     [InlineData(StoreDefect.PatternReadOmitsAreaOffset, "resumable cursor")]
     [InlineData(StoreDefect.PatternReadIsUnordered, "resume immediately")]
+    [InlineData(StoreDefect.PatternReadIgnoresRealm, "outside the pattern")]
+    [InlineData(StoreDefect.PatternReadIgnoresArea, "outside the pattern")]
     public async Task ShouldRejectEventStoreProbeGivenOneBrokenInvariant(StoreDefect defect, string expected)
     {
         var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
@@ -216,8 +231,24 @@ public sealed class ConformanceRejectionTests
         await ProjectionStoreConformance.VerifyAsync(probe, timeout.Token);
     }
 
+    /// <summary>
+    ///     Verifies that a store keying checkpoints by component and generation alone is rejected: two
+    ///     tenants of one projector would share progress, so one tenant skips the other's events.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRejectProjectionProbeGivenCheckpointsIgnoreThePattern()
+    {
+        using var probe = new ShapedProjectionProbe(ProjectionStoreShape.KeysByComponentAndGeneration);
+
+        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
+            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+
+        Assert.Contains("independent identity", exception.Message, StringComparison.Ordinal);
+    }
+
     sealed class DefectiveEventStoreProbe(StoreDefect defect) : IEventStoreConformanceProbe
     {
+        readonly ConcurrentDictionary<EventStreamAddress, byte> _written = new();
         InMemoryEventStore _store = new();
 
         public string Realm => "portia-conformance";
@@ -227,19 +258,24 @@ public sealed class ConformanceRejectionTests
         public ValueTask ResetAsync(CancellationToken ct = default)
         {
             _store = new InMemoryEventStore();
+            _written.Clear();
             return ValueTask.CompletedTask;
         }
 
         public ValueTask<IEventStore> OpenAsync(CancellationToken ct = default) =>
             ValueTask.FromResult<IEventStore>(defect == StoreDefect.None
                 ? _store
-                : new DefectiveEventStore(_store, defect, Realm, Area));
+                : new DefectiveEventStore(_store, defect, Realm, Area, _written));
     }
 
     // One decorator, one defect at a time: everything else delegates to a store the suite already
     // accepts, so a rejection can only come from the injected defect.
-    sealed class DefectiveEventStore(InMemoryEventStore inner, StoreDefect defect, string realm, string area)
-        : IEventStore
+    sealed class DefectiveEventStore(
+        InMemoryEventStore inner,
+        StoreDefect defect,
+        string realm,
+        string area,
+        ConcurrentDictionary<EventStreamAddress, byte> written) : IEventStore
     {
         public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
             [EnumeratorCancellation] CancellationToken ct = default)
@@ -286,8 +322,22 @@ public sealed class ConformanceRejectionTests
             [EnumeratorCancellation] CancellationToken ct = default)
         {
             var records = new List<DomainEventRecord>();
-            await foreach (var record in inner.ReadAsync(pattern, cursor, ct))
+            var read = defect == StoreDefect.PatternReadIgnoresArea
+                ? EventStreamPattern.ForPattern(pattern.Realm)
+                : pattern;
+            await foreach (var record in inner.ReadAsync(read, cursor, ct))
                 records.Add(record);
+
+            if (defect == StoreDefect.PatternReadIgnoresRealm)
+            {
+                // Adds same-area streams from every other realm, as a store keyed without the realm would.
+                foreach (var stream in written.Keys.Where(stream =>
+                             stream.Realm != pattern.Realm && stream.Area == pattern.Area))
+                {
+                    await foreach (var record in inner.ReadAsync(stream, 0, ct))
+                        records.Add(record);
+                }
+            }
 
             if (defect == StoreDefect.PatternReadMissesStreams)
             {
@@ -310,6 +360,16 @@ public sealed class ConformanceRejectionTests
         public async ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
             IReadOnlyList<DomainEvent> events, CancellationToken ct = default)
         {
+            _ = written.TryAdd(stream, 0);
+            if (defect == StoreDefect.AcceptsAppendAheadOfStream)
+            {
+                var actual = 0UL;
+                await foreach (var _ in inner.ReadAsync(stream, 0, ct))
+                    actual++;
+                await inner.AppendAsync(stream, Math.Min(expectedStreamPosition, actual), events, ct);
+                return;
+            }
+
             if (defect == StoreDefect.AcceptsStaleAppend)
             {
                 var actual = 0UL;
@@ -450,8 +510,14 @@ public sealed class ConformanceRejectionTests
         ProjectionCheckpoint CheckpointOf(CheckpointIdentity identity)
         {
             lock (_gate)
-                return _states.GetValueOrDefault(identity).Checkpoint;
+                return _states.GetValueOrDefault(Key(identity)).Checkpoint;
         }
+
+        CheckpointIdentity Key(CheckpointIdentity identity) =>
+            Shape == ProjectionStoreShape.KeysByComponentAndGeneration
+                ? new CheckpointIdentity(identity.ComponentName, EventStreamPattern.ForPattern("any"),
+                    identity.RebuildId)
+                : identity;
 
         sealed class Session(ShapedProjectionProbe probe) : IProjectionStoreConformanceSession, IProjectionStore
         {
@@ -495,7 +561,7 @@ public sealed class ConformanceRejectionTests
             public ValueTask<string?> ReadValueAsync(CheckpointIdentity identity, CancellationToken ct = default)
             {
                 lock (_probe._gate)
-                    return ValueTask.FromResult(_probe._states.GetValueOrDefault(identity).Value);
+                    return ValueTask.FromResult(_probe._states.GetValueOrDefault(_probe.Key(identity)).Value);
             }
 
             public ValueTask FailNextCommitAsync(CancellationToken ct = default)
@@ -546,20 +612,21 @@ public sealed class ConformanceRejectionTests
                     var probe = session._probe;
                     lock (probe._gate)
                     {
-                        var current = probe._states.GetValueOrDefault(context.Identity);
+                        var key = probe.Key(context.Identity);
+                        var current = probe._states.GetValueOrDefault(key);
                         if (probe.Shape != ProjectionStoreShape.ChecksCheckpointOnlyAtBegin
                             && current.Checkpoint != context.Checkpoint)
                         {
                             if (probe.Shape == ProjectionStoreShape.DiscardsWinner)
                             {
                                 // Rejects the loser, then drops the winner's committed batch as well.
-                                _ = probe._states.Remove(context.Identity);
+                                _ = probe._states.Remove(key);
                             }
 
                             throw new ProjectionConcurrencyException("stale checkpoint");
                         }
 
-                        probe._states[context.Identity] = (Value, checkpoint);
+                        probe._states[key] = (Value, checkpoint);
                     }
                 }
 
