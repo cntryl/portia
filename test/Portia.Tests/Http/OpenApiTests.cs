@@ -105,6 +105,10 @@ public sealed class OpenApiTests : IAsyncDisposable
                 Assert.Null(schema.Properties["custom_value"].Type);
                 Assert.Equal(JsonSchemaType.String, schema.Properties["team_id"].Type);
                 Assert.Equal("uuid", schema.Properties["team_id"].Format);
+                var candidateApplicationIds = schema.Properties["candidate_application_ids"];
+                Assert.Equal(JsonSchemaType.Array, candidateApplicationIds.Type);
+                Assert.Equal(JsonSchemaType.String, candidateApplicationIds.Items!.Type);
+                Assert.Equal("uuid", candidateApplicationIds.Items.Format);
                 Assert.True(schema.Properties["parent_team_id"].Type!.Value.HasFlag(JsonSchemaType.String));
                 Assert.True(schema.Properties["parent_team_id"].Type!.Value.HasFlag(JsonSchemaType.Null));
                 Assert.Equal("uuid", schema.Properties["parent_team_id"].Format);

@@ -6,6 +6,10 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+### Fixed
+
+- OpenAPI export now preserves the `string`/`uuid` item schema for collections of `Uuid` values.
+
 ## 0.5.4 - 2026-09-21
 
 ### Fixed
