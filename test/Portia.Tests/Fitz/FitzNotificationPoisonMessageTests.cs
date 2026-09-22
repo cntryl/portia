@@ -43,6 +43,26 @@ public sealed class FitzNotificationPoisonMessageTests
     }
 
     /// <summary>
+    ///     A fired request whose own declared schedule route is not the fired route is lost before its
+    ///     system identity is validated, so a route's approved principal never runs another route's request.
+    /// </summary>
+    [Fact]
+    public async Task ShouldDropScheduleGivenRequestDeclaredForAnotherRoute()
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var validator = new CountingScheduledValidator();
+        using var meter = ListenToLost(out var lost);
+        var consumer = new FitzScheduledRequestConsumer(
+            new ScriptedScheduleClient([ScheduleEnvelope(serializer)]), serializer,
+            "schedule://test/billing/invoices/generate",
+            TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)), validator);
+
+        Assert.Empty(await ReadAllAsync(consumer));
+        Assert.Equal(0, validator.Calls);
+        Assert.Equal(["schedule"], lost);
+    }
+
+    /// <summary>
     ///     Verifies a notice whose body is not a Portia envelope is skipped and the next notice on
     ///     the same subscription still arrives.
     /// </summary>

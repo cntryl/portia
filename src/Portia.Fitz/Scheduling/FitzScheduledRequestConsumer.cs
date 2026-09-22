@@ -197,6 +197,11 @@ public sealed class FitzScheduledRequestConsumer(
                               "A fired Fitz schedule entry deserialized to a result-bearing request; only no-result requests can be scheduled.");
             if (!_catalog.Get(request.GetType()).Transports.Contains(RequestTransportId.Schedule))
                 throw new InvalidRequestTransportException(request, RequestTransportId.Schedule);
+            // The validator approves a system identity per fired route, so the request must be one that
+            // declares this route; otherwise an entry could run another route's request as this principal.
+            if (!DeclaresRoute(request, notification.Route))
+                throw new InvalidOperationException(
+                    $"A fired schedule's request does not declare its route '{notification.Route}'.");
             return new ScheduledFiring(notification.Route, scheduled.SystemSubject, scheduled.SystemIssuer, request,
                 envelope);
         }
@@ -205,6 +210,20 @@ public sealed class FitzScheduledRequestConsumer(
             RecordLost();
             return null;
         }
+    }
+
+    // Resolves the request's own schedule route with the fired route's segments as values, so only
+    // the request type's wildcarded segments can vary.
+    bool DeclaresRoute(IRequest request, string firedRoute)
+    {
+        const string prefix = "schedule://";
+        if (!firedRoute.StartsWith(prefix, StringComparison.Ordinal))
+            return false;
+        var segments = firedRoute[prefix.Length..].Split('/');
+        return segments.Length == 4 && string.Equals(firedRoute,
+            FitzRouting.ResolveScheduleRoute(_catalog, request,
+                new RequestRouteValues(segments[0], segments[1], segments[2], segments[3])),
+            StringComparison.Ordinal);
     }
 
     // One validator call in a fresh scope. A definite rejection loses the firing; a thrown or transient

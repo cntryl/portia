@@ -15,6 +15,14 @@ alerts are as breaking to change as an API.
 - `EventSourcedTenantDirectory` bounds each commit-notification wait by its poll interval, so a
   notification lost to a reconnect or bounded subscription buffer no longer stalls tenant discovery
   until the next lifecycle commit.
+- `FitzScheduledRequestConsumer` now records a firing as lost, without validating its system
+  identity or dispatching it, when the embedded request's declared schedule route does not resolve
+  to the fired route. Previously an entry could run another route's schedulable request as the
+  principal approved for the fired route.
+- Disposing a Fitz event-store subscription whose pending wait faulted now releases the Fitz
+  subscription instead of rethrowing that fault and leaking it.
+- `FitzEventStore` pattern reads now fault on a record whose stream metadata disagrees with the
+  broker-reported record route.
 
 ## 0.5.5 - 2026-09-22
 
