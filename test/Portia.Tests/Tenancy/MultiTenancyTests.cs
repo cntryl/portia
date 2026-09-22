@@ -445,6 +445,47 @@ public sealed class MultiTenancyTests
             await ReadOneAsync(second));
     }
 
+    /// <summary>
+    ///     A commit notification is only a wakeup. When a reconnect or bounded subscription buffer
+    ///     drops it, the poll interval still re-reads durable state so a new tenant is discovered.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ShouldDiscoverTenantAfterPollIntervalWhenNotificationIsLost(bool useCursor)
+    {
+        var pollInterval = TimeSpan.FromSeconds(30);
+        var clock = new ManualTestClock();
+        var store = new InMemoryEventStore();
+        await RegisterTenantAsync(store, "acme");
+        var directory = new EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(store,
+            TenantRegistryPattern, GetTenantId, pollInterval, clock, new DroppingNotifier());
+        await using var cursor = await directory.OpenCursorAsync();
+        using var cancellation = new CancellationTokenSource();
+        await using var reader = (useCursor ? cursor.ReadAsync(cancellation.Token) : directory.WatchAsync(cancellation.Token))
+            .GetAsyncEnumerator();
+        Assert.True(await reader.MoveNextAsync());
+        Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")), reader.Current);
+
+        var pending = reader.MoveNextAsync().AsTask();
+        try
+        {
+            Assert.Equal(pollInterval, await clock.WaitForDelayAsync());
+            await RegisterTenantAsync(store, "beta");
+            clock.Advance(pollInterval);
+
+            Assert.True(await pending.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("beta")),
+                reader.Current);
+        }
+        finally
+        {
+            // An enumerator cannot be disposed while a move is still pending.
+            await cancellation.CancelAsync();
+            _ = await Record.ExceptionAsync(() => pending);
+        }
+    }
+
     /// <summary>One cursor cannot be enumerated by two consumers at the same time.</summary>
     [Fact]
     public async Task ShouldRejectConcurrentEnumerationOfOneResumableCursor()
@@ -940,6 +981,20 @@ public sealed class MultiTenancyTests
 
                 return ValueTask.CompletedTask;
             }
+        }
+    }
+
+    sealed class DroppingNotifier : IDomainEventNotifier
+    {
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
+            CancellationToken ct = default) => ValueTask.FromResult<IDomainEventSubscription>(new Subscription());
+
+        sealed class Subscription : IDomainEventSubscription
+        {
+            public ValueTask WaitAsync(CancellationToken ct = default) =>
+                new(Task.Delay(Timeout.InfiniteTimeSpan, ct));
+
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
     }
 
