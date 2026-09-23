@@ -95,16 +95,16 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var types = context.SyntaxProvider.CreateSyntaxProvider(
-            static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
-            static (syntaxContext, ct) => Analyze(syntaxContext, ct));
+        // Flattened so each equatable finding is cached on its own; an array compares by reference.
+        var findings = context.SyntaxProvider.CreateSyntaxProvider(
+                static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
+                static (syntaxContext, ct) => Analyze(syntaxContext, ct))
+            .SelectMany(static (findings, _) => findings)
+            .WithTrackingName("PortiaComponentPractices");
 
-        context.RegisterSourceOutput(types, static (output, findings) =>
-        {
-            foreach (var finding in findings)
-                output.ReportDiagnostic(Diagnostic.Create(Descriptor(finding.Kind), finding.Location.ToLocation(),
-                    finding.Arguments));
-        });
+        context.RegisterSourceOutput(findings, static (output, finding) =>
+            output.ReportDiagnostic(Diagnostic.Create(Descriptor(finding.Kind), finding.Location.ToLocation(),
+                finding.Arguments)));
     }
 
     static Finding[] Analyze(GeneratorSyntaxContext context, CancellationToken ct)
@@ -113,11 +113,19 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         if (context.SemanticModel.GetDeclaredSymbol(node, ct) is not { IsAbstract: false } symbol)
             return [];
         var findings = new List<Finding>();
-        ReportProjectorEffects(findings, symbol);
-        ReportServiceLocation(findings, symbol, node, context.SemanticModel);
-        ReportAggregateServices(findings, symbol);
-        ReportPreflightEffects(findings, symbol);
-        ReportMultipleHandlers(findings, symbol);
+        // Constructors and interfaces belong to the type, not to the declaration being visited, so a
+        // partial type reports them from its first declaration only.
+        var firstDeclaration = symbol.DeclaringSyntaxReferences[0].SyntaxTree == node.SyntaxTree
+                               && symbol.DeclaringSyntaxReferences[0].Span == node.Span;
+        if (firstDeclaration)
+        {
+            ReportProjectorEffects(findings, symbol);
+            ReportAggregateServices(findings, symbol);
+            ReportPreflightEffects(findings, symbol);
+            ReportMultipleHandlers(findings, symbol);
+        }
+
+        ReportServiceLocation(findings, symbol, node, context.SemanticModel, firstDeclaration);
         ReportCaughtExceptionAsResult(findings, symbol, node, context.SemanticModel, ct);
         return [.. findings];
     }
@@ -159,11 +167,12 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         List<Finding> findings,
         INamedTypeSymbol symbol,
         TypeDeclarationSyntax node,
-        SemanticModel semanticModel)
+        SemanticModel semanticModel,
+        bool reportParameters)
     {
         if (!IsPortiaComponent(symbol))
             return;
-        foreach (var parameter in Parameters(symbol, LocatorTypes))
+        foreach (var parameter in reportParameters ? Parameters(symbol, LocatorTypes) : [])
         {
             findings.Add(Finding.Create(Kind.ServiceLocation, Location(parameter), symbol.Name, Display(parameter)));
         }

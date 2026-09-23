@@ -38,6 +38,25 @@ alerts are as breaking to change as an API.
 - MCP tool binding now rejects a missing or `null` argument for a constructor member that is
   neither nullable nor defaulted with a `Binding` failure, matching generated HTTP binding.
   Previously the handler received `null` or the type's default value.
+- Generators no longer emit uncompilable source for types generated code cannot name: a
+  `file`-local type, or a type nested in a private, protected, or `private protected` type. Such a
+  transported request, component, projector, or reactor now reports `PORTIA015`, an HTTP mapping
+  `PORTIA016`, a registration call `PORTIA018`, and such a domain event is left out of generated
+  registration, as the event catalog already did for private nested events.
+- Generated `Add<Request>()` names are disambiguated across every emitted name, so
+  `Billing.Charge`, `Sales.Charge`, and `Other.BillingCharge` no longer produce two
+  `AddBillingCharge` methods. `Other.BillingCharge` now registers through `AddOtherBillingCharge`.
+- Generated string literals escape control characters, so a discriminator, route value, or
+  `RequiresPermission` template containing a newline no longer breaks the build.
+- `PORTIA011` now rejects a `RequiresPermission` token that names a property whose getter generated
+  code cannot call, instead of emitting code that fails with `CS0122`.
+- HTTP bindings emit `double.NaN`, `double.PositiveInfinity`, `double.NegativeInfinity`, and the
+  `float` equivalents for non-finite parameter defaults.
+- `PORTIA018` names the rejected type instead of repeating the role.
+- `PORTIA100`–`PORTIA103`, `PORTIA105`, and `PORTIA106` report once per type instead of once per
+  partial declaration.
+- The `PORTIA025` code fix writes global-qualified `typeof(global::...)` roots, so a root no longer
+  binds to a same-named child namespace of the JSON context's namespace.
 
 ## 0.5.5 - 2026-09-22
 

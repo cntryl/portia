@@ -149,6 +149,25 @@ public sealed class RequestGuardGeneratorTests
     }
 
     [Fact]
+    public void Portia018NamesTheRejectedType()
+    {
+        var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics("""
+                                                                        using Cntryl.Portia;
+                                                                        using Microsoft.Extensions.DependencyInjection;
+                                                                        public sealed class NotAGuard;
+                                                                        public static class Scenario
+                                                                        {
+                                                                            public static void Register() => new ServiceCollection().AddPortia().AddRequestGuard<NotAGuard>();
+                                                                        }
+                                                                        """,
+            new RegistrationCallInterceptorGenerator()), item => item.Id == "PORTIA018");
+
+        Assert.Equal(
+            "Cannot register 'NotAGuard' as a Portia guard: the type does not implement a Portia guard interface",
+            diagnostic.GetMessage(CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
     public void GenericGuardRegistrationReportsPortia018()
     {
         var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics("""
