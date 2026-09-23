@@ -6,6 +6,8 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+## 0.5.6 - 2026-09-23
+
 ### Fixed
 
 - `SingleProcessWorkloadCoordinator` now cancels and awaits every remaining workload when a
