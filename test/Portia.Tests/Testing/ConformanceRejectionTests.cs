@@ -27,7 +27,10 @@ public sealed class ConformanceRejectionTests
         LosesConcurrentRace,
 
         /// <summary>Keeps its record of executed events only in memory.</summary>
-        ForgetsAfterReopen
+        ForgetsAfterReopen,
+
+        /// <summary>Checks then marks without ever yielding, so it only races when callers are truly concurrent.</summary>
+        LosesSynchronousRace
     }
 
     /// <summary>How a hand-written projection store coordinates two writers of one checkpoint.</summary>
@@ -43,7 +46,10 @@ public sealed class ConformanceRejectionTests
         LocksAtBegin,
 
         /// <summary>Keys data and checkpoints by component and generation only, ignoring the stream pattern.</summary>
-        KeysByComponentAndGeneration
+        KeysByComponentAndGeneration,
+
+        /// <summary>Keys data and checkpoints by realm and area, ignoring the pattern's resource.</summary>
+        KeysWithoutResource
     }
 
     /// <summary>The single event-store invariant a defective probe breaks.</summary>
@@ -95,7 +101,19 @@ public sealed class ConformanceRejectionTests
         PatternReadIgnoresRealm,
 
         /// <summary>Returns every area in the realm from a pattern read that names one area.</summary>
-        PatternReadIgnoresArea
+        PatternReadIgnoresArea,
+
+        /// <summary>Resumes a pattern read with the right payloads but a different event identity.</summary>
+        PatternReadResumesWithForeignIdentity,
+
+        /// <summary>Returns a pattern read grouped by stream instead of in append order.</summary>
+        PatternReadGroupsByStream,
+
+        /// <summary>Issues every record after the first the first record's cursor.</summary>
+        PatternReadRepeatsFirstCursor,
+
+        /// <summary>Checks the expected position and appends in two separate steps.</summary>
+        LosesConcurrentAppendRace
     }
 
     /// <summary>
@@ -119,9 +137,13 @@ public sealed class ConformanceRejectionTests
     [InlineData(StoreDefect.WritesDespiteConflict, "must write nothing")]
     [InlineData(StoreDefect.PatternReadMissesStreams, "every stream in the area")]
     [InlineData(StoreDefect.PatternReadOmitsAreaOffset, "resumable cursor")]
-    [InlineData(StoreDefect.PatternReadIsUnordered, "resume immediately")]
+    [InlineData(StoreDefect.PatternReadIsUnordered, "append order")]
     [InlineData(StoreDefect.PatternReadIgnoresRealm, "outside the pattern")]
     [InlineData(StoreDefect.PatternReadIgnoresArea, "outside the pattern")]
+    [InlineData(StoreDefect.PatternReadResumesWithForeignIdentity, "resume immediately")]
+    [InlineData(StoreDefect.PatternReadGroupsByStream, "append order")]
+    [InlineData(StoreDefect.PatternReadRepeatsFirstCursor, "resume immediately")]
+    [InlineData(StoreDefect.LosesConcurrentAppendRace, "exactly one must win")]
     public async Task ShouldRejectEventStoreProbeGivenOneBrokenInvariant(StoreDefect defect, string expected)
     {
         var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
@@ -150,6 +172,7 @@ public sealed class ConformanceRejectionTests
     [InlineData(DeduplicationDefect.ExecutesSequentialDuplicate, "sequential duplicate")]
     [InlineData(DeduplicationDefect.LosesConcurrentRace, "concurrent duplicate")]
     [InlineData(DeduplicationDefect.ForgetsAfterReopen, "after the implementation reopened")]
+    [InlineData(DeduplicationDefect.LosesSynchronousRace, "concurrent duplicate")]
     public async Task ShouldRejectDeduplicationProbeGivenOneBrokenGuarantee(DeduplicationDefect defect,
         string expected)
     {
@@ -246,6 +269,21 @@ public sealed class ConformanceRejectionTests
         Assert.Contains("independent identity", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    ///     Verifies that a store keying checkpoints without the pattern's resource is rejected: two resource-scoped
+    ///     workloads of one projector would share progress.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRejectProjectionProbeGivenCheckpointsIgnoreTheResource()
+    {
+        using var probe = new ShapedProjectionProbe(ProjectionStoreShape.KeysWithoutResource);
+
+        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
+            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+
+        Assert.Contains("independent identity", exception.Message, StringComparison.Ordinal);
+    }
+
     sealed class DefectiveEventStoreProbe(StoreDefect defect) : IEventStoreConformanceProbe
     {
         readonly ConcurrentDictionary<EventStreamAddress, byte> _written = new();
@@ -277,6 +315,7 @@ public sealed class ConformanceRejectionTests
         string area,
         ConcurrentDictionary<EventStreamAddress, byte> written) : IEventStore
     {
+
         public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
@@ -349,6 +388,27 @@ public sealed class ConformanceRejectionTests
                 records.Reverse();
             }
 
+            if (defect == StoreDefect.PatternReadGroupsByStream)
+            {
+                // Keeps each record's own cursor, as a store reading stream by stream would.
+                records = [.. records.GroupBy(record => record.Stream).SelectMany(group => group)];
+            }
+
+            if (defect == StoreDefect.PatternReadRepeatsFirstCursor && records.Count > 1)
+            {
+                var repeated = records[0].NextCursor;
+                records = [records[0], .. records.Skip(1).Select(record => record with { NextCursor = repeated })];
+            }
+
+            if (defect == StoreDefect.PatternReadResumesWithForeignIdentity && cursor != EventCursor.Start)
+            {
+                records = [.. records.Select(record => record with
+                {
+                    Event = DomainEventSeed.Attach(new ConformanceEvent(((ConformanceEvent)record.Event).Sequence),
+                        record.Event.Metadata.AggregateId, record.Event.Metadata.AggregateVersion)
+                })];
+            }
+
             foreach (var record in records)
             {
                 yield return defect == StoreDefect.PatternReadOmitsAreaOffset
@@ -368,6 +428,32 @@ public sealed class ConformanceRejectionTests
                     actual++;
                 await inner.AppendAsync(stream, Math.Min(expectedStreamPosition, actual), events, ct);
                 return;
+            }
+
+            if (defect == StoreDefect.LosesConcurrentAppendRace)
+            {
+                var observed = 0UL;
+                await foreach (var _ in inner.ReadAsync(stream, 0, ct))
+                    observed++;
+                if (observed != expectedStreamPosition)
+                    throw new EventStreamConcurrencyException("stale append");
+                await Task.Delay(50, ct);
+                // Appends at whatever the end is by now, retrying past other racers, as a store that never
+                // re-checks would.
+                while (true)
+                {
+                    var actual = 0UL;
+                    await foreach (var _ in inner.ReadAsync(stream, 0, ct))
+                        actual++;
+                    try
+                    {
+                        await inner.AppendAsync(stream, actual, events, ct);
+                        return;
+                    }
+                    catch (EventStreamConcurrencyException)
+                    {
+                    }
+                }
             }
 
             if (defect == StoreDefect.AcceptsStaleAppend)
@@ -452,6 +538,22 @@ public sealed class ConformanceRejectionTests
                 first = !already;
                 seen[eventId] = 0;
             }
+            else if (defect == DeduplicationDefect.LosesSynchronousRace)
+            {
+                _sequentialEventId ??= eventId;
+                var already = seen.ContainsKey(eventId);
+                if (eventId != _sequentialEventId)
+                {
+                    // Blocks instead of yielding: callers started one after another never overlap, so only an
+                    // attempt that already runs on its own thread meets a second one here.
+                    if (Interlocked.Increment(ref _concurrentReaderCount) == 2)
+                        _concurrentReaders.TrySetResult();
+                    _ = _concurrentReaders.Task.Wait(TimeSpan.FromSeconds(1), ct);
+                }
+
+                first = !already;
+                seen[eventId] = 0;
+            }
             else
             {
                 first = defect == DeduplicationDefect.ExecutesSequentialDuplicate || seen.TryAdd(eventId, 0);
@@ -513,11 +615,14 @@ public sealed class ConformanceRejectionTests
                 return _states.GetValueOrDefault(Key(identity)).Checkpoint;
         }
 
-        CheckpointIdentity Key(CheckpointIdentity identity) =>
-            Shape == ProjectionStoreShape.KeysByComponentAndGeneration
-                ? new CheckpointIdentity(identity.ComponentName, EventStreamPattern.ForPattern("any"),
-                    identity.RebuildId)
-                : identity;
+        CheckpointIdentity Key(CheckpointIdentity identity) => Shape switch
+        {
+            ProjectionStoreShape.KeysByComponentAndGeneration => new CheckpointIdentity(identity.ComponentName,
+                EventStreamPattern.ForPattern("any"), identity.RebuildId),
+            ProjectionStoreShape.KeysWithoutResource => new CheckpointIdentity(identity.ComponentName,
+                EventStreamPattern.ForPattern(identity.Pattern.Realm, identity.Pattern.Area), identity.RebuildId),
+            _ => identity
+        };
 
         sealed class Session(ShapedProjectionProbe probe) : IProjectionStoreConformanceSession, IProjectionStore
         {

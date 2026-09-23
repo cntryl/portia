@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Testing;
@@ -45,7 +46,24 @@ static class ScenarioEngine
         var lifecycle = recorder.Resolved.Select(type => Classify(type, handlerType, authorizers, guards, behaviors))
             .OfType<LifecycleEntry>()
             .ToArray();
+        ThrowUnlessSettled(outcome, lifecycle, guards);
         return (new ScenarioObservation(requestType, handlerType, guards, lifecycle, outcome), payload);
+    }
+
+    // The bus settles a denial only from its own authorization, before anything past it runs, and a guard
+    // exception only for a request that has guards. Anything else is a fault it would report as one.
+    static void ThrowUnlessSettled(ScenarioOutcome outcome, LifecycleEntry[] lifecycle, Type[] guards)
+    {
+        var settled = outcome.Cause switch
+        {
+            null => true,
+            RequestAuthorizationException => !lifecycle.Any(entry =>
+                entry.Phase is LifecyclePhase.Behavior or LifecyclePhase.Guard or LifecyclePhase.Handler),
+            RequestGuardException => guards.Length != 0,
+            _ => false
+        };
+        if (!settled)
+            ExceptionDispatchInfo.Throw(outcome.Cause!);
     }
 
     static LifecycleEntry? Classify(Type type, Type handler, HashSet<Type> authorizers, Type[] guards,

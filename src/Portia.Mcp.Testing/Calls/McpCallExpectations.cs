@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 
 namespace Cntryl.Portia.Testing;
 
@@ -24,19 +25,27 @@ public sealed class McpCallExpectations
         if (snapshot.IsError != expectFailure)
         {
             throw new InvalidOperationException(expectFailure
-                ? "Expected the MCP tool call to fail, but it succeeded."
-                : "Expected the MCP tool call to succeed, but it failed.");
+                ? $"Expected the MCP tool call to fail, but it succeeded.{Describe(snapshot)}"
+                : $"Expected the MCP tool call to succeed, but it failed.{Describe(snapshot)}");
         }
 
-        if (kind is not null && (!snapshot.StructuredJson.HasValue
-                                 || !snapshot.StructuredJson.Value.TryGetProperty("kind", out var actual)
-                                 || !string.Equals(actual.GetString(), kind, StringComparison.Ordinal)))
+        if (kind is not null && !string.Equals(KindOf(snapshot), kind, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException($"Expected MCP failure kind '{kind}'.");
+            throw new InvalidOperationException(
+                $"Expected MCP failure kind '{kind}', but the failure {(KindOf(snapshot) is { } actual ? $"had kind '{actual}'" : "carried no string kind")}.{Describe(snapshot)}");
         }
 
         return snapshot;
     }
+
+    static string? KindOf(McpCallSnapshot snapshot) =>
+        snapshot.StructuredJson is { ValueKind: JsonValueKind.Object } json
+        && json.TryGetProperty("kind", out var kind) && kind.ValueKind == JsonValueKind.String
+            ? kind.GetString()
+            : null;
+
+    static string Describe(McpCallSnapshot snapshot) =>
+        snapshot.Text.Count == 0 ? string.Empty : $" Tool text: {string.Join(" ", snapshot.Text)}";
 
     /// <summary>Returns an awaiter for the immutable call snapshot.</summary>
     public TaskAwaiter<McpCallSnapshot> GetAwaiter() => _task.GetAwaiter();

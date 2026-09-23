@@ -19,11 +19,12 @@ static class PortiaComponentRoles
 
     static readonly string[] All = [.. Handler, .. Authorizer, .. Behavior, .. Guard];
 
+    // The cheap name check runs first; the namespace is compared segment by segment, without building a string.
     public static bool Is(INamedTypeSymbol iface, string[] roles)
     {
         var definition = iface.OriginalDefinition;
-        return definition.ContainingNamespace?.ToDisplayString() == Namespace
-               && Array.IndexOf(roles, definition.MetadataName) >= 0;
+        return Array.IndexOf(roles, definition.MetadataName) >= 0
+               && SymbolNames.IsInNamespace(definition, Namespace);
     }
 
     public static bool IsComponent(INamedTypeSymbol symbol) =>

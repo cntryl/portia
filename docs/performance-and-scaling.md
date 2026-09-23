@@ -208,12 +208,14 @@ composition remains available for focused tests.
 `PORTIA100` and `PORTIA101` are best-effort architecture warnings, not proofs of purity or
 dependency transparency. `PORTIA100` recognizes Portia dispatch/effect APIs, `HttpClient` and
 `IHttpClientFactory`, `SmtpClient`, Stripe clients, EF Core contexts, ADO.NET connections, and
-generated gRPC client ancestry. `PORTIA101` recognizes DI service-provider/scope dependencies and
+generated gRPC client ancestry, except a dependency that is the projector's own projection store. `PORTIA101` recognizes DI service-provider/scope dependencies and
 semantic `ActivatorUtilities` calls. An application-defined gateway without one of those known
 markers remains intentionally unreported and still needs architectural review. `PORTIA105` and
-`PORTIA106` apply the same best-effort recognition to request guards and authorizers, additionally
-recognizing `IAggregateWriter`, `IAggregateExecutor`, event stores, and
-projection stores, while `IAggregateReader` and `IDomainEventReader` remain allowed.
+`PORTIA106` report only Portia's own write and dispatch APIs in request guards and authorizers:
+`IRequestBus` and the other senders, the scheduler, `IAggregateWriter`, `IAggregateExecutor`, event stores,
+and `IProjectionStore` or `IProjectionCheckpointStore` taken directly. Preflight often reads through an HTTP
+policy service or a read-model database, so those clients, and application repositories that happen to
+implement a projection contract, are not reported; `IAggregateReader` and `IDomainEventReader` remain allowed.
 # Bounded processor passes
 
 Projector and reactor workers enumerate at most `ProjectionRunOptions.MaxEventsPerPass` records per

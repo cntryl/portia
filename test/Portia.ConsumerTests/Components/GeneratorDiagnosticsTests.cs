@@ -100,7 +100,7 @@ public sealed class GeneratorDiagnosticsTests
             .Where(diagnostic => diagnostic.Id == id).ToArray();
 
         Assert.Equal(
-            ["bus", "checkpoints", "events", "executor", "http", "projections", "scheduler", "store", "writer"],
+            ["bus", "checkpoints", "events", "executor", "projections", "scheduler", "store", "writer"],
             Locations(source, diagnostics));
         Assert.All(diagnostics, diagnostic => Assert.StartsWith(messagePrefix,
             diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal));
@@ -750,5 +750,151 @@ public sealed class GeneratorDiagnosticsTests
                                                            """, new ComponentPracticeGenerator());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
+    }
+
+    [Fact]
+    public void Portia107ReportsScenarioExpectationsDiscardedAsStatements()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using System;
+                                                           using Cntryl.Portia;
+                                                           using Cntryl.Portia.Testing;
+                                                           public sealed record Request : IRequest;
+                                                           public static class Tests
+                                                           {
+                                                               public static void Forgotten(IServiceProvider services) =>
+                                                                   RequestScenario.For(services).When(new Request()).ExpectDenied();
+                                                           }
+                                                           """, new ScenarioObservationGenerator());
+
+        _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA107");
+    }
+
+    [Fact]
+    public void Portia107IgnoresAwaitedAndDeliberatelyKeptExpectations()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using System;
+                                                           using System.Threading.Tasks;
+                                                           using Cntryl.Portia;
+                                                           using Cntryl.Portia.Testing;
+                                                           public sealed record Request : IRequest;
+                                                           public static class Tests
+                                                           {
+                                                               public static async Task Observed(IServiceProvider services)
+                                                               {
+                                                                   await RequestScenario.For(services).When(new Request()).ExpectDenied();
+                                                                   var kept = RequestScenario.For(services).When(new Request());
+                                                                   _ = kept.ExpectHandled();
+                                                                   await kept;
+                                                               }
+                                                           }
+                                                           """, new ScenarioObservationGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA107");
+    }
+
+    [Fact]
+    public void Portia105And106IgnorePreflightReadsThroughNonPortiaClients()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using System.Data.Common;
+                                                           using System.Net.Http;
+                                                           using System.Threading;
+                                                           using System.Threading.Tasks;
+                                                           using Cntryl.Portia;
+                                                           public sealed record Req : IRequest;
+                                                           public sealed class PolicyAuthorizer(HttpClient policy) : IRequestAuthorizer<Req>
+                                                           {
+                                                               public ValueTask<Result> AuthorizeAsync(IRequestContext<Req> context, CancellationToken ct) => default;
+                                                           }
+                                                           public sealed class UniqueGuard(DbConnection readModel) : IRequestGuard<Req>
+                                                           {
+                                                               public ValueTask<Result> GuardAsync(IRequestContext<Req> context, CancellationToken ct) => default;
+                                                           }
+                                                           public interface IAccountRepository : IProjectionStore
+                                                           {
+                                                               ValueTask<int> GetBalanceAsync(CancellationToken ct);
+                                                           }
+                                                           public sealed class BalanceGuard(IAccountRepository accounts) : IRequestGuard<Req>
+                                                           {
+                                                               public ValueTask<Result> GuardAsync(IRequestContext<Req> context, CancellationToken ct) => default;
+                                                           }
+                                                           """, new ComponentPracticeGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "PORTIA105" or "PORTIA106");
+    }
+
+    [Fact]
+    public void Portia105StillReportsPreflightDispatchAndProjectionStore()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using System.Threading;
+                                                           using System.Threading.Tasks;
+                                                           using Cntryl.Portia;
+                                                           public sealed record Req : IRequest;
+                                                           public sealed class DispatchingGuard(IRequestBus bus, IProjectionStore store) : IRequestGuard<Req>
+                                                           {
+                                                               public ValueTask<Result> GuardAsync(IRequestContext<Req> context, CancellationToken ct) => default;
+                                                           }
+                                                           """, new ComponentPracticeGenerator());
+
+        Assert.Equal(2, diagnostics.Count(diagnostic => diagnostic.Id == "PORTIA105"));
+    }
+
+    [Fact]
+    public void Portia100IgnoresTheProjectorsOwnProjectionStore()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using System.Threading;
+                                                           using System.Threading.Tasks;
+                                                           using Cntryl.Portia;
+                                                           namespace Microsoft.EntityFrameworkCore { public abstract class DbContext; }
+                                                           public abstract class AccountsDb : Microsoft.EntityFrameworkCore.DbContext, IProjectionStore
+                                                           {
+                                                               public abstract ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default);
+                                                               public abstract ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default);
+                                                           }
+                                                           public sealed class AccountProjector(AccountsDb db) : Projector(db, EventStreamPattern.ForPattern("events"));
+                                                           """, new ComponentPracticeGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA100");
+    }
+
+    [Fact]
+    public void Portia104IgnoresFailuresBuiltInsideLambdas()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using System;
+                                                           using System.Threading;
+                                                           using System.Threading.Tasks;
+                                                           using Cntryl.Portia;
+                                                           public sealed record Req : IRequest;
+                                                           public sealed class Handler : IRequestHandler<Req>
+                                                           {
+                                                               public async ValueTask<Result> HandleAsync(IRequestContext<Req> context, CancellationToken ct)
+                                                               {
+                                                                   try { await Task.Yield(); return Result.Success; }
+                                                                   catch (Exception ex) { return Fallback(() => Result.Failure(new(RequestErrorKind.Internal, "failed")), ex); }
+                                                               }
+                                                               static Result Fallback(Func<Result> fallback, Exception ex) => throw ex;
+                                                           }
+                                                           """, new ComponentPracticeGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
+    }
+
+    [Fact]
+    public void Portia101LeavesAggregateLocatorsToPortia102()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using System;
+                                                           using Cntryl.Portia;
+                                                           public sealed class Account(Uuid id, IServiceProvider services)
+                                                               : Aggregate(id, new EventStreamAddress("r", "a", id.ToString()));
+                                                           """, new ComponentPracticeGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA101");
+        _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA102");
     }
 }

@@ -17,10 +17,34 @@ static class HttpBindingShape
 
     public static IMethodSymbol? SinglePublicConstructor(INamedTypeSymbol request)
     {
+        // A struct always has an implicit parameterless constructor; it is never the binding constructor.
         var constructors = request.Constructors
-            .Where(constructor => constructor.DeclaredAccessibility == Accessibility.Public && !constructor.IsStatic)
+            .Where(constructor => constructor.DeclaredAccessibility == Accessibility.Public && !constructor.IsStatic
+                                  && !(request.IsValueType && constructor.IsImplicitlyDeclared
+                                                           && constructor.Parameters.Length == 0))
             .ToArray();
         return constructors.Length == 1 ? constructors[0] : null;
+    }
+
+    // A token is optional only when its name or its last constraint ends in '?'; a '?' inside a constraint
+    // argument such as regex(^[a-z]?$) does not make it optional.
+    public static bool IsOptionalRouteToken(Match token) => token.Value.EndsWith("?}", StringComparison.Ordinal);
+
+    // Generated binding constructs the request through its constructor alone, so required members it does
+    // not set would not compile.
+    public static bool HasUnsetRequiredMembers(INamedTypeSymbol request, IMethodSymbol constructor)
+    {
+        if (constructor.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString()
+                                                         == "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute"))
+            return false;
+        for (var current = request; current is not null; current = current.BaseType)
+        {
+            if (current.GetMembers().Any(member => member is IPropertySymbol { IsRequired: true }
+                                             or IFieldSymbol { IsRequired: true }))
+                return true;
+        }
+
+        return false;
     }
 
     public static bool IsRouteParameter(string pattern, string name) => RouteTokenPattern.Matches(pattern).Cast<Match>()

@@ -8,13 +8,16 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Cntryl.Portia;
 
-/// <summary>Adds the partial modifier required for generated projector and reactor dispatch.</summary>
+/// <summary>
+///     Adds the partial modifier required for generated projector and reactor dispatch, to the processor or to the
+///     types that enclose it.
+/// </summary>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(PartialProcessorCodeFixProvider))]
 [Shared]
 public sealed class PartialProcessorCodeFixProvider : CodeFixProvider
 {
     /// <inheritdoc />
-    public override ImmutableArray<string> FixableDiagnosticIds => ["PORTIA002", "PORTIA005"];
+    public override ImmutableArray<string> FixableDiagnosticIds => ["PORTIA002", "PORTIA005", "PORTIA015"];
 
     /// <inheritdoc />
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
@@ -24,18 +27,43 @@ public sealed class PartialProcessorCodeFixProvider : CodeFixProvider
     {
         var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
         var declaration = root?.FindNode(context.Span).FirstAncestorOrSelf<ClassDeclarationSyntax>();
-        if (declaration is null || declaration.Modifiers.Any(SyntaxKind.PartialKeyword))
+        if (declaration is null)
             return;
 
-        context.RegisterCodeFix(CodeAction.Create("Make processor partial",
-                ct => AddPartialAsync(context.Document, declaration, ct), "Portia.MakeProcessorPartial"),
-            context.Diagnostics);
+        foreach (var diagnostic in context.Diagnostics)
+        {
+            if (diagnostic.Id == "PORTIA015")
+            {
+                // PORTIA015 has several causes; only the one the generator marks is repaired here.
+                if (!diagnostic.Properties.ContainsKey("PartialContainers"))
+                    continue;
+                var containers = declaration.Ancestors().OfType<TypeDeclarationSyntax>()
+                    .Where(container => !container.Modifiers.Any(SyntaxKind.PartialKeyword)).ToArray();
+                if (containers.Length == 0)
+                    continue;
+                context.RegisterCodeFix(CodeAction.Create("Make enclosing types partial",
+                    ct => AddPartialAsync(context.Document, containers, ct), "Portia.MakeContainersPartial"),
+                    diagnostic);
+            }
+            else if (!declaration.Modifiers.Any(SyntaxKind.PartialKeyword))
+            {
+                context.RegisterCodeFix(CodeAction.Create("Make processor partial",
+                    ct => AddPartialAsync(context.Document, [declaration], ct), "Portia.MakeProcessorPartial"),
+                    diagnostic);
+            }
+        }
     }
 
-    static async Task<Document> AddPartialAsync(Document document, ClassDeclarationSyntax declaration,
+    static async Task<Document> AddPartialAsync(Document document, IReadOnlyCollection<TypeDeclarationSyntax> declarations,
         CancellationToken cancellationToken)
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
+        return document.WithSyntaxRoot(root!.ReplaceNodes(declarations, (_, current) => WithPartial(current)));
+    }
+
+    // Appended last, so it sits immediately before the type keyword as C# requires.
+    static TypeDeclarationSyntax WithPartial(TypeDeclarationSyntax declaration)
+    {
         var partial = SyntaxFactory.Token(SyntaxKind.PartialKeyword).WithTrailingTrivia(SyntaxFactory.Space);
         var replacement = declaration;
         if (declaration.Modifiers.Count == 0)
@@ -45,7 +73,6 @@ public sealed class PartialProcessorCodeFixProvider : CodeFixProvider
                 declaration.Keyword.WithLeadingTrivia(default(SyntaxTriviaList)));
         }
 
-        replacement = replacement.WithModifiers(replacement.Modifiers.Add(partial));
-        return document.WithSyntaxRoot(root!.ReplaceNode(declaration, replacement));
+        return replacement.WithModifiers(replacement.Modifiers.Add(partial));
     }
 }

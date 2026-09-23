@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -50,6 +51,22 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
 
         var singleName = projector ? "IProjectorHandler" : "IReactorHandler";
         var batchName = projector ? "IBatchProjectorHandler" : "IBatchReactorHandler";
+        bool IsHandlerInterface(INamedTypeSymbol i) => i.ContainingNamespace.ToDisplayString() == "Cntryl.Portia"
+                                                       && i.TypeArguments.Length == 1
+                                                       && (i.Name == singleName || i.Name == batchName);
+        // A concrete base processor already generates dispatch for every handler it implements, and this type
+        // inherits that override; it needs its own only when it adds handlers.
+        var dispatchingBase = symbol.BaseType;
+        while (dispatchingBase is not null && dispatchingBase.IsAbstract)
+            dispatchingBase = dispatchingBase.BaseType;
+        if (dispatchingBase is not null
+            && InheritsFrom(dispatchingBase, projector ? "Cntryl.Portia.Projector" : "Cntryl.Portia.Reactor")
+            && symbol.AllInterfaces.Where(IsHandlerInterface)
+                .All(handler => dispatchingBase.AllInterfaces.Contains(handler, SymbolEqualityComparer.Default)))
+        {
+            return null;
+        }
+
         var handlers = symbol.AllInterfaces.Where(i => i.ContainingNamespace.ToDisplayString() == "Cntryl.Portia"
                                                        && i.TypeArguments.Length == 1 &&
                                                        (i.Name == singleName || i.Name == batchName))
@@ -65,6 +82,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
                 GetParents(symbol), GeneratedTypeShape.HintName(symbol),
                 DiagnosticLocation.From(symbol.Locations.FirstOrDefault()),
                 GeneratedTypeShape.UnsupportedReason(symbol, true),
+                GeneratedTypeShape.UnsupportedReason(symbol) is null,
                 declaration.Modifiers.Any(SyntaxKind.PartialKeyword), projector,
                 InheritsFrom(symbol, projector ? "Cntryl.Portia.BatchProjector" : "Cntryl.Portia.BatchReactor"),
                 handlers);
@@ -82,8 +100,12 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
 
         if (processor.UnsupportedReason is { } unsupportedReason)
         {
+            // Every other shape check passed, so the reason is enclosing types that are not partial.
+            var properties = processor.OnlyContainersUnsupported
+                ? ImmutableDictionary<string, string?>.Empty.Add(GeneratedTypeShape.PartialContainersProperty, "true")
+                : ImmutableDictionary<string, string?>.Empty;
             context.ReportDiagnostic(Diagnostic.Create(GeneratedTypeShape.Unsupported,
-                processor.Location.ToLocation(), processor.DisplayName, unsupportedReason));
+                processor.Location.ToLocation(), properties, processor.DisplayName, unsupportedReason));
             return;
         }
 
@@ -242,6 +264,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         string hintName,
         DiagnosticLocation location,
         string? unsupportedReason,
+        bool onlyContainersUnsupported,
         bool partial,
         bool projector,
         bool batch,
@@ -254,6 +277,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         public string HintName { get; } = hintName;
         public DiagnosticLocation Location { get; } = location;
         public string? UnsupportedReason { get; } = unsupportedReason;
+        public bool OnlyContainersUnsupported { get; } = onlyContainersUnsupported;
         public bool Partial { get; } = partial;
         public bool Projector { get; } = projector;
         public bool Batch { get; } = batch;
@@ -264,6 +288,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
                                                 HintName == other.HintName &&
                                                 Location.Equals(other.Location) &&
                                                 UnsupportedReason == other.UnsupportedReason &&
+                                                OnlyContainersUnsupported == other.OnlyContainersUnsupported &&
                                                 Partial == other.Partial &&
                                                 Projector == other.Projector && Batch == other.Batch &&
                                                 Parents.SequenceEqual(other.Parents) &&

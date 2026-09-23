@@ -42,14 +42,14 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
     {
         var events = context.SyntaxProvider
             .CreateSyntaxProvider(
-                static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
+                static (node, _) => SyntaxFilters.HasBaseList(node),
                 static (syntaxContext, _) => GetEventModel(syntaxContext))
             .Where(static model => model is not null)
             .Select(static (model, _) => model!);
         var eventModels = events.Collect();
         var referencedEventModels = context.SyntaxProvider
             .CreateSyntaxProvider(
-                static (node, _) => node is TypeSyntax,
+                static (node, _) => SyntaxFilters.IsTypeReference(node),
                 static (syntaxContext, _) => GetReferencedEventModel(syntaxContext))
             .Where(static model => model is not null)
             .Select(static (model, _) => model!)
@@ -60,7 +60,7 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             .WithTrackingName("DomainEventCatalogRegistrations");
         var invalidDiscriminators = context.SyntaxProvider
             .CreateSyntaxProvider(
-                static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
+                static (node, _) => SyntaxFilters.HasBaseList(node),
                 static (syntaxContext, _) => GetInvalidEventDiscriminator(syntaxContext))
             .Where(static model => model is not null)
             .Select(static (model, _) => model!)
@@ -74,28 +74,75 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
 
         var upcasters = context.SyntaxProvider
             .CreateSyntaxProvider(
-                static (node, _) => node is ClassDeclarationSyntax,
+                static (node, _) => node is ClassDeclarationSyntax { BaseList: not null },
                 static (syntaxContext, _) => GetUpcasterEventName(syntaxContext))
             .Where(static upcaster => upcaster is not null)
             .Select(static (upcaster, _) => upcaster!)
             .Collect();
 
+        // An upcaster may serve an event a referenced feature assembly declares and handles itself, which no
+        // type syntax in this compilation mentions. Referenced assemblies are searched only for an upcaster
+        // whose name nothing in this compilation declares, so ordinary edits never walk them.
         context.RegisterSourceOutput(
-            eventModels.Combine(referencedEventModels).Combine(upcasters),
+            eventModels.Combine(referencedEventModels).Combine(upcasters).Combine(context.CompilationProvider),
             static (sourceContext, pair) => GenerateDiagnostics(sourceContext,
-                pair.Left.Left.AddRange(pair.Left.Right), pair.Right));
+                pair.Left.Left.Left.AddRange(pair.Left.Left.Right), pair.Left.Right, pair.Right));
         context.RegisterSourceOutput(eventRegistrations, static (sourceContext, registrations) =>
             GenerateCatalog(sourceContext, registrations));
+    }
+
+    static SortedSet<string> ReferencedAssemblyEventNames(Compilation compilation, CancellationToken ct)
+    {
+        var names = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
+        {
+            // Only assemblies built against Portia can declare domain events.
+            if (!assembly.Modules.Any(module => module.ReferencedAssemblySymbols.Any(reference =>
+                    reference.Name == "Portia.Abstractions")))
+            {
+                continue;
+            }
+
+            var pending = new Stack<INamespaceOrTypeSymbol>();
+            pending.Push(assembly.GlobalNamespace);
+            while (pending.Count > 0)
+            {
+                ct.ThrowIfCancellationRequested();
+                foreach (var member in pending.Pop().GetMembers())
+                {
+                    if (member is INamespaceSymbol space)
+                    {
+                        pending.Push(space);
+                    }
+                    else if (member is INamedTypeSymbol type)
+                    {
+                        pending.Push(type);
+                        if (type.DeclaredAccessibility == Accessibility.Public && !type.IsAbstract
+                                                                               && InheritsFrom(type, DomainEventMetadataName)
+                                                                               && GetSchemaIdentity(type).Name is { } name)
+                        {
+                            _ = names.Add(name);
+                        }
+                    }
+                }
+            }
+        }
+
+        return names;
     }
 
     static void GenerateDiagnostics(
         SourceProductionContext context,
         ImmutableArray<EventModel> events,
-        ImmutableArray<UpcasterModel> upcasters)
+        ImmutableArray<UpcasterModel> upcasters,
+        Compilation compilation)
     {
+        SortedSet<string>? referencedNames = null;
         foreach (var upcaster in upcasters)
         {
-            if (!events.Any(e => e.Name == upcaster.EventName))
+            if (!events.Any(e => e.Name == upcaster.EventName)
+                && !(referencedNames ??= ReferencedAssemblyEventNames(compilation, context.CancellationToken))
+                    .Contains(upcaster.EventName))
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     UnknownUpcasterEventName,
@@ -170,7 +217,8 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
     static EventModel? GetReferencedEventModel(GeneratorSyntaxContext context)
     {
         var syntax = (TypeSyntax)context.Node;
-        if (context.SemanticModel.GetTypeInfo(syntax).Type is not INamedTypeSymbol symbol
+        if (!ReferencedEventNames.MayName(context)
+            || context.SemanticModel.GetTypeInfo(syntax).Type is not INamedTypeSymbol symbol
             || SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly,
                 context.SemanticModel.Compilation.Assembly)
             || !IsCatalogable(symbol)

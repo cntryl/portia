@@ -55,8 +55,16 @@ public sealed class RequestScenario
         ArgumentNullException.ThrowIfNull(request);
         return new RequestExpectations(Definition(request, async (bus, context) =>
         {
-            var result = await bus.DispatchAsync(request, context).ConfigureAwait(false);
-            return (ScenarioOutcome.From(result.IsSuccess, result.Error), result);
+            try
+            {
+                var result = await bus.DispatchAsync(request, context).ConfigureAwait(false);
+                return (ScenarioOutcome.From(result.IsSuccess, result.Error), result);
+            }
+            catch (EventStreamConcurrencyException)
+            {
+                var conflict = ScenarioOutcome.Conflict();
+                return (conflict, Result.Failure(conflict.Error!));
+            }
         }), []);
     }
 
@@ -69,8 +77,16 @@ public sealed class RequestScenario
         ArgumentNullException.ThrowIfNull(request);
         return new RequestExpectations<TOut>(Definition(request, async (bus, context) =>
         {
-            var result = await bus.DispatchAsync(request, context).ConfigureAwait(false);
-            return (ScenarioOutcome.From(result.IsSuccess, result.Error), result);
+            try
+            {
+                var result = await bus.DispatchAsync(request, context).ConfigureAwait(false);
+                return (ScenarioOutcome.From(result.IsSuccess, result.Error), result);
+            }
+            catch (EventStreamConcurrencyException)
+            {
+                var conflict = ScenarioOutcome.Conflict();
+                return (conflict, Result<TOut>.Failure(conflict.Error!));
+            }
         }), []);
     }
 
@@ -91,11 +107,15 @@ public sealed class RequestScenario
             }
             catch (RequestAuthorizationException ex)
             {
-                return (ScenarioOutcome.From(false, ex.Error), items);
+                return (new ScenarioOutcome(false, ex.Error, ex), items);
             }
             catch (RequestGuardException ex)
             {
-                return (ScenarioOutcome.From(false, ex.Error), items);
+                return (new ScenarioOutcome(false, ex.Error, ex), items);
+            }
+            catch (EventStreamConcurrencyException)
+            {
+                return (ScenarioOutcome.Conflict(), items);
             }
 
             return (ScenarioOutcome.From(true, null), (IReadOnlyList<TOut>)items);

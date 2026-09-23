@@ -112,7 +112,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             return Invalid(invocation, "the route must be a compile-time string constant");
 
         var optionalToken = HttpBindingShape.RouteTokenPattern.Matches(pattern).Cast<Match>()
-            .FirstOrDefault(match => match.Value.IndexOf('?') >= 0);
+            .FirstOrDefault(HttpBindingShape.IsOptionalRouteToken);
         if (optionalToken is not null)
         {
             return new CallAnalysis(null,
@@ -176,6 +176,11 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             return configured
                 ? Mapping([], false)
                 : Invalid(invocation, "the request must expose exactly one public constructor");
+        if (!configured && HttpBindingShape.HasUnsetRequiredMembers(requestType, primaryConstructor))
+        {
+            return Invalid(invocation,
+                "required members are not bound; bind them through constructor parameters or mark the constructor [SetsRequiredMembers]");
+        }
 
         var routeTokens = HttpBindingShape.RouteTokenPattern.Matches(pattern)
             .Cast<Match>()
@@ -247,9 +252,11 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         ? "default!"
         : $"({typeName})({NonFiniteLiteral(parameter.ExplicitDefaultValue) ?? SymbolDisplay.FormatPrimitive(parameter.ExplicitDefaultValue, true, false)})";
 
-    // FormatPrimitive renders a non-finite value as a bare NaN or Infinity, which is not C#.
+    // FormatPrimitive renders a non-finite value as a bare NaN or Infinity, and a decimal without its 'm'
+    // suffix, where a large value is not a valid integer literal; none of those is C#.
     static string? NonFiniteLiteral(object value) => value switch
     {
+        decimal number => number.ToString(CultureInfo.InvariantCulture) + "m",
         double number when double.IsNaN(number) => "double.NaN",
         double number when double.IsPositiveInfinity(number) => "double.PositiveInfinity",
         double number when double.IsNegativeInfinity(number) => "double.NegativeInfinity",
@@ -263,19 +270,41 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
     // Whether an endpoint is described is a property of the endpoint, not of the order its
     // conventions were written in, so the whole builder chain is walked rather than only the call
-    // directly attached to the mapping. A chain is still all this can see: an exclusion applied to
-    // a variable later is not detected, and the runtime document check remains the backstop.
+    // directly attached to the mapping. An exclusion applied through a local — the mapping's own
+    // result, or the group it was mapped on — counts too; anything further away is left to the
+    // runtime document check.
     static bool IsExcludedFromDescription(InvocationExpressionSyntax invocation)
     {
-        for (SyntaxNode current = invocation;
-             current.Parent is MemberAccessExpressionSyntax { Parent: InvocationExpressionSyntax next } access;
+        SyntaxNode current = invocation;
+        for (; current.Parent is MemberAccessExpressionSyntax { Parent: InvocationExpressionSyntax next } access;
              current = next)
         {
             if (access.Name.Identifier.ValueText == "ExcludeFromDescription")
                 return true;
         }
 
-        return false;
+        if (current.Parent is EqualsValueClauseSyntax { Parent: VariableDeclaratorSyntax result }
+            && ExcludesLocal(invocation, result.Identifier.ValueText))
+        {
+            return true;
+        }
+
+        return invocation.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax receiver }
+               && ExcludesLocal(invocation, receiver.Identifier.ValueText);
+    }
+
+    static bool ExcludesLocal(InvocationExpressionSyntax invocation, string local)
+    {
+        var scope = invocation.Ancestors()
+            .FirstOrDefault(node => node is LocalFunctionStatementSyntax or BaseMethodDeclarationSyntax
+                or CompilationUnitSyntax);
+        return scope is not null && scope.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(candidate =>
+            candidate.Expression is MemberAccessExpressionSyntax
+            {
+                Name.Identifier.ValueText: "ExcludeFromDescription",
+                Expression: IdentifierNameSyntax target
+            }
+            && target.Identifier.ValueText == local);
     }
 
     static string ContainingScope(InvocationExpressionSyntax invocation)

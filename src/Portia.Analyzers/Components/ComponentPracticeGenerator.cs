@@ -82,12 +82,25 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         "Cntryl.Portia.IProjectionCheckpointStore"
     ];
 
-    // Guards and authorizers read; reads through IAggregateReader and IDomainEventReader stay allowed.
+    // Guards and authorizers read, often through an application's own HTTP policy service or read-model
+    // database, so only Portia's own write and dispatch APIs count as effects here.
     static readonly string[] PreflightForbiddenTypes =
     [
-        .. EffectTypes,
+        "Cntryl.Portia.IRequestBus",
+        "Cntryl.Portia.IRemoteRequestSender",
+        "Cntryl.Portia.IRequestQueuePublisher",
+        "Cntryl.Portia.INoticeRequestSender",
+        "Cntryl.Portia.IRequestScheduler",
+        "Cntryl.Portia.IAggregateWriter",
+        "Cntryl.Portia.IAggregateExecutor",
         "Cntryl.Portia.IEventStore",
-        "Cntryl.Portia.IDomainEventWriter",
+        "Cntryl.Portia.IDomainEventWriter"
+    ];
+
+    // The projection contracts themselves commit progress. An application repository that also implements
+    // one is matched only by the rule that owns it, since reading through it is legitimate.
+    static readonly string[] ProjectionContracts =
+    [
         "Cntryl.Portia.IProjectionStore",
         "Cntryl.Portia.IProjectionCheckpointStore"
     ];
@@ -97,7 +110,11 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
     {
         // Flattened so each equatable finding is cached on its own; an array compares by reference.
         var findings = context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
+                // Every rule concerns a type that derives from or implements something. A partial part without
+                // a base list may still belong to one, so it is analyzed too.
+                static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax
+                                    && (((TypeDeclarationSyntax)node).BaseList is not null
+                                        || ((TypeDeclarationSyntax)node).Modifiers.Any(SyntaxKind.PartialKeyword)),
                 static (syntaxContext, ct) => Analyze(syntaxContext, ct))
             .SelectMany(static (findings, _) => findings)
             .WithTrackingName("PortiaComponentPractices");
@@ -134,7 +151,9 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
     {
         if (!DerivesFrom(symbol, "Cntryl.Portia.Projector"))
             return;
-        foreach (var parameter in Parameters(symbol, EffectTypes))
+        // The projector's own projection store shares its commit, whatever else that repository derives from.
+        foreach (var parameter in Parameters(symbol, EffectTypes)
+                     .Where(parameter => !Matches(parameter.Type, ProjectionContracts)))
         {
             findings.Add(Finding.Create(Kind.ProjectorEffect, Location(parameter), symbol.Name, Display(parameter)));
         }
@@ -147,7 +166,11 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
             symbol.AllInterfaces.Any(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Authorizer));
         if (!guard && !authorizer)
             return;
-        foreach (var parameter in Parameters(symbol, PreflightForbiddenTypes))
+        foreach (var parameter in Parameters(symbol, PreflightForbiddenTypes).Concat(symbol.InstanceConstructors
+                     .Where(constructor => !constructor.IsImplicitlyDeclared)
+                     .SelectMany(constructor => constructor.Parameters)
+                     .Where(parameter => parameter.Type is INamedTypeSymbol named
+                                         && IsAny(named, ProjectionContracts))))
         {
             var remedy = Matches(parameter.Type, ["Cntryl.Portia.IAggregateWriter", "Cntryl.Portia.IAggregateExecutor"])
                 ? "inject IAggregateReader to hydrate aggregates"
@@ -172,17 +195,21 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
     {
         if (!IsPortiaComponent(symbol))
             return;
-        foreach (var parameter in reportParameters ? Parameters(symbol, LocatorTypes) : [])
+        // PORTIA102 already reports every locator an aggregate takes.
+        var aggregate = DerivesFrom(symbol, "Cntryl.Portia.Aggregate");
+        foreach (var parameter in reportParameters && !aggregate ? Parameters(symbol, LocatorTypes) : [])
         {
             findings.Add(Finding.Create(Kind.ServiceLocation, Location(parameter), symbol.Name, Display(parameter)));
         }
 
+        // Only ActivatorUtilities' own method names are bound; every other call in the component is skipped.
         foreach (var invocation in node.DescendantNodes().OfType<InvocationExpressionSyntax>()
-                     .Where(candidate =>
-                         candidate.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() == node))
+                     .Where(candidate => IsActivatorUtilitiesName(candidate)
+                                         && candidate.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()
+                                         == node))
         {
             if (semanticModel.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method ||
-                MetadataName(method.ContainingType) != "Microsoft.Extensions.DependencyInjection.ActivatorUtilities")
+                !SymbolNames.Is(method.ContainingType, "Microsoft.Extensions.DependencyInjection.ActivatorUtilities"))
             {
                 continue;
             }
@@ -191,6 +218,14 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
                 $"ActivatorUtilities.{method.Name}"));
         }
     }
+
+    static bool IsActivatorUtilitiesName(InvocationExpressionSyntax invocation) =>
+        (invocation.Expression switch
+        {
+            MemberAccessExpressionSyntax access => access.Name,
+            SimpleNameSyntax simple => simple,
+            _ => null
+        })?.Identifier.ValueText is "CreateInstance" or "GetServiceOrCreateInstance" or "CreateFactory";
 
     static void ReportAggregateServices(List<Finding> findings, INamedTypeSymbol symbol)
     {
@@ -220,6 +255,13 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         SemanticModel semanticModel,
         CancellationToken ct)
     {
+        // Type lookups search every referenced assembly, so they wait until this declaration is known to be a
+        // handler that catches something.
+        if (!node.DescendantNodes().OfType<CatchClauseSyntax>().Any()
+            || !symbol.AllInterfaces.Any(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Handler)))
+        {
+            return;
+        }
         var compilation = semanticModel.Compilation;
         var exceptionType = compilation.GetTypeByMetadataName("System.Exception");
         var resultType = compilation.GetTypeByMetadataName("Cntryl.Portia.Result");
@@ -260,6 +302,15 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
                     if (clause.Filter is not null)
                         continue;
 
+                    // Syntax first: only a catch that returns a call named Failure can be this shape, so every
+                    // other catch is skipped before its body is bound.
+                    if (!clause.Block.Statements.OfType<ReturnStatementSyntax>().Any(statement =>
+                            statement.Expression?.DescendantNodesAndSelf(DescendIntoHandlerBody)
+                                .OfType<InvocationExpressionSyntax>().Any(IsNamedFailure) == true))
+                    {
+                        continue;
+                    }
+
                     if (clause.Declaration?.Type is
                         // A bare catch, or one naming System.Exception itself — a specific exception
                         // type is a failure the handler genuinely anticipates, which is what Result is for.
@@ -276,7 +327,8 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
                     if (!clause.Block.Statements.OfType<ReturnStatementSyntax>().Any(statement =>
                             statement.Expression is { } expression
                             && !expression.DescendantNodesAndSelf().OfType<ThrowExpressionSyntax>().Any()
-                            && expression.DescendantNodesAndSelf().OfType<InvocationExpressionSyntax>()
+                            && expression.DescendantNodesAndSelf(DescendIntoHandlerBody)
+                                .OfType<InvocationExpressionSyntax>()
                                 .Any(invocation => IsResultFailure(
                                     semanticModel.GetSymbolInfo(invocation, ct).Symbol as IMethodSymbol,
                                     resultType,
@@ -289,6 +341,14 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
                 }
             }
         }
+
+        static bool IsNamedFailure(InvocationExpressionSyntax invocation) =>
+            (invocation.Expression switch
+            {
+                MemberAccessExpressionSyntax access => access.Name,
+                SimpleNameSyntax simple => simple,
+                _ => null
+            })?.Identifier.ValueText == "Failure";
 
         static bool DescendIntoHandlerBody(SyntaxNode current)
         {
@@ -319,7 +379,7 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
     {
         for (var current = symbol.BaseType; current is not null; current = current.BaseType)
         {
-            if (current.OriginalDefinition.ToDisplayString() == baseTypeName)
+            if (SymbolNames.Is(current, baseTypeName))
                 return true;
         }
 
@@ -339,26 +399,22 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
 
         for (var current = named; current is not null; current = current.BaseType)
         {
-            if (Array.IndexOf(forbidden, MetadataName(current)) >= 0 ||
-                current.AllInterfaces.Any(iface => Array.IndexOf(forbidden, MetadataName(iface)) >= 0))
-            {
+            if (IsAny(current, forbidden) || current.AllInterfaces.Any(iface => IsAny(iface, forbidden)))
                 return true;
-            }
         }
 
         return false;
     }
 
-    static string MetadataName(INamedTypeSymbol type)
+    static bool IsAny(INamedTypeSymbol type, string[] names)
     {
-        type = type.OriginalDefinition;
-        var names = new Stack<string>();
-        for (var current = type; current is not null; current = current.ContainingType)
-            names.Push(current.MetadataName);
-        var name = string.Join("+", names);
-        return type.ContainingNamespace is { IsGlobalNamespace: false } space
-            ? $"{space.ToDisplayString()}.{name}"
-            : name;
+        foreach (var name in names)
+        {
+            if (SymbolNames.Is(type, name))
+                return true;
+        }
+
+        return false;
     }
 
     static Location? Location(IParameterSymbol parameter) => parameter.Locations.FirstOrDefault();

@@ -113,11 +113,8 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
                 ? NormalizeTypeName(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
                 : NormalizeTypeName(expression.Type.ToString()))
             .ToImmutableHashSet(StringComparer.Ordinal);
-        var attributes = typeNames
-            .Select(NormalizeTypeName)
-            .Distinct(StringComparer.Ordinal)
-            .Where(typeName => !existing.Contains(typeName))
-            .OrderBy(typeName => typeName, StringComparer.Ordinal)
+        var attributes = Distinct(typeNames)
+            .Where(typeName => !existing.Contains(NormalizeTypeName(typeName)))
             .Select(typeName => SyntaxFactory.AttributeList([
                 SyntaxFactory.Attribute(
                     SyntaxFactory.ParseName("System.Text.Json.Serialization.JsonSerializable"),
@@ -147,8 +144,7 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
         var namespaceDeclaration = string.IsNullOrEmpty(contextNamespace)
             ? string.Empty
             : $"namespace {contextNamespace};\n\n";
-        var rootAttributes = string.Join(string.Empty, roots.Select(root => NormalizeTypeName(root.TypeName))
-            .Distinct(StringComparer.Ordinal).OrderBy(typeName => typeName, StringComparer.Ordinal)
+        var rootAttributes = string.Join(string.Empty, Distinct(roots.Select(root => root.TypeName))
             .Select(typeName => $"[JsonSerializable(typeof({GlobalTypeName(typeName)}))]\n"));
         var source = "using System.Text.Json;\nusing System.Text.Json.Serialization;\nusing Cntryl.Portia;\n\n"
                      + namespaceDeclaration
@@ -208,9 +204,17 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
 
     static string NormalizeTypeName(string typeName) => typeName.Replace("global::", string.Empty);
 
+    // One name per root, compared without qualification, in a stable order.
+    static IEnumerable<string> Distinct(IEnumerable<string> typeNames) => typeNames
+        .GroupBy(NormalizeTypeName, StringComparer.Ordinal)
+        .OrderBy(group => group.Key, StringComparer.Ordinal)
+        .Select(group => group.First());
+
     // A root is written global-qualified: a partially qualified name binds relative to the context's
-    // namespace, where a same-named child namespace (App.Orders for Orders.Query) captures it.
-    static string GlobalTypeName(string typeName) => "global::" + NormalizeTypeName(typeName);
+    // namespace, where a same-named child namespace (App.Orders for Orders.Query) captures it. A name the
+    // diagnostic already qualified keeps its qualified type arguments too.
+    static string GlobalTypeName(string typeName) =>
+        typeName.StartsWith("global::", StringComparison.Ordinal) ? typeName : "global::" + typeName;
 
     static string EquivalenceKey(ContextInfo context) =>
         $"Portia.AddJsonRoot.{context.DocumentId}.{context.SpanStart}";

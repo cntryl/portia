@@ -22,6 +22,18 @@ public abstract record DomainEvent
 
     internal DomainEventMetadata? AttachedMetadata => _metadata;
 
+    /// <summary>
+    ///     Compares business payload only. Metadata is the envelope Portia attaches when an event is raised or
+    ///     read, so an event equals a freshly constructed event with the same type and data.
+    /// </summary>
+    /// <param name="other">The event to compare with.</param>
+    /// <returns>Whether both events have the same type and business data.</returns>
+    public virtual bool Equals(DomainEvent? other) =>
+        ReferenceEquals(this, other) || (other is not null && EqualityContract == other.EqualityContract);
+
+    /// <inheritdoc />
+    public override int GetHashCode() => EqualityContract.GetHashCode();
+
     internal void AttachAggregateMetadata(DomainEventMetadata metadata)
     {
         AttachMetadata(metadata);

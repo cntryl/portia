@@ -513,9 +513,9 @@ Each guard records `portia.guard.duration` with its component name and outcome.
 
 Guards and authorizers read; they never change state. Take `IAggregateReader` to hydrate an
 aggregate and `IDomainEventReader` to read events. Portia's practice analyzers report `PORTIA105`
-for a guard, and `PORTIA106` for an authorizer, that takes a known effect-capable dependency such as
-`IRequestBus`, a scheduler or queue publisher, `IAggregateWriter`,
-`IAggregateExecutor`, or an event or projection store.
+for a guard, and `PORTIA106` for an authorizer, that takes one of Portia's write or dispatch APIs:
+`IRequestBus`, a scheduler or queue publisher, `IAggregateWriter`, `IAggregateExecutor`, or an event or
+projection store. Reading through an HTTP policy service or a read-model database is not reported.
 
 Every direct dispatch is a fresh attempt. Queue retry or redelivery creates a fresh dependency-
 injection delivery scope, resolves scoped guards again, and reruns them; guard outcomes are never

@@ -36,8 +36,15 @@ public static class ReactionDeduplicationConformance
         }
 
         var concurrentId = Uuid.CreateVersion4();
-        var attempts = Enumerable.Range(0, 8)
-            .Select(_ => probe.ExecuteAsync(concurrentId, Effect, ct).AsTask()).ToArray();
+        // Each attempt is released onto its own thread-pool continuation at once, so an implementation that
+        // completes synchronously still races instead of running the attempts one after another.
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempts = Enumerable.Range(0, 8).Select(_ => Task.Run(async () =>
+        {
+            await start.Task.WaitAsync(ct).ConfigureAwait(false);
+            return await probe.ExecuteAsync(concurrentId, Effect, ct).ConfigureAwait(false);
+        }, ct)).ToArray();
+        start.SetResult();
         _ = await Task.WhenAll(attempts).ConfigureAwait(false);
         if (attempts.Count(task => task.Result) != 1 || effects != 2)
         {
