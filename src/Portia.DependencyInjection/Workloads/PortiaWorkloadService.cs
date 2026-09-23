@@ -9,8 +9,8 @@ sealed class PortiaWorkloadService(
     IServiceScopeFactory scopes,
     IEnumerable<WorkloadRegistration> registrations,
     IServiceProviderIsService available,
+    IEnumerable<IWorkloadCoordinator> workloadCoordinators,
     ITenantDirectory? tenantDirectory = null,
-    IWorkloadCoordinator? workloadCoordinator = null,
     IDomainEventNotifier? notifier = null,
     TimeProvider? timeProvider = null,
     ILogger<PortiaWorkloadService>? logger = null,
@@ -20,6 +20,7 @@ sealed class PortiaWorkloadService(
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly ILogger<PortiaWorkloadService>? _logger = logger;
     readonly WorkloadRegistration[] _registrations = [.. registrations];
+    IWorkloadCoordinator? _coordinator;
 
     public async Task StartingAsync(CancellationToken cancellationToken)
     {
@@ -33,6 +34,17 @@ sealed class PortiaWorkloadService(
         {
             Require(typeof(ITenantDirectory));
         }
+
+        IWorkloadCoordinator[] coordinators = [.. workloadCoordinators];
+        if (coordinators.Length != 1)
+        {
+            throw new InvalidOperationException(
+                $"Portia workers require exactly one '{nameof(IWorkloadCoordinator)}' but found {coordinators.Length}. " +
+                "Register a distributed coordinator such as AddFitz(...), " +
+                $"or call {nameof(PortiaBuilder.UseSingleProcessWorkloads)}() when exactly one worker replica runs.");
+        }
+
+        _coordinator = coordinators[0];
 
         foreach (var registration in _registrations)
         {
@@ -104,7 +116,7 @@ sealed class PortiaWorkloadService(
         {
             var directory = tenantDirectory ?? throw new InvalidOperationException(
                 $"Portia workers require '{nameof(ITenantDirectory)}'. Register its application or infrastructure implementation.");
-            return new MultiTenantRunner(directory, tenantLogger, _clock).RunAsync(
+            return new MultiTenantRunner(directory, logger: tenantLogger, timeProvider: _clock).RunAsync(
                 async (tenant, ct) =>
                 {
                     var identities = perTenant.Select(item => new WorkloadIdentity(item.Name, tenant)).ToArray();
@@ -124,7 +136,7 @@ sealed class PortiaWorkloadService(
 
         async Task CoordinateAsync()
         {
-            await ResolveCoordinator().RunAsync(
+            await _coordinator!.RunAsync(
                 () => [.. active.Keys],
                 (identity, ct) => active.TryGetValue(identity, out var registration)
                     ? RunAsync(registration, identity, ct)
@@ -152,27 +164,6 @@ sealed class PortiaWorkloadService(
         {
             throw new InvalidOperationException("The workload coordinator or tenant directory stopped unexpectedly.");
         }
-    }
-
-    /// <summary>
-    ///     Uses the application's coordinator when infrastructure supplies one, and otherwise owns
-    ///     every workload in this process. Resolving the fallback here rather than registering it in
-    ///     <c>AddWorkers()</c> keeps it immune to setup order: infrastructure registered after
-    ///     <c>AddWorkers()</c> is still the coordinator that runs.
-    /// </summary>
-    IWorkloadCoordinator ResolveCoordinator()
-    {
-        if (workloadCoordinator is not null)
-        {
-            return workloadCoordinator;
-        }
-
-        PortiaTelemetry.RecordSingleProcessCoordinator(_logger);
-
-        // Reconcile cadence is infrastructure timing, not application time, so it deliberately
-        // does not follow a registered TimeProvider — a test that controls the workload poll
-        // interval with a fake clock would otherwise also be driving ownership reconciliation.
-        return new SingleProcessWorkloadCoordinator();
     }
 
     async Task RunAsync(WorkloadRegistration registration, WorkloadIdentity identity, CancellationToken ct)

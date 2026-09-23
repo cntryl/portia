@@ -52,15 +52,13 @@ public sealed class PortiaTelemetryLoggerFallbackTests
         PortiaTelemetry.RecordWorkload("test.projector", "tenant", true, logger);
         PortiaTelemetry.RecordLostDelivery("test.request", "notice", logger);
         PortiaTelemetry.RecordTerminalDelivery("test.request", "queue", logger);
-        PortiaTelemetry.RecordSingleProcessCoordinator(logger);
 
         Assert.Equal(
         [
             (1001, LogLevel.Debug),
             (1003, LogLevel.Debug),
             (1004, LogLevel.Warning),
-            (1005, LogLevel.Warning),
-            (1006, LogLevel.Warning)
+            (1005, LogLevel.Warning)
         ], logger.Entries.Select(entry => (entry.EventId.Id, entry.Level)));
         Assert.DoesNotContain(logger.Entries,
             entry => entry.Message.Contains("worker-secret", StringComparison.Ordinal));

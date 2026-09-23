@@ -113,6 +113,27 @@ public abstract class McpToolRegistration
         ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call,
         JsonSerializerOptions json, CancellationToken ct);
 
+    /// <summary>Binds, attributes, and dispatches one MCP call, projecting only a successful result.</summary>
+    private protected async ValueTask<McpToolInvocationResult> DispatchAsync<TRequest, TResult>(
+        ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call,
+        JsonSerializerOptions json,
+        Func<IRequestBus, TRequest, RequestDispatchContext, CancellationToken, ValueTask<TResult>> dispatch,
+        Func<TResult, RequestError?> failure,
+        Func<TResult, JsonSerializerOptions, CallToolResult> success,
+        CancellationToken ct)
+    {
+        var services = call.Services ?? throw new InvalidOperationException("The MCP request has no service scope.");
+        var request = Bind<TRequest>(call.Params, json);
+        var actor = await ActorAsync(call, ct).ConfigureAwait(false);
+        var bus = services.GetRequiredService<IRequestBus>();
+        var context = new RequestDispatchContext(actor, Invocation,
+            timeProvider: services.GetService<TimeProvider>());
+        var result = await dispatch(bus, request, context, ct).ConfigureAwait(false);
+        return failure(result) is { } error
+            ? new McpToolInvocationResult(Failure(error), error)
+            : new McpToolInvocationResult(success(result, json), null);
+    }
+
     /// <summary>Binds one generated request from untrusted MCP arguments.</summary>
     protected static TRequest Bind<TRequest>(CallToolRequestParams call, JsonSerializerOptions json)
     {
@@ -271,22 +292,18 @@ public sealed class McpToolRegistration<TRequest>(string name, string descriptio
     : McpToolRegistration(typeof(TRequest), null, name, description, options)
     where TRequest : IRequest, ICallable
 {
-    internal override async ValueTask<McpToolInvocationResult> InvokeAsync(
+    internal override ValueTask<McpToolInvocationResult> InvokeAsync(
         ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call,
-        JsonSerializerOptions json, CancellationToken ct)
-    {
-        var services = call.Services ?? throw new InvalidOperationException("The MCP request has no service scope.");
-        var request = Bind<TRequest>(call.Params, json);
-        var actor = await ActorAsync(call, ct).ConfigureAwait(false);
-        var bus = services.GetRequiredService<IRequestBus>();
-        var context = new RequestDispatchContext(actor, Invocation,
-            timeProvider: services.GetService<TimeProvider>());
-        var result = await bus.DispatchAsync(request, context, ct).ConfigureAwait(false);
-        return result.IsSuccess
-            ? new McpToolInvocationResult(
-                new CallToolResult { IsError = false, Content = [new TextContentBlock { Text = "Succeeded." }] }, null)
-            : new McpToolInvocationResult(Failure(result.Error!), result.Error);
-    }
+        JsonSerializerOptions json, CancellationToken ct) =>
+        DispatchAsync<TRequest, Result>(call, json,
+            static (bus, request, context, token) => bus.DispatchAsync(request, context, token),
+            static result => result.IsSuccess ? null : result.Error!,
+            static (_, _) => new CallToolResult
+            {
+                IsError = false,
+                Content = [new TextContentBlock { Text = "Succeeded." }]
+            },
+            ct);
 }
 
 /// <summary>Generated descriptor for a result-bearing MCP request.</summary>
@@ -295,25 +312,21 @@ public sealed class McpToolRegistration<TRequest, TOut>(string name, string desc
     : McpToolRegistration(typeof(TRequest), typeof(TOut), name, description, options)
     where TRequest : IRequest<TOut>, ICallable
 {
-    internal override async ValueTask<McpToolInvocationResult> InvokeAsync(
+    internal override ValueTask<McpToolInvocationResult> InvokeAsync(
         ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call,
-        JsonSerializerOptions json, CancellationToken ct)
-    {
-        var services = call.Services ?? throw new InvalidOperationException("The MCP request has no service scope.");
-        var request = Bind<TRequest>(call.Params, json);
-        var actor = await ActorAsync(call, ct).ConfigureAwait(false);
-        var bus = services.GetRequiredService<IRequestBus>();
-        var context = new RequestDispatchContext(actor, Invocation,
-            timeProvider: services.GetService<TimeProvider>());
-        var result = await bus.DispatchAsync(request, context, ct).ConfigureAwait(false);
-        if (!result.IsSuccess)
-            return new McpToolInvocationResult(Failure(result.Error!), result.Error);
-        var value = StructuredResult(result.Value, (JsonTypeInfo<TOut>)json.GetTypeInfo(typeof(TOut)));
-        return new McpToolInvocationResult(new CallToolResult
-        {
-            IsError = false,
-            StructuredContent = value,
-            Content = [new TextContentBlock { Text = value.GetRawText() }]
-        }, null);
-    }
+        JsonSerializerOptions json, CancellationToken ct) =>
+        DispatchAsync<TRequest, Result<TOut>>(call, json,
+            static (bus, request, context, token) => bus.DispatchAsync(request, context, token),
+            static result => result.IsSuccess ? null : result.Error!,
+            static (result, options) =>
+            {
+                var value = StructuredResult(result.Value, (JsonTypeInfo<TOut>)options.GetTypeInfo(typeof(TOut)));
+                return new CallToolResult
+                {
+                    IsError = false,
+                    StructuredContent = value,
+                    Content = [new TextContentBlock { Text = value.GetRawText() }]
+                };
+            },
+            ct);
 }

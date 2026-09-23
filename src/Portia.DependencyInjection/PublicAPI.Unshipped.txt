@@ -1,1 +1,2 @@
 #nullable enable
+Cntryl.Portia.PortiaBuilder.UseSingleProcessWorkloads() -> Cntryl.Portia.PortiaBuilder!

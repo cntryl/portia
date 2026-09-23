@@ -95,7 +95,6 @@ event occurrence and clamped to zero.
 | 1003 | Debug | workload lifecycle |
 | 1004 | Warning | irrecoverably lost one-way delivery |
 | 1005 | Warning | successfully terminalized queue delivery |
-| 1006 | Warning | unsafe single-process workload-coordinator fallback |
 | 1101 | Error | Fitz partition termination timeout |
 
 Routine success, retry, and abandonment are silent. Expected actor or request failures are not

@@ -236,10 +236,10 @@ only when a component is driven manually outside hosting, so changing a hosted r
 a persistence migration. Projector options also accept `Processing`
 (`ProjectionRunOptions`, including a rebuild ID) and a positive `PollInterval`.
 
-`AddWorkers()` runs every declared workload under one hosted service. With no
-`IWorkloadCoordinator` registered it owns them all in this process, which is correct for a
-single worker replica and needs no infrastructure at all; it logs a warning saying so. Register
-a distributed coordinator before scaling workers past one replica.
+`AddWorkers()` runs every declared workload under one hosted service and fails at startup unless
+exactly one `IWorkloadCoordinator` is registered. `UseSingleProcessWorkloads()` registers one that
+owns every workload in this process, which is correct only for a single worker replica; register a
+distributed coordinator such as Fitz's instead of it before scaling workers past one replica.
 
 Fitz implements `IWorkloadCoordinator` and consumes these same declarations. There is
 no second component list or per-component lease route. Component workloads require either

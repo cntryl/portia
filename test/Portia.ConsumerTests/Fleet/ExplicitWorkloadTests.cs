@@ -42,6 +42,48 @@ public sealed class ExplicitWorkloadTests
     }
 
     [Fact]
+    public async Task ShouldFailStartGivenNoCoordinatorWhenStartingWorkers()
+    {
+        var services = ConsumerHost.CreateServices();
+        _ = services.AddPortia().AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global).AddWorkers();
+        await using var provider = services.BuildServiceProvider();
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => worker.StartAsync(default));
+
+        Assert.Contains(nameof(IWorkloadCoordinator), error.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(PortiaBuilder.UseSingleProcessWorkloads), error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ShouldFailStartGivenTwoCoordinatorsWhenStartingWorkers()
+    {
+        var services = ConsumerHost.CreateServices();
+        _ = services.AddSingleton<IWorkloadCoordinator, CompletedCoordinator>();
+        _ = services.AddPortia().AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)
+            .UseSingleProcessWorkloads().AddWorkers();
+        await using var provider = services.BuildServiceProvider();
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => worker.StartAsync(default));
+
+        Assert.Contains("exactly one", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldRegisterSingleProcessCoordinatorGivenOptInWhenUsingSingleProcessWorkloads()
+    {
+        var services = new ServiceCollection();
+
+        _ = services.AddPortia().UseSingleProcessWorkloads();
+
+        var descriptor = Assert.Single(services, item => item.ServiceType == typeof(IWorkloadCoordinator));
+        using var provider = services.BuildServiceProvider();
+        _ = Assert.IsType<SingleProcessWorkloadCoordinator>(provider.GetRequiredService<IWorkloadCoordinator>());
+        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+    }
+
+    [Fact]
     public void InfrastructureRegistrationOrderDoesNotChangeWorkloadDeclarations()
     {
         var configuration = new ConfigurationBuilder()

@@ -360,6 +360,18 @@ public sealed class PortiaBuilder
         return this;
     }
 
+    /// <summary>
+    ///     Opts this host into <see cref="SingleProcessWorkloadCoordinator" />, which owns every
+    ///     workload in this process. Use it only when exactly one worker replica runs; a scaled-out
+    ///     deployment registers a distributed coordinator such as Fitz's instead.
+    /// </summary>
+    /// <returns>This builder, for chaining.</returns>
+    public PortiaBuilder UseSingleProcessWorkloads()
+    {
+        _ = Services.AddSingleton<IWorkloadCoordinator>(_ => new SingleProcessWorkloadCoordinator());
+        return this;
+    }
+
     /// <summary>Activates the shared application's worker registrations once in this host.</summary>
     /// <returns>This builder, for chaining.</returns>
     public PortiaBuilder AddWorkers()

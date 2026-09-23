@@ -41,7 +41,7 @@ public sealed class HostedReactorRecoveryTests
             {
                 o.PollInterval = TimeSpan.FromMilliseconds(20);
                 o.Processing = new ProjectionRunOptions { MaxBatchSize = 2 };
-            }).AddWorkers();
+            }).AddWorkers().UseSingleProcessWorkloads();
         using var provider = services.BuildServiceProvider();
 
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
