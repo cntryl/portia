@@ -16,73 +16,41 @@ namespace Cntryl.Portia;
 ///     component; this decides which tenants that component runs for, on whichever worker it's
 ///     already running on. Every worker runs the same code, so the two concerns compose freely.
 /// </summary>
-/// <param name="tenantDirectory">Reports active tenants and lifecycle changes.</param>
-/// <param name="logger">
-///     Reports a tenant's start callback faulting even when nothing is listening to
-///     <see cref="PortiaTelemetry.ActivitySource" />. Supply it explicitly, or configure
-///     Microsoft.Extensions.Logging with at least one provider before resolving the runner through
-///     DI; a bare <c>ServiceCollection</c> registration does not create or emit logs.
-/// </param>
-/// <param name="timeProvider">Schedules reconnect and workload restart delays.</param>
-/// <param name="restartInterval">Positive delay between attempts; defaults to one second.</param>
-/// <param name="shutdownGrace">
-///     Positive total time allowed for active-tenant cleanup during shutdown; defaults to five seconds.
-/// </param>
-public sealed class MultiTenantRunner(
-    ITenantDirectory tenantDirectory,
-    ILogger<MultiTenantRunner>? logger = null,
-    TimeProvider? timeProvider = null,
-    TimeSpan? restartInterval = null,
-    TimeSpan? shutdownGrace = null)
+public sealed class MultiTenantRunner
 {
-    readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
-    readonly ILogger<MultiTenantRunner>? _logger = logger;
-    readonly TimeSpan _restartInterval = GetRestartInterval(restartInterval);
-    readonly TimeSpan _shutdownGrace = GetShutdownGrace(shutdownGrace);
+    readonly TimeProvider _clock;
+    readonly ILogger<MultiTenantRunner>? _logger;
+    readonly TimeSpan _restartInterval;
+    readonly TimeSpan _shutdownGrace;
+    readonly ITenantDirectory _tenantDirectory;
+    readonly TimeSpan _tenantStopTimeout;
 
-    readonly ITenantDirectory _tenantDirectory =
-        tenantDirectory ?? throw new ArgumentNullException(nameof(tenantDirectory));
-
-    readonly TimeSpan _tenantStopTimeout = TimeSpan.FromSeconds(5);
-
-    /// <summary>Creates a runner using the default five-second shutdown grace.</summary>
+    /// <summary>Creates a runner.</summary>
     /// <param name="tenantDirectory">Reports active tenants and lifecycle changes.</param>
-    /// <param name="logger">Reports runner faults when configured.</param>
-    /// <param name="timeProvider">Schedules reconnect and workload restart delays.</param>
-    /// <param name="restartInterval">Positive delay between attempts; defaults to one second.</param>
-    public MultiTenantRunner(
-        ITenantDirectory tenantDirectory,
-        ILogger<MultiTenantRunner>? logger,
-        TimeProvider? timeProvider,
-        TimeSpan? restartInterval)
-        : this(tenantDirectory, logger, timeProvider, restartInterval, null)
-    {
-    }
-
-    /// <summary>Creates a runner using explicit recovery and cleanup options.</summary>
-    /// <param name="tenantDirectory">Reports active tenants and lifecycle changes.</param>
-    /// <param name="options">Recovery, shutdown, and normal-removal durations.</param>
-    public MultiTenantRunner(ITenantDirectory tenantDirectory, MultiTenantRunnerOptions options)
-        : this(tenantDirectory, options, null, null)
-    {
-    }
-
-    /// <summary>Creates a runner using explicit recovery and cleanup options.</summary>
-    /// <param name="tenantDirectory">Reports active tenants and lifecycle changes.</param>
-    /// <param name="options">Recovery, shutdown, and normal-removal durations.</param>
-    /// <param name="logger">Reports runner faults when configured.</param>
+    /// <param name="options">
+    ///     Positive recovery, shutdown, and normal-removal durations; defaults to
+    ///     <see cref="MultiTenantRunnerOptions" /> defaults.
+    /// </param>
+    /// <param name="logger">
+    ///     Reports a tenant's start callback faulting even when nothing is listening to
+    ///     <see cref="PortiaTelemetry.ActivitySource" />. Supply it explicitly, or configure
+    ///     Microsoft.Extensions.Logging with at least one provider before resolving the runner through
+    ///     DI; a bare <c>ServiceCollection</c> registration does not create or emit logs.
+    /// </param>
     /// <param name="timeProvider">Schedules delays and cleanup deadlines.</param>
     public MultiTenantRunner(
         ITenantDirectory tenantDirectory,
-        MultiTenantRunnerOptions options,
-        ILogger<MultiTenantRunner>? logger,
-        TimeProvider? timeProvider)
-        : this(tenantDirectory, logger, timeProvider,
-            GetPositive(options, static value => value.RestartInterval, nameof(options.RestartInterval)),
-            GetPositive(options, static value => value.ShutdownGrace, nameof(options.ShutdownGrace)))
+        MultiTenantRunnerOptions? options = null,
+        ILogger<MultiTenantRunner>? logger = null,
+        TimeProvider? timeProvider = null)
     {
-        _tenantStopTimeout = GetPositive(options, static value => value.TenantStopTimeout,
-            nameof(options.TenantStopTimeout));
+        _tenantDirectory = tenantDirectory ?? throw new ArgumentNullException(nameof(tenantDirectory));
+        options ??= new MultiTenantRunnerOptions();
+        _restartInterval = GetPositive(options.RestartInterval, nameof(options.RestartInterval));
+        _shutdownGrace = GetPositive(options.ShutdownGrace, nameof(options.ShutdownGrace));
+        _tenantStopTimeout = GetPositive(options.TenantStopTimeout, nameof(options.TenantStopTimeout));
+        _logger = logger;
+        _clock = timeProvider ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -300,27 +268,8 @@ public sealed class MultiTenantRunner(
         }
     }
 
-    static TimeSpan GetRestartInterval(TimeSpan? restartInterval)
+    static TimeSpan GetPositive(TimeSpan value, string parameterName)
     {
-        var interval = restartInterval ?? TimeSpan.FromSeconds(1);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(interval, TimeSpan.Zero, nameof(restartInterval));
-        return interval;
-    }
-
-    static TimeSpan GetShutdownGrace(TimeSpan? shutdownGrace)
-    {
-        var grace = shutdownGrace ?? TimeSpan.FromSeconds(5);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(grace, TimeSpan.Zero, nameof(shutdownGrace));
-        return grace;
-    }
-
-    static TimeSpan GetPositive(
-        MultiTenantRunnerOptions options,
-        Func<MultiTenantRunnerOptions, TimeSpan> select,
-        string parameterName)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-        var value = select(options);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(value, TimeSpan.Zero, parameterName);
         return value;
     }

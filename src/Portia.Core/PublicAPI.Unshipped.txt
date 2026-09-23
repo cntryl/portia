@@ -1,1 +1,6 @@
 #nullable enable
+Cntryl.Portia.MultiTenantRunner.MultiTenantRunner(Cntryl.Portia.ITenantDirectory! tenantDirectory, Cntryl.Portia.MultiTenantRunnerOptions? options = null, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.MultiTenantRunner!>? logger = null, System.TimeProvider? timeProvider = null) -> void
+*REMOVED*Cntryl.Portia.MultiTenantRunner.MultiTenantRunner(Cntryl.Portia.ITenantDirectory! tenantDirectory, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.MultiTenantRunner!>? logger = null, System.TimeProvider? timeProvider = null, System.TimeSpan? restartInterval = null, System.TimeSpan? shutdownGrace = null) -> void
+*REMOVED*Cntryl.Portia.MultiTenantRunner.MultiTenantRunner(Cntryl.Portia.ITenantDirectory! tenantDirectory, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.MultiTenantRunner!>? logger, System.TimeProvider? timeProvider, System.TimeSpan? restartInterval) -> void
+*REMOVED*Cntryl.Portia.MultiTenantRunner.MultiTenantRunner(Cntryl.Portia.ITenantDirectory! tenantDirectory, Cntryl.Portia.MultiTenantRunnerOptions! options) -> void
+*REMOVED*Cntryl.Portia.MultiTenantRunner.MultiTenantRunner(Cntryl.Portia.ITenantDirectory! tenantDirectory, Cntryl.Portia.MultiTenantRunnerOptions! options, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.MultiTenantRunner!>? logger, System.TimeProvider? timeProvider) -> void

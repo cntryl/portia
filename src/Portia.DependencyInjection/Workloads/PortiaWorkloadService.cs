@@ -111,7 +111,7 @@ sealed class PortiaWorkloadService(
         {
             var directory = tenantDirectory ?? throw new InvalidOperationException(
                 $"Portia workers require '{nameof(ITenantDirectory)}'. Register its application or infrastructure implementation.");
-            return new MultiTenantRunner(directory, tenantLogger, _clock).RunAsync(
+            return new MultiTenantRunner(directory, logger: tenantLogger, timeProvider: _clock).RunAsync(
                 async (tenant, ct) =>
                 {
                     var identities = perTenant.Select(item => new WorkloadIdentity(item.Name, tenant)).ToArray();

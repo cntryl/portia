@@ -178,7 +178,7 @@ public sealed class MultiTenancyTests
     {
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "blocked");
-        var runner = new MultiTenantRunner(CreateDirectory(store), shutdownGrace: TimeSpan.FromMilliseconds(50));
+        var runner = new MultiTenantRunner(CreateDirectory(store), new MultiTenantRunnerOptions { ShutdownGrace = TimeSpan.FromMilliseconds(50) });
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stopEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cts = new CancellationTokenSource();
@@ -211,7 +211,7 @@ public sealed class MultiTenancyTests
     {
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "cooperative");
-        var runner = new MultiTenantRunner(CreateDirectory(store), shutdownGrace: TimeSpan.FromSeconds(1));
+        var runner = new MultiTenantRunner(CreateDirectory(store), new MultiTenantRunnerOptions { ShutdownGrace = TimeSpan.FromSeconds(1) });
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cleanupCompleted = false;
         using var cts = new CancellationTokenSource();
