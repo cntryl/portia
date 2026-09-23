@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace Cntryl.Portia.Consumer;
 
@@ -214,6 +215,67 @@ public sealed class GeneratorFalsePositiveTests
                                                            """, [feature], new DomainEventCatalogGenerator());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA012");
+    }
+
+    [Theory]
+    [InlineData("switch (value) { case UsedEvent: return 1; default: return 0; }")]
+    [InlineData("return value switch { UsedEvent => 1, _ => 0 };")]
+    [InlineData("_ = UsedEvent.Create(); return 0;")]
+    public void RegistersReferencedEventsNamedOnlyInPatternsOrStaticCalls(string body)
+    {
+        var contracts = GeneratorCompilation.Reference("""
+                                                       using Cntryl.Portia;
+                                                       namespace Contracts;
+                                                       [Discriminator("used.event", 1)]
+                                                       public sealed record UsedEvent(string Value) : DomainEvent
+                                                       {
+                                                           public static UsedEvent Create() => new("x");
+                                                       }
+                                                       """);
+        var generated = GeneratorCompilation.GeneratedSource($$"""
+                                                              using Cntryl.Portia;
+                                                              using Contracts;
+                                                              using Microsoft.Extensions.DependencyInjection;
+                                                              public static class Composition
+                                                              {
+                                                                  public static void Add(IServiceCollection services) => services.AddPortia();
+                                                                  public static int Classify(object value) { {{body}} }
+                                                              }
+                                                              """, [contracts], new RegistrationCallInterceptorGenerator());
+
+        Assert.Contains("Contracts.UsedEvent", generated, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UpcasterSplitAcrossFilesDoesNotCrashTheCatalog()
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var compilation = CSharpCompilation.Create("SplitUpcaster",
+        [
+            CSharpSyntaxTree.ParseText("""
+                                       using Cntryl.Portia;
+                                       [Discriminator("evt", 2)] public sealed record Evt : DomainEvent;
+                                       public sealed partial class Up : IJsonDomainEventUpcaster;
+                                       """, parseOptions, "a.cs"),
+            CSharpSyntaxTree.ParseText("""
+                                       using System.Text.Json.Nodes;
+                                       public sealed partial class Up
+                                       {
+                                           public string EventName => "evt";
+                                           public int FromVersion => 1;
+                                           public JsonObject Upcast(JsonObject payload) => payload;
+                                       }
+                                       """, parseOptions, "b.cs")
+        ], ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Append(typeof(Aggregate).Assembly.Location).Append(typeof(PortiaBuilder).Assembly.Location)
+            .Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path)),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var result = CSharpGeneratorDriver.Create([new DomainEventCatalogGenerator().AsSourceGenerator()],
+            parseOptions: parseOptions).RunGenerators(compilation).GetRunResult();
+
+        Assert.Null(result.Results.Single().Exception);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Id == "PORTIA012");
     }
 
     static void AssertNoCompilerErrors(IReadOnlyList<Diagnostic> diagnostics)

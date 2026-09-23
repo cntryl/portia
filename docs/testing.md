@@ -31,8 +31,8 @@ Assert.Empty(scenario.PendingEvents);
 
 `When` applies the returned `AggregateOutcome` as `IAggregateExecutor` does: after `Commit`, what the
 operation raised or audited stays in `PendingEvents` and `PendingAudits`, which is exactly what a save would
-write, until the next `Given` or `When` saves them as the executor would have; after `Discard`, nothing
-does, and the instance refuses further operations exactly as in production. A value-returning operation returns its `Result<TOut>`. Operations that
+write, until the next `Given` or `When` saves them as the executor would have; after `Discard`, or an
+operation that throws, nothing does, and the instance refuses further operations exactly as in production. A value-returning operation returns its `Result<TOut>`. Operations that
 return nothing can be called on `scenario.Aggregate` directly.
 
 ## Requests
@@ -51,7 +51,7 @@ await RequestScenario.For(services)
 ```
 
 The actor defaults to anonymous. `TestPermissionEvaluator.AllowAll()` and `DenyAll()` stand in for the
-application's permission policy. A concurrency conflict is reported as the `Conflict` failure the bus returns.
+application's permission policy. A concurrency conflict is reported as the `Conflict` failure transports return; the bus itself rethrows `EventStreamConcurrencyException` to in-process callers.
 
 Scenarios run only when awaited; `PORTIA107` warns about one left as a statement, which would otherwise pass
 without running.
@@ -84,7 +84,8 @@ against the real repository with the projection-store conformance suite.
 
 ## Reactors
 
-Construct the reactor with `scenario.Requests` as its `IRequestBus`. Every command it sends is recorded and
+Construct the reactor with `scenario.Requests` as its `IRequestBus` and a `new InMemoryProjectionCheckpointStore()`
+for its progress. Every command it sends is recorded and
 succeeds unless scripted with `RespondTo<TRequest>`.
 
 ```csharp

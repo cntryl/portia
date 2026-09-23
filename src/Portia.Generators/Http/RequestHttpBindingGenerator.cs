@@ -293,12 +293,13 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                && ExcludesLocal(invocation, receiver.Identifier.ValueText);
     }
 
+    // Only calls in the same executable scope count: a local function or lambda has its own locals, and a
+    // same-named local there is a different variable.
     static bool ExcludesLocal(InvocationExpressionSyntax invocation, string local)
     {
-        var scope = invocation.Ancestors()
-            .FirstOrDefault(node => node is LocalFunctionStatementSyntax or BaseMethodDeclarationSyntax
-                or CompilationUnitSyntax);
+        var scope = ExecutableScope(invocation);
         return scope is not null && scope.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(candidate =>
+            ExecutableScope(candidate) == scope &&
             candidate.Expression is MemberAccessExpressionSyntax
             {
                 Name.Identifier.ValueText: "ExcludeFromDescription",
@@ -306,6 +307,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             }
             && target.Identifier.ValueText == local);
     }
+
+    static SyntaxNode? ExecutableScope(SyntaxNode node) => node.Ancestors().FirstOrDefault(ancestor =>
+        ancestor is LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax or BaseMethodDeclarationSyntax
+            or AccessorDeclarationSyntax or CompilationUnitSyntax);
 
     static string ContainingScope(InvocationExpressionSyntax invocation)
     {

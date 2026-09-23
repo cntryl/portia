@@ -208,7 +208,8 @@ composition remains available for focused tests.
 `PORTIA100` and `PORTIA101` are best-effort architecture warnings, not proofs of purity or
 dependency transparency. `PORTIA100` recognizes Portia dispatch/effect APIs, `HttpClient` and
 `IHttpClientFactory`, `SmtpClient`, Stripe clients, EF Core contexts, ADO.NET connections, and
-generated gRPC client ancestry, except a dependency that is the projector's own projection store. `PORTIA101` recognizes DI service-provider/scope dependencies and
+generated gRPC client ancestry, except a dependency that implements `IProjectionStore` or
+`IProjectionCheckpointStore`, such as an EF Core repository the projector commits through. `PORTIA101` recognizes DI service-provider/scope dependencies and
 semantic `ActivatorUtilities` calls. An application-defined gateway without one of those known
 markers remains intentionally unreported and still needs architectural review. `PORTIA105` and
 `PORTIA106` report only Portia's own write and dispatch APIs in request guards and authorizers:

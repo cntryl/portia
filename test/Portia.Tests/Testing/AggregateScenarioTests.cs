@@ -125,6 +125,42 @@ public sealed class AggregateScenarioTests
         Assert.Equal(2UL, scenario.CommittedEventCount);
     }
 
+    /// <summary>
+    ///     An operation that throws after raising leaves nothing to save, and the instance refuses further
+    ///     operations exactly as it would after the executor discarded it.
+    /// </summary>
+    [Fact]
+    public void ShouldDiscardWhatAThrowingOperationRaised()
+    {
+        var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
+
+        _ = Assert.Throws<DivideByZeroException>(() => scenario.When(aggregate =>
+        {
+            aggregate.ChangeValue(5);
+            throw new DivideByZeroException();
+        }));
+
+        Assert.Empty(scenario.PendingEvents);
+        _ = Assert.Throws<InvalidOperationException>(() => scenario.When(aggregate =>
+        {
+            aggregate.ChangeValue(6);
+            return AggregateOutcome.Commit(Result.Success);
+        }));
+    }
+
+    /// <summary>What a direct call on the aggregate raised is saved before the next history, like a committed When.</summary>
+    [Fact]
+    public void ShouldSaveDirectCallsBeforeFurtherHistory()
+    {
+        var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
+        scenario.Aggregate.ChangeValue(5);
+
+        _ = scenario.Given(new ValueIncremented(2));
+
+        Assert.Equal(7, scenario.Aggregate.Value);
+        Assert.Equal(2UL, scenario.CommittedEventCount);
+    }
+
     /// <summary>An uninitialized outcome is a bug in the operation, reported the same way the executor reports it.</summary>
     [Fact]
     public void ShouldThrowWhenOperationReturnsUninitializedOutcome()

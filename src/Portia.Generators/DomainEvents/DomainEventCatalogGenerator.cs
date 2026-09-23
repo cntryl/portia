@@ -274,7 +274,8 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         return eventNameProperty?.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is not
                    PropertyDeclarationSyntax propertySyntax
                || propertySyntax.ExpressionBody?.Expression is not LiteralExpressionSyntax literal
-               || context.SemanticModel.GetConstantValue(literal) is not { HasValue: true, Value: string eventName }
+               // The property may live in another part of a partial upcaster, outside this model's tree.
+               || literal.Token.Value is not string eventName
             ? null
             : new UpcasterModel(symbol.ToDisplayString(), eventName,
                 DiagnosticLocation.From(declaration.Identifier.GetLocation()));

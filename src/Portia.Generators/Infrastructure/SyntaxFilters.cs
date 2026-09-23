@@ -21,7 +21,16 @@ static class SyntaxFilters
         NameSyntax { Parent: QualifiedNameSyntax or AliasQualifiedNameSyntax } => false,
         // An implicitly typed local names no type; whatever it holds is written at its construction or signature.
         IdentifierNameSyntax { IsVar: true } => false,
-        TypeSyntax type => SyntaxFacts.IsInTypeOnlyContext(type),
+        TypeSyntax type => SyntaxFacts.IsInTypeOnlyContext(type) || NamesTypeInExpression(type),
+        _ => false
+    };
+
+    // Places the parser reads a type as an expression: a type pattern in a switch (`case E:`, `E => ...`) and the
+    // receiver of a static member (`E.Create()`). Each still references the type itself.
+    static bool NamesTypeInExpression(TypeSyntax type) => type is NameSyntax && type.Parent switch
+    {
+        ConstantPatternSyntax or CaseSwitchLabelSyntax => true,
+        MemberAccessExpressionSyntax access => access.Expression == type,
         _ => false
     };
 
