@@ -197,7 +197,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     static string Finish(bool completed, string outcome, CancellationToken ct) =>
         completed ? outcome : ct.IsCancellationRequested ? "canceled" : "fault";
 
-    static RequestError ConcurrencyError() => new(RequestErrorKind.Conflict,
+    internal static RequestError ConcurrencyError() => new(RequestErrorKind.Conflict,
         "The request conflicted with a concurrent update.", true);
 
     // A yield return cannot sit inside a try with a catch, so enumeration is wrapped in methods

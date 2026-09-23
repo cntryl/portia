@@ -112,6 +112,7 @@ is modeled honestly as an at-least-once reactor effect instead.
 - [Projectors and reactors](docs/projectors-and-reactors.md): native repositories and durable processing
 - [Request context](docs/request-context.md): actor, correlation, and causation
 - [Request guards](docs/request-guards.md): authorization, reusable asynchronous preflight, and authoritative invariants
+- [Testing applications](docs/testing.md): aggregate, request, projector, and reactor scenarios
 - [Platform vision](docs/platform-vision.md): the fixed Fitz–Portia–Cassie boundary
 - [Scope](docs/scope.md) and [design decisions](docs/design-decisions.md): guarantees and deliberate limits
 - [Performance and scaling](docs/performance-and-scaling.md): measured hot paths and scaling model

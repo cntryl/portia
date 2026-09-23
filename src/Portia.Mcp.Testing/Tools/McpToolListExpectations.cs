@@ -22,8 +22,8 @@ public sealed class McpToolListExpectations
     async Task<IReadOnlyList<McpToolSnapshot>> VerifyAsync(string[] expected)
     {
         var snapshots = await _task.ConfigureAwait(false);
-        var actual = snapshots.Select(tool => tool.Name).Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal).ToArray();
+        // Duplicates in the server's list are kept, so a tool advertised twice fails an exact match.
+        var actual = snapshots.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray();
         var wanted = expected.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         if (!actual.SequenceEqual(wanted, StringComparer.Ordinal))
         {

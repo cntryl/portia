@@ -36,5 +36,25 @@ public sealed class DomainEventTests
         _ = Assert.Throws<InvalidOperationException>(() => ev.Metadata);
     }
 
+    /// <summary>
+    ///     Verifies that equality compares business payload only, so a raised event equals a freshly
+    ///     constructed expectation regardless of the metadata Portia attached.
+    /// </summary>
+    [Fact]
+    public void ShouldCompareEventsByPayloadIgnoringMetadata()
+    {
+        var attached = new ValueChanged(3);
+        attached.AttachMetadata(new DomainEventMetadata(
+            Uuid.CreateVersion4(),
+            Uuid.CreateVersion4(),
+            1,
+            DateTimeOffset.UtcNow));
+
+        Assert.Equal(new ValueChanged(3), attached);
+        Assert.Equal(new ValueChanged(3).GetHashCode(), attached.GetHashCode());
+        Assert.NotEqual(new ValueChanged(4), attached);
+        Assert.NotEqual<DomainEvent>(new ValueIncremented(3), attached);
+    }
+
     sealed record StubEvent : DomainEvent;
 }

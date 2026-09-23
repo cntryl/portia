@@ -24,190 +24,226 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         "Portia", DiagnosticSeverity.Error, true);
 
     /// <inheritdoc />
-    public void Initialize(IncrementalGeneratorInitializationContext context) =>
-        context.RegisterSourceOutput(context.CompilationProvider,
-            static (output, compilation) => Analyze(output, compilation));
-
-    static void Analyze(SourceProductionContext output, Compilation compilation)
+    public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        if (compilation.GetTypeByMetadataName("Cntryl.Portia.PortiaJsonContextAttribute") is null)
-        {
+        // Each root use, event, and context is found per syntax node, so an edit re-binds only what could
+        // have changed instead of re-walking the whole compilation.
+        var calls = context.SyntaxProvider.CreateSyntaxProvider(
+                static (node, _) => node is InvocationExpressionSyntax invocation
+                                    && CandidateMethods.Contains(InvokedName(invocation)),
+                static (ctx, ct) => CallRoots(ctx, ct))
+            .SelectMany(static (roots, _) => roots)
+            .Collect();
+        var events = context.SyntaxProvider.CreateSyntaxProvider(
+                static (node, _) => SyntaxFilters.HasBaseList(node),
+                static (ctx, ct) => EventRoot(ctx, ct))
+            .Where(static root => root is not null)
+            .Select(static (root, _) => root!)
+            .Collect();
+        var declaredCoverage = context.SyntaxProvider.ForAttributeWithMetadataName(
+                "Cntryl.Portia.PortiaJsonContextAttribute",
+                static (node, _) => node is TypeDeclarationSyntax,
+                static (ctx, _) => DeclaredCoverage((INamedTypeSymbol)ctx.TargetSymbol))
+            .SelectMany(static (keys, _) => keys)
+            .Collect();
+        var referencedCoverage = context.CompilationProvider.Select(static (compilation, _) =>
+            compilation.GetTypeByMetadataName("Cntryl.Portia.PortiaJsonContextAttribute") is null
+                ? null
+                : string.Join("\n", ReferencedCoverage(compilation)));
+
+        context.RegisterSourceOutput(events.Combine(calls).Combine(declaredCoverage).Combine(referencedCoverage),
+            static (output, input) => Report(output, input.Left.Left.Left.AddRange(input.Left.Left.Right),
+                input.Left.Right, input.Right));
+    }
+
+    static void Report(SourceProductionContext output, ImmutableArray<RootUse> uses,
+        ImmutableArray<string> declaredCoverage, string? referencedCoverage)
+    {
+        // No Portia JSON context attribute means the application is not built against Portia's JSON contract.
+        if (referencedCoverage is null)
             return;
+
+        var covered = new HashSet<string>(declaredCoverage, StringComparer.Ordinal);
+        covered.UnionWith(referencedCoverage.Split('\n'));
+        var required = new Dictionary<string, RootUse>(StringComparer.Ordinal);
+        foreach (var use in uses)
+        {
+            if (!required.ContainsKey(use.Key))
+                required.Add(use.Key, use);
         }
 
-        var covered = ContextRoots(compilation).ToImmutableHashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
-        var required = new Dictionary<ITypeSymbol, Location>(SymbolEqualityComparer.Default);
-        var streamType = compilation.GetTypeByMetadataName("System.IO.Stream");
-
-        foreach (var type in Types(compilation.Assembly.GlobalNamespace))
+        foreach (var use in required.Values.Where(use => !covered.Contains(use.Key))
+                     .OrderBy(use => use.Display, StringComparer.Ordinal))
         {
-            if (IsConcreteDomainEvent(type) && HasDiscriminator(type))
-            {
-                Add(type, type.Locations.FirstOrDefault());
-            }
-        }
-
-        foreach (var tree in compilation.SyntaxTrees)
-        {
-            var model = compilation.GetSemanticModel(tree);
-            foreach (var invocation in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
-            {
-                var syntaxName = invocation.Expression switch
-                {
-                    MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
-                    IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-                    GenericNameSyntax generic => generic.Identifier.ValueText,
-                    MemberBindingExpressionSyntax binding => binding.Name.Identifier.ValueText,
-                    _ => string.Empty
-                };
-                if (!CandidateMethods.Contains(syntaxName))
-                    continue;
-                if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
-                {
-                    continue;
-                }
-
-                var name = method.Name;
-                var registration = IsPortiaRegistration(method);
-                var endpointMapping = IsPortiaEndpointMapping(method);
-                if ((registration && name is "AddEvent" or "RegisterDynamicRequest") || endpointMapping)
-                {
-                    foreach (var argument in method.TypeArguments)
-                        Add(argument, invocation.GetLocation());
-                }
-                else if (registration && name == "AddRequestHandler" &&
-                         method.TypeArguments.FirstOrDefault() is INamedTypeSymbol handler)
-                {
-                    foreach (var iface in handler.AllInterfaces.Where(IsHandlerInterface))
-                    {
-                        Add(iface.TypeArguments[0], invocation.GetLocation());
-                        if (iface.TypeArguments.Length == 2)
-                        {
-                            Add(iface.TypeArguments[1], invocation.GetLocation());
-                        }
-                    }
-                }
-
-                if (name == "AddMcpTool" && IsPortiaMcpRegistration(method)
-                                         && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol mcpRequest)
-                {
-                    Add(mcpRequest, invocation.GetLocation());
-                    var requestContract = mcpRequest.AllInterfaces.FirstOrDefault(iface =>
-                        iface.OriginalDefinition.ToDisplayString() == "Cntryl.Portia.IRequest<TOut>");
-                    if (requestContract is not null)
-                        Add(requestContract.TypeArguments[0], invocation.GetLocation());
-                }
-
-                if (IsPortiaDispatch(method))
-                {
-                    var requestParameter = method.Parameters.FirstOrDefault(parameter => parameter.Name == "request");
-                    var requestArgument = requestParameter is null
-                        ? null
-                        : invocation.ArgumentList.Arguments.FirstOrDefault(argument =>
-                              argument.NameColon?.Name.Identifier.ValueText == "request")
-                          ?? invocation.ArgumentList.Arguments.ElementAtOrDefault(requestParameter.Ordinal);
-                    if (requestArgument is not null && model.GetTypeInfo(requestArgument.Expression).Type is
-                        { } dispatchedType)
-                    {
-                        Add(dispatchedType, invocation.GetLocation());
-                    }
-
-                    foreach (var argument in method.TypeArguments)
-                        Add(argument, invocation.GetLocation());
-                }
-
-                if (endpointMapping &&
-                    method.TypeArguments.FirstOrDefault() is INamedTypeSymbol request)
-                {
-                    var mutating = name is "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch";
-                    var operation = model.GetOperation(invocation) as IInvocationOperation;
-                    var pattern = operation?.Arguments.FirstOrDefault(argument => argument.Parameter?.Name == "pattern")
-                        ?.Value.ConstantValue is { HasValue: true, Value: string route }
-                        ? route
-                        : string.Empty;
-                    var constructor = HttpBindingShape.SinglePublicConstructor(request);
-                    if (mutating && constructor is not null && SupportsDefaultBinding(constructor, pattern))
-                    {
-                        foreach (var parameter in constructor.Parameters)
-                        {
-                            if (!HttpBindingShape.IsRouteParameter(pattern, parameter.Name))
-                            {
-                                Add(UnwrapNullable(parameter.Type), invocation.GetLocation());
-                            }
-                        }
-                    }
-                }
-
-                if (name is "Accepts" or "Parameter" or "Produces" &&
-                    method.ContainingType.OriginalDefinition.ToDisplayString() ==
-                    "Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>")
-                {
-                    foreach (var argument in method.TypeArguments)
-                    {
-                        if (name is "Accepts" or "Produces" && IsOrDerivesFrom(argument, streamType))
-                            continue;
-                        Add(argument, invocation.GetLocation());
-                    }
-                }
-            }
-        }
-
-        foreach (var pair in required.Where(pair => !covered.Contains(pair.Key))
-                     .OrderBy(pair => pair.Key.ToDisplayString(), StringComparer.Ordinal))
-        {
-            output.ReportDiagnostic(Diagnostic.Create(MissingMetadata, pair.Value,
+            output.ReportDiagnostic(Diagnostic.Create(MissingMetadata, use.Location.ToLocation(),
                 ImmutableDictionary<string, string?>.Empty
-                    .Add("TypeName", pair.Key.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                    .Add("Namespace", pair.Key.ContainingNamespace is { IsGlobalNamespace: false } space
-                        ? space.ToDisplayString()
-                        : string.Empty),
-                pair.Key.ToDisplayString()));
-        }
-
-        void Add(ITypeSymbol type, Location? location)
-        {
-            if (type.TypeKind is TypeKind.Error or TypeKind.TypeParameter ||
-                type.SpecialType == SpecialType.System_Void)
-            {
-                return;
-            }
-
-            if (!required.ContainsKey(type))
-            {
-                required.Add(type, location ?? Location.None);
-            }
+                    .Add("TypeName", use.Key)
+                    .Add("Namespace", use.Namespace),
+                use.Display));
         }
     }
 
-    static IEnumerable<ITypeSymbol> ContextRoots(Compilation compilation)
+    static string InvokedName(InvocationExpressionSyntax invocation) => invocation.Expression switch
     {
-        foreach (var context in Types(compilation.Assembly.GlobalNamespace).Where(IsPortiaContext))
+        MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+        IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+        GenericNameSyntax generic => generic.Identifier.ValueText,
+        MemberBindingExpressionSyntax binding => binding.Name.Identifier.ValueText,
+        _ => string.Empty
+    };
+
+    static RootUse? EventRoot(GeneratorSyntaxContext context, CancellationToken ct) =>
+        context.SemanticModel.GetDeclaredSymbol(context.Node, ct) is INamedTypeSymbol type
+        && IsConcreteDomainEvent(type) && HasDiscriminator(type)
+            ? Use(type, type.Locations.FirstOrDefault(), context.SemanticModel.Compilation)
+            : null;
+
+    static ImmutableArray<RootUse> CallRoots(GeneratorSyntaxContext context, CancellationToken ct)
+    {
+        var invocation = (InvocationExpressionSyntax)context.Node;
+        var model = context.SemanticModel;
+        if (model.GetSymbolInfo(invocation, ct).Symbol is not IMethodSymbol method)
+            return ImmutableArray<RootUse>.Empty;
+
+        var roots = ImmutableArray.CreateBuilder<RootUse>();
+        var location = invocation.GetLocation();
+        var name = method.Name;
+        var registration = IsPortiaRegistration(method);
+        var endpointMapping = IsPortiaEndpointMapping(method);
+        if ((registration && name is "AddEvent" or "RegisterDynamicRequest") || endpointMapping)
         {
-            foreach (var attribute in context.GetAttributes().Where(a =>
-                         a.AttributeClass?.ToDisplayString() ==
-                         "System.Text.Json.Serialization.JsonSerializableAttribute"))
+            foreach (var argument in method.TypeArguments)
+                Add(argument);
+        }
+        else if (registration && name == "AddRequestHandler" &&
+                 method.TypeArguments.FirstOrDefault() is INamedTypeSymbol handler)
+        {
+            foreach (var iface in handler.AllInterfaces.Where(IsHandlerInterface))
             {
-                if (attribute.ConstructorArguments.FirstOrDefault().Value is ITypeSymbol type)
+                Add(iface.TypeArguments[0]);
+                if (iface.TypeArguments.Length == 2)
+                    Add(iface.TypeArguments[1]);
+            }
+        }
+
+        if (name == "AddMcpTool" && IsPortiaMcpRegistration(method)
+                                 && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol mcpRequest)
+        {
+            Add(mcpRequest);
+            var requestContract = mcpRequest.AllInterfaces.FirstOrDefault(iface =>
+                iface.OriginalDefinition.ToDisplayString() == "Cntryl.Portia.IRequest<TOut>");
+            if (requestContract is not null)
+                Add(requestContract.TypeArguments[0]);
+        }
+
+        if (IsPortiaDispatch(method))
+        {
+            var requestParameter = method.Parameters.FirstOrDefault(parameter => parameter.Name == "request");
+            var requestArgument = requestParameter is null
+                ? null
+                : invocation.ArgumentList.Arguments.FirstOrDefault(argument =>
+                      argument.NameColon?.Name.Identifier.ValueText == "request")
+                  ?? invocation.ArgumentList.Arguments.ElementAtOrDefault(requestParameter.Ordinal);
+            // A helper that forwards an IRequest<T> or an abstract request dispatches whatever its
+            // callers pass; the concrete request is the root, found where it is constructed.
+            if (requestArgument is not null && model.GetTypeInfo(requestArgument.Expression, ct).Type is
+                { TypeKind: not TypeKind.Interface, IsAbstract: false } dispatchedType)
+            {
+                Add(dispatchedType);
+            }
+
+            foreach (var argument in method.TypeArguments)
+                Add(argument);
+        }
+
+        if (endpointMapping && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol request)
+        {
+            var mutating = name is "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch";
+            var operation = model.GetOperation(invocation, ct) as IInvocationOperation;
+            var pattern = operation?.Arguments.FirstOrDefault(argument => argument.Parameter?.Name == "pattern")
+                ?.Value.ConstantValue is { HasValue: true, Value: string route }
+                ? route
+                : string.Empty;
+            var constructor = HttpBindingShape.SinglePublicConstructor(request);
+            if (mutating && constructor is not null && SupportsDefaultBinding(constructor, pattern))
+            {
+                foreach (var parameter in constructor.Parameters)
                 {
-                    yield return type;
+                    if (!HttpBindingShape.IsRouteParameter(pattern, parameter.Name))
+                        Add(UnwrapNullable(parameter.Type));
                 }
             }
         }
 
+        if (name is "Accepts" or "Parameter" or "Produces" &&
+            method.ContainingType.OriginalDefinition.ToDisplayString() ==
+            "Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>")
+        {
+            var streamType = name is "Accepts" or "Produces"
+                ? model.Compilation.GetTypeByMetadataName("System.IO.Stream")
+                : null;
+            foreach (var argument in method.TypeArguments)
+            {
+                if (name is "Accepts" or "Produces" && IsOrDerivesFrom(argument, streamType))
+                    continue;
+                Add(argument);
+            }
+        }
 
+        return roots.ToImmutable();
+
+        void Add(ITypeSymbol type)
+        {
+            if (Use(type, location, model.Compilation) is { } use)
+                roots.Add(use);
+        }
+    }
+
+    // An open type such as IReadOnlyList<T> cannot be named in [JsonSerializable]; its closed uses can.
+    static RootUse? Use(ITypeSymbol type, Location? location, Compilation compilation)
+    {
+        if (type.TypeKind is TypeKind.Error || ContainsTypeParameter(type) ||
+            type.SpecialType == SpecialType.System_Void)
+        {
+            return null;
+        }
+
+        // Only the application's own types suggest where a new context belongs; a framework root
+        // such as List<T> would otherwise place the context in the framework's namespace.
+        var @namespace = SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly)
+                         && type.ContainingNamespace is { IsGlobalNamespace: false } space
+            ? space.ToDisplayString()
+            : string.Empty;
+        return new RootUse(Key(type), type.ToDisplayString(), @namespace, DiagnosticLocation.From(location));
+    }
+
+    static string Key(ITypeSymbol type) =>
+        type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+            .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+    static ImmutableArray<string> DeclaredCoverage(INamedTypeSymbol context) =>
+    [
+        .. context.GetAttributes()
+            .Where(a => a.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializableAttribute")
+            .Select(attribute => attribute.ConstructorArguments.FirstOrDefault().Value)
+            .OfType<ITypeSymbol>()
+            .Select(Key)
+    ];
+
+    static IEnumerable<string> ReferencedCoverage(Compilation compilation)
+    {
         foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
         {
             foreach (var attribute in assembly.GetAttributes().Where(a =>
                          a.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonRootAttribute"))
             {
                 if (attribute.ConstructorArguments.FirstOrDefault().Value is ITypeSymbol type)
-                    yield return type;
+                    yield return Key(type);
             }
         }
     }
 
-    static bool IsPortiaContext(INamedTypeSymbol type) => type.GetAttributes().Any(a =>
-        a.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonContextAttribute");
+    sealed record RootUse(string Key, string Display, string Namespace, DiagnosticLocation Location);
 
     static bool SupportsDefaultBinding(IMethodSymbol constructor, string pattern)
     {
@@ -281,9 +317,20 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         return owner.ToDisplayString() == "Cntryl.Portia.PortiaEndpointRouteBuilderExtensions";
     }
 
+    static bool ContainsTypeParameter(ITypeSymbol type) => type switch
+    {
+        ITypeParameterSymbol => true,
+        IArrayTypeSymbol array => ContainsTypeParameter(array.ElementType),
+        IPointerTypeSymbol pointer => ContainsTypeParameter(pointer.PointedAtType),
+        INamedTypeSymbol named => named.TypeArguments.Any(ContainsTypeParameter)
+                                  || (named.ContainingType is { } containing && ContainsTypeParameter(containing)),
+        _ => false
+    };
+
+    // An event generated code cannot name, such as a file-local one, cannot be rooted in a context either.
     static bool IsConcreteDomainEvent(INamedTypeSymbol type)
     {
-        if (type.IsAbstract || type.DeclaredAccessibility is Accessibility.Private or Accessibility.Protected)
+        if (type.IsAbstract || GeneratedTypeShape.InaccessibleReason(type) is not null)
         {
             return false;
         }
@@ -305,30 +352,4 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
     } nullable
         ? nullable.TypeArguments[0]
         : type;
-
-    static IEnumerable<INamedTypeSymbol> Types(INamespaceSymbol scope)
-    {
-        foreach (var type in scope.GetTypeMembers())
-        {
-            yield return type;
-            foreach (var nested in Nested(type))
-                yield return nested;
-        }
-
-        foreach (var child in scope.GetNamespaceMembers())
-        {
-            foreach (var type in Types(child))
-                yield return type;
-        }
-    }
-
-    static IEnumerable<INamedTypeSymbol> Nested(INamedTypeSymbol owner)
-    {
-        foreach (var type in owner.GetTypeMembers())
-        {
-            yield return type;
-            foreach (var nested in Nested(type))
-                yield return nested;
-        }
-    }
 }

@@ -25,6 +25,7 @@ public static class EventStoreConformance
         await VerifyResumeFromOffsetAsync(probe, ct).ConfigureAwait(false);
         await VerifyStaleAppendConflictsAsync(probe, ct).ConfigureAwait(false);
         await VerifyConflictLeavesStreamUnchangedAsync(probe, ct).ConfigureAwait(false);
+        await VerifyConcurrentAppendsConflictAsync(probe, ct).ConfigureAwait(false);
         await VerifyPatternReadCoversStreamsAsync(probe, ct).ConfigureAwait(false);
     }
 
@@ -143,9 +144,49 @@ public static class EventStoreConformance
         }
     }
 
+    // Writers racing at one expected position: exactly one may win. A store that checks the position and then
+    // appends in two steps lets several through, which breaks every aggregate's optimistic concurrency.
+    static async ValueTask VerifyConcurrentAppendsConflictAsync(IEventStoreConformanceProbe probe,
+        CancellationToken ct)
+    {
+        const int writers = 8;
+        var store = await probe.OpenAsync(ct).ConfigureAwait(false);
+        var stream = Stream(probe, "race");
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempts = Enumerable.Range(0, writers).Select(_ => Task.Run(async () =>
+        {
+            await start.Task.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await store.AppendAsync(stream, 0, [Event(Uuid.CreateVersion4(), 1)], ct).ConfigureAwait(false);
+                return true;
+            }
+            catch (EventStreamConcurrencyException)
+            {
+                return false;
+            }
+        }, ct)).ToArray();
+        start.SetResult();
+        var winners = (await Task.WhenAll(attempts).ConfigureAwait(false)).Count(won => won);
+        var records = await ReadAsync(store, stream, 0, ct).ConfigureAwait(false);
+        if (winners != 1 || records.Count != 1)
+        {
+            throw new ConformanceViolationException(
+                $"{writers} concurrent appends at one expected position let {winners} succeed and left {records.Count} records; exactly one must win and the rest must conflict.");
+        }
+    }
+
     static async ValueTask VerifyPatternReadCoversStreamsAsync(IEventStoreConformanceProbe probe, CancellationToken ct)
     {
         var store = await probe.OpenAsync(ct).ConfigureAwait(false);
+
+        // Appends interleaved across two streams: a pattern read must return them in append order, not grouped
+        // by stream.
+        var first = Uuid.CreateVersion4();
+        var second = Uuid.CreateVersion4();
+        await store.AppendAsync(Stream(probe, "interleave-a"), 0, [Event(first, 1)], ct).ConfigureAwait(false);
+        await store.AppendAsync(Stream(probe, "interleave-b"), 0, [Event(second, 1)], ct).ConfigureAwait(false);
+        await store.AppendAsync(Stream(probe, "interleave-a"), 1, [Event(first, 2)], ct).ConfigureAwait(false);
 
         // Same-named streams in another realm (another tenant) and another area of this realm must
         // stay out of the probe area's pattern read.
@@ -177,13 +218,23 @@ public static class EventStoreConformance
                 "A pattern read must supply a resumable cursor for every record.");
         }
 
-        if (records.Count > 1)
+        var interleaved = records.Where(record => record.Stream.Resource.StartsWith("interleave-", StringComparison.Ordinal))
+            .Select(record => (record.Stream.Resource, record.Event.Metadata.AggregateVersion)).ToArray();
+        if (!interleaved.SequenceEqual([("interleave-a", 1UL), ("interleave-b", 1UL), ("interleave-a", 2UL)]))
         {
-            var resumed = await ReadAsync(store, pattern, records[0].NextCursor, ct).ConfigureAwait(false);
-            if (!resumed.SequenceEqual(records.Skip(1)))
+            throw new ConformanceViolationException(
+                $"A pattern read returned interleaved appends as [{string.Join(", ", interleaved)}]; it must return records across streams in append order.");
+        }
+
+        // Every record's cursor, not just the first, must resume immediately after that record. Event equality
+        // is payload-only, so identity is compared explicitly alongside the record's position.
+        for (var index = 0; index < records.Count; index++)
+        {
+            var resumed = await ReadAsync(store, pattern, records[index].NextCursor, ct).ConfigureAwait(false);
+            if (!resumed.Select(Position).SequenceEqual(records.Skip(index + 1).Select(Position)))
             {
                 throw new ConformanceViolationException(
-                    "A pattern read must resume immediately after the record that issued its cursor.");
+                    $"Resuming from record {index}'s cursor did not continue with the records after it; a pattern read must resume immediately after the record that issued its cursor.");
             }
         }
     }
@@ -211,4 +262,8 @@ public static class EventStoreConformance
             records.Add(record);
         return records;
     }
+
+    static (EventStreamAddress Stream, ulong ResourceOffset, EventCursor NextCursor, DomainEventMetadata Metadata)
+        Position(DomainEventRecord record) =>
+        (record.Stream, record.ResourceOffset, record.NextCursor, record.Event.Metadata);
 }

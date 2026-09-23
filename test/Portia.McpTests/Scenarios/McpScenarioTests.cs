@@ -50,6 +50,11 @@ public sealed class McpScenarioTests
             Assert.Equal("Greeting already exists.",
                 failure.StructuredJson?.GetProperty("message").GetString());
 
+            var mismatch = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await scenario.When("greetings.reject").ExpectFailure("NotFound"));
+            Assert.Contains("'Conflict'", mismatch.Message, StringComparison.Ordinal);
+            Assert.Contains("Greeting already exists.", mismatch.Message, StringComparison.Ordinal);
+
             var malformed = await scenario.When("greetings.read", new Dictionary<string, object?>
             {
                 ["name"] = 42

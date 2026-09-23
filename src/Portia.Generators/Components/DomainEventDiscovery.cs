@@ -10,7 +10,7 @@ static class DomainEventDiscovery
     public static IncrementalValueProvider<ImmutableArray<DiscoveredEvent>> DeclaredEvents(
         IncrementalGeneratorInitializationContext context) =>
         context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
+                static (node, _) => SyntaxFilters.HasBaseList(node),
                 static (ctx, _) => DeclaredEventModel(ctx))
             .Where(static model => model is not null)
             .Select(static (model, _) => model!)
@@ -19,7 +19,7 @@ static class DomainEventDiscovery
     public static IncrementalValueProvider<ImmutableArray<DiscoveredEvent>> ReferencedEvents(
         IncrementalGeneratorInitializationContext context) =>
         context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => node is TypeSyntax,
+                static (node, _) => SyntaxFilters.IsTypeReference(node),
                 static (ctx, _) => ReferencedEventModel(ctx))
             .Where(static model => model is not null)
             .Select(static (model, _) => model!)
@@ -39,7 +39,8 @@ static class DomainEventDiscovery
     // explicit generic dispatch. A project reference by itself is deliberately not such an edge.
     static DiscoveredEvent? ReferencedEventModel(GeneratorSyntaxContext context)
     {
-        return context.SemanticModel.GetTypeInfo((TypeSyntax)context.Node).Type is INamedTypeSymbol type
+        return ReferencedEventNames.MayName(context)
+               && context.SemanticModel.GetTypeInfo((TypeSyntax)context.Node).Type is INamedTypeSymbol type
                && !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly,
                    context.SemanticModel.Compilation.Assembly)
                && IsRegistrableEvent(type, false)

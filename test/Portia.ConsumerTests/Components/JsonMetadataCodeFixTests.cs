@@ -331,6 +331,65 @@ public sealed class JsonMetadataCodeFixTests
         Assert.Equal(1, CountOccurrences(text, "typeof(global::App.Answer)"));
     }
 
+    const string UnrootedGenericResult = """
+                                         using System.Collections.Generic;
+                                         using System.Threading;
+                                         using System.Threading.Tasks;
+                                         using Cntryl.Portia;
+                                         using Microsoft.Extensions.DependencyInjection;
+                                         namespace App;
+                                         public sealed record Query : IRequest<List<Answer>>;
+                                         public sealed record Answer;
+                                         public sealed class Handler : IRequestHandler<Query, List<Answer>>
+                                         {
+                                             public ValueTask<Result<List<Answer>>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
+                                         }
+                                         public static class Registration
+                                         {
+                                             public static void Add(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();
+                                         }
+                                         [PortiaJsonContext]
+                                         [System.Text.Json.Serialization.JsonSerializable(typeof(Query))]
+                                         internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+                                         """;
+
+    /// <summary>
+    ///     Verifies that a generic root keeps every type argument globally qualified, so an argument cannot bind
+    ///     to a same-named type relative to the context's namespace.
+    /// </summary>
+    [Fact]
+    public async Task AddsAGenericRootWithGloballyQualifiedTypeArguments()
+    {
+        var (actions, solution) = await FixAsync(UnrootedGenericResult,
+            "System.Collections.Generic.List<App.Answer>");
+
+        var text = await SingleDocumentTextAsync(await ApplyAsync(solution, Assert.Single(actions)));
+
+        Assert.Contains("typeof(global::System.Collections.Generic.List<global::App.Answer>)", text,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     Verifies that a context created for a framework root such as a list is not placed in the framework's
+    ///     own namespace.
+    /// </summary>
+    [Fact]
+    public async Task CreatesContextOutsideTheFrameworkNamespaceOfAGenericRoot()
+    {
+        var source = UnrootedGenericResult.Replace("[PortiaJsonContext]", string.Empty, StringComparison.Ordinal)
+            .Replace("[System.Text.Json.Serialization.JsonSerializable(typeof(Query))]", string.Empty,
+                StringComparison.Ordinal)
+            .Replace("internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;",
+                string.Empty, StringComparison.Ordinal);
+        var (actions, solution) = await FixAsync(source, "System.Collections.Generic.List<App.Answer>");
+
+        var created = await ApplyAsync(solution, Assert.Single(actions));
+        var text = (await Assert.Single(created.Projects.Single().Documents,
+            item => item.Name == "PortiaJsonContext.cs").GetTextAsync()).ToString();
+
+        Assert.DoesNotContain("namespace System", text, StringComparison.Ordinal);
+    }
+
     static async Task<(IReadOnlyList<CodeAction> Actions, Solution Solution)> FixAsync(string source, string typeName,
         bool expectDiagnostic = true, string projectName = "JsonMetadataFix")
     {

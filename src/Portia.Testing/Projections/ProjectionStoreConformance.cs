@@ -159,7 +159,7 @@ public static class ProjectionStoreConformance
             "reloading a rebuild generation", ct).ConfigureAwait(false);
     }
 
-    // The same component consuming another realm (another tenant) or another area is a separate
+    // The same component consuming another realm (another tenant), area, or resource is a separate
     // workload, so a store keyed by component and generation alone must fail here. The component
     // stays fixed: a store may legitimately be bound to the one projector it serves.
     static async ValueTask VerifyPatternIsolationAsync(IProjectionStoreConformanceProbe probe, CancellationToken ct)
@@ -170,7 +170,9 @@ public static class ProjectionStoreConformance
             new(live.ComponentName, EventStreamPattern.ForPattern(live.Pattern.Realm + "-other", live.Pattern.Area,
                 live.Pattern.Resource)),
             new(live.ComponentName, EventStreamPattern.ForPattern(live.Pattern.Realm,
-                (live.Pattern.Area ?? "area") + "-other", live.Pattern.Resource))
+                (live.Pattern.Area ?? "area") + "-other", live.Pattern.Resource)),
+            new(live.ComponentName, EventStreamPattern.ForPattern(live.Pattern.Realm, live.Pattern.Area ?? "area",
+                (live.Pattern.Resource ?? "resource") + "-other"))
         ];
 
         foreach (var other in others)

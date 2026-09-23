@@ -271,6 +271,31 @@ public sealed class RequestScenarioTests
         Assert.Empty(items);
     }
 
+    /// <summary>A concurrency conflict is the settled Conflict outcome the bus reports, so it is assertable.</summary>
+    [Fact]
+    public async Task ShouldReportConcurrencyConflictAsConflictFailure()
+    {
+        await using var provider = Provider();
+
+        await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioConflictCommand())
+            .ExpectHandled()
+            .ExpectFailure(RequestErrorKind.Conflict);
+    }
+
+    /// <summary>
+    ///     A denial raised inside a stream handler, such as by a nested dispatch, is a fault the bus does not
+    ///     settle, so it propagates instead of passing as the request's own denial.
+    /// </summary>
+    [Fact]
+    public async Task ShouldPropagateDenialRaisedInsideStreamHandler()
+    {
+        await using var provider = Provider();
+
+        _ = await Assert.ThrowsAsync<RequestAuthorizationException>(async () =>
+            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioNestedDenialStream())
+                .ExpectFailure(RequestErrorKind.Forbidden));
+    }
+
     static ServiceProvider Provider(RequestErrorKind? guardFailure = null, IPermissionEvaluator? permissions = null)
     {
         var services = new ServiceCollection();
@@ -284,6 +309,8 @@ public sealed class RequestScenarioTests
         _ = services.AddScoped<ScenarioQueryHandler>();
         _ = services.AddScoped<ScenarioStreamHandler>();
         _ = services.AddScoped<ScenarioExplodingCommandHandler>();
+        _ = services.AddScoped<ScenarioConflictCommandHandler>();
+        _ = services.AddScoped<ScenarioNestedDenialStreamHandler>();
         _ = services.AddScoped<ScenarioAuthorizer>();
         _ = services.AddScoped<SlugGuard>();
         _ = services.AddScoped<OpenCommandGuard>();
@@ -301,6 +328,10 @@ public sealed class RequestScenarioTests
             new StreamRequestRegistration<ScenarioStream, ScenarioStreamHandler, int>());
         _ = services.AddSingleton<RequestHandlerRegistration>(
             new RequestRegistration<ScenarioExplodingCommand, ScenarioExplodingCommandHandler>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<ScenarioConflictCommand, ScenarioConflictCommandHandler>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new StreamRequestRegistration<ScenarioNestedDenialStream, ScenarioNestedDenialStreamHandler, int>());
         _ = services.AddSingleton<RequestAuthorizerRegistration>(
             new RequestAuthorizerRegistration<IScenarioFamily, ScenarioAuthorizer>());
         _ = services.AddSingleton<RequestGuardRegistration>(new RequestGuardRegistration<IScenarioFamily, SlugGuard>());
@@ -335,6 +366,27 @@ public sealed class RequestScenarioTests
     internal sealed record ScenarioStream : IStreamRequest<int>, IScenarioFamily;
 
     internal sealed record ScenarioExplodingCommand : IRequest;
+
+    internal sealed record ScenarioConflictCommand : IRequest, IScenarioFamily;
+
+    internal sealed record ScenarioNestedDenialStream : IStreamRequest<int>, IScenarioFamily;
+
+    internal sealed class ScenarioConflictCommandHandler : IRequestHandler<ScenarioConflictCommand>
+    {
+        public ValueTask<Result> HandleAsync(IRequestContext<ScenarioConflictCommand> context, CancellationToken ct) =>
+            throw new EventStreamConcurrencyException("stale");
+    }
+
+    internal sealed class ScenarioNestedDenialStreamHandler : IStreamRequestHandler<ScenarioNestedDenialStream, int>
+    {
+        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<ScenarioNestedDenialStream> context,
+            [EnumeratorCancellation] CancellationToken ct)
+        {
+            yield return 1;
+            await Task.Yield();
+            throw new RequestAuthorizationException(new RequestError(RequestErrorKind.Forbidden, "nested"));
+        }
+    }
 
     internal sealed class ScenarioCommandHandler(ScenarioLog log, ScopeMarker scope) : IRequestHandler<ScenarioCommand>
     {

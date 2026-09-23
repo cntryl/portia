@@ -13,6 +13,12 @@ static class GeneratedTypeShape
         "Component '{0}' cannot be generated: {1}",
         "Portia", DiagnosticSeverity.Error, true);
 
+    /// <summary>
+    ///     The diagnostic property marking a PORTIA015 whose only cause is enclosing types that are not partial,
+    ///     which a code fix can repair mechanically.
+    /// </summary>
+    public const string PartialContainersProperty = "PartialContainers";
+
     public static bool IsSupported(INamedTypeSymbol symbol, bool requirePartialContainers = false) =>
         UnsupportedReason(symbol, requirePartialContainers) is null;
 

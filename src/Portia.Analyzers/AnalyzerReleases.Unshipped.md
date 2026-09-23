@@ -11,3 +11,4 @@
  PORTIA104 | Portia   | Warning  | Unexpected failures must stay exceptions, not become a failed Result
  PORTIA105 | Portia   | Warning  | Request guards should not take known effect-capable dependencies; recognized type ancestry is a best-effort heuristic
  PORTIA106 | Portia   | Warning  | Request authorizers should not take known effect-capable dependencies; recognized type ancestry is a best-effort heuristic
+ PORTIA107 | Portia   | Warning  | Test scenarios must be awaited; a discarded scenario runs and asserts nothing

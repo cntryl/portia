@@ -60,7 +60,8 @@ public sealed class CompleteWorkflowTests
             .AddProjector<SecondProjector>("second-projector", WorkloadScope.Global)
             .AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)
             .AddReactor<SecondReactor>("second-reactor", WorkloadScope.Global)
-            .AddWorkers();
+            .AddWorkers()
+            .UseSingleProcessWorkloads();
         var id = Uuid.CreateVersion4();
         var route = new RequestRouteValues(Resource: id.ToString());
         _ = builder.Services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(client.Queue,

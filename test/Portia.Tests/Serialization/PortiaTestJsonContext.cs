@@ -105,6 +105,7 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(TransportExecutionContextTests.TransportCommand))]
 [JsonSerializable(typeof(ValueAudited))]
 [JsonSerializable(typeof(ValueChanged))]
+[JsonSerializable(typeof(UserCreated))]
 [JsonSerializable(typeof(ValueIncremented))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(int))]

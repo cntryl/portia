@@ -13,15 +13,26 @@ namespace Cntryl.Portia.Testing;
 /// </param>
 public sealed class TestPermissionEvaluator(bool grantsEveryPermission) : IPermissionEvaluator
 {
+    readonly List<string> _evaluated = [];
+    readonly Lock _gate = new();
+
     /// <summary>
-    ///     Gets every permission this evaluator has been asked to evaluate, in order.
+    ///     Gets a snapshot of every permission this evaluator has been asked to evaluate, in order.
     /// </summary>
-    public List<string> EvaluatedPermissions { get; } = [];
+    public IReadOnlyList<string> EvaluatedPermissions
+    {
+        get
+        {
+            lock (_gate)
+                return [.. _evaluated];
+        }
+    }
 
     /// <inheritdoc />
     public ValueTask<Result> EvaluateAsync(ClaimsPrincipal actor, string permission, CancellationToken ct = default)
     {
-        EvaluatedPermissions.Add(permission);
+        lock (_gate)
+            _evaluated.Add(permission);
 
         return ValueTask.FromResult(grantsEveryPermission
             ? Result.Success

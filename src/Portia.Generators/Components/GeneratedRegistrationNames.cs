@@ -72,7 +72,7 @@ static class GeneratedRegistrationNames
         // A type in the global namespace is just "global::Name", with no '.' to split on.
         var name = Unqualify(fullyQualifiedTypeName);
         var separator = name.LastIndexOfAny(['.', '+']);
-        return separator < 0 ? name : name.Substring(separator + 1);
+        return (separator < 0 ? name : name.Substring(separator + 1)).TrimStart('@');
     }
 
     static string Unqualify(string fullyQualifiedTypeName) =>
@@ -81,7 +81,9 @@ static class GeneratedRegistrationNames
             : fullyQualifiedTypeName;
 
     // "global::Acme.Billing.Charge" -> "AcmeBillingCharge": every identifier in the qualified
-    // name, so two same-named components stay distinguishable and readable.
+    // name, so two same-named components stay distinguishable and readable. A keyword escaped as an
+    // identifier ("@class") loses its '@', which is only valid at the start of a whole identifier.
     static string Qualify(string fullyQualifiedTypeName) =>
-        string.Concat(Unqualify(fullyQualifiedTypeName).Split('.', '+').Where(part => part.Length > 0));
+        string.Concat(Unqualify(fullyQualifiedTypeName).Split('.', '+').Select(part => part.TrimStart('@'))
+            .Where(part => part.Length > 0));
 }
