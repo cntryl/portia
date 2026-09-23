@@ -15,6 +15,7 @@
     <Compile Include="../Portia.Generators/Infrastructure/GeneratedTypeShape.cs" Link="Infrastructure/GeneratedTypeShape.cs"/>
     <Compile Include="../Portia.Generators/Http/HttpBindingShape.cs" Link="Http/HttpBindingShape.cs"/>
     <Compile Include="../Portia.Generators/Http/InterceptableLocationModel.cs" Link="Http/InterceptableLocationModel.cs"/>
+    <Compile Include="../Portia.Generators/Infrastructure/InterceptsLocationPolyfill.cs" Link="Infrastructure/InterceptsLocationPolyfill.cs"/>
     <Compile Include="../Portia.Generators/Infrastructure/IsExternalInit.cs" Link="Infrastructure/IsExternalInit.cs"/>
     <Compile Include="../Portia.Generators/Http/RequestHttpBindingGenerator.cs" Link="Http/RequestHttpBindingGenerator.cs"/>
   </ItemGroup>

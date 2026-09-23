@@ -73,26 +73,10 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         // site. Reading them inside the per-call-site transform made every registration re-derive
         // the compilation and invalidated every call site whenever any event changed, so they get
         // their own per-node pipelines and are combined once, here.
-        var jsonContexts = context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => node is TypeDeclarationSyntax,
-                static (ctx, _) => JsonContextModel(ctx))
-            .Where(static model => model is not null)
-            .Select(static (model, _) => model!)
-            .Collect();
-        var referencedJsonContexts = context.CompilationProvider.Select(static (compilation, _) =>
-            ReferencedJsonContexts(compilation));
-        var declaredEvents = context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
-                static (ctx, _) => DeclaredEventModel(ctx))
-            .Where(static model => model is not null)
-            .Select(static (model, _) => model!)
-            .Collect();
-        var referencedEvents = context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => node is TypeSyntax,
-                static (ctx, _) => ReferencedEventModel(ctx))
-            .Where(static model => model is not null)
-            .Select(static (model, _) => model!)
-            .Collect();
+        var jsonContexts = JsonContextDiscovery.DeclaredContexts(context);
+        var referencedJsonContexts = JsonContextDiscovery.ReferencedContexts(context);
+        var declaredEvents = DomainEventDiscovery.DeclaredEvents(context);
+        var referencedEvents = DomainEventDiscovery.ReferencedEvents(context);
         var shared = jsonContexts.Combine(referencedJsonContexts).Combine(declaredEvents).Combine(referencedEvents)
             .Select(static (input, _) => SharedRegistrations(
                 input.Left.Left.Left.AddRange(input.Left.Left.Right), input.Left.Right, input.Right))
@@ -454,77 +438,10 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             : null;
     }
 
-    static JsonContextModelRecord? JsonContextModel(GeneratorSyntaxContext context)
-    {
-        var declaration = (TypeDeclarationSyntax)context.Node;
-        return context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol symbol
-               && symbol.GetAttributes().Any(attribute =>
-                   attribute.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonContextAttribute")
-            ? new JsonContextModelRecord(symbol.ToDisplayString(), Type(symbol))
-            : null;
-    }
-
-    static ImmutableArray<JsonContextModelRecord> ReferencedJsonContexts(Compilation compilation)
-    {
-        var contexts = ImmutableArray.CreateBuilder<JsonContextModelRecord>();
-        foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
-        {
-            foreach (var attribute in assembly.GetAttributes().Where(candidate =>
-                         candidate.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonRootAttribute"))
-            {
-                if (attribute.ConstructorArguments.Length > 2
-                    && attribute.ConstructorArguments[2].Value is INamedTypeSymbol factory)
-                {
-                    contexts.Add(new JsonContextModelRecord(factory.ToDisplayString(), Type(factory) + ".Create"));
-                }
-            }
-        }
-
-        return contexts.ToImmutable();
-    }
-
-    static EventModelRecord? DeclaredEventModel(GeneratorSyntaxContext context)
-    {
-        var declaration = (TypeDeclarationSyntax)context.Node;
-        return context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol symbol
-               && IsRegistrableEvent(symbol, true)
-            ? EventModel(symbol)
-            : null;
-    }
-
-    // Type syntax covers the semantic edges that make an external event part of this application:
-    // handler interfaces, aggregate On<TEvent> calls, method signatures, construction, casts, and
-    // explicit generic dispatch. A project reference by itself is deliberately not such an edge.
-    static EventModelRecord? ReferencedEventModel(GeneratorSyntaxContext context)
-    {
-        return context.SemanticModel.GetTypeInfo((TypeSyntax)context.Node).Type is INamedTypeSymbol type
-               && !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly,
-                   context.SemanticModel.Compilation.Assembly)
-               && IsRegistrableEvent(type, false)
-            ? EventModel(type)
-            : null;
-    }
-
-    // One discriminator cannot describe every constructed form of a generic event. This also
-    // keeps open type parameters out of the generated, non-generic AddPortia interceptor.
-    static bool IsRegistrableEvent(INamedTypeSymbol symbol, bool requireSameAssembly) =>
-        !symbol.IsGenericType && IsDomainEvent(symbol, requireSameAssembly);
-
-    static EventModelRecord? EventModel(INamedTypeSymbol symbol)
-    {
-        var attribute = symbol.GetAttributes().FirstOrDefault(candidate =>
-            candidate.AttributeClass?.ToDisplayString() == "Cntryl.Portia.DiscriminatorAttribute");
-        return attribute is null || attribute.ConstructorArguments.Length != 2
-            ? null
-            : new EventModelRecord(symbol.ToDisplayString(), Type(symbol),
-                attribute.ConstructorArguments[0].Value as string ?? string.Empty,
-                attribute.ConstructorArguments[1].Value as int? ?? 0);
-    }
-
     static SharedRegistrationsModel SharedRegistrations(
-        ImmutableArray<JsonContextModelRecord> jsonContexts,
-        ImmutableArray<EventModelRecord> declaredEvents,
-        ImmutableArray<EventModelRecord> referencedEvents)
+        ImmutableArray<DiscoveredJsonContext> jsonContexts,
+        ImmutableArray<DiscoveredEvent> declaredEvents,
+        ImmutableArray<DiscoveredEvent> referencedEvents)
     {
         var contexts = new StringBuilder();
         foreach (var context in Unique(jsonContexts, model => model.DisplayName))
@@ -553,23 +470,6 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         models.GroupBy(key, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .Select(group => group.First());
-
-    static bool IsDomainEvent(INamedTypeSymbol symbol, bool currentAssembly)
-    {
-        if (symbol.IsAbstract || (!currentAssembly && symbol.DeclaredAccessibility != Accessibility.Public)
-                              || GeneratedTypeShape.InaccessibleReason(symbol) is not null)
-        {
-            return false;
-        }
-
-        for (var current = symbol.BaseType; current is not null; current = current.BaseType)
-        {
-            if (current.ToDisplayString() == "Cntryl.Portia.DomainEvent")
-                return true;
-        }
-
-        return false;
-    }
 
     static string RequestExpression(RequestTransportComponent transport)
     {
@@ -703,9 +603,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         if (valid.Length == 0)
             return;
 
-        var source = new StringBuilder().AppendLine("// <auto-generated />").AppendLine("#nullable enable")
-            .AppendLine(
-                "namespace System.Runtime.CompilerServices { [global::System.AttributeUsage(global::System.AttributeTargets.Method, AllowMultiple = true)] file sealed class InterceptsLocationAttribute : global::System.Attribute { public InterceptsLocationAttribute(int version, string data) { _ = version; _ = data; } } }")
+        var source = InterceptsLocationPolyfill.AppendTo(
+                new StringBuilder().AppendLine("// <auto-generated />").AppendLine("#nullable enable"), false)
             .AppendLine("namespace Cntryl.Portia.Generated { file static class PortiaRegistrationInterceptors {");
         for (var i = 0; i < valid.Length; i++)
         {
@@ -739,10 +638,6 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         context.AddSource("PortiaGeneratedRegistrationInterceptors.g.cs",
             SourceText.From(source.ToString(), Encoding.UTF8));
     }
-
-    sealed record JsonContextModelRecord(string DisplayName, string TypeName);
-
-    sealed record EventModelRecord(string DisplayName, string TypeName, string Name, int Version);
 
     sealed record SharedRegistrationsModel(string JsonContexts, string Events);
 

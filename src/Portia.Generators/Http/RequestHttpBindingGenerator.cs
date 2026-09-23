@@ -316,22 +316,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .AppendLine("using Microsoft.AspNetCore.Builder;")
             .AppendLine("using Microsoft.AspNetCore.Http;")
             .AppendLine("using Microsoft.AspNetCore.Routing;")
-            .AppendLine()
-            // The BCL doesn't ship this attribute on every target yet; the compiler recognizes it
-            // structurally by name, so a self-declared copy works exactly like the real one.
-            .AppendLine("namespace System.Runtime.CompilerServices")
-            .AppendLine("{")
-            .AppendLine(
-                "    [global::System.AttributeUsage(global::System.AttributeTargets.Method, AllowMultiple = true)]")
-            .AppendLine("    file sealed class InterceptsLocationAttribute : global::System.Attribute")
-            .AppendLine("    {")
-            .AppendLine("        public InterceptsLocationAttribute(int version, string data)")
-            .AppendLine("        {")
-            .AppendLine("            _ = version;")
-            .AppendLine("            _ = data;")
-            .AppendLine("        }")
-            .AppendLine("    }")
-            .AppendLine("}")
+            .AppendLine();
+        _ = InterceptsLocationPolyfill.AppendTo(source, true)
             .AppendLine()
             .AppendLine("namespace Cntryl.Portia.Generated")
             .AppendLine("{");
