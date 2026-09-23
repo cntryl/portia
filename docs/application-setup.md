@@ -237,9 +237,9 @@ a persistence migration. Projector options also accept `Processing`
 (`ProjectionRunOptions`, including a rebuild ID) and a positive `PollInterval`.
 
 `AddWorkers()` runs every declared workload under one hosted service and fails at startup unless
-an `IWorkloadCoordinator` is registered. `UseSingleProcessWorkloads()` registers one that owns
-every workload in this process, which is correct only for a single worker replica; register a
-distributed coordinator such as Fitz's before scaling workers past one replica.
+exactly one `IWorkloadCoordinator` is registered. `UseSingleProcessWorkloads()` registers one that
+owns every workload in this process, which is correct only for a single worker replica; register a
+distributed coordinator such as Fitz's instead of it before scaling workers past one replica.
 
 Fitz implements `IWorkloadCoordinator` and consumes these same declarations. There is
 no second component list or per-component lease route. Component workloads require either

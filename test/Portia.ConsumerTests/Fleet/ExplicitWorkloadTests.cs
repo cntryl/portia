@@ -56,6 +56,21 @@ public sealed class ExplicitWorkloadTests
     }
 
     [Fact]
+    public async Task ShouldFailStartGivenTwoCoordinatorsWhenStartingWorkers()
+    {
+        var services = ConsumerHost.CreateServices();
+        _ = services.AddSingleton<IWorkloadCoordinator, CompletedCoordinator>();
+        _ = services.AddPortia().AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)
+            .UseSingleProcessWorkloads().AddWorkers();
+        await using var provider = services.BuildServiceProvider();
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => worker.StartAsync(default));
+
+        Assert.Contains("exactly one", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ShouldRegisterSingleProcessCoordinatorGivenOptInWhenUsingSingleProcessWorkloads()
     {
         var services = new ServiceCollection();

@@ -9,8 +9,8 @@ sealed class PortiaWorkloadService(
     IServiceScopeFactory scopes,
     IEnumerable<WorkloadRegistration> registrations,
     IServiceProviderIsService available,
+    IEnumerable<IWorkloadCoordinator> workloadCoordinators,
     ITenantDirectory? tenantDirectory = null,
-    IWorkloadCoordinator? workloadCoordinator = null,
     IDomainEventNotifier? notifier = null,
     TimeProvider? timeProvider = null,
     ILogger<PortiaWorkloadService>? logger = null,
@@ -20,6 +20,7 @@ sealed class PortiaWorkloadService(
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly ILogger<PortiaWorkloadService>? _logger = logger;
     readonly WorkloadRegistration[] _registrations = [.. registrations];
+    IWorkloadCoordinator? _coordinator;
 
     public async Task StartingAsync(CancellationToken cancellationToken)
     {
@@ -34,12 +35,16 @@ sealed class PortiaWorkloadService(
             Require(typeof(ITenantDirectory));
         }
 
-        if (workloadCoordinator is null)
+        IWorkloadCoordinator[] coordinators = [.. workloadCoordinators];
+        if (coordinators.Length != 1)
         {
             throw new InvalidOperationException(
-                $"Portia workers require an '{nameof(IWorkloadCoordinator)}'. Register a distributed coordinator such as AddFitz(...), " +
+                $"Portia workers require exactly one '{nameof(IWorkloadCoordinator)}' but found {coordinators.Length}. " +
+                "Register a distributed coordinator such as AddFitz(...), " +
                 $"or call {nameof(PortiaBuilder.UseSingleProcessWorkloads)}() when exactly one worker replica runs.");
         }
+
+        _coordinator = coordinators[0];
 
         foreach (var registration in _registrations)
         {
@@ -131,7 +136,7 @@ sealed class PortiaWorkloadService(
 
         async Task CoordinateAsync()
         {
-            await workloadCoordinator!.RunAsync(
+            await _coordinator!.RunAsync(
                 () => [.. active.Keys],
                 (identity, ct) => active.TryGetValue(identity, out var registration)
                     ? RunAsync(registration, identity, ct)
