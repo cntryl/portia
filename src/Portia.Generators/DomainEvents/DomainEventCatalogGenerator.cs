@@ -264,25 +264,7 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
     // schema shared by every closed form — so emitting it would produce source that does not
     // compile rather than a registration.
     static bool IsCatalogable(INamedTypeSymbol symbol) =>
-        !symbol.IsGenericType && IsAccessibleFromGeneratedCode(symbol);
-
-    // Only a type (and every enclosing type, for a nested declaration) that's at least internal
-    // can be named as a generic type argument from the generated top-level extension method —
-    // a private or protected nested event type is invisible to it, same as it would be to any
-    // other hand-written code outside the declaring type.
-    static bool IsAccessibleFromGeneratedCode(INamedTypeSymbol symbol)
-    {
-        for (var type = symbol; type is not null; type = type.ContainingType)
-        {
-            if (type.DeclaredAccessibility is Accessibility.Private or Accessibility.Protected
-                or Accessibility.ProtectedAndInternal)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
+        !symbol.IsGenericType && GeneratedTypeShape.InaccessibleReason(symbol) is null;
 
     sealed record EventModel(string TypeName, string Name, int Version, DiagnosticLocation Location);
 

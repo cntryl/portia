@@ -123,7 +123,7 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
                     SyntaxFactory.ParseName("System.Text.Json.Serialization.JsonSerializable"),
                     SyntaxFactory.AttributeArgumentList([
                         SyntaxFactory.AttributeArgument(
-                            SyntaxFactory.TypeOfExpression(SyntaxFactory.ParseTypeName(typeName)))
+                            SyntaxFactory.TypeOfExpression(SyntaxFactory.ParseTypeName(GlobalTypeName(typeName))))
                     ]))
             ])).ToArray();
         if (attributes.Length == 0)
@@ -149,7 +149,7 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
             : $"namespace {contextNamespace};\n\n";
         var rootAttributes = string.Join(string.Empty, roots.Select(root => NormalizeTypeName(root.TypeName))
             .Distinct(StringComparer.Ordinal).OrderBy(typeName => typeName, StringComparer.Ordinal)
-            .Select(typeName => $"[JsonSerializable(typeof({typeName}))]\n"));
+            .Select(typeName => $"[JsonSerializable(typeof({GlobalTypeName(typeName)}))]\n"));
         var source = "using System.Text.Json;\nusing System.Text.Json.Serialization;\nusing Cntryl.Portia;\n\n"
                      + namespaceDeclaration
                      + "[PortiaJsonContext]\n[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]\n"
@@ -207,6 +207,10 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
     }
 
     static string NormalizeTypeName(string typeName) => typeName.Replace("global::", string.Empty);
+
+    // A root is written global-qualified: a partially qualified name binds relative to the context's
+    // namespace, where a same-named child namespace (App.Orders for Orders.Query) captures it.
+    static string GlobalTypeName(string typeName) => "global::" + NormalizeTypeName(typeName);
 
     static string EquivalenceKey(ContextInfo context) =>
         $"Portia.AddJsonRoot.{context.DocumentId}.{context.SpanStart}";

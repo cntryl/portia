@@ -245,7 +245,19 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
     static string DefaultValue(IParameterSymbol parameter, string typeName) => parameter.ExplicitDefaultValue is null
         ? "default!"
-        : $"({typeName})({SymbolDisplay.FormatPrimitive(parameter.ExplicitDefaultValue, true, false)})";
+        : $"({typeName})({NonFiniteLiteral(parameter.ExplicitDefaultValue) ?? SymbolDisplay.FormatPrimitive(parameter.ExplicitDefaultValue, true, false)})";
+
+    // FormatPrimitive renders a non-finite value as a bare NaN or Infinity, which is not C#.
+    static string? NonFiniteLiteral(object value) => value switch
+    {
+        double number when double.IsNaN(number) => "double.NaN",
+        double number when double.IsPositiveInfinity(number) => "double.PositiveInfinity",
+        double number when double.IsNegativeInfinity(number) => "double.NegativeInfinity",
+        float number when float.IsNaN(number) => "float.NaN",
+        float number when float.IsPositiveInfinity(number) => "float.PositiveInfinity",
+        float number when float.IsNegativeInfinity(number) => "float.NegativeInfinity",
+        _ => null
+    };
 
     static string Literal(string value) => SymbolDisplay.FormatLiteral(value, true);
 

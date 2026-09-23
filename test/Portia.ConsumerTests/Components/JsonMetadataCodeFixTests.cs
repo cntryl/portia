@@ -71,7 +71,7 @@ public sealed class JsonMetadataCodeFixTests
         var text = (await document.GetTextAsync()).ToString();
         Assert.Contains("namespace App;", text, StringComparison.Ordinal);
         Assert.Contains("[PortiaJsonContext]", text, StringComparison.Ordinal);
-        Assert.Contains("[JsonSerializable(typeof(App.Query))]", text, StringComparison.Ordinal);
+        Assert.Contains("[JsonSerializable(typeof(global::App.Query))]", text, StringComparison.Ordinal);
         Assert.Contains("JsonSerializerContext", text, StringComparison.Ordinal);
         Assert.DoesNotContain(CSharpSyntaxTree.ParseText(text).GetDiagnostics(),
             diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
@@ -112,8 +112,53 @@ public sealed class JsonMetadataCodeFixTests
         var action = Assert.Single(actions);
         Assert.Equal("Add global::App.Query to AppJsonContext", action.Title);
         var text = await SingleDocumentTextAsync(await ApplyAsync(solution, action));
-        Assert.Contains("typeof(App.Query)", text, StringComparison.Ordinal);
+        Assert.Contains("typeof(global::App.Query)", text, StringComparison.Ordinal);
         Assert.Contains("typeof(Answer)", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     Verifies that the added root keeps its global qualification, so a context declared in a
+    ///     namespace with a same-named child namespace still binds the root to the intended type.
+    /// </summary>
+    [Fact]
+    public async Task AddsAGloballyQualifiedRootThatBindsInsideTheContextNamespace()
+    {
+        const string source = """
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              using Microsoft.Extensions.DependencyInjection;
+                              namespace Orders
+                              {
+                                  public sealed record Query : IRequest<Answer>;
+                                  public sealed record Answer;
+                                  public sealed class Handler : IRequestHandler<Query, Answer>
+                                  {
+                                      public ValueTask<Result<Answer>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
+                                  }
+                                  public static class Registration
+                                  {
+                                      public static void Add(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();
+                                  }
+                              }
+                              namespace App.Orders
+                              {
+                                  public sealed class Marker;
+                              }
+                              namespace App
+                              {
+                                  [PortiaJsonContext]
+                                  internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+                              }
+                              """;
+        var (actions, solution) = await FixAsync(source, "Orders.Query");
+
+        var changed = await ApplyAsync(solution, Assert.Single(actions));
+        var compilation = await changed.Projects.Single().GetCompilationAsync();
+
+        Assert.DoesNotContain(compilation!.GetDiagnostics(), diagnostic => diagnostic.Id is "CS0234" or "CS0246");
+        Assert.Contains("typeof(global::Orders.Query)", await SingleDocumentTextAsync(changed),
+            StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -140,7 +185,7 @@ public sealed class JsonMetadataCodeFixTests
             : await ApplyAsync(once, repeated.Actions[0]);
 
         Assert.Equal(await SingleDocumentTextAsync(once), await SingleDocumentTextAsync(twice));
-        Assert.Equal(1, CountOccurrences(await SingleDocumentTextAsync(once), "typeof(App.Query)"));
+        Assert.Equal(1, CountOccurrences(await SingleDocumentTextAsync(once), "typeof(global::App.Query)"));
     }
 
     /// <summary>
@@ -252,8 +297,8 @@ public sealed class JsonMetadataCodeFixTests
         var generated = Assert.Single(changed.Projects.Single().Documents,
             item => item.Name == "PortiaJsonContext.cs");
         var text = (await generated.GetTextAsync()).ToString();
-        Assert.Equal(1, CountOccurrences(text, "typeof(App.Query)"));
-        Assert.Equal(1, CountOccurrences(text, "typeof(App.Answer)"));
+        Assert.Equal(1, CountOccurrences(text, "typeof(global::App.Query)"));
+        Assert.Equal(1, CountOccurrences(text, "typeof(global::App.Answer)"));
     }
 
     [Fact]
@@ -282,8 +327,8 @@ public sealed class JsonMetadataCodeFixTests
         var changed = await ApplyAsync(document.Project.Solution, action);
         var text = await SingleDocumentTextAsync(changed);
 
-        Assert.Equal(1, CountOccurrences(text, "typeof(App.Query)"));
-        Assert.Equal(1, CountOccurrences(text, "typeof(App.Answer)"));
+        Assert.Equal(1, CountOccurrences(text, "typeof(global::App.Query)"));
+        Assert.Equal(1, CountOccurrences(text, "typeof(global::App.Answer)"));
     }
 
     static async Task<(IReadOnlyList<CodeAction> Actions, Solution Solution)> FixAsync(string source, string typeName,

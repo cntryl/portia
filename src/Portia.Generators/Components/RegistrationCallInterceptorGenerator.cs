@@ -23,7 +23,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     static readonly DiagnosticDescriptor UnknownPermissionToken = new(
         "PORTIA011",
         "Unknown permission token",
-        "RequiresPermission on '{0}' references '{{{1}}}', which does not match a request property",
+        "RequiresPermission on '{0}' references '{{{1}}}', which does not match an accessible request property",
         "Portia",
         DiagnosticSeverity.Error,
         true);
@@ -150,8 +150,21 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 DiagnosticLocation.From(invocation.GetLocation()));
         }
 
+        return TypedCall(method, role, invocation, location, context.SemanticModel.Compilation.Assembly) with
+        {
+            Subject = method.TypeArguments[0].ToDisplayString()
+        };
+    }
+
+    static Call TypedCall(IMethodSymbol method, string role, InvocationExpressionSyntax invocation,
+        InterceptableLocation location, IAssemblySymbol consumerAssembly)
+    {
         if (method.TypeArguments[0] is not INamedTypeSymbol type)
             return new Call(InterceptableLocationModel.From(location), role, null, "use a concrete named type",
+                DiagnosticLocation.From(invocation.GetLocation()));
+
+        if (GeneratedTypeShape.InaccessibleReason(type) is { } inaccessible)
+            return new Call(InterceptableLocationModel.From(location), role, null, inaccessible,
                 DiagnosticLocation.From(invocation.GetLocation()));
 
         if (role == "domain event")
@@ -209,14 +222,16 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
         var body = new StringBuilder();
         var permissionDiagnostic = role == "handler"
-            ? selected.Select(iface => PermissionDiagnostic(iface.TypeArguments[0], invocation.GetLocation()))
+            ? selected.Select(iface => PermissionDiagnostic(iface.TypeArguments[0], invocation.GetLocation(),
+                    consumerAssembly))
                 .FirstOrDefault(diagnostic => diagnostic is not null)
             : null;
         if (permissionDiagnostic is not null)
         {
-            _ = body.Append("throw new global::System.InvalidOperationException(\"")
-                .Append(EscapeLiteral(permissionDiagnostic.ToDiagnostic().GetMessage(CultureInfo.InvariantCulture)))
-                .AppendLine("\");");
+            _ = body.Append("throw new global::System.InvalidOperationException(")
+                .Append(RequestTransportDiscovery.FormatStringLiteral(
+                    permissionDiagnostic.ToDiagnostic().GetMessage(CultureInfo.InvariantCulture)))
+                .AppendLine(");");
         }
 
         foreach (var iface in selected)
@@ -253,7 +268,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             }
 
             var request = iface.TypeArguments[0];
-            var diagnostic = PermissionDiagnostic(request, invocation.GetLocation());
+            var diagnostic = PermissionDiagnostic(request, invocation.GetLocation(), consumerAssembly);
             var descriptor = iface.OriginalDefinition.MetadataName == "IStreamRequestHandler`2"
                 ? "StreamRequestRegistration"
                 : "RequestRegistration";
@@ -262,7 +277,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             if (iface.TypeArguments.Length == 2)
                 _ = body.Append(", ").Append(Type(iface.TypeArguments[1]));
 
-            _ = body.Append(">(").Append(Permission(request, diagnostic)).AppendLine("));");
+            _ = body.Append(">(").Append(Permission(request, diagnostic, consumerAssembly)).AppendLine("));");
             if (RequestTransportDiscovery.GetRequestTransportComponent(request) is { } transport)
             {
                 _ = body.Append("_ = builder.AddGeneratedRequest(").Append(RequestExpression(transport))
@@ -542,7 +557,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     static bool IsDomainEvent(INamedTypeSymbol symbol, bool currentAssembly)
     {
         if (symbol.IsAbstract || (!currentAssembly && symbol.DeclaredAccessibility != Accessibility.Public)
-                              || symbol.DeclaredAccessibility is Accessibility.Private or Accessibility.Protected)
+                              || GeneratedTypeShape.InaccessibleReason(symbol) is not null)
         {
             return false;
         }
@@ -563,7 +578,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         return source.ToString();
     }
 
-    static string Permission(ITypeSymbol request, RegistrationDiagnostic? diagnostic)
+    static string Permission(ITypeSymbol request, RegistrationDiagnostic? diagnostic,
+        IAssemblySymbol consumerAssembly)
     {
         if (request.GetAttributes()
                 .FirstOrDefault(attribute =>
@@ -576,7 +592,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         if (diagnostic is not null)
             return "null"; // The generated interceptor throws before any registration mutation.
 
-        var properties = RequestProperties(request).ToArray();
+        var properties = RequestProperties(request, consumerAssembly).ToArray();
         // A permission string is a stable identifier an application looks up in its own policy
         // store, so an interpolated property must render the same on every host. Plain $"..."
         // formats with the ambient culture, which changes a negative id's sign character and a
@@ -601,7 +617,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         return expression.Append(Escape(value.Substring(offset))).Append("\")").ToString();
     }
 
-    static RegistrationDiagnostic? PermissionDiagnostic(ITypeSymbol request, Location location)
+    static RegistrationDiagnostic? PermissionDiagnostic(ITypeSymbol request, Location location,
+        IAssemblySymbol consumerAssembly)
     {
         if (request.GetAttributes()
                 .FirstOrDefault(attribute =>
@@ -611,7 +628,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             return null;
         }
 
-        var properties = RequestProperties(request).ToArray();
+        var properties = RequestProperties(request, consumerAssembly).ToArray();
         foreach (Match match in PermissionTokenPattern.Matches(value))
         {
             var token = match.Groups[1].Value;
@@ -634,19 +651,30 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         return null;
     }
 
-    static IEnumerable<IPropertySymbol> RequestProperties(ITypeSymbol request)
+    static IEnumerable<IPropertySymbol> RequestProperties(ITypeSymbol request, IAssemblySymbol consumerAssembly)
     {
         for (var type = request as INamedTypeSymbol; type is not null; type = type.BaseType)
         {
-            foreach (var property in type.GetMembers().OfType<IPropertySymbol>().Where(property => !property.IsStatic))
+            // Generated code reads the token from outside the request type, so only a property whose
+            // getter it can call is a match.
+            foreach (var property in type.GetMembers().OfType<IPropertySymbol>().Where(property => !property.IsStatic
+                         && property.GetMethod is { } getter
+                         && (getter.DeclaredAccessibility == Accessibility.Public
+                             || SymbolEqualityComparer.Default.Equals(getter.ContainingAssembly, consumerAssembly)
+                             && getter.DeclaredAccessibility is Accessibility.Internal
+                                 or Accessibility.ProtectedOrInternal)))
+            {
                 yield return property;
+            }
         }
     }
 
-    static string Escape(string value) =>
-        value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("{", "{{").Replace("}", "}}");
-
-    static string EscapeLiteral(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    // The text of an interpolated string segment: a quoted literal without its quotes, braces doubled.
+    static string Escape(string value)
+    {
+        var literal = RequestTransportDiscovery.FormatStringLiteral(value);
+        return literal.Substring(1, literal.Length - 2).Replace("{", "{{").Replace("}", "}}");
+    }
 
     static string Type(ITypeSymbol symbol) => symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
@@ -660,7 +688,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             if (call.Error is not null)
             {
                 context.ReportDiagnostic(Diagnostic.Create(InvalidRegistration, call.DiagnosticLocation.ToLocation(),
-                    call.Role, call.Role, call.Error));
+                    call.Subject, call.Role, call.Error));
             }
         }
 
@@ -724,7 +752,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         string? Body,
         string? Error,
         DiagnosticLocation DiagnosticLocation,
-        RegistrationDiagnostic? Diagnostic = null);
+        RegistrationDiagnostic? Diagnostic = null,
+        string Subject = "");
 
     enum RegistrationDiagnosticKind
     {

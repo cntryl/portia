@@ -690,6 +690,33 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
+    public void PracticeDiagnosticsReportOncePerTypeGivenPartialDeclarations()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using System;
+                                                           using System.Threading;
+                                                           using System.Threading.Tasks;
+                                                           using Cntryl.Portia;
+                                                           public sealed record First : IRequest;
+                                                           public sealed record Second : IRequest;
+                                                           public sealed partial class Handler(IServiceProvider services) : IRequestHandler<First>
+                                                           {
+                                                               public IServiceProvider Services { get; } = services;
+                                                               public ValueTask<Result> HandleAsync(IRequestContext<First> context, CancellationToken ct) =>
+                                                                   ValueTask.FromResult(Result.Success);
+                                                           }
+                                                           public sealed partial class Handler : IRequestHandler<Second>
+                                                           {
+                                                               public ValueTask<Result> HandleAsync(IRequestContext<Second> context, CancellationToken ct) =>
+                                                                   ValueTask.FromResult(Result.Success);
+                                                           }
+                                                           """, new ComponentPracticeGenerator());
+
+        _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA101");
+        _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA103");
+    }
+
+    [Fact]
     public void Portia104UsesSemanticExceptionAndResultTypes()
     {
         var diagnostics = GeneratorCompilation.Diagnostics("""

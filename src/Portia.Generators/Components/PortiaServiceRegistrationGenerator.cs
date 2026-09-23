@@ -80,6 +80,23 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
                 sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidTransportId, model.Location.ToLocation(),
                     model.TypeName, model.Id));
         });
+        var inaccessibleRequests = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) => RequestTransportDiscovery.IsCandidate(node),
+                static (syntaxContext, _) => RequestTransportDiscovery.GetInaccessibleRequest(syntaxContext))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!)
+            .Collect();
+        context.RegisterSourceOutput(inaccessibleRequests, static (sourceContext, inaccessible) =>
+        {
+            // A partial request reaches the pipeline once per declaration; report it once.
+            foreach (var model in inaccessible.GroupBy(model => model.TypeName, StringComparer.Ordinal)
+                         .Select(group => group.First()))
+            {
+                sourceContext.ReportDiagnostic(Diagnostic.Create(GeneratedTypeShape.Unsupported,
+                    model.Location.ToLocation(), model.TypeName, model.Reason));
+            }
+        });
         var components = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => node is ClassDeclarationSyntax,

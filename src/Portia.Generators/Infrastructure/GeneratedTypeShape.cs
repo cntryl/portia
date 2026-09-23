@@ -27,11 +27,8 @@ static class GeneratedTypeShape
                     : $"enclosing type '{current.ToDisplayString()}' is generic; move the component to a non-generic type";
             }
 
-            if (current.DeclaredAccessibility is Accessibility.Private
-                or Accessibility.Protected or Accessibility.ProtectedAndInternal)
-            {
-                return $"'{current.ToDisplayString()}' is not visible to generated code; make it internal or public";
-            }
+            if (VisibilityReason(current) is { } hidden)
+                return hidden;
 
             if (requirePartialContainers && !SymbolEqualityComparer.Default.Equals(current, symbol)
                                          && current.DeclaringSyntaxReferences.Any(reference =>
@@ -44,6 +41,27 @@ static class GeneratedTypeShape
 
         return null;
     }
+
+    /// <summary>
+    ///     Why generated code, which lives in its own file, cannot name <paramref name="symbol" />; null when
+    ///     it can. Every enclosing type counts, and a file-local type is invisible outside its own file.
+    /// </summary>
+    public static string? InaccessibleReason(INamedTypeSymbol symbol)
+    {
+        for (var current = symbol; current is not null; current = current.ContainingType)
+        {
+            if (VisibilityReason(current) is { } hidden)
+                return hidden;
+        }
+
+        return null;
+    }
+
+    static string? VisibilityReason(INamedTypeSymbol type) =>
+        type.IsFileLocal || type.DeclaredAccessibility is Accessibility.Private
+            or Accessibility.Protected or Accessibility.ProtectedAndInternal
+            ? $"'{type.ToDisplayString()}' is not visible to generated code; make it internal or public"
+            : null;
 
     public static string HintName(INamedTypeSymbol symbol)
     {

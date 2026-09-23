@@ -98,6 +98,26 @@ public sealed class GeneratorCacheModelTests
             new RequestHttpBindingGenerator(), "PortiaHttpBindings", httpBinding);
     }
 
+    [Fact]
+    public void ComponentPracticeFindingsStayCachedAfterUnrelatedEdit()
+    {
+        const string handler = """
+                               using System;
+                               using System.Threading;
+                               using System.Threading.Tasks;
+                               using Cntryl.Portia;
+                               public sealed record Request : IRequest;
+                               public sealed class Handler(IServiceProvider services) : IRequestHandler<Request>
+                               {
+                                   public IServiceProvider Services { get; } = services;
+                                   public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct) =>
+                                       ValueTask.FromResult(Result.Success);
+                               }
+                               """;
+
+        AssertCachedAfterUnrelatedPragmaEdit(new ComponentPracticeGenerator(), "PortiaComponentPractices", handler);
+    }
+
     static void AssertCachedAfterUnrelatedPragmaEdit(
         IIncrementalGenerator generator,
         string trackingName,

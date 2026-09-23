@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Cntryl.Portia;
@@ -87,6 +88,18 @@ static class RequestTransportDiscovery
         return null;
     }
 
+    public static InaccessibleRequest? GetInaccessibleRequest(GeneratorSyntaxContext context)
+    {
+        var declaration = (TypeDeclarationSyntax)context.Node;
+        return context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol { IsAbstract: false } symbol
+               && !IsStream(symbol)
+               && HasTransportMarker(symbol)
+               && GeneratedTypeShape.InaccessibleReason(symbol) is { } reason
+            ? new InaccessibleRequest(symbol.ToDisplayString(), reason,
+                DiagnosticLocation.From(declaration.Identifier.GetLocation()))
+            : null;
+    }
+
     public static InvalidTransportId? GetInvalidTransportId(GeneratorSyntaxContext context)
     {
         var declaration = (TypeDeclarationSyntax)context.Node;
@@ -114,7 +127,9 @@ static class RequestTransportDiscovery
 
     public static RequestTransportComponent? GetRequestTransportComponent(ITypeSymbol? type)
     {
-        if (type is not INamedTypeSymbol symbol || symbol.IsAbstract)
+        // An inaccessible request is reported as PORTIA015 by GetInaccessibleRequest instead.
+        if (type is not INamedTypeSymbol symbol || symbol.IsAbstract
+                                                || GeneratedTypeShape.InaccessibleReason(symbol) is not null)
         {
             return null;
         }
@@ -171,8 +186,7 @@ static class RequestTransportDiscovery
         "new global::Cntryl.Portia.RequestTransportId[] { " + string.Join(", ", transports.Select(id =>
             $"new global::Cntryl.Portia.RequestTransportId({FormatStringLiteral(id)})")) + " }";
 
-    public static string FormatStringLiteral(string value) =>
-        "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+    public static string FormatStringLiteral(string value) => SymbolDisplay.FormatLiteral(value, true);
 
     static bool ImplementsInterface(INamedTypeSymbol symbol, string metadataName) =>
         symbol.AllInterfaces.Any(iface => iface.ToDisplayString() == metadataName);
