@@ -1,16 +1,11 @@
-using System.Buffers;
 using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
-using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Cntryl.Portia;
 
@@ -20,18 +15,9 @@ namespace Cntryl.Portia;
 ///     directly. Map endpoints with <see cref="PortiaEndpointRouteBuilderExtensions" /> instead.
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public static class PortiaHttpBinding
+public static partial class PortiaHttpBinding
 {
-    // Content-Length is the caller's claim, not a measurement. Sizing the buffer from it lets one
-    // small request reserve the whole configured maximum, so the hint is capped: an ordinary body
-    // still lands in a single allocation, and a dishonest header cannot reserve more than this.
-    const int MaximumInitialBodyBytes = 64 * 1024;
-    const int BodyChunkBytes = 16 * 1024;
-    const string JsonMediaTypeRequired = "Request bodies must declare a JSON content type.";
-    static readonly object BodyLimitAppliedKey = new();
     static readonly ConditionalWeakTable<JsonSerializerOptions, OptionsBindingCache> BindingCaches = [];
-
-    static readonly ReadOnlyMemory<byte> EmptyObjectUtf8 = "{}"u8.ToArray();
 
     /// <summary>Creates execution context from authenticated HTTP state and concrete endpoint facts.</summary>
     /// <param name="context">The current HTTP request.</param>
@@ -48,37 +34,6 @@ public static class PortiaHttpBinding
     public static JsonSerializerOptions GetJsonOptions(HttpContext context)
         => context.RequestServices.GetRequiredService<JsonSerializerOptions>();
 
-    /// <summary>Applies Portia's body limit to a declared custom request body.</summary>
-    /// <param name="context">The current HTTP request.</param>
-    public static void EnsureBodyWithinLimit(HttpContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        var maximum = MaximumBodyBytes(context);
-        if (context.Request.ContentLength > maximum)
-            throw new HttpPayloadTooLargeException();
-        if (context.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } feature &&
-            (feature.MaxRequestBodySize is null || feature.MaxRequestBodySize > maximum))
-            feature.MaxRequestBodySize = maximum;
-        if (context.Items.ContainsKey(BodyLimitAppliedKey))
-            return;
-        context.Request.Body = new LimitedRequestBodyStream(context.Request.Body, maximum);
-        context.Items.Add(BodyLimitAppliedKey, null);
-    }
-
-    /// <summary>
-    ///     Refuses a state-changing browser request from another origin unless the application's CORS
-    ///     pipeline allows that origin.
-    /// </summary>
-    /// <param name="context">The current HTTP request.</param>
-    /// <returns>A 403 problem result, or <see langword="null" /> when the request may proceed.</returns>
-    public static IResult? RejectCrossOrigin(HttpContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        return PortiaCrossOrigin.IsAllowed(context)
-            ? null
-            : Problem(StatusCodes.Status403Forbidden, "Cross-origin request rejected.");
-    }
-
     /// <summary>Ensures <c>AddHttp()</c> registered Portia's HTTP services before an endpoint is mapped.</summary>
     /// <param name="app">The endpoint route builder.</param>
     /// <exception cref="InvalidOperationException"><c>AddHttp()</c> was not called.</exception>
@@ -88,237 +43,6 @@ public static class PortiaHttpBinding
         if (app.ServiceProvider.GetService<PortiaHttpExtensions.PortiaOpenApiMarker>() is null)
             throw new InvalidOperationException(
                 "Portia HTTP endpoints require AddHttp() in the shared Portia application composition.");
-    }
-
-    /// <summary>Reports whether the request carries an HTML form body.</summary>
-    /// <param name="context">The current HTTP request.</param>
-    /// <returns><see langword="true" /> for <c>application/x-www-form-urlencoded</c> or <c>multipart/form-data</c>.</returns>
-    public static bool HasFormBody(HttpContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        return context.Request.HasFormContentType;
-    }
-
-    /// <summary>
-    ///     Reads a bounded HTML form body after antiforgery validation. Without a registered antiforgery
-    ///     service, forms are refused unless the endpoint disables antiforgery.
-    /// </summary>
-    /// <param name="context">The current HTTP request.</param>
-    /// <param name="ct">A token that can cancel the read.</param>
-    /// <returns>The parsed form.</returns>
-    /// <exception cref="HttpPayloadTooLargeException">The body exceeds <c>PortiaHttpOptions.MaxJsonBodyBytes</c>.</exception>
-    /// <exception cref="AntiforgeryValidationException">The antiforgery token is missing or invalid.</exception>
-    /// <exception cref="HttpUnsupportedMediaTypeException">
-    ///     Antiforgery is not registered and the endpoint does not disable it.
-    /// </exception>
-    public static async ValueTask<IFormCollection> ReadFormBodyAsync(HttpContext context, CancellationToken ct)
-    {
-        EnsureBodyWithinLimit(context);
-        try
-        {
-            await ValidateAntiforgeryAsync(context).ConfigureAwait(false);
-            return await context.Request.ReadFormAsync(ct).ConfigureAwait(false);
-        }
-        catch (AntiforgeryValidationException ex) when (HasBodyLimitCause(ex))
-        {
-            throw new HttpPayloadTooLargeException();
-        }
-        catch (BadHttpRequestException ex) when (IsServerBodyLimit(ex))
-        {
-            throw new HttpPayloadTooLargeException();
-        }
-        catch (InvalidDataException ex)
-        {
-            throw new BadHttpRequestException("Malformed form body.", ex);
-        }
-    }
-
-    /// <summary>Reads one form field value.</summary>
-    /// <param name="form">The parsed form.</param>
-    /// <param name="name">The field name.</param>
-    /// <param name="emptyIsMissing">Whether an empty value is treated as an absent field.</param>
-    /// <returns>The value, or <see langword="null" /> when the field is absent.</returns>
-    /// <exception cref="BadHttpRequestException">The field was submitted more than once.</exception>
-    public static string? ReadForm(IFormCollection form, string name, bool emptyIsMissing)
-    {
-        ArgumentNullException.ThrowIfNull(form);
-        if (!form.TryGetValue(name, out var values) || values.Count == 0)
-            return null;
-        if (values.Count != 1)
-            throw new BadHttpRequestException($"Expected one value for '{name}'.");
-        return emptyIsMissing && string.IsNullOrEmpty(values[0]) ? null : values[0];
-    }
-
-    /// <summary>
-    ///     Reads a form Boolean field. ASP.NET's checkbox helpers post the checkbox value followed by a
-    ///     hidden <c>false</c> field of the same name, so repeated values bind <c>true</c> when any is set.
-    /// </summary>
-    /// <param name="form">The parsed form.</param>
-    /// <param name="name">The field name.</param>
-    /// <returns><c>true</c>, <c>false</c>, the first unparseable value, or <see langword="null" /> when absent or blank.</returns>
-    public static string? ReadFormBoolean(IFormCollection form, string name)
-    {
-        ArgumentNullException.ThrowIfNull(form);
-        if (!form.TryGetValue(name, out var values))
-            return null;
-        var isSet = false;
-        var found = false;
-        foreach (var value in values)
-        {
-            if (string.IsNullOrEmpty(value))
-                continue;
-            if (!TryParseFormBoolean(value, out var parsed))
-                return value;
-            found = true;
-            isSet |= parsed;
-        }
-
-        return !found ? null : isSet ? bool.TrueString : bool.FalseString;
-    }
-
-    /// <summary>Parses a form Boolean, accepting the <c>on</c> value a checked HTML checkbox submits.</summary>
-    /// <param name="value">The submitted field value.</param>
-    /// <param name="result">The parsed value.</param>
-    /// <returns><see langword="true" /> when the value is <c>on</c>, <c>true</c>, or <c>false</c>.</returns>
-    public static bool TryParseFormBoolean(string? value, out bool result)
-    {
-        if (string.Equals(value, "on", StringComparison.OrdinalIgnoreCase))
-        {
-            result = true;
-            return true;
-        }
-
-        return bool.TryParse(value, out result);
-    }
-
-    /// <summary>Reports whether default binding accepts HTML form bodies for an endpoint.</summary>
-    /// <param name="endpointMetadata">The endpoint's metadata.</param>
-    /// <param name="services">The application services.</param>
-    /// <returns>
-    ///     <see langword="true" /> when the application registers antiforgery or the endpoint opts out of it.
-    /// </returns>
-    internal static bool AcceptsFormBody(IEnumerable<object> endpointMetadata, IServiceProvider services) =>
-        endpointMetadata.OfType<IAntiforgeryMetadata>().LastOrDefault() is { RequiresValidation: false } ||
-        services.GetService<IAntiforgery>() is not null;
-
-    // A form post can be forged cross-site where a JSON post cannot, so default form binding fails
-    // closed: forms are refused unless antiforgery is registered to validate them or the endpoint
-    // explicitly opts out with DisableAntiforgery().
-    static async ValueTask ValidateAntiforgeryAsync(HttpContext context)
-    {
-        if (context.GetEndpoint()?.Metadata.GetMetadata<IAntiforgeryMetadata>() is { RequiresValidation: false })
-            return;
-        if (context.Features.Get<IAntiforgeryValidationFeature>() is { } feature)
-        {
-            if (!feature.IsValid)
-                throw new AntiforgeryValidationException("Invalid antiforgery token.", feature.Error);
-            return;
-        }
-
-        if (context.RequestServices.GetService<IAntiforgery>() is not { } antiforgery)
-            throw new HttpUnsupportedMediaTypeException("Form bodies require antiforgery validation.");
-        await antiforgery.ValidateRequestAsync(context).ConfigureAwait(false);
-    }
-
-    /// <summary>Reads one bounded JSON object request body.</summary>
-    /// <param name="context">The current HTTP request.</param>
-    /// <param name="bodyRequired">Whether an empty body is rejected rather than read as <c>{}</c>.</param>
-    /// <param name="ct">A token that can cancel the read.</param>
-    /// <returns>The parsed body, or an empty object when the body was empty and optional.</returns>
-    /// <exception cref="HttpPayloadTooLargeException">The body exceeds <c>PortiaHttpOptions.MaxJsonBodyBytes</c>.</exception>
-    /// <exception cref="HttpUnsupportedMediaTypeException">
-    ///     The request declares a non-JSON content type, or carries a body without declaring one.
-    /// </exception>
-    public static async ValueTask<JsonDocument> ReadJsonBodyAsync(HttpContext context, bool bodyRequired,
-        CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        // A cross-site page can send a text/plain or untyped body without a CORS preflight, and that
-        // body can still be valid JSON, so only a declared JSON media type is read as JSON. A request
-        // without a content type is accepted only when it carries no body.
-        var declaresJson = context.Request.HasJsonContentType();
-        if (!declaresJson && (context.Request.ContentType is not null || context.Request.ContentLength > 0))
-            throw new HttpUnsupportedMediaTypeException(JsonMediaTypeRequired);
-        var maximum = MaximumBodyBytes(context);
-
-        if (context.Request.ContentLength > 0 && context.Request.ContentLength > maximum)
-            throw new HttpPayloadTooLargeException();
-
-        var hint = Math.Min(Math.Min(context.Request.ContentLength ?? 0, maximum), MaximumInitialBodyBytes);
-        await using var buffer = new MemoryStream((int)hint);
-        var chunk = ArrayPool<byte>.Shared.Rent(BodyChunkBytes);
-        try
-        {
-            while (true)
-            {
-                var read = await context.Request.Body.ReadAsync(chunk, ct).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    break;
-                }
-
-                if (buffer.Length + read > maximum)
-                {
-                    throw new HttpPayloadTooLargeException();
-                }
-
-                await buffer.WriteAsync(chunk.AsMemory(0, read), ct).ConfigureAwait(false);
-            }
-        }
-        catch (BadHttpRequestException ex) when (IsServerBodyLimit(ex))
-        {
-            throw new HttpPayloadTooLargeException();
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(chunk);
-        }
-
-        if (buffer.Length == 0)
-        {
-            return bodyRequired
-                ? throw new BadHttpRequestException("Missing required request body.")
-                : JsonDocument.Parse(EmptyObjectUtf8);
-        }
-
-        if (!declaresJson)
-            throw new HttpUnsupportedMediaTypeException(JsonMediaTypeRequired);
-
-        buffer.Position = 0;
-        var json = GetJsonOptions(context);
-        return await JsonDocument.ParseAsync(buffer, new JsonDocumentOptions
-        {
-            AllowTrailingCommas = json.AllowTrailingCommas,
-            CommentHandling = json.ReadCommentHandling,
-            MaxDepth = json.MaxDepth
-        }, ct).ConfigureAwait(false);
-    }
-
-    // The server (Kestrel's MaxRequestBodySize) can reject an oversized body before Portia counts it;
-    // that is the same limit breach, so it surfaces as Portia's 413 rather than a malformed request.
-    static bool IsServerBodyLimit(BadHttpRequestException exception) =>
-        exception is not HttpPayloadTooLargeException &&
-        exception.StatusCode == StatusCodes.Status413PayloadTooLarge;
-
-    static bool HasBodyLimitCause(Exception exception)
-    {
-        for (var cause = exception.InnerException; cause is not null; cause = cause.InnerException)
-        {
-            if (cause is HttpPayloadTooLargeException ||
-                cause is BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge })
-                return true;
-        }
-
-        return false;
-    }
-
-    static long MaximumBodyBytes(HttpContext context)
-    {
-        var maximum = context.RequestServices.GetService<IOptions<PortiaHttpOptions>>()?.Value.MaxJsonBodyBytes
-                      ?? PortiaHttpOptions.DefaultMaxJsonBodyBytes;
-        return maximum > 0
-            ? maximum
-            : throw new InvalidOperationException($"{nameof(PortiaHttpOptions.MaxJsonBodyBytes)} must be positive.");
     }
 
     /// <summary>Reports whether an exact RFC 7240 preference token requests asynchronous handling.</summary>
@@ -344,78 +68,6 @@ public static class PortiaHttpBinding
         }
 
         return false;
-    }
-
-    /// <summary>Reads exactly one nonempty Bearer credential, or null when authorization is absent.</summary>
-    /// <param name="context">The current HTTP request.</param>
-    /// <returns>The raw credential, or <see langword="null" /> when no Authorization header was sent.</returns>
-    /// <exception cref="Microsoft.AspNetCore.Http.BadHttpRequestException">
-    ///     The header is present but does not carry exactly one nonempty Bearer credential.
-    /// </exception>
-    public static string? ReadBearerCredential(HttpContext context)
-    {
-        var values = context.Request.Headers.Authorization;
-        if (values.Count == 0)
-        {
-            return null;
-        }
-
-        if (values.Count != 1)
-        {
-            throw new BadHttpRequestException("Authorization must contain one Bearer credential.");
-        }
-
-        var value = values[0];
-        if (value is null || !value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new BadHttpRequestException("Authorization must contain one Bearer credential.");
-        }
-
-        var credential = value.AsSpan(7).Trim();
-        return credential.IsEmpty || credential.Contains(' ')
-            ? throw new BadHttpRequestException("Authorization must contain one Bearer credential.")
-            : credential.ToString();
-    }
-
-    /// <summary>Rejects an authenticated identity that cannot be replayed by a durable worker.</summary>
-    public static string? ReadPortableBearerCredential(HttpContext context)
-    {
-        var credential = ReadBearerCredential(context);
-        if (credential is null && context.User.Identities.Any(identity => identity.IsAuthenticated))
-        {
-            throw new BadHttpRequestException(
-                "Asynchronous delivery of an authenticated request requires a Bearer credential.");
-        }
-
-        return credential;
-    }
-
-    /// <summary>Creates the asynchronous acceptance receipt.</summary>
-    /// <param name="context">The current HTTP request, whose response gains <c>Preference-Applied</c>.</param>
-    /// <param name="requestId">The logical identity the caller can track the enqueued request by.</param>
-    /// <returns>A 202 Accepted result carrying the request identity.</returns>
-    public static IResult Accepted(HttpContext context, Uuid requestId)
-    {
-        context.Response.Headers["Preference-Applied"] = "respond-async";
-        return new AcceptedReceiptResult(requestId,
-            GetJsonOptions(context).PropertyNamingPolicy?.ConvertName("RequestId") ?? "RequestId");
-    }
-
-    /// <summary>Writes the stable Portia problem contract.</summary>
-    /// <param name="statusCode">The HTTP status to respond with.</param>
-    /// <param name="message">The non-sensitive detail reported to the caller.</param>
-    /// <returns>A problem-details result.</returns>
-    public static IResult Problem(int statusCode, string message) => new ProblemResult(statusCode, message);
-
-    /// <summary>Logs an unexpected HTTP failure and returns a non-sensitive response.</summary>
-    /// <param name="context">The current HTTP request.</param>
-    /// <param name="exception">The unexpected failure, recorded through Portia's telemetry contract.</param>
-    /// <returns>A 500 problem-details result that discloses nothing about the failure.</returns>
-    public static IResult Unexpected(HttpContext context, Exception exception)
-    {
-        PortiaTelemetry.RecordRunnerFault("Http", RunnerFaultStage.Execution, exception,
-            context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("Cntryl.Portia.Http"));
-        return Problem(StatusCodes.Status500InternalServerError, "An unexpected error occurred.");
     }
 
     /// <summary>Resolves contextual queue route values configured on the selected endpoint.</summary>
@@ -545,82 +197,6 @@ public static class PortiaHttpBinding
         }
 
         return false;
-    }
-
-    sealed class LimitedRequestBodyStream(Stream inner, long maximum) : Stream
-    {
-        long _read;
-
-        public override bool CanRead => inner.CanRead;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => throw new NotSupportedException();
-
-        public override long Position
-        {
-            get => _read;
-            set => throw new NotSupportedException();
-        }
-
-        public override void Flush()
-        {
-        }
-
-        public override int Read(byte[] buffer, int offset, int count) => Count(inner.Read(buffer, offset, count));
-        public override int Read(Span<byte> buffer) => Count(inner.Read(buffer));
-
-        public override int ReadByte()
-        {
-            var value = inner.ReadByte();
-            if (value >= 0)
-                _ = Count(1);
-            return value;
-        }
-
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count,
-            CancellationToken cancellationToken) =>
-            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
-
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
-            CancellationToken cancellationToken = default) =>
-            Count(await inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false));
-
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-
-
-        int Count(int read)
-        {
-            _read += read;
-            return _read <= maximum ? read : throw new HttpPayloadTooLargeException();
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-                inner.Dispose();
-            base.Dispose(disposing);
-        }
-    }
-
-    sealed class AcceptedReceiptResult(Uuid requestId, string propertyName) : IResult
-    {
-        public async Task ExecuteAsync(HttpContext context)
-        {
-            context.Response.StatusCode = StatusCodes.Status202Accepted;
-            context.Response.ContentType = "application/json; charset=utf-8";
-            await using var writer = new Utf8JsonWriter(context.Response.Body);
-            writer.WriteStartObject();
-            writer.WriteString(propertyName, requestId.ToString());
-            writer.WriteEndObject();
-            await writer.FlushAsync(context.RequestAborted).ConfigureAwait(false);
-        }
-    }
-
-    sealed class ProblemResult(int statusCode, string message) : IResult
-    {
-        public Task ExecuteAsync(HttpContext context) => PortiaProblemDetails.WriteAsync(context, statusCode, message);
     }
 
     readonly record struct BindingKey(Type RequestType, Type ValueType, int MemberIndex, string FallbackName);
