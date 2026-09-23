@@ -43,7 +43,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
                 new RequestRouteValues("first"), RequestActor.System)
             .AddRequestSchedule(new FitzHostedRequest(), new RequestScheduleSpec("0 1 * * *"),
                 new RequestRouteValues("second"), RequestActor.System)
-            .AddWorkers();
+            .AddWorkers().UseSingleProcessWorkloads();
         using var provider = services.BuildServiceProvider();
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is RequestScheduleStartupService);
@@ -60,7 +60,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var services = new ServiceCollection();
         _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
                 new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), RequestActor.System)
-            .AddWorkers();
+            .AddWorkers().UseSingleProcessWorkloads();
         using var provider = services.BuildServiceProvider();
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is RequestScheduleStartupService);
@@ -79,7 +79,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton<IRequestScheduler>(scheduler);
         _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
                 new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), new ClaimsPrincipal())
-            .AddWorkers();
+            .AddWorkers().UseSingleProcessWorkloads();
         using var provider = services.BuildServiceProvider();
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is RequestScheduleStartupService);
@@ -99,7 +99,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         { Failure = new IOException("broker unavailable") });
         _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
                 new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), RequestActor.System)
-            .AddWorkers();
+            .AddWorkers().UseSingleProcessWorkloads();
         using var provider = services.BuildServiceProvider();
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is RequestScheduleStartupService);
@@ -167,7 +167,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
             EventStreamPattern.ForTenant("orders")));
         _ = builder.Services.AddPortia()
             .AddProjector<TestProjector>("orders", WorkloadScope.Global)
-            .AddWorkers();
+            .AddWorkers().UseSingleProcessWorkloads();
         using var host = builder.Build();
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
@@ -186,7 +186,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
             EventStreamPattern.ForPattern("placeholder", "orders")));
         _ = builder.Services.AddPortia()
             .AddProjector<TestProjector>("orders", WorkloadScope.PerTenant)
-            .AddWorkers();
+            .AddWorkers().UseSingleProcessWorkloads();
         using var host = builder.Build();
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
@@ -221,7 +221,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     public async Task ShouldSkipJsonUpcasterPolicyForCustomSerializer()
     {
         var services = new ServiceCollection();
-        _ = services.AddPortia().AddWorkers();
+        _ = services.AddPortia().AddWorkers().UseSingleProcessWorkloads();
         _ = services.AddSingleton<IJsonDomainEventUpcaster>(new RecordingUpcaster(string.Empty, 0));
         _ = services.AddSingleton<IDomainEventSerializer>(new PassthroughDomainEventSerializer());
         using var provider = services.BuildServiceProvider();
@@ -337,7 +337,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddPortia()
             .AddProjector<TestProjector>("test-projector", WorkloadScope.Global,
                 o => o.PollInterval = TimeSpan.FromMilliseconds(20))
-            .AddWorkers();
+            .AddWorkers().UseSingleProcessWorkloads();
         using var provider = services.BuildServiceProvider();
 
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
@@ -370,7 +370,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddPortia()
             .AddProjector<TestProjector>("test-projector", WorkloadScope.Global,
                 o => o.PollInterval = TimeSpan.FromMilliseconds(10))
-            .AddWorkers();
+            .AddWorkers().UseSingleProcessWorkloads();
         using var provider = services.BuildServiceProvider();
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
 
@@ -403,7 +403,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddFrameworkTests();
         _ = services.AddSingleton(new TestProjector(target));
         _ = services.AddPortia().AddProjector<TestProjector>("test-projector", WorkloadScope.Global,
-            o => { o.PollInterval = TimeSpan.FromMilliseconds(10); }).AddWorkers();
+            o => { o.PollInterval = TimeSpan.FromMilliseconds(10); }).AddWorkers().UseSingleProcessWorkloads();
         using var provider = services.BuildServiceProvider();
 
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());

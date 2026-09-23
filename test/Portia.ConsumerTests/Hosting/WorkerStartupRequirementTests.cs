@@ -15,7 +15,7 @@ public sealed class WorkerStartupRequirementTests
     {
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global)
-            .AddWorkers();
+            .AddWorkers().UseSingleProcessWorkloads();
         using var host = builder.Build();
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
@@ -32,7 +32,7 @@ public sealed class WorkerStartupRequirementTests
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
         _ = builder.Services.AddPortia().AddProjector<TenantFirstProjector>("first-projector", WorkloadScope.PerTenant)
-            .AddWorkers();
+            .AddWorkers().UseSingleProcessWorkloads();
         using var host = builder.Build();
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
@@ -49,7 +49,7 @@ public sealed class WorkerStartupRequirementTests
         _ = builder.Services.AddPortia()
             .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
                 options => options.PollInterval = TimeSpan.FromDays(1))
-            .AddWorkers();
+            .AddWorkers().UseSingleProcessWorkloads();
         using var host = builder.Build();
 
         await host.StartAsync();
@@ -60,7 +60,7 @@ public sealed class WorkerStartupRequirementTests
     public async Task AHostThatDeclaredNoComponentsRequiresNothing()
     {
         var builder = Host.CreateApplicationBuilder();
-        _ = builder.Services.AddPortia().AddWorkers();
+        _ = builder.Services.AddPortia().AddWorkers().UseSingleProcessWorkloads();
         using var host = builder.Build();
 
         await host.StartAsync();

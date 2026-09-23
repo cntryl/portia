@@ -34,6 +34,13 @@ sealed class PortiaWorkloadService(
             Require(typeof(ITenantDirectory));
         }
 
+        if (workloadCoordinator is null)
+        {
+            throw new InvalidOperationException(
+                $"Portia workers require an '{nameof(IWorkloadCoordinator)}'. Register a distributed coordinator such as AddFitz(...), " +
+                $"or call {nameof(PortiaBuilder.UseSingleProcessWorkloads)}() when exactly one worker replica runs.");
+        }
+
         foreach (var registration in _registrations)
         {
             await using var scope = scopes.CreateAsyncScope();
@@ -124,7 +131,7 @@ sealed class PortiaWorkloadService(
 
         async Task CoordinateAsync()
         {
-            await ResolveCoordinator().RunAsync(
+            await workloadCoordinator!.RunAsync(
                 () => [.. active.Keys],
                 (identity, ct) => active.TryGetValue(identity, out var registration)
                     ? RunAsync(registration, identity, ct)
@@ -152,27 +159,6 @@ sealed class PortiaWorkloadService(
         {
             throw new InvalidOperationException("The workload coordinator or tenant directory stopped unexpectedly.");
         }
-    }
-
-    /// <summary>
-    ///     Uses the application's coordinator when infrastructure supplies one, and otherwise owns
-    ///     every workload in this process. Resolving the fallback here rather than registering it in
-    ///     <c>AddWorkers()</c> keeps it immune to setup order: infrastructure registered after
-    ///     <c>AddWorkers()</c> is still the coordinator that runs.
-    /// </summary>
-    IWorkloadCoordinator ResolveCoordinator()
-    {
-        if (workloadCoordinator is not null)
-        {
-            return workloadCoordinator;
-        }
-
-        PortiaTelemetry.RecordSingleProcessCoordinator(_logger);
-
-        // Reconcile cadence is infrastructure timing, not application time, so it deliberately
-        // does not follow a registered TimeProvider — a test that controls the workload poll
-        // interval with a fake clock would otherwise also be driving ownership reconciliation.
-        return new SingleProcessWorkloadCoordinator();
     }
 
     async Task RunAsync(WorkloadRegistration registration, WorkloadIdentity identity, CancellationToken ct)

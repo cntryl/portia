@@ -50,7 +50,7 @@ public sealed class FitzKvProjectionStoreStartupTests
             scope == WorkloadScope.PerTenant
                 ? EventStreamPattern.ForTenant("orders")
                 : EventStreamPattern.ForPattern("test", "orders")));
-        _ = builder.Services.AddPortia().AddProjector<OrdersProjector>(registeredAs, scope).AddWorkers();
+        _ = builder.Services.AddPortia().AddProjector<OrdersProjector>(registeredAs, scope).AddWorkers().UseSingleProcessWorkloads();
         return builder.Build();
     }
 }

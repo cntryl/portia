@@ -112,7 +112,7 @@ public static partial class PortiaTelemetry
     /// <param name="requestName">The startup-bounded generated request discriminator.</param>
     /// <param name="transport">The stable transport shape.</param>
     /// <returns>The started activity, or <see langword="null" /> when no listener samples it.</returns>
-    public static Activity? StartExecute(string requestName, string transport)
+    internal static Activity? StartExecute(string requestName, string transport)
     {
         var activity = ActivitySource.StartActivity(ExecuteActivityName);
         if (activity?.IsAllDataRequested == true)
@@ -129,7 +129,7 @@ public static partial class PortiaTelemetry
     /// <param name="transport">The stable transport shape.</param>
     /// <param name="messagingSystem">The standard messaging system name when the adapter knows it.</param>
     /// <returns>The started activity, or <see langword="null" /> when no listener samples it.</returns>
-    public static Activity? StartSend(string requestName, string transport, string? messagingSystem)
+    internal static Activity? StartSend(string requestName, string transport, string? messagingSystem)
     {
         var activity = ActivitySource.StartActivity(SendActivityName, ActivityKind.Producer);
         if (activity?.IsAllDataRequested == true)
@@ -156,7 +156,7 @@ public static partial class PortiaTelemetry
     ///     <c>portia.transport.trace_context.invalid</c>. The invocation decides whether valid
     ///     context is a parent or a link.
     /// </remarks>
-    public static Activity? StartProcess(string requestName, RequestInvocation invocation,
+    internal static Activity? StartProcess(string requestName, RequestInvocation invocation,
         RequestTraceContext? propagated)
     {
         ArgumentNullException.ThrowIfNull(invocation);
@@ -193,19 +193,19 @@ public static partial class PortiaTelemetry
     /// <summary>Captures the current activity's W3C trace-parent and trace-state fields.</summary>
     /// <returns>The propagation-safe context, or <see langword="null" /> when no activity is current.</returns>
     /// <remarks>Baggage, credentials, claims, and application payload data are never captured.</remarks>
-    public static RequestTraceContext? CaptureTraceContext() =>
+    internal static RequestTraceContext? CaptureTraceContext() =>
         Activity.Current is { Id: { } id } current ? new RequestTraceContext(id, current.TraceStateString) : null;
 
     /// <summary>Captures a monotonic timestamp suitable for the duration-recording methods.</summary>
     /// <returns>A timestamp produced by <see cref="Stopwatch.GetTimestamp()" />.</returns>
-    public static long StartTimestamp() => Stopwatch.GetTimestamp();
+    internal static long StartTimestamp() => Stopwatch.GetTimestamp();
 
     static double Seconds(long started) => Stopwatch.GetElapsedTime(started).TotalSeconds;
 
     /// <summary>Increments the active-request instrument.</summary>
     /// <param name="requestName">The startup-bounded generated request discriminator.</param>
     /// <param name="transport">The stable transport identifier.</param>
-    public static void RequestStarted(string requestName, string transport) => RequestActive.Add(1,
+    internal static void RequestStarted(string requestName, string transport) => RequestActive.Add(1,
         new KeyValuePair<string, object?>("portia.request.name", requestName),
         new KeyValuePair<string, object?>("portia.transport.name", transport));
 
@@ -214,7 +214,7 @@ public static partial class PortiaTelemetry
     /// <param name="requestName">The startup-bounded generated request discriminator.</param>
     /// <param name="transport">The stable transport identifier.</param>
     /// <param name="outcome">A stable outcome returned by <see cref="Outcome" /> or another documented closed-set value.</param>
-    public static void RequestFinished(long started, string requestName, string transport, string outcome)
+    internal static void RequestFinished(long started, string requestName, string transport, string outcome)
     {
         RequestActive.Add(-1, new KeyValuePair<string, object?>("portia.request.name", requestName),
             new KeyValuePair<string, object?>("portia.transport.name", transport));
@@ -228,7 +228,7 @@ public static partial class PortiaTelemetry
     /// <param name="requestName">The startup-bounded generated request discriminator.</param>
     /// <param name="transport">The stable transport shape.</param>
     /// <param name="outcome">The delivery's closed-set final outcome.</param>
-    public static void RecordDelivery(string requestName, string transport, RequestDeliveryOutcome outcome) =>
+    internal static void RecordDelivery(string requestName, string transport, RequestDeliveryOutcome outcome) =>
         RequestDelivery.Add(1, new KeyValuePair<string, object?>("portia.request.name", requestName),
             new KeyValuePair<string, object?>("portia.transport.name", transport),
             new KeyValuePair<string, object?>("portia.outcome", DeliveryOutcomeName(outcome)));
@@ -238,7 +238,7 @@ public static partial class PortiaTelemetry
     /// <param name="policy">The startup-bounded policy or authorizer name.</param>
     /// <param name="stage">The stable authorization stage.</param>
     /// <param name="outcome">The stable authorization outcome.</param>
-    public static void AuthorizationFinished(long started, string policy, string stage, string outcome) =>
+    internal static void AuthorizationFinished(long started, string policy, string stage, string outcome) =>
         AuthorizationDuration.Record(Seconds(started),
             new KeyValuePair<string, object?>("portia.component.name", policy),
             new KeyValuePair<string, object?>("portia.stage", stage),
@@ -248,7 +248,7 @@ public static partial class PortiaTelemetry
     /// <param name="started">The value returned by <see cref="StartTimestamp" />.</param>
     /// <param name="guard">The guard's startup-bounded component name.</param>
     /// <param name="outcome">The bounded guard outcome.</param>
-    public static void GuardFinished(long started, string guard, string outcome) =>
+    internal static void GuardFinished(long started, string guard, string outcome) =>
         GuardDuration.Record(Seconds(started),
             new KeyValuePair<string, object?>("portia.component.name", guard),
             new KeyValuePair<string, object?>("portia.outcome", outcome));
@@ -258,7 +258,7 @@ public static partial class PortiaTelemetry
     /// <param name="transport">The stable transport identifier.</param>
     /// <param name="operation">The stable transport operation.</param>
     /// <param name="outcome">The stable operation outcome.</param>
-    public static void TransportFinished(long started, string transport, string operation, string outcome) =>
+    internal static void TransportFinished(long started, string transport, string operation, string outcome) =>
         TransportDuration.Record(Seconds(started),
             new KeyValuePair<string, object?>("portia.transport.name", transport),
             new KeyValuePair<string, object?>("portia.operation", operation),
@@ -269,7 +269,7 @@ public static partial class PortiaTelemetry
     /// <param name="operation">The stable aggregate operation.</param>
     /// <param name="outcome">The stable operation outcome.</param>
     /// <param name="eventCount">The number of events handled; zero suppresses the count instrument.</param>
-    public static void AggregateFinished(long started, string operation, string outcome, int eventCount = 0)
+    internal static void AggregateFinished(long started, string operation, string outcome, int eventCount = 0)
     {
         AggregateDuration.Record(Seconds(started), new KeyValuePair<string, object?>("portia.operation", operation),
             new KeyValuePair<string, object?>("portia.outcome", outcome));
@@ -285,7 +285,7 @@ public static partial class PortiaTelemetry
     /// <param name="scope">The stable stream or pattern scope.</param>
     /// <param name="outcome">The stable operation outcome.</param>
     /// <param name="eventCount">The number of events handled; zero suppresses the count instrument.</param>
-    public static void EventStoreFinished(long started, string operation, string scope, string outcome,
+    internal static void EventStoreFinished(long started, string operation, string scope, string outcome,
         int eventCount = 0)
     {
         EventStoreDuration.Record(Seconds(started),
@@ -309,7 +309,7 @@ public static partial class PortiaTelemetry
     ///     The occurrence time of the last committed event, or
     ///     <see langword="null" /> to omit lag. Negative lag is clamped to zero.
     /// </param>
-    public static void ProcessorBatchFinished(long started, string component, string runner, string outcome,
+    internal static void ProcessorBatchFinished(long started, string component, string runner, string outcome,
         int eventCount, DateTimeOffset? lastOccurrence = null)
     {
         ProcessorDuration.Record(Seconds(started),
@@ -351,7 +351,7 @@ public static partial class PortiaTelemetry
     /// <param name="scope">The stable workload scope.</param>
     /// <param name="active"><see langword="true" /> when acquired; <see langword="false" /> when released.</param>
     /// <param name="logger">An optional logger for the lifecycle transition.</param>
-    public static void RecordWorkload(string component, string scope, bool active, ILogger? logger = null)
+    internal static void RecordWorkload(string component, string scope, bool active, ILogger? logger = null)
     {
         WorkloadActive.Add(active ? 1 : -1,
             new KeyValuePair<string, object?>("portia.component.name", component),
@@ -365,7 +365,7 @@ public static partial class PortiaTelemetry
     /// <summary>Increments the worker-restart counter.</summary>
     /// <param name="runner">The stable runner name.</param>
     /// <param name="stage">The stable restart stage.</param>
-    public static void RecordWorkerRestart(string runner, string stage) => WorkerRestart.Add(1,
+    internal static void RecordWorkerRestart(string runner, string stage) => WorkerRestart.Add(1,
         new KeyValuePair<string, object?>("portia.runner.name", runner),
         new KeyValuePair<string, object?>("portia.stage", stage));
 
@@ -373,7 +373,7 @@ public static partial class PortiaTelemetry
     /// <param name="activity">The request activity, or <see langword="null" /> when unsampled.</param>
     /// <param name="isSuccess">Whether request handling succeeded.</param>
     /// <param name="error">The expected request error when handling failed.</param>
-    public static void RecordOutcome(Activity? activity, bool isSuccess, RequestError? error)
+    internal static void RecordOutcome(Activity? activity, bool isSuccess, RequestError? error)
     {
         if (activity == null)
         {
@@ -428,7 +428,7 @@ public static partial class PortiaTelemetry
     /// <param name="success">Whether the request succeeded.</param>
     /// <param name="error">The expected request error when unsuccessful.</param>
     /// <returns><c>success</c>, a known request-error kind, or <c>fault</c>.</returns>
-    public static string Outcome(bool success, RequestError? error = null) => success
+    internal static string Outcome(bool success, RequestError? error = null) => success
         ? "success"
         : error?.Kind switch
         {
@@ -454,7 +454,7 @@ public static partial class PortiaTelemetry
     ///     the bounded runner and stage. The structured log retains the exception type and full
     ///     exception for operator diagnosis.
     /// </remarks>
-    public static void RecordRunnerFault(string runnerName, RunnerFaultStage stage, Exception? exception = null,
+    internal static void RecordRunnerFault(string runnerName, RunnerFaultStage stage, Exception? exception = null,
         ILogger? logger = null)
     {
         WorkerFailure.Add(1, new KeyValuePair<string, object?>("portia.runner.name", runnerName),
@@ -499,7 +499,7 @@ public static partial class PortiaTelemetry
     /// <param name="assigned"><see langword="true" /> when assigned; <see langword="false" /> when released.</param>
     /// <param name="logger">An optional logger for the lifecycle transition.</param>
     /// <remarks>Worker and partition identities are deliberately excluded from both metrics and logs.</remarks>
-    public static void RecordFleetAssignment(string workerId, string partition, bool assigned, ILogger? logger = null)
+    internal static void RecordFleetAssignment(string workerId, string partition, bool assigned, ILogger? logger = null)
     {
         FleetAssignmentActive.Add(assigned ? 1 : -1,
             new KeyValuePair<string, object?>("portia.scope", "partition"));
@@ -524,15 +524,6 @@ public static partial class PortiaTelemetry
         if (logger is not null)
         {
             LogTerminalDelivery(logger, requestName, transport);
-        }
-    }
-
-    /// <summary>Logs use of the single-process coordinator fallback.</summary>
-    internal static void RecordSingleProcessCoordinator(ILogger? logger)
-    {
-        if (logger is not null)
-        {
-            LogSingleProcessCoordinator(logger);
         }
     }
 
@@ -567,9 +558,4 @@ public static partial class PortiaTelemetry
     [LoggerMessage(EventId = 1005, Level = LogLevel.Warning,
         Message = "Portia terminalized queue request {RequestName} on {Transport}")]
     static partial void LogTerminalDelivery(ILogger logger, string requestName, string transport);
-
-    [LoggerMessage(EventId = 1006, Level = LogLevel.Warning,
-        Message =
-            "No IWorkloadCoordinator is registered; owning every workload in this process. That is correct for a single worker replica only — register a distributed coordinator before scaling workers out.")]
-    static partial void LogSingleProcessCoordinator(ILogger logger);
 }

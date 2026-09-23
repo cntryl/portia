@@ -627,7 +627,8 @@ services.AddPortia()
     .AddWorkers();
 ```
 
-Fitz coordinates these registrations across replicas. `WorkloadScope.PerTenant` requires an
+Workers need an `IWorkloadCoordinator`: `AddFitz(...)` coordinates these registrations across
+replicas, and `UseSingleProcessWorkloads()` owns them all in a single worker replica. `WorkloadScope.PerTenant` requires an
 `ITenantDirectory` and a component pattern created by `EventStreamPattern.ForTenant(...)`;
 `WorkloadScope.Global` requires `ForPattern(...)` and retains its exact realm and filters.
 See [shared application setup](application-setup.md) for application identity and fleet coordination.

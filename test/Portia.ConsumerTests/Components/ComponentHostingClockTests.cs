@@ -21,7 +21,7 @@ public sealed partial class ComponentHostingTests
         _ = services.AddSingleton<TimeProvider>(clock);
         _ = services.AddSingleton<IDomainEventNotifier>(changes);
         _ = services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
-            options => options.PollInterval = pollInterval).AddWorkers();
+            options => options.PollInterval = pollInterval).AddWorkers().UseSingleProcessWorkloads();
         await using var provider = ConsumerHost.Build(services);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         var id = Uuid.CreateVersion4();

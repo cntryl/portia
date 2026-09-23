@@ -9,9 +9,12 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Portia.Core"/>
+    <InternalsVisibleTo Include="Portia.AspNetCore"/>
     <InternalsVisibleTo Include="Portia.DependencyInjection"/>
     <InternalsVisibleTo Include="Portia.Fitz"/>
+    <InternalsVisibleTo Include="Portia.Mcp"/>
     <InternalsVisibleTo Include="Portia.Testing"/>
     <InternalsVisibleTo Include="Portia.Tests"/>
+    <InternalsVisibleTo Include="Portia.Benchmarks"/>
   </ItemGroup>
 </Project>
