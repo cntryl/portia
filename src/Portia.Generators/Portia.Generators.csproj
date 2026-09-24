@@ -1,21 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <Description>Roslyn source generators for Portia.</Description>
+    <Description>Roslyn source generators and analyzers for Portia.</Description>
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <IncludeBuildOutput>false</IncludeBuildOutput>
-    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <!-- Shipped inside Cntryl.Portia.DependencyInjection under analyzers/dotnet/cs, never on its own. -->
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Remove="Http/RequestHttpBindingGenerator.cs"/>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all"/>
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="buildTransitive/Portia.Generators.props" Pack="true" PackagePath="buildTransitive/Cntryl.Portia.Generators.props"/>
-    <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false"/>
   </ItemGroup>
 
   <ItemGroup>

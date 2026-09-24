@@ -33,8 +33,9 @@ static class PortiaComponentRoles
     public static bool Is(INamedTypeSymbol iface, string[] roles)
     {
         var definition = iface.OriginalDefinition;
-        return definition.ContainingNamespace?.ToDisplayString() == Namespace
-               && Array.IndexOf(roles, definition.MetadataName) >= 0;
+        // The cheap name check runs first; the namespace is compared in place, without building a string.
+        return Array.IndexOf(roles, definition.MetadataName) >= 0
+               && SymbolNames.IsInNamespace(definition, Namespace);
     }
 
     /// <summary>Reports whether a type implements any Portia component role.</summary>

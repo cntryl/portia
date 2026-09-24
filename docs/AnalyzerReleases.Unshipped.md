@@ -4,7 +4,7 @@
 ; build to be sound; the 1xx band reports design rules that are warnings by choice.
 ;
 ; Retired IDs, never to be reused: PORTIA001, PORTIA003, PORTIA004, PORTIA006, PORTIA007,
-; PORTIA008, PORTIA009, PORTIA010, PORTIA014. Reusing one would make an old suppression in a
+; PORTIA008, PORTIA009, PORTIA010, PORTIA014, PORTIA103. Reusing one would make an old suppression in a
 ; consumer's code silently apply to an unrelated rule.
 
 ### New Rules
@@ -28,3 +28,10 @@
 | PORTIA025 | Portia   | Error    | Portia serializer root is not explicitly registered on a PortiaJsonContext            |
 | PORTIA028 | Portia   | Error    | A processor cannot select single and batch handling for the same event                |
 | PORTIA029 | Portia   | Error    | Request transport IDs must be nonblank ASCII identifiers                              |
+| PORTIA100 | Portia   | Warning  | Projectors should not take known effect dependencies                                  |
+| PORTIA101 | Portia   | Warning  | Portia components should not use service-location dependencies or ActivatorUtilities   |
+| PORTIA102 | Portia   | Warning  | Aggregates must not depend on services                                                |
+| PORTIA104 | Portia   | Warning  | Unexpected failures must stay exceptions, not become a failed Result                  |
+| PORTIA105 | Portia   | Warning  | Request guards should not take Portia write or dispatch dependencies                  |
+| PORTIA106 | Portia   | Warning  | Request authorizers should not take Portia write or dispatch dependencies             |
+| PORTIA107 | Portia   | Warning  | Test scenarios must be awaited; a discarded scenario runs and asserts nothing         |

@@ -16,7 +16,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj"/>
-    <ProjectReference Include="../Portia.Analyzers/Portia.Analyzers.csproj" ReferenceOutputAssembly="false" PrivateAssets="all"/>
     <ProjectReference Include="../Portia.CodeFixes/Portia.CodeFixes.csproj" ReferenceOutputAssembly="false" PrivateAssets="all"/>
     <ProjectReference Include="../Portia.Core/Portia.Core.csproj"/>
     <ProjectReference Include="../Portia.Generators/Portia.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all"/>
@@ -24,7 +23,6 @@
 
   <ItemGroup>
     <None Include="../Portia.Generators/bin/$(Configuration)/netstandard2.0/Portia.Generators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false"/>
-    <None Include="../Portia.Analyzers/bin/$(Configuration)/netstandard2.0/Portia.Analyzers.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false"/>
     <None Include="../Portia.CodeFixes/bin/$(Configuration)/netstandard2.0/Portia.CodeFixes.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false"/>
     <None Include="../Portia.Generators/buildTransitive/Portia.Generators.props" Pack="true" PackagePath="buildTransitive/Cntryl.Portia.DependencyInjection.props"/>
   </ItemGroup>

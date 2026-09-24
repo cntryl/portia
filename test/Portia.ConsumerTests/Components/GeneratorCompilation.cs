@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Runtime.Loader;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Cntryl.Portia.Consumer;
 
@@ -46,6 +47,27 @@ static class GeneratorCompilation
                 parseOptions: parseOptions);
         driver = driver.RunGenerators(compilation);
         return driver.GetRunResult().Diagnostics;
+    }
+
+    public static IReadOnlyList<Diagnostic> Diagnostics(string source, params DiagnosticAnalyzer[] analyzers)
+        => Diagnostics(source, [], analyzers);
+
+    // Analyzers report through the compiler's analyzer driver, which is also what applies their severity
+    // configuration and pragma suppressions.
+    public static IReadOnlyList<Diagnostic> Diagnostics(string source,
+        IReadOnlyCollection<MetadataReference> additionalReferences, params DiagnosticAnalyzer[] analyzers)
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
+            [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Append(typeof(Aggregate).Assembly.Location)
+            .Distinct(StringComparer.Ordinal)
+            .Select(path => MetadataReference.CreateFromFile(path))
+            .Concat(additionalReferences);
+        var compilation = CSharpCompilation.Create("Diagnostics",
+            [CSharpSyntaxTree.ParseText(source, parseOptions, "DiagnosticScenario.cs")], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        return compilation.WithAnalyzers([.. analyzers]).GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
     }
 
     public static IReadOnlyList<Diagnostic> OutputDiagnostics(string source,

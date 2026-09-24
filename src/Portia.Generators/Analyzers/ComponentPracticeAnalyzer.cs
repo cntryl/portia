@@ -1,7 +1,8 @@
+using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Text;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Cntryl.Portia;
 
@@ -10,8 +11,8 @@ namespace Cntryl.Portia;
 ///     These are warnings, not errors: each one restates a boundary Portia's own documentation
 ///     already asserts, and an application that means to cross one can suppress it deliberately.
 /// </summary>
-[Generator(LanguageNames.CSharp)]
-public sealed class ComponentPracticeGenerator : IIncrementalGenerator
+[DiagnosticAnalyzer(LanguageNames.CSharp)]
+public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
 {
     static readonly DiagnosticDescriptor ProjectorEffect = new("PORTIA100", "Projector has known effect dependency",
         "Projector '{0}' takes known effect dependency '{1}'. Effects can replay after commit failure or during rebuild; move the effect to a reactor.",
@@ -23,10 +24,6 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
 
     static readonly DiagnosticDescriptor AggregateService = new("PORTIA102", "Aggregate depends on a service",
         "Aggregate '{0}' takes '{1}'. An aggregate receives data and an optional IDomainEventMetadataFactory; loading and persisting are the repository's job, and a service dependency makes the aggregate impossible to replay in isolation.",
-        "Portia", DiagnosticSeverity.Warning, true);
-
-    static readonly DiagnosticDescriptor MultipleHandlers = new("PORTIA103", "Type handles more than one request",
-        "'{0}' implements {1} request handler interfaces. The request and its handler are Portia's unit of responsibility; split them so each request's behavior can change on its own.",
         "Portia", DiagnosticSeverity.Warning, true);
 
     static readonly DiagnosticDescriptor CaughtExceptionAsResult = new("PORTIA104",
@@ -106,69 +103,66 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
     ];
 
     /// <inheritdoc />
-    public void Initialize(IncrementalGeneratorInitializationContext context)
-    {
-        // Flattened so each equatable finding is cached on its own; an array compares by reference.
-        var findings = context.SyntaxProvider.CreateSyntaxProvider(
-                // Every rule concerns a type that derives from or implements something. A partial part without
-                // a base list may still belong to one, so it is analyzed too.
-                static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax
-                                    && (((TypeDeclarationSyntax)node).BaseList is not null
-                                        || ((TypeDeclarationSyntax)node).Modifiers.Any(SyntaxKind.PartialKeyword)),
-                static (syntaxContext, ct) => Analyze(syntaxContext, ct))
-            .SelectMany(static (findings, _) => findings)
-            .WithTrackingName("PortiaComponentPractices");
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
+        [ProjectorEffect, ServiceLocation, AggregateService, CaughtExceptionAsResult, GuardEffect, AuthorizerEffect];
 
-        context.RegisterSourceOutput(findings, static (output, finding) =>
-            output.ReportDiagnostic(Diagnostic.Create(Descriptor(finding.Kind), finding.Location.ToLocation(),
-                finding.Arguments)));
+    /// <inheritdoc />
+    public override void Initialize(AnalysisContext context)
+    {
+        // Generated files are the application's code too: a partial component part often lives in one, and
+        // skipping it would hide findings the generators always saw.
+        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze |
+                                               GeneratedCodeAnalysisFlags.ReportDiagnostics);
+        context.EnableConcurrentExecution();
+        context.RegisterSyntaxNodeAction(static syntaxContext =>
+        {
+            // Every rule concerns a type that derives from or implements something. A partial part without a
+            // base list may still belong to one, so it is analyzed too.
+            var node = (TypeDeclarationSyntax)syntaxContext.Node;
+            if (node.BaseList is null && !node.Modifiers.Any(SyntaxKind.PartialKeyword))
+                return;
+            foreach (var finding in Analyze(node, syntaxContext.SemanticModel, syntaxContext.CancellationToken))
+            {
+                syntaxContext.ReportDiagnostic(Diagnostic.Create(Descriptor(finding.Kind), finding.Location,
+                    finding.Arguments));
+            }
+        }, SyntaxKind.ClassDeclaration, SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration);
     }
 
-    static Finding[] Analyze(GeneratorSyntaxContext context, CancellationToken ct)
+    static Finding[] Analyze(TypeDeclarationSyntax node, SemanticModel semanticModel, CancellationToken ct)
     {
-        var node = (TypeDeclarationSyntax)context.Node;
-        if (context.SemanticModel.GetDeclaredSymbol(node, ct) is not { IsAbstract: false } symbol)
+        if (semanticModel.GetDeclaredSymbol(node, ct) is not { IsAbstract: false } symbol)
             return [];
         var findings = new List<Finding>();
-        // Constructors and interfaces belong to the type, not to the declaration being visited, so a
-        // partial type reports them from its first declaration only.
-        var firstDeclaration = symbol.DeclaringSyntaxReferences[0].SyntaxTree == node.SyntaxTree
-                               && symbol.DeclaringSyntaxReferences[0].Span == node.Span;
-        if (firstDeclaration)
-        {
-            ReportProjectorEffects(findings, symbol);
-            ReportAggregateServices(findings, symbol);
-            ReportPreflightEffects(findings, symbol);
-            ReportMultipleHandlers(findings, symbol);
-        }
-
-        ReportServiceLocation(findings, symbol, node, context.SemanticModel, firstDeclaration);
-        ReportCaughtExceptionAsResult(findings, symbol, node, context.SemanticModel, ct);
+        var parameters = DeclaredParameters(symbol, node);
+        ReportProjectorEffects(findings, symbol, parameters);
+        ReportAggregateServices(findings, symbol, parameters);
+        ReportPreflightEffects(findings, symbol, parameters);
+        ReportServiceLocation(findings, symbol, node, semanticModel, parameters);
+        ReportCaughtExceptionAsResult(findings, symbol, node, semanticModel, ct);
         return [.. findings];
     }
 
-    static void ReportProjectorEffects(List<Finding> findings, INamedTypeSymbol symbol)
+    static void ReportProjectorEffects(List<Finding> findings, INamedTypeSymbol symbol, IParameterSymbol[] parameters)
     {
         if (!DerivesFrom(symbol, "Cntryl.Portia.Projector"))
             return;
         // The projector's own projection store shares its commit, whatever else that repository derives from.
-        foreach (var parameter in Parameters(symbol, EffectTypes)
+        foreach (var parameter in Parameters(parameters, EffectTypes)
                      .Where(parameter => !Matches(parameter.Type, ProjectionContracts)))
         {
             findings.Add(Finding.Create(Kind.ProjectorEffect, Location(parameter), symbol.Name, Display(parameter)));
         }
     }
 
-    static void ReportPreflightEffects(List<Finding> findings, INamedTypeSymbol symbol)
+    static void ReportPreflightEffects(List<Finding> findings, INamedTypeSymbol symbol, IParameterSymbol[] parameters)
     {
         var guard = symbol.AllInterfaces.Any(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Guard));
         var authorizer =
             symbol.AllInterfaces.Any(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Authorizer));
         if (!guard && !authorizer)
             return;
-        foreach (var parameter in Parameters(symbol, PreflightForbiddenTypes).Concat(symbol.InstanceConstructors
-                     .Where(constructor => !constructor.IsImplicitlyDeclared)
-                     .SelectMany(constructor => constructor.Parameters)
+        foreach (var parameter in Parameters(parameters, PreflightForbiddenTypes).Concat(parameters
                      .Where(parameter => parameter.Type is INamedTypeSymbol named
                                          && IsAny(named, ProjectionContracts))))
         {
@@ -191,13 +185,13 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         INamedTypeSymbol symbol,
         TypeDeclarationSyntax node,
         SemanticModel semanticModel,
-        bool reportParameters)
+        IParameterSymbol[] parameters)
     {
         if (!IsPortiaComponent(symbol))
             return;
         // PORTIA102 already reports every locator an aggregate takes.
         var aggregate = DerivesFrom(symbol, "Cntryl.Portia.Aggregate");
-        foreach (var parameter in reportParameters && !aggregate ? Parameters(symbol, LocatorTypes) : [])
+        foreach (var parameter in aggregate ? [] : Parameters(parameters, LocatorTypes))
         {
             findings.Add(Finding.Create(Kind.ServiceLocation, Location(parameter), symbol.Name, Display(parameter)));
         }
@@ -227,24 +221,13 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
             _ => null
         })?.Identifier.ValueText is "CreateInstance" or "GetServiceOrCreateInstance" or "CreateFactory";
 
-    static void ReportAggregateServices(List<Finding> findings, INamedTypeSymbol symbol)
+    static void ReportAggregateServices(List<Finding> findings, INamedTypeSymbol symbol, IParameterSymbol[] parameters)
     {
         if (!DerivesFrom(symbol, "Cntryl.Portia.Aggregate"))
             return;
-        foreach (var parameter in Parameters(symbol, AggregateForbiddenTypes))
+        foreach (var parameter in Parameters(parameters, AggregateForbiddenTypes))
         {
             findings.Add(Finding.Create(Kind.AggregateService, Location(parameter), symbol.Name, Display(parameter)));
-        }
-    }
-
-    static void ReportMultipleHandlers(List<Finding> findings, INamedTypeSymbol symbol)
-    {
-        var handlers =
-            symbol.AllInterfaces.Count(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Handler));
-        if (handlers > 1)
-        {
-            findings.Add(Finding.Create(Kind.MultipleHandlers, symbol.Locations.FirstOrDefault(), symbol.Name,
-                handlers));
         }
     }
 
@@ -386,11 +369,21 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         return false;
     }
 
-    static IEnumerable<IParameterSymbol> Parameters(INamedTypeSymbol symbol, string[] forbidden) =>
-        symbol.InstanceConstructors
+    // Constructors belong to the type, not to the declaration being visited, so a partial type reports each
+    // constructor parameter from the declaration that holds it: analyzing one file finds everything located in it,
+    // and the whole compilation still reports each parameter once.
+    static IParameterSymbol[] DeclaredParameters(INamedTypeSymbol symbol, TypeDeclarationSyntax node) =>
+    [
+        .. symbol.InstanceConstructors
             .Where(constructor => !constructor.IsImplicitlyDeclared)
             .SelectMany(constructor => constructor.Parameters)
-            .Where(parameter => Matches(parameter.Type, forbidden));
+            .Where(parameter => parameter.Locations.FirstOrDefault() is { } location
+                                && location.SourceTree == node.SyntaxTree
+                                && node.Span.Contains(location.SourceSpan))
+    ];
+
+    static IEnumerable<IParameterSymbol> Parameters(IParameterSymbol[] parameters, string[] forbidden) =>
+        parameters.Where(parameter => Matches(parameter.Type, forbidden));
 
     static bool Matches(ITypeSymbol type, string[] forbidden)
     {
@@ -426,7 +419,6 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         Kind.ProjectorEffect => ProjectorEffect,
         Kind.ServiceLocation => ServiceLocation,
         Kind.AggregateService => AggregateService,
-        Kind.MultipleHandlers => MultipleHandlers,
         Kind.CaughtExceptionAsResult => CaughtExceptionAsResult,
         Kind.GuardEffect => GuardEffect,
         Kind.AuthorizerEffect => AuthorizerEffect,
@@ -438,69 +430,18 @@ public sealed class ComponentPracticeGenerator : IIncrementalGenerator
         ProjectorEffect,
         ServiceLocation,
         AggregateService,
-        MultipleHandlers,
         CaughtExceptionAsResult,
         GuardEffect,
         AuthorizerEffect
     }
 
-    sealed class Finding(Kind kind, SourceLocation location, object[] arguments) : IEquatable<Finding>
+    sealed class Finding(Kind kind, Location location, object[] arguments)
     {
         public Kind Kind { get; } = kind;
-        public SourceLocation Location { get; } = location;
+        public Location Location { get; } = location;
         public object[] Arguments { get; } = arguments;
 
-        public bool Equals(Finding? other) => other is not null && Kind == other.Kind && Location.Equals(other.Location)
-                                              && Arguments.SequenceEqual(other.Arguments);
-
         public static Finding Create(Kind kind, Location? location, params object[] arguments) =>
-            new(kind, SourceLocation.From(location), arguments);
-
-        public override bool Equals(object? obj) => Equals(obj as Finding);
-        public override int GetHashCode() => Kind.GetHashCode();
-    }
-
-    readonly struct SourceLocation(
-        string path,
-        int start,
-        int length,
-        int startLine,
-        int startCharacter,
-        int endLine,
-        int endCharacter) : IEquatable<SourceLocation>
-    {
-        readonly string _path = path;
-        readonly int _start = start;
-        readonly int _length = length;
-        readonly int _startLine = startLine;
-        readonly int _startCharacter = startCharacter;
-        readonly int _endLine = endLine;
-        readonly int _endCharacter = endCharacter;
-
-        public static SourceLocation From(Location? location)
-        {
-            if (location is null || !location.IsInSource)
-                return default;
-            var lines = location.GetLineSpan().Span;
-            return new SourceLocation(location.SourceTree?.FilePath ?? string.Empty, location.SourceSpan.Start,
-                location.SourceSpan.Length, lines.Start.Line, lines.Start.Character, lines.End.Line,
-                lines.End.Character);
-        }
-
-        public Location ToLocation() =>
-            string.IsNullOrEmpty(_path) && _start == 0 && _length == 0
-                ? Microsoft.CodeAnalysis.Location.None
-                : Microsoft.CodeAnalysis.Location.Create(_path, new TextSpan(_start, _length),
-                    new LinePositionSpan(new LinePosition(_startLine, _startCharacter),
-                        new LinePosition(_endLine, _endCharacter)));
-
-        public bool Equals(SourceLocation other) => _path == other._path && _start == other._start &&
-                                                    _length == other._length && _startLine == other._startLine &&
-                                                    _startCharacter == other._startCharacter &&
-                                                    _endLine == other._endLine &&
-                                                    _endCharacter == other._endCharacter;
-
-        public override bool Equals(object? obj) => obj is SourceLocation other && Equals(other);
-        public override int GetHashCode() => (_path, _start, _length).GetHashCode();
+            new(kind, location ?? Microsoft.CodeAnalysis.Location.None, arguments);
     }
 }

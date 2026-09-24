@@ -1,4 +1,0 @@
-#nullable enable
-Cntryl.Portia.ScenarioObservationGenerator
-Cntryl.Portia.ScenarioObservationGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
-Cntryl.Portia.ScenarioObservationGenerator.ScenarioObservationGenerator() -> void
