@@ -124,7 +124,7 @@ public sealed class PortiaFitzBuilderTests
         await lifecycle.StartingAsync(default);
     }
 
-    /// <summary>Fitz 1.0 rejects terminal thresholds before connecting because attempts are unavailable.</summary>
+    /// <summary>Fitz rejects terminal thresholds before connecting because attempts are unavailable.</summary>
     [Fact]
     public async Task ShouldRejectPositiveTerminalAttemptAtFitzStartup()
     {

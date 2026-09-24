@@ -51,9 +51,9 @@ service providers, or acknowledgement handles. A wildcard subscription selector 
 not substituted for the actual route received. Custom transports can define another
 `RequestInvocation` record and must supply execution context through `DispatchAsync`.
 
-Fitz 1.0.0 does not expose broker message, call, reservation, or schedule occurrence
-IDs through these delivery objects. Portia does not invent them. Its current queue wire
-also does not report delivery attempts, so every Fitz queue delivery exposes
+Fitz's delivery objects do not expose broker message, call, reservation, or schedule
+occurrence IDs. Portia does not invent them. Fitz's current queue wire also does not report
+delivery attempts, so every Fitz queue delivery exposes
 `QueueItem.AttemptUnavailable` (`0`). Treat `Attempt` as transport-reported information,
 not an application idempotency key or a guaranteed monotonic counter.
 
@@ -100,7 +100,7 @@ business occurrence key.
 
 ## Reactions use system identities
 
-A reaction's `Source` contains the triggering event and its stream offsets; `Ev`
+A reaction's `Source` contains the triggering event and its stream offsets; `Trigger`
 provides the typed business event. The runner inherits correlation from that event,
 uses its event ID as the cause, and creates an independent system execution.
 The original event's actor is attribution only; it never authorizes the reaction.

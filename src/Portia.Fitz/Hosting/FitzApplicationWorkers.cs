@@ -56,7 +56,7 @@ sealed class FitzApplicationWorkers(
             options.Validate();
             if (options.TerminalAttempt is > 0)
                 throw new InvalidOperationException(
-                    "Fitz queue workers do not support QueueRunnerOptions.TerminalAttempt because Fitz 1.0 does not expose durable attempt counts.");
+                    "Fitz queue workers do not support QueueRunnerOptions.TerminalAttempt because Fitz does not expose durable attempt counts.");
         }
 
         var required = _workers.SelectMany(worker => worker.Requirements).ToHashSet();

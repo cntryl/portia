@@ -346,7 +346,7 @@ public static partial class PortiaTelemetry
         TenantDirectoryActive.Record(activeTenantCount, tags);
     }
 
-    /// <summary>Records a balanced workload lifecycle transition and optional information log.</summary>
+    /// <summary>Records a balanced workload lifecycle transition and optional debug log.</summary>
     /// <param name="component">The startup-bounded registered workload name.</param>
     /// <param name="scope">The stable workload scope.</param>
     /// <param name="active"><see langword="true" /> when acquired; <see langword="false" /> when released.</param>
@@ -493,7 +493,7 @@ public static partial class PortiaTelemetry
         RunnerFaultStage.Execution or _ => "execution"
     };
 
-    /// <summary>Records a fleet-assignment gauge transition and optional information log.</summary>
+    /// <summary>Records a fleet-assignment gauge transition and optional debug log.</summary>
     /// <param name="workerId">The worker identity associated with the transition.</param>
     /// <param name="partition">The partition identity associated with the transition.</param>
     /// <param name="assigned"><see langword="true" /> when assigned; <see langword="false" /> when released.</param>

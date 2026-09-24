@@ -173,9 +173,9 @@ workflows with events and reactors, and make every at-least-once reaction safe t
 stable effect ID or an integration-owned inbox/outbox with the target's transaction.
 
 Terminal queue outcomes include permanent handler failure, actor-validation failure, and reaching
-an explicitly configured retry limit when the transport reports a durable attempt count. Fitz 1.0
-does not report queue attempts, so its worker rejects a positive `QueueRunnerOptions.TerminalAttempt`
-at startup. Every queue runner requires an application-selected `IQueuedRequestTerminalHandler`, even
+an explicitly configured retry limit when the transport reports a durable attempt count. Fitz's
+wire protocol does not report queue attempts, so its worker rejects a positive
+`QueueRunnerOptions.TerminalAttempt` at startup. Every queue runner requires an application-selected `IQueuedRequestTerminalHandler`, even
 when a queue is expected to contain only successful work. Direct and generic hosted runners validate
 a disposable scope before enumerating the transport, and each delivery scope is rechecked. Portia
 supplies no default poison-message acknowledgment policy. The callback completes before the single
@@ -217,7 +217,8 @@ markers remains intentionally unreported and still needs architectural review. `
 and `IProjectionStore` or `IProjectionCheckpointStore` taken directly. Preflight often reads through an HTTP
 policy service or a read-model database, so those clients, and application repositories that happen to
 implement a projection contract, are not reported; `IAggregateReader` and `IDomainEventReader` remain allowed.
-# Bounded processor passes
+
+## Bounded processor passes
 
 Projector and reactor workers enumerate at most `ProjectionRunOptions.MaxEventsPerPass` records per
 dependency-injection scope (4,096 by default). A budget-exhausted backlog continues immediately in a

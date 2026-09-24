@@ -31,8 +31,8 @@ public abstract class Reactor
 
     /// <summary>
     ///     Gets the stable checkpoint name. Fixed for the life of this instance once the component
-    ///     starts running: a registration that explicitly named the workload supplies that name, and
-    ///     otherwise this keeps the name given at construction. It is never reassigned afterwards —
+    ///     starts running: hosting replaces it with the name passed to <c>AddReactor</c>, and outside
+    ///     hosting it keeps the name given at construction. It is never reassigned afterwards —
     ///     rebinding to a second workload throws rather than silently repointing the checkpoint this
     ///     component has already been writing.
     /// </summary>
@@ -48,10 +48,11 @@ public abstract class Reactor
     internal virtual bool IsBatch => false;
 
     /// <summary>
-    ///     Applies the running workload's tenant and, when the application explicitly named the
-    ///     workload, its name. <paramref name="componentName" /> is null unless the registration set
-    ///     <c>WorkloadOptions.Name</c> — the component's own <see cref="Name" /> is its checkpoint
-    ///     identity, so a registration that does not name the workload must not silently repoint it.
+    ///     Applies the running workload's tenant and, when the workload is hosted, its name.
+    ///     <paramref name="componentName" /> is the required <c>name</c> argument of <c>AddReactor</c>,
+    ///     and null when the reactor runs outside hosting — the component's own <see cref="Name" /> is
+    ///     its checkpoint identity, so a binding that does not name the workload must not silently
+    ///     repoint it.
     /// </summary>
     internal void BindWorkload(WorkloadIdentity identity, string? componentName)
     {
