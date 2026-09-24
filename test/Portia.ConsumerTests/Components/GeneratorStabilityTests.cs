@@ -1,7 +1,8 @@
+using System.Collections.Immutable;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Cntryl.Portia.Consumer;
 
@@ -80,44 +81,50 @@ public sealed class GeneratorStabilityTests
                           }
                           """;
 
-    static IIncrementalGenerator[] AllGenerators() =>
-        [.. new[]
-            {
-                typeof(DomainEventCatalogGenerator).Assembly, typeof(ComponentPracticeGenerator).Assembly,
-                typeof(RequestHttpBindingGenerator).Assembly
-            }
-            .SelectMany(assembly => assembly.GetTypes())
-            .Where(type => typeof(IIncrementalGenerator).IsAssignableFrom(type) && !type.IsAbstract)
+    static readonly Assembly[] RoslynAssemblies =
+        [typeof(DomainEventCatalogGenerator).Assembly, typeof(RequestHttpBindingGenerator).Assembly];
+
+    static IIncrementalGenerator[] AllGenerators() => Create<IIncrementalGenerator>();
+
+    static DiagnosticAnalyzer[] AllAnalyzers() => Create<DiagnosticAnalyzer>();
+
+    static T[] Create<T>() =>
+    [
+        .. RoslynAssemblies.SelectMany(assembly => assembly.GetTypes())
+            .Where(type => typeof(T).IsAssignableFrom(type) && !type.IsAbstract)
             .OrderBy(type => type.FullName, StringComparer.Ordinal)
-            .Select(type => (IIncrementalGenerator)Activator.CreateInstance(type)!)];
+            .Select(type => (T)Activator.CreateInstance(type)!)
+    ];
 
+    /// <summary>Generators emit source; every diagnostics-only rule is an analyzer.</summary>
     [Fact]
-    public void EveryGeneratorIsCovered() =>
-        Assert.Equal(10, AllGenerators().Length);
-
-    /// <summary>Every prefix of a realistic file, as it exists while being typed, runs without a generator exception.</summary>
-    [Fact]
-    public void GeneratorsNeverThrowOnIncompleteCode()
+    public void EveryGeneratorAndAnalyzerIsCovered()
     {
-        var generators = AllGenerators();
+        Assert.Equal(6, AllGenerators().Length);
+        Assert.Equal(4, AllAnalyzers().Length);
+    }
+
+    /// <summary>Every prefix of a realistic file, as it exists while being typed, runs without an exception.</summary>
+    [Fact]
+    public void NeverThrowOnIncompleteCode()
+    {
         var failures = new List<string>();
         for (var length = 0; length <= Corpus.Length; length += 11)
-            failures.AddRange(Failures(Corpus[..length], generators).Select(failure => $"prefix {length}: {failure}"));
+            failures.AddRange(Failures(Corpus[..length]).Select(failure => $"prefix {length}: {failure}"));
 
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures.Take(20)));
     }
 
-    /// <summary>Removing any single line, as an edit in progress does, runs without a generator exception.</summary>
+    /// <summary>Removing any single line, as an edit in progress does, runs without an exception.</summary>
     [Fact]
-    public void GeneratorsNeverThrowWithAnyLineMissing()
+    public void NeverThrowWithAnyLineMissing()
     {
-        var generators = AllGenerators();
         var lines = Corpus.Split('\n');
         var failures = new List<string>();
         for (var index = 0; index < lines.Length; index++)
         {
             var source = string.Join('\n', lines.Where((_, line) => line != index));
-            failures.AddRange(Failures(source, generators).Select(failure => $"without line {index + 1}: {failure}"));
+            failures.AddRange(Failures(source).Select(failure => $"without line {index + 1}: {failure}"));
         }
 
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures.Take(20)));
@@ -125,61 +132,56 @@ public sealed class GeneratorStabilityTests
 
     /// <summary>Two independent runs over the same input produce identical sources and diagnostics.</summary>
     [Fact]
-    public void GeneratorOutputIsDeterministic()
+    public void OutputIsDeterministic()
     {
-        var first = Snapshot(Run(Corpus, AllGenerators()));
-        var second = Snapshot(Run(Corpus, AllGenerators()));
+        var first = Snapshot(Run(Corpus));
+        var second = Snapshot(Run(Corpus));
 
         Assert.NotEmpty(first);
         Assert.Equal(first, second);
     }
 
-    [Fact]
-    public void AnalyzerCacheModelsDoNotRetainCompilerObjects()
+    static IEnumerable<string> Failures(string source)
     {
-        var fields = typeof(ComponentPracticeGenerator).Assembly.GetTypes()
-            .Where(type => typeof(IIncrementalGenerator).IsAssignableFrom(type) && !type.IsAbstract)
-            .SelectMany(static type => type.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
-            .Where(static type => !type.IsDefined(typeof(CompilerGeneratedAttribute), false))
-            .SelectMany(static type => type.GetFields(BindingFlags.Instance | BindingFlags.Public |
-                                                      BindingFlags.NonPublic))
-            .ToArray();
-
-        Assert.NotEmpty(fields);
-        Assert.All(fields, field => Assert.False(
-            typeof(ISymbol).IsAssignableFrom(field.FieldType) || typeof(SyntaxNode).IsAssignableFrom(field.FieldType)
-            || typeof(SemanticModel).IsAssignableFrom(field.FieldType)
-            || typeof(Compilation).IsAssignableFrom(field.FieldType)
-            || typeof(Location).IsAssignableFrom(field.FieldType),
-            $"{field.DeclaringType!.Name}.{field.Name} retains {field.FieldType}."));
-    }
-
-    static IEnumerable<string> Failures(string source, IIncrementalGenerator[] generators)
-    {
-        var result = Run(source, generators);
-        foreach (var generator in result.Results.Where(generator => generator.Exception is not null))
+        var run = Run(source);
+        foreach (var generator in run.Generators.Results.Where(generator => generator.Exception is not null))
             yield return $"{generator.Generator.GetGeneratorType().Name} threw {generator.Exception}";
-        foreach (var diagnostic in result.Diagnostics.Where(diagnostic => diagnostic.Id is "CS8784" or "CS8785"))
+        foreach (var diagnostic in run.Generators.Diagnostics.Where(diagnostic => diagnostic.Id is "CS8784" or "CS8785"))
             yield return diagnostic.ToString();
+        foreach (var exception in run.AnalyzerExceptions)
+            yield return exception;
     }
 
-    static GeneratorDriverRunResult Run(string source, IIncrementalGenerator[] generators)
+    // Analyzers see the compilation the build sees: user source plus everything the generators emitted.
+    static (GeneratorDriverRunResult Generators, ImmutableArray<Diagnostic> Analyzers, List<string> AnalyzerExceptions)
+        Run(string source)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var compilation = CSharpCompilation.Create("Stability",
             [CSharpSyntaxTree.ParseText(source, parseOptions, "Stability.cs")], References(),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-        return CSharpGeneratorDriver.Create([.. generators.Select(generator => generator.AsSourceGenerator())],
+        var driver = CSharpGeneratorDriver.Create([.. AllGenerators().Select(generator => generator.AsSourceGenerator())],
                 parseOptions: parseOptions)
-            .RunGenerators(compilation).GetRunResult();
+            .RunGeneratorsAndUpdateCompilation(compilation, out var generated, out _);
+        var exceptions = new List<string>();
+        var analyzers = generated.WithAnalyzers([.. AllAnalyzers()], new CompilationWithAnalyzersOptions(
+                new AnalyzerOptions([]), (exception, analyzer, _) =>
+                {
+                    lock (exceptions)
+                        exceptions.Add($"{analyzer.GetType().Name} threw {exception}");
+                }, concurrentAnalysis: true, logAnalyzerExecutionTime: false))
+            .GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
+        return (driver.GetRunResult(), analyzers, exceptions);
     }
 
-    static string[] Snapshot(GeneratorDriverRunResult result) =>
+    static string[] Snapshot((GeneratorDriverRunResult Generators, ImmutableArray<Diagnostic> Analyzers,
+        List<string> AnalyzerExceptions) run) =>
     [
-        .. result.Results.SelectMany(generator => generator.GeneratedSources)
+        .. run.Generators.Results.SelectMany(generator => generator.GeneratedSources)
             .Select(source => source.HintName + "\n" + source.SourceText),
-        .. result.Diagnostics.Select(diagnostic => diagnostic.ToString())
+        .. run.Generators.Diagnostics.Select(diagnostic => diagnostic.ToString()),
+        .. run.Analyzers.Select(diagnostic => diagnostic.ToString()).Order(StringComparer.Ordinal)
     ];
 
     static IEnumerable<MetadataReference> References() =>

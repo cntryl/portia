@@ -26,7 +26,7 @@ public sealed class GeneratorDiagnosticsTests
                                   : Projector(null!, EventStreamPattern.ForPattern("events"));
                               """;
 
-        var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator())
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer())
             .Where(diagnostic => diagnostic.Id == "PORTIA100").ToArray();
 
         Assert.Equal(8, diagnostics.Length);
@@ -50,7 +50,7 @@ public sealed class GeneratorDiagnosticsTests
                                   : Projector(null!, EventStreamPattern.ForPattern("events"));
                               """;
 
-        var locations = Locations(source, GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator())
+        var locations = Locations(source, GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer())
             .Where(diagnostic => diagnostic.Id == "PORTIA100"));
 
         Assert.Equal(["executor", "writer"], locations);
@@ -65,7 +65,7 @@ public sealed class GeneratorDiagnosticsTests
                                   : Aggregate(Uuid.CreateVersion4(), new EventStreamAddress("bank", "accounts", "one"));
                               """;
 
-        var locations = Locations(source, GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator())
+        var locations = Locations(source, GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer())
             .Where(diagnostic => diagnostic.Id == "PORTIA102"));
 
         Assert.Equal(["executor", "reader", "writer"], locations);
@@ -96,7 +96,7 @@ public sealed class GeneratorDiagnosticsTests
                        }
                        """;
 
-        var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator())
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer())
             .Where(diagnostic => diagnostic.Id == id).ToArray();
 
         Assert.Equal(
@@ -127,7 +127,7 @@ public sealed class GeneratorDiagnosticsTests
                        }
                        """;
 
-        var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator());
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "PORTIA105" or "PORTIA106");
     }
@@ -138,7 +138,7 @@ public sealed class GeneratorDiagnosticsTests
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
                                                            public sealed class ApplicationService(IRequestBus bus, IAggregateWriter writer);
-                                                           """, new ComponentPracticeGenerator());
+                                                           """, new ComponentPracticeAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "PORTIA105" or "PORTIA106");
     }
@@ -167,7 +167,7 @@ public sealed class GeneratorDiagnosticsTests
                               }
                               """;
 
-        var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeGenerator())
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer())
             .Where(diagnostic => diagnostic.Id == "PORTIA101").ToArray();
 
         Assert.Equal(4, diagnostics.Length);
@@ -195,7 +195,7 @@ public sealed class GeneratorDiagnosticsTests
                                                            {
                                                                public object Call() => ActivatorUtilities.CreateInstance();
                                                            }
-                                                           """, new ComponentPracticeGenerator());
+                                                           """, new ComponentPracticeAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "PORTIA100" or "PORTIA101");
     }
@@ -423,7 +423,7 @@ public sealed class GeneratorDiagnosticsTests
                                                            {
                                                                public ValueTask<Result> HandleAsync(IRequestContext<Request> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                                            }
-                                                           """, new RequestShapeDiagnosticsGenerator());
+                                                           """, new RequestShapeAnalyzer());
         var diagnostic = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA015");
         Assert.Equal("Component 'Handler<T>' cannot be generated: generic component types are unsupported; " +
                      "use a closed, non-generic component class",
@@ -582,7 +582,7 @@ public sealed class GeneratorDiagnosticsTests
                                                                    catch (Exception) { return Result.Failure(new(RequestErrorKind.Internal, "failed")); }
                                                                }
                                                            }
-                                                           """, new ComponentPracticeGenerator());
+                                                           """, new ComponentPracticeAnalyzer());
 
         _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
     }
@@ -622,7 +622,7 @@ public sealed class GeneratorDiagnosticsTests
                                                                    }
                                                                }
                                                            }
-                                                           """, new ComponentPracticeGenerator());
+                                                           """, new ComponentPracticeAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
     }
@@ -649,7 +649,7 @@ public sealed class GeneratorDiagnosticsTests
                                                                    }
                                                                }
                                                            }
-                                                           """, new ComponentPracticeGenerator());
+                                                           """, new ComponentPracticeAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
     }
@@ -684,7 +684,7 @@ public sealed class GeneratorDiagnosticsTests
                                                                    }
                                                                }
                                                            }
-                                                           """, new ComponentPracticeGenerator());
+                                                           """, new ComponentPracticeAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
     }
@@ -710,10 +710,11 @@ public sealed class GeneratorDiagnosticsTests
                                                                public ValueTask<Result> HandleAsync(IRequestContext<Second> context, CancellationToken ct) =>
                                                                    ValueTask.FromResult(Result.Success);
                                                            }
-                                                           """, new ComponentPracticeGenerator());
+                                                           """, new ComponentPracticeAnalyzer());
 
         _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA101");
-        _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA103");
+        // One type may handle several requests, as a test double often does; that is a design choice, not a defect.
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA103");
     }
 
     [Fact]
@@ -747,7 +748,7 @@ public sealed class GeneratorDiagnosticsTests
                                                                    catch (System.Exception) { return ValueTask.FromResult(ResultFactory.Failure(new(RequestErrorKind.Internal, "failed"))); }
                                                                }
                                                            }
-                                                           """, new ComponentPracticeGenerator());
+                                                           """, new ComponentPracticeAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
     }
@@ -765,7 +766,7 @@ public sealed class GeneratorDiagnosticsTests
                                                                public static void Forgotten(IServiceProvider services) =>
                                                                    RequestScenario.For(services).When(new Request()).ExpectDenied();
                                                            }
-                                                           """, new ScenarioObservationGenerator());
+                                                           """, new ScenarioObservationAnalyzer());
 
         _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA107");
     }
@@ -789,7 +790,7 @@ public sealed class GeneratorDiagnosticsTests
                                                                    await kept;
                                                                }
                                                            }
-                                                           """, new ScenarioObservationGenerator());
+                                                           """, new ScenarioObservationAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA107");
     }
@@ -820,7 +821,7 @@ public sealed class GeneratorDiagnosticsTests
                                                            {
                                                                public ValueTask<Result> GuardAsync(IRequestContext<Req> context, CancellationToken ct) => default;
                                                            }
-                                                           """, new ComponentPracticeGenerator());
+                                                           """, new ComponentPracticeAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "PORTIA105" or "PORTIA106");
     }
@@ -837,7 +838,7 @@ public sealed class GeneratorDiagnosticsTests
                                                            {
                                                                public ValueTask<Result> GuardAsync(IRequestContext<Req> context, CancellationToken ct) => default;
                                                            }
-                                                           """, new ComponentPracticeGenerator());
+                                                           """, new ComponentPracticeAnalyzer());
 
         Assert.Equal(2, diagnostics.Count(diagnostic => diagnostic.Id == "PORTIA105"));
     }
@@ -856,7 +857,7 @@ public sealed class GeneratorDiagnosticsTests
                                                                public abstract ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default);
                                                            }
                                                            public sealed class AccountProjector(AccountsDb db) : Projector(db, EventStreamPattern.ForPattern("events"));
-                                                           """, new ComponentPracticeGenerator());
+                                                           """, new ComponentPracticeAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA100");
     }
@@ -879,7 +880,7 @@ public sealed class GeneratorDiagnosticsTests
                                                                }
                                                                static Result Fallback(Func<Result> fallback, Exception ex) => throw ex;
                                                            }
-                                                           """, new ComponentPracticeGenerator());
+                                                           """, new ComponentPracticeAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA104");
     }
@@ -892,7 +893,7 @@ public sealed class GeneratorDiagnosticsTests
                                                            using Cntryl.Portia;
                                                            public sealed class Account(Uuid id, IServiceProvider services)
                                                                : Aggregate(id, new EventStreamAddress("r", "a", id.ToString()));
-                                                           """, new ComponentPracticeGenerator());
+                                                           """, new ComponentPracticeAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA101");
         _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA102");

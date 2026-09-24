@@ -4,7 +4,6 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Portia.Abstractions/Portia.Abstractions.csproj"/>
-    <Project Path="src/Portia.Analyzers/Portia.Analyzers.csproj"/>
     <Project Path="src/Portia.CodeFixes/Portia.CodeFixes.csproj"/>
     <Project Path="src/Portia.Generators/Portia.Generators.csproj"/>
     <Project Path="src/Portia.AspNetCore.Generators/Portia.AspNetCore.Generators.csproj"/>

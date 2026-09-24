@@ -98,44 +98,6 @@ public sealed class GeneratorCacheModelTests
             new RequestHttpBindingGenerator(), "PortiaHttpBindings", httpBinding);
     }
 
-    [Fact]
-    public void ComponentPracticeFindingsStayCachedAfterUnrelatedEdit()
-    {
-        const string handler = """
-                               using System;
-                               using System.Threading;
-                               using System.Threading.Tasks;
-                               using Cntryl.Portia;
-                               public sealed record Request : IRequest;
-                               public sealed class Handler(IServiceProvider services) : IRequestHandler<Request>
-                               {
-                                   public IServiceProvider Services { get; } = services;
-                                   public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct) =>
-                                       ValueTask.FromResult(Result.Success);
-                               }
-                               """;
-
-        AssertCachedAfterUnrelatedPragmaEdit(new ComponentPracticeGenerator(), "PortiaComponentPractices", handler);
-    }
-
-    [Fact]
-    public void ScenarioObservationFindingsStayCachedAfterUnrelatedEdit()
-    {
-        const string body = """
-                            using System;
-                            using Cntryl.Portia;
-                            using Cntryl.Portia.Testing;
-                            public sealed record Request : IRequest;
-                            public static class Tests
-                            {
-                                public static void Forgotten(IServiceProvider services) =>
-                                    RequestScenario.For(services).When(new Request()).ExpectDenied();
-                            }
-                            """;
-
-        AssertCachedAfterUnrelatedPragmaEdit(new ScenarioObservationGenerator(), "PortiaScenarioObservation", body);
-    }
-
     static void AssertCachedAfterUnrelatedPragmaEdit(
         IIncrementalGenerator generator,
         string trackingName,

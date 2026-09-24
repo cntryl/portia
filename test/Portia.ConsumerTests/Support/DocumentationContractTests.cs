@@ -7,13 +7,12 @@ public sealed partial class DocumentationContractTests
     static readonly string Root = FindRoot();
 
     static readonly string[] DiagnosticSourceDirectories =
-        ["src/Portia.Generators", "src/Portia.AspNetCore.Generators", "src/Portia.Analyzers"];
+        ["src/Portia.Generators", "src/Portia.AspNetCore.Generators"];
 
     static readonly string[] DiagnosticReleaseManifests =
     [
         "docs/AnalyzerReleases.Unshipped.md",
-        "src/Portia.AspNetCore.Generators/AnalyzerReleases.Unshipped.md",
-        "src/Portia.Analyzers/AnalyzerReleases.Unshipped.md"
+        "src/Portia.AspNetCore.Generators/AnalyzerReleases.Unshipped.md"
     ];
 
     static readonly string[] Maintained =
@@ -65,7 +64,10 @@ public sealed partial class DocumentationContractTests
     public void AnalyzerManifestsListEveryCompilerDiagnostic()
     {
         var declared = DiagnosticSourceDirectories
-            .SelectMany(directory => Directory.EnumerateFiles(Path.Combine(Root, directory), "*.cs"))
+            .SelectMany(directory => Directory.EnumerateFiles(Path.Combine(Root, directory), "*.cs",
+                SearchOption.AllDirectories))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                StringComparison.Ordinal))
             .SelectMany(path => DiagnosticId().Matches(File.ReadAllText(path)).Select(match => match.Value))
             .ToHashSet(StringComparer.Ordinal);
         var documented = DiagnosticReleaseManifests

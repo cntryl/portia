@@ -157,7 +157,7 @@ public sealed class GeneratorFalsePositiveTests
                                                            [PortiaJsonContext]
                                                            [System.Text.Json.Serialization.JsonSerializable(typeof(Guid))]
                                                            internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
-                                                           """, new JsonMetadataDiagnosticGenerator());
+                                                           """, new JsonMetadataAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
@@ -170,7 +170,7 @@ public sealed class GeneratorFalsePositiveTests
                                                            [Discriminator("j01", 1)] file sealed record J01 : DomainEvent;
                                                            [PortiaJsonContext]
                                                            internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
-                                                           """, new JsonMetadataDiagnosticGenerator());
+                                                           """, new JsonMetadataAnalyzer());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }

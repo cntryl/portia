@@ -283,7 +283,7 @@ public sealed class JsonMetadataCodeFixTests
     {
         using var workspace = new AdhocWorkspace();
         var document = AddProject(workspace, UnrootedRequest);
-        var diagnostics = GeneratorCompilation.Diagnostics(UnrootedRequest, new JsonMetadataDiagnosticGenerator())
+        var diagnostics = GeneratorCompilation.Diagnostics(UnrootedRequest, new JsonMetadataAnalyzer())
             .Where(item => item.Id == "PORTIA025").ToArray();
         Assert.Equal(2, diagnostics.Length);
         var provider = new JsonMetadataCodeFixProvider();
@@ -311,7 +311,7 @@ public sealed class JsonMetadataCodeFixTests
                                        """;
         using var workspace = new AdhocWorkspace();
         var document = AddProject(workspace, source);
-        var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator())
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataAnalyzer())
             .Where(item => item.Id == "PORTIA025").ToArray();
         Assert.Equal(2, diagnostics.Length);
         var provider = new JsonMetadataCodeFixProvider();
@@ -395,7 +395,7 @@ public sealed class JsonMetadataCodeFixTests
     {
         using var workspace = new AdhocWorkspace();
         var document = AddProject(workspace, source, projectName);
-        var candidates = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator())
+        var candidates = GeneratorCompilation.Diagnostics(source, new JsonMetadataAnalyzer())
             .Where(item => item.Id == "PORTIA025"
                            && item.Properties.TryGetValue("TypeName", out var name)
                            && name?.Replace("global::", string.Empty) == typeName)

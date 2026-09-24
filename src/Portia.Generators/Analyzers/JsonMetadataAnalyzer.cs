@@ -1,13 +1,16 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
 
 namespace Cntryl.Portia;
 
 /// <summary>Ensures Portia wire roots are explicitly owned by an application JSON context.</summary>
-[Generator(LanguageNames.CSharp)]
-public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
+[DiagnosticAnalyzer(LanguageNames.CSharp)]
+public sealed class JsonMetadataAnalyzer : DiagnosticAnalyzer
 {
     static readonly HashSet<string> CandidateMethods = new(StringComparer.Ordinal)
     {
@@ -21,61 +24,69 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
     static readonly DiagnosticDescriptor MissingMetadata = new(
         "PORTIA025", "Missing Portia JSON metadata",
         "Serializer root '{0}' must be explicitly registered with [JsonSerializable(typeof({0}))] on a [PortiaJsonContext]",
-        "Portia", DiagnosticSeverity.Error, true);
+        "Portia", DiagnosticSeverity.Error, true, customTags: WellKnownDiagnosticTags.CompilationEnd);
 
     /// <inheritdoc />
-    public void Initialize(IncrementalGeneratorInitializationContext context)
-    {
-        // Each root use, event, and context is found per syntax node, so an edit re-binds only what could
-        // have changed instead of re-walking the whole compilation.
-        var calls = context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => node is InvocationExpressionSyntax invocation
-                                    && CandidateMethods.Contains(InvokedName(invocation)),
-                static (ctx, ct) => CallRoots(ctx, ct))
-            .SelectMany(static (roots, _) => roots)
-            .Collect();
-        var events = context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => SyntaxFilters.HasBaseList(node),
-                static (ctx, ct) => EventRoot(ctx, ct))
-            .Where(static root => root is not null)
-            .Select(static (root, _) => root!)
-            .Collect();
-        var declaredCoverage = context.SyntaxProvider.ForAttributeWithMetadataName(
-                "Cntryl.Portia.PortiaJsonContextAttribute",
-                static (node, _) => node is TypeDeclarationSyntax,
-                static (ctx, _) => DeclaredCoverage((INamedTypeSymbol)ctx.TargetSymbol))
-            .SelectMany(static (keys, _) => keys)
-            .Collect();
-        var referencedCoverage = context.CompilationProvider.Select(static (compilation, _) =>
-            compilation.GetTypeByMetadataName("Cntryl.Portia.PortiaJsonContextAttribute") is null
-                ? null
-                : string.Join("\n", ReferencedCoverage(compilation)));
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [MissingMetadata];
 
-        context.RegisterSourceOutput(events.Combine(calls).Combine(declaredCoverage).Combine(referencedCoverage),
-            static (output, input) => Report(output, input.Left.Left.Left.AddRange(input.Left.Left.Right),
-                input.Left.Right, input.Right));
+    /// <inheritdoc />
+    public override void Initialize(AnalysisContext context)
+    {
+        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+        context.EnableConcurrentExecution();
+        context.RegisterCompilationStartAction(static start =>
+        {
+            // No Portia JSON context attribute means the application is not built against Portia's JSON contract.
+            if (start.Compilation.GetTypeByMetadataName("Cntryl.Portia.PortiaJsonContextAttribute") is null)
+                return;
+
+            var uses = new ConcurrentBag<RootUse>();
+            var covered = new ConcurrentBag<string>();
+            start.RegisterSymbolAction(symbolContext =>
+            {
+                var type = (INamedTypeSymbol)symbolContext.Symbol;
+                if (IsPortiaContext(type))
+                {
+                    foreach (var key in DeclaredCoverage(type))
+                        covered.Add(key);
+                }
+
+                if (IsConcreteDomainEvent(type) && HasDiscriminator(type)
+                                                && Use(type, type.Locations.FirstOrDefault(), 0,
+                                                    symbolContext.Compilation) is { } use)
+                {
+                    uses.Add(use);
+                }
+            }, SymbolKind.NamedType);
+            start.RegisterSyntaxNodeAction(syntaxContext =>
+            {
+                var invocation = (InvocationExpressionSyntax)syntaxContext.Node;
+                if (!CandidateMethods.Contains(InvokedName(invocation)))
+                    return;
+                foreach (var use in CallRoots(invocation, syntaxContext.SemanticModel, syntaxContext.CancellationToken))
+                    uses.Add(use);
+            }, SyntaxKind.InvocationExpression);
+            start.RegisterCompilationEndAction(end =>
+            {
+                var coverage = new HashSet<string>(covered, StringComparer.Ordinal);
+                coverage.UnionWith(ReferencedCoverage(end.Compilation));
+                Report(end, uses, coverage);
+            });
+        });
     }
 
-    static void Report(SourceProductionContext output, ImmutableArray<RootUse> uses,
-        ImmutableArray<string> declaredCoverage, string? referencedCoverage)
+    // Callbacks run concurrently, so each missing root is reported once, at a location chosen independently of
+    // that order: an event's own declaration first, then the earliest call site.
+    static void Report(CompilationAnalysisContext context, IEnumerable<RootUse> uses, HashSet<string> covered)
     {
-        // No Portia JSON context attribute means the application is not built against Portia's JSON contract.
-        if (referencedCoverage is null)
-            return;
-
-        var covered = new HashSet<string>(declaredCoverage, StringComparer.Ordinal);
-        covered.UnionWith(referencedCoverage.Split('\n'));
-        var required = new Dictionary<string, RootUse>(StringComparer.Ordinal);
-        foreach (var use in uses)
-        {
-            if (!required.ContainsKey(use.Key))
-                required.Add(use.Key, use);
-        }
-
-        foreach (var use in required.Values.Where(use => !covered.Contains(use.Key))
+        foreach (var use in uses.Where(use => !covered.Contains(use.Key))
+                     .GroupBy(use => use.Key, StringComparer.Ordinal)
+                     .Select(group => group.OrderBy(use => use.Rank)
+                         .ThenBy(use => use.Location.SourceTree?.FilePath, StringComparer.Ordinal)
+                         .ThenBy(use => use.Location.SourceSpan.Start).First())
                      .OrderBy(use => use.Display, StringComparer.Ordinal))
         {
-            output.ReportDiagnostic(Diagnostic.Create(MissingMetadata, use.Location.ToLocation(),
+            context.ReportDiagnostic(Diagnostic.Create(MissingMetadata, use.Location,
                 ImmutableDictionary<string, string?>.Empty
                     .Add("TypeName", use.Key)
                     .Add("Namespace", use.Namespace),
@@ -92,16 +103,9 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         _ => string.Empty
     };
 
-    static RootUse? EventRoot(GeneratorSyntaxContext context, CancellationToken ct) =>
-        context.SemanticModel.GetDeclaredSymbol(context.Node, ct) is INamedTypeSymbol type
-        && IsConcreteDomainEvent(type) && HasDiscriminator(type)
-            ? Use(type, type.Locations.FirstOrDefault(), context.SemanticModel.Compilation)
-            : null;
-
-    static ImmutableArray<RootUse> CallRoots(GeneratorSyntaxContext context, CancellationToken ct)
+    static ImmutableArray<RootUse> CallRoots(InvocationExpressionSyntax invocation, SemanticModel model,
+        CancellationToken ct)
     {
-        var invocation = (InvocationExpressionSyntax)context.Node;
-        var model = context.SemanticModel;
         if (model.GetSymbolInfo(invocation, ct).Symbol is not IMethodSymbol method)
             return ImmutableArray<RootUse>.Empty;
 
@@ -194,13 +198,13 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 
         void Add(ITypeSymbol type)
         {
-            if (Use(type, location, model.Compilation) is { } use)
+            if (Use(type, location, 1, model.Compilation) is { } use)
                 roots.Add(use);
         }
     }
 
     // An open type such as IReadOnlyList<T> cannot be named in [JsonSerializable]; its closed uses can.
-    static RootUse? Use(ITypeSymbol type, Location? location, Compilation compilation)
+    static RootUse? Use(ITypeSymbol type, Location? location, int rank, Compilation compilation)
     {
         if (type.TypeKind is TypeKind.Error || ContainsTypeParameter(type) ||
             type.SpecialType == SpecialType.System_Void)
@@ -214,7 +218,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                          && type.ContainingNamespace is { IsGlobalNamespace: false } space
             ? space.ToDisplayString()
             : string.Empty;
-        return new RootUse(Key(type), type.ToDisplayString(), @namespace, DiagnosticLocation.From(location));
+        return new RootUse(Key(type), type.ToDisplayString(), @namespace, location ?? Location.None, rank);
     }
 
     static string Key(ITypeSymbol type) =>
@@ -243,7 +247,10 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         }
     }
 
-    sealed record RootUse(string Key, string Display, string Namespace, DiagnosticLocation Location);
+    sealed record RootUse(string Key, string Display, string Namespace, Location Location, int Rank);
+
+    static bool IsPortiaContext(INamedTypeSymbol type) => type.GetAttributes().Any(attribute =>
+        attribute.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonContextAttribute");
 
     static bool SupportsDefaultBinding(IMethodSymbol constructor, string pattern)
     {

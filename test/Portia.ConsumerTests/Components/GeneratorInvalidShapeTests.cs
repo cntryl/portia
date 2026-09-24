@@ -54,7 +54,7 @@ public sealed class GeneratorInvalidShapeTests
     [Fact]
     public void ShouldReportPortia015GivenFileLocalHandlerWhenRegistered()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        const string source = """
                                                                  using System.Threading;
                                                                  using System.Threading.Tasks;
                                                                  using Cntryl.Portia;
@@ -70,8 +70,13 @@ public sealed class GeneratorInvalidShapeTests
                                                                      public static PortiaBuilder Register(IServiceCollection services) =>
                                                                          services.AddPortia().AddRequestHandler<Handler>();
                                                                  }
-                                                                 """, new RegistrationCallInterceptorGenerator(),
-            new RequestShapeDiagnosticsGenerator(), new PortiaServiceRegistrationGenerator());
+                                                                 """;
+        IReadOnlyList<Diagnostic> diagnostics =
+        [
+            .. GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator(),
+                new PortiaServiceRegistrationGenerator()),
+            .. GeneratorCompilation.Diagnostics(source, new RequestShapeAnalyzer())
+        ];
 
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA015");
         AssertNoCompilerErrors(diagnostics);

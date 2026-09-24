@@ -23,7 +23,6 @@
     <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj"/>
     <ProjectReference Include="../../src/Portia.Fitz/Portia.Fitz.csproj"/>
     <ProjectReference Include="../../src/Portia.Mcp/Portia.Mcp.csproj"/>
-    <ProjectReference Include="../../src/Portia.Analyzers/Portia.Analyzers.csproj"/>
     <ProjectReference Include="../../src/Portia.CodeFixes/Portia.CodeFixes.csproj"/>
     <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj"/>
     <ProjectReference Include="../../src/Portia.AspNetCore.Generators/Portia.AspNetCore.Generators.csproj"/>
