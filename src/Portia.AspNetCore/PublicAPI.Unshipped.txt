@@ -1,1 +1,2 @@
 #nullable enable
+static Cntryl.Portia.PortiaHttpBinding.HasCredentials(Microsoft.AspNetCore.Http.HttpContext! context) -> bool

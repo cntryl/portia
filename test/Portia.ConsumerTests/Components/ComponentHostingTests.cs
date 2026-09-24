@@ -134,7 +134,11 @@ public sealed partial class ComponentHostingTests
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             while (changes.SubscriptionCount < 3)
                 await Task.Delay(10, timeout.Token);
+            // Retrying every 20ms poll would make about fifty attempts in this second; backing off
+            // like a failed pass makes a handful.
+            await Task.Delay(TimeSpan.FromSeconds(1));
 
+            Assert.InRange(changes.SubscriptionCount, 3, 12);
             Assert.False(worker.ExecuteTask?.IsCompleted);
         }
         finally

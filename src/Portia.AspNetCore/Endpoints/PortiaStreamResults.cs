@@ -60,12 +60,15 @@ public static class PortiaStreamResults
         static async ValueTask<bool> NextAsync(IAsyncEnumerator<T> iterator, CancellationTokenSource source,
             HttpResponse response, TimeSpan? keepAlive, CancellationToken ct)
         {
-            if (keepAlive is not { } interval)
+            // An item that is already available needs no keep-alive, and a busy stream is the case
+            // that must stay cheap, so nothing is allocated until the source actually waits.
+            var move = iterator.MoveNextAsync();
+            if (keepAlive is not { } interval || move.IsCompleted)
             {
-                return await iterator.MoveNextAsync().ConfigureAwait(false);
+                return await move.ConfigureAwait(false);
             }
 
-            var pending = iterator.MoveNextAsync().AsTask();
+            var pending = move.AsTask();
             try
             {
                 while (true)
@@ -75,7 +78,7 @@ public static class PortiaStreamResults
                     if (await Task.WhenAny(pending, elapsed).ConfigureAwait(false) == pending)
                     {
                         // The losing delay is cancelled rather than left to fire later.
-                        await idle.CancelAsync().ConfigureAwait(false);
+                        idle.Cancel();
                         return await pending.ConfigureAwait(false);
                     }
 
@@ -85,7 +88,15 @@ public static class PortiaStreamResults
             }
             catch
             {
-                await source.CancelAsync().ConfigureAwait(false);
+                try
+                {
+                    await source.CancelAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // A callback the source registered failed; the source is cancelled all the same.
+                }
+
                 // Only the move's completion matters here; its outcome is superseded by the failure.
                 await ((Task)pending).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
                 throw;

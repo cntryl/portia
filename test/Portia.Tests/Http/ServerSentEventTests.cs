@@ -75,8 +75,10 @@ public sealed class ServerSentEventTests : IAsyncDisposable
     ///     A keep-alive write that fails while the source is idle stops the source before the failure
     ///     surfaces, so the handler's cleanup runs instead of its iterator being abandoned mid-wait.
     /// </summary>
-    [Fact]
-    public async Task ShouldStopAnIdleSourceWhenAKeepAliveWriteFails()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldStopAnIdleSourceWhenAKeepAliveWriteFails(bool throwingCallback)
     {
         var services = new ServiceCollection()
             .AddSingleton(new JsonSerializerOptions { TypeInfoResolver = new DefaultJsonTypeInfoResolver() })
@@ -87,17 +89,22 @@ public sealed class ServerSentEventTests : IAsyncDisposable
         var stopped = new StrongBox<bool>();
 
         _ = await Assert.ThrowsAsync<IOException>(() =>
-            PortiaStreamResults.Sse(IdleAfterFirstItem(stopped)).ExecuteAsync(context));
+            PortiaStreamResults.Sse(IdleAfterFirstItem(stopped, throwingCallback)).ExecuteAsync(context));
 
         Assert.True(stopped.Value);
     }
 
-    static async IAsyncEnumerable<string> IdleAfterFirstItem(StrongBox<bool> stopped,
+    // A source may register its own cancellation callback, and one that throws must not keep the
+    // stream from waiting for the source to stop.
+    static async IAsyncEnumerable<string> IdleAfterFirstItem(StrongBox<bool> stopped, bool throwingCallback,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         try
         {
             yield return "first";
+            using var registration = throwingCallback
+                ? ct.Register(static () => throw new InvalidOperationException("The callback failed."))
+                : default;
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
         }
         finally

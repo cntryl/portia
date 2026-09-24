@@ -35,11 +35,20 @@ public static partial class PortiaHttpBinding
             : credential.ToString();
     }
 
+    /// <summary>Reports whether the caller sent an Authorization header or was authenticated by any scheme.</summary>
+    /// <param name="context">The current HTTP request.</param>
+    /// <returns><see langword="false" /> only for an anonymous caller.</returns>
+    public static bool HasCredentials(HttpContext context) =>
+        context.Request.Headers.Authorization.Count != 0 || IsAuthenticated(context);
+
+    static bool IsAuthenticated(HttpContext context) =>
+        context.User.Identities.Any(identity => identity.IsAuthenticated);
+
     /// <summary>Rejects an authenticated identity that cannot be replayed by a durable worker.</summary>
     public static string? ReadPortableBearerCredential(HttpContext context)
     {
         var credential = ReadBearerCredential(context);
-        if (credential is null && context.User.Identities.Any(identity => identity.IsAuthenticated))
+        if (credential is null && IsAuthenticated(context))
         {
             throw new BadHttpRequestException(
                 "Asynchronous delivery of an authenticated request requires a Bearer credential.");
