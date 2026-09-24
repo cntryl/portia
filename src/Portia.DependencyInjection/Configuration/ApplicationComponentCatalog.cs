@@ -14,6 +14,7 @@ sealed class ApplicationComponentCatalog
     internal Dictionary<(Type ScopeType, Type BehaviorType), int> Behaviors { get; } = [];
     internal HashSet<(Type ScopeType, Type GuardType)> Guards { get; } = [];
     internal bool WorkersActivated { get; set; }
+    internal bool SingleProcessWorkloads { get; set; }
     internal bool AuthorizationRequired { get; set; }
     internal HashSet<Type> AnonymousRequests { get; } = [];
 }

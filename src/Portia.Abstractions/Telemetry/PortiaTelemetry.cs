@@ -304,7 +304,7 @@ public static partial class PortiaTelemetry
     /// <param name="component">The startup-bounded registered processor name.</param>
     /// <param name="runner">The stable processor-runner kind.</param>
     /// <param name="outcome">The stable batch outcome.</param>
-    /// <param name="eventCount">The number of events in the batch.</param>
+    /// <param name="eventCount">The number of events the batch committed, or zero when it failed.</param>
     /// <param name="lastOccurrence">
     ///     The occurrence time of the last committed event, or
     ///     <see langword="null" /> to omit lag. Negative lag is clamped to zero.

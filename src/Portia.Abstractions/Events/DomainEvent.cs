@@ -10,6 +10,21 @@ public abstract record DomainEvent
     bool _aggregateOwned;
     DomainEventMetadata? _metadata;
 
+    /// <summary>Creates an event without metadata.</summary>
+    protected DomainEvent()
+    {
+    }
+
+    /// <summary>
+    ///     Copies the business payload for a <c>with</c> expression. The copy is a new event, so it starts
+    ///     without metadata rather than sharing the original's event ID.
+    /// </summary>
+    /// <param name="original">The event being copied.</param>
+    protected DomainEvent(DomainEvent original)
+    {
+        ArgumentNullException.ThrowIfNull(original);
+    }
+
     /// <summary>
     ///     Gets the event-sourcing metadata attached by Portia. Excluded from JSON serialization —
     ///     a serializer carries metadata in its own envelope, separately from the event's business

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
@@ -1129,6 +1131,32 @@ public sealed class HttpBindingTests : IAsyncDisposable
     }
 
     /// <summary>
+    ///     Verifies that a client abort is requested cancellation, not a fault: the endpoint aborts the
+    ///     connection rather than logging a fault and writing a 500 that nobody can receive.
+    /// </summary>
+    [Fact]
+    public async Task ShouldAbortWithoutFaultWhenClientAbortsUnaryRequest()
+    {
+        var logs = new RecordingLoggerProvider();
+        _ = await StartAsync(app => app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}"),
+            services => services.AddSingleton<ILoggerProvider>(logs));
+        var endpoint = Assert.Single(((IEndpointRouteBuilder)_app!).DataSources
+            .SelectMany(source => source.Endpoints).OfType<RouteEndpoint>());
+        await using var scope = _app!.Services.CreateAsyncScope();
+        var lifetime = new AbortedRequestLifetime();
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        context.Features.Set<IHttpRequestLifetimeFeature>(lifetime);
+        context.Request.Method = HttpMethods.Get;
+        context.Request.RouteValues["widget_id"] = Uuid.CreateVersion4().ToString();
+
+        await endpoint.RequestDelegate!(context);
+
+        Assert.True(lifetime.Aborted);
+        Assert.NotEqual(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
+        Assert.DoesNotContain(logs.Levels, level => level >= LogLevel.Error);
+    }
+
+    /// <summary>
     ///     Verifies that a body property whose casing differs from the configured naming policy still
     ///     binds. The generated binder looks for the exact name first and falls back to a case-insensitive
     ///     match, which is what lets a hand-written client that sends <c>Value</c> work against an
@@ -1435,6 +1463,33 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         await _app.StartAsync();
         return _app.GetTestClient();
+    }
+
+    sealed class AbortedRequestLifetime : IHttpRequestLifetimeFeature
+    {
+        public bool Aborted { get; private set; }
+
+        public CancellationToken RequestAborted { get; set; } = new(true);
+
+        public void Abort() => Aborted = true;
+    }
+
+    sealed class RecordingLoggerProvider : ILoggerProvider, ILogger
+    {
+        public ConcurrentQueue<LogLevel> Levels { get; } = new();
+
+        public ILogger CreateLogger(string categoryName) => this;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Levels.Enqueue(logLevel);
+
+        public void Dispose()
+        {
+        }
     }
 
     sealed class DebugHeaderPermissionEvaluator : IPermissionEvaluator

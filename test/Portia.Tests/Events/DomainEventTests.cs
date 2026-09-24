@@ -56,5 +56,30 @@ public sealed class DomainEventTests
         Assert.NotEqual<DomainEvent>(new ValueIncremented(3), attached);
     }
 
+    /// <summary>
+    ///     Verifies that a <c>with</c> copy is a new event: it starts without the original's metadata,
+    ///     so it can never share an event ID with the event it was copied from.
+    /// </summary>
+    [Fact]
+    public void ShouldStartCopiedEventWithoutMetadata()
+    {
+        var attached = new ValueChanged(3);
+        attached.AttachMetadata(new DomainEventMetadata(
+            Uuid.CreateVersion4(),
+            Uuid.CreateVersion4(),
+            1,
+            DateTimeOffset.UtcNow));
+
+        var copy = attached with { Value = 4 };
+
+        _ = Assert.Throws<InvalidOperationException>(() => copy.Metadata);
+        copy.AttachMetadata(new DomainEventMetadata(
+            Uuid.CreateVersion4(),
+            Uuid.CreateVersion4(),
+            1,
+            DateTimeOffset.UtcNow));
+        Assert.NotEqual(attached.Metadata.EventId, copy.Metadata.EventId);
+    }
+
     sealed record StubEvent : DomainEvent;
 }

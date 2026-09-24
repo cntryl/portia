@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia;
@@ -214,6 +215,47 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         {
             throw new InvalidOperationException("broken worker");
         }
+    }
+
+    /// <summary>
+    ///     A worker declaration's <c>TryAdd*</c> defers to the application's own registration whether it
+    ///     is declared before or after <c>AddWorkers()</c>.
+    /// </summary>
+    /// <param name="declaredAfterActivation">Whether the worker declaration follows <c>AddWorkers()</c>.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShouldKeepApplicationRegistrationsOverWorkerDefaults(bool declaredAfterActivation)
+    {
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IWorkerDefaultProbe, ApplicationProbe>();
+        _ = services.AddHostedService<ProbeHostedService>();
+        var portia = services.AddPortia();
+        if (declaredAfterActivation)
+            _ = portia.AddWorkers();
+        _ = portia.ConfigureWorker("defaults", worker =>
+        {
+            worker.TryAddSingleton<IWorkerDefaultProbe, WorkerDefaultProbe>();
+            _ = worker.AddHostedService<ProbeHostedService>();
+        });
+        if (!declaredAfterActivation)
+            _ = portia.AddWorkers();
+        using var provider = services.BuildServiceProvider();
+
+        _ = Assert.IsType<ApplicationProbe>(provider.GetRequiredService<IWorkerDefaultProbe>());
+        _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkerDefaultProbe));
+        _ = Assert.Single(services, descriptor => descriptor.ImplementationType == typeof(ProbeHostedService));
+    }
+
+    /// <summary>Shared setup that repeats the single-process opt-in still registers exactly one coordinator.</summary>
+    [Fact]
+    public void ShouldRegisterOneCoordinatorWhenSingleProcessWorkloadsIsRepeated()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddPortia().UseSingleProcessWorkloads().AddWorkers();
+        _ = services.AddPortia().UseSingleProcessWorkloads();
+
+        _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkloadCoordinator));
     }
 
     /// <summary>A replacement serializer remains outside Portia's JSON-upcaster policy.</summary>
@@ -474,6 +516,19 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         public ValueTask CompleteAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
 
         public ValueTask AbandonAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
+    }
+
+    interface IWorkerDefaultProbe;
+
+    sealed class ApplicationProbe : IWorkerDefaultProbe;
+
+    sealed class WorkerDefaultProbe : IWorkerDefaultProbe;
+
+    sealed class ProbeHostedService : IHostedService
+    {
+        public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     sealed class HostingTerminalHandler : IQueuedRequestTerminalHandler

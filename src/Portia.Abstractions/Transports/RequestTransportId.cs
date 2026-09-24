@@ -30,5 +30,5 @@ public readonly record struct RequestTransportId
     public static RequestTransportId Schedule => new("schedule");
 
     /// <inheritdoc />
-    public override string ToString() => Value;
+    public override string ToString() => Value ?? string.Empty;
 }

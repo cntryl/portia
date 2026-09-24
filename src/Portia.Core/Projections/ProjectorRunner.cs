@@ -108,8 +108,10 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         }
         finally
         {
-            PortiaTelemetry.ProcessorBatchFinished(started, projector.Name, "projector", outcome, count,
-                lastOccurrence);
+            // Only a committed batch processed its events and moved the checkpoint the lag measures.
+            var committed = outcome == "success";
+            PortiaTelemetry.ProcessorBatchFinished(started, projector.Name, "projector", outcome,
+                committed ? count : 0, committed ? lastOccurrence : null);
         }
     }
 }

@@ -534,6 +534,12 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .AppendLine(
                 "                await global::Cntryl.Portia.ResultHttpExtensions.ToHttpResult(global::Cntryl.Portia.Result.Failure(new global::Cntryl.Portia.RequestError(global::Cntryl.Portia.RequestErrorKind.Conflict, \"The request conflicted with a concurrent update.\", true))).ExecuteAsync(httpContext).ConfigureAwait(false);")
             .AppendLine("            }")
+            // A client abort is requested cancellation, not a fault, and nobody can receive a response.
+            .AppendLine(
+                "            catch (global::System.OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)")
+            .AppendLine("            {")
+            .AppendLine("                httpContext.Abort();")
+            .AppendLine("            }")
             .AppendLine("            catch (global::System.Exception ex) when (!httpContext.Response.HasStarted)")
             .AppendLine("            {")
             .AppendLine(

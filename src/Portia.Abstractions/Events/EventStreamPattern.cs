@@ -7,7 +7,7 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed record EventStreamPattern
 {
-    const string TenantTemplateRealm = "{tenant}";
+    internal const string TenantTemplateRealm = "{tenant}";
 
     EventStreamPattern(string realm, string? area, string? resource, bool tenantTemplate = false)
     {
@@ -80,7 +80,8 @@ public sealed record EventStreamPattern
             throw new InvalidOperationException("Only an unbound tenant stream template can be bound.");
         }
 
-        return new EventStreamPattern(tenant.Value, Area, Resource);
+        // ForPattern also refuses the reserved template realm, as WorkloadIdentity does.
+        return ForPattern(tenant.Value, Area, Resource);
     }
 
     /// <summary>

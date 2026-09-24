@@ -151,8 +151,9 @@ await builder.Build().RunAsync();
 ```
 
 `AddWorkers()` activates the declarations once. Declarations added after activation
-are also included, provided all setup happens before the host is built. Applications
-can declare other hosted services in shared setup with
+are also included, provided all setup happens before the host is built. Either way,
+`TryAdd*` calls in a declaration never override the application's own registrations.
+Applications can declare other hosted services in shared setup with
 `portia.ConfigureWorker("name", services => services.AddHostedService<MyWorker>())`.
 The name is the declaration's identity: declaring the same name twice keeps the first
 callback and ignores the second, so shared setup that runs in both hosts composes

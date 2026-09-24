@@ -366,9 +366,16 @@ public sealed class PortiaBuilder
     ///     deployment registers a distributed coordinator such as Fitz's instead.
     /// </summary>
     /// <returns>This builder, for chaining.</returns>
+    /// <remarks>Repeated calls register the coordinator once.</remarks>
     public PortiaBuilder UseSingleProcessWorkloads()
     {
+        if (_catalog.SingleProcessWorkloads)
+        {
+            return this;
+        }
+
         _ = Services.AddSingleton<IWorkloadCoordinator>(_ => new SingleProcessWorkloadCoordinator());
+        _catalog.SingleProcessWorkloads = true;
         return this;
     }
 
@@ -381,10 +388,16 @@ public sealed class PortiaBuilder
             return this;
         }
 
+        // Declarations run against a copy of the application's registrations, so TryAdd* sees them exactly
+        // as it would for a declaration made after activation; the copy replaces the collection only once
+        // every declaration has succeeded.
         var staged = new ServiceCollection();
+        foreach (var descriptor in Services)
+            staged.Add(descriptor);
         foreach (var configure in _catalog.Workers.Values)
             configure(staged);
         _ = staged.AddSingleton<IHostedService, PortiaWorkloadService>();
+        Services.Clear();
         foreach (var descriptor in staged)
             Services.Add(descriptor);
         _catalog.WorkersActivated = true;

@@ -182,6 +182,41 @@ public sealed class AggregateMetadataFactoryTests
         Assert.Equal(0UL, aggregate.CommittedStreamPosition);
     }
 
+    /// <summary>
+    ///     Verifies that an event the aggregate refuses to attach does not use up the identity the
+    ///     factory issued for it, so the aggregate only tracks identities that an event actually carries.
+    /// </summary>
+    [Fact]
+    public void ShouldNotReserveEventIdWhenAttachingFails()
+    {
+        var id = Uuid.CreateVersion4();
+        var eventId = Uuid.CreateVersion4();
+        var aggregate = new InstanceAggregate(id, Factory(eventId));
+
+        _ = Assert.Throws<InvalidOperationException>(() => aggregate.Raise(Committed(new ValueChanged(1), id, 1)));
+        aggregate.Raise(new ValueChanged(2));
+
+        Assert.Equal(eventId, Assert.Single(aggregate.UncommittedEvents).Metadata.EventId);
+    }
+
+    /// <summary>
+    ///     Verifies that a <c>with</c> copy of an event the aggregate already raised is a new event, which
+    ///     the aggregate raises under its own identity and version.
+    /// </summary>
+    [Fact]
+    public void ShouldRaiseCopyOfRaisedEventUnderNewIdentity()
+    {
+        var aggregate = new InstanceAggregate(Uuid.CreateVersion4());
+        var raised = new ValueChanged(1);
+        aggregate.Raise(raised);
+
+        var copy = raised with { Value = 2 };
+        aggregate.Raise(copy);
+
+        Assert.Equal(2UL, copy.Metadata.AggregateVersion);
+        Assert.NotEqual(raised.Metadata.EventId, copy.Metadata.EventId);
+    }
+
     // Deliberately neither a list nor an array: that is the only way to reach the aggregate's
     // general IReadOnlyList path rather than its span fast paths.
     static ReadOnlyCollection<DomainEvent> ReadOnly(params DomainEvent[] events) => new(events);
@@ -197,6 +232,18 @@ public sealed class AggregateMetadataFactoryTests
 
     static MisbehavingMetadataFactory Factory(Uuid? eventId = null, Uuid? aggregateId = null, ulong? version = null,
         DateTimeOffset? occurredOn = null) => new(eventId, aggregateId, version, occurredOn);
+
+    // Raises the exact instance it is given, so a test controls what that instance already carries.
+    sealed class InstanceAggregate : Aggregate
+    {
+        public InstanceAggregate(Uuid id, IDomainEventMetadataFactory? metadataFactory = null)
+            : base(id, new EventStreamAddress("test", "aggregates", id.ToString()), metadataFactory)
+        {
+            On<ValueChanged>(_ => { });
+        }
+
+        public void Raise(DomainEvent ev) => RaiseEvent(ev);
+    }
 
     // Returns whatever it is told to, standing in for an application factory with a bug in it.
     sealed class MisbehavingMetadataFactory(

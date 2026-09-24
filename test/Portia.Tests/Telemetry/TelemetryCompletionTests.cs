@@ -195,6 +195,50 @@ public sealed class TelemetryCompletionTests
         Assert.DoesNotContain(execute.Events, activityEvent => activityEvent.Name == "exception");
     }
 
+    /// <summary>
+    ///     A consumer that stops enumerating early cancels the rest of the stream rather than faulting it;
+    ///     only a failure actually observed while the stream is disposed is a fault.
+    /// </summary>
+    /// <param name="disposeFails">Whether the handler's stream fails while being disposed.</param>
+    /// <param name="expectedOutcome">The bounded telemetry outcome.</param>
+    [Theory]
+    [InlineData(false, "canceled")]
+    [InlineData(true, "fault")]
+    public async Task ShouldRecordStreamStoppedEarlyByConsumerAsCanceled(bool disposeFails, string expectedOutcome)
+    {
+        using var measurements = new OutcomeMeasurements();
+        using var listener = ListenToActivities(out var stopped);
+        var services = new ServiceCollection()
+            .AddSingleton(new EarlyStopBehavior(disposeFails))
+            .AddSingleton<EarlyStopTelemetryStreamHandler>()
+            .BuildServiceProvider();
+        var bus = new RequestBus(services, new RequestRegistry(
+            [new StreamRequestRegistration<EarlyStopTelemetryStream, EarlyStopTelemetryStreamHandler, int>()],
+            [], [], [], []));
+
+        if (disposeFails)
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(TakeFirstAsync);
+        else
+            await TakeFirstAsync();
+
+        Assert.Equal(expectedOutcome, measurements.SingleOutcome("portia.request.duration",
+            "portia.request.name", nameof(EarlyStopTelemetryStream)));
+        var execute = Assert.Single(stopped, activity =>
+            activity.OperationName == PortiaTelemetry.ExecuteActivityName &&
+            Equals(activity.GetTagItem("portia.request.name"), nameof(EarlyStopTelemetryStream)));
+        Assert.Equal(expectedOutcome, execute.GetTagItem("portia.outcome"));
+        Assert.Equal(disposeFails ? ActivityStatusCode.Error : ActivityStatusCode.Unset, execute.Status);
+
+        async Task TakeFirstAsync()
+        {
+            await foreach (var _ in bus.DispatchStreamAsync(new EarlyStopTelemetryStream(),
+                               bus.CreateContext(RequestActor.System)))
+            {
+                break;
+            }
+        }
+    }
+
     static RequestBus GuardBus(GuardBehavior behavior, params RequestGuardRegistration[] guards)
     {
         var services = new ServiceCollection()
@@ -248,6 +292,36 @@ public sealed class TelemetryCompletionTests
             new CancelingReactor(), ProjectionCheckpoint.Start).AsTask());
 
         Assert.Equal("fault", measurements.SingleOutcome("portia.processor.batch.duration", "reactor"));
+    }
+
+    /// <summary>
+    ///     Only a committed processor batch records lag and processed events, so a retried batch counts
+    ///     its events once rather than once per attempt.
+    /// </summary>
+    /// <param name="runner">The processor-runner kind.</param>
+    [Theory]
+    [InlineData("projector")]
+    [InlineData("reactor")]
+    public async Task ShouldRecordLagAndEventCountOnlyForCommittedBatch(string runner)
+    {
+        using var measurements = new OutcomeMeasurements();
+        var source = await SourceWithOneEventAsync();
+        var component = $"telemetry.flaky-{runner}";
+        var projector = new FlakyProjector(component);
+        var reactor = new FlakyReactor(component);
+        Func<Task> pass = runner == "projector"
+            ? () => new ProjectorRunner(source).RunAsync(projector, ProjectionCheckpoint.Start).AsTask()
+            : () => new ReactorRunner(source).RunAsync(reactor, ProjectionCheckpoint.Start).AsTask();
+
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(pass);
+
+        Assert.Equal(0, measurements.Count("portia.processor.lag", "portia.component.name", component));
+        Assert.Equal(0, measurements.Sum("portia.processor.event.count", "portia.component.name", component));
+
+        await pass();
+
+        Assert.Equal(1, measurements.Count("portia.processor.lag", "portia.component.name", component));
+        Assert.Equal(1, measurements.Sum("portia.processor.event.count", "portia.component.name", component));
     }
 
     /// <summary>Every Fitz append failure completes one duration with its actual failure outcome.</summary>
@@ -480,6 +554,58 @@ public sealed class TelemetryCompletionTests
             CancellationToken ct) => ValueTask.FromException(new OperationCanceledException());
     }
 
+    // Fails its first batch and succeeds on every retry, like a transient fault on a poison-free batch.
+    sealed class FlakyProjector(string name) : Projector(new RecordingProjectionTarget(),
+        EventStreamPattern.ForPattern("test", "telemetry"), name)
+    {
+        int _attempts;
+
+        protected override ValueTask ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
+            CancellationToken ct) => ++_attempts == 1
+            ? ValueTask.FromException(new InvalidOperationException("transient"))
+            : ValueTask.CompletedTask;
+    }
+
+    sealed class FlakyReactor(string name) : Reactor(new InMemoryProjectionCheckpointStore(),
+        EventStreamPattern.ForPattern("test", "telemetry"), name)
+    {
+        int _attempts;
+
+        protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+            CancellationToken ct) => ++_attempts == 1
+            ? ValueTask.FromException(new InvalidOperationException("transient"))
+            : ValueTask.CompletedTask;
+    }
+
+    internal sealed record EarlyStopTelemetryStream : IStreamRequest<int>;
+
+    internal sealed record EarlyStopBehavior(bool DisposeFails);
+
+    internal sealed class EarlyStopTelemetryStreamHandler(EarlyStopBehavior behavior)
+        : IStreamRequestHandler<EarlyStopTelemetryStream, int>
+    {
+        public IAsyncEnumerable<int> HandleAsync(IRequestContext<EarlyStopTelemetryStream> context,
+            CancellationToken ct) => new EndlessTelemetryStream(behavior.DisposeFails);
+    }
+
+    // Never ends on its own, so only the consumer can stop it.
+    sealed class EndlessTelemetryStream(bool disposeFails) : IAsyncEnumerable<int>, IAsyncEnumerator<int>
+    {
+        public int Current { get; private set; }
+
+        public IAsyncEnumerator<int> GetAsyncEnumerator(CancellationToken ct = default) => this;
+
+        public ValueTask<bool> MoveNextAsync()
+        {
+            Current++;
+            return ValueTask.FromResult(true);
+        }
+
+        public ValueTask DisposeAsync() => disposeFails
+            ? ValueTask.FromException(new InvalidOperationException("dispose failed"))
+            : ValueTask.CompletedTask;
+    }
+
     sealed class FailingAppendStreams(
         string failureStage,
         CancellationTokenSource cancellation,
@@ -542,6 +668,7 @@ public sealed class TelemetryCompletionTests
     sealed class OutcomeMeasurements : IDisposable
     {
         readonly MeterListener _listener;
+        readonly List<(string Name, long Value, KeyValuePair<string, object?>[] Tags)> _counts = [];
         readonly List<(string Name, KeyValuePair<string, object?>[] Tags)> _measurements = [];
 
         public OutcomeMeasurements()
@@ -558,6 +685,8 @@ public sealed class TelemetryCompletionTests
             };
             _listener.SetMeasurementEventCallback<double>((instrument, _, tags, _) =>
                 _measurements.Add((instrument.Name, tags.ToArray())));
+            _listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
+                _counts.Add((instrument.Name, value, tags.ToArray())));
             _listener.Start();
         }
 
@@ -574,6 +703,10 @@ public sealed class TelemetryCompletionTests
 
         public int Count(string name, string tagKey, string tagValue) => _measurements.Count(item =>
             item.Name == name && item.Tags.Any(tag => tag.Key == tagKey && Equals(tag.Value, tagValue)));
+
+        public long Sum(string name, string tagKey, string tagValue) => _counts.Where(item =>
+                item.Name == name && item.Tags.Any(tag => tag.Key == tagKey && Equals(tag.Value, tagValue)))
+            .Sum(item => item.Value);
 
         public string SingleOutcome(string name, string? runner = null)
         {

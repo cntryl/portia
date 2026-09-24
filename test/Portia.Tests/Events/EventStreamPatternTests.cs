@@ -76,6 +76,30 @@ public sealed class EventStreamPatternTests
         Assert.Equal("stream://acme/orders/*", projector.Pattern.ToString());
     }
 
+    /// <summary>A template cannot be bound to its own reserved realm token, which would read as still unbound.</summary>
+    [Fact]
+    public void ShouldRejectBindingTenantTemplateToReservedRealm() =>
+        _ = Assert.ThrowsAny<ArgumentException>(() =>
+            EventStreamPattern.ForTenant("orders").BindTenant(new TenantId("{tenant}")));
+
+    /// <summary>A tenant ID is refused unless it is a valid realm segment, however it is assigned.</summary>
+    /// <param name="value">The invalid tenant ID.</param>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("a/b*")]
+    [InlineData("{tenant}")]
+    public void ShouldRejectTenantIdThatIsNotARealmSegment(string? value)
+    {
+        _ = Assert.ThrowsAny<ArgumentException>(() => new TenantId(value!));
+        _ = Assert.ThrowsAny<ArgumentException>(() => new TenantId("acme") with { Value = value! });
+    }
+
+    /// <summary>An uninitialized tenant ID still formats as a string, as its non-nullable signature promises.</summary>
+    [Fact]
+    public void ShouldFormatDefaultTenantIdAsEmpty() => Assert.Equal(string.Empty, default(TenantId).ToString());
+
     /// <summary>Manual runners cannot construct a checkpoint for an unbound template.</summary>
     [Fact]
     public async Task ShouldRejectManualRunOfUnboundTenantTemplate()
