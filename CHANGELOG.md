@@ -6,6 +6,83 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+## 0.6.0 - 2026-09-24
+
+### Upgrading
+
+- Remove any reference to `Cntryl.Portia.Analyzers`. Its analyzers now ship inside
+  `Cntryl.Portia.DependencyInjection`, and the standalone package is no longer produced; a leftover
+  0.5.x reference reports PORTIA101 and PORTIA107 twice and keeps reporting the retired PORTIA103.
+- Resolve Portia's JSON options with `GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json)`
+  instead of the unkeyed `JsonSerializerOptions`.
+- Register exactly one `IWorkloadCoordinator` for workers: call `UseSingleProcessWorkloads()` for a
+  single replica, or use Fitz coordination.
+
+### Breaking
+
+- `AddWorkers()` no longer falls back to running every workload in-process; startup fails unless
+  exactly one `IWorkloadCoordinator` is registered. Log event 1006 is removed.
+- `PortiaTelemetry` recording helpers are internal; only `SourceName`, `Version`, the activity-name
+  constants, `ActivitySource`, and `Meter` remain public. `MultiTenantRunner` has one constructor.
+- Portia's `JsonSerializerOptions` are a keyed singleton under `PortiaServiceKeys.Json`. An
+  application's own `JsonSerializerOptions` registration no longer becomes Portia's wire format.
+- `JwtRequestActorValidator` maps inbound claims by default, as ASP.NET Core's `JwtBearer` does, so a
+  worker sees the same `Name`, `NameIdentifier`, and roles as the HTTP pipeline. Pass
+  `mapInboundClaims: false` when the API turns mapping off (including through
+  `JwtSecurityTokenHandler.DefaultMapInboundClaims`).
+- MCP tool failures carry their details in `_meta["portia/error"]` (`kind`, `message`,
+  `isTransient`) instead of `structuredContent`, which the protocol requires to match the tool's
+  output schema. `McpCallSnapshot.Error` exposes them.
+- An anonymous caller sending `Prefer: respond-async` is answered synchronously instead of with 202:
+  a worker has no credential of theirs to validate again, so the request could never have run.
+- `TenantId` validates its value (not blank, no `/` or `*`, not `{tenant}`) where it is constructed.
+- `TestPermissionEvaluator.EvaluatedPermissions` is an `IReadOnlyList<string>` snapshot.
+- PORTIA103 is retired: a type that handles several requests is supported, and the rule could not
+  tell intent apart.
+
+### Added
+
+- `AggregateScenario`, `ProjectorScenario`, and `ReactorScenario` test components, bare-event `Given`,
+  and payload-only `DomainEvent` equality, so events compare with `Assert.Equal`. See
+  `docs/testing.md`.
+- PORTIA107 warns about a test scenario that is never awaited.
+- `Uuid` serializes as a JSON dictionary key.
+- `PortiaHttpBinding.HasCredentials` for generated endpoints.
+
+### Fixed
+
+- An aggregate operation that throws, or an event handler that throws part-way through, discards its
+  pending events and invalidates the instance instead of letting a later save commit them.
+- The queue runner never dead-letters a handled request whose acknowledgment fails, leaves a delivery
+  whose reservation was lost to the transport, treats host shutdown as cancellation, and stops the
+  hosted runner on an unusable `QueueRunnerOptions.TerminalAttempt` instead of restarting forever.
+- Fitz queue deliveries release their reserved item, stop lease renewal before acknowledging, and drain
+  buffered wake-up notifications; an overflowing subscription counts as one wake-up and resubscribes
+  instead of faulting.
+- A failed SSE keep-alive stops and waits for the idle source, so its cleanup runs.
+- A notifier that fails to subscribe falls back to polling with backoff instead of faulting the
+  workload host.
+- `ConfigureWorker` declarations see and keep application registrations in either order, and
+  `UseSingleProcessWorkloads()` is idempotent.
+- A `with` copy of a domain event starts without metadata.
+- `InMemoryRpcClient` matches wildcard routes and is thread-safe.
+- Analyzer and generator false positives removed across PORTIA002, 005, 012, 016, 025, 026, 027, 100,
+  101, 104, 105, and 106; generated code compiles for keyword namespaces, large decimal defaults, and
+  `required` members. PORTIA015 and PORTIA025 fire even with analyzers turned off. The PORTIA025 code
+  fix offers one action per context and never edits generated files.
+- Exception messages that reach logs and traces no longer carry tenant, route, or aggregate
+  identifiers; the identifiers remain on exception properties.
+
+### Changed
+
+- Telemetry no longer reports faults that are not: a stream the consumer stops early records
+  `canceled`, a failed processor batch records no lag or event count, and a client abort on a unary
+  endpoint is not logged as a fault.
+- Conformance suites reject concurrent-append races, cross-stream ordering, per-record cursor and
+  identity defects, synchronous deduplication races, and resource-scoped checkpoint sharing.
+- MCP endpoints reachable from browsers must configure ASP.NET Core `AllowedHosts` to prevent DNS
+  rebinding; `docs/mcp.md` explains how.
+
 ## 0.5.6 - 2026-09-23
 
 ### Fixed
