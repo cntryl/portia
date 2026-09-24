@@ -4,6 +4,9 @@ Baseline: `ab6657cd7b14fa484181605cddcb4575e8a88558`. Wire formats and checkpoin
 encodings were held constant. “Green” below means the focused regression and its relevant control
 pass in the final tree.
 
+Rows marked **Superseded** or **Reopened** were changed or contradicted after this audit; each says
+what changed and when, and the original resolution is kept for the record.
+
 | Finding | Initial evidence | Resolution | Final evidence |
 | --- | --- | --- | --- |
 | Queue terminal attempt zero | `0` passed validation and could never be reached by a positive delivery count. | Reproduced and fixed. | `ShouldRejectZeroTerminalAttemptBeforeReadingTheDelivery`; durable-attempt positive control remains green. |
@@ -13,7 +16,7 @@ pass in the final tree.
 | Queue read ownership classification | Unknown contracts were completed as malformed and retryable reads ignored the durable threshold. | Reproduced and fixed. | Permanent reads always reach the terminal handler; retryable reads abandon below threshold and reach `RetryLimitReached` at threshold; later deliveries continue after successful terminal disposition. |
 | Request envelope classification fallthrough | Missing members and malformed JSON could escape without permanent classification, while an unsupported version was not rejected until v2 fields had been parsed. | Reproduced and fixed. | Missing, null, wrong-kind, and fractional versions remain permanent; every unsupported integer version is retryable before any version-specific field is inspected; valid v2 classifications remain intact. |
 | Abandoned queue failure visibility | Lazy read failures abandoned for redelivery emitted a delivery outcome but no runner-fault diagnostic. | Reproduced and fixed. | Every abandoned read failure records exactly one queue execution fault; terminal-handled poison payloads do not duplicate it. |
-| Notification burst overflow | Fitz subscriptions are pull-based async enumerables and the queue retains only one pending `MoveNextAsync`. No callback channel or unbounded fan-out reproduced. | Disproven; no production change. | Existing queue/notice/schedule continuation and poison-message suites pass. |
+| Notification burst overflow | Fitz subscriptions are pull-based async enumerables and the queue retains only one pending `MoveNextAsync`. No callback channel or unbounded fan-out reproduced. | Disproven; no production change. **Reopened (2026-09-24):** a related overflow exists. The queue consumer and event store read wake-up notifications only when a read comes back empty, so a busy consumer leaves them undrained; after 256 the Fitz subscription terminates with `SubscriptionBackpressureException`. Open. | Existing queue/notice/schedule continuation and poison-message suites pass; the undrained-wake-up case is not covered. |
 | Hosted workload identity drift | Hosted binding discarded the explicit registration name, reverting to constructor defaults used by Portia 0.1. | Reproduced and fixed. | Hosted registration names remain the stable ownership, checkpoint, and effect identities; constructor names remain manual-run defaults. |
 | Unnamed Fitz coordination | Request-only workers and custom-coordinator workloads were rejected even though they do not use Fitz fleet membership. | Reproduced and fixed. | Only Fitz-coordinated workloads require `ApplicationName`/`UseFleet`; custom-coordinator workloads, request-only workers, and client-only setup remain valid unnamed. |
 | Scheduled system-principal assertion | Version-1 envelope subject/issuer were trusted directly and a validator could be captured outside its registered lifetime. | Reproduced and fixed. | Hosted consumers resolve and dispose a distinct scoped `IScheduledRequestActorValidator` for each firing; the public constructor still requires an explicit validator. |
@@ -21,7 +24,7 @@ pass in the final tree.
 | Stale reactor checkpoint | Unconditional Fitz KV save could overwrite a newer checkpoint. | Reproduced and fixed. | Reactor runner uses an internal expected-checkpoint save; legacy public stores and legacy checkpoint decoding remain unchanged. |
 | MCP authorization bypass | Endpoint conventions already own HTTP authorization and `RequireAuthorization` returns 401 before tool dispatch. | Disproven; no production change. | Authenticated tool and endpoint authorization controls pass. |
 | Authenticated async credential loss | Cookie/custom-authenticated HTTP principals could enqueue with a null credential and later execute anonymously. | Reproduced and fixed. | Such calls return 400 before enqueue; Bearer and explicitly authorized anonymous paths remain supported. |
-| JWT role parity | No same-token HTTP/worker difference reproduced under equal validation parameters. | Disproven; no production change. | Existing JWT validation and HTTP authorization suites pass. |
+| JWT role parity | No same-token HTTP/worker difference reproduced under equal validation parameters. | Disproven; no production change. **Superseded (2026-09-24):** a difference does exist with ASP.NET Core's default bearer options. `JwtBearerOptions.MapInboundClaims` defaults to true, while `JwtRequestActorValidator` did not map claims, so a worker lost `Name`, `NameIdentifier`, and roles for the same token. Fixed in #80: the validator maps by default and accepts `mapInboundClaims: false`. | `ShouldMapInboundClaimsLikeJwtBearerByDefault` and `ShouldKeepTokenClaimNamesWhenInboundMappingIsOff`. |
 | Culture-sensitive HTTP binding | Generated supported scalar parsing already supplies `InvariantCulture`; semantic `TryParse` discovery covers provider signatures. | Disproven; no production change. | Generated binding culture tests pass. |
 | Nullable OpenAPI null default | A null default was emitted as a schema default even though optionality already carries the contract. | Reproduced and fixed. | Null defaults are omitted; non-null defaults and optional parameters remain described. |
 | Recursive MCP root reference | Nested references were rewritten, but a bare `"$ref":"#"` was not. | Reproduced and fixed. | Both bare-root and nested references now remain within the result envelope. |
@@ -30,8 +33,10 @@ pass in the final tree.
 | Transport incremental equality | Transport arrays used reference equality while diagnostic locations were omitted from equality. | Reproduced and fixed. | `RequestTransportComponent` uses structural transport-list equality and includes locations, so declaration movement relocates duplicate diagnostics while unrelated inputs remain cacheable. |
 | Modifier-free partial code fix | Leading declaration trivia stayed on the declaration after inserting its first modifier. | Reproduced and fixed. | The inserted `partial` token owns leading trivia; existing modifier and Fix All controls pass. |
 | Locking-store conformance hang | The conformance test opened the stale write batch before committing the winner, which deadlocks a locking store. | Reproduced and fixed. | Winner commits first while the stale batch retains its original expected checkpoint. |
-| Publish privilege and ordering | One write-scoped job built, tested, packed, pushed packages, then pushed its tag. | Reproduced and fixed. | Read-scoped prepare uploads exact-head packages; publish establishes and reads back exact-SHA tag parity before duplicate-tolerant package push. |
+| Publish privilege and ordering | One write-scoped job built, tested, packed, pushed packages, then pushed its tag. | Reproduced and fixed. **Superseded (2026-09-16, #39):** the split was removed. `publish.yml` is again one `workflow_dispatch` job on `main` with `contents: write` and `packages: write`; it packs, pushes with `--skip-duplicate`, then tags. It does not build, test, or restore in locked mode itself; those gates run in CI. | The read-scoped prepare job and exact-SHA tag-parity check no longer exist. |
 
-Final local gates: format verification, Release build, public API baseline, all broker-free tests,
-locked package/NativeAOT consumer execution, isolated Fitz broker integration, `actionlint`, and
-`git diff --check`.
+Final local gates at the time of the audit: format verification, Release build, public API baseline,
+all broker-free tests, locked package/NativeAOT consumer execution, isolated Fitz broker integration,
+`actionlint`, and `git diff --check`. The public API baseline script (`eng/verify-public-api-baseline.sh`)
+was removed in #39; the public surface is enforced by `Microsoft.CodeAnalysis.PublicApiAnalyzers` in every
+build, where warnings are errors.
