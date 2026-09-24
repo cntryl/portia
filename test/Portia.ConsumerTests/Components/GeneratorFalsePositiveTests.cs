@@ -11,6 +11,8 @@ namespace Cntryl.Portia.Consumer;
 /// </summary>
 public sealed class GeneratorFalsePositiveTests
 {
+    static readonly CSharpParseOptions FileParseOptions = new(LanguageVersion.Preview);
+
     [Fact]
     public void RegistrationNamesCompileForKeywordNamespaces()
     {
@@ -159,7 +161,7 @@ public sealed class GeneratorFalsePositiveTests
                                                            [PortiaJsonContext]
                                                            [System.Text.Json.Serialization.JsonSerializable(typeof(Guid))]
                                                            internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
-                                                           """, new JsonMetadataAnalyzer());
+                                                           """, new JsonMetadataDiagnosticGenerator());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
@@ -172,7 +174,7 @@ public sealed class GeneratorFalsePositiveTests
                                                            [Discriminator("j01", 1)] file sealed record J01 : DomainEvent;
                                                            [PortiaJsonContext]
                                                            internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
-                                                           """, new JsonMetadataAnalyzer());
+                                                           """, new JsonMetadataDiagnosticGenerator());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
@@ -284,7 +286,7 @@ public sealed class GeneratorFalsePositiveTests
     [Fact]
     public void JsonContextInAGeneratedFileCoversItsRoots()
     {
-        var diagnostics = AnalyzeFiles(new JsonMetadataAnalyzer(),
+        var diagnostics = GenerateFiles(new JsonMetadataDiagnosticGenerator(),
             ("Events.cs", """
                           using Cntryl.Portia;
                           namespace App;
@@ -329,17 +331,21 @@ public sealed class GeneratorFalsePositiveTests
         _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA101");
     }
 
-    static ImmutableArray<Diagnostic> AnalyzeFiles(DiagnosticAnalyzer analyzer, params (string Path, string Source)[] files)
-    {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
-        var compilation = CSharpCompilation.Create("GeneratedFiles",
-            files.Select(file => CSharpSyntaxTree.ParseText(file.Source, parseOptions, file.Path)),
+    static ImmutableArray<Diagnostic> GenerateFiles(IIncrementalGenerator generator,
+        params (string Path, string Source)[] files) =>
+        CSharpGeneratorDriver.Create([generator.AsSourceGenerator()], parseOptions: FileParseOptions)
+            .RunGenerators(CompileFiles(files)).GetRunResult().Diagnostics;
+
+    static ImmutableArray<Diagnostic> AnalyzeFiles(DiagnosticAnalyzer analyzer, params (string Path, string Source)[] files) =>
+        CompileFiles(files).WithAnalyzers([analyzer]).GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
+
+    static CSharpCompilation CompileFiles((string Path, string Source)[] files) =>
+        CSharpCompilation.Create("GeneratedFiles",
+            files.Select(file => CSharpSyntaxTree.ParseText(file.Source, FileParseOptions, file.Path)),
             ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
             .Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-        return compilation.WithAnalyzers([analyzer]).GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
-    }
 
     static void AssertNoCompilerErrors(IReadOnlyList<Diagnostic> diagnostics)
     {

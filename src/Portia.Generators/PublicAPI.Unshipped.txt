@@ -1,23 +1,9 @@
 #nullable enable
-*REMOVED*Cntryl.Portia.JsonMetadataDiagnosticGenerator
-*REMOVED*Cntryl.Portia.JsonMetadataDiagnosticGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
-*REMOVED*Cntryl.Portia.JsonMetadataDiagnosticGenerator.JsonMetadataDiagnosticGenerator() -> void
-*REMOVED*Cntryl.Portia.RequestShapeDiagnosticsGenerator
-*REMOVED*Cntryl.Portia.RequestShapeDiagnosticsGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
-*REMOVED*Cntryl.Portia.RequestShapeDiagnosticsGenerator.RequestShapeDiagnosticsGenerator() -> void
 Cntryl.Portia.ComponentPracticeAnalyzer
 Cntryl.Portia.ComponentPracticeAnalyzer.ComponentPracticeAnalyzer() -> void
-Cntryl.Portia.JsonMetadataAnalyzer
-Cntryl.Portia.JsonMetadataAnalyzer.JsonMetadataAnalyzer() -> void
-Cntryl.Portia.RequestShapeAnalyzer
-Cntryl.Portia.RequestShapeAnalyzer.RequestShapeAnalyzer() -> void
 Cntryl.Portia.ScenarioObservationAnalyzer
 Cntryl.Portia.ScenarioObservationAnalyzer.ScenarioObservationAnalyzer() -> void
 override Cntryl.Portia.ComponentPracticeAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
 override Cntryl.Portia.ComponentPracticeAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
-override Cntryl.Portia.JsonMetadataAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
-override Cntryl.Portia.JsonMetadataAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
-override Cntryl.Portia.RequestShapeAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
-override Cntryl.Portia.RequestShapeAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
 override Cntryl.Portia.ScenarioObservationAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
 override Cntryl.Portia.ScenarioObservationAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>

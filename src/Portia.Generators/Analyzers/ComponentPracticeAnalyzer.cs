@@ -109,8 +109,8 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
     {
-        // Generated files are the application's code too: a JSON context or a partial component part often lives in
-        // one, and skipping it would hide coverage or findings the generators always saw.
+        // Generated files are the application's code too: a partial component part often lives in one, and
+        // skipping it would hide findings the generators always saw.
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze |
                                                GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();
@@ -126,7 +126,7 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
                 syntaxContext.ReportDiagnostic(Diagnostic.Create(Descriptor(finding.Kind), finding.Location,
                     finding.Arguments));
             }
-        }, SyntaxKind.ClassDeclaration, SyntaxKind.RecordDeclaration);
+        }, SyntaxKind.ClassDeclaration, SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration);
     }
 
     static Finding[] Analyze(TypeDeclarationSyntax node, SemanticModel semanticModel, CancellationToken ct)
@@ -134,44 +134,35 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         if (semanticModel.GetDeclaredSymbol(node, ct) is not { IsAbstract: false } symbol)
             return [];
         var findings = new List<Finding>();
-        // Constructors and interfaces belong to the type, not to the declaration being visited, so a
-        // partial type reports them from its first declaration only.
-        var firstDeclaration = symbol.DeclaringSyntaxReferences[0].SyntaxTree == node.SyntaxTree
-                               && symbol.DeclaringSyntaxReferences[0].Span == node.Span;
-        if (firstDeclaration)
-        {
-            ReportProjectorEffects(findings, symbol);
-            ReportAggregateServices(findings, symbol);
-            ReportPreflightEffects(findings, symbol);
-        }
-
-        ReportServiceLocation(findings, symbol, node, semanticModel, firstDeclaration);
+        var parameters = DeclaredParameters(symbol, node);
+        ReportProjectorEffects(findings, symbol, parameters);
+        ReportAggregateServices(findings, symbol, parameters);
+        ReportPreflightEffects(findings, symbol, parameters);
+        ReportServiceLocation(findings, symbol, node, semanticModel, parameters);
         ReportCaughtExceptionAsResult(findings, symbol, node, semanticModel, ct);
         return [.. findings];
     }
 
-    static void ReportProjectorEffects(List<Finding> findings, INamedTypeSymbol symbol)
+    static void ReportProjectorEffects(List<Finding> findings, INamedTypeSymbol symbol, IParameterSymbol[] parameters)
     {
         if (!DerivesFrom(symbol, "Cntryl.Portia.Projector"))
             return;
         // The projector's own projection store shares its commit, whatever else that repository derives from.
-        foreach (var parameter in Parameters(symbol, EffectTypes)
+        foreach (var parameter in Parameters(parameters, EffectTypes)
                      .Where(parameter => !Matches(parameter.Type, ProjectionContracts)))
         {
             findings.Add(Finding.Create(Kind.ProjectorEffect, Location(parameter), symbol.Name, Display(parameter)));
         }
     }
 
-    static void ReportPreflightEffects(List<Finding> findings, INamedTypeSymbol symbol)
+    static void ReportPreflightEffects(List<Finding> findings, INamedTypeSymbol symbol, IParameterSymbol[] parameters)
     {
         var guard = symbol.AllInterfaces.Any(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Guard));
         var authorizer =
             symbol.AllInterfaces.Any(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Authorizer));
         if (!guard && !authorizer)
             return;
-        foreach (var parameter in Parameters(symbol, PreflightForbiddenTypes).Concat(symbol.InstanceConstructors
-                     .Where(constructor => !constructor.IsImplicitlyDeclared)
-                     .SelectMany(constructor => constructor.Parameters)
+        foreach (var parameter in Parameters(parameters, PreflightForbiddenTypes).Concat(parameters
                      .Where(parameter => parameter.Type is INamedTypeSymbol named
                                          && IsAny(named, ProjectionContracts))))
         {
@@ -194,13 +185,13 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol symbol,
         TypeDeclarationSyntax node,
         SemanticModel semanticModel,
-        bool reportParameters)
+        IParameterSymbol[] parameters)
     {
         if (!IsPortiaComponent(symbol))
             return;
         // PORTIA102 already reports every locator an aggregate takes.
         var aggregate = DerivesFrom(symbol, "Cntryl.Portia.Aggregate");
-        foreach (var parameter in reportParameters && !aggregate ? Parameters(symbol, LocatorTypes) : [])
+        foreach (var parameter in aggregate ? [] : Parameters(parameters, LocatorTypes))
         {
             findings.Add(Finding.Create(Kind.ServiceLocation, Location(parameter), symbol.Name, Display(parameter)));
         }
@@ -230,11 +221,11 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
             _ => null
         })?.Identifier.ValueText is "CreateInstance" or "GetServiceOrCreateInstance" or "CreateFactory";
 
-    static void ReportAggregateServices(List<Finding> findings, INamedTypeSymbol symbol)
+    static void ReportAggregateServices(List<Finding> findings, INamedTypeSymbol symbol, IParameterSymbol[] parameters)
     {
         if (!DerivesFrom(symbol, "Cntryl.Portia.Aggregate"))
             return;
-        foreach (var parameter in Parameters(symbol, AggregateForbiddenTypes))
+        foreach (var parameter in Parameters(parameters, AggregateForbiddenTypes))
         {
             findings.Add(Finding.Create(Kind.AggregateService, Location(parameter), symbol.Name, Display(parameter)));
         }
@@ -378,11 +369,21 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         return false;
     }
 
-    static IEnumerable<IParameterSymbol> Parameters(INamedTypeSymbol symbol, string[] forbidden) =>
-        symbol.InstanceConstructors
+    // Constructors belong to the type, not to the declaration being visited, so a partial type reports each
+    // constructor parameter from the declaration that holds it: analyzing one file finds everything located in it,
+    // and the whole compilation still reports each parameter once.
+    static IParameterSymbol[] DeclaredParameters(INamedTypeSymbol symbol, TypeDeclarationSyntax node) =>
+    [
+        .. symbol.InstanceConstructors
             .Where(constructor => !constructor.IsImplicitlyDeclared)
             .SelectMany(constructor => constructor.Parameters)
-            .Where(parameter => Matches(parameter.Type, forbidden));
+            .Where(parameter => parameter.Locations.FirstOrDefault() is { } location
+                                && location.SourceTree == node.SyntaxTree
+                                && node.Span.Contains(location.SourceSpan))
+    ];
+
+    static IEnumerable<IParameterSymbol> Parameters(IParameterSymbol[] parameters, string[] forbidden) =>
+        parameters.Where(parameter => Matches(parameter.Type, forbidden));
 
     static bool Matches(ITypeSymbol type, string[] forbidden)
     {

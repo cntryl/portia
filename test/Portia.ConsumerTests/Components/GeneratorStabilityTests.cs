@@ -96,12 +96,15 @@ public sealed class GeneratorStabilityTests
             .Select(type => (T)Activator.CreateInstance(type)!)
     ];
 
-    /// <summary>Generators emit source; every diagnostics-only rule is an analyzer.</summary>
+    /// <summary>
+    ///     Generators report every error the build needs to be sound, so a build that skips analyzers still fails;
+    ///     analyzers report only the design warnings.
+    /// </summary>
     [Fact]
     public void EveryGeneratorAndAnalyzerIsCovered()
     {
-        Assert.Equal(6, AllGenerators().Length);
-        Assert.Equal(4, AllAnalyzers().Length);
+        Assert.Equal(8, AllGenerators().Length);
+        Assert.Equal(2, AllAnalyzers().Length);
     }
 
     /// <summary>Every prefix of a realistic file, as it exists while being typed, runs without an exception.</summary>

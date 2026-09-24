@@ -24,8 +24,8 @@ public sealed class ScenarioObservationAnalyzer : DiagnosticAnalyzer
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
     {
-        // Generated files are the application's code too: a JSON context or a partial component part often lives in
-        // one, and skipping it would hide coverage or findings the generators always saw.
+        // Generated files are the application's code too, and skipping them would hide findings the generators
+        // always saw.
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze |
                                                GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();

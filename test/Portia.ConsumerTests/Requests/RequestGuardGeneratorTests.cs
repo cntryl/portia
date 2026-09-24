@@ -98,7 +98,7 @@ public sealed class RequestGuardGeneratorTests
                                                                         {
                                                                             public ValueTask<Result> GuardAsync(IRequestContext<Command> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                                                         }
-                                                                        """, new RequestShapeAnalyzer()),
+                                                                        """, new RequestShapeDiagnosticsGenerator()),
             item => item.Id == "PORTIA015");
 
         Assert.Contains("generic component types are unsupported",

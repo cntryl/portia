@@ -23,7 +23,7 @@ public sealed class JsonMetadataGeneratorTests
                                                            {
                                                                public ValueTask<Result<Answer>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
                                                            }
-                                                           """, new JsonMetadataAnalyzer());
+                                                           """, new JsonMetadataDiagnosticGenerator());
 
         Assert.Equal(["Created"], diagnostics.Where(d => d.Id == "PORTIA025")
             .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
@@ -45,7 +45,7 @@ public sealed class JsonMetadataGeneratorTests
                                                            {
                                                                public static void Configure(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();
                                                            }
-                                                           """, new JsonMetadataAnalyzer());
+                                                           """, new JsonMetadataDiagnosticGenerator());
 
         Assert.Equal(["Answer", "Query"], diagnostics.Where(d => d.Id == "PORTIA025")
             .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
@@ -79,7 +79,7 @@ public sealed class JsonMetadataGeneratorTests
                                                            {
                                                                public static void Map(IEndpointRouteBuilder routes) => routes.MapPortiaPost<Query>("/query");
                                                            }
-                                                           """, [contracts], new JsonMetadataAnalyzer());
+                                                           """, [contracts], new JsonMetadataDiagnosticGenerator());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
@@ -134,7 +134,7 @@ public sealed class JsonMetadataGeneratorTests
                                                            {
                                                                public static void Configure(IServiceCollection services) => services.AddPortia().AddMcpTool<Query>();
                                                            }
-                                                           """, [mcp], new JsonMetadataAnalyzer());
+                                                           """, [mcp], new JsonMetadataDiagnosticGenerator());
 
         Assert.Equal(["Answer", "Query"], diagnostics.Where(d => d.Id == "PORTIA025")
             .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
@@ -158,7 +158,7 @@ public sealed class JsonMetadataGeneratorTests
                                                            [JsonSerializable(typeof(Query))]
                                                            [JsonSerializable(typeof(Answer))]
                                                            internal sealed partial class AppJsonContext : JsonSerializerContext;
-                                                           """, new JsonMetadataAnalyzer());
+                                                           """, new JsonMetadataDiagnosticGenerator());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
@@ -182,7 +182,7 @@ public sealed class JsonMetadataGeneratorTests
                                                                    MapPortiaPost<Payload>();
                                                                }
                                                            }
-                                                           """, new JsonMetadataAnalyzer());
+                                                           """, new JsonMetadataDiagnosticGenerator());
 
         Assert.DoesNotContain(diagnostics,
             diagnostic => diagnostic.Id is "PORTIA025" or "CS8785");
@@ -211,7 +211,7 @@ public sealed class JsonMetadataGeneratorTests
                                                            [JsonSerializable(typeof(Query))]
                                                            [JsonSerializable(typeof(string))]
                                                            internal sealed partial class AppJsonContext : JsonSerializerContext;
-                                                           """, new JsonMetadataAnalyzer());
+                                                           """, new JsonMetadataDiagnosticGenerator());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
@@ -238,7 +238,7 @@ public sealed class JsonMetadataGeneratorTests
                                                            [PortiaJsonContext]
                                                            [JsonSerializable(typeof(Upload))]
                                                            internal sealed partial class AppJsonContext : JsonSerializerContext;
-                                                           """, new JsonMetadataAnalyzer());
+                                                           """, new JsonMetadataDiagnosticGenerator());
 
         Assert.DoesNotContain(diagnostics,
             diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
@@ -266,7 +266,7 @@ public sealed class JsonMetadataGeneratorTests
                                                            [PortiaJsonContext]
                                                            [JsonSerializable(typeof(Create))]
                                                            internal sealed partial class AppJsonContext : JsonSerializerContext;
-                                                           """, new JsonMetadataAnalyzer());
+                                                           """, new JsonMetadataDiagnosticGenerator());
 
         Assert.Equal(["CreateBody", "CreatedDto", "Tenant"], diagnostics.Where(d => d.Id == "PORTIA025")
             .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
@@ -297,7 +297,7 @@ public sealed class JsonMetadataGeneratorTests
                                                              [JsonSerializable(typeof(Upload))]
                                                              [JsonSerializable(typeof(string))]
                                                              internal sealed partial class AppJsonContext : JsonSerializerContext;
-                                                             """", new JsonMetadataAnalyzer());
+                                                             """", new JsonMetadataDiagnosticGenerator());
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
@@ -313,7 +313,7 @@ public sealed class JsonMetadataGeneratorTests
                                                            {
                                                                public static void Send(IRequestBus? bus) => _ = bus?.SendAsync(new Ping(), new ClaimsPrincipal());
                                                            }
-                                                           """, new JsonMetadataAnalyzer());
+                                                           """, new JsonMetadataDiagnosticGenerator());
 
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA025" &&
                                                    diagnostic.GetMessage(CultureInfo.InvariantCulture)

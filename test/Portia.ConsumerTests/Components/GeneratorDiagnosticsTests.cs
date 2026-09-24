@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Cntryl.Portia.Consumer;
 
@@ -423,11 +424,51 @@ public sealed class GeneratorDiagnosticsTests
                                                            {
                                                                public ValueTask<Result> HandleAsync(IRequestContext<Request> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                                            }
-                                                           """, new RequestShapeAnalyzer());
+                                                           """, new RequestShapeDiagnosticsGenerator());
         var diagnostic = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA015");
         Assert.Equal("Component 'Handler<T>' cannot be generated: generic component types are unsupported; " +
                      "use a closed, non-generic component class",
             diagnostic.GetMessage(CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    ///     PORTIA015 and PORTIA025 are build-soundness errors, so the generators report them: a build that skips
+    ///     analyzers still fails.
+    /// </summary>
+    [Fact]
+    public void BuildSoundnessErrorsAreReportedByGeneratorsAlone()
+    {
+        const string source = """
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record Query : IRequest, ICallable;
+                              public class Handler<T> : IRequestHandler<Query>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<Query> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                              }
+                              public static class Endpoints
+                              {
+                                  public static void Map(IEndpointRouteBuilder routes) => routes.MapPortiaPost<Query>("/query");
+                              }
+                              """;
+        IIncrementalGenerator[] generators =
+        [
+            .. new[] { typeof(DomainEventCatalogGenerator).Assembly, typeof(RequestHttpBindingGenerator).Assembly }
+                .SelectMany(assembly => assembly.GetTypes())
+                .Where(type => typeof(IIncrementalGenerator).IsAssignableFrom(type) && !type.IsAbstract)
+                .Select(type => (IIncrementalGenerator)Activator.CreateInstance(type)!)
+        ];
+
+        var diagnostics = GeneratorCompilation.Diagnostics(source, generators);
+
+        _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA015");
+        // Reported where the application maps the endpoint, never inside Portia's generated interceptor.
+        var missing = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
+        Assert.Equal("DiagnosticScenario.cs", missing.Location.GetLineSpan().Path);
+        Assert.Equal("routes.MapPortiaPost<Query>(\"/query\")",
+            source.Substring(missing.Location.SourceSpan.Start, missing.Location.SourceSpan.Length));
     }
 
     [Fact]
@@ -715,6 +756,68 @@ public sealed class GeneratorDiagnosticsTests
         _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA101");
         // One type may handle several requests, as a test double often does; that is a design choice, not a defect.
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA103");
+    }
+
+    /// <summary>
+    ///     An editor analyzes one file at a time, so a constructor-parameter finding is reported from the partial
+    ///     declaration that holds the parameter, and still once for the whole compilation.
+    /// </summary>
+    [Fact]
+    public async Task PracticeDiagnosticsReportFromThePartialDeclarationHoldingTheParameter()
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var handlers = CSharpSyntaxTree.ParseText("""
+                                                  using System.Threading;
+                                                  using System.Threading.Tasks;
+                                                  using Cntryl.Portia;
+                                                  public sealed record Changed : DomainEvent;
+                                                  public sealed partial class View : IProjectorHandler<Changed>
+                                                  {
+                                                      public ValueTask HandleAsync(Changed ev, IProjectorContext context, CancellationToken ct) => default;
+                                                  }
+                                                  """, parseOptions, "View.Handlers.cs");
+        const string state = """
+                             using System.Net.Http;
+                             using Cntryl.Portia;
+                             public sealed partial class View(IProjectionStore store, HttpClient http)
+                                 : Projector(store, EventStreamPattern.ForPattern("views"));
+                             """;
+        var stateTree = CSharpSyntaxTree.ParseText(state, parseOptions, "View.cs");
+        var compilation = CSharpCompilation.Create("PartialFiles", [handlers, stateTree],
+            ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Append(typeof(Aggregate).Assembly.Location)
+            .Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path)),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var whole = await compilation.WithAnalyzers([new ComponentPracticeAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        // A fresh analysis per file, as an editor runs for the open document.
+        var inHandlers = await compilation.WithAnalyzers([new ComponentPracticeAnalyzer()])
+            .GetAnalyzerSemanticDiagnosticsAsync(compilation.GetSemanticModel(handlers), null, CancellationToken.None);
+        var inState = await compilation.WithAnalyzers([new ComponentPracticeAnalyzer()])
+            .GetAnalyzerSemanticDiagnosticsAsync(compilation.GetSemanticModel(stateTree), null, CancellationToken.None);
+
+        Assert.Equal(["http"], Locations(state, whole.Where(diagnostic => diagnostic.Id == "PORTIA100")));
+        Assert.Equal(["http"], Locations(state, inState.Where(diagnostic => diagnostic.Id == "PORTIA100")));
+        Assert.DoesNotContain(inHandlers, diagnostic => diagnostic.Id == "PORTIA100");
+    }
+
+    [Fact]
+    public void PracticeDiagnosticsCoverRecordStructComponents()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using System;
+                                                           using System.Threading;
+                                                           using System.Threading.Tasks;
+                                                           using Cntryl.Portia;
+                                                           public sealed record Ping : IRequest;
+                                                           public record struct StructHandler(IServiceProvider Services) : IRequestHandler<Ping>
+                                                           {
+                                                               public ValueTask<Result> HandleAsync(IRequestContext<Ping> context, CancellationToken ct) =>
+                                                                   ValueTask.FromResult(Result.Success);
+                                                           }
+                                                           """, new ComponentPracticeAnalyzer());
+
+        _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA101");
     }
 
     [Fact]
