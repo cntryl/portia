@@ -170,8 +170,11 @@ public sealed partial class ComponentHostingTests
         var failure = await Assert.ThrowsAsync<WorkloadFailureException>(async () =>
             await (worker.ExecuteTask ?? throw new InvalidOperationException("The worker did not start.")));
 
-        Assert.Contains("changed its event-stream pattern", failure.InnerException?.Message,
-            StringComparison.Ordinal);
+        var message = failure.InnerException?.Message;
+        Assert.Contains("changed its event-stream pattern", message, StringComparison.Ordinal);
+        // The realm is the tenant for tenant-scoped workloads, so neither pattern's realm may leak.
+        Assert.DoesNotContain("first-pattern", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("second-pattern", message, StringComparison.Ordinal);
         Assert.Equal(1, changes.SubscriptionCount);
         Assert.Equal(1, changes.DisposalCount);
         worker.Dispose();

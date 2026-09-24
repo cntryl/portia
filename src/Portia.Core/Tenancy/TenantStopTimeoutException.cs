@@ -4,7 +4,8 @@ namespace Cntryl.Portia;
 /// <param name="tenantId">The tenant whose cleanup exceeded the budget.</param>
 /// <param name="timeout">The configured total cleanup budget.</param>
 public sealed class TenantStopTimeoutException(TenantId tenantId, TimeSpan timeout)
-    : TimeoutException($"Tenant '{tenantId}' did not stop within {timeout}.")
+    // The tenant stays in the TenantId property; the message reaches logs and traces.
+    : TimeoutException($"A tenant did not stop within {timeout}.")
 {
     /// <summary>Gets the tenant whose cleanup timed out.</summary>
     public TenantId TenantId { get; } = tenantId;

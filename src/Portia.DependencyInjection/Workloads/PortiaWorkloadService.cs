@@ -207,7 +207,7 @@ sealed class PortiaWorkloadService(
                     else if (passPattern != subscribedPattern)
                     {
                         throw new InvalidOperationException(
-                            $"Workload '{identity}' changed its event-stream pattern from '{subscribedPattern}' to '{passPattern}' across dependency-injection scopes.");
+                            $"Workload '{identity.Name}' ({registration.Scope}) changed its event-stream pattern from area '{subscribedPattern?.Area ?? "*"}' to area '{passPattern.Area ?? "*"}' across dependency-injection scopes.");
                     }
 
                     var pass = await registration.Descriptor.RunPass(provider, registration.Processing, ct)

@@ -59,7 +59,7 @@ public abstract class Reactor
         if (_boundIdentity is { } bound && bound != identity)
         {
             throw new InvalidOperationException(
-                $"Reactor '{GetType().FullName}' is already bound to workload '{bound}' and cannot be rebound to '{identity}'.");
+                $"Reactor '{GetType().FullName}' is already bound to workload '{bound.Name}' and cannot be rebound to workload '{identity.Name}' or another tenant.");
         }
 
         if (_boundIdentity == identity)
