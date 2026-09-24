@@ -390,15 +390,21 @@ public sealed class PortiaBuilder
 
         // Declarations run against a copy of the application's registrations, so TryAdd* sees them exactly
         // as it would for a declaration made after activation; the copy replaces the collection only once
-        // every declaration has succeeded.
+        // every declaration has succeeded. A declaration that registers through the application's own
+        // collection instead (a captured collection, or this builder) adds to it directly, and those
+        // registrations are kept.
+        var snapshot = new HashSet<ServiceDescriptor>(Services, ReferenceEqualityComparer.Instance);
         var staged = new ServiceCollection();
         foreach (var descriptor in Services)
             staged.Add(descriptor);
         foreach (var configure in _catalog.Workers.Values)
             configure(staged);
+        var direct = Services.Where(descriptor => !snapshot.Contains(descriptor)).ToArray();
         _ = staged.AddSingleton<IHostedService, PortiaWorkloadService>();
         Services.Clear();
         foreach (var descriptor in staged)
+            Services.Add(descriptor);
+        foreach (var descriptor in direct)
             Services.Add(descriptor);
         _catalog.WorkersActivated = true;
         return this;

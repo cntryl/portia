@@ -247,6 +247,24 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = Assert.Single(services, descriptor => descriptor.ImplementationType == typeof(ProbeHostedService));
     }
 
+    /// <summary>
+    ///     A declaration may register through the application's own collection or builder, not only through the
+    ///     collection it is given; activation keeps those registrations.
+    /// </summary>
+    [Fact]
+    public void ShouldKeepRegistrationsADeclarationMakesThroughTheApplicationCollection()
+    {
+        var services = new ServiceCollection();
+        var portia = services.AddPortia();
+        _ = portia.ConfigureWorker("coordination", _ => portia.UseSingleProcessWorkloads());
+        _ = portia.ConfigureWorker("probe", _ => services.AddSingleton<IWorkerDefaultProbe, ApplicationProbe>());
+
+        _ = portia.AddWorkers();
+
+        _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkloadCoordinator));
+        _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkerDefaultProbe));
+    }
+
     /// <summary>Shared setup that repeats the single-process opt-in still registers exactly one coordinator.</summary>
     [Fact]
     public void ShouldRegisterOneCoordinatorWhenSingleProcessWorkloadsIsRepeated()

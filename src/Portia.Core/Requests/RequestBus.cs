@@ -159,8 +159,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             await foreach (var item in CatchStream(EnumerateStream(registration, policies, request, requestContext, ct),
                                activity, observed, policies.HasGuards, ct).ConfigureAwait(false))
             {
-                // A consumer that stops early (break, FirstAsync) disposes this iterator while it is
-                // suspended here, so the finally below runs with this still set.
+                // A consumer that stops early (break, FirstAsync, or its own exception) disposes this
+                // iterator while it is suspended here, so the finally below runs with this still set.
                 suspended = true;
                 yield return item;
                 suspended = false;
