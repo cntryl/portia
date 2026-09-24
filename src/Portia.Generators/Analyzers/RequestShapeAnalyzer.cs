@@ -15,7 +15,10 @@ public sealed class RequestShapeAnalyzer : DiagnosticAnalyzer
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
     {
-        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+        // Generated files are the application's code too: a JSON context or a partial component part often lives in
+        // one, and skipping it would hide coverage or findings the generators always saw.
+        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze |
+                                               GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();
         context.RegisterSymbolAction(static symbolContext =>
         {

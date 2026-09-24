@@ -64,7 +64,9 @@ Portia uses snake_case for application JSON by default, including HTTP. Keep the
 option aligned with that default. Use `ConfigureJson` only when the whole application deliberately
 chooses a different convention or adds converters.
 
-`PORTIA025` catches JSON roots that the generator can discover at compile time. Startup validation
+`PORTIA025` catches JSON roots that Portia's analyzer can discover at compile time. It needs the whole
+compilation to know which roots a context covers, so it is reported when compilation analysis completes: every
+build shows it, and an editor shows it live only with full-solution analysis enabled. Startup validation
 remains the defensive fallback for roots and resolver combinations that cross compilation
 boundaries or otherwise cannot be proven statically.
 
