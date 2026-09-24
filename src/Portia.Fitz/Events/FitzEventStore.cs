@@ -34,8 +34,12 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(pattern);
-        var subscription = await _streams.SubscribeAsync(pattern.ToString(), ct).ConfigureAwait(false);
-        return new FitzDomainEventSubscription(subscription);
+        var route = pattern.ToString();
+        var wakeups = await FitzWakeupSubscription<StreamCommitEvent>.SubscribeAsync(
+                async token => await _streams.SubscribeAsync(route, token).ConfigureAwait(false),
+                "The Fitz stream subscription ended without cancellation.", ct)
+            .ConfigureAwait(false);
+        return new FitzDomainEventSubscription(wakeups);
     }
 
     /// <inheritdoc />
@@ -48,10 +52,10 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
             nameof(stream),
             "stream",
             () => (stream.ToString(), fromOffset),
-            (route, item, nextOffset) =>
+            (item, nextOffset) =>
             {
                 var record = item.Record ?? throw new InvalidOperationException(
-                    $"Fitz stream '{route}' contains a gap at offset '{item.Offset}'.");
+                    $"A Fitz stream in area '{stream.Area}' contains a gap at offset '{item.Offset}'.");
                 var expectedOffset = nextOffset;
                 if (record.Offset != expectedOffset)
                     throw new InvalidOperationException(
@@ -73,19 +77,19 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
             nameof(pattern),
             "pattern",
             () => (pattern.ToString(), Offset(cursor)),
-            (route, item, nextOffset) =>
+            (item, nextOffset) =>
             {
                 var record = item.Record ?? throw new InvalidOperationException(
-                    $"Fitz stream pattern '{route}' contains a gap at offset '{item.Offset}'.");
+                    $"A Fitz stream pattern read contains a gap at offset '{item.Offset}'.");
                 var metadata = record.Metadata ?? throw new InvalidOperationException(
                     "A Portia Fitz record does not contain its concrete stream route.");
                 var stream = EventStreamAddress.Parse(Encoding.UTF8.GetString(metadata.Span));
                 if (stream != EventStreamAddress.Parse(record.Route))
                     throw new InvalidOperationException(
-                        $"Record metadata stream '{stream}' does not match its Fitz route '{record.Route}'.");
+                        $"The metadata stream of the record at offset '{record.Offset}' does not match its Fitz route.");
                 if (!FitzEventStreamPatternOffsets.Matches(stream, pattern))
                     throw new InvalidOperationException(
-                        $"Stream '{stream}' does not match pattern '{pattern}'.");
+                        $"A stream in area '{stream.Area}' does not match the pattern it was read through.");
                 var areaOffset = record.AreaOffset;
                 var realmOffset = record.RealmOffset;
                 var scopeOffset = FitzEventStreamPatternOffsets.GetPatternOffset(
@@ -133,7 +137,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                 ex.DomainCode == FitzErrorCodes.StreamSessionAlreadyActive)
             {
                 throw new EventStreamConcurrencyException(
-                    $"Stream '{stream}' already has an active append session.", ex);
+                    $"A stream in area '{stream.Area}' already has an active append session.", ex);
             }
             var failed = false;
             try
@@ -162,7 +166,8 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                 if (ex is StreamException { DomainCode: FitzErrorCodes.StreamConcurrencyConflict })
                 {
                     throw new EventStreamConcurrencyException(
-                        $"Stream '{stream}' is not at the expected physical stream position.", ex);
+                        $"A stream in area '{stream.Area}' is not at the expected physical stream position "
+                        + $"'{expectedStreamPosition}'.", ex);
                 }
 
                 throw;
@@ -198,7 +203,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
         string sourceName,
         string telemetryTarget,
         Func<(string Route, ulong StartOffset)> open,
-        Func<string, StreamReadItem, ulong, DomainEventRecord> map,
+        Func<StreamReadItem, ulong, DomainEventRecord> map,
         Func<StreamReadCursor, ulong> nextStartOffset,
         [EnumeratorCancellation] CancellationToken ct)
     {
@@ -239,7 +244,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                     DomainEventRecord result;
                     try
                     {
-                        result = map(route, item, nextOffset);
+                        result = map(item, nextOffset);
                     }
                     catch (OperationCanceledException) when (ct.IsCancellationRequested)
                     {
@@ -302,61 +307,14 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
         }
     }
 
-    sealed class FitzDomainEventSubscription : IDomainEventSubscription
+    // The token bounds one wait, not the subscription: a caller that polls with a backstop must
+    // still receive the next commit. Only disposal ends the subscription. A workload that keeps
+    // finding work skips its waits, so each wait drains every commit buffered meanwhile.
+    sealed class FitzDomainEventSubscription(FitzWakeupSubscription<StreamCommitEvent> wakeups)
+        : IDomainEventSubscription
     {
-        readonly IAsyncEnumerator<StreamCommitEvent> _notifications;
-        readonly CancellationTokenSource _stop = new();
-        readonly StreamSubscription _subscription;
-        Task<bool>? _pending;
+        public ValueTask WaitAsync(CancellationToken ct = default) => wakeups.WaitAsync(ct);
 
-        public FitzDomainEventSubscription(StreamSubscription subscription)
-        {
-            _subscription = subscription;
-            _notifications = subscription.GetAsyncEnumerator(_stop.Token);
-        }
-
-        // The token bounds this wait, not the subscription: a caller that polls with a backstop
-        // must still receive the next commit. The in-flight MoveNextAsync is therefore retained
-        // rather than cancelled, and resumed by the next wait. Only disposal ends the subscription.
-        public async ValueTask WaitAsync(CancellationToken ct = default)
-        {
-            _pending ??= _notifications.MoveNextAsync().AsTask();
-            if (!await _pending.WaitAsync(ct).ConfigureAwait(false))
-                throw new InvalidOperationException("The Fitz stream subscription ended without cancellation.");
-            _pending = null;
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            await _stop.CancelAsync().ConfigureAwait(false);
-            try
-            {
-                if (_pending is not null)
-                {
-                    try
-                    {
-                        _ = await _pending.ConfigureAwait(false);
-                    }
-                    catch
-                    {
-                        // The wait's cancellation or fault belongs to WaitAsync's caller; disposal
-                        // only has to release the subscription.
-                    }
-                }
-
-                await _notifications.DisposeAsync().ConfigureAwait(false);
-            }
-            finally
-            {
-                try
-                {
-                    await _subscription.DisposeAsync().ConfigureAwait(false);
-                }
-                finally
-                {
-                    _stop.Dispose();
-                }
-            }
-        }
+        public ValueTask DisposeAsync() => wakeups.DisposeAsync();
     }
 }

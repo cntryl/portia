@@ -227,6 +227,29 @@ public sealed class FitzKvCheckpointStoreTests
     }
 
     /// <summary>
+    ///     Verifies a conflict names the component and stream area but not the bound pattern, whose
+    ///     realm is a tenant for a per-tenant workload and whose resource can be an aggregate. The
+    ///     message reaches error logs and trace exception events, which must not carry tenant data.
+    /// </summary>
+    [Fact]
+    public async Task ShouldKeepTenantAndAggregateIdentifiersOutOfTheConflictMessage()
+    {
+        var conflict = new KvException("conflict", "TX_CONFLICT", domainCode: FitzErrorCodes.KvIsolationConflict);
+        var client = new FakeKvClient { CommitFailure = conflict };
+        var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
+        var identity = new CheckpointIdentity("reactor",
+            EventStreamPattern.ForPattern("tenant-7f3a", "orders", "order-5c21"));
+
+        var error = await Assert.ThrowsAsync<ProjectionConcurrencyException>(async () =>
+            await store.SaveAsync(identity, new ProjectionCheckpoint(new EventCursor("1"))));
+
+        Assert.Contains("reactor", error.Message, StringComparison.Ordinal);
+        Assert.Contains("orders", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("tenant-7f3a", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("order-5c21", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     ///     Verifies that every other failure reaches the caller unchanged — only a structured isolation
     ///     conflict is retryable, so a transport or backend fault must not be disguised as one.
     /// </summary>
