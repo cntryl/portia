@@ -124,11 +124,15 @@ static class FitzKvCheckpoints
     public static string WorkloadRoute(string route, CheckpointIdentity identity) =>
         WorkloadRoute(route, identity.ComponentName, identity.Pattern.Realm);
 
-    /// <summary>Builds the shared conflict failure, so BEGIN and COMMIT conflicts read alike.</summary>
+    /// <summary>
+    ///     Builds the shared conflict failure, so BEGIN and COMMIT conflicts read alike. It names the
+    ///     component and stream area but not the pattern: a per-tenant pattern's realm is the tenant,
+    ///     and this message reaches error logs and trace exception events.
+    /// </summary>
     public static ProjectionConcurrencyException Conflict(string subject, CheckpointIdentity identity,
         Exception cause) =>
-        new($"{subject} for '{identity.ComponentName}' pattern '{identity.Pattern}' conflicted with a "
-            + "concurrent writer; reload the authoritative checkpoint before retrying.", cause);
+        new($"{subject} for '{identity.ComponentName}' in stream area '{identity.Pattern.Area ?? "*"}' conflicted "
+            + "with a concurrent writer; reload the authoritative checkpoint before retrying.", cause);
 
     /// <summary>Best-effort rollback that never replaces the failure that caused it.</summary>
     public static async Task RollbackAsync(IKvTransaction transaction)

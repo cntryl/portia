@@ -37,74 +37,50 @@ public sealed class FitzRequestQueueConsumer(
     /// <inheritdoc />
     public async IAsyncEnumerable<IQueuedRequest> ReadAsync([EnumeratorCancellation] CancellationToken ct = default)
     {
-        await using var subscription = await _queue.SubscribeAsync(_route, ct).ConfigureAwait(false);
-        using var notificationLifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        await using var notifications = subscription.GetAsyncEnumerator(notificationLifetime.Token);
-        Task<bool>? pendingNotification = null;
-        try
+        await using var wakeups = await FitzWakeupSubscription<QueueAvailabilityEvent>.SubscribeAsync(
+                async token => await _queue.SubscribeAsync(_route, token).ConfigureAwait(false),
+                "The Fitz queue subscription ended without cancellation.", ct)
+            .ConfigureAwait(false);
+        while (true)
         {
-            while (true)
+            ct.ThrowIfCancellationRequested();
+            // The reserve below answers every wake-up that arrived before it, so they are consumed
+            // here. A consumer that never runs dry would otherwise never read them at all.
+            await wakeups.DrainAsync(ct).ConfigureAwait(false);
+            var items = await _queue.ReserveAsync(_route, TimeSpan.FromSeconds(visibilityTimeoutSeconds),
+                    1, TimeSpan.Zero, ct)
+                .ConfigureAwait(false);
+            var reservations = new List<FitzQueuedRequest>(items.Length);
+            try
             {
-                ct.ThrowIfCancellationRequested();
-                var items = await _queue.ReserveAsync(_route, TimeSpan.FromSeconds(visibilityTimeoutSeconds),
-                        1, TimeSpan.Zero, ct)
-                    .ConfigureAwait(false);
-                var reservations = new List<FitzQueuedRequest>(items.Length);
-                try
+                foreach (var item in items)
                 {
-                    foreach (var item in items)
-                    {
-                        reservations.Add(new FitzQueuedRequest(item, _serializer, _catalog, visibilityTimeoutSeconds,
-                            _renewalInterval, _clock, logger, ct));
-                    }
-
-                    foreach (var reservation in reservations)
-                        yield return reservation;
-                }
-                finally
-                {
-                    foreach (var reservation in reservations)
-                        await reservation.DisposeAsync().ConfigureAwait(false);
+                    reservations.Add(new FitzQueuedRequest(item, _serializer, _catalog, visibilityTimeoutSeconds,
+                        _renewalInterval, _clock, logger, ct));
                 }
 
-                if (items.Length == 0)
-                {
-                    // An idle queue is the ordinary state, so the backstop elapsing is ordinary
-                    // too. Waiting on it by catching a TimeoutException threw once per idle poll,
-                    // per consumer, forever — noise in any first-chance exception view and a cost
-                    // paid for a condition that is not exceptional. The pending move is held
-                    // across the wait; an enumerator cannot be advanced twice concurrently.
-                    pendingNotification ??= notifications.MoveNextAsync().AsTask();
-                    using var backstop = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    var elapsed = Task.Delay(_notificationBackstop, _clock, backstop.Token);
-                    if (await Task.WhenAny(pendingNotification, elapsed).ConfigureAwait(false) == pendingNotification)
-                    {
-                        if (!await pendingNotification.ConfigureAwait(false))
-                        {
-                            throw new InvalidOperationException(
-                                "The Fitz queue subscription ended without cancellation.");
-                        }
-
-                        pendingNotification = null;
-                    }
-
-                    // Whichever lost is cancelled rather than left to fire later.
-                    await backstop.CancelAsync().ConfigureAwait(false);
-                }
+                foreach (var reservation in reservations)
+                    yield return reservation;
             }
-        }
-        finally
-        {
-            await notificationLifetime.CancelAsync().ConfigureAwait(false);
-            if (pendingNotification is not null)
+            finally
             {
-                try
-                {
-                    _ = await pendingNotification.ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (notificationLifetime.IsCancellationRequested)
-                {
-                }
+                foreach (var reservation in reservations)
+                    await reservation.DisposeAsync().ConfigureAwait(false);
+            }
+
+            if (items.Length == 0)
+            {
+                // An idle queue is the ordinary state, so the backstop elapsing is ordinary
+                // too. Waiting on it by catching a TimeoutException threw once per idle poll,
+                // per consumer, forever — noise in any first-chance exception view and a cost
+                // paid for a condition that is not exceptional. A wake-up that wins is consumed
+                // by the next drain.
+                using var backstop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                var elapsed = Task.Delay(_notificationBackstop, _clock, backstop.Token);
+                _ = await Task.WhenAny(wakeups.Next, elapsed).ConfigureAwait(false);
+
+                // Whichever lost is cancelled rather than left to fire later.
+                await backstop.CancelAsync().ConfigureAwait(false);
             }
         }
     }
@@ -180,24 +156,25 @@ public sealed class FitzRequestQueueConsumer(
 
         public async ValueTask CompleteAsync(CancellationToken ct = default)
         {
-            // Written by the renewal loop and read here on the consuming thread, so the read has
-            // to be ordered: acknowledging a reservation whose lease was already lost is exactly
-            // the outcome this check exists to prevent.
-            if (Volatile.Read(ref _renewalError) is not null)
+            // Renewal stops before the acknowledgment rather than after it. Fitz moves the item to
+            // "completing" when COMPLETE starts and then rejects EXTEND with ITEM_CLOSED, and an
+            // EXTEND still in flight can reach the broker after COMPLETE retired the lease token;
+            // either would report a lost reservation for a delivery being acknowledged. Nothing is
+            // given up: Fitz rejects a COMPLETE whose lease expired, so it must fit inside the lease
+            // regardless, and the last renewal left at least half of one.
+            await StopRenewalAsync().ConfigureAwait(false);
+
+            // Written by the renewal loop, so the read has to be ordered: acknowledging a
+            // reservation whose lease was already lost is exactly the outcome this check exists to
+            // prevent. It runs after renewal stopped, so a renewal that failed on its way out counts.
+            if (Volatile.Read(ref _renewalError) is { } renewalError)
             {
                 throw new InvalidOperationException("Cannot acknowledge a reservation whose renewal failed.",
-                    Volatile.Read(ref _renewalError));
+                    renewalError);
             }
 
             _lost.Token.ThrowIfCancellationRequested();
-            try
-            {
-                await _item.CompleteAsync(ct).ConfigureAwait(false);
-            }
-            finally
-            {
-                await StopRenewalAsync().ConfigureAwait(false);
-            }
+            await _item.CompleteAsync(ct).ConfigureAwait(false);
         }
 
         // Fitz owns expiration, redelivery and dead-letter policy. Do not acknowledge or republish.

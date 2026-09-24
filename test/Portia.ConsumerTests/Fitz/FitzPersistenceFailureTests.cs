@@ -109,6 +109,32 @@ public sealed class FitzPersistenceFailureTests
         Assert.False(session.Disposed);
     }
 
+    // A stream route is realm/area/resource: for a tenant's aggregate, its tenant and aggregate ID.
+    // These failures reach error logs and trace exception events, so the message names the stream
+    // area and expected position instead.
+    [Theory]
+    [InlineData(FitzErrorCodes.StreamSessionAlreadyActive)]
+    [InlineData(FitzErrorCodes.StreamConcurrencyConflict)]
+    public async Task ConcurrencyFailuresKeepTenantAndAggregateIdentifiersOutOfTheirMessage(uint code)
+    {
+        var original = new StreamException("rejected", "APPEND_FAILED", domainCode: code);
+        var admission = code == FitzErrorCodes.StreamSessionAlreadyActive;
+        var session = new Session(admission ? "success" : "append", false) { Failure = original };
+        var streams = new Streams(session, admission ? original : null);
+        var store = new FitzEventStore(streams,
+            ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Declined>(1, "Declined")));
+        var account = new Account(Uuid.CreateVersion4());
+        account.Audit(new Declined("pending"));
+
+        var error = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() =>
+            new AggregateRepository(store).SaveAsync(account, _saveContext).AsTask());
+
+        var stream = EventStreamAddress.Parse(streams.Route!);
+        Assert.Contains(stream.Area, error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(stream.Realm, error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(stream.Resource, error.Message, StringComparison.Ordinal);
+    }
+
     sealed class Session(string failureAt, bool cleanupFails) : IStreamSession
     {
         public Exception Failure { get; init; } = new IOException("Injected session failure");
