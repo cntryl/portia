@@ -21,3 +21,5 @@
 *REMOVED*static Cntryl.Portia.PortiaTelemetry.TransportFinished(long started, string! transport, string! operation, string! outcome) -> void
 override Cntryl.Portia.UuidJsonConverter.ReadAsPropertyName(ref System.Text.Json.Utf8JsonReader reader, System.Type! typeToConvert, System.Text.Json.JsonSerializerOptions! options) -> Cntryl.Portia.Uuid
 override Cntryl.Portia.UuidJsonConverter.WriteAsPropertyName(System.Text.Json.Utf8JsonWriter! writer, Cntryl.Portia.Uuid value, System.Text.Json.JsonSerializerOptions! options) -> void
+Cntryl.Portia.PortiaServiceKeys
+const Cntryl.Portia.PortiaServiceKeys.Json = "Cntryl.Portia.Json" -> string!

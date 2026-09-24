@@ -9,7 +9,7 @@ namespace Cntryl.Portia;
 ///     boundaries before a hosted application starts accepting work.
 /// </summary>
 sealed class PortiaStartupValidator(
-    JsonSerializerOptions json,
+    [FromKeyedServices(PortiaServiceKeys.Json)] JsonSerializerOptions json,
     IDomainEventSerializer eventSerializer,
     RequestRegistry requests,
     PortiaStartupValidationRegistry validations,

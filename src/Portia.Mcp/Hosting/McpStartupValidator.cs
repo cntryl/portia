@@ -1,10 +1,11 @@
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia;
 
 sealed class McpStartupValidator(
-    JsonSerializerOptions json,
+    [FromKeyedServices(PortiaServiceKeys.Json)] JsonSerializerOptions json,
     IEnumerable<McpToolRegistration> tools,
     IEnumerable<RequestHandlerRegistration> handlers) : IHostedService
 {

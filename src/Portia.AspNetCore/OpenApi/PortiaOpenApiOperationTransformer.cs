@@ -54,7 +54,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
         operation.OperationId = metadata.OperationId;
         operation.Parameters = [];
-        var jsonOptions = context.ApplicationServices.GetRequiredService<JsonSerializerOptions>();
+        var jsonOptions = context.ApplicationServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
         foreach (var responseMetadata in explicitResponses)
         {
             var status = responseMetadata.StatusCode.ToString(CultureInfo.InvariantCulture);

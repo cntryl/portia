@@ -247,7 +247,7 @@ public sealed class PortiaFitzBuilder
             new RequestTransportCatalog(provider.GetServices<RequestTransportRegistration>()));
         services.TryAddSingleton(provider => new JsonRequestSerializer(
             provider.GetServices<RequestTransportRegistration>(),
-            provider.GetRequiredService<JsonSerializerOptions>()));
+            provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json)));
         services.TryAddSingleton<IRequestSerializer>(provider => provider.GetRequiredService<JsonRequestSerializer>());
         services.TryAddSingleton<IRequestDeserializer>(provider =>
             provider.GetRequiredService<JsonRequestSerializer>());
