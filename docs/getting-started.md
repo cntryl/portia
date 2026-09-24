@@ -284,7 +284,7 @@ public sealed class DepositAccountHandler(IAggregateExecutor aggregates)
     : IRequestHandler<DepositAccount>
 {
     public ValueTask<Result> HandleAsync(IRequestContext<DepositAccount> context, CancellationToken ct) =>
-        aggregates.ExecuteAsync(new Account(context.Request.AccountId), account =>
+        aggregates.ExecuteAsync(new Account(context.Request.Id), account =>
         {
             var deposit = account.Deposit(context.Request.Amount);
             return AggregateOutcome.CommitOnSuccess(deposit);
@@ -394,6 +394,7 @@ the request's own parameters place it, not from a `Last-Event-ID`.
 The routes are served only when the application explicitly calls `MapPortiaOpenApi()`.
 Publishing a schema is not itself a disclosure — every mapped endpoint is one the application opted
 into with `ICallable` — but whether it should be publicly reachable is a deployment decision, so
+call it only in the environments that should serve the document.
 The application can instead map the composed document wherever it wants, with Portia's operation
 IDs, parameters, and responses included. ASP.NET Core's own `MapOpenApi` composes it per request;
 the caching described below applies to Portia's routes:
@@ -593,11 +594,14 @@ Applications that deliberately own individual consumers can construct `FitzRpcRe
 with `AddRequestWorkers()` for the same routes.
 
 Queue and notification hosting create a scope for each delivery, including nested
-dispatch, and dispose it on completion, failure, or cancellation:
+dispatch, and dispose it on completion, failure, or cancellation. `AddFitz(...)` registers the
+request deserializer and the `RequestTransportCatalog` that checks each request's declared
+transport:
 
 ```csharp
-services.AddSingleton<IRequestQueueConsumer>(new FitzRequestQueueConsumer(
-    fitz.Queue, serializer, "queue://consumer/business/account-id"));
+services.AddSingleton<IRequestQueueConsumer>(provider => new FitzRequestQueueConsumer(
+    fitz.Queue, provider.GetRequiredService<IRequestDeserializer>(),
+    "queue://consumer/business/account-id", provider.GetRequiredService<RequestTransportCatalog>()));
 services.AddScoped<IQueuedRequestTerminalHandler, ApplicationQueueFailurePolicy>();
 services.AddPortiaQueueRunner();
 ```

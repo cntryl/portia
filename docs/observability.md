@@ -71,6 +71,9 @@ dimensions.
 | `portia.processor.batch.duration` | `s` | `portia.component.name`, `portia.runner.name`, `portia.outcome` |
 | `portia.processor.event.count` | `{event}` | `portia.component.name`, `portia.runner.name` |
 | `portia.processor.lag` | `s` | `portia.component.name`, `portia.runner.name` |
+| `portia.tenant_directory.operation.duration` | `s` | `portia.operation`, `portia.phase`, `portia.outcome` |
+| `portia.tenant_directory.event.count` | `{event}` | `portia.operation`, `portia.phase`, `portia.outcome` |
+| `portia.tenant_directory.active.count` | `{tenant}` | `portia.operation`, `portia.phase`, `portia.outcome` |
 | `portia.workload.active` | `{workload}` | `portia.component.name`, `portia.scope` |
 | `portia.worker.failure` | `{failure}` | `portia.runner.name`, `portia.stage` |
 | `portia.worker.restart` | `{restart}` | `portia.runner.name`, `portia.stage` |

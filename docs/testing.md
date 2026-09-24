@@ -73,7 +73,7 @@ var scenario = new ProjectorScenario().Given(
 
 await scenario.RunAsync(new AccountProjector(accounts, scenario.Store));
 
-Assert.Equal(15, await accounts.GetBalanceAsync(accountId, CancellationToken.None));
+Assert.Equal(15, accounts.Balances[accountId]);
 ```
 
 Bare events belong to one scenario aggregate; seed events with `DomainEventSeed.Attach` when the projector

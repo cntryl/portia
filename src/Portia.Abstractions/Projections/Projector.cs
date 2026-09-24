@@ -54,10 +54,11 @@ public abstract class Projector
     internal virtual bool IsBatch => false;
 
     /// <summary>
-    ///     Applies the running workload's tenant and, when the application explicitly named the
-    ///     workload, its name. <paramref name="componentName" /> is null unless the registration set
-    ///     <c>WorkloadOptions.Name</c> — the component's own <see cref="Name" /> is its checkpoint
-    ///     identity, so a registration that does not name the workload must not silently repoint it.
+    ///     Applies the running workload's tenant and, when the workload is hosted, its name.
+    ///     <paramref name="componentName" /> is the required <c>name</c> argument of <c>AddProjector</c>,
+    ///     and null when the projector runs outside hosting — the component's own <see cref="Name" /> is
+    ///     its checkpoint identity, so a binding that does not name the workload must not silently
+    ///     repoint it.
     /// </summary>
     internal void BindWorkload(WorkloadIdentity identity, string? componentName)
     {

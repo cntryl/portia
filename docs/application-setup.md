@@ -118,8 +118,8 @@ on every request until it is resolved.
 
 Queue redelivery remains broker-owned below `QueueRunnerOptions.TerminalAttempt`, or indefinitely
 when no threshold is configured. A positive threshold requires a transport-reported durable attempt
-count. Fitz 1.0 reports no queue attempt count, so a Fitz queue worker configured with a positive
-`TerminalAttempt` fails during startup instead of silently retrying forever. Actor-validation failures
+count. Fitz's wire protocol reports no queue attempt count, so a Fitz queue worker configured with
+a positive `TerminalAttempt` fails during startup instead of silently retrying forever. Actor-validation failures
 and non-transient handler results remain intrinsically terminal. Malformed, incomplete, wrong-kind,
 invalid-metadata, and invalid known-contract request payloads always use `DeserializationFailure`.
 Any readable unsupported integer envelope version is classified as retryable before that version's
@@ -135,8 +135,9 @@ Callback failure uses `TerminalHandlerFailureException` and leaves transport own
 request, metadata, invocation, attempt, error, and exception, and completes before Portia
 acknowledges once. Callback and acknowledgment are not atomic, so terminal handlers must tolerate
 replay; an acknowledgment failure is logged while transport ownership expires. Expected business rejection continues
-to use `Result.Validation` (and the other `RequestError` kinds); validation policy belongs to the
-application rather than a separate framework validation pipeline.
+to use `Result.Failure(new RequestError(RequestErrorKind.Validation, ...))` (and the other
+`RequestErrorKind` values); validation policy belongs to the application rather than a separate
+framework validation pipeline.
 
 Use the standard .NET worker host, referencing the shared project:
 

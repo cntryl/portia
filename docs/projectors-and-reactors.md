@@ -42,7 +42,7 @@ and put both on the class, so a caller that only wants `GetBalanceAsync` does no
 public interface IAccountRepository
 {
     ValueTask IncrementBalanceAsync(Uuid accountId, int amount, CancellationToken ct);
-    ValueTask<int> GetBalanceAsync(Uuid accountId, CancellationToken ct);
+    ValueTask<long> GetBalanceAsync(TenantId tenant, Uuid accountId, CancellationToken ct);
 }
 
 public sealed class AccountRepository : IAccountRepository, IProjectionStore
@@ -108,8 +108,8 @@ A batch base accepts ordinary per-event handlers, applying them in source order 
 one unit of work. To issue bulk application operations, implement a batch handler:
 
 ```csharp
-public sealed partial class AccountProjector(IAccountRepository accounts)
-    : BatchProjector(accounts, EventStreamPattern.ForPattern("accounts", "balances")),
+public sealed partial class AccountProjector(IAccountRepository accounts, IProjectionStore store)
+    : BatchProjector(store, EventStreamPattern.ForPattern("accounts", "balances")),
       IBatchProjectorHandler<MoneyDeposited>
 {
     public async ValueTask HandleAsync(
@@ -131,10 +131,9 @@ Set `options.Processing.MaxBatchSize` through a new `ProjectionRunOptions` insta
 bound a batch (default 512). This counts source events, not database write actions.
 Single-event bases always commit progress per event. Batch handler interfaces require
 a batch base (`PORTIA017`), and one event type cannot select both handler modes (`PORTIA028`).
-At 512 events on the maintained benchmark machine, the single-event path measured 45.27 us and
-102,600 B, while a bounded batch measured 5.55 us and 12,864 B. See
-[performance and scaling](performance-and-scaling.md) for reproduction details and the semantic
-tradeoff; select batching for throughput only when one batch is the intended atomic boundary.
+[Performance and scaling](performance-and-scaling.md) measures both paths at 512 events and
+explains the semantic tradeoff; select batching for throughput only when one batch is the intended
+atomic boundary.
 
 Manual implementations can override `ProjectEventAsync` / `ProjectBatchAsync`, or
 `ReactToEventAsync` / `ReactBatchAsync`, instead of using generated typed handlers.
@@ -402,7 +401,8 @@ checkpoint share one instance without a forwarding registration; query callers d
 an opaque string. It is bound to the tenant's resource, so a cursor from one tenant's list is
 rejected with `KvDirectoryQueryError.CursorMismatch` on another's rather than paging from a foreign
 key. The caller-owned `QueryAsync` overload needs `Cntryl.Fitz.Extensions` 1.4.0 or later with
-`Cntryl.Fitz.Core` 1.4.0 or later, which `Cntryl.Portia.Fitz` supplies.
+`Cntryl.Fitz.Core` 1.4.0 or later. `Cntryl.Portia.Fitz` supplies the core package but not the
+extensions, so reference `Cntryl.Fitz.Extensions` 1.4.0 or later directly.
 
 ## Storage implementations
 

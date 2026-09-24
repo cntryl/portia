@@ -27,8 +27,10 @@ current, deliberate boundary.
 - Each queue runner reserves, dispatches, and acknowledges one delivery at a time. Portia scales
   queue throughput through additional processes and routes; it does not provide in-process
   prefetch or parallel-delivery controls.
-- HTTP request bodies are fully buffered object JSON, bounded to 10 MiB by default. Multipart,
-  form, binary, and streaming-body inputs are not supported.
+- HTTP request bodies are fully buffered and bounded to 10 MiB by default. Default binding accepts
+  object JSON or, for scalar-only bodies, a URL-encoded or multipart form, and binds no file parts.
+  Binary bodies need a custom `OnBind` binder. Streaming request bodies are not supported: every
+  body, custom ones included, is buffered before binding.
 - Portia never skips a poison projection or reaction event. Hosted passes retry with bounded
   exponential backoff and then fault the worker, leaving the last successful checkpoint intact.
 - Durable event persistence is bundled for Fitz only. `Cntryl.Portia.Fitz` supplies `FitzEventStore`,
