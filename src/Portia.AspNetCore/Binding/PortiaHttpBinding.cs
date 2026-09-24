@@ -32,7 +32,7 @@ public static partial class PortiaHttpBinding
     /// <param name="context">The current HTTP request.</param>
     /// <returns>The options registered by <c>AddPortia</c>.</returns>
     public static JsonSerializerOptions GetJsonOptions(HttpContext context)
-        => context.RequestServices.GetRequiredService<JsonSerializerOptions>();
+        => context.RequestServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
 
     /// <summary>Ensures <c>AddHttp()</c> registered Portia's HTTP services before an endpoint is mapped.</summary>
     /// <param name="app">The endpoint route builder.</param>

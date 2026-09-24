@@ -38,7 +38,7 @@ public sealed class OpenApiTests : IAsyncDisposable
         using var provider = services.BuildServiceProvider();
 
         Assert.True(provider.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions.WriteIndented);
-        Assert.False(provider.GetRequiredService<JsonSerializerOptions>().WriteIndented);
+        Assert.False(provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json).WriteIndented);
     }
 
     /// <summary>Portia schemas describe its payloads while ordinary endpoints retain their own contract.</summary>

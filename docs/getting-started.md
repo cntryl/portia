@@ -62,7 +62,10 @@ internal sealed partial class BusinessJsonContext : JsonSerializerContext;
 
 Portia uses snake_case for application JSON by default, including HTTP. Keep the source-generation
 option aligned with that default. Use `ConfigureJson` only when the whole application deliberately
-chooses a different convention or adds converters.
+chooses a different convention or adds converters. Portia registers its options as a keyed service,
+`PortiaServiceKeys.Json`, so a `JsonSerializerOptions` the application registers for itself never
+changes Portia's wire format; resolve Portia's with
+`GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json)`.
 
 `PORTIA025` catches JSON roots that the generator can discover at compile time. Startup validation
 remains the defensive fallback for roots and resolver combinations that cross compilation

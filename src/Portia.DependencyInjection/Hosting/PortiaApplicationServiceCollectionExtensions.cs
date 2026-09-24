@@ -54,11 +54,13 @@ public static class PortiaApplicationServiceCollectionExtensions
             provider.GetServices<RequestTransportRegistration>(),
             provider.GetRequiredService<PortiaBuilder>().AuthorizationRequirement()));
         services.TryAddSingleton<PortiaStartupValidationRegistry>();
-        services.TryAddSingleton(provider => provider.GetRequiredService<PortiaBuilder>().BuildJsonOptions());
+        // Keyed, so an application's own JsonSerializerOptions never becomes Portia's wire format.
+        services.TryAddKeyedSingleton(PortiaServiceKeys.Json,
+            static (provider, _) => provider.GetRequiredService<PortiaBuilder>().BuildJsonOptions());
         services.TryAddSingleton(PortiaEventServiceCollectionExtensions.BuildCatalog);
         services.TryAddSingleton<IDomainEventSerializer>(provider => new JsonDomainEventSerializer(
             provider.GetRequiredService<DomainEventTypeCatalog>(), provider.GetServices<IJsonDomainEventUpcaster>(),
-            provider.GetRequiredService<JsonSerializerOptions>()));
+            provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json)));
         services.TryAddSingleton<IReactorPrincipalProvider, SystemReactorPrincipalProvider>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, PortiaStartupValidator>());
         return builder;

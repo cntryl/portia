@@ -13,8 +13,32 @@ public sealed class StartupValidationTests
         _ = ReferencedJsonComposition.Add(services);
         using var provider = services.BuildServiceProvider();
 
-        Assert.True(provider.GetRequiredService<JsonSerializerOptions>()
+        Assert.True(provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json)
             .TryGetTypeInfo(typeof(ReferencedContractJsonPayload), out _));
+    }
+
+    /// <summary>
+    ///     An application's own <see cref="JsonSerializerOptions" /> registration, made before or after Portia's,
+    ///     never becomes Portia's wire format, and Portia never replaces it.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ApplicationJsonOptionsNeverBecomePortiasWireFormat(bool registeredFirst)
+    {
+        var application = new JsonSerializerOptions { WriteIndented = true };
+        var services = new ServiceCollection();
+        if (registeredFirst)
+            _ = services.AddSingleton(application);
+        _ = ReferencedJsonComposition.Add(services);
+        if (!registeredFirst)
+            _ = services.AddSingleton(application);
+        using var provider = services.BuildServiceProvider();
+
+        var portia = provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
+        Assert.NotSame(application, portia);
+        Assert.True(portia.TryGetTypeInfo(typeof(ReferencedContractJsonPayload), out _));
+        Assert.Same(application, provider.GetRequiredService<JsonSerializerOptions>());
     }
 
     [Fact]

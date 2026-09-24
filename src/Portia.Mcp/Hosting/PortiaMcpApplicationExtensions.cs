@@ -75,7 +75,7 @@ public static class PortiaMcpApplicationExtensions
                 ServiceDescriptor.Singleton<IHostedService, McpStartupValidator>());
             _ = application.Services.AddSingleton<McpServerTool>(services =>
                 new PortiaMcpServerTool(registration,
-                    services.GetRequiredService<JsonSerializerOptions>(),
+                    services.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json),
                     services.GetService<ILogger<PortiaMcpServerTool>>()
                     ?? NullLogger<PortiaMcpServerTool>.Instance));
         }

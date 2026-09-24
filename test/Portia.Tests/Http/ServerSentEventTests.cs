@@ -81,7 +81,8 @@ public sealed class ServerSentEventTests : IAsyncDisposable
     public async Task ShouldStopAnIdleSourceWhenAKeepAliveWriteFails(bool throwingCallback)
     {
         var services = new ServiceCollection()
-            .AddSingleton(new JsonSerializerOptions { TypeInfoResolver = new DefaultJsonTypeInfoResolver() })
+            .AddKeyedSingleton(PortiaServiceKeys.Json,
+                new JsonSerializerOptions { TypeInfoResolver = new DefaultJsonTypeInfoResolver() })
             .Configure<PortiaHttpOptions>(options => options.ServerSentEventKeepAlive = TimeSpan.FromMilliseconds(10));
         await using var provider = services.BuildServiceProvider();
         var context = new DefaultHttpContext { RequestServices = provider };
