@@ -45,7 +45,11 @@ Activities use these ordered attributes:
 - `portia.outcome`: final bounded outcome
 
 Portia never adds payloads, tokens, claims, request IDs, routes, or `RequestError.Message` to telemetry.
-Requested cancellation records `canceled` without error status or an exception event. Expected
+Requested cancellation records `canceled` without error status or an exception event; so does a
+stream whose consumer stops enumerating early, unless disposing the stream then fails. A consumer
+that throws while handling an item also stops early: the request itself did not fail, so the
+consumer's failure belongs to the consumer's own telemetry (an HTTP stream records it as a runner
+fault). Expected
 `RequestError` values record their bounded kind and error status without the business message.
 Unexpected failures, including unrequested cancellation, record `fault`, error status, and the full
 exception event when the activity was sampled for data.
@@ -87,7 +91,8 @@ envelopes and failed dispatches are lost.
 Registered request and component names are startup-bounded. Never use tenant, aggregate, partition,
 worker, request, correlation, or execution IDs; concrete routes; exception types or messages;
 payload values; or arbitrary reasons as metric values. Processor lag is based on the last committed
-event occurrence and clamped to zero.
+event occurrence and clamped to zero. Only a committed batch records lag and processed events; a failed
+batch records only its duration and outcome.
 
 ## Log catalog
 

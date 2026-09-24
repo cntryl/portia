@@ -115,8 +115,10 @@ public sealed class ReactorRunner(
             }
             finally
             {
-                PortiaTelemetry.ProcessorBatchFinished(started, reactor.Name, "reactor", outcome, count,
-                    lastOccurrence);
+                // Only a committed batch processed its events and moved the checkpoint the lag measures.
+                var committed = outcome == "success";
+                PortiaTelemetry.ProcessorBatchFinished(started, reactor.Name, "reactor", outcome,
+                    committed ? count : 0, committed ? lastOccurrence : null);
             }
         }
     }

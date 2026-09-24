@@ -138,7 +138,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         PortiaTelemetry.RequestStarted(policies.Name, transport);
         var outcome = "fault";
         var completed = false;
-        var streamFailure = new StrongBox<RequestError?>();
+        var observed = new StreamObservation();
+        var suspended = false;
         try
         {
             if (policies.IsUnprotected)
@@ -156,9 +157,13 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             }
 
             await foreach (var item in CatchStream(EnumerateStream(registration, policies, request, requestContext, ct),
-                               activity, streamFailure, policies.HasGuards, ct).ConfigureAwait(false))
+                               activity, observed, policies.HasGuards, ct).ConfigureAwait(false))
             {
+                // A consumer that stops early (break, FirstAsync, or its own exception) disposes this
+                // iterator while it is suspended here, so the finally below runs with this still set.
+                suspended = true;
                 yield return item;
+                suspended = false;
             }
 
             outcome = "success";
@@ -168,9 +173,17 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         finally
         {
             // A failed guard or commit-time concurrency race is a settled request outcome, not a fault.
-            if (!completed && streamFailure.Value is { } streamError)
+            if (!completed && observed.Failure is { } streamError)
             {
                 outcome = PortiaTelemetry.Outcome(false, streamError);
+                completed = true;
+            }
+
+            // Stopping early cancels the rest of the stream. It is a fault only if disposing the stream faulted.
+            if (!completed && suspended && !observed.Faulted)
+            {
+                PortiaTelemetry.RecordCanceled(activity);
+                outcome = "canceled";
                 completed = true;
             }
 
@@ -203,14 +216,14 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     // A yield return cannot sit inside a try with a catch, so enumeration is wrapped in methods
     // that can, keeping mid-stream faults on the activity like the unary paths.
     static async IAsyncEnumerable<TOut> CatchStream<TOut>(IAsyncEnumerable<TOut> source, Activity? activity,
-        StrongBox<RequestError?> streamFailure, bool hasGuards, [EnumeratorCancellation] CancellationToken ct)
+        StreamObservation observed, bool hasGuards, [EnumeratorCancellation] CancellationToken ct)
     {
         var enumerator = source.GetAsyncEnumerator(ct);
         try
         {
             while (true)
             {
-                var (hasValue, value) = await MoveNextAsync(enumerator, activity, streamFailure, hasGuards, ct)
+                var (hasValue, value) = await MoveNextAsync(enumerator, activity, observed, hasGuards, ct)
                     .ConfigureAwait(false);
                 if (!hasValue)
                 {
@@ -224,12 +237,12 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         finally
         {
-            await DisposeAsync(enumerator, activity, streamFailure, ct).ConfigureAwait(false);
+            await DisposeAsync(enumerator, activity, observed, ct).ConfigureAwait(false);
         }
     }
 
     static async ValueTask<(bool HasValue, TOut? Value)> MoveNextAsync<TOut>(IAsyncEnumerator<TOut> enumerator,
-        Activity? activity, StrongBox<RequestError?> streamFailure, bool hasGuards, CancellationToken ct)
+        Activity? activity, StreamObservation observed, bool hasGuards, CancellationToken ct)
     {
         try
         {
@@ -239,14 +252,14 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         catch (RequestGuardException ex) when (hasGuards)
         {
-            streamFailure.Value = ex.Error;
+            observed.Failure = ex.Error;
             PortiaTelemetry.RecordOutcome(activity, false, ex.Error);
             throw;
         }
         catch (EventStreamConcurrencyException)
         {
             var error = ConcurrencyError();
-            streamFailure.Value = error;
+            observed.Failure = error;
             PortiaTelemetry.RecordOutcome(activity, false, error);
             throw;
         }
@@ -257,13 +270,14 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         catch (Exception ex)
         {
+            observed.Faulted = true;
             PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }
     }
 
     static async ValueTask DisposeAsync<TOut>(IAsyncEnumerator<TOut> enumerator, Activity? activity,
-        StrongBox<RequestError?> streamFailure, CancellationToken ct)
+        StreamObservation observed, CancellationToken ct)
     {
         try
         {
@@ -271,23 +285,34 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            streamFailure.Value = null;
+            observed.Failure = null;
             PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
         catch (EventStreamConcurrencyException)
         {
             var error = ConcurrencyError();
-            streamFailure.Value = error;
+            observed.Failure = error;
             PortiaTelemetry.RecordOutcome(activity, false, error);
             throw;
         }
         catch (Exception ex)
         {
-            streamFailure.Value = null;
+            observed.Failure = null;
+            observed.Faulted = true;
             PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }
+    }
+
+    // What the enumeration wrappers observed on behalf of the dispatch iterator, which cannot catch.
+    sealed class StreamObservation
+    {
+        // A failed guard or commit-time concurrency race: a settled outcome that still propagates.
+        public RequestError? Failure { get; set; }
+
+        // An unexpected failure, including one raised while an early stop disposes the stream.
+        public bool Faulted { get; set; }
     }
 
     // Behaviors are selected by scope assignability, which says nothing about request shape: a

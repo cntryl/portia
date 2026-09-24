@@ -148,6 +148,11 @@ public sealed class ComponentRegistrationTests
     public void ShouldRejectInvalidTransportIds(string value) =>
         _ = Assert.Throws<ArgumentException>(() => new RequestTransportId(value));
 
+    /// <summary>Verifies an uninitialized transport ID still formats as a string, as its signature promises.</summary>
+    [Fact]
+    public void ShouldFormatDefaultTransportIdAsEmpty() =>
+        Assert.Equal(string.Empty, default(RequestTransportId).ToString());
+
     /// <summary>Verifies registrations cannot contain the invalid default transport ID.</summary>
     [Fact]
     public void ShouldRejectARegistrationWithoutAValidTransport()

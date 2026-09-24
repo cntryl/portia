@@ -339,8 +339,10 @@ public abstract class Aggregate(
             throw new InvalidOperationException("The event metadata factory returned a non-UTC occurrence time.");
         }
 
-        _ = _issuedEventIds.Add(metadata.EventId);
+        // Attach first: an event that already carries metadata refuses it, and the ID it was offered
+        // must not be recorded as used.
         ev.AttachAggregateMetadata(metadata with { IsAudit = isAudit });
+        _ = _issuedEventIds.Add(metadata.EventId);
     }
 
     void ValidateCommittedEvent(DomainEvent ev, ulong expectedVersion)
