@@ -65,7 +65,7 @@ public abstract class Projector
         if (_boundIdentity is { } bound && bound != identity)
         {
             throw new InvalidOperationException(
-                $"Projector '{GetType().FullName}' is already bound to workload '{bound}' and cannot be rebound to '{identity}'.");
+                $"Projector '{GetType().FullName}' is already bound to workload '{bound.Name}' and cannot be rebound to workload '{identity.Name}' or another tenant.");
         }
 
         if (_boundIdentity == identity)

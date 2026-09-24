@@ -9,7 +9,8 @@ namespace Cntryl.Portia;
 /// <param name="attempts">The number of consecutive failed passes.</param>
 /// <param name="innerException">The final pass failure.</param>
 public sealed class WorkloadFailureException(WorkloadIdentity identity, int attempts, Exception innerException)
-    : Exception($"Workload '{identity}' failed {attempts} consecutive attempts.", innerException)
+    // The identity's tenant stays in the Identity property; the message reaches logs and traces.
+    : Exception($"Workload '{identity.Name}' failed {attempts} consecutive attempts.", innerException)
 {
     /// <summary>Gets the workload that exhausted its attempts.</summary>
     public WorkloadIdentity Identity { get; } = identity;

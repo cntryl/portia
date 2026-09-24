@@ -362,7 +362,7 @@ public abstract class Aggregate(
         if (metadata.AggregateId != Id)
         {
             throw new InvalidOperationException(
-                $"Event aggregate ID '{metadata.AggregateId}' does not match aggregate ID '{Id}'.");
+                "An event's aggregate ID does not match the aggregate it is applied to.");
         }
 
         if (metadata.AggregateVersion != expectedVersion)

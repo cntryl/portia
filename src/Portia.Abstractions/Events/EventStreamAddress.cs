@@ -49,18 +49,21 @@ public sealed record EventStreamAddress
     /// <returns>The parsed stream address.</returns>
     public static EventStreamAddress Parse(string route)
     {
+        // The route is not echoed: its realm is typically a tenant and its resource an aggregate ID.
+        const string NonCanonicalRouteMessage =
+            "A value is not a canonical stream route of the form 'stream://{realm}/{area}/{resource}'.";
         ArgumentException.ThrowIfNullOrWhiteSpace(route);
         const string prefix = "stream://";
 
         if (!route.StartsWith(prefix, StringComparison.Ordinal))
         {
-            throw new FormatException($"'{route}' is not a canonical stream route.");
+            throw new FormatException(NonCanonicalRouteMessage);
         }
 
         var segments = route[prefix.Length..].Split('/');
         return segments.Length == 3
             ? new EventStreamAddress(segments[0], segments[1], segments[2])
-            : throw new FormatException($"'{route}' is not a canonical stream route.");
+            : throw new FormatException(NonCanonicalRouteMessage);
     }
 
     static string ValidateSegment(string value, string parameterName)
