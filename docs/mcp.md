@@ -89,9 +89,12 @@ hosting diagnostics cannot corrupt the protocol stream.
 
 `IRequest<T>` successes return an object-shaped `{ "result": T }` as MCP structured content and as
 compact JSON text, keeping the result valid for every supported MCP protocol revision. A successful
-`IRequest` returns a short success message. Expected Portia failures set MCP `isError` and include a
-structured `kind`, `message`, and `isTransient` object so a model can correct inputs or decide whether
-retrying is appropriate. Binding, missing-actor, and unexpected failures use stable `Binding`,
+`IRequest` returns a short success message. Expected Portia failures set MCP `isError`, carry the
+message as text content, and report `kind`, `message`, and `isTransient` under the result's
+`_meta["portia/error"]`, so a model can correct inputs and a client can decide whether retrying is
+appropriate. A failure carries no structured content: the protocol requires structured content to conform
+to the tool's output schema, which describes a successful result, and clients such as the TypeScript SDK
+reject a failure that does not. Binding, missing-actor, and unexpected failures use stable `Binding`,
 `Unauthorized`, and `Internal` envelopes. Portia does not disclose stack traces, claims, tokens,
 routes, exception messages, or internal event data.
 
@@ -110,8 +113,8 @@ var result = await mcp.When("accounts.get", new Dictionary<string, object?>
 ```
 
 The scenario owns the official MCP client and transport but never disposes `client`. Catalog and
-call snapshots contain detached schemas, hints, metadata, text, and structured JSON for ordinary
-assertions. `ExpectFailure(kind)` checks Portia's structured failure kind. Authentication is not a
+call snapshots contain detached schemas, hints, metadata, text, structured JSON, and Portia's failure
+details (`Error`) for ordinary assertions. `ExpectFailure(kind)` checks Portia's failure kind. Authentication is not a
 scenario shortcut: configure it on the supplied HTTP client so ASP.NET authorization and Portia
 actor resolution stay inside the test.
 

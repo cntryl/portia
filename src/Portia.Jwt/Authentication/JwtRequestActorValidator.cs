@@ -29,9 +29,17 @@ namespace Cntryl.Portia;
 ///     <see cref="TokenValidationParameters.ClockSkew" /> at all) in
 ///     <c>JwtRequestActorValidatorTests.ShouldRejectRecentlyExpiredTokenEvenWhenCallerUsesDefaultClockSkew</c>.
 /// </param>
-public sealed class JwtRequestActorValidator(TokenValidationParameters validationParameters) : IRequestActorValidator
+/// <param name="mapInboundClaims">
+///     Whether token claim names are mapped to .NET claim types (<c>sub</c> to
+///     <see cref="ClaimTypes.NameIdentifier" />, <c>unique_name</c> to <see cref="ClaimTypes.Name" />, <c>role</c> to
+///     <see cref="ClaimTypes.Role" />). Defaults to <see langword="true" />, the default of ASP.NET Core's
+///     <c>JwtBearerOptions.MapInboundClaims</c>, so a worker sees the same principal the HTTP pipeline saw for the
+///     same token. Pass the value the application's bearer authentication uses.
+/// </param>
+public sealed class JwtRequestActorValidator(TokenValidationParameters validationParameters, bool mapInboundClaims = true)
+    : IRequestActorValidator
 {
-    static readonly JsonWebTokenHandler Handler = new();
+    readonly JsonWebTokenHandler _handler = new() { MapInboundClaims = mapInboundClaims };
 
     readonly TokenValidationParameters _validationParameters = Clone(validationParameters);
 
@@ -46,7 +54,7 @@ public sealed class JwtRequestActorValidator(TokenValidationParameters validatio
                 "No actor token was provided."));
         }
 
-        var validationResult = await Handler.ValidateTokenAsync(token, _validationParameters).ConfigureAwait(false);
+        var validationResult = await _handler.ValidateTokenAsync(token, _validationParameters).ConfigureAwait(false);
 
         if (!validationResult.IsValid)
         {

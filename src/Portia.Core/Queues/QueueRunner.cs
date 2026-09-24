@@ -110,6 +110,14 @@ public sealed class QueueRunner(
                                 actorToken, traceContext, scope.TimeProvider), delivery.Token)
                         .ConfigureAwait(false);
 
+                    // A lost reservation returned the delivery to the transport, which redelivers it: this
+                    // runner no longer owns it and must not dead-letter, abandon, or acknowledge it.
+                    if (queued.ReservationCancellation.IsCancellationRequested)
+                    {
+                        RecordLostReservation();
+                        continue;
+                    }
+
                     if (!dispatch.WasDispatched)
                     {
                         deliveryOutcome = await CompleteTerminalAsync(scope, queued, dispatch.Outcome.Error, null,
@@ -119,8 +127,18 @@ public sealed class QueueRunner(
                     }
                     else if (dispatch.Outcome.IsSuccess)
                     {
-                        await queued.CompleteAsync(ct).ConfigureAwait(false);
-                        deliveryOutcome = RequestDeliveryOutcome.Completed;
+                        // The request was handled, so it is never dead-lettered: a refused acknowledgment
+                        // leaves the delivery with the transport, whose redelivery is the at-least-once path.
+                        try
+                        {
+                            await queued.CompleteAsync(ct).ConfigureAwait(false);
+                            deliveryOutcome = RequestDeliveryOutcome.Completed;
+                        }
+                        catch (Exception acknowledgmentException) when (!ct.IsCancellationRequested)
+                        {
+                            PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Cleanup,
+                                acknowledgmentException, _logger);
+                        }
                     }
                     else if (dispatch.Outcome.Error is { IsTransient: false } permanent)
                     {
@@ -157,6 +175,9 @@ public sealed class QueueRunner(
                     // An unrecognized exception's retriability is unknown; abandoning (rather than
                     // silently dropping the request) is the safer default.
                     PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, _logger);
+                    if (queued.ReservationCancellation.IsCancellationRequested)
+                        continue;
+
                     if (IsRetryLimitReached(scope, queued))
                     {
                         deliveryOutcome = await CompleteTerminalAsync(scope, queued, null, ex,
@@ -181,6 +202,10 @@ public sealed class QueueRunner(
             }
         }
     }
+
+    void RecordLostReservation() =>
+        PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution,
+            new QueueReservationLostException(), _logger);
 
     static bool IsRetryLimitReached(IQueueDeliveryScope scope, IQueuedRequest queued) =>
         scope.Options.TerminalAttempt is { } terminal && queued.Attempt >= terminal;

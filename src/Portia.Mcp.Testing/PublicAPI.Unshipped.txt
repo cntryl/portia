@@ -1,1 +1,2 @@
 #nullable enable
+Cntryl.Portia.Testing.McpCallSnapshot.Error.get -> System.Text.Json.JsonElement?

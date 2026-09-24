@@ -274,6 +274,51 @@ public sealed class AggregateExecutorTests
         Assert.Equal(0, store.Appends);
     }
 
+    /// <summary>
+    ///     An operation that throws commits nothing: what it raised is discarded and the instance is invalidated,
+    ///     so a caller that reuses it cannot save a failed operation's events later.
+    /// </summary>
+    [Fact]
+    public async Task ShouldDiscardAndInvalidateWhenOperationThrows()
+    {
+        var store = new RecordingEventStore();
+        var executor = Executor(store);
+        var aggregate = new TestAggregate(Uuid.CreateVersion4());
+
+        _ = await Assert.ThrowsAsync<DivideByZeroException>(() => executor.ExecuteAsync(aggregate, current =>
+        {
+            current.ChangeValue(5);
+            throw new DivideByZeroException();
+        }, Context()).AsTask());
+
+        Assert.Empty(aggregate.UncommittedEvents);
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(aggregate, current =>
+        {
+            current.ChangeValue(6);
+            return AggregateOutcome.Commit(Result.Success);
+        }, Context()).AsTask());
+        Assert.Equal(0, store.Appends);
+    }
+
+    /// <summary>The value-returning overload discards a throwing operation's records the same way.</summary>
+    [Fact]
+    public async Task ShouldDiscardWhenValueOperationThrows()
+    {
+        var store = new RecordingEventStore();
+        var executor = Executor(store);
+        var aggregate = new TestAggregate(Uuid.CreateVersion4());
+
+        _ = await Assert.ThrowsAsync<DivideByZeroException>(() => executor.ExecuteAsync<TestAggregate, int>(
+            aggregate, current =>
+            {
+                current.Audit("attempted");
+                throw new DivideByZeroException();
+            }, Context()).AsTask());
+
+        Assert.Empty(aggregate.UncommittedAudits);
+        Assert.Equal(0, store.Appends);
+    }
+
     /// <summary>A discarded outcome with nothing recorded leaves the instance usable.</summary>
     [Fact]
     public async Task ShouldKeepAggregateUsableAfterDiscardWithNothingPending()

@@ -20,6 +20,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace Cntryl.Portia.Tests;
@@ -369,9 +370,9 @@ public sealed class McpRegistrationTests
 
         // Assert
         Assert.True(result.IsError);
-        Assert.Equal("Conflict", result.StructuredContent?.GetProperty("kind").GetString());
-        Assert.Equal("Greeting already exists.", result.StructuredContent?.GetProperty("message").GetString());
-        Assert.True(result.StructuredContent?.GetProperty("isTransient").GetBoolean());
+        Assert.Equal("Conflict", PortiaFailure(result).GetProperty("kind").GetString());
+        Assert.Equal("Greeting already exists.", PortiaFailure(result).GetProperty("message").GetString());
+        Assert.True(PortiaFailure(result).GetProperty("isTransient").GetBoolean());
         var receive = Assert.Single(stopped, activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);
         var execute = Assert.Single(stopped, activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName);
         Assert.Equal("conflict", receive.GetTagItem("portia.outcome"));
@@ -404,10 +405,10 @@ public sealed class McpRegistrationTests
 
         Assert.Equal(1, probe.Committed);
         Assert.True(result.IsError);
-        Assert.Equal("Internal", result.StructuredContent?.GetProperty("kind").GetString());
+        Assert.Equal("Internal", PortiaFailure(result).GetProperty("kind").GetString());
         Assert.Equal("The tool could not be completed.",
-            result.StructuredContent?.GetProperty("message").GetString());
-        Assert.DoesNotContain("committed", result.StructuredContent?.GetRawText(), StringComparison.Ordinal);
+            PortiaFailure(result).GetProperty("message").GetString());
+        Assert.DoesNotContain("committed", PortiaFailure(result).GetRawText(), StringComparison.Ordinal);
         var receive = Assert.Single(stopped, activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);
         Assert.Equal(ActivityStatusCode.Error, receive.Status);
         Assert.Equal("fault", receive.GetTagItem("portia.outcome"));
@@ -434,8 +435,8 @@ public sealed class McpRegistrationTests
         var result = await client.CallToolAsync("failures.actor", new Dictionary<string, object?>());
 
         Assert.True(result.IsError);
-        Assert.Equal("Internal", result.StructuredContent?.GetProperty("kind").GetString());
-        Assert.DoesNotContain("Actor 42", result.StructuredContent?.GetRawText(), StringComparison.Ordinal);
+        Assert.Equal("Internal", PortiaFailure(result).GetProperty("kind").GetString());
+        Assert.DoesNotContain("Actor 42", PortiaFailure(result).GetRawText(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -461,7 +462,7 @@ public sealed class McpRegistrationTests
         });
 
         Assert.True(result.IsError);
-        Assert.Equal("Binding", result.StructuredContent?.GetProperty("kind").GetString());
+        Assert.Equal("Binding", PortiaFailure(result).GetProperty("kind").GetString());
         var receive = Assert.Single(stopped, activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);
         Assert.Equal("validation", receive.GetTagItem("portia.outcome"));
         Assert.Equal(ActivityStatusCode.Error, receive.Status);
@@ -501,6 +502,40 @@ public sealed class McpRegistrationTests
             result.StructuredContent?.GetProperty("result").GetString());
     }
 
+    /// <summary>
+    ///     A failing tool that declares an output schema returns no structured content, because the protocol
+    ///     requires structured content to conform to that schema; Portia's failure details travel in the result
+    ///     metadata instead, where clients read them without validating against the schema.
+    /// </summary>
+    [Fact]
+    public async Task ShouldKeepFailuresOfResultBearingToolsConformantToTheirOutputSchema()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .AddMcpTool<ReadGreeting>()
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        UseTestActor(app);
+        _ = app.MapPortiaMcp();
+        await app.StartAsync();
+        await using var client = await HttpClientAsync(app);
+
+        var result = await client.CallToolAsync("greetings.read", new Dictionary<string, object?> { ["name"] = 42 });
+
+        Assert.True(result.IsError);
+        Assert.Null(result.StructuredContent);
+        var failure = PortiaFailure(result);
+        Assert.Equal("Binding", failure.GetProperty("kind").GetString());
+        Assert.Equal("The tool input is not valid.", failure.GetProperty("message").GetString());
+        Assert.False(failure.GetProperty("isTransient").GetBoolean());
+        Assert.Equal("The tool input is not valid.", Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text);
+    }
+
+    static JsonElement PortiaFailure(CallToolResult result) =>
+        JsonSerializer.SerializeToElement(result.Meta?["portia/error"]);
+
     [Fact]
     public async Task ShouldRejectMalformedNestedInputBeforeResolvingActorOrInvokingHandler()
     {
@@ -529,7 +564,7 @@ public sealed class McpRegistrationTests
         });
 
         Assert.True(result.IsError);
-        Assert.Equal("Binding", result.StructuredContent?.GetProperty("kind").GetString());
+        Assert.Equal("Binding", PortiaFailure(result).GetProperty("kind").GetString());
         Assert.Equal(0, actor.Invocations);
         Assert.Equal(0, probe.Invocations);
     }
@@ -567,12 +602,12 @@ public sealed class McpRegistrationTests
 
         Assert.False(winner.IsError);
         Assert.True(conflict.IsError);
-        Assert.Equal("Conflict", conflict.StructuredContent?.GetProperty("kind").GetString());
+        Assert.Equal("Conflict", PortiaFailure(conflict).GetProperty("kind").GetString());
         Assert.Equal("The request conflicted with a concurrent update.",
-            conflict.StructuredContent?.GetProperty("message").GetString());
-        Assert.True(conflict.StructuredContent?.GetProperty("isTransient").GetBoolean());
-        Assert.DoesNotContain("Fitz", conflict.StructuredContent?.GetRawText(), StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("secret/tenant-stream", conflict.StructuredContent?.GetRawText(),
+            PortiaFailure(conflict).GetProperty("message").GetString());
+        Assert.True(PortiaFailure(conflict).GetProperty("isTransient").GetBoolean());
+        Assert.DoesNotContain("Fitz", PortiaFailure(conflict).GetRawText(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret/tenant-stream", PortiaFailure(conflict).GetRawText(),
             StringComparison.Ordinal);
         Assert.Equal(2, probe.Attempts);
         Assert.Equal(1, probe.Commits);
@@ -638,7 +673,7 @@ public sealed class McpRegistrationTests
 
         // Assert
         Assert.Equal(0, actor.Invocations);
-        Assert.DoesNotContain("provider-actor", result.StructuredContent?.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain("provider-actor", PortiaFailure(result).GetRawText(), StringComparison.Ordinal);
     }
 
     [Theory]
@@ -667,7 +702,7 @@ public sealed class McpRegistrationTests
 
         // Assert
         Assert.True(result.IsError);
-        Assert.Equal("Binding", result.StructuredContent?.GetProperty("kind").GetString());
+        Assert.Equal("Binding", PortiaFailure(result).GetProperty("kind").GetString());
     }
 
     [Fact]

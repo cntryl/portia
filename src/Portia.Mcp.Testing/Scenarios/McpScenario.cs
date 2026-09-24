@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -57,6 +58,13 @@ public sealed class McpScenario : IAsyncDisposable
             .ConfigureAwait(false);
         var text = result.Content.OfType<TextContentBlock>().Select(block => block.Text).ToArray();
         var structured = result.StructuredContent?.Clone();
-        return new McpCallSnapshot(result.IsError == true, text, structured);
+        JsonElement? error = null;
+        if (result.Meta?[McpFailureMetadata.Key] is { } failure)
+        {
+            using var document = JsonDocument.Parse(failure.ToJsonString());
+            error = document.RootElement.Clone();
+        }
+
+        return new McpCallSnapshot(result.IsError == true, text, structured, error);
     }
 }

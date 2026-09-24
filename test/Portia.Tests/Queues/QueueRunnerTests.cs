@@ -280,6 +280,52 @@ public sealed class QueueRunnerTests
         Assert.Equal(["completed", "fault"], deliveryOutcomes.Order());
     }
 
+    /// <summary>
+    ///     A request its handler completed is never dead-lettered, even at the terminal attempt: a refused
+    ///     acknowledgment is a cleanup fault, and the transport's redelivery is the at-least-once path.
+    /// </summary>
+    [Fact]
+    public async Task ShouldNotDeadLetterASuccessfulRequestWhoseAcknowledgmentFailsAtTerminalAttempt()
+    {
+        using var busHost = TestRequestBus.Create();
+        using var deliveryMeter = ListenToDeliveries(out var deliveryOutcomes);
+        var queued = new FakeQueuedRequest(new ChangeValue(5), attempt: 3, throwOnAcknowledge: true);
+        var terminal = new RecordingTerminalHandler();
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
+
+        await runner.RunAsync();
+
+        Assert.Empty(terminal.Failures);
+        Assert.Equal(1, queued.CompletionCount);
+        Assert.False(queued.Abandoned);
+        Assert.Equal(["fault"], deliveryOutcomes);
+    }
+
+    /// <summary>
+    ///     A delivery whose reservation was lost during dispatch belongs to the transport again, which will
+    ///     redeliver it, so the runner neither dead-letters nor abandons it.
+    /// </summary>
+    [Fact]
+    public async Task ShouldLeaveADeliveryWhoseReservationWasLostToTheTransport()
+    {
+        using var busHost = TestRequestBus.Create();
+        using var deliveryMeter = ListenToDeliveries(out var deliveryOutcomes);
+        using var lost = new CancellationTokenSource();
+        await lost.CancelAsync();
+        var queued = new FakeQueuedRequest(new ChangeValue(5), true, attempt: 3, reservation: lost.Token);
+        var terminal = new RecordingTerminalHandler();
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
+
+        await runner.RunAsync();
+
+        Assert.Empty(terminal.Failures);
+        Assert.False(queued.Completed);
+        Assert.False(queued.Abandoned);
+        Assert.Equal(["fault"], deliveryOutcomes);
+    }
+
     /// <summary>A retryable handler result at the configured threshold becomes terminal.</summary>
     [Fact]
     public async Task ShouldInvokeTerminalHandlerGivenRetryableResultAtTerminalAttempt()
@@ -882,8 +928,11 @@ public sealed class QueueRunnerTests
         bool transportMismatch = false,
         bool invocationMayBeReadOnce = false,
         Exception? readException = null,
-        bool throwOnInvocation = false) : IQueuedRequest
+        bool throwOnInvocation = false,
+        CancellationToken reservation = default) : IQueuedRequest
     {
+        public CancellationToken ReservationCancellation => reservation;
+
         public int CompletionCount { get; private set; }
 
         public int AbandonmentCount { get; private set; }

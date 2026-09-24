@@ -1,1 +1,3 @@
 #nullable enable
+*REMOVED*Cntryl.Portia.JwtRequestActorValidator.JwtRequestActorValidator(Microsoft.IdentityModel.Tokens.TokenValidationParameters! validationParameters) -> void
+Cntryl.Portia.JwtRequestActorValidator.JwtRequestActorValidator(Microsoft.IdentityModel.Tokens.TokenValidationParameters! validationParameters, bool mapInboundClaims = true) -> void

@@ -39,8 +39,8 @@ public sealed class McpCallExpectations
     }
 
     static string? KindOf(McpCallSnapshot snapshot) =>
-        snapshot.StructuredJson is { ValueKind: JsonValueKind.Object } json
-        && json.TryGetProperty("kind", out var kind) && kind.ValueKind == JsonValueKind.String
+        snapshot.Error is { ValueKind: JsonValueKind.Object } error
+        && error.TryGetProperty("kind", out var kind) && kind.ValueKind == JsonValueKind.String
             ? kind.GetString()
             : null;
 

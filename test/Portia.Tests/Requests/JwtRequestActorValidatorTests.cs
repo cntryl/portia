@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
@@ -43,7 +44,39 @@ public sealed class JwtRequestActorValidatorTests
         Assert.True(result.IsSuccess);
         var actor = result.Value;
         Assert.NotNull(actor);
+        Assert.Equal("user-1", actor.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+    }
+
+    /// <summary>
+    ///     A worker must see the same principal the HTTP pipeline saw for the same token, so inbound claims are
+    ///     mapped the way ASP.NET Core's JWT bearer authentication maps them by default.
+    /// </summary>
+    [Fact]
+    public async Task ShouldMapInboundClaimsLikeJwtBearerByDefault()
+    {
+        var validator = new JwtRequestActorValidator(ValidationParameters);
+        var token = CreateToken(DateTime.UtcNow.AddMinutes(5), "user-1",
+            claims: new Dictionary<string, object> { ["unique_name"] = "alice", ["role"] = "admin" });
+
+        var actor = (await validator.ValidateAsync(token)).Value;
+
+        Assert.Equal("alice", actor.Identity?.Name);
+        Assert.Equal("user-1", actor.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+        Assert.True(actor.IsInRole("admin"));
+    }
+
+    /// <summary>An application that turned claim mapping off for its bearer authentication turns it off here too.</summary>
+    [Fact]
+    public async Task ShouldKeepTokenClaimNamesWhenInboundMappingIsOff()
+    {
+        var validator = new JwtRequestActorValidator(ValidationParameters, mapInboundClaims: false);
+        var token = CreateToken(DateTime.UtcNow.AddMinutes(5), "user-1",
+            claims: new Dictionary<string, object> { ["role"] = "admin" });
+
+        var actor = (await validator.ValidateAsync(token)).Value;
+
         Assert.Equal("user-1", actor.FindFirst("sub")?.Value);
+        Assert.Equal("admin", actor.FindFirst("role")?.Value);
     }
 
     /// <summary>
@@ -207,7 +240,7 @@ public sealed class JwtRequestActorValidatorTests
     }
 
     static string CreateToken(DateTime expires, string subject, SymmetricSecurityKey? signingKey = null,
-        DateTime? notBefore = null)
+        DateTime? notBefore = null, Dictionary<string, object>? claims = null)
     {
         var handler = new JsonWebTokenHandler();
         var descriptor = new SecurityTokenDescriptor
@@ -222,7 +255,7 @@ public sealed class JwtRequestActorValidatorTests
             NotBefore = notBefore,
             Expires = expires,
             SigningCredentials = new SigningCredentials(signingKey ?? SigningKey, SecurityAlgorithms.HmacSha256),
-            Claims = new Dictionary<string, object> { ["sub"] = subject }
+            Claims = new Dictionary<string, object>(claims ?? []) { ["sub"] = subject }
         };
 
         return handler.CreateToken(descriptor);
