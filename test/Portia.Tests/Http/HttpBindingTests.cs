@@ -928,6 +928,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             Content = JsonContent.Create(new { })
         };
         request.Headers.Add("Prefer", "respond-async");
+        request.Headers.Add("Authorization", "Bearer carried");
 
         var response = await client.SendAsync(request);
 
@@ -939,6 +940,26 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.NotEqual(Uuid.Empty, Uuid.Parse(requestId, CultureInfo.InvariantCulture));
         _ = Assert.Single(publisher.Enqueued);
         _ = Assert.IsType<HttpSendPing>(publisher.Enqueued[0]);
+    }
+
+    /// <summary>
+    ///     An anonymous caller has no credential a worker could validate again, so its preference is
+    ///     declined and the request runs now rather than being accepted and then rejected unseen.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRunAnonymousCallerSynchronouslyWhenRespondAsyncIsPreferred()
+    {
+        var publisher = new RecordingRequestQueuePublisher();
+        var client = await StartAsync(app => app.MapPortiaPost<HttpSendPing>("/ping"),
+            services => services.AddSingleton<IRequestQueuePublisher>(publisher));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/ping") { Content = JsonContent.Create(new { }) };
+        request.Headers.Add("Prefer", "respond-async");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.False(response.Headers.Contains("Preference-Applied"));
+        Assert.Empty(publisher.Enqueued);
     }
 
     /// <summary>
@@ -976,6 +997,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         using var request = new HttpRequestMessage(HttpMethod.Post, "/configured-ping")
         { Content = JsonContent.Create(new { }) };
         request.Headers.Add("Prefer", "respond-async");
+        request.Headers.Add("Authorization", "Bearer carried");
 
         var response = await client.SendAsync(request);
 

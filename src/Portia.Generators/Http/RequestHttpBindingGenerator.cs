@@ -785,13 +785,17 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             // Accepting onto a durable queue is as consequential as running the request, so the
             // caller's authorization is settled here rather than at the worker: a 202 is final,
             // and deferring the refusal would turn an unauthorized call into a dead letter that
-            // the caller never learns about.
+            // the caller never learns about. For the same reason only a caller with a Bearer
+            // credential is answered asynchronously: the worker validates the carried credential
+            // again, and an anonymous caller has none to carry.
             _ = source
                 // A result hook shapes the response to the completed operation, so an endpoint that
                 // declares one stays synchronous; honoring a preference is optional (RFC 7240).
                 .Append("            if (")
                 .Append(call.Configured ? "configuration.ResultHandler is null && " : string.Empty)
-                .AppendLine("global::Cntryl.Portia.PortiaHttpBinding.PrefersRespondAsync(httpContext))")
+                .AppendLine("global::Cntryl.Portia.PortiaHttpBinding.PrefersRespondAsync(httpContext)")
+                .AppendLine(
+                    "                && global::Cntryl.Portia.PortiaHttpBinding.ReadPortableBearerCredential(httpContext) is { } actorToken)")
                 .AppendLine("            {")
                 .AppendLine(
                     "                var authorization = await bus.AuthorizeAsync(request, context, ct).ConfigureAwait(false);")
@@ -800,8 +804,6 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 .AppendLine("                    return authorization.ToHttpResult();")
                 .AppendLine("                }")
                 .AppendLine()
-                .AppendLine(
-                    "                var actorToken = global::Cntryl.Portia.PortiaHttpBinding.ReadPortableBearerCredential(httpContext);")
                 .AppendLine(
                     "                await queue.EnqueueAsync(request, global::Cntryl.Portia.PortiaHttpBinding.ResolveRouteValues(httpContext), actorToken, context.Metadata, ct).ConfigureAwait(false);")
                 .AppendLine(

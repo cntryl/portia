@@ -18,4 +18,12 @@ public sealed class UuidJsonConverter : JsonConverter<Uuid>
     /// <inheritdoc />
     public override void Write(Utf8JsonWriter writer, Uuid value, JsonSerializerOptions options) =>
         writer.WriteStringValue(value.ToString());
+
+    /// <inheritdoc />
+    public override Uuid ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert,
+        JsonSerializerOptions options) => Read(ref reader, typeToConvert, options);
+
+    /// <inheritdoc />
+    public override void WriteAsPropertyName(Utf8JsonWriter writer, Uuid value, JsonSerializerOptions options) =>
+        writer.WritePropertyName(value.ToString());
 }

@@ -35,6 +35,27 @@ public sealed class QueueConsumerContractTests
         Assert.Equal(acknowledge ? 1 : 0, item.Completions);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SettledReservationReleasesItsFitzItem(bool acknowledge)
+    {
+        var serializer = ConsumerJson.CreateSerializer();
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
+        var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
+            "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), 4, timeProvider: new ManualClock());
+        var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        Assert.True(await reader.MoveNextAsync());
+        if (acknowledge)
+            await reader.Current.CompleteAsync();
+        else
+            await reader.Current.AbandonAsync();
+
+        await reader.DisposeAsync();
+
+        Assert.Equal(1, item.Disposals);
+    }
+
     [Fact]
     public async Task ReservationKeepsRenewingWhileAcknowledgmentIsPending()
     {
@@ -360,6 +381,12 @@ public sealed class QueueConsumerContractTests
 
         public Task CompleteWithTokenAsync(ulong token, CancellationToken ct = default) => CompleteAsync(ct);
 
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public int Disposals { get; private set; }
+
+        public ValueTask DisposeAsync()
+        {
+            Disposals++;
+            return ValueTask.CompletedTask;
+        }
     }
 }

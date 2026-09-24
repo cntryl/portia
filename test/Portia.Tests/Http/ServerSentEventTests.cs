@@ -1,6 +1,10 @@
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,7 +38,7 @@ public sealed class ServerSentEventTests : IAsyncDisposable
         var client = await StartAsync(TimeSpan.FromSeconds(30));
 
         using var response = await client.GetAsync("/events", HttpCompletionOption.ResponseHeadersRead);
-        var body = await ReadUntilAsync(response, "fourth");
+        var body = await ReadUntilAsync(response, "fourth\n\n");
 
         Assert.Contains("data: first\ndata: second\ndata: third\ndata: fourth\n\n", body, StringComparison.Ordinal);
     }
@@ -65,6 +69,41 @@ public sealed class ServerSentEventTests : IAsyncDisposable
         await Task.Delay(200);
 
         Assert.DoesNotContain(":\n\n", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     A keep-alive write that fails while the source is idle stops the source before the failure
+    ///     surfaces, so the handler's cleanup runs instead of its iterator being abandoned mid-wait.
+    /// </summary>
+    [Fact]
+    public async Task ShouldStopAnIdleSourceWhenAKeepAliveWriteFails()
+    {
+        var services = new ServiceCollection()
+            .AddSingleton(new JsonSerializerOptions { TypeInfoResolver = new DefaultJsonTypeInfoResolver() })
+            .Configure<PortiaHttpOptions>(options => options.ServerSentEventKeepAlive = TimeSpan.FromMilliseconds(10));
+        await using var provider = services.BuildServiceProvider();
+        var context = new DefaultHttpContext { RequestServices = provider };
+        context.Response.Body = new FailingAfterFirstWriteStream();
+        var stopped = new StrongBox<bool>();
+
+        _ = await Assert.ThrowsAsync<IOException>(() =>
+            PortiaStreamResults.Sse(IdleAfterFirstItem(stopped)).ExecuteAsync(context));
+
+        Assert.True(stopped.Value);
+    }
+
+    static async IAsyncEnumerable<string> IdleAfterFirstItem(StrongBox<bool> stopped,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        try
+        {
+            yield return "first";
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+        }
+        finally
+        {
+            stopped.Value = true;
+        }
     }
 
     static async Task<string> ReadUntilAsync(HttpResponseMessage response, string marker)
@@ -100,5 +139,15 @@ public sealed class ServerSentEventTests : IAsyncDisposable
         client.Timeout = TimeSpan.FromSeconds(20);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
         return client;
+    }
+
+    sealed class FailingAfterFirstWriteStream : MemoryStream
+    {
+        int _writes;
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ++_writes > 1
+                ? ValueTask.FromException(new IOException("The connection was reset."))
+                : base.WriteAsync(buffer, cancellationToken);
     }
 }

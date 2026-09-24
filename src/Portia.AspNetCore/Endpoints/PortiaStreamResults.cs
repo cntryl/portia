@@ -54,9 +54,11 @@ public static class PortiaStreamResults
 
         // Waiting for the next item and keeping the connection alive are the same wait: the pending
         // move is held across each comment rather than restarted, since an enumerator cannot be
-        // advanced twice concurrently.
-        static async ValueTask<bool> NextAsync(IAsyncEnumerator<T> iterator, HttpResponse response,
-            TimeSpan? keepAlive, CancellationToken ct)
+        // advanced twice concurrently. For the same reason the enumerator cannot be disposed while
+        // that move is still running, so a failed comment stops the source and waits for the move
+        // to finish before the failure surfaces; the source's own cleanup then runs on disposal.
+        static async ValueTask<bool> NextAsync(IAsyncEnumerator<T> iterator, CancellationTokenSource source,
+            HttpResponse response, TimeSpan? keepAlive, CancellationToken ct)
         {
             if (keepAlive is not { } interval)
             {
@@ -64,16 +66,29 @@ public static class PortiaStreamResults
             }
 
             var pending = iterator.MoveNextAsync().AsTask();
-            while (true)
+            try
             {
-                var idle = Task.Delay(interval, ct);
-                if (await Task.WhenAny(pending, idle).ConfigureAwait(false) == pending)
+                while (true)
                 {
-                    return await pending.ConfigureAwait(false);
-                }
+                    using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    var elapsed = Task.Delay(interval, idle.Token);
+                    if (await Task.WhenAny(pending, elapsed).ConfigureAwait(false) == pending)
+                    {
+                        // The losing delay is cancelled rather than left to fire later.
+                        await idle.CancelAsync().ConfigureAwait(false);
+                        return await pending.ConfigureAwait(false);
+                    }
 
-                await response.WriteAsync(":\n\n", ct).ConfigureAwait(false);
-                await response.Body.FlushAsync(ct).ConfigureAwait(false);
+                    await response.WriteAsync(":\n\n", ct).ConfigureAwait(false);
+                    await response.Body.FlushAsync(ct).ConfigureAwait(false);
+                }
+            }
+            catch
+            {
+                await source.CancelAsync().ConfigureAwait(false);
+                // Only the move's completion matters here; its outcome is superseded by the failure.
+                await ((Task)pending).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                throw;
             }
         }
 
@@ -121,7 +136,10 @@ public static class PortiaStreamResults
             var keepAlive = sse
                 ? context.RequestServices.GetService<IOptions<PortiaHttpOptions>>()?.Value.ServerSentEventKeepAlive
                 : null;
-            await using var iterator = source.GetAsyncEnumerator(ct);
+            // The source gets its own token so a failed keep-alive can stop it without aborting the
+            // request; the request's cancellation still reaches it through the link.
+            using var sourceLifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            await using var iterator = source.GetAsyncEnumerator(sourceLifetime.Token);
             var pending = iterator.MoveNextAsync();
             // The first item is awaited before any header is written so authorization can still
             // choose the status code; keep-alive only starts once the response is committed.
@@ -162,7 +180,7 @@ public static class PortiaStreamResults
 
                 first = false;
                 await response.Body.FlushAsync(ct).ConfigureAwait(false);
-                hasItem = await NextAsync(iterator, response, keepAlive, ct).ConfigureAwait(false);
+                hasItem = await NextAsync(iterator, sourceLifetime, response, keepAlive, ct).ConfigureAwait(false);
             }
 
             if (!sse)
