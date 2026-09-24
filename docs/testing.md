@@ -68,8 +68,8 @@ it with `scenario.Store` for progress and a fake or in-memory repository for dat
 ```csharp
 var accounts = new InMemoryAccountRepository();
 var scenario = new ProjectorScenario().Given(
-    DomainEventSeed.Attach(new Deposited(10), accountId, 1),
-    DomainEventSeed.Attach(new Deposited(5), accountId, 2));
+    DomainEventSeed.Attach(new MoneyDeposited(10), accountId, 1),
+    DomainEventSeed.Attach(new MoneyDeposited(5), accountId, 2));
 
 await scenario.RunAsync(new AccountProjector(accounts, scenario.Store));
 

@@ -37,8 +37,8 @@ public abstract class Projector
 
     /// <summary>
     ///     Gets the stable checkpoint name. Fixed for the life of this instance once the component
-    ///     starts running: a registration that explicitly named the workload supplies that name, and
-    ///     otherwise this keeps the name given at construction. It is never reassigned afterwards —
+    ///     starts running: hosting replaces it with the name passed to <c>AddProjector</c>, and outside
+    ///     hosting it keeps the name given at construction. It is never reassigned afterwards —
     ///     rebinding to a second workload throws rather than silently repointing the checkpoint this
     ///     component has already been writing.
     /// </summary>

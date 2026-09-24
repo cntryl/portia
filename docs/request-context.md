@@ -52,7 +52,7 @@ not substituted for the actual route received. Custom transports can define anot
 `RequestInvocation` record and must supply execution context through `DispatchAsync`.
 
 Fitz's delivery objects do not expose broker message, call, reservation, or schedule
-occurrence IDs. Portia does not invent them. Its current queue wire also does not report
+occurrence IDs. Portia does not invent them. Fitz's current queue wire also does not report
 delivery attempts, so every Fitz queue delivery exposes
 `QueueItem.AttemptUnavailable` (`0`). Treat `Attempt` as transport-reported information,
 not an application idempotency key or a guaranteed monotonic counter.

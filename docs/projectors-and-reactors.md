@@ -109,7 +109,7 @@ one unit of work. To issue bulk application operations, implement a batch handle
 
 ```csharp
 public sealed partial class AccountProjector(IAccountRepository accounts, IProjectionStore store)
-    : BatchProjector(store, EventStreamPattern.ForPattern("accounts", "balances")),
+    : BatchProjector(store, EventStreamPattern.ForTenant("balances")),
       IBatchProjectorHandler<MoneyDeposited>
 {
     public async ValueTask HandleAsync(
@@ -156,7 +156,7 @@ authorization and handler pipeline, or can also originate outside the reactor:
 public sealed partial class AccountReactor(
     IProjectionCheckpointStore checkpoints,
     IRequestBus bus)
-    : Reactor(checkpoints, EventStreamPattern.ForPattern("accounts", "balances")),
+    : Reactor(checkpoints, EventStreamPattern.ForTenant("balances")),
       IReactorHandler<MoneyDeposited>
 {
     public ValueTask HandleAsync(IReactorContext<MoneyDeposited> context, CancellationToken ct) =>
@@ -188,7 +188,7 @@ public interface IAccountReactions
 }
 
 public sealed partial class AccountReactor(IAccountReactions accounts, IProjectionCheckpointStore checkpoints)
-    : BatchReactor(checkpoints, EventStreamPattern.ForPattern("accounts", "balances")),
+    : BatchReactor(checkpoints, EventStreamPattern.ForTenant("balances")),
       IBatchReactorHandler<MoneyDeposited>
 {
     public async ValueTask HandleAsync(

@@ -594,9 +594,9 @@ Applications that deliberately own individual consumers can construct `FitzRpcRe
 with `AddRequestWorkers()` for the same routes.
 
 Queue and notification hosting create a scope for each delivery, including nested
-dispatch, and dispose it on completion, failure, or cancellation. `AddFitz(...)` registers the
-request deserializer and the `RequestTransportCatalog` that checks each request's declared
-transport:
+dispatch, and dispose it on completion, failure, or cancellation. `AddFitz(...)`, or
+`UseFitzClient(fitz)` when the application owns the client as here, registers the request
+deserializer and the `RequestTransportCatalog` that checks each request's declared transport:
 
 ```csharp
 services.AddSingleton<IRequestQueueConsumer>(provider => new FitzRequestQueueConsumer(
