@@ -372,6 +372,10 @@ app.MapPortiaPost<DepositAccount>("/accounts/{id}");
 A subdomain is a different origin, so it needs a CORS policy too. Behind a proxy that rewrites the
 host, use `UseForwardedHeaders` so the `Origin` comparison sees the host the browser used.
 
+The check is not DNS-rebinding protection: a page on a host name rebound to your server's address is
+same-origin with it. Set ASP.NET Core's `AllowedHosts` to the host names the application serves when
+browsers can reach it; [MCP endpoints](mcp.md#streamable-http) show the setting.
+
 ### Server-sent event streams
 
 `MapPortiaGetSse` frames each item as one event. A `string` item is written as-is, since the body is
