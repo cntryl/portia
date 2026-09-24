@@ -16,7 +16,9 @@ current, deliberate boundary.
 - Portia and Fitz do not impose a KV key schema. Applications that use `Cntryl.LexKey` can pass its
   allocation-free `LexKey.AsMemory()` view directly to Fitz; neither Portia nor Fitz takes an
   unnecessary dependency on the encoding package. CI proves this composition through a freshly
-  packed external consumer using `Cntryl.Portia.Fitz`, `Cntryl.Fitz.Testing`, and `Cntryl.LexKey`.
+  packed external consumer, published as a NativeAOT executable, whose `FitzKvProjectionStore`
+  repository commits a LexKey-keyed row with its checkpoint and reads it back, over the in-memory KV
+  client from `Cntryl.Fitz.Testing`.
 - Aggregate snapshotting is not supported and is not planned. Aggregates are expected to stay
   bounded enough to rehydrate directly from their event streams. Prefix truncation is also
   unsupported: readers must continue to expose original contiguous physical offsets.

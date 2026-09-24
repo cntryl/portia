@@ -8,7 +8,8 @@ namespace Cntryl.Portia;
 // text/plain, or bodiless request reaches the server without a CORS preflight. A state-changing request
 // is therefore accepted only when the browser reports it as same-origin or the application's CORS
 // pipeline allows its origin. Clients that are not browsers send neither Sec-Fetch-Site nor Origin, so
-// they are unaffected.
+// they are unaffected. This is not DNS-rebinding protection: a page on a host name rebound to this server
+// is same-origin with the host it reaches, and only ASP.NET Core host filtering (AllowedHosts) refuses it.
 static class PortiaCrossOrigin
 {
     internal static bool IsAllowed(HttpContext context)

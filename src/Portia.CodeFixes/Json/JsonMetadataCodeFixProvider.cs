@@ -78,8 +78,13 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
                     continue;
                 }
 
-                if (!symbol.GetAttributes().Any(a =>
-                        a.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonContextAttribute"))
+                // A partial context is one fix however many files declare it: its roots go on the declaration
+                // that carries [PortiaJsonContext], so every other part of the same type is skipped.
+                var marker = symbol.GetAttributes().FirstOrDefault(a =>
+                    a.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonContextAttribute");
+                if (marker?.ApplicationSyntaxReference is not { } reference
+                    || reference.SyntaxTree != declaration.SyntaxTree
+                    || !declaration.AttributeLists.Any(list => list.Span.Contains(reference.Span)))
                 {
                     continue;
                 }
@@ -106,12 +111,13 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
         var declaration = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .First(node => node.SpanStart == context.SpanStart);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
-        var existing = declaration.AttributeLists.SelectMany(list => list.Attributes)
-            .Select(attribute => attribute.ArgumentList?.Arguments.FirstOrDefault()?.Expression)
-            .OfType<TypeOfExpressionSyntax>()
-            .Select(expression => semanticModel?.GetTypeInfo(expression.Type, cancellationToken).Type is { } type
-                ? NormalizeTypeName(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                : NormalizeTypeName(expression.Type.ToString()))
+        // Read through the symbol, so a root declared on any partial part of the context counts.
+        var existing = (semanticModel?.GetDeclaredSymbol(declaration, cancellationToken)?.GetAttributes() ?? [])
+            .Where(attribute => attribute.AttributeClass?.ToDisplayString()
+                                == "System.Text.Json.Serialization.JsonSerializableAttribute")
+            .Select(attribute => attribute.ConstructorArguments.FirstOrDefault().Value)
+            .OfType<ITypeSymbol>()
+            .Select(type => NormalizeTypeName(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))
             .ToImmutableHashSet(StringComparer.Ordinal);
         var attributes = Distinct(typeNames)
             .Where(typeName => !existing.Contains(NormalizeTypeName(typeName)))

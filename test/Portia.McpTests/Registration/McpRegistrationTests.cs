@@ -227,7 +227,47 @@ public sealed class McpRegistrationTests
         Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
     }
 
-    static HttpRequestMessage CrossOriginListTools(string origin)
+    /// <summary>
+    ///     A page on a DNS-rebound host name is same-origin with the endpoint it reaches, so the cross-origin
+    ///     rule accepts it; ASP.NET Core host filtering is what refuses a host the application does not serve.
+    /// </summary>
+    [Fact]
+    public async Task ShouldLeaveDnsRebindingToAspNetCoreHostFiltering()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Configuration["AllowedHosts"] = "localhost";
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .AddMcpTool<ReadGreeting>(tool => tool.ReadOnly())
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        UseTestActor(app);
+        _ = app.MapPortiaMcp();
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+
+        // Act
+        using var rebound = await client.SendAsync(SameOriginListTools("rebound.example"));
+        using var served = await client.SendAsync(SameOriginListTools("localhost"));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, rebound.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, served.StatusCode);
+    }
+
+    // What a browser sends from a page served by the host the request reaches.
+    static HttpRequestMessage SameOriginListTools(string host)
+    {
+        var request = BrowserListTools($"http://{host}", "same-origin");
+        request.Headers.Host = host;
+        return request;
+    }
+
+    static HttpRequestMessage CrossOriginListTools(string origin) => BrowserListTools(origin, "cross-site");
+
+    static HttpRequestMessage BrowserListTools(string origin, string fetchSite)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
         {
@@ -236,7 +276,7 @@ public sealed class McpRegistrationTests
         };
         request.Headers.Accept.ParseAdd("application/json");
         request.Headers.Accept.ParseAdd("text/event-stream");
-        request.Headers.Add("Sec-Fetch-Site", "cross-site");
+        request.Headers.Add("Sec-Fetch-Site", fetchSite);
         request.Headers.Add("Origin", origin);
         return request;
     }

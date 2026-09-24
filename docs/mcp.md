@@ -69,6 +69,20 @@ The endpoint also honors `PortiaHttpOptions.MaxJsonBodyBytes`. As with generated
 `POST` or `DELETE` from another browser origin returns 403 unless the CORS pipeline allows that
 origin; see [cross-origin requests](getting-started.md#cross-origin-requests).
 
+That check does not stop DNS rebinding. A page on a host name an attacker points at your server's
+address is same-origin with the endpoint it reaches: the browser sends `Sec-Fetch-Site: same-origin`,
+and its `Origin` matches `Host`. An MCP endpoint that a browser can reach, including one on localhost
+or a private network, must therefore set ASP.NET Core's `AllowedHosts` to the host names it serves.
+`WebApplication.CreateBuilder` and `CreateSlimBuilder` already run host filtering from that setting,
+but allow every host when it is absent or `*`, as the project templates ship it. With the setting
+below, a request for any other host returns 400 before it reaches the endpoint:
+
+```json
+{
+  "AllowedHosts": "agents.example.com;localhost"
+}
+```
+
 ## Standard input and output
 
 Reference `Cntryl.Portia.Mcp`, register an `IMcpActorProvider`, and activate stdio:
