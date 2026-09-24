@@ -47,8 +47,8 @@ public sealed class McpScenarioTests
                 actor.StructuredJson?.GetProperty("result").GetString());
 
             var failure = await scenario.When("greetings.reject").ExpectFailure("Conflict");
-            Assert.Equal("Greeting already exists.",
-                failure.StructuredJson?.GetProperty("message").GetString());
+            Assert.Null(failure.StructuredJson);
+            Assert.Equal("Greeting already exists.", failure.Error?.GetProperty("message").GetString());
 
             var mismatch = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
                 await scenario.When("greetings.reject").ExpectFailure("NotFound"));

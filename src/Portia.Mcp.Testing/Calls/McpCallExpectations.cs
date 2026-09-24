@@ -16,7 +16,7 @@ public sealed class McpCallExpectations
     /// <summary>Requires a successful tool result.</summary>
     public McpCallExpectations ExpectSuccess() => new(VerifyAsync(false, null));
 
-    /// <summary>Requires a failed tool result and, when supplied, its structured failure kind.</summary>
+    /// <summary>Requires a failed tool result and, when supplied, its Portia failure kind.</summary>
     public McpCallExpectations ExpectFailure(string? kind = null) => new(VerifyAsync(true, kind));
 
     async Task<McpCallSnapshot> VerifyAsync(bool expectFailure, string? kind)
@@ -39,8 +39,8 @@ public sealed class McpCallExpectations
     }
 
     static string? KindOf(McpCallSnapshot snapshot) =>
-        snapshot.StructuredJson is { ValueKind: JsonValueKind.Object } json
-        && json.TryGetProperty("kind", out var kind) && kind.ValueKind == JsonValueKind.String
+        snapshot.Error is { ValueKind: JsonValueKind.Object } error
+        && error.TryGetProperty("kind", out var kind) && kind.ValueKind == JsonValueKind.String
             ? kind.GetString()
             : null;
 

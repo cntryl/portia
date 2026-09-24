@@ -197,29 +197,29 @@ public abstract class McpToolRegistration
                ?? throw new McpActorRequiredException("IMcpActorProvider returned null.");
     }
 
-    /// <summary>Maps an expected Portia failure to an MCP tool failure.</summary>
-    protected static CallToolResult Failure(RequestError error) => new()
-    {
-        IsError = true,
-        Content = [new TextContentBlock { Text = error.Message }],
-        StructuredContent = Element(new JsonObject
-        {
-            ["kind"] = error.Kind.ToString(),
-            ["message"] = error.Message,
-            ["isTransient"] = error.IsTransient
-        })
-    };
+    /// <summary>The result metadata key that carries Portia's failure kind, message, and transience.</summary>
+    internal const string FailureMetadataKey = "portia/error";
 
+    /// <summary>Maps an expected Portia failure to an MCP tool failure.</summary>
+    protected static CallToolResult Failure(RequestError error) =>
+        IngressFailure(error.Kind.ToString(), error.Message, error.IsTransient);
+
+    // A failure carries no structured content: the protocol requires structured content to conform to the tool's
+    // output schema, which describes a successful result. The message is the text a model reads; the kind and
+    // transience ride in result metadata, which clients read without validating against that schema.
     internal static CallToolResult IngressFailure(string kind, string message, bool transient = false) => new()
     {
         IsError = true,
         Content = [new TextContentBlock { Text = message }],
-        StructuredContent = Element(new JsonObject
+        Meta = new JsonObject
         {
-            ["kind"] = kind,
-            ["message"] = message,
-            ["isTransient"] = transient
-        })
+            [FailureMetadataKey] = new JsonObject
+            {
+                ["kind"] = kind,
+                ["message"] = message,
+                ["isTransient"] = transient
+            }
+        }
     };
 
     internal static JsonElement StructuredResult<TOut>(TOut value, JsonTypeInfo<TOut> typeInfo)

@@ -68,6 +68,12 @@ corresponding environment names. The backend token authenticates the Fitz connec
 For rotating backend credentials, use the overload accepting Fitz's `ClientConfig`
 and its `TokenProvider`. No permissive actor validator is registered automatically.
 
+For JWT actors, `Cntryl.Portia.Jwt` supplies `JwtRequestActorValidator`. Give it the same
+`TokenValidationParameters` as the API's JWT bearer authentication. It maps inbound claims the way
+`JwtBearerOptions.MapInboundClaims` does by default, so a worker sees the same principal the HTTP pipeline saw;
+pass `mapInboundClaims: false` when the API turns that mapping off, whether through
+`MapInboundClaims = false` or globally through `JwtSecurityTokenHandler.DefaultMapInboundClaims = false`.
+
 ## API deployment
 
 Reference the shared project and `Cntryl.Portia.AspNetCore`. The HTTP package depends directly on
