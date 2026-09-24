@@ -74,7 +74,7 @@ sealed class FitzWakeupSubscription<T> : IAsyncDisposable
             }
             catch (SubscriptionBackpressureException)
             {
-                await ResubscribeAsync(ct).ConfigureAwait(false);
+                await ResubscribeAsync().ConfigureAwait(false);
                 return;
             }
         }
@@ -106,11 +106,13 @@ sealed class FitzWakeupSubscription<T> : IAsyncDisposable
 
     // The overflowed handle has already ended, so it is released before its replacement exists.
     // Anything committed in between is covered by the caller's next read, which this wake-up causes.
-    async ValueTask ResubscribeAsync(CancellationToken ct)
+    // The replacement is bound to this subscription's lifetime, not to the wait that noticed the overflow:
+    // a caller's per-wait backstop firing mid-subscribe would otherwise leave it holding the ended handle.
+    async ValueTask ResubscribeAsync()
     {
         await _notifications.DisposeAsync().ConfigureAwait(false);
         await _subscription.DisposeAsync().ConfigureAwait(false);
-        _subscription = await _subscribe(ct).ConfigureAwait(false);
+        _subscription = await _subscribe(_stop.Token).ConfigureAwait(false);
         _notifications = _subscription.GetAsyncEnumerator(_stop.Token);
     }
 }

@@ -93,7 +93,7 @@ public sealed class FitzEventStoreSubscriptionTests
     ///     accumulate until Fitz ends the subscription at the bound of its buffer.
     /// </summary>
     [Fact]
-    public async Task ShouldDrainBufferedCommitsSoABusyWorkloadNeverOverflows()
+    public async Task ShouldDrainBufferedCommitsAtEachWait()
     {
         var client = new BoundedStreamClient(4);
         var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
