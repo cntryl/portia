@@ -34,7 +34,8 @@ namespace Cntryl.Portia;
 ///     <see cref="ClaimTypes.NameIdentifier" />, <c>unique_name</c> to <see cref="ClaimTypes.Name" />, <c>role</c> to
 ///     <see cref="ClaimTypes.Role" />). Defaults to <see langword="true" />, the default of ASP.NET Core's
 ///     <c>JwtBearerOptions.MapInboundClaims</c>, so a worker sees the same principal the HTTP pipeline saw for the
-///     same token. Pass the value the application's bearer authentication uses.
+///     same token. Pass the value the application's bearer authentication uses, including when it turns mapping off
+///     globally through <c>JwtSecurityTokenHandler.DefaultMapInboundClaims</c>, which this validator does not read.
 /// </param>
 public sealed class JwtRequestActorValidator(TokenValidationParameters validationParameters, bool mapInboundClaims = true)
     : IRequestActorValidator

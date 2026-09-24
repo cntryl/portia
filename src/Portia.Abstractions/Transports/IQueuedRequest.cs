@@ -48,6 +48,10 @@ public interface IQueuedRequest
     string? ActorToken { get; }
 
     /// <summary>Signals that the transport can no longer maintain this reservation.</summary>
+    /// <remarks>
+    ///     Once it fires the delivery is the transport's again: the runner neither completes nor
+    ///     abandons it and reports nothing, so the transport that cancels it reports why.
+    /// </remarks>
     CancellationToken ReservationCancellation => CancellationToken.None;
 
     /// <summary>
@@ -61,6 +65,11 @@ public interface IQueuedRequest
     ///     Stops processing without acknowledging the request. The transport owns redelivery: the
     ///     queue technology waits for the reservation to expire according to its own configuration.
     /// </summary>
+    /// <remarks>
+    ///     Not every unsettled delivery is abandoned. After a lost reservation, or a refused
+    ///     acknowledgment of a request that was handled, the runner calls neither this nor
+    ///     <see cref="CompleteAsync" />, so a reservation must also be released when it expires.
+    /// </remarks>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the abandonment.</returns>
     ValueTask AbandonAsync(CancellationToken ct = default);

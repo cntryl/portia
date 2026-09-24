@@ -16,7 +16,7 @@ public sealed class McpCallExpectations
     /// <summary>Requires a successful tool result.</summary>
     public McpCallExpectations ExpectSuccess() => new(VerifyAsync(false, null));
 
-    /// <summary>Requires a failed tool result and, when supplied, its structured failure kind.</summary>
+    /// <summary>Requires a failed tool result and, when supplied, its Portia failure kind.</summary>
     public McpCallExpectations ExpectFailure(string? kind = null) => new(VerifyAsync(true, kind));
 
     async Task<McpCallSnapshot> VerifyAsync(bool expectFailure, string? kind)

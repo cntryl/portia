@@ -344,7 +344,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldMapExpectedBusinessFailureAsStructuredToolResult()
+    public async Task ShouldMapExpectedBusinessFailureAsPortiaToolFailure()
     {
         // Arrange
         var stopped = new ConcurrentQueue<Activity>();

@@ -1,5 +1,6 @@
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
+using System.Security.Claims;
 using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
@@ -324,6 +325,59 @@ public sealed class QueueRunnerTests
         Assert.False(queued.Completed);
         Assert.False(queued.Abandoned);
         Assert.Equal(["fault"], deliveryOutcomes);
+    }
+
+    /// <summary>
+    ///     A reservation lost while the handler runs leaves the delivery with the transport whatever the
+    ///     handler returned; the transport that gave the reservation up reports why.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldLeaveADeliveryWhoseReservationIsLostWhileItsHandlerRuns(bool fails)
+    {
+        using var busHost = TestRequestBus.Create();
+        using var deliveryMeter = ListenToDeliveries(out var deliveryOutcomes);
+        using var lost = new CancellationTokenSource();
+        var logger = new CapturingLogger();
+        var queued = new FakeQueuedRequest(fails ? new InvalidChangeValue(5) : new ChangeValue(5), attempt: 3,
+            reservation: lost.Token);
+        var terminal = new RecordingTerminalHandler();
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            new AfterDispatchBus(busHost.Bus, lost.Cancel), new TestRequestActorValidator(),
+            new QueueRunnerOptions { TerminalAttempt = 3 }, terminal), logger);
+
+        await runner.RunAsync();
+
+        Assert.Empty(terminal.Failures);
+        Assert.False(queued.Completed);
+        Assert.False(queued.Abandoned);
+        Assert.Empty(logger.Entries);
+        Assert.Equal(["fault"], deliveryOutcomes);
+    }
+
+    /// <summary>
+    ///     Stopping the host cancels a transport's reservation token with it, which is a shutdown and
+    ///     not a lost reservation: the handled delivery is still acknowledged and nothing is reported.
+    /// </summary>
+    [Fact]
+    public async Task ShouldTreatHostShutdownAfterDispatchAsCancellationNotALostReservation()
+    {
+        using var busHost = TestRequestBus.Create();
+        using var deliveryMeter = ListenToDeliveries(out var deliveryOutcomes);
+        using var host = new CancellationTokenSource();
+        using var reservation = CancellationTokenSource.CreateLinkedTokenSource(host.Token);
+        var logger = new CapturingLogger();
+        var queued = new FakeQueuedRequest(new ChangeValue(5), reservation: reservation.Token);
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            new AfterDispatchBus(busHost.Bus, host.Cancel), new TestRequestActorValidator(),
+            terminalHandler: new RecordingTerminalHandler()), logger);
+
+        await runner.RunAsync(host.Token);
+
+        Assert.True(queued.Completed);
+        Assert.Empty(logger.Entries);
+        Assert.Equal(["completed"], deliveryOutcomes);
     }
 
     /// <summary>A retryable handler result at the configured threshold becomes terminal.</summary>
@@ -1005,6 +1059,32 @@ public sealed class QueueRunnerTests
         public ValueTask<Result> HandleAsync(IRequestContext<InvalidChangeValue> context, CancellationToken ct) =>
             ValueTask.FromResult(Result.Failure(new RequestError(RequestErrorKind.Validation, "Value is invalid.",
                 context.Request.IsTransient)));
+    }
+
+    // Runs a callback once the inner bus has returned, to change transport state between dispatch
+    // and settlement.
+    sealed class AfterDispatchBus(IRequestBus inner, Action dispatched) : IRequestBus
+    {
+        public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
+            inner.CreateContext(actor, metadata);
+
+        public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
+            CancellationToken ct = default) => inner.AuthorizeAsync(request, context, ct);
+
+        public async ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
+            CancellationToken ct = default)
+        {
+            var result = await inner.DispatchAsync(request, context, ct);
+            dispatched();
+            return result;
+        }
+
+        public ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context,
+            CancellationToken ct = default) => inner.DispatchAsync(request, context, ct);
+
+        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request,
+            RequestDispatchContext context, CancellationToken ct = default) =>
+            inner.DispatchStreamAsync(request, context, ct);
     }
 
     sealed class CapturingLogger : ILogger<QueueRunner>

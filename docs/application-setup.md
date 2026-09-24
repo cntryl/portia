@@ -71,7 +71,8 @@ and its `TokenProvider`. No permissive actor validator is registered automatical
 For JWT actors, `Cntryl.Portia.Jwt` supplies `JwtRequestActorValidator`. Give it the same
 `TokenValidationParameters` as the API's JWT bearer authentication. It maps inbound claims the way
 `JwtBearerOptions.MapInboundClaims` does by default, so a worker sees the same principal the HTTP pipeline saw;
-pass `mapInboundClaims: false` when the API turns that mapping off.
+pass `mapInboundClaims: false` when the API turns that mapping off, whether through
+`MapInboundClaims = false` or globally through `JwtSecurityTokenHandler.DefaultMapInboundClaims = false`.
 
 ## API deployment
 

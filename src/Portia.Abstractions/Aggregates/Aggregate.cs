@@ -193,7 +193,18 @@ public abstract class Aggregate(
         }
 
         AttachMetadata(ev, checked(Version + 1), false);
-        Apply(ev);
+        try
+        {
+            Apply(ev);
+        }
+        catch
+        {
+            // A handler that throws may already have changed state, and nothing records what it
+            // did, so the instance no longer matches its stream.
+            _discarded = true;
+            throw;
+        }
+
         _uncommittedEvents.Add(ev);
         Version++;
     }
