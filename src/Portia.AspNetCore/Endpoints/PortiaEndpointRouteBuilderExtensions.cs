@@ -17,9 +17,10 @@ namespace Cntryl.Portia;
 ///     JSON body on POST/PUT/PATCH, or from the query string on GET/DELETE.
 ///     There's no separate "async" method to opt into queue-backed dispatch: on POST/PUT/PATCH/DELETE,
 ///     the generator checks whether <c>TRequest</c> also implements <see cref="IQueuable" />. If it
-///     does, a caller sending the standard <c>Prefer: respond-async</c> header (RFC 7240) gets the
-///     request enqueued and a 202 Accepted back immediately; anyone else, and any request that isn't
-///     <see cref="IQueuable" /> at all, gets the ordinary dispatch-and-wait behavior. The request
+///     does, a caller with credentials sending the standard <c>Prefer: respond-async</c> header
+///     (RFC 7240) gets the request enqueued and a 202 Accepted back immediately; anyone else, anonymous
+///     callers included since a worker has no credential of theirs to validate, and any request that
+///     isn't <see cref="IQueuable" /> at all, gets the ordinary dispatch-and-wait behavior. The request
 ///     itself decides whether the pivot is available, the same way it opts into every other transport.
 ///     A result-bearing request restates its result type at the call site
 ///     (<c>MapPortiaPost&lt;CreateOrder, OrderId&gt;</c>) even though <c>IRequest&lt;OrderId&gt;</c>

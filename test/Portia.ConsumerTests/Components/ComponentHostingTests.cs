@@ -114,6 +114,41 @@ public sealed partial class ComponentHostingTests
     }
 
     [Fact]
+    public async Task FailingNotificationSubscriptionFallsBackToPollingWithoutFaultingTheWorkload()
+    {
+        var changes = new Changes { FailSubscriptions = true };
+        var services = ConsumerHost.CreateServices();
+        _ = services.AddSingleton<IDomainEventNotifier>(changes);
+        _ = services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global, options =>
+        {
+            options.FailureAttemptLimit = 1;
+            options.PollInterval = TimeSpan.FromMilliseconds(20);
+        }).AddWorkers().UseSingleProcessWorkloads();
+        await using var provider = ConsumerHost.Build(services);
+        await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
+        var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+        try
+        {
+            await worker.StartAsync(default);
+            await provider.GetRequiredService<ConsumerHost.Effects>().WaitForAsync("first-projector");
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            while (changes.SubscriptionCount < 3)
+                await Task.Delay(10, timeout.Token);
+            // Retrying every 20ms poll would make about fifty attempts in this second; backing off
+            // like a failed pass makes a handful.
+            await Task.Delay(TimeSpan.FromSeconds(1));
+
+            Assert.InRange(changes.SubscriptionCount, 3, 12);
+            Assert.False(worker.ExecuteTask?.IsCompleted);
+        }
+        finally
+        {
+            await worker.StopAsync(default);
+            worker.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task ScopedComponentCannotChangeTheRetainedSubscriptionPattern()
     {
         var changes = new Changes();
@@ -404,11 +439,16 @@ public sealed partial class ComponentHostingTests
         }
 
         public int SubscriptionCount => Volatile.Read(ref _subscriptionCount);
+        public bool FailSubscriptions { get; init; }
 
         public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
             CancellationToken ct = default)
         {
             _ = Interlocked.Increment(ref _subscriptionCount);
+            if (FailSubscriptions)
+                return ValueTask.FromException<IDomainEventSubscription>(
+                    new InvalidOperationException("Notification subscription failed."));
+
             _ = Subscribed.TrySetResult();
             return ValueTask.FromResult<IDomainEventSubscription>(new Subscription(this, _signals.Reader));
         }

@@ -522,7 +522,9 @@ For a no-result `IQueuable` request, the exact `Prefer: respond-async` token sel
 publishing and returns 202 with `Preference-Applied: respond-async` and a JSON request-ID
 receipt. The request's declared authorization runs before it is accepted, so a caller who would
 receive 403 synchronously receives 403 here too and nothing reaches the queue. The worker
-re-validates the carried actor token and authorizes again when it runs the request. The ID is correlation identity, not completion tracking. Portia has no status
+re-validates the carried actor token and authorizes again when it runs the request, so only a
+caller with a Bearer credential is answered asynchronously; an anonymous caller's preference is
+declined and the request runs synchronously. The ID is correlation identity, not completion tracking. Portia has no status
 resource and therefore emits no `Location` header. Register `IRequestQueuePublisher`; supply wildcard route values
 explicitly on the endpoint:
 

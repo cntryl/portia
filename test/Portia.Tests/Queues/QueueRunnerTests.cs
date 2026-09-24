@@ -530,7 +530,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 },
             new RecordingTerminalHandler()));
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync());
+        var error = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync());
 
         Assert.Contains("durable delivery-attempt count", error.Message, StringComparison.Ordinal);
         Assert.False(queued.Completed);
@@ -547,11 +547,36 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 0 },
             new RecordingTerminalHandler()));
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync());
+        var error = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync());
 
         Assert.Contains("must be positive", error.Message, StringComparison.Ordinal);
         Assert.False(queued.Completed);
         Assert.False(queued.Abandoned);
+    }
+
+    /// <summary>
+    ///     A terminal-attempt setting the transport cannot honor is a configuration error, so the hosted
+    ///     runner stops rather than restarting, and reserving, forever.
+    /// </summary>
+    [Theory]
+    [InlineData(0u, true)]
+    [InlineData(3u, false)]
+    public async Task ShouldFaultHostedRunnerGivenUnusableTerminalAttempt(uint terminalAttempt, bool durable)
+    {
+        using var busHost = TestRequestBus.Create();
+        var consumer = new FakeQueueConsumer([
+            new FakeQueuedRequest(new ChangeValue(1), supportsDurableAttempts: durable),
+            new FakeQueuedRequest(new ChangeValue(2), supportsDurableAttempts: durable)
+        ]);
+        var runner = new QueueRunner(consumer, RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = terminalAttempt },
+            new RecordingTerminalHandler()));
+        using var hosted = new QueueRunnerHostedService(runner);
+
+        await hosted.StartAsync(default);
+        _ = await Assert.ThrowsAsync<QueueConfigurationException>(async () =>
+            await (hosted.ExecuteTask ?? throw new InvalidOperationException("The hosted runner did not start."))
+                .WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
     /// <summary>A request that did not declare queue delivery is terminal and never dispatched.</summary>

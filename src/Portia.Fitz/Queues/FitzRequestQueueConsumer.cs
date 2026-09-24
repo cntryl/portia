@@ -145,6 +145,9 @@ public sealed class FitzRequestQueueConsumer(
             _renewal = RenewAsync(leaseSeconds, interval, clock, logger);
         }
 
+        // Fitz keeps a disconnect listener, and with it the body, alive for every item that is
+        // neither completed nor disposed, so an abandoned or faulted delivery must release its
+        // item once renewal can no longer touch it. Disposing a completed item is a no-op.
         public async ValueTask DisposeAsync()
         {
             try
@@ -155,6 +158,7 @@ public sealed class FitzRequestQueueConsumer(
             {
                 _stop.Dispose();
                 _lost.Dispose();
+                await _item.DisposeAsync().ConfigureAwait(false);
             }
         }
 

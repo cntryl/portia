@@ -928,6 +928,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             Content = JsonContent.Create(new { })
         };
         request.Headers.Add("Prefer", "respond-async");
+        request.Headers.Add("Authorization", "Bearer carried");
 
         var response = await client.SendAsync(request);
 
@@ -939,6 +940,26 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.NotEqual(Uuid.Empty, Uuid.Parse(requestId, CultureInfo.InvariantCulture));
         _ = Assert.Single(publisher.Enqueued);
         _ = Assert.IsType<HttpSendPing>(publisher.Enqueued[0]);
+    }
+
+    /// <summary>
+    ///     An anonymous caller has no credential a worker could validate again, so its preference is
+    ///     declined and the request runs now rather than being accepted and then rejected unseen.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRunAnonymousCallerSynchronouslyWhenRespondAsyncIsPreferred()
+    {
+        var publisher = new RecordingRequestQueuePublisher();
+        var client = await StartAsync(app => app.MapPortiaPost<HttpSendPing>("/ping"),
+            services => services.AddSingleton<IRequestQueuePublisher>(publisher));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/ping") { Content = JsonContent.Create(new { }) };
+        request.Headers.Add("Prefer", "respond-async");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.False(response.Headers.Contains("Preference-Applied"));
+        Assert.Empty(publisher.Enqueued);
     }
 
     /// <summary>
@@ -976,6 +997,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         using var request = new HttpRequestMessage(HttpMethod.Post, "/configured-ping")
         { Content = JsonContent.Create(new { }) };
         request.Headers.Add("Prefer", "respond-async");
+        request.Headers.Add("Authorization", "Bearer carried");
 
         var response = await client.SendAsync(request);
 
@@ -1324,12 +1346,42 @@ public sealed class HttpBindingTests : IAsyncDisposable
             Content = JsonContent.Create(new { })
         };
         request.Headers.Add("Prefer", "respond-async");
+        request.Headers.Add("Authorization", "Bearer carried");
 
         var response = await client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Empty(publisher.Enqueued);
         Assert.False(response.Headers.Contains("Preference-Applied"));
+    }
+
+    /// <summary>
+    ///     A caller whose credential could not be carried to a worker is still refused for lacking
+    ///     permission first, exactly as without the preference; the credential's shape is checked only
+    ///     for a caller who could run the request.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ShouldReturnForbiddenBeforeCheckingTheCredentialWhenPreferringRespondAsync(bool cookieIdentity)
+    {
+        var publisher = new RecordingRequestQueuePublisher();
+        var client = await StartAsync(app => app.MapPortiaPost<HttpGuardedQueueAction>("/guarded-queue"),
+            services => services.AddSingleton<IRequestQueuePublisher>(publisher));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/guarded-queue")
+        {
+            Content = JsonContent.Create(new { })
+        };
+        request.Headers.Add("Prefer", "respond-async");
+        if (cookieIdentity)
+            request.Headers.Add("X-Debug-Permission", "http:other");
+        else
+            _ = request.Headers.TryAddWithoutValidation("Authorization", "Basic secret");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(publisher.Enqueued);
     }
 
     /// <summary>

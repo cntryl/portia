@@ -19,3 +19,5 @@
 *REMOVED*static Cntryl.Portia.PortiaTelemetry.StartSend(string! requestName, string! transport, string? messagingSystem) -> System.Diagnostics.Activity?
 *REMOVED*static Cntryl.Portia.PortiaTelemetry.StartTimestamp() -> long
 *REMOVED*static Cntryl.Portia.PortiaTelemetry.TransportFinished(long started, string! transport, string! operation, string! outcome) -> void
+override Cntryl.Portia.UuidJsonConverter.ReadAsPropertyName(ref System.Text.Json.Utf8JsonReader reader, System.Type! typeToConvert, System.Text.Json.JsonSerializerOptions! options) -> Cntryl.Portia.Uuid
+override Cntryl.Portia.UuidJsonConverter.WriteAsPropertyName(System.Text.Json.Utf8JsonWriter! writer, Cntryl.Portia.Uuid value, System.Text.Json.JsonSerializerOptions! options) -> void

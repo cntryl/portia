@@ -9,6 +9,6 @@ public sealed class QueueRunnerOptions
     internal void Validate()
     {
         if (TerminalAttempt == 0)
-            throw new InvalidOperationException("QueueRunnerOptions.TerminalAttempt must be positive when configured.");
+            throw new QueueConfigurationException("QueueRunnerOptions.TerminalAttempt must be positive when configured.");
     }
 }

@@ -50,7 +50,7 @@ public sealed class QueueRunner(
                 ValidateScope(scope);
                 if (scope.Options.TerminalAttempt is > 0 && !queued.SupportsDurableAttempts)
                 {
-                    throw new InvalidOperationException(
+                    throw new QueueConfigurationException(
                         "QueueRunnerOptions.TerminalAttempt requires a transport with a durable delivery-attempt count.");
                 }
 

@@ -171,6 +171,8 @@ sealed class PortiaWorkloadService(
         var telemetryScope = identity.Tenant is null ? "global" : "tenant";
         PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, true, _logger);
         var consecutiveFailures = 0;
+        var subscribeFailures = 0;
+        var resubscribeAt = DateTimeOffset.MinValue;
         IDomainEventSubscription? subscription = null;
         EventStreamPattern? subscribedPattern = null;
         try
@@ -188,7 +190,18 @@ sealed class PortiaWorkloadService(
                     var passPattern = registration.Descriptor.Pattern(provider);
                     if (subscription is null)
                     {
-                        subscription = await SubscribeAsync(passPattern, ct).ConfigureAwait(false);
+                        // A failed subscription is retried with the same backoff as a failed pass, so a
+                        // notifier that stays down is reported at a falling rate instead of every poll.
+                        if (notifier is not null && _clock.GetUtcNow() >= resubscribeAt)
+                        {
+                            subscription = await TrySubscribeAsync(notifier, passPattern, _logger, ct)
+                                .ConfigureAwait(false);
+                            if (subscription is null)
+                                resubscribeAt = _clock.GetUtcNow() + GetFailureDelay(registration, ++subscribeFailures);
+                            else
+                                subscribeFailures = 0;
+                        }
+
                         subscribedPattern = passPattern;
                     }
                     else if (passPattern != subscribedPattern)
@@ -303,19 +316,25 @@ sealed class PortiaWorkloadService(
             PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, false, _logger);
         }
 
-        ValueTask<IDomainEventSubscription?> SubscribeAsync(EventStreamPattern pattern, CancellationToken token)
-        {
-            return notifier is not null
-                ? SubscribeCoreAsync(notifier, pattern, token)
-                : ValueTask.FromResult<IDomainEventSubscription?>(null);
-        }
-
-        static async ValueTask<IDomainEventSubscription?> SubscribeCoreAsync(
+        // A notification is only a wakeup, so failing to subscribe is handled like a failed wait:
+        // recorded, then polled through until a later pass subscribes again. It never counts
+        // against the workload's own failure limit.
+        static async ValueTask<IDomainEventSubscription?> TrySubscribeAsync(
             IDomainEventNotifier notifier,
             EventStreamPattern pattern,
+            ILogger? logger,
             CancellationToken token)
         {
-            return await notifier.SubscribeAsync(pattern, token).ConfigureAwait(false);
+            try
+            {
+                return await notifier.SubscribeAsync(pattern, token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (!token.IsCancellationRequested)
+            {
+                PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Notification, ex,
+                    logger);
+                return null;
+            }
         }
     }
 
