@@ -35,6 +35,10 @@ write, until the next `Given` or `When` saves them as the executor would have; a
 operation that throws, nothing does, and the instance refuses further operations exactly as in production. A value-returning operation returns its `Result<TOut>`. Operations that
 return nothing can be called on `scenario.Aggregate` directly.
 
+For operations that return `Result` or `Result<TOut>`, use `WhenCommitOnSuccess` to apply the common
+commit-on-success rule without constructing an `AggregateOutcome` at each call site. Use `When` with an
+explicit outcome when a failure must still commit an audit or another record.
+
 ## Requests
 
 Build the service provider the way your application composes Portia, then describe one dispatch and what

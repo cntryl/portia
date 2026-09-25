@@ -1,6 +1,8 @@
 #nullable enable
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.When(System.Func<TAggregate!, Cntryl.Portia.AggregateOutcome>! operation) -> Cntryl.Portia.Result
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.When<TOut>(System.Func<TAggregate!, Cntryl.Portia.AggregateOutcome<TOut>>! operation) -> Cntryl.Portia.Result<TOut>
+Cntryl.Portia.Testing.AggregateScenario<TAggregate>.WhenCommitOnSuccess(System.Func<TAggregate!, Cntryl.Portia.Result>! operation) -> Cntryl.Portia.Result
+Cntryl.Portia.Testing.AggregateScenario<TAggregate>.WhenCommitOnSuccess<TOut>(System.Func<TAggregate!, Cntryl.Portia.Result<TOut>>! operation) -> Cntryl.Portia.Result<TOut>
 Cntryl.Portia.Testing.ReactorScenario
 Cntryl.Portia.Testing.ReactorScenario.Given(params Cntryl.Portia.DomainEvent![]! events) -> Cntryl.Portia.Testing.ReactorScenario!
 Cntryl.Portia.Testing.ReactorScenario.ReactorScenario() -> void
