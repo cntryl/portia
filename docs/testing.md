@@ -23,7 +23,7 @@ events and numbers them from the aggregate's current version; an event you seede
 var scenario = new AggregateScenario<Account>(new Account(id))
     .Given(new Opened(), new Deposited(10));
 
-var result = scenario.When(account => account.Withdraw(15));
+var result = scenario.WhenCommitOnSuccess(account => account.Withdraw(15));
 
 Assert.Equal(RequestErrorKind.Conflict, result.Error!.Kind);
 Assert.Empty(scenario.PendingEvents);
