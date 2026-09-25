@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -26,6 +27,7 @@ public static class PortiaMcpApplicationExtensions
         ArgumentNullException.ThrowIfNull(application);
         ArgumentNullException.ThrowIfNull(bind);
         ArgumentNullException.ThrowIfNull(configure);
+        McpPrimitiveHandlers.RequireDeclarationsBeforeTransport(application.Services);
         McpUri.ValidateTemplate(uriTemplate);
         var configuredLimits = application.Services.FirstOrDefault(service => service.ServiceType == typeof(McpLimits))
             ?.ImplementationInstance as McpLimits;
@@ -69,6 +71,7 @@ public static class PortiaMcpApplicationExtensions
         ArgumentNullException.ThrowIfNull(bind);
         ArgumentNullException.ThrowIfNull(render);
         ArgumentNullException.ThrowIfNull(configure);
+        McpPrimitiveHandlers.RequireDeclarationsBeforeTransport(application.Services);
         var options = new McpPromptOptions();
         configure(options);
         if (options.Access == McpAccess.Unset)
@@ -89,16 +92,32 @@ public static class PortiaMcpApplicationExtensions
         ArgumentNullException.ThrowIfNull(application);
         ArgumentNullException.ThrowIfNull(configure);
         var descriptor = application.Services.FirstOrDefault(service => service.ServiceType == typeof(McpLimits));
-        if (descriptor?.ImplementationInstance is not McpLimits limits)
-        {
-            limits = new McpLimits();
-            _ = application.Services.AddSingleton(limits);
-        }
-        configure(limits);
-        if (limits.MaxResourceUriBytes <= 0 || limits.MaxPromptArgumentBytes <= 0 ||
-            limits.MaxPromptMessages <= 0 || limits.MaxResultBytes <= 0 || limits.OperationDeadline <= TimeSpan.Zero)
+        var existing = descriptor?.ImplementationInstance as McpLimits;
+        var proposed = new McpLimits();
+        if (existing is not null)
+            CopyLimits(existing, proposed);
+        configure(proposed);
+        if (proposed.MaxResourceUriBytes <= 0 || proposed.MaxPromptArgumentBytes <= 0 ||
+            proposed.MaxPromptMessages <= 0 || proposed.MaxResultBytes <= 0 || proposed.OperationDeadline <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(configure), "MCP limits must be positive.");
+        if (PrimitiveCatalogs.TryGetValue(application, out var catalog) &&
+            catalog.Resources.Any(resource => Encoding.UTF8.GetByteCount(resource.Template) > proposed.MaxResourceUriBytes))
+            throw new ArgumentOutOfRangeException(nameof(configure),
+                "The MCP resource URI limit is shorter than a registered resource URI template.");
+        if (existing is not null)
+            CopyLimits(proposed, existing);
+        else
+            _ = application.Services.AddSingleton(proposed);
         return application;
+    }
+
+    static void CopyLimits(McpLimits source, McpLimits target)
+    {
+        target.MaxResourceUriBytes = source.MaxResourceUriBytes;
+        target.MaxPromptArgumentBytes = source.MaxPromptArgumentBytes;
+        target.MaxPromptMessages = source.MaxPromptMessages;
+        target.MaxResultBytes = source.MaxResultBytes;
+        target.OperationDeadline = source.OperationDeadline;
     }
 
     static void RegisterPrimitives(PortiaBuilder application)
@@ -192,6 +211,7 @@ public static class PortiaMcpApplicationExtensions
             options.LogToStandardErrorThreshold = LogLevel.Trace);
         var server = application.Services.AddMcpServer().WithStdioServerTransport();
         McpPrimitiveHandlers.Attach(server, application.Services);
+        McpPrimitiveHandlers.MarkTransportActivated(application.Services, "AddMcpStdio");
         return application;
     }
 

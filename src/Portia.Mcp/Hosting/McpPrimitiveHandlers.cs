@@ -22,6 +22,20 @@ static class McpPrimitiveHandlers
             _ = server.WithListPromptsHandler(ListPromptsAsync).WithGetPromptHandler(GetPromptAsync);
     }
 
+    internal static void MarkTransportActivated(IServiceCollection services, string transport) =>
+        services.AddSingleton(new TransportActivation(transport));
+
+    internal static void RequireDeclarationsBeforeTransport(IServiceCollection services)
+    {
+        var activation = services.FirstOrDefault(service => service.ServiceType == typeof(TransportActivation))
+            ?.ImplementationInstance as TransportActivation;
+        if (activation is not null)
+            throw new InvalidOperationException(
+                $"MCP resources and prompts must be declared before {activation.Transport}().");
+    }
+
+    sealed record TransportActivation(string Transport);
+
     static async ValueTask<ListResourcesResult> ListResourcesAsync(
         ModelContextProtocol.Server.RequestContext<ListResourcesRequestParams> call, CancellationToken ct)
     {

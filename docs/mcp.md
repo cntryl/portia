@@ -67,6 +67,8 @@ Fixed URIs and templates with whole path-segment `{name}` placeholders are suppo
 declare required or optional string arguments. Missing or unknown arguments fail before binding.
 Resources and prompts can be the only MCP declarations in an HTTP or stdio host. The catalog is
 static; dynamic enumeration, subscriptions, and list-change notifications are not advertised.
+Declare resources and prompts before calling `AddMcpHttp()` or `AddMcpStdio()`; adding them after
+transport activation fails during configuration.
 Resource lists and reads carry private, zero-TTL cache hints on the 2026 protocol.
 
 ## Streamable HTTP
@@ -169,6 +171,8 @@ actor resolution stay inside the test.
 `ConfigureMcpLimits(options => ...)` can set `MaxResourceUriBytes`, `MaxPromptArgumentBytes`,
 `MaxPromptMessages`, `MaxResultBytes`, and `OperationDeadline`. Defaults are 2 KiB, 64 KiB,
 16 messages, 1 MiB, and two minutes. The existing HTTP request body limit remains in force.
+If a configured URI limit is shorter than an existing resource URI or template, configuration fails
+without changing the active limits.
 
 ## Current boundary
 
