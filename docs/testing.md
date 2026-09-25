@@ -1,9 +1,14 @@
 # Testing applications
 
 `Cntryl.Portia.Testing` runs your aggregates, requests, projectors, and reactors through Portia's real
-lifecycle and leaves assertions to the test framework you already use. There is no assertion DSL for
-events: `DomainEvent` equality compares type and business data and ignores the metadata Portia attaches,
-so `Assert.Equal([new Deposited(10)], scenario.PendingEvents)` works as written.
+lifecycle and leaves most assertions to the test framework you already use. `DomainEvent` equality compares
+type and business data and ignores the metadata Portia attaches. Records with collection members still use
+the collection's own equality, which is often reference equality. Use `EventAssert.Equal(expected, actual)`
+to compare event payloads structurally, including nested records and ordered collections:
+
+```csharp
+EventAssert.Equal([new CriteriaRevised(["a", "b"])], scenario.PendingEvents);
+```
 
 | Testing | Use | Runs |
 |---|---|---|
