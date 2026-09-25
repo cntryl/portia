@@ -19,6 +19,81 @@ public sealed class MultiTenancyTests
 
     static readonly EventStreamAddress RegistryStream = new("global", "tenants", "registry");
 
+    /// <summary>A new directory resumes after the persisted cursor and still applies later removals.</summary>
+    [Fact]
+    public async Task ShouldResumeTenantMembershipFromDurableSnapshot()
+    {
+        var events = new InMemoryEventStore();
+        await RegisterTenantAsync(events, "acme");
+        await RegisterTenantAsync(events, "beta");
+        var snapshots = new FitzKvTenantDirectorySnapshotStore(new FakeKvClient(), "kv://global/tenants/snapshots");
+        var firstReader = new CountingEventReader(events);
+        var first = TenantDirectorySnapshots.Create<TenantRegistered, TenantDeregistered>(firstReader,
+            TenantRegistryPattern, GetTenantId, snapshots);
+
+        Assert.Equal(2, (await ReadActiveTenantsAsync(first)).Count);
+        Assert.Equal(EventCursor.Start, firstReader.Cursors.Single());
+
+        await DeregisterTenantAsync(events, "acme");
+        var restartedReader = new CountingEventReader(events);
+        var restarted = TenantDirectorySnapshots.Create<TenantRegistered, TenantDeregistered>(restartedReader,
+            TenantRegistryPattern, GetTenantId, snapshots);
+        Assert.Equal([new TenantId("beta")], await ReadActiveTenantsAsync(restarted));
+        Assert.NotEqual(EventCursor.Start, restartedReader.Cursors.Single());
+
+        var thirdReader = new CountingEventReader(events);
+        var third = TenantDirectorySnapshots.Create<TenantRegistered, TenantDeregistered>(thirdReader,
+            TenantRegistryPattern, GetTenantId, snapshots);
+        Assert.Equal([new TenantId("beta")], await ReadActiveTenantsAsync(third));
+        Assert.Equal((await snapshots.LoadAsync(TenantRegistryPattern))!.Cursor, thirdReader.Cursors.Single());
+    }
+
+    /// <summary>A worker cursor starts from the persisted roster before reading later changes.</summary>
+    [Fact]
+    public async Task ShouldResumeWorkerCursorFromDurableSnapshot()
+    {
+        var events = new InMemoryEventStore();
+        await RegisterTenantAsync(events, "acme");
+        var snapshots = new FitzKvTenantDirectorySnapshotStore(new FakeKvClient(), "kv://global/tenants/snapshots");
+        var first = TenantDirectorySnapshots.Create<TenantRegistered, TenantDeregistered>(events,
+            TenantRegistryPattern, GetTenantId, snapshots);
+        await using (var cursor = await first.OpenCursorAsync())
+            Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")),
+                await ReadOneAsync(cursor));
+
+        var resumedReader = new CountingEventReader(events);
+        var resumed = TenantDirectorySnapshots.Create<TenantRegistered, TenantDeregistered>(resumedReader,
+            TenantRegistryPattern, GetTenantId, snapshots);
+        await using (var cursor = await resumed.OpenCursorAsync())
+            Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")),
+                await ReadOneAsync(cursor));
+        Assert.NotEqual(EventCursor.Start, resumedReader.Cursors.Single());
+    }
+
+    /// <summary>One live change catches up on restart without rewriting the full roster.</summary>
+    [Fact]
+    public async Task ShouldBatchLiveRosterWritesAndReplayTheUnsavedTail()
+    {
+        var events = new InMemoryEventStore();
+        await RegisterTenantAsync(events, "acme");
+        var snapshots = new FitzKvTenantDirectorySnapshotStore(new FakeKvClient(), "kv://global/tenants/snapshots");
+        var directory = TenantDirectorySnapshots.Create<TenantRegistered, TenantDeregistered>(events,
+            TenantRegistryPattern, GetTenantId, snapshots);
+        await using var cursor = await directory.OpenCursorAsync();
+        _ = await ReadOneAsync(cursor);
+        var persisted = (await snapshots.LoadAsync(TenantRegistryPattern))!.Cursor;
+
+        await RegisterTenantAsync(events, "beta");
+        Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("beta")),
+            await ReadOneAsync(cursor));
+        Assert.Equal(persisted, (await snapshots.LoadAsync(TenantRegistryPattern))!.Cursor);
+
+        var restarted = TenantDirectorySnapshots.Create<TenantRegistered, TenantDeregistered>(events,
+            TenantRegistryPattern, GetTenantId, snapshots);
+        Assert.Equal([new TenantId("acme"), new TenantId("beta")],
+            (await ReadActiveTenantsAsync(restarted)).OrderBy(tenant => tenant.Value, StringComparer.Ordinal));
+    }
+
     // AppendAsync is optimistic-concurrency versioned per aggregate stream, and every test in
     // this file appends to the same fixed registry stream address — each test tracks its own
     // running version here rather than assuming a fixed 0/1, since tests appending more than one
@@ -717,6 +792,21 @@ public sealed class MultiTenancyTests
             tenants.Add(tenantId);
 
         return tenants;
+    }
+
+    sealed class CountingEventReader(IDomainEventReader inner) : IDomainEventReader
+    {
+        public List<EventCursor> Cursors { get; } = [];
+
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
+            CancellationToken ct) => inner.ReadAsync(stream, fromOffset, ct);
+
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
+            CancellationToken ct)
+        {
+            Cursors.Add(cursor);
+            return inner.ReadAsync(pattern, cursor, ct);
+        }
     }
 
     static async Task<TenantLifecycleChange> ReadOneAsync(ITenantDirectoryCursor cursor)
