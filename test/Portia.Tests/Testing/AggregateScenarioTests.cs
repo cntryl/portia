@@ -169,4 +169,57 @@ public sealed class AggregateScenarioTests
 
         _ = Assert.Throws<InvalidOperationException>(() => scenario.When(_ => default(AggregateOutcome)));
     }
+
+    /// <summary>The shortcut commits a successful result and retains its raised event.</summary>
+    [Fact]
+    public void ShouldCommitSuccessfulResultThroughShortcut()
+    {
+        var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
+
+        var result = scenario.WhenCommitOnSuccess(aggregate =>
+        {
+            aggregate.ChangeValue(5);
+            return Result.Success;
+        });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal([new ValueChanged(5)], scenario.PendingEvents);
+    }
+
+    /// <summary>The shortcut discards a failed value result and prevents later operations.</summary>
+    [Fact]
+    public void ShouldDiscardFailedValueResultThroughShortcut()
+    {
+        var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
+
+        var result = scenario.WhenCommitOnSuccess(aggregate =>
+        {
+            aggregate.ChangeValue(5);
+            return Result<int>.Failure(new RequestError(RequestErrorKind.Conflict, "taken"));
+        });
+
+        Assert.Equal(RequestErrorKind.Conflict, result.Error!.Kind);
+        Assert.Empty(scenario.PendingEvents);
+        _ = Assert.Throws<InvalidOperationException>(() => scenario.WhenCommitOnSuccess(aggregate =>
+        {
+            aggregate.ChangeValue(6);
+            return Result.Success;
+        }));
+    }
+
+    /// <summary>A successful value result is returned and its audit is retained.</summary>
+    [Fact]
+    public void ShouldReturnSuccessfulValueThroughShortcut()
+    {
+        var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
+
+        var result = scenario.WhenCommitOnSuccess(aggregate =>
+        {
+            aggregate.Audit("checked");
+            return Result<int>.Success(aggregate.Value);
+        });
+
+        Assert.Equal(0, result.Value);
+        Assert.Equal([new ValueAudited("checked")], scenario.PendingAudits);
+    }
 }

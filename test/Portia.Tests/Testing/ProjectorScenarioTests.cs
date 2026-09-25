@@ -48,4 +48,24 @@ public sealed class ProjectorScenarioTests
 
         Assert.Equal([user], users);
     }
+
+    /// <summary>A caller-selected tenant binds the projector and supplies matching event streams.</summary>
+    [Fact]
+    public async Task ShouldRunProjectorUnderChosenTenant()
+    {
+        var tenant = new TenantId(Uuid.CreateVersion4().ToString());
+        var users = new List<Uuid>();
+        var scenario = new ProjectorScenario(tenant).Given(new UserCreated(Uuid.CreateVersion4()));
+        var projector = new WelcomeProjector(users, scenario.Store, EventStreamPattern.ForTenant("users"));
+
+        await scenario.RunAsync(projector);
+
+        Assert.Single(users);
+        Assert.Equal(tenant.Value, projector.Pattern.Realm);
+    }
+
+    /// <summary>The optional tenant cannot be the uninitialized value of the tenant struct.</summary>
+    [Fact]
+    public void ShouldRejectUninitializedTenant() =>
+        _ = Assert.ThrowsAny<ArgumentException>(() => new ProjectorScenario(default));
 }

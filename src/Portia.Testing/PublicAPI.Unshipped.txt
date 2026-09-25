@@ -1,9 +1,15 @@
 #nullable enable
+Cntryl.Portia.Testing.EventAssert
+static Cntryl.Portia.Testing.EventAssert.Equal(Cntryl.Portia.DomainEvent! expected, Cntryl.Portia.DomainEvent! actual) -> void
+static Cntryl.Portia.Testing.EventAssert.Equal(System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>! expected, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>! actual) -> void
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.When(System.Func<TAggregate!, Cntryl.Portia.AggregateOutcome>! operation) -> Cntryl.Portia.Result
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.When<TOut>(System.Func<TAggregate!, Cntryl.Portia.AggregateOutcome<TOut>>! operation) -> Cntryl.Portia.Result<TOut>
+Cntryl.Portia.Testing.AggregateScenario<TAggregate>.WhenCommitOnSuccess(System.Func<TAggregate!, Cntryl.Portia.Result>! operation) -> Cntryl.Portia.Result
+Cntryl.Portia.Testing.AggregateScenario<TAggregate>.WhenCommitOnSuccess<TOut>(System.Func<TAggregate!, Cntryl.Portia.Result<TOut>>! operation) -> Cntryl.Portia.Result<TOut>
 Cntryl.Portia.Testing.ReactorScenario
 Cntryl.Portia.Testing.ReactorScenario.Given(params Cntryl.Portia.DomainEvent![]! events) -> Cntryl.Portia.Testing.ReactorScenario!
 Cntryl.Portia.Testing.ReactorScenario.ReactorScenario() -> void
+Cntryl.Portia.Testing.ReactorScenario.ReactorScenario(Cntryl.Portia.TenantId tenant) -> void
 Cntryl.Portia.Testing.ReactorScenario.Requests.get -> Cntryl.Portia.IRequestBus!
 Cntryl.Portia.Testing.ReactorScenario.RespondTo<TRequest>(Cntryl.Portia.Result result) -> Cntryl.Portia.Testing.ReactorScenario!
 Cntryl.Portia.Testing.ReactorScenario.RunAsync(Cntryl.Portia.Reactor! reactor, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
@@ -11,6 +17,7 @@ Cntryl.Portia.Testing.ReactorScenario.SentRequests.get -> System.Collections.Gen
 Cntryl.Portia.Testing.ProjectorScenario
 Cntryl.Portia.Testing.ProjectorScenario.Given(params Cntryl.Portia.DomainEvent![]! events) -> Cntryl.Portia.Testing.ProjectorScenario!
 Cntryl.Portia.Testing.ProjectorScenario.ProjectorScenario() -> void
+Cntryl.Portia.Testing.ProjectorScenario.ProjectorScenario(Cntryl.Portia.TenantId tenant) -> void
 Cntryl.Portia.Testing.ProjectorScenario.RunAsync(Cntryl.Portia.Projector! projector, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Cntryl.Portia.Testing.ProjectorScenario.Store.get -> Cntryl.Portia.IProjectionStore!
 *REMOVED*Cntryl.Portia.Testing.TestPermissionEvaluator.EvaluatedPermissions.get -> System.Collections.Generic.List<string!>!

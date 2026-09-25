@@ -1,9 +1,14 @@
 # Testing applications
 
 `Cntryl.Portia.Testing` runs your aggregates, requests, projectors, and reactors through Portia's real
-lifecycle and leaves assertions to the test framework you already use. There is no assertion DSL for
-events: `DomainEvent` equality compares type and business data and ignores the metadata Portia attaches,
-so `Assert.Equal([new Deposited(10)], scenario.PendingEvents)` works as written.
+lifecycle and leaves most assertions to the test framework you already use. `DomainEvent` equality compares
+type and business data and ignores the metadata Portia attaches. Records with collection members still use
+the collection's own equality, which is often reference equality. Use `EventAssert.Equal(expected, actual)`
+to compare event payloads structurally, including nested records and ordered collections:
+
+```csharp
+EventAssert.Equal([new CriteriaRevised(["a", "b"])], scenario.PendingEvents);
+```
 
 | Testing | Use | Runs |
 |---|---|---|
@@ -23,7 +28,7 @@ events and numbers them from the aggregate's current version; an event you seede
 var scenario = new AggregateScenario<Account>(new Account(id))
     .Given(new Opened(), new Deposited(10));
 
-var result = scenario.When(account => account.Withdraw(15));
+var result = scenario.WhenCommitOnSuccess(account => account.Withdraw(15));
 
 Assert.Equal(RequestErrorKind.Conflict, result.Error!.Kind);
 Assert.Empty(scenario.PendingEvents);
@@ -34,6 +39,10 @@ operation raised or audited stays in `PendingEvents` and `PendingAudits`, which 
 write, until the next `Given` or `When` saves them as the executor would have; after `Discard`, or an
 operation that throws, nothing does, and the instance refuses further operations exactly as in production. A value-returning operation returns its `Result<TOut>`. Operations that
 return nothing can be called on `scenario.Aggregate` directly.
+
+For operations that return `Result` or `Result<TOut>`, use `WhenCommitOnSuccess` to apply the common
+commit-on-success rule without constructing an `AggregateOutcome` at each call site. Use `When` with an
+explicit outcome when a failure must still commit an audit or another record.
 
 ## Requests
 
@@ -106,5 +115,7 @@ request with a result or a stream request should be tested through `RequestScena
 `Given` attaches metadata to the event instances you pass, as raising them would. Construct events per test
 rather than sharing one instance across scenarios.
 
-Both component scenarios run a tenant-scoped component (`EventStreamPattern.ForTenant`) bound to a single test
-tenant, as hosting would bind it per tenant.
+Both component scenarios run a tenant-scoped component (`EventStreamPattern.ForTenant`) bound to the
+`"scenario"` test tenant by default. Pass a `TenantId` to either scenario constructor to bind it to a
+specific tenant, as hosting would bind it per tenant. For a tenant-scoped component, given events are
+placed on that tenant's streams.

@@ -7,8 +7,15 @@ namespace Cntryl.Portia.Testing;
 /// </summary>
 public sealed class ReactorScenario
 {
-    readonly ScenarioHistory _history = new();
+    readonly ScenarioHistory _history;
     readonly ScenarioRequestBus _requests = new();
+
+    /// <summary>Creates a scenario for the default test tenant.</summary>
+    public ReactorScenario() : this(new TenantId("scenario")) { }
+
+    /// <summary>Creates a scenario for a specific tenant's streams.</summary>
+    /// <param name="tenant">The tenant to bind tenant-scoped reactors to.</param>
+    public ReactorScenario(TenantId tenant) => _history = new ScenarioHistory(tenant);
 
     /// <summary>Gets the request bus to construct the reactor with.</summary>
     public IRequestBus Requests => _requests;
@@ -58,7 +65,7 @@ public sealed class ReactorScenario
     {
         ArgumentNullException.ThrowIfNull(reactor);
         if (reactor.Pattern.IsTenantTemplate)
-            reactor.BindWorkload(ScenarioHistory.Workload(reactor.Name), null);
+            reactor.BindWorkload(_history.Workload(reactor.Name), null);
         var store = await _history.ToStoreAsync(reactor.Pattern, ct).ConfigureAwait(false);
         _ = await new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start, ct: ct).ConfigureAwait(false);
     }

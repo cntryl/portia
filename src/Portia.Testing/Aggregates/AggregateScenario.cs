@@ -72,6 +72,25 @@ public sealed class AggregateScenario<TAggregate>(TAggregate aggregate)
         return outcome.Result;
     }
 
+    /// <summary>Runs an operation, committing its records on success and discarding them on failure.</summary>
+    /// <param name="operation">The operation under test.</param>
+    /// <returns>The result the caller would receive.</returns>
+    public Result WhenCommitOnSuccess(Func<TAggregate, Result> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        return When(aggregate => AggregateOutcome.CommitOnSuccess(operation(aggregate)));
+    }
+
+    /// <summary>Runs a value-returning operation, committing on success and discarding on failure.</summary>
+    /// <typeparam name="TOut">The type of the value on success.</typeparam>
+    /// <param name="operation">The operation under test.</param>
+    /// <returns>The result the caller would receive.</returns>
+    public Result<TOut> WhenCommitOnSuccess<TOut>(Func<TAggregate, Result<TOut>> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        return When(aggregate => AggregateOutcome.CommitOnSuccess(operation(aggregate)));
+    }
+
     // The executor saves a committed operation as it returns; the scenario defers that save to the next Given or
     // When so the test can inspect what would have been written. Records raised by calling the aggregate directly
     // are saved the same way.
