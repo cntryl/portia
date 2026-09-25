@@ -1,2 +1,71 @@
 #nullable enable
 Cntryl.Portia.Testing.McpCallSnapshot.Error.get -> System.Text.Json.JsonElement?
+Cntryl.Portia.Testing.McpPromptMessageSnapshot
+Cntryl.Portia.Testing.McpPromptMessageSnapshot.<Clone>$() -> Cntryl.Portia.Testing.McpPromptMessageSnapshot!
+Cntryl.Portia.Testing.McpPromptMessageSnapshot.Deconstruct(out string! Role, out string! Text) -> void
+Cntryl.Portia.Testing.McpPromptMessageSnapshot.Equals(Cntryl.Portia.Testing.McpPromptMessageSnapshot? other) -> bool
+Cntryl.Portia.Testing.McpPromptMessageSnapshot.McpPromptMessageSnapshot(string! Role, string! Text) -> void
+Cntryl.Portia.Testing.McpPromptMessageSnapshot.Role.get -> string!
+Cntryl.Portia.Testing.McpPromptMessageSnapshot.Role.init -> void
+Cntryl.Portia.Testing.McpPromptMessageSnapshot.Text.get -> string!
+Cntryl.Portia.Testing.McpPromptMessageSnapshot.Text.init -> void
+Cntryl.Portia.Testing.McpPromptSnapshot
+Cntryl.Portia.Testing.McpPromptSnapshot.<Clone>$() -> Cntryl.Portia.Testing.McpPromptSnapshot!
+Cntryl.Portia.Testing.McpPromptSnapshot.Arguments.get -> System.Collections.Generic.IReadOnlyDictionary<string!, bool>!
+Cntryl.Portia.Testing.McpPromptSnapshot.Arguments.init -> void
+Cntryl.Portia.Testing.McpPromptSnapshot.Deconstruct(out string! Name, out System.Collections.Generic.IReadOnlyDictionary<string!, bool>! Arguments) -> void
+Cntryl.Portia.Testing.McpPromptSnapshot.Equals(Cntryl.Portia.Testing.McpPromptSnapshot? other) -> bool
+Cntryl.Portia.Testing.McpPromptSnapshot.McpPromptSnapshot(string! Name, System.Collections.Generic.IReadOnlyDictionary<string!, bool>! Arguments) -> void
+Cntryl.Portia.Testing.McpPromptSnapshot.Name.get -> string!
+Cntryl.Portia.Testing.McpPromptSnapshot.Name.init -> void
+Cntryl.Portia.Testing.McpResourceContentSnapshot
+Cntryl.Portia.Testing.McpResourceContentSnapshot.<Clone>$() -> Cntryl.Portia.Testing.McpResourceContentSnapshot!
+Cntryl.Portia.Testing.McpResourceContentSnapshot.Bytes.get -> byte[]?
+Cntryl.Portia.Testing.McpResourceContentSnapshot.Bytes.init -> void
+Cntryl.Portia.Testing.McpResourceContentSnapshot.Deconstruct(out string! Uri, out string? MimeType, out string? Text, out byte[]? Bytes) -> void
+Cntryl.Portia.Testing.McpResourceContentSnapshot.Equals(Cntryl.Portia.Testing.McpResourceContentSnapshot? other) -> bool
+Cntryl.Portia.Testing.McpResourceContentSnapshot.McpResourceContentSnapshot(string! Uri, string? MimeType, string? Text, byte[]? Bytes) -> void
+Cntryl.Portia.Testing.McpResourceContentSnapshot.MimeType.get -> string?
+Cntryl.Portia.Testing.McpResourceContentSnapshot.MimeType.init -> void
+Cntryl.Portia.Testing.McpResourceContentSnapshot.Text.get -> string?
+Cntryl.Portia.Testing.McpResourceContentSnapshot.Text.init -> void
+Cntryl.Portia.Testing.McpResourceContentSnapshot.Uri.get -> string!
+Cntryl.Portia.Testing.McpResourceContentSnapshot.Uri.init -> void
+Cntryl.Portia.Testing.McpResourceSnapshot
+Cntryl.Portia.Testing.McpResourceSnapshot.<Clone>$() -> Cntryl.Portia.Testing.McpResourceSnapshot!
+Cntryl.Portia.Testing.McpResourceSnapshot.Deconstruct(out string! Uri, out string! Name, out string? MimeType, out bool IsTemplate) -> void
+Cntryl.Portia.Testing.McpResourceSnapshot.Equals(Cntryl.Portia.Testing.McpResourceSnapshot? other) -> bool
+Cntryl.Portia.Testing.McpResourceSnapshot.IsTemplate.get -> bool
+Cntryl.Portia.Testing.McpResourceSnapshot.IsTemplate.init -> void
+Cntryl.Portia.Testing.McpResourceSnapshot.McpResourceSnapshot(string! Uri, string! Name, string? MimeType, bool IsTemplate) -> void
+Cntryl.Portia.Testing.McpResourceSnapshot.MimeType.get -> string?
+Cntryl.Portia.Testing.McpResourceSnapshot.MimeType.init -> void
+Cntryl.Portia.Testing.McpResourceSnapshot.Name.get -> string!
+Cntryl.Portia.Testing.McpResourceSnapshot.Name.init -> void
+Cntryl.Portia.Testing.McpResourceSnapshot.Uri.get -> string!
+Cntryl.Portia.Testing.McpResourceSnapshot.Uri.init -> void
+Cntryl.Portia.Testing.McpScenario.GetPromptAsync(string! name, System.Collections.Generic.IReadOnlyDictionary<string!, object?>? arguments = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpPromptMessageSnapshot!>!>!
+Cntryl.Portia.Testing.McpScenario.ListPromptsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpPromptSnapshot!>!>!
+Cntryl.Portia.Testing.McpScenario.ListResourceTemplatesAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpResourceSnapshot!>!>!
+Cntryl.Portia.Testing.McpScenario.ListResourcesAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpResourceSnapshot!>!>!
+Cntryl.Portia.Testing.McpScenario.ReadResourceAsync(string! uri, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpResourceContentSnapshot!>!>!
+override Cntryl.Portia.Testing.McpPromptMessageSnapshot.Equals(object? obj) -> bool
+override Cntryl.Portia.Testing.McpPromptMessageSnapshot.GetHashCode() -> int
+override Cntryl.Portia.Testing.McpPromptMessageSnapshot.ToString() -> string!
+override Cntryl.Portia.Testing.McpPromptSnapshot.Equals(object? obj) -> bool
+override Cntryl.Portia.Testing.McpPromptSnapshot.GetHashCode() -> int
+override Cntryl.Portia.Testing.McpPromptSnapshot.ToString() -> string!
+override Cntryl.Portia.Testing.McpResourceContentSnapshot.Equals(object? obj) -> bool
+override Cntryl.Portia.Testing.McpResourceContentSnapshot.GetHashCode() -> int
+override Cntryl.Portia.Testing.McpResourceContentSnapshot.ToString() -> string!
+override Cntryl.Portia.Testing.McpResourceSnapshot.Equals(object? obj) -> bool
+override Cntryl.Portia.Testing.McpResourceSnapshot.GetHashCode() -> int
+override Cntryl.Portia.Testing.McpResourceSnapshot.ToString() -> string!
+static Cntryl.Portia.Testing.McpPromptMessageSnapshot.operator !=(Cntryl.Portia.Testing.McpPromptMessageSnapshot? left, Cntryl.Portia.Testing.McpPromptMessageSnapshot? right) -> bool
+static Cntryl.Portia.Testing.McpPromptMessageSnapshot.operator ==(Cntryl.Portia.Testing.McpPromptMessageSnapshot? left, Cntryl.Portia.Testing.McpPromptMessageSnapshot? right) -> bool
+static Cntryl.Portia.Testing.McpPromptSnapshot.operator !=(Cntryl.Portia.Testing.McpPromptSnapshot? left, Cntryl.Portia.Testing.McpPromptSnapshot? right) -> bool
+static Cntryl.Portia.Testing.McpPromptSnapshot.operator ==(Cntryl.Portia.Testing.McpPromptSnapshot? left, Cntryl.Portia.Testing.McpPromptSnapshot? right) -> bool
+static Cntryl.Portia.Testing.McpResourceContentSnapshot.operator !=(Cntryl.Portia.Testing.McpResourceContentSnapshot? left, Cntryl.Portia.Testing.McpResourceContentSnapshot? right) -> bool
+static Cntryl.Portia.Testing.McpResourceContentSnapshot.operator ==(Cntryl.Portia.Testing.McpResourceContentSnapshot? left, Cntryl.Portia.Testing.McpResourceContentSnapshot? right) -> bool
+static Cntryl.Portia.Testing.McpResourceSnapshot.operator !=(Cntryl.Portia.Testing.McpResourceSnapshot? left, Cntryl.Portia.Testing.McpResourceSnapshot? right) -> bool
+static Cntryl.Portia.Testing.McpResourceSnapshot.operator ==(Cntryl.Portia.Testing.McpResourceSnapshot? left, Cntryl.Portia.Testing.McpResourceSnapshot? right) -> bool

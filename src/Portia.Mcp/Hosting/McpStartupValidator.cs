@@ -7,6 +7,8 @@ namespace Cntryl.Portia;
 sealed class McpStartupValidator(
     [FromKeyedServices(PortiaServiceKeys.Json)] JsonSerializerOptions json,
     IEnumerable<McpToolRegistration> tools,
+    IEnumerable<McpResourceEntry> resources,
+    IEnumerable<McpPromptEntry> prompts,
     IEnumerable<RequestHandlerRegistration> handlers) : IHostedService
 {
     public Task StartAsync(CancellationToken cancellationToken)
@@ -14,13 +16,16 @@ sealed class McpStartupValidator(
         foreach (var tool in tools)
             _ = tool.CreateProtocolTool(json);
         var handled = handlers.Select(handler => handler.RequestType).ToHashSet();
-        var missing = tools.Where(tool => !handled.Contains(tool.RequestType))
-            .OrderBy(tool => tool.Name, StringComparer.Ordinal)
+        var missing = tools.Select(tool => (RequestType: tool.RequestType, Name: tool.Name))
+            .Concat(resources.Select(resource => (RequestType: resource.RequestType, Name: resource.Template)))
+            .Concat(prompts.Select(prompt => (RequestType: prompt.RequestType, Name: prompt.Name)))
+            .Where(entry => !handled.Contains(entry.RequestType))
+            .OrderBy(entry => entry.Name, StringComparer.Ordinal)
             .ToArray();
         if (missing.Length > 0)
         {
             throw new InvalidOperationException(
-                $"MCP tools require registered request handlers: {string.Join(", ", missing.Select(tool => $"'{tool.Name}' ({tool.RequestType})"))}.");
+                $"MCP declarations require registered request handlers: {string.Join(", ", missing.Select(entry => $"'{entry.Name}' ({entry.RequestType})"))}.");
         }
 
         return Task.CompletedTask;

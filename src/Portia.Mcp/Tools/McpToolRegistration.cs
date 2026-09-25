@@ -188,7 +188,7 @@ public abstract class McpToolRegistration
         var services = call.Services ?? throw new InvalidOperationException("The MCP request has no service scope.");
         // HTTP authentication owns identity: the SDK omits an unauthenticated caller's principal, so it
         // stays anonymous and the request bus fails closed. The actor provider is a stdio-only policy.
-        if (services.GetService<PortiaMcpHttpMarker>() is not null)
+        if (PortiaMcpHttpMarker.IsCurrentRequest)
             return new ClaimsPrincipal(new ClaimsIdentity());
         var provider = services.GetService<IMcpActorProvider>()
                        ?? throw new McpActorRequiredException(

@@ -153,7 +153,7 @@ public sealed class McpRegistrationTests
         // Act
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
 
         // Assert
@@ -173,7 +173,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
@@ -213,7 +213,7 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.UseCors("agents");
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         using var client = app.GetTestClient();
 
@@ -244,7 +244,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         using var client = app.GetTestClient();
 
@@ -302,11 +302,11 @@ public sealed class McpRegistrationTests
     {
         var stdio = Assert.Throws<InvalidOperationException>(() =>
             new ServiceCollection().AddPortia().AddMcpStdio());
-        Assert.Contains("at least one AddMcpTool", stdio.Message, StringComparison.Ordinal);
+        Assert.Contains("at least one MCP declaration", stdio.Message, StringComparison.Ordinal);
 
         var httpServices = Assert.Throws<InvalidOperationException>(() =>
             new ServiceCollection().AddPortia().AddMcpHttp());
-        Assert.Contains("at least one AddMcpTool", httpServices.Message, StringComparison.Ordinal);
+        Assert.Contains("at least one MCP declaration", httpServices.Message, StringComparison.Ordinal);
 
         var builder = WebApplication.CreateBuilder();
         _ = builder.Services.AddPortia()
@@ -345,7 +345,7 @@ public sealed class McpRegistrationTests
             .AddMcpTool<ReadGreeting>()
             .AddMcpHttp();
         using var app = builder.Build();
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
 
         var endpoint = Assert.Single(((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints),
             candidate => candidate.DisplayName?.Contains("MCP", StringComparison.OrdinalIgnoreCase) == true);
@@ -375,7 +375,7 @@ public sealed class McpRegistrationTests
         _ = builder.Services.AddPortia().AddMcpTool<ReadGreeting>().AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => app.StartAsync());
 
@@ -397,7 +397,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
@@ -437,7 +437,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
@@ -468,7 +468,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
@@ -492,7 +492,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
@@ -520,7 +520,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
@@ -558,7 +558,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
@@ -590,7 +590,7 @@ public sealed class McpRegistrationTests
             .AddMcpTool<InspectNestedInput>()
             .AddMcpHttp();
         await using var app = builder.Build();
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
@@ -624,7 +624,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
@@ -675,7 +675,7 @@ public sealed class McpRegistrationTests
                 [new Claim(ClaimTypes.Name, "authenticated-agent")], "test"));
             return next(context);
         });
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
@@ -704,7 +704,7 @@ public sealed class McpRegistrationTests
             .AddMcpTool<ReadActor>()
             .AddMcpHttp();
         await using var app = builder.Build();
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
@@ -730,7 +730,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
         var arguments = new Dictionary<string, object?>();
@@ -758,7 +758,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
@@ -775,6 +775,28 @@ public sealed class McpRegistrationTests
         Assert.False(result.IsError);
         Assert.Equal("single-1:Nested||2,3,5|scalar|null",
             result.StructuredContent?.GetProperty("result").GetString());
+    }
+
+    [Fact]
+    public async Task ShouldRequireHttpAuthenticationByDefault()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddAuthentication("test")
+            .AddScheme<AuthenticationSchemeOptions, UnauthenticatedHandler>("test", _ => { });
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .AddMcpTool<ReadGreeting>()
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        app.UseAuthorization();
+        _ = app.MapPortiaMcp();
+        await app.StartAsync();
+
+        using var http = app.GetTestClient();
+        var error = await Assert.ThrowsAsync<HttpRequestException>(async () =>
+            await McpScenario.ConnectAsync(http, new Uri("http://localhost/mcp")));
+        Assert.Equal(HttpStatusCode.Unauthorized, error.StatusCode);
     }
 
     [Fact]
@@ -920,7 +942,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
@@ -960,7 +982,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
@@ -994,7 +1016,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app, "aliased-agent");
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
@@ -1335,6 +1357,8 @@ public sealed class McpRegistrationTests
 [JsonSerializable(typeof(McpRegistrationTests.CommitGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.ReadActor))]
 [JsonSerializable(typeof(McpRegistrationTests.WaitForCancellation))]
+[JsonSerializable(typeof(McpPrimitiveTests.ReadTenant))]
+[JsonSerializable(typeof(McpPrimitiveTests.SlowRead))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(ExternalGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.InheritedGreeting))]
