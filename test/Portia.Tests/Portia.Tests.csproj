@@ -34,6 +34,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Portia.Core/Portia.Core.csproj"/>
     <ProjectReference Include="../../src/Portia.Testing/Portia.Testing.csproj"/>
+    <ProjectReference Include="../../src/Portia.Storage.Aws/Portia.Storage.Aws.csproj"/>
     <ProjectReference Include="../../src/Portia.Telemetry/Portia.Telemetry.csproj"/>
     <ProjectReference Include="../../src/Portia.DependencyInjection/Portia.DependencyInjection.csproj"/>
     <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj"/>

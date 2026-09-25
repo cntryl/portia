@@ -1,11 +1,29 @@
 #nullable enable
-Cntryl.Portia.Testing.EventAssert
-static Cntryl.Portia.Testing.EventAssert.Equal(Cntryl.Portia.DomainEvent! expected, Cntryl.Portia.DomainEvent! actual) -> void
-static Cntryl.Portia.Testing.EventAssert.Equal(System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>! expected, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>! actual) -> void
+*REMOVED*Cntryl.Portia.Testing.TestPermissionEvaluator.EvaluatedPermissions.get -> System.Collections.Generic.List<string!>!
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.When(System.Func<TAggregate!, Cntryl.Portia.AggregateOutcome>! operation) -> Cntryl.Portia.Result
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.When<TOut>(System.Func<TAggregate!, Cntryl.Portia.AggregateOutcome<TOut>>! operation) -> Cntryl.Portia.Result<TOut>
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.WhenCommitOnSuccess(System.Func<TAggregate!, Cntryl.Portia.Result>! operation) -> Cntryl.Portia.Result
 Cntryl.Portia.Testing.AggregateScenario<TAggregate>.WhenCommitOnSuccess<TOut>(System.Func<TAggregate!, Cntryl.Portia.Result<TOut>>! operation) -> Cntryl.Portia.Result<TOut>
+Cntryl.Portia.Testing.EventAssert
+Cntryl.Portia.Testing.FakeObjectStorage
+Cntryl.Portia.Testing.FakeObjectStorage.AbortUploadAsync(Cntryl.Portia.Storage.ObjectUploadSession! session, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.FakeObjectStorage.AcceptPartAsync(Cntryl.Portia.Storage.ObjectUploadSession! session, int partNumber, System.IO.Stream! contents, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Storage.ObjectPartReceipt!>
+Cntryl.Portia.Testing.FakeObjectStorage.ActiveUploadCount.get -> int
+Cntryl.Portia.Testing.FakeObjectStorage.CompleteUploadAsync(Cntryl.Portia.Storage.ObjectUploadSession! session, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Storage.ObjectPartReceipt!>! parts, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.FakeObjectStorage.CreateDownloadAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.TimeSpan lifetime, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Storage.ObjectDownload!>
+Cntryl.Portia.Testing.FakeObjectStorage.CreateUploadAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Storage.ObjectUploadSession!>
+Cntryl.Portia.Testing.FakeObjectStorage.DeleteAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Testing.FakeObjectStorage.FakeObjectStorage() -> void
+Cntryl.Portia.Testing.FakeObjectStorage.HeadAndVerifyAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.Testing.FakeObjectStorage.OpenReadAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.IO.Stream?>
+Cntryl.Portia.Testing.FakeObjectStorage.SignPartAsync(Cntryl.Portia.Storage.ObjectUploadSession! session, int partNumber, System.TimeSpan lifetime, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Storage.ObjectUploadPart!>
+Cntryl.Portia.Testing.ObjectStorageConformance
+Cntryl.Portia.Testing.ProjectorScenario
+Cntryl.Portia.Testing.ProjectorScenario.Given(params Cntryl.Portia.DomainEvent![]! events) -> Cntryl.Portia.Testing.ProjectorScenario!
+Cntryl.Portia.Testing.ProjectorScenario.ProjectorScenario() -> void
+Cntryl.Portia.Testing.ProjectorScenario.ProjectorScenario(Cntryl.Portia.TenantId tenant) -> void
+Cntryl.Portia.Testing.ProjectorScenario.RunAsync(Cntryl.Portia.Projector! projector, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Cntryl.Portia.Testing.ProjectorScenario.Store.get -> Cntryl.Portia.IProjectionStore!
 Cntryl.Portia.Testing.ReactorScenario
 Cntryl.Portia.Testing.ReactorScenario.Given(params Cntryl.Portia.DomainEvent![]! events) -> Cntryl.Portia.Testing.ReactorScenario!
 Cntryl.Portia.Testing.ReactorScenario.ReactorScenario() -> void
@@ -14,11 +32,7 @@ Cntryl.Portia.Testing.ReactorScenario.Requests.get -> Cntryl.Portia.IRequestBus!
 Cntryl.Portia.Testing.ReactorScenario.RespondTo<TRequest>(Cntryl.Portia.Result result) -> Cntryl.Portia.Testing.ReactorScenario!
 Cntryl.Portia.Testing.ReactorScenario.RunAsync(Cntryl.Portia.Reactor! reactor, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Cntryl.Portia.Testing.ReactorScenario.SentRequests.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.IRequestBase!>!
-Cntryl.Portia.Testing.ProjectorScenario
-Cntryl.Portia.Testing.ProjectorScenario.Given(params Cntryl.Portia.DomainEvent![]! events) -> Cntryl.Portia.Testing.ProjectorScenario!
-Cntryl.Portia.Testing.ProjectorScenario.ProjectorScenario() -> void
-Cntryl.Portia.Testing.ProjectorScenario.ProjectorScenario(Cntryl.Portia.TenantId tenant) -> void
-Cntryl.Portia.Testing.ProjectorScenario.RunAsync(Cntryl.Portia.Projector! projector, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
-Cntryl.Portia.Testing.ProjectorScenario.Store.get -> Cntryl.Portia.IProjectionStore!
-*REMOVED*Cntryl.Portia.Testing.TestPermissionEvaluator.EvaluatedPermissions.get -> System.Collections.Generic.List<string!>!
 Cntryl.Portia.Testing.TestPermissionEvaluator.EvaluatedPermissions.get -> System.Collections.Generic.IReadOnlyList<string!>!
+static Cntryl.Portia.Testing.EventAssert.Equal(Cntryl.Portia.DomainEvent! expected, Cntryl.Portia.DomainEvent! actual) -> void
+static Cntryl.Portia.Testing.EventAssert.Equal(System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>! expected, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.DomainEvent!>! actual) -> void
+static Cntryl.Portia.Testing.ObjectStorageConformance.VerifyAsync(Cntryl.Portia.Storage.IObjectStorage! storage, Cntryl.Portia.TenantId tenant, Cntryl.Portia.TenantId otherTenant, System.Func<Cntryl.Portia.Storage.ObjectUploadPart!, System.ReadOnlyMemory<byte>, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<Cntryl.Portia.Storage.ObjectPartReceipt!>>! uploadPart, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask

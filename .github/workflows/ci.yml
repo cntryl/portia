@@ -102,6 +102,14 @@ jobs:
             --configuration Release \
             --no-restore \
             -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-storage-packages" dotnet restore \
+            smoke/Portia.Storage.PackageConsumer/Host/Portia.Storage.PackageConsumer.csproj \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-storage-packages" dotnet run \
+            --project smoke/Portia.Storage.PackageConsumer/Host/Portia.Storage.PackageConsumer.csproj \
+            --configuration Release \
+            --no-restore \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
           NUGET_PACKAGES="$RUNNER_TEMP/portia-fitz-lexkey-packages" dotnet restore \
             smoke/Portia.Fitz.LexKey.PackageConsumer/Portia.Fitz.LexKey.PackageConsumer.csproj \
             --runtime linux-x64 \

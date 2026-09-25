@@ -1,0 +1,16 @@
+#nullable enable
+Cntryl.Portia.Storage.Aws.AwsObjectStorage
+Cntryl.Portia.Storage.Aws.AwsObjectStorage.AbortUploadAsync(Cntryl.Portia.Storage.ObjectUploadSession! session, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Storage.Aws.AwsObjectStorage.AwsObjectStorage(Amazon.S3.IAmazonS3! client, Cntryl.Portia.Storage.IObjectStorageTenantResolver! tenantResolver, Microsoft.AspNetCore.DataProtection.IDataProtector! sessionProtector) -> void
+Cntryl.Portia.Storage.Aws.AwsObjectStorage.CompleteUploadAsync(Cntryl.Portia.Storage.ObjectUploadSession! session, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Storage.ObjectPartReceipt!>! parts, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Storage.Aws.AwsObjectStorage.CreateDownloadAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.TimeSpan lifetime, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Storage.ObjectDownload!>
+Cntryl.Portia.Storage.Aws.AwsObjectStorage.CreateUploadAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Storage.ObjectUploadSession!>
+Cntryl.Portia.Storage.Aws.AwsObjectStorage.DeleteAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Storage.Aws.AwsObjectStorage.HeadAndVerifyAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.Storage.Aws.AwsObjectStorage.OpenReadAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.IO.Stream?>
+Cntryl.Portia.Storage.Aws.AwsObjectStorage.SignPartAsync(Cntryl.Portia.Storage.ObjectUploadSession! session, int partNumber, System.TimeSpan lifetime, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Storage.ObjectUploadPart!>
+Cntryl.Portia.Storage.Aws.AwsObjectStorageBuilder
+Cntryl.Portia.Storage.Aws.AwsObjectStorageBuilder.AwsObjectStorageBuilder() -> void
+Cntryl.Portia.Storage.Aws.AwsObjectStorageBuilder.UseClient(Amazon.S3.IAmazonS3! client) -> Cntryl.Portia.Storage.Aws.AwsObjectStorageBuilder!
+Cntryl.Portia.Storage.Aws.AwsObjectStorageServiceCollectionExtensions
+static Cntryl.Portia.Storage.Aws.AwsObjectStorageServiceCollectionExtensions.AddAwsObjectStorage(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Cntryl.Portia.Storage.Aws.AwsObjectStorageBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

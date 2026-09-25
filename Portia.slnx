@@ -12,6 +12,8 @@
     <Project Path="src/Portia.Telemetry/Portia.Telemetry.csproj"/>
     <Project Path="src/Portia.DependencyInjection/Portia.DependencyInjection.csproj"/>
     <Project Path="src/Portia.Fitz/Portia.Fitz.csproj"/>
+    <Project Path="src/Portia.Storage.Abstractions/Portia.Storage.Abstractions.csproj"/>
+    <Project Path="src/Portia.Storage.Aws/Portia.Storage.Aws.csproj"/>
     <Project Path="src/Portia.AspNetCore/Portia.AspNetCore.csproj"/>
     <Project Path="src/Portia.Jwt/Portia.Jwt.csproj"/>
     <Project Path="src/Portia.Mcp/Portia.Mcp.csproj"/>
