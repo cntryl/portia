@@ -23,7 +23,7 @@ events and numbers them from the aggregate's current version; an event you seede
 var scenario = new AggregateScenario<Account>(new Account(id))
     .Given(new Opened(), new Deposited(10));
 
-var result = scenario.When(account => account.Withdraw(15));
+var result = scenario.WhenCommitOnSuccess(account => account.Withdraw(15));
 
 Assert.Equal(RequestErrorKind.Conflict, result.Error!.Kind);
 Assert.Empty(scenario.PendingEvents);
@@ -34,6 +34,10 @@ operation raised or audited stays in `PendingEvents` and `PendingAudits`, which 
 write, until the next `Given` or `When` saves them as the executor would have; after `Discard`, or an
 operation that throws, nothing does, and the instance refuses further operations exactly as in production. A value-returning operation returns its `Result<TOut>`. Operations that
 return nothing can be called on `scenario.Aggregate` directly.
+
+For operations that return `Result` or `Result<TOut>`, use `WhenCommitOnSuccess` to apply the common
+commit-on-success rule without constructing an `AggregateOutcome` at each call site. Use `When` with an
+explicit outcome when a failure must still commit an audit or another record.
 
 ## Requests
 
