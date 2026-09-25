@@ -11,7 +11,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 {
     static readonly HashSet<string> CandidateMethods = new(StringComparer.Ordinal)
     {
-        "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "AddMcpTool", "SendAsync", "StreamAsync",
+        "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "AddMcpTool", "AddMcpResource", "AddMcpPrompt", "SendAsync", "StreamAsync",
         "DispatchAsync",
         "DispatchStreamAsync", "EnqueueAsync", "PublishAsync", "ScheduleAsync", "EnsureAsync", "AddRequestSchedule",
         "MapPortiaGet", "MapPortiaPost", "MapPortiaPut", "MapPortiaPatch", "MapPortiaDelete", "MapPortiaGetStream",
@@ -126,7 +126,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
             }
         }
 
-        if (name == "AddMcpTool" && IsPortiaMcpRegistration(method)
+        if (name is ("AddMcpTool" or "AddMcpResource" or "AddMcpPrompt") && IsPortiaMcpRegistration(method)
                                  && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol mcpRequest)
         {
             Add(mcpRequest);

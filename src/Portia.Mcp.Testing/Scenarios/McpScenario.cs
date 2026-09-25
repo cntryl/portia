@@ -37,6 +37,59 @@ public sealed class McpScenario : IAsyncDisposable
     public McpToolListExpectations ListTools(CancellationToken cancellationToken = default) =>
         new(ListToolsCoreAsync(cancellationToken));
 
+    /// <summary>Lists visible fixed resources.</summary>
+    public async Task<IReadOnlyList<McpResourceSnapshot>> ListResourcesAsync(CancellationToken cancellationToken = default)
+    {
+        var resources = await _client.ListResourcesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        return resources.Select(resource => new McpResourceSnapshot(resource.Uri, resource.Name,
+            resource.MimeType, false)).ToArray();
+    }
+
+    /// <summary>Lists visible resource URI templates.</summary>
+    public async Task<IReadOnlyList<McpResourceSnapshot>> ListResourceTemplatesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var templates = await _client.ListResourceTemplatesAsync(cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        return templates.Select(template => new McpResourceSnapshot(template.UriTemplate, template.Name,
+            template.MimeType, true)).ToArray();
+    }
+
+    /// <summary>Reads a resource through MCP.</summary>
+    public async Task<IReadOnlyList<McpResourceContentSnapshot>> ReadResourceAsync(string uri,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(uri);
+        var result = await _client.ReadResourceAsync(uri, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return result.Contents.Select(content => content switch
+        {
+            TextResourceContents text => new McpResourceContentSnapshot(text.Uri, text.MimeType, text.Text, null),
+            BlobResourceContents blob => new McpResourceContentSnapshot(blob.Uri, blob.MimeType, null,
+                blob.DecodedData.ToArray()),
+            _ => throw new InvalidOperationException("Unsupported resource content type.")
+        }).ToArray();
+    }
+
+    /// <summary>Lists visible prompts.</summary>
+    public async Task<IReadOnlyList<McpPromptSnapshot>> ListPromptsAsync(CancellationToken cancellationToken = default)
+    {
+        var prompts = await _client.ListPromptsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        return prompts.Select(prompt => new McpPromptSnapshot(prompt.Name,
+            prompt.ProtocolPrompt.Arguments?.ToDictionary(argument => argument.Name, argument => argument.Required == true,
+                StringComparer.Ordinal) ?? new Dictionary<string, bool>(StringComparer.Ordinal))).ToArray();
+    }
+
+    /// <summary>Gets rendered prompt messages.</summary>
+    public async Task<IReadOnlyList<McpPromptMessageSnapshot>> GetPromptAsync(string name,
+        IReadOnlyDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        var result = await _client.GetPromptAsync(name, arguments, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        return result.Messages.Select(message => new McpPromptMessageSnapshot(message.Role.ToString(),
+            message.Content is TextContentBlock text ? text.Text : string.Empty)).ToArray();
+    }
+
     /// <summary>Invokes a tool and returns awaitable expectations.</summary>
     public McpCallExpectations When(string toolName, IReadOnlyDictionary<string, object?>? arguments = null,
         CancellationToken cancellationToken = default)

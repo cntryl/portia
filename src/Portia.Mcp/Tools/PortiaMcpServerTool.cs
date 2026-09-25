@@ -1,4 +1,6 @@
+using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -35,11 +37,22 @@ sealed class PortiaMcpServerTool(
         ModelContextProtocol.Server.RequestContext<CallToolRequestParams> request,
         CancellationToken cancellationToken)
     {
+        var limits = request.Services?.GetRequiredService<McpLimits>() ?? new McpLimits();
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(limits.OperationDeadline);
         using var receive = PortiaTelemetry.StartProcess(registration.RequestName, registration.Invocation,
             PortiaTelemetry.CaptureTraceContext());
         try
         {
-            var result = await registration.InvokeAsync(request, json, cancellationToken).ConfigureAwait(false);
+            var result = await registration.InvokeAsync(request, json, deadline.Token).ConfigureAwait(false);
+            var size = result.Result.StructuredContent is { } structured
+                ? Encoding.UTF8.GetByteCount(structured.GetRawText()) + 128L : 128L;
+            foreach (var block in result.Result.Content.OfType<TextContentBlock>())
+                size += JsonEncodedText.Encode(block.Text).EncodedUtf8Bytes.Length + 64L;
+            if (result.Result.Meta is { } meta)
+                size += Encoding.UTF8.GetByteCount(meta.ToJsonString());
+            if (size > limits.MaxResultBytes)
+                throw new InvalidOperationException("MCP result exceeds the configured output limit.");
             PortiaTelemetry.RecordOutcome(receive, result.Result.IsError != true, result.Error);
             return result.Result;
         }
@@ -66,6 +79,11 @@ sealed class PortiaMcpServerTool(
         {
             _ = receive?.SetTag("portia.outcome", "canceled");
             throw;
+        }
+        catch (OperationCanceledException)
+        {
+            PortiaTelemetry.RecordOutcome(receive, false, null);
+            return InternalFailure;
         }
         catch (Exception exception)
         {

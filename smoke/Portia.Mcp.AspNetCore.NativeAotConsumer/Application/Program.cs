@@ -9,6 +9,13 @@ builder.WebHost.UseUrls("http://127.0.0.1:0");
 _ = builder.Services.AddPortia()
     .AddRequestHandler<ReadGreetingHandler>()
     .AddMcpTool<ReadGreeting>(tool => tool.ReadOnly())
+    .AddMcpResource<ReadGreeting, string>("greetings://local/{name}",
+        values => new ReadGreeting(values["name"]),
+        options => { options.Authenticated(); options.AsText("text/plain", value => value); })
+    .AddMcpPrompt<ReadGreeting, string>("greeting",
+        values => new ReadGreeting(values["name"]),
+        value => [new McpPromptMessage("user", value)],
+        options => { options.Authenticated(); options.Required("name"); })
     .AddMcpHttp();
 var app = builder.Build();
 app.Use((context, next) =>
@@ -17,7 +24,7 @@ app.Use((context, next) =>
         [new Claim(ClaimTypes.Name, "native-aot-test-actor")], "smoke"));
     return next(context);
 });
-_ = app.MapPortiaMcp();
+_ = app.MapPortiaMcp().AllowAnonymous();
 await app.StartAsync();
 
 using var http = new HttpClient();
@@ -35,6 +42,14 @@ var result = await client.CallToolAsync("greetings.read", new Dictionary<string,
 }!);
 if (result.IsError == true || result.StructuredContent?.GetProperty("result").GetString() != "Hello, native-aot.")
     throw new InvalidOperationException($"Unexpected MCP result: {result.StructuredContent?.GetRawText()}");
+var resource = await client.ReadResourceAsync("greetings://local/native-aot");
+if (resource.Contents.Single() is not ModelContextProtocol.Protocol.TextResourceContents resourceText ||
+    resourceText.Text != "Hello, native-aot.")
+    throw new InvalidOperationException("Unexpected MCP resource result.");
+var prompt = await client.GetPromptAsync("greeting", new Dictionary<string, object?> { ["name"] = "native-aot" });
+if (prompt.Messages.Single().Content is not ModelContextProtocol.Protocol.TextContentBlock promptText ||
+    promptText.Text != "Hello, native-aot.")
+    throw new InvalidOperationException("Unexpected MCP prompt result.");
 await app.StopAsync();
 
 /// <summary>Reads a greeting without changing application state.</summary>

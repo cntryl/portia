@@ -21,14 +21,17 @@ public static class PortiaMcpEndpointRouteBuilderExtensions
         if (endpoints.ServiceProvider.GetService<PortiaMcpHttpMarker>() is null)
             throw new InvalidOperationException(
                 "MapPortiaMcp requires AddMcpHttp() in the shared Portia application composition.");
-        if (!endpoints.ServiceProvider.GetServices<McpToolRegistration>().Any())
+        if (!endpoints.ServiceProvider.GetServices<McpToolRegistration>().Any()
+            && !endpoints.ServiceProvider.GetServices<McpResourceEntry>().Any()
+            && !endpoints.ServiceProvider.GetServices<McpPromptEntry>().Any())
             throw new InvalidOperationException(
-                "MapPortiaMcp requires at least one AddMcpTool<TRequest>() declaration.");
+                "MapPortiaMcp requires at least one MCP declaration.");
         var maximum = endpoints.ServiceProvider.GetService<IOptions<PortiaHttpOptions>>()?.Value.MaxJsonBodyBytes
                       ?? PortiaHttpOptions.DefaultMaxJsonBodyBytes;
         if (maximum <= 0)
             throw new InvalidOperationException($"{nameof(PortiaHttpOptions.MaxJsonBodyBytes)} must be positive.");
-        var builder = endpoints.MapMcp(pattern).WithMetadata(new McpRequestSizeLimit(maximum));
+        var builder = endpoints.MapMcp(pattern).WithMetadata(new McpRequestSizeLimit(maximum))
+            .RequireAuthorization();
         // The MCP endpoints share Portia's cross-origin rule, which refuses a request another browser origin
         // starts. That alone does not meet the Streamable HTTP rule against DNS rebinding: a page on a rebound
         // host name is same-origin with the host it reaches, so only ASP.NET Core host filtering (AllowedHosts),
@@ -39,7 +42,7 @@ public static class PortiaMcpEndpointRouteBuilderExtensions
                 return;
             endpoint.RequestDelegate = context => PortiaHttpBinding.RejectCrossOrigin(context) is { } rejection
                 ? rejection.ExecuteAsync(context)
-                : next(context);
+                : PortiaMcpHttpMarker.InvokeAsync(() => next(context));
         });
         return builder;
     }

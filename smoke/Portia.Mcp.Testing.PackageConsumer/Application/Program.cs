@@ -10,6 +10,13 @@ builder.WebHost.UseUrls("http://127.0.0.1:0");
 _ = builder.Services.AddPortia()
     .AddRequestHandler<ReadGreetingHandler>()
     .AddMcpTool<ReadGreeting>(tool => tool.ReadOnly())
+    .AddMcpResource<ReadGreeting, string>("greetings://local/{name}",
+        values => new ReadGreeting(values["name"]),
+        options => { options.Authenticated(); options.AsText("text/plain", value => value); })
+    .AddMcpPrompt<ReadGreeting, string>("greeting",
+        values => new ReadGreeting(values["name"]),
+        value => [new McpPromptMessage("user", value)],
+        options => { options.Authenticated(); options.Required("name"); })
     .AddMcpHttp();
 await using var app = builder.Build();
 app.Use((context, next) =>
@@ -18,7 +25,7 @@ app.Use((context, next) =>
         [new Claim(ClaimTypes.Name, "mcp-testing-smoke-actor")], "smoke"));
     return next(context);
 });
-_ = app.MapPortiaMcp();
+_ = app.MapPortiaMcp().AllowAnonymous();
 await app.StartAsync();
 
 using var http = new HttpClient();
@@ -31,6 +38,11 @@ await using (var mcp = await McpScenario.ConnectAsync(http, new Uri(new Uri(app.
     }).ExpectSuccess();
     if (result.StructuredJson?.GetProperty("result").GetString() != "Hello, package.")
         throw new InvalidOperationException($"Unexpected MCP result: {result.StructuredJson?.GetRawText()}");
+    if ((await mcp.ReadResourceAsync("greetings://local/package")).Single().Text != "Hello, package.")
+        throw new InvalidOperationException("Unexpected MCP resource result.");
+    var promptArguments = new Dictionary<string, object?> { ["name"] = "package" };
+    if ((await mcp.GetPromptAsync("greeting", promptArguments)).Single().Text != "Hello, package.")
+        throw new InvalidOperationException("Unexpected MCP prompt result.");
 }
 
 await app.StopAsync();

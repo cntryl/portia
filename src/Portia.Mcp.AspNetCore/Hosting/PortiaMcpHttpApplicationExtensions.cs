@@ -14,16 +14,19 @@ public static class PortiaMcpHttpApplicationExtensions
         Action<HttpServerTransportOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(application);
-        if (!application.Services.Any(service => service.ServiceType == typeof(McpToolRegistration)))
+        if (!PortiaMcpApplicationExtensions.HasDeclarations(application.Services))
             throw new InvalidOperationException(
-                "AddMcpHttp requires at least one AddMcpTool<TRequest>() declaration.");
-        _ = application.Services.AddMcpServer()
+                "AddMcpHttp requires at least one MCP declaration.");
+        application.Services.AddAuthorization();
+        var server = application.Services.AddMcpServer()
             .WithHttpTransport(options =>
             {
                 options.Stateless = true;
                 configure?.Invoke(options);
             })
             .AddAuthorizationFilters();
+        McpPrimitiveHandlers.Attach(server, application.Services);
+        McpPrimitiveHandlers.MarkTransportActivated(application.Services, "AddMcpHttp");
         _ = application.Services.AddSingleton<PortiaMcpHttpMarker>();
         PortiaCrossOrigin.AddCorsDecisions(application.Services);
         return application;

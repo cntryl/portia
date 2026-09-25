@@ -1,1 +1,76 @@
 #nullable enable
+Cntryl.Portia.IMcpVisibilityPolicy
+Cntryl.Portia.IMcpVisibilityPolicy.IsVisibleAsync(System.Security.Claims.ClaimsPrincipal! actor, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.McpEntryOptions
+Cntryl.Portia.McpEntryOptions.Authenticated() -> void
+Cntryl.Portia.McpEntryOptions.McpEntryOptions() -> void
+Cntryl.Portia.McpEntryOptions.Public() -> void
+Cntryl.Portia.McpEntryOptions.VisibleTo<TPolicy>() -> void
+Cntryl.Portia.McpLimits
+Cntryl.Portia.McpLimits.MaxPromptArgumentBytes.get -> int
+Cntryl.Portia.McpLimits.MaxPromptArgumentBytes.set -> void
+Cntryl.Portia.McpLimits.MaxPromptMessages.get -> int
+Cntryl.Portia.McpLimits.MaxPromptMessages.set -> void
+Cntryl.Portia.McpLimits.MaxResourceUriBytes.get -> int
+Cntryl.Portia.McpLimits.MaxResourceUriBytes.set -> void
+Cntryl.Portia.McpLimits.MaxResultBytes.get -> int
+Cntryl.Portia.McpLimits.MaxResultBytes.set -> void
+Cntryl.Portia.McpLimits.McpLimits() -> void
+Cntryl.Portia.McpLimits.OperationDeadline.get -> System.TimeSpan
+Cntryl.Portia.McpLimits.OperationDeadline.set -> void
+Cntryl.Portia.McpPromptInvocation
+Cntryl.Portia.McpPromptInvocation.Deconstruct(out string! PromptName) -> void
+Cntryl.Portia.McpPromptInvocation.Equals(Cntryl.Portia.McpPromptInvocation? other) -> bool
+Cntryl.Portia.McpPromptInvocation.McpPromptInvocation(string! PromptName) -> void
+Cntryl.Portia.McpPromptInvocation.PromptName.get -> string!
+Cntryl.Portia.McpPromptInvocation.PromptName.init -> void
+Cntryl.Portia.McpPromptMessage
+Cntryl.Portia.McpPromptMessage.<Clone>$() -> Cntryl.Portia.McpPromptMessage!
+Cntryl.Portia.McpPromptMessage.Deconstruct(out string! Role, out string! Text) -> void
+Cntryl.Portia.McpPromptMessage.Equals(Cntryl.Portia.McpPromptMessage? other) -> bool
+Cntryl.Portia.McpPromptMessage.McpPromptMessage(string! Role, string! Text) -> void
+Cntryl.Portia.McpPromptMessage.Role.get -> string!
+Cntryl.Portia.McpPromptMessage.Role.init -> void
+Cntryl.Portia.McpPromptMessage.Text.get -> string!
+Cntryl.Portia.McpPromptMessage.Text.init -> void
+Cntryl.Portia.McpPromptOptions
+Cntryl.Portia.McpPromptOptions.McpPromptOptions() -> void
+Cntryl.Portia.McpPromptOptions.Optional(string! name) -> void
+Cntryl.Portia.McpPromptOptions.Required(string! name) -> void
+Cntryl.Portia.McpResourceInvocation
+Cntryl.Portia.McpResourceInvocation.Deconstruct(out string! UriTemplate) -> void
+Cntryl.Portia.McpResourceInvocation.Equals(Cntryl.Portia.McpResourceInvocation? other) -> bool
+Cntryl.Portia.McpResourceInvocation.McpResourceInvocation(string! UriTemplate) -> void
+Cntryl.Portia.McpResourceInvocation.UriTemplate.get -> string!
+Cntryl.Portia.McpResourceInvocation.UriTemplate.init -> void
+Cntryl.Portia.McpResourceOptions<TOut>
+Cntryl.Portia.McpResourceOptions<TOut>.AsBinary(string! mimeType, System.Func<TOut, byte[]!>! project) -> void
+Cntryl.Portia.McpResourceOptions<TOut>.AsJson() -> void
+Cntryl.Portia.McpResourceOptions<TOut>.AsText(string! mimeType, System.Func<TOut, string!>! project) -> void
+Cntryl.Portia.McpResourceOptions<TOut>.McpResourceOptions() -> void
+override Cntryl.Portia.McpPromptInvocation.<Clone>$() -> Cntryl.Portia.McpPromptInvocation!
+override Cntryl.Portia.McpPromptInvocation.Equals(object? obj) -> bool
+override Cntryl.Portia.McpPromptInvocation.GetHashCode() -> int
+override Cntryl.Portia.McpPromptInvocation.ToString() -> string!
+override Cntryl.Portia.McpPromptInvocation.TraceRelationship.get -> Cntryl.Portia.RequestTraceRelationship
+override Cntryl.Portia.McpPromptInvocation.TransportName.get -> string!
+override Cntryl.Portia.McpPromptMessage.Equals(object? obj) -> bool
+override Cntryl.Portia.McpPromptMessage.GetHashCode() -> int
+override Cntryl.Portia.McpPromptMessage.ToString() -> string!
+override Cntryl.Portia.McpResourceInvocation.<Clone>$() -> Cntryl.Portia.McpResourceInvocation!
+override Cntryl.Portia.McpResourceInvocation.Equals(object? obj) -> bool
+override Cntryl.Portia.McpResourceInvocation.GetHashCode() -> int
+override Cntryl.Portia.McpResourceInvocation.ToString() -> string!
+override Cntryl.Portia.McpResourceInvocation.TraceRelationship.get -> Cntryl.Portia.RequestTraceRelationship
+override Cntryl.Portia.McpResourceInvocation.TransportName.get -> string!
+override sealed Cntryl.Portia.McpPromptInvocation.Equals(Cntryl.Portia.RequestInvocation? other) -> bool
+override sealed Cntryl.Portia.McpResourceInvocation.Equals(Cntryl.Portia.RequestInvocation? other) -> bool
+static Cntryl.Portia.McpPromptInvocation.operator !=(Cntryl.Portia.McpPromptInvocation? left, Cntryl.Portia.McpPromptInvocation? right) -> bool
+static Cntryl.Portia.McpPromptInvocation.operator ==(Cntryl.Portia.McpPromptInvocation? left, Cntryl.Portia.McpPromptInvocation? right) -> bool
+static Cntryl.Portia.McpPromptMessage.operator !=(Cntryl.Portia.McpPromptMessage? left, Cntryl.Portia.McpPromptMessage? right) -> bool
+static Cntryl.Portia.McpPromptMessage.operator ==(Cntryl.Portia.McpPromptMessage? left, Cntryl.Portia.McpPromptMessage? right) -> bool
+static Cntryl.Portia.McpResourceInvocation.operator !=(Cntryl.Portia.McpResourceInvocation? left, Cntryl.Portia.McpResourceInvocation? right) -> bool
+static Cntryl.Portia.McpResourceInvocation.operator ==(Cntryl.Portia.McpResourceInvocation? left, Cntryl.Portia.McpResourceInvocation? right) -> bool
+static Cntryl.Portia.PortiaMcpApplicationExtensions.AddMcpPrompt<TRequest, TOut>(this Cntryl.Portia.PortiaBuilder! application, string! name, System.Func<System.Collections.Generic.IReadOnlyDictionary<string!, string!>!, TRequest>! bind, System.Func<TOut, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.McpPromptMessage!>!>! render, System.Action<Cntryl.Portia.McpPromptOptions!>! configure) -> Cntryl.Portia.PortiaBuilder!
+static Cntryl.Portia.PortiaMcpApplicationExtensions.AddMcpResource<TRequest, TOut>(this Cntryl.Portia.PortiaBuilder! application, string! uriTemplate, System.Func<System.Collections.Generic.IReadOnlyDictionary<string!, string!>!, TRequest>! bind, System.Action<Cntryl.Portia.McpResourceOptions<TOut>!>! configure) -> Cntryl.Portia.PortiaBuilder!
+static Cntryl.Portia.PortiaMcpApplicationExtensions.ConfigureMcpLimits(this Cntryl.Portia.PortiaBuilder! application, System.Action<Cntryl.Portia.McpLimits!>! configure) -> Cntryl.Portia.PortiaBuilder!

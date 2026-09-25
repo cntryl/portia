@@ -29,7 +29,7 @@ public sealed class McpScenarioTests
                 [new Claim(ClaimTypes.Name, "scenario-agent")], "test"));
             return next(context);
         });
-        _ = app.MapPortiaMcp();
+        _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         using var http = app.GetTestClient();
         await using (var scenario = await McpScenario.ConnectAsync(http, new Uri("http://localhost/mcp")))
