@@ -22,6 +22,10 @@ part URI, sends the bytes with HTTP `PUT`, and passes the returned opaque part r
 request additional numbered part URIs for larger payloads. The adapter rejects objects above 256 MiB. Business
 authorization remains in the consuming application; a signed download link is not an authorization decision.
 
+For multipart uploads, each part except the final part must be at least 5 MiB
+(`ObjectStorageLimits.MinimumNonfinalPartLength`). The final part may be smaller. Both the S3 adapter and the testing
+fake follow this completion rule.
+
 The adapter uploads parts to a unique tenant-scoped staging key with SSE-KMS, streams the completed staged object to
 check its actual length and full SHA-256, then conditionally copies verified bytes to
 `content/sha256/{first_two_hex}/{sha256_digest}`. It writes verified digest and length metadata during promotion and
@@ -29,8 +33,13 @@ removes staging data. A completion race verifies the already-promoted object bef
 checks length and adapter-written digest metadata without downloading object bytes. `OpenReadAsync` returns a stream after
 that metadata check.
 
+If multipart completion loses its response, retry `CompleteUploadAsync` with the same session and part receipts. A
+completed staging object is streamed and verified again before promotion. The copy is conditional on both an absent
+destination and the ETag of the staged object that was verified. A concurrent destination-copy conflict is retried a
+bounded number of times. Unresolved completion or copy errors and canceled completion calls retain staging for a later
+retry. Call `AbortUploadAsync` to intentionally discard a session and its staging data.
+
 Configure S3 lifecycle rules to abort incomplete multipart uploads and expire completed objects under the `staging/`
 prefix. These rules protect against host loss and abandoned sessions. The library aborts and removes staging data for
-explicit aborts, failed digest verification, and completed uploads. If S3 reports that an upload ID is gone while a
-concurrent completion may still be reading the staged object, the adapter preserves that object so it cannot sabotage
-the in-flight completion; the `staging/` expiry rule removes it if no request promotes it.
+explicit aborts, failed digest verification, and completed uploads. An unresolved retry leaves staged data in place so
+that another completion request can recover it; the `staging/` expiry rule eventually removes abandoned data.

@@ -64,6 +64,7 @@ Cntryl.Portia.Storage.ObjectUploadSession.ObjectUploadSession(string! Token) -> 
 Cntryl.Portia.Storage.ObjectUploadSession.Token.get -> string!
 Cntryl.Portia.Storage.ObjectUploadSession.Token.init -> void
 const Cntryl.Portia.Storage.ObjectStorageLimits.MaximumObjectLength = 268435456 -> long
+const Cntryl.Portia.Storage.ObjectStorageLimits.MinimumNonfinalPartLength = 5242880 -> int
 override Cntryl.Portia.Storage.ObjectDigest.Equals(object? obj) -> bool
 override Cntryl.Portia.Storage.ObjectDigest.GetHashCode() -> int
 override Cntryl.Portia.Storage.ObjectDigest.ToString() -> string!

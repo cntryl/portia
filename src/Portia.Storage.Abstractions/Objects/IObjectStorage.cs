@@ -9,7 +9,7 @@ public interface IObjectStorage
     /// <summary>Creates a short-lived URL for one part of an active upload.</summary>
     ValueTask<ObjectUploadPart> SignPartAsync(ObjectUploadSession session, int partNumber, TimeSpan lifetime, CancellationToken ct = default);
 
-    /// <summary>Completes, verifies, and promotes the upload to its immutable content key.</summary>
+    /// <summary>Completes, verifies, and promotes the upload to its immutable content key. Every nonfinal part must be at least <see cref="ObjectStorageLimits.MinimumNonfinalPartLength"/> bytes.</summary>
     ValueTask CompleteUploadAsync(ObjectUploadSession session, IReadOnlyList<ObjectPartReceipt> parts, CancellationToken ct = default);
 
     /// <summary>Aborts an active multipart upload and removes any temporary data.</summary>

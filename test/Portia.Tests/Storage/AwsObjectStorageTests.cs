@@ -33,6 +33,7 @@ public sealed class AwsObjectStorageTests
         Assert.Equal("alias/tenant-one-key", proxy.InitiateRequest?.ServerSideEncryptionKeyManagementServiceKeyId);
         Assert.StartsWith("staging/", proxy.InitiateRequest?.Key, StringComparison.Ordinal);
         Assert.Equal("content/sha256/" + digest.Sha256[..2] + "/" + digest.Sha256, proxy.CopyRequest?.DestinationKey);
+        Assert.Equal("\"staged-etag\"", proxy.CopyRequest?.ETagToMatch);
         Assert.Equal("*", proxy.CopyRequest?.IfNoneMatch);
         Assert.Equal(ServerSideEncryptionMethod.AWSKMS, proxy.CopyRequest?.ServerSideEncryptionMethod);
         Assert.Equal("alias/tenant-one-key", proxy.CopyRequest?.ServerSideEncryptionKeyManagementServiceKeyId);
@@ -108,6 +109,7 @@ public sealed class AwsObjectStorageTests
         var proxy = (TestS3ClientProxy)(object)client;
         proxy.Content = content;
         proxy.FailAllCompletions = true;
+        proxy.StagingObjectMissing = true;
         var services = new ServiceCollection();
         services.AddDataProtection();
         using var provider = services.BuildServiceProvider();
@@ -124,6 +126,142 @@ public sealed class AwsObjectStorageTests
         Assert.Equal(0, proxy.StagingDeleteCount);
     }
 
+    /// <summary>Checks that a completed staging object can be verified and promoted on retry.</summary>
+    [Fact]
+    public async Task ShouldResumePromotionWhenTheMultipartUploadIdIsGone()
+    {
+        var content = "completed staging object"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = content;
+        proxy.FailAllCompletions = true;
+        var storage = CreateStorage(client);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+
+        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]);
+
+        Assert.Equal(1, proxy.CompleteCount);
+        Assert.Equal(1, proxy.CopyCount);
+        Assert.Equal(1, proxy.StagingDeleteCount);
+        Assert.Equal(digest.Sha256, proxy.CopyRequest?.Metadata["portia-sha256"]);
+    }
+
+    /// <summary>Checks that a lost completion response leaves the staged bytes available for retry.</summary>
+    [Fact]
+    public async Task ShouldPreserveAndResumeAfterAmbiguousMultipartCompletion()
+    {
+        var content = "ambiguous completion"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = content;
+        proxy.TimeoutAfterFirstCompletion = true;
+        var storage = CreateStorage(client);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var parts = new[] { new ObjectPartReceipt(1, "etag") };
+
+        await Assert.ThrowsAsync<TimeoutException>(async () => await storage.CompleteUploadAsync(session, parts));
+        Assert.Equal(0, proxy.AbortCount);
+        Assert.Equal(0, proxy.StagingDeleteCount);
+
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await storage.CompleteUploadAsync(session, parts, canceled.Token));
+        Assert.Equal(0, proxy.AbortCount);
+        Assert.Equal(0, proxy.StagingDeleteCount);
+
+        await storage.CompleteUploadAsync(session, parts);
+        Assert.Equal(2, proxy.CompleteCount);
+        Assert.Equal(1, proxy.CopyCount);
+        Assert.Equal(1, proxy.StagingDeleteCount);
+    }
+
+    /// <summary>Checks that cancellation after S3 receives completion leaves a retry path.</summary>
+    [Fact]
+    public async Task ShouldPreserveStagingWhenCompletionIsCanceledInFlight()
+    {
+        var content = "in-flight cancellation"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = content;
+        using var source = new CancellationTokenSource();
+        proxy.CancelDuringFirstCompletion = source;
+        var storage = CreateStorage(client);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var parts = new[] { new ObjectPartReceipt(1, "etag") };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await storage.CompleteUploadAsync(session, parts, source.Token));
+        Assert.Equal(0, proxy.AbortCount);
+        Assert.Equal(0, proxy.StagingDeleteCount);
+
+        await storage.CompleteUploadAsync(session, parts);
+        Assert.Equal(1, proxy.CopyCount);
+        Assert.Equal(1, proxy.StagingDeleteCount);
+    }
+
+    /// <summary>Checks that a bad completed staging object is discarded during recovery.</summary>
+    [Fact]
+    public async Task ShouldRejectAndCleanMismatchedStagingOnResume()
+    {
+        var content = "expected content"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = "corrupt content"u8.ToArray();
+        proxy.FailAllCompletions = true;
+        var storage = CreateStorage(client);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]));
+
+        Assert.Equal(0, proxy.CopyCount);
+        Assert.Equal(1, proxy.StagingDeleteCount);
+    }
+
+    /// <summary>Checks that a transient destination conflict retries without discarding verified bytes.</summary>
+    [Fact]
+    public async Task ShouldRetryConditionalCopyConflict()
+    {
+        var content = "conflicting promotion"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = content;
+        proxy.ConditionalCopyConflictsRemaining = 1;
+        var storage = CreateStorage(client);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+
+        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]);
+
+        Assert.Equal(2, proxy.CopyCount);
+        Assert.Equal(1, proxy.StagingDeleteCount);
+    }
+
+    /// <summary>Checks that unresolved conditional conflicts retain staged bytes for a later retry.</summary>
+    [Fact]
+    public async Task ShouldKeepStagingAfterRepeatedConditionalCopyConflicts()
+    {
+        var content = "persistent conflict"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = content;
+        proxy.ConditionalCopyConflictsRemaining = 10;
+        var storage = CreateStorage(client);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+
+        await Assert.ThrowsAsync<AmazonS3Exception>(async () =>
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]));
+
+        Assert.InRange(proxy.CopyCount, 1, 3);
+        Assert.Equal(0, proxy.StagingDeleteCount);
+    }
+
     /// <summary>Checks that an immutable-copy race succeeds only when the existing object verifies.</summary>
     [Fact]
     public async Task ShouldAcceptVerifiedConditionalCreateRace()
@@ -134,6 +272,7 @@ public sealed class AwsObjectStorageTests
         var proxy = (TestS3ClientProxy)(object)client;
         proxy.Content = content;
         proxy.FailCopyConditionally = true;
+        proxy.ExistingObject = true;
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
 
@@ -166,9 +305,9 @@ public sealed class AwsObjectStorageTests
         Assert.False(await storage.HeadAndVerifyAsync(tenant, digest));
     }
 
-    /// <summary>Checks cancellation after multipart completion begins still cleans up staging data.</summary>
+    /// <summary>Checks cancellation leaves a session recoverable until the caller explicitly aborts it.</summary>
     [Fact]
-    public async Task ShouldCleanUpWhenCompletionIsCanceled()
+    public async Task ShouldPreserveStagingWhenCompletionIsCanceledBeforeS3Request()
     {
         var content = "cancelled object"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
@@ -184,9 +323,31 @@ public sealed class AwsObjectStorageTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")], source.Token));
 
-        Assert.Equal(1, proxy.AbortCount);
-        Assert.Equal(1, proxy.StagingDeleteCount);
+        Assert.Equal(0, proxy.AbortCount);
+        Assert.Equal(0, proxy.StagingDeleteCount);
         Assert.Equal(0, proxy.CopyCount);
+
+        await storage.AbortUploadAsync(session);
+        Assert.Equal(2, proxy.AbortCount);
+        Assert.Equal(1, proxy.StagingDeleteCount);
+    }
+
+    /// <summary>Checks that abort remains idempotent after S3 has removed the upload ID.</summary>
+    [Fact]
+    public async Task ShouldAbortWhenS3ReportsNoSuchUpload()
+    {
+        var content = "aborted object"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.AbortReportsNoSuchUpload = true;
+        var storage = CreateStorage(client);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+
+        await storage.AbortUploadAsync(session);
+
+        Assert.Equal(2, proxy.AbortCount);
+        Assert.Equal(1, proxy.StagingDeleteCount);
     }
 
     static AwsObjectStorage CreateStorage(IAmazonS3 client)
@@ -240,6 +401,18 @@ public sealed class AwsObjectStorageTests
         /// <summary>Gets or sets whether every completion reports that its upload ID is gone.</summary>
         public bool FailAllCompletions { get; set; }
 
+        /// <summary>Gets or sets whether the first completion loses its response after S3 commits it.</summary>
+        public bool TimeoutAfterFirstCompletion { get; set; }
+
+        /// <summary>Gets or sets the cancellation source to signal after completion starts.</summary>
+        public CancellationTokenSource? CancelDuringFirstCompletion { get; set; }
+
+        /// <summary>Gets or sets whether the staging object is unavailable to a retry.</summary>
+        public bool StagingObjectMissing { get; set; }
+
+        /// <summary>Gets or sets the number of conditional-copy 409 responses to simulate.</summary>
+        public int ConditionalCopyConflictsRemaining { get; set; }
+
         /// <summary>Gets or sets whether immutable promotion loses a precondition race.</summary>
         public bool FailCopyConditionally { get; set; }
 
@@ -255,11 +428,16 @@ public sealed class AwsObjectStorageTests
         /// <summary>Gets or sets whether completion throws cancellation before reaching S3.</summary>
         public bool CancelCompletion { get; set; }
 
+        /// <summary>Gets or sets whether abort reports that the multipart upload is already gone.</summary>
+        public bool AbortReportsNoSuchUpload { get; set; }
+
         /// <summary>Gets the number of multipart completion calls.</summary>
         public int CompleteCount { get; private set; }
 
         /// <summary>Gets the number of immutable-copy calls.</summary>
         public int CopyCount { get; private set; }
+
+        bool PromotedObjectExists { get; set; }
 
         /// <inheritdoc />
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
@@ -294,7 +472,14 @@ public sealed class AwsObjectStorageTests
         }
 
         GetObjectResponse GetObjectResponseForCall()
-            => new() { ResponseStream = new MemoryStream(Content, writable: false) };
+        {
+            if (StagingObjectMissing)
+            {
+                throw new AmazonS3Exception("The staging object does not exist.") { StatusCode = System.Net.HttpStatusCode.NotFound };
+            }
+
+            return new GetObjectResponse { ETag = "\"staged-etag\"", ResponseStream = new MemoryStream(Content, writable: false) };
+        }
 
         CopyObjectResponse CaptureCopy(object?[] args)
         {
@@ -308,6 +493,17 @@ public sealed class AwsObjectStorageTests
                 };
             }
 
+            if (ConditionalCopyConflictsRemaining > 0)
+            {
+                ConditionalCopyConflictsRemaining--;
+                throw new AmazonS3Exception("A conflicting conditional operation is in progress.")
+                {
+                    StatusCode = System.Net.HttpStatusCode.Conflict,
+                    ErrorCode = "ConditionalRequestConflict"
+                };
+            }
+
+            PromotedObjectExists = true;
             return new CopyObjectResponse();
         }
 
@@ -319,7 +515,20 @@ public sealed class AwsObjectStorageTests
                 throw new OperationCanceledException(token);
             }
 
-            if (FailAllCompletions || (FailRepeatedCompletion && CompleteCount > 1))
+            if (TimeoutAfterFirstCompletion && CompleteCount == 1)
+            {
+                throw new TimeoutException("The response was lost after S3 completed the upload.");
+            }
+
+            if (CancelDuringFirstCompletion is { } source && CompleteCount == 1)
+            {
+                source.Cancel();
+                throw new OperationCanceledException(source.Token);
+            }
+
+            if (FailAllCompletions || (FailRepeatedCompletion && CompleteCount > 1) ||
+                (TimeoutAfterFirstCompletion && CompleteCount > 1) ||
+                (CancelDuringFirstCompletion is not null && CompleteCount > 1))
             {
                 throw new AmazonS3Exception("The upload ID no longer exists.") { ErrorCode = "NoSuchUpload" };
             }
@@ -335,7 +544,7 @@ public sealed class AwsObjectStorageTests
             }
 
             var response = new GetObjectMetadataResponse { ContentLength = Content.LongLength };
-            if (CopyCount > 0 || ExistingObject)
+            if (PromotedObjectExists || ExistingObject)
             {
                 response.Metadata["portia-sha256"] = MetadataDigest ?? Convert.ToHexString(SHA256.HashData(Content)).ToLowerInvariant();
             }
@@ -346,6 +555,11 @@ public sealed class AwsObjectStorageTests
         AbortMultipartUploadResponse CountAbort()
         {
             AbortCount++;
+            if (AbortReportsNoSuchUpload)
+            {
+                throw new AmazonS3Exception("The upload ID no longer exists.") { ErrorCode = "NoSuchUpload" };
+            }
+
             return new AbortMultipartUploadResponse();
         }
 
@@ -354,10 +568,12 @@ public sealed class AwsObjectStorageTests
             if (args[0] is DeleteObjectRequest request && request.Key.StartsWith("staging/", StringComparison.Ordinal))
             {
                 StagingDeleteCount++;
+                StagingObjectMissing = true;
             }
             else if (args[0] is string && args.Length > 1 && ((string)args[1]!).StartsWith("staging/", StringComparison.Ordinal))
             {
                 StagingDeleteCount++;
+                StagingObjectMissing = true;
             }
 
             return new DeleteObjectResponse();

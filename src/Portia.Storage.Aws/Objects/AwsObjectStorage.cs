@@ -5,6 +5,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
 {
     const string DigestMetadata = "portia-sha256";
     const int MaximumParts = 10_000;
+    const int MaximumConditionalCopyAttempts = 3;
     static readonly TimeSpan UploadLifetime = TimeSpan.FromHours(24);
 
     readonly IAmazonS3 _client = client ?? throw new ArgumentNullException(nameof(client));
@@ -72,103 +73,67 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         ArgumentNullException.ThrowIfNull(parts);
         var payload = SessionPayload.Decode(session.Token, _sessionProtector);
         EnsureSessionActive(payload);
+        // A canceled call can be a retry after S3 committed completion but lost its response.
+        // Only an explicit abort can safely discard its potentially completed staging object.
+        ct.ThrowIfCancellationRequested();
+
         if (parts.Count is < 1 or > MaximumParts || parts.Any(static part => part is null || string.IsNullOrWhiteSpace(part.Token)) ||
             parts.Select(static part => part.PartNumber).Distinct().Count() != parts.Count ||
             parts.Any(static part => part.PartNumber is < 1 or > MaximumParts))
         {
-            await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
             throw new ArgumentException("Multipart completion requires unique, valid part receipts.", nameof(parts));
         }
 
         var ordered = parts.OrderBy(static part => part.PartNumber).ToArray();
-        var cleanupStaging = true;
+        var uploadIdGone = false;
         try
         {
-            try
+            await _client.CompleteMultipartUploadAsync(new CompleteMultipartUploadRequest
             {
-                await _client.CompleteMultipartUploadAsync(new CompleteMultipartUploadRequest
-                {
-                    BucketName = payload.Bucket,
-                    Key = payload.StagingKey,
-                    UploadId = payload.UploadId,
-                    PartETags = ordered.Select(static part => new PartETag(part.PartNumber, part.Token)).ToList()
-                }, ct).ConfigureAwait(false);
-            }
-            catch (AmazonS3Exception exception) when (exception.ErrorCode == "NoSuchUpload")
-            {
-                // Completion may have succeeded before the caller lost its response. Treat a retry
-                // as successful only when the immutable destination has the expected length and digest.
-                if (await HeadAndVerifyAsync(payload.Bucket, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
-                {
-                    return;
-                }
-
-                // Another completion request may have finished the MPU and still be reading the
-                // staged object before promotion. Do not delete its input; lifecycle expiry cleans
-                // up completed staging objects if no request eventually promotes them.
-                cleanupStaging = false;
-                throw;
-            }
-
-            using var staged = await _client.GetObjectAsync(payload.Bucket, payload.StagingKey, ct).ConfigureAwait(false);
-            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            var buffer = new byte[64 * 1024];
-            long length = 0;
-            while (true)
-            {
-                var read = await staged.ResponseStream.ReadAsync(buffer, ct).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    break;
-                }
-
-                length = checked(length + read);
-                if (length > payload.Length)
-                {
-                    throw new InvalidDataException("Uploaded object exceeds its declared length.");
-                }
-
-                hash.AppendData(buffer, 0, read);
-            }
-
-            var actualDigest = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
-            if (length != payload.Length || !CryptographicOperations.FixedTimeEquals(
-                Encoding.ASCII.GetBytes(actualDigest), Encoding.ASCII.GetBytes(payload.Sha256)))
-            {
-                throw new InvalidDataException("Uploaded object length or SHA-256 does not match the declared content.");
-            }
-
-            var contentKey = ContentKey(payload.Sha256);
-            try
-            {
-                await _client.CopyObjectAsync(new CopyObjectRequest
-                {
-                    SourceBucket = payload.Bucket,
-                    SourceKey = payload.StagingKey,
-                    DestinationBucket = payload.Bucket,
-                    DestinationKey = contentKey,
-                    MetadataDirective = S3MetadataDirective.REPLACE,
-                    ServerSideEncryptionMethod = ServerSideEncryptionMethod.AWSKMS,
-                    ServerSideEncryptionKeyManagementServiceKeyId = payload.KmsKey,
-                    Metadata = { [DigestMetadata] = actualDigest, ["portia-length"] = length.ToString(System.Globalization.CultureInfo.InvariantCulture) },
-                    IfNoneMatch = "*"
-                }, ct).ConfigureAwait(false);
-            }
-            catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
-            {
-                if (!await HeadAndVerifyAsync(payload.Bucket, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
-                {
-                    throw new InvalidDataException("An object already exists at the immutable content key but failed verification.", exception);
-                }
-            }
+                BucketName = payload.Bucket,
+                Key = payload.StagingKey,
+                UploadId = payload.UploadId,
+                PartETags = ordered.Select(static part => new PartETag(part.PartNumber, part.Token)).ToList()
+            }, ct).ConfigureAwait(false);
         }
-        finally
+        catch (AmazonS3Exception exception) when (exception.ErrorCode == "NoSuchUpload")
         {
-            if (cleanupStaging)
+            // The upload ID is also gone after a successful completion. The staged object may
+            // still need verification and promotion after a lost response or host restart.
+            uploadIdGone = true;
+        }
+
+        if (uploadIdGone && await HeadAndVerifyAsync(payload.Bucket, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
+        {
+            await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
+            return;
+        }
+
+        (string Digest, string ETag) verified;
+        try
+        {
+            verified = await VerifyStagingAsync(payload, ct).ConfigureAwait(false);
+        }
+        catch (InvalidDataException)
+        {
+            await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+        catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // A concurrent completion may have promoted and removed staging while this caller
+            // was retrying. An absent destination leaves the outcome unresolved for another retry.
+            if (await HeadAndVerifyAsync(payload.Bucket, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
             {
                 await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
+                return;
             }
+
+            throw;
         }
+
+        await PromoteVerifiedAsync(payload, verified.Digest, verified.ETag, ct).ConfigureAwait(false);
+        await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -185,7 +150,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
                 UploadId = payload.UploadId
             }, ct).ConfigureAwait(false);
         }
-        catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound || exception.ErrorCode == "NoSuchUpload")
         {
             // Idempotent abort: the upload may already have completed or been removed.
         }
@@ -258,6 +223,86 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         }
 
         return location;
+    }
+
+    async ValueTask<(string Digest, string ETag)> VerifyStagingAsync(SessionPayload payload, CancellationToken ct)
+    {
+        using var staged = await _client.GetObjectAsync(payload.Bucket, payload.StagingKey, ct).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(staged.ETag))
+        {
+            throw new InvalidOperationException("S3 did not return an ETag for the staged object.");
+        }
+
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[64 * 1024];
+        long length = 0;
+        while (true)
+        {
+            var read = await staged.ResponseStream.ReadAsync(buffer, ct).ConfigureAwait(false);
+            if (read == 0)
+            {
+                break;
+            }
+
+            length = checked(length + read);
+            if (length > payload.Length)
+            {
+                throw new InvalidDataException("Uploaded object exceeds its declared length.");
+            }
+
+            hash.AppendData(buffer, 0, read);
+        }
+
+        var computed = hash.GetHashAndReset();
+        if (length != payload.Length || !CryptographicOperations.FixedTimeEquals(computed, Convert.FromHexString(payload.Sha256)))
+        {
+            throw new InvalidDataException("Uploaded object length or SHA-256 does not match the declared content.");
+        }
+
+        return (Convert.ToHexString(computed).ToLowerInvariant(), staged.ETag);
+    }
+
+    async ValueTask PromoteVerifiedAsync(SessionPayload payload, string verifiedDigest, string stagedETag, CancellationToken ct)
+    {
+        for (var attempt = 1; attempt <= MaximumConditionalCopyAttempts; attempt++)
+        {
+            try
+            {
+                await _client.CopyObjectAsync(new CopyObjectRequest
+                {
+                    SourceBucket = payload.Bucket,
+                    SourceKey = payload.StagingKey,
+                    ETagToMatch = stagedETag,
+                    DestinationBucket = payload.Bucket,
+                    DestinationKey = ContentKey(payload.Sha256),
+                    MetadataDirective = S3MetadataDirective.REPLACE,
+                    ServerSideEncryptionMethod = ServerSideEncryptionMethod.AWSKMS,
+                    ServerSideEncryptionKeyManagementServiceKeyId = payload.KmsKey,
+                    Metadata = { [DigestMetadata] = verifiedDigest, ["portia-length"] = payload.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+                    IfNoneMatch = "*"
+                }, ct).ConfigureAwait(false);
+                return;
+            }
+            catch (AmazonS3Exception exception) when (exception.StatusCode is System.Net.HttpStatusCode.PreconditionFailed or System.Net.HttpStatusCode.Conflict)
+            {
+                if (await HeadAndVerifyAsync(payload.Bucket, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
+                {
+                    return;
+                }
+
+                if (exception.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
+                {
+                    throw new InvalidDataException("An object already exists at the immutable content key but failed verification.", exception);
+                }
+
+                if (attempt == MaximumConditionalCopyAttempts)
+                {
+                    throw;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(50 * attempt), ct).ConfigureAwait(false);
+            }
+        }
     }
 
     async ValueTask<bool> HeadAndVerifyAsync(string bucket, string sha256, long length, CancellationToken ct)
