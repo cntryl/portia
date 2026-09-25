@@ -43,3 +43,10 @@ Configure S3 lifecycle rules to abort incomplete multipart uploads and expire co
 prefix. These rules protect against host loss and abandoned sessions. The library aborts and removes staging data for
 explicit aborts, failed digest verification, and completed uploads. An unresolved retry leaves staged data in place so
 that another completion request can recover it; the `staging/` expiry rule eventually removes abandoned data.
+
+The `StorageIntegration` test lane uses a digest-pinned Sqrzl image to exercise authenticated signed parts, multipart
+completion, conditional writes and copies, tenant buckets, and separate API and worker registrations. Sqrzl surfaces
+SSE-KMS headers and metadata but does not perform KMS encryption. The test client normalizes the SDK's URL-encoded
+`CopySource` slashes before signing because this Sqrzl version parses literal slashes; the production adapter retains
+the AWS SDK's encoded header. Locally, start `docker compose up -d sqrzl` and run the storage integration tests with
+`PORTIA_S3_TEST_ENDPOINT=http://127.0.0.1:9000`, then stop the service with `docker compose down --volumes`.

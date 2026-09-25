@@ -61,6 +61,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
             UploadId = payload.UploadId,
             PartNumber = partNumber,
             Verb = HttpVerb.PUT,
+            Protocol = PresignedProtocol,
             Expires = expiresAt.UtcDateTime
         });
         return ValueTask.FromResult(new ObjectUploadPart(partNumber, new Uri(uri), expiresAt));
@@ -186,6 +187,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
             BucketName = location.BucketReference,
             Key = ContentKey(expected.Sha256),
             Verb = HttpVerb.GET,
+            Protocol = PresignedProtocol,
             Expires = expiresAt.UtcDateTime
         });
         return new(new Uri(url), expiresAt);
@@ -202,8 +204,15 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
             return null;
         }
 
-        var response = await _client.GetObjectAsync(location.BucketReference, ContentKey(expected.Sha256), ct).ConfigureAwait(false);
-        return new ResponseStream(response);
+        try
+        {
+            var response = await _client.GetObjectAsync(location.BucketReference, ContentKey(expected.Sha256), ct).ConfigureAwait(false);
+            return new ResponseStream(response);
+        }
+        catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
     }
 
     /// <inheritdoc />
@@ -353,6 +362,20 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         }
 
         return lifetime;
+    }
+
+    Protocol PresignedProtocol
+    {
+        get
+        {
+            var config = _client.Config;
+            if (Uri.TryCreate(config.ServiceURL, UriKind.Absolute, out var endpoint))
+            {
+                return endpoint.Scheme == Uri.UriSchemeHttp ? Protocol.HTTP : Protocol.HTTPS;
+            }
+
+            return config.UseHttp ? Protocol.HTTP : Protocol.HTTPS;
+        }
     }
 
     static void EnsureSessionActive(SessionPayload payload)

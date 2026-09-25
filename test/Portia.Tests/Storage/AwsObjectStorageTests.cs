@@ -26,6 +26,7 @@ public sealed class AwsObjectStorageTests
         Assert.DoesNotContain("alias/tenant-one-key", session.Token, StringComparison.Ordinal);
         var signed = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(4));
         Assert.True(signed.ExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(4));
+        Assert.Equal(Protocol.HTTPS, proxy.PresignedRequest?.Protocol);
         await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "opaque-etag")]);
 
         Assert.Equal("tenant-one-bucket", resolver.LastTenantLocation?.BucketReference);
@@ -41,6 +42,44 @@ public sealed class AwsObjectStorageTests
         Assert.Equal(digest.Length.ToString(System.Globalization.CultureInfo.InvariantCulture), proxy.CopyRequest?.Metadata["portia-length"]);
         Assert.Equal(1, proxy.AbortCount);
         Assert.Equal(1, proxy.StagingDeleteCount);
+    }
+
+    /// <summary>Uses the configured S3 endpoint scheme for signed part and download links.</summary>
+    [Fact]
+    public async Task ShouldSignHttpUrlsForHttpS3Endpoints()
+    {
+        var content = "local endpoint"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = content;
+        proxy.ServiceUrl = "http://127.0.0.1:9000";
+        proxy.ExistingObject = true;
+        var storage = CreateStorage(client);
+        var tenant = new TenantId("tenant-one");
+        var session = await storage.CreateUploadAsync(tenant, digest);
+
+        await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1));
+        Assert.Equal(Protocol.HTTP, proxy.PresignedRequest?.Protocol);
+
+        await storage.CreateDownloadAsync(tenant, digest, TimeSpan.FromMinutes(1));
+        Assert.Equal(Protocol.HTTP, proxy.PresignedRequest?.Protocol);
+    }
+
+    /// <summary>Uses the S3 client's HTTP setting when it has no explicit service URL.</summary>
+    [Fact]
+    public async Task ShouldSignHttpUrlsWhenS3ClientUsesHttp()
+    {
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.UseHttp = true;
+        var storage = CreateStorage(client);
+        var digest = new ObjectDigest(new string('a', 64), 1);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+
+        await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1));
+
+        Assert.Equal(Protocol.HTTP, proxy.PresignedRequest?.Protocol);
     }
 
     /// <summary>Checks that a staged full-object digest mismatch never reaches the content key.</summary>
@@ -305,6 +344,22 @@ public sealed class AwsObjectStorageTests
         Assert.False(await storage.HeadAndVerifyAsync(tenant, digest));
     }
 
+    /// <summary>A delete between metadata verification and reading has the same missing-object result.</summary>
+    [Fact]
+    public async Task ShouldReturnNoStreamWhenContentDisappearsAfterHead()
+    {
+        var content = "concurrent deletion"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = content;
+        proxy.ExistingObject = true;
+        proxy.MissingPromotedObjectOnGet = true;
+        var storage = CreateStorage(client);
+
+        Assert.Null(await storage.OpenReadAsync(new TenantId("tenant-one"), digest));
+    }
+
     /// <summary>Checks cancellation leaves a session recoverable until the caller explicitly aborts it.</summary>
     [Fact]
     public async Task ShouldPreserveStagingWhenCompletionIsCanceledBeforeS3Request()
@@ -383,6 +438,15 @@ public sealed class AwsObjectStorageTests
         /// <summary>Gets or sets the bytes returned when the adapter reads the staged object.</summary>
         public byte[] Content { get; set; } = [];
 
+        /// <summary>Gets or sets the S3 endpoint exposed by the configured client.</summary>
+        public string? ServiceUrl { get; set; }
+
+        /// <summary>Gets or sets whether the S3 client uses HTTP without an explicit service URL.</summary>
+        public bool UseHttp { get; set; }
+
+        /// <summary>Gets the most recent signed URL request.</summary>
+        public GetPreSignedUrlRequest? PresignedRequest { get; private set; }
+
         /// <summary>Gets the multipart creation request.</summary>
         public InitiateMultipartUploadRequest? InitiateRequest { get; private set; }
 
@@ -419,6 +483,9 @@ public sealed class AwsObjectStorageTests
         /// <summary>Gets or sets whether a metadata check reports the content key as missing.</summary>
         public bool MissingObject { get; set; }
 
+        /// <summary>Gets or sets whether a promoted object disappears after a successful metadata check.</summary>
+        public bool MissingPromotedObjectOnGet { get; set; }
+
         /// <summary>Gets or sets whether a content object should be visible to metadata checks.</summary>
         public bool ExistingObject { get; set; }
 
@@ -449,12 +516,13 @@ public sealed class AwsObjectStorageTests
             {
                 nameof(IAmazonS3.InitiateMultipartUploadAsync) => Box(Initiate(args)),
                 nameof(IAmazonS3.CompleteMultipartUploadAsync) => Box(Complete(args)),
-                nameof(IAmazonS3.GetObjectAsync) => Box(GetObjectResponseForCall()),
+                nameof(IAmazonS3.GetObjectAsync) => Box(GetObjectResponseForCall(args)),
                 nameof(IAmazonS3.CopyObjectAsync) => Box(CaptureCopy(args)),
                 nameof(IAmazonS3.AbortMultipartUploadAsync) => Box(CountAbort()),
                 nameof(IAmazonS3.DeleteObjectAsync) => Box(CountDelete(args)),
-                nameof(IAmazonS3.GetPreSignedURL) => Box("https://objects.example.invalid/signed"),
+                nameof(IAmazonS3.GetPreSignedURL) => Box(CaptureSignedUrl(args)),
                 nameof(IAmazonS3.GetObjectMetadataAsync) => Box(GetMetadata()),
+                "get_Config" => Box(new AmazonS3Config { ServiceURL = ServiceUrl, UseHttp = UseHttp }),
                 _ => throw new NotSupportedException($"Unexpected AWS S3 operation: {targetMethod.Name}.")
             };
 
@@ -465,14 +533,26 @@ public sealed class AwsObjectStorageTests
 
         static object Box<T>(T value) where T : notnull => value;
 
+        string CaptureSignedUrl(object?[] args)
+        {
+            PresignedRequest = (GetPreSignedUrlRequest)args[0]!;
+            return "https://objects.example.invalid/signed";
+        }
+
         InitiateMultipartUploadResponse Initiate(object?[] args)
         {
             InitiateRequest = (InitiateMultipartUploadRequest)args[0]!;
             return new InitiateMultipartUploadResponse { UploadId = "test-upload-id" };
         }
 
-        GetObjectResponse GetObjectResponseForCall()
+        GetObjectResponse GetObjectResponseForCall(object?[] args)
         {
+            var key = args[0] is GetObjectRequest request ? request.Key : args.ElementAtOrDefault(1) as string;
+            if (MissingPromotedObjectOnGet && key?.StartsWith("content/", StringComparison.Ordinal) == true)
+            {
+                throw new AmazonS3Exception("The promoted object was deleted.") { StatusCode = System.Net.HttpStatusCode.NotFound };
+            }
+
             if (StagingObjectMissing)
             {
                 throw new AmazonS3Exception("The staging object does not exist.") { StatusCode = System.Net.HttpStatusCode.NotFound };
