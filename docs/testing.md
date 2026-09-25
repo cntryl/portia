@@ -108,4 +108,5 @@ rather than sharing one instance across scenarios.
 
 Both component scenarios run a tenant-scoped component (`EventStreamPattern.ForTenant`) bound to the
 `"scenario"` test tenant by default. Pass a `TenantId` to either scenario constructor to bind it to a
-specific tenant, as hosting would bind it per tenant. Given events are placed on that tenant's streams.
+specific tenant, as hosting would bind it per tenant. For a tenant-scoped component, given events are
+placed on that tenant's streams.

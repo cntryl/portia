@@ -100,8 +100,14 @@ public sealed class ReactorScenarioTests
         await scenario.RunAsync(reactor);
 
         Assert.Equal(tenant.Value, reactor.Pattern.Realm);
+        Assert.Equal(tenant.Value, reactor.LastStreamRealm);
         Assert.Equal<IRequestBase>([new SendWelcomeEmail(user)], scenario.SentRequests);
     }
+
+    /// <summary>The optional tenant cannot be the uninitialized value of the tenant struct.</summary>
+    [Fact]
+    public void ShouldRejectUninitializedTenant() =>
+        _ = Assert.ThrowsAny<ArgumentException>(() => new ReactorScenario(default));
 
     /// <summary>Seeded events reach the reactor with the metadata the test attached.</summary>
     [Fact]

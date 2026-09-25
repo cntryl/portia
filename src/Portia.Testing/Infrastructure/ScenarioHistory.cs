@@ -9,7 +9,11 @@ sealed class ScenarioHistory
     readonly List<DomainEvent> _events = [];
     ulong _version;
 
-    public ScenarioHistory(TenantId tenant) => _tenant = tenant;
+    public ScenarioHistory(TenantId tenant)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenant.Value, nameof(tenant));
+        _tenant = tenant;
+    }
 
     public void Add(DomainEvent[] events)
     {

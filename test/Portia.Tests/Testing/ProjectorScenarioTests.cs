@@ -63,4 +63,9 @@ public sealed class ProjectorScenarioTests
         Assert.Single(users);
         Assert.Equal(tenant.Value, projector.Pattern.Realm);
     }
+
+    /// <summary>The optional tenant cannot be the uninitialized value of the tenant struct.</summary>
+    [Fact]
+    public void ShouldRejectUninitializedTenant() =>
+        _ = Assert.ThrowsAny<ArgumentException>(() => new ProjectorScenario(default));
 }
