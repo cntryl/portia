@@ -88,6 +88,21 @@ public sealed class ReactorScenarioTests
         Assert.Equal<IRequestBase>([new SendWelcomeEmail(user)], scenario.SentRequests);
     }
 
+    /// <summary>A caller-selected tenant binds the reactor and supplies matching event streams.</summary>
+    [Fact]
+    public async Task ShouldRunReactorUnderChosenTenant()
+    {
+        var tenant = new TenantId(Uuid.CreateVersion4().ToString());
+        var user = Uuid.CreateVersion4();
+        var scenario = new ReactorScenario(tenant).Given(new UserCreated(user));
+        var reactor = new WelcomeReactor(scenario.Requests, EventStreamPattern.ForTenant("users"));
+
+        await scenario.RunAsync(reactor);
+
+        Assert.Equal(tenant.Value, reactor.Pattern.Realm);
+        Assert.Equal<IRequestBase>([new SendWelcomeEmail(user)], scenario.SentRequests);
+    }
+
     /// <summary>Seeded events reach the reactor with the metadata the test attached.</summary>
     [Fact]
     public async Task ShouldDeliverSeededEventsUnchanged()

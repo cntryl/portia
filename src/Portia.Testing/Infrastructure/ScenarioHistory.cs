@@ -4,10 +4,12 @@ namespace Cntryl.Portia.Testing;
 // order; seeded events keep their metadata. Delivery always replays them into streams the component consumes.
 sealed class ScenarioHistory
 {
-    static readonly TenantId Tenant = new("scenario");
+    readonly TenantId _tenant;
     readonly Uuid _aggregateId = Uuid.CreateVersion4();
     readonly List<DomainEvent> _events = [];
     ulong _version;
+
+    public ScenarioHistory(TenantId tenant) => _tenant = tenant;
 
     public void Add(DomainEvent[] events)
     {
@@ -22,7 +24,7 @@ sealed class ScenarioHistory
     }
 
     // A tenant template only runs once bound, which hosting does per tenant; tests run as one scenario tenant.
-    public static WorkloadIdentity Workload(string name) => new(name, Tenant);
+    public WorkloadIdentity Workload(string name) => new(name, _tenant);
 
     public async ValueTask<InMemoryEventStore> ToStoreAsync(EventStreamPattern pattern, CancellationToken ct)
     {

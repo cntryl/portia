@@ -7,8 +7,15 @@ namespace Cntryl.Portia.Testing;
 /// </summary>
 public sealed class ProjectorScenario
 {
-    readonly ScenarioHistory _history = new();
+    readonly ScenarioHistory _history;
     readonly ScenarioProjectionStore _store = new();
+
+    /// <summary>Creates a scenario for the default test tenant.</summary>
+    public ProjectorScenario() : this(new TenantId("scenario")) { }
+
+    /// <summary>Creates a scenario for a specific tenant's streams.</summary>
+    /// <param name="tenant">The tenant to bind tenant-scoped projectors to.</param>
+    public ProjectorScenario(TenantId tenant) => _history = new ScenarioHistory(tenant);
 
     /// <summary>Gets the projection store to construct the projector with; it commits progress in memory.</summary>
     public IProjectionStore Store => _store;
@@ -36,7 +43,7 @@ public sealed class ProjectorScenario
     {
         ArgumentNullException.ThrowIfNull(projector);
         if (projector.Pattern.IsTenantTemplate)
-            projector.BindWorkload(ScenarioHistory.Workload(projector.Name), null);
+            projector.BindWorkload(_history.Workload(projector.Name), null);
         var store = await _history.ToStoreAsync(projector.Pattern, ct).ConfigureAwait(false);
         var identity = new CheckpointIdentity(projector.Name, projector.Pattern);
         var checkpoint = await projector.Store.LoadCheckpointAsync(identity, ct).ConfigureAwait(false);

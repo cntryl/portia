@@ -106,5 +106,6 @@ request with a result or a stream request should be tested through `RequestScena
 `Given` attaches metadata to the event instances you pass, as raising them would. Construct events per test
 rather than sharing one instance across scenarios.
 
-Both component scenarios run a tenant-scoped component (`EventStreamPattern.ForTenant`) bound to a single test
-tenant, as hosting would bind it per tenant.
+Both component scenarios run a tenant-scoped component (`EventStreamPattern.ForTenant`) bound to the
+`"scenario"` test tenant by default. Pass a `TenantId` to either scenario constructor to bind it to a
+specific tenant, as hosting would bind it per tenant. Given events are placed on that tenant's streams.
