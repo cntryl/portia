@@ -40,8 +40,36 @@ public sealed class EventAssertTests
         _ = Assert.Throws<InvalidOperationException>(() => EventAssert.Equal([revised], Array.Empty<DomainEvent>()));
     }
 
+    /// <summary>A sequence mismatch names the event index and payload path.</summary>
+    [Fact]
+    public void ShouldReportEventIndexForSequenceMismatch()
+    {
+        var first = new CriteriaRevised(["one"], new RevisionDetails(["a"]));
+        var expected = new CriteriaRevised(["two"], new RevisionDetails(["b"]));
+        var actual = new CriteriaRevised(["two"], new RevisionDetails(["c"]));
+
+        var error = Assert.Throws<InvalidOperationException>(() => EventAssert.Equal([first, expected], [first, actual]));
+
+        Assert.Contains("[1].CriteriaRevised.Details.Tags[0]", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>Nested record structs use the same structural collection comparison.</summary>
+    [Fact]
+    public void ShouldCompareNestedRecordStructCollections()
+    {
+        var expected = new StructuredRevision(new RevisionStruct(["a", "b"]));
+        var actual = new StructuredRevision(new RevisionStruct(["a", "b"]));
+
+        EventAssert.Equal(expected, actual);
+    }
+
     sealed record RevisionDetails(IReadOnlyList<string> Tags);
 
     [Discriminator("test.scenario.criteria-revised")]
     sealed record CriteriaRevised(IReadOnlyList<string> Criteria, RevisionDetails Details) : DomainEvent;
+
+    readonly record struct RevisionStruct(IReadOnlyList<string> Tags);
+
+    [Discriminator("test.scenario.structured-revision")]
+    sealed record StructuredRevision(RevisionStruct Details) : DomainEvent;
 }

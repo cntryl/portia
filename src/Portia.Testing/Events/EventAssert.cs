@@ -34,7 +34,12 @@ public static class EventAssert
         if (expected.Count != actual.Count)
             throw new InvalidOperationException($"Event count differs: expected {expected.Count}, actual {actual.Count}.");
         for (var index = 0; index < expected.Count; index++)
-            Equal(expected[index], actual[index]);
+        {
+            var difference = Difference(expected[index], actual[index], $"[{index}].{expected[index]?.GetType().Name}",
+                new HashSet<(object, object)>(PairComparer.Instance));
+            if (difference is not null)
+                throw new InvalidOperationException($"Event payload differs at {difference}.");
+        }
     }
 
     [RequiresUnreferencedCode("Structural event assertions require public payload properties to be retained.")]
@@ -65,7 +70,8 @@ public static class EventAssert
             return null;
         }
 
-        if (type.IsPrimitive || type.IsEnum || type.Namespace?.StartsWith("System", StringComparison.Ordinal) == true)
+        if (type.IsPrimitive || type.IsEnum || type.Namespace == "System"
+            || type.Namespace?.StartsWith("System.", StringComparison.Ordinal) == true)
             return Equals(expected, actual) ? null : path;
 
         var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public)
