@@ -124,6 +124,82 @@ public sealed class AwsObjectStorageTests
         Assert.Equal(0, proxy.StagingDeleteCount);
     }
 
+    /// <summary>Checks that an immutable-copy race succeeds only when the existing object verifies.</summary>
+    [Fact]
+    public async Task ShouldAcceptVerifiedConditionalCreateRace()
+    {
+        var content = "concurrent immutable object"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = content;
+        proxy.FailCopyConditionally = true;
+        var storage = CreateStorage(client);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+
+        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]);
+
+        Assert.Equal(1, proxy.CopyCount);
+        Assert.Equal(1, proxy.StagingDeleteCount);
+    }
+
+    /// <summary>Checks that missing and incorrectly described promoted objects are not reported as valid.</summary>
+    [Fact]
+    public async Task ShouldReportMissingOrUnverifiedContentAsUnavailable()
+    {
+        var content = "existing object"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = content;
+        var storage = CreateStorage(client);
+        var tenant = new TenantId("tenant-one");
+
+        proxy.MissingObject = true;
+        Assert.False(await storage.HeadAndVerifyAsync(tenant, digest));
+        await Assert.ThrowsAsync<FileNotFoundException>(async () =>
+            await storage.CreateDownloadAsync(tenant, digest, TimeSpan.FromMinutes(1)));
+
+        proxy.MissingObject = false;
+        proxy.ExistingObject = true;
+        proxy.MetadataDigest = new string('0', 64);
+        Assert.False(await storage.HeadAndVerifyAsync(tenant, digest));
+    }
+
+    /// <summary>Checks cancellation after multipart completion begins still cleans up staging data.</summary>
+    [Fact]
+    public async Task ShouldCleanUpWhenCompletionIsCanceled()
+    {
+        var content = "cancelled object"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = content;
+        proxy.CancelCompletion = true;
+        var storage = CreateStorage(client);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        using var source = new CancellationTokenSource();
+        source.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")], source.Token));
+
+        Assert.Equal(1, proxy.AbortCount);
+        Assert.Equal(1, proxy.StagingDeleteCount);
+        Assert.Equal(0, proxy.CopyCount);
+    }
+
+    static AwsObjectStorage CreateStorage(IAmazonS3 client)
+    {
+        var services = new ServiceCollection();
+        services.AddDataProtection();
+        using var provider = services.BuildServiceProvider();
+        return new AwsObjectStorage(
+            client,
+            new TestTenantResolver(),
+            provider.GetRequiredService<IDataProtectionProvider>().CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
+    }
+
     /// <summary>A tenant-to-bucket and KMS mapping used by the request-boundary tests.</summary>
     public sealed class TestTenantResolver : IObjectStorageTenantResolver
     {
@@ -164,6 +240,21 @@ public sealed class AwsObjectStorageTests
         /// <summary>Gets or sets whether every completion reports that its upload ID is gone.</summary>
         public bool FailAllCompletions { get; set; }
 
+        /// <summary>Gets or sets whether immutable promotion loses a precondition race.</summary>
+        public bool FailCopyConditionally { get; set; }
+
+        /// <summary>Gets or sets whether a metadata check reports the content key as missing.</summary>
+        public bool MissingObject { get; set; }
+
+        /// <summary>Gets or sets whether a content object should be visible to metadata checks.</summary>
+        public bool ExistingObject { get; set; }
+
+        /// <summary>Gets or sets a digest to return instead of the digest of the staged bytes.</summary>
+        public string? MetadataDigest { get; set; }
+
+        /// <summary>Gets or sets whether completion throws cancellation before reaching S3.</summary>
+        public bool CancelCompletion { get; set; }
+
         /// <summary>Gets the number of multipart completion calls.</summary>
         public int CompleteCount { get; private set; }
 
@@ -179,7 +270,7 @@ public sealed class AwsObjectStorageTests
             var response = targetMethod.Name switch
             {
                 nameof(IAmazonS3.InitiateMultipartUploadAsync) => Box(Initiate(args)),
-                nameof(IAmazonS3.CompleteMultipartUploadAsync) => Box(Complete()),
+                nameof(IAmazonS3.CompleteMultipartUploadAsync) => Box(Complete(args)),
                 nameof(IAmazonS3.GetObjectAsync) => Box(GetObjectResponseForCall()),
                 nameof(IAmazonS3.CopyObjectAsync) => Box(CaptureCopy(args)),
                 nameof(IAmazonS3.AbortMultipartUploadAsync) => Box(CountAbort()),
@@ -209,12 +300,25 @@ public sealed class AwsObjectStorageTests
         {
             CopyCount++;
             CopyRequest = (CopyObjectRequest)args[0]!;
+            if (FailCopyConditionally)
+            {
+                throw new AmazonS3Exception("The destination object already exists.")
+                {
+                    StatusCode = System.Net.HttpStatusCode.PreconditionFailed
+                };
+            }
+
             return new CopyObjectResponse();
         }
 
-        CompleteMultipartUploadResponse Complete()
+        CompleteMultipartUploadResponse Complete(object?[] args)
         {
             CompleteCount++;
+            if (CancelCompletion && args.LastOrDefault() is CancellationToken { IsCancellationRequested: true } token)
+            {
+                throw new OperationCanceledException(token);
+            }
+
             if (FailAllCompletions || (FailRepeatedCompletion && CompleteCount > 1))
             {
                 throw new AmazonS3Exception("The upload ID no longer exists.") { ErrorCode = "NoSuchUpload" };
@@ -225,10 +329,15 @@ public sealed class AwsObjectStorageTests
 
         GetObjectMetadataResponse GetMetadata()
         {
-            var response = new GetObjectMetadataResponse { ContentLength = Content.LongLength };
-            if (CopyCount > 0)
+            if (MissingObject)
             {
-                response.Metadata["portia-sha256"] = Convert.ToHexString(SHA256.HashData(Content)).ToLowerInvariant();
+                throw new AmazonS3Exception("The object does not exist.") { StatusCode = System.Net.HttpStatusCode.NotFound };
+            }
+
+            var response = new GetObjectMetadataResponse { ContentLength = Content.LongLength };
+            if (CopyCount > 0 || ExistingObject)
+            {
+                response.Metadata["portia-sha256"] = MetadataDigest ?? Convert.ToHexString(SHA256.HashData(Content)).ToLowerInvariant();
             }
 
             return response;
