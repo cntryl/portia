@@ -153,8 +153,13 @@ faulting pass that repeatedly stops at the same event count points to an unreada
 lifecycle event. Successful catch-up passes while processor lag remains flat or rises instead point
 to processor checkpoint progress, not tenant discovery. No duration by itself proves a stalled
 checkpoint: confirm that event counts and processor lag fail to advance across repeated samples.
-Directory cursors remain in-process only; these diagnostics do not add a durable tenant snapshot or
-checkpoint.
+For large tenant lifecycle histories, construct `EventSourcedTenantDirectory` through
+`TenantDirectorySnapshots.Create<TStartEvent,TStopEvent>` and pass a
+`FitzKvTenantDirectorySnapshotStore` backed by a dedicated `kv://` base route. The store commits
+the active roster and lifecycle cursor as one value after the initial complete read pass and then
+after 256 further events. On restart the directory resumes from that cursor and catches up before it announces active tenants. Concurrent
+workers save conditionally, so a stale replay cannot replace a newer snapshot. Without a snapshot
+store, the directory continues to replay from the beginning.
 
 Normal tenant removal has one `MultiTenantRunnerOptions.TenantStopTimeout` deadline shared by
 workload cancellation and the stop callback. Ignoring that deadline faults the runner with

@@ -24,12 +24,23 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
     where TStartEvent : DomainEvent
     where TStopEvent : DomainEvent
 {
+    const int SnapshotEventsPerWrite = 256;
+
+    internal EventSourcedTenantDirectory(IDomainEventReader reader, EventStreamPattern pattern,
+        Func<DomainEvent, TenantId> getTenantId, TimeSpan? pollInterval,
+        TimeProvider? timeProvider, IDomainEventNotifier? notifier, ITenantDirectorySnapshotStore snapshotStore)
+        : this(reader, pattern, getTenantId, pollInterval, timeProvider, notifier)
+    {
+        _snapshotStore = snapshotStore;
+    }
+
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
 
     readonly Func<DomainEvent, TenantId> _getTenantId =
         getTenantId ?? throw new ArgumentNullException(nameof(getTenantId));
 
     readonly IDomainEventNotifier? _notifier = notifier;
+    readonly ITenantDirectorySnapshotStore? _snapshotStore;
     readonly EventStreamPattern _pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
     readonly TimeSpan _pollInterval = GetInterval(pollInterval);
     readonly IDomainEventReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
@@ -45,11 +56,18 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
     public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var active = new HashSet<TenantId>();
-        await foreach (var record in ReadPassAsync(EventCursor.Start, active, "snapshot", "replay", ct)
+        var snapshot = await LoadSnapshotAsync(ct).ConfigureAwait(false);
+        var active = new HashSet<TenantId>(snapshot?.ActiveTenants ?? []);
+        var cursor = snapshot?.Cursor ?? EventCursor.Start;
+        var expected = snapshot?.Cursor;
+        await foreach (var record in ReadPassAsync(cursor, active, "snapshot", "replay", ct)
                            .WithCancellation(ct)
                            .ConfigureAwait(false))
+        {
+            cursor = record.NextCursor;
             _ = Apply(active, record.Event);
+        }
+        await SaveSnapshotAsync(expected, cursor, active, ct).ConfigureAwait(false);
         foreach (var tenantId in active)
             yield return tenantId;
     }
@@ -61,9 +79,12 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
         await using var subscription = _notifier is null
             ? null
             : await _notifier.SubscribeAsync(_pattern, ct).ConfigureAwait(false);
-        var active = new HashSet<TenantId>();
+        var snapshot = await LoadSnapshotAsync(ct).ConfigureAwait(false);
+        var active = new HashSet<TenantId>(snapshot?.ActiveTenants ?? []);
         var initiallyRemoved = new HashSet<TenantId>();
-        var cursor = EventCursor.Start;
+        var cursor = snapshot?.Cursor ?? EventCursor.Start;
+        var savedCursor = snapshot?.Cursor;
+        var unsavedEvents = 0;
         var initial = true;
         while (true)
         {
@@ -75,9 +96,17 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
             {
                 cursor = record.NextCursor;
                 sawAny = true;
+                unsavedEvents++;
                 var change = Apply(active, record.Event, initial ? initiallyRemoved : null);
                 if (!initial && change is { } delta)
                     yield return delta;
+            }
+            if ((initial || unsavedEvents >= SnapshotEventsPerWrite) &&
+                cursor != (savedCursor ?? EventCursor.Start))
+            {
+                await SaveSnapshotAsync(savedCursor, cursor, active, ct).ConfigureAwait(false);
+                savedCursor = cursor;
+                unsavedEvents = 0;
             }
 
             if (initial)
@@ -100,6 +129,39 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
             {
                 await Task.Delay(_pollInterval, _clock, ct).ConfigureAwait(false);
             }
+        }
+    }
+
+    ValueTask<TenantDirectorySnapshot?> LoadSnapshotAsync(CancellationToken ct) =>
+        _snapshotStore?.LoadAsync(_pattern, ct) ?? ValueTask.FromResult<TenantDirectorySnapshot?>(null);
+
+    async ValueTask SaveSnapshotAsync(EventCursor? expected, EventCursor cursor, HashSet<TenantId> active,
+        CancellationToken ct)
+    {
+        if (_snapshotStore is null || cursor == (expected ?? EventCursor.Start))
+            return;
+        var tenants = active.OrderBy(tenant => tenant.Value, StringComparer.Ordinal).ToArray();
+        if (await _snapshotStore.TrySaveAsync(_pattern, expected,
+                new TenantDirectorySnapshot(cursor, tenants), ct).ConfigureAwait(false))
+            return;
+
+        // Another worker advanced the snapshot. Rebuild from its authoritative cursor before
+        // attempting to save again; opaque cursors cannot be ordered safely in memory.
+        var current = await LoadSnapshotAsync(ct).ConfigureAwait(false);
+        var reconciled = new HashSet<TenantId>(current?.ActiveTenants ?? []);
+        var reconciledCursor = current?.Cursor ?? EventCursor.Start;
+        await foreach (var record in ReadPassAsync(reconciledCursor, reconciled, "snapshot", "catch_up", ct)
+                           .WithCancellation(ct).ConfigureAwait(false))
+        {
+            reconciledCursor = record.NextCursor;
+            _ = Apply(reconciled, record.Event);
+        }
+        if (reconciledCursor != (current?.Cursor ?? EventCursor.Start))
+        {
+            _ = await _snapshotStore.TrySaveAsync(_pattern, current?.Cursor,
+                new TenantDirectorySnapshot(reconciledCursor,
+                    reconciled.OrderBy(tenant => tenant.Value, StringComparer.Ordinal).ToArray()), ct)
+                .ConfigureAwait(false);
         }
     }
 
@@ -204,9 +266,12 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
         readonly HashSet<TenantId> _active = [];
         int _disposed;
         bool _initial = true;
+        bool _initialized;
         TenantLifecycleChange[]? _initialChanges;
         int _initialIndex;
         EventCursor _nextCursor;
+        EventCursor? _savedCursor;
+        int _unsavedEvents;
         int _reading;
         IDomainEventSubscription? _subscription;
 
@@ -236,6 +301,18 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                     throw new ObjectDisposedException(GetType().FullName);
                 }
 
+                if (!_initialized)
+                {
+                    var snapshot = await directory.LoadSnapshotAsync(ct).ConfigureAwait(false);
+                    if (snapshot is not null)
+                    {
+                        _active.UnionWith(snapshot.ActiveTenants);
+                        _nextCursor = snapshot.Cursor;
+                        _savedCursor = snapshot.Cursor;
+                    }
+                    _initialized = true;
+                }
+
                 while (true)
                 {
                     ct.ThrowIfCancellationRequested();
@@ -254,9 +331,18 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                     {
                         _nextCursor = record.NextCursor;
                         sawAny = true;
+                        _unsavedEvents++;
                         var change = directory.Apply(_active, record.Event);
                         if (!_initial && change is { } delta)
                             yield return delta;
+                    }
+                    if ((_initial || _unsavedEvents >= SnapshotEventsPerWrite) &&
+                        _nextCursor != (_savedCursor ?? EventCursor.Start))
+                    {
+                        await directory.SaveSnapshotAsync(_savedCursor, _nextCursor, _active, ct)
+                            .ConfigureAwait(false);
+                        _savedCursor = _nextCursor;
+                        _unsavedEvents = 0;
                     }
 
                     if (_initial)

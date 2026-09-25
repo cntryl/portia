@@ -71,12 +71,40 @@ public sealed class FitzNotificationFaultTests
         Assert.Equal(1, tracker.Disposed);
     }
 
-    /// <summary>
-    ///     Three transient attempts use 1s/2s backoff, then lose only the current firing; a later firing on
-    ///     the route starts its own attempts without waiting for the earlier firing's backoff.
-    /// </summary>
+    /// <summary>A transient validator outage longer than three attempts must not discard a live firing.</summary>
     [Fact]
-    public async Task ShouldBoundScheduledValidationAndContinueAfterExhaustion()
+    public async Task ShouldKeepRetryingScheduledValidationUntilTheValidatorRecovers()
+    {
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var tracker = new ValidatorTracker { TransientAttempts = 3 };
+        var services = new ServiceCollection();
+        _ = services.AddSingleton(tracker);
+        _ = services.AddScoped<IScheduledRequestActorValidator, ScopedValidator>();
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var clock = new ManualTestClock();
+        var consumer = new FitzScheduledRequestConsumer(new OnePayloadScheduleClient(ScheduledPayload(serializer)),
+            serializer, "schedule://test/shared/action/run",
+            TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)),
+            provider.GetRequiredService<IServiceScopeFactory>(), clock);
+        await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+
+        var move = enumerator.MoveNextAsync().AsTask();
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(TimeSpan.FromSeconds(2), await clock.WaitForDelayAsync());
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Equal(TimeSpan.FromSeconds(4), await clock.WaitForDelayAsync());
+        Assert.False(move.IsCompleted);
+        clock.Advance(TimeSpan.FromSeconds(4));
+
+        Assert.True(await move);
+        Assert.Equal(4, tracker.Attempts);
+        Assert.Equal(4, tracker.Disposed);
+    }
+
+    /// <summary>Long outages cap retry delay and cancellation releases the pending firing.</summary>
+    [Fact]
+    public async Task ShouldCapScheduledValidationBackoffAndCancel()
     {
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var tracker = new ValidatorTracker { AlwaysTransient = true };
@@ -85,23 +113,24 @@ public sealed class FitzNotificationFaultTests
         _ = services.AddScoped<IScheduledRequestActorValidator, ScopedValidator>();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var clock = new ManualTestClock();
-        var consumer = new FitzScheduledRequestConsumer(new TwoPayloadScheduleClient(ScheduledPayload(serializer)),
+        var consumer = new FitzScheduledRequestConsumer(new OnePayloadScheduleClient(ScheduledPayload(serializer)),
             serializer, "schedule://test/shared/action/run",
             TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)),
             provider.GetRequiredService<IServiceScopeFactory>(), clock);
-        await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+        using var cancellation = new CancellationTokenSource();
+        await using var enumerator = consumer.ReadAsync(cancellation.Token).GetAsyncEnumerator();
 
         var move = enumerator.MoveNextAsync().AsTask();
-        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
-        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
-        clock.Advance(TimeSpan.FromSeconds(1));
-        Assert.Equal(TimeSpan.FromSeconds(2), await clock.WaitForDelayAsync());
-        Assert.Equal(TimeSpan.FromSeconds(2), await clock.WaitForDelayAsync());
-        clock.Advance(TimeSpan.FromSeconds(2));
-
-        Assert.False(await move);
-        Assert.Equal(6, tracker.Attempts);
-        Assert.Equal(6, tracker.Disposed);
+        foreach (var seconds in new[] { 1, 2, 4, 8, 16 })
+        {
+            Assert.Equal(TimeSpan.FromSeconds(seconds), await clock.WaitForDelayAsync());
+            clock.Advance(TimeSpan.FromSeconds(seconds));
+        }
+        Assert.Equal(TimeSpan.FromSeconds(30), await clock.WaitForDelayAsync());
+        Assert.False(move.IsCompleted);
+        await cancellation.CancelAsync();
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => move);
+        Assert.Equal(tracker.Attempts, tracker.Disposed);
     }
 
     /// <summary>
@@ -377,6 +406,7 @@ public sealed class FitzNotificationFaultTests
         public bool ThrowFirst { get; init; }
         public bool FailFirstTransiently { get; init; }
         public bool AlwaysTransient { get; init; }
+        public int TransientAttempts { get; init; }
         public bool AlwaysRejected { get; init; }
 
         public int RecordAttempt(Guid instance)
@@ -407,7 +437,8 @@ public sealed class FitzNotificationFaultTests
             var attempt = tracker.RecordAttempt(_id);
             if (tracker.ThrowFirst && attempt == 1)
                 throw new IOException("identity provider unavailable");
-            if (tracker.AlwaysTransient || (tracker.FailFirstTransiently && attempt == 1))
+            if (tracker.AlwaysTransient || attempt <= tracker.TransientAttempts ||
+                (tracker.FailFirstTransiently && attempt == 1))
                 return ValueTask.FromResult(Result<ClaimsPrincipal>.Failure(
                     new RequestError(RequestErrorKind.Conflict, "identity provider unavailable", true)));
             if (tracker.AlwaysRejected)

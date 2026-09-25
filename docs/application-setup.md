@@ -175,12 +175,14 @@ queue work and serve RPC. Infrastructure autoscaling configuration remains deplo
 Notice subscriptions are fanout on each replica; scheduled delivery follows the
 schedule's one/broadcast policy. Those transports are not interchangeable with a
 competing queue. Non-transient scheduled identity rejection drops the firing. A thrown validator
-failure or transient `RequestError` makes at most three attempts, delayed one then two seconds, before
-losing only that firing and continuing the route. Retries wait off the route's read loop, so later
+failure or transient `RequestError` retries the live firing until validation succeeds or the host
+stops, with delay doubling from one second to a 30-second cap. Retries wait off the route's read loop, so later
 firings are validated and delivered meanwhile, and a retried firing can arrive after firings that fired
 after it. Up to 32 firings per route wait to retry at once; beyond that, reading pauses until one
 finishes. Hosted retries use the registered `TimeProvider`, record every failed attempt, and resolve a
-fresh disposed scope each time. Caller cancellation propagates.
+fresh disposed scope each time. Caller cancellation propagates. Fitz schedule notifications have no
+acknowledgment or redelivery handle, so process loss can still lose a firing that has already been
+received; use a durable queue for work that requires that guarantee.
 
 ## Construct and hydrate aggregates directly
 

@@ -24,8 +24,8 @@ public sealed class FitzScheduledRequestConsumer(
     IScheduledRequestActorValidator actorValidator,
     ILogger<FitzScheduledRequestConsumer>? logger = null) : IRequestNotificationConsumer
 {
-    const int ValidationAttempts = 3;
     const int MaxDeferredRetries = 32;
+    const int MaxValidationRetryDelaySeconds = 30;
 
     readonly IScheduledRequestActorValidator _actorValidator =
         actorValidator ?? throw new ArgumentNullException(nameof(actorValidator));
@@ -140,9 +140,10 @@ public sealed class FitzScheduledRequestConsumer(
     {
         try
         {
-            for (var attempt = 2; attempt <= ValidationAttempts; attempt++)
+            var delaySeconds = 1;
+            while (true)
             {
-                await Task.Delay(TimeSpan.FromSeconds(attempt - 1), _clock, ct).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), _clock, ct).ConfigureAwait(false);
                 var result = await TryValidateActorAsync(firing, ct).ConfigureAwait(false);
                 if (result.Actor is { } actor)
                 {
@@ -154,9 +155,9 @@ public sealed class FitzScheduledRequestConsumer(
                 {
                     return;
                 }
-            }
 
-            RecordLost();
+                delaySeconds = Math.Min(delaySeconds * 2, MaxValidationRetryDelaySeconds);
+            }
         }
         finally
         {

@@ -1,1 +1,5 @@
 #nullable enable
+Cntryl.Portia.FitzKvTenantDirectorySnapshotStore
+Cntryl.Portia.FitzKvTenantDirectorySnapshotStore.FitzKvTenantDirectorySnapshotStore(Cntryl.Fitz.IKvClient! client, string! route) -> void
+Cntryl.Portia.FitzKvTenantDirectorySnapshotStore.LoadAsync(Cntryl.Portia.EventStreamPattern! pattern, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.TenantDirectorySnapshot?>
+Cntryl.Portia.FitzKvTenantDirectorySnapshotStore.TrySaveAsync(Cntryl.Portia.EventStreamPattern! pattern, Cntryl.Portia.EventCursor? expectedCursor, Cntryl.Portia.TenantDirectorySnapshot! snapshot, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
