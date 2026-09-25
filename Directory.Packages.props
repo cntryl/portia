@@ -14,8 +14,8 @@
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <!-- ASP.NET Core 10's OpenAPI integration requires Microsoft.OpenApi below 3.0.0. -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="3.10.2" />
-    <PackageVersion Include="Microsoft.OpenApi.YamlReader" Version="3.10.2" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
+    <PackageVersion Include="Microsoft.OpenApi.YamlReader" Version="2.12.2" />
     <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.19.1" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.19.1" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />

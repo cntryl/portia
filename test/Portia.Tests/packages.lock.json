@@ -57,17 +57,17 @@
       },
       "Microsoft.OpenApi": {
         "type": "Direct",
-        "requested": "[3.10.2, )",
-        "resolved": "3.10.2",
-        "contentHash": "qzg4a3WmgQm28Azaporbnsu+KHA+vq5sgpQQFLiJgB06Rra2S+kzGAU7pzUB8/UIwZJCSCY2JEE/M5e0hQ2K8w=="
+        "requested": "[2.12.2, )",
+        "resolved": "2.12.2",
+        "contentHash": "ZkT7qiJe0Kj0+DTZOZo+xrDy1kNmdsWFQVPIQLNx9ZJ0T9cB2LG7r+Bi60so8/+yg1nkS7QCPadrzsTG4VPKrA=="
       },
       "Microsoft.OpenApi.YamlReader": {
         "type": "Direct",
-        "requested": "[3.10.2, )",
-        "resolved": "3.10.2",
-        "contentHash": "qVWoRH8gBWcs2C67e5crYLXPPqK3O8VbzN9G4nxC3Ykjv+Vjv6BJZXx9WyAohe2UT5ZOkHr4LdLJ/ZpaptWdZQ==",
+        "requested": "[2.12.2, )",
+        "resolved": "2.12.2",
+        "contentHash": "ppHZ/+lgwdrQPyZA0ws0BsKqGc713+xL9BhpqwmP3scbWLg6GSWJQD6BX6dts7C/7QDwat4cbCGGGLMOPgvzQw==",
         "dependencies": {
-          "Microsoft.OpenApi": "3.10.2",
+          "Microsoft.OpenApi": "2.12.2",
           "SharpYaml": "2.1.5"
         }
       },
@@ -222,7 +222,7 @@
           "Cntryl.Portia.Abstractions": "[0.6.0, )",
           "Cntryl.Portia.DependencyInjection": "[0.6.0, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.12, )",
-          "Microsoft.OpenApi": "[3.10.2, )"
+          "Microsoft.OpenApi": "[2.12.2, )"
         }
       },
       "Cntryl.Portia.Core": {
