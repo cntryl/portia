@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>AWS S3 object storage provider for Portia with tenant-scoped SSE-KMS encryption.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.S3"/>
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions"/>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Portia.Storage.Abstractions/Portia.Storage.Abstractions.csproj"/>
+  </ItemGroup>
+</Project>

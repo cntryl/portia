@@ -50,7 +50,7 @@ jobs:
           dotnet test Portia.slnx
           --configuration Release
           --no-build
-          --filter "Category!=BrokerIntegration"
+          --filter "Category!=BrokerIntegration&Category!=StorageIntegration"
 
       - name: Confirm packed consumers
         run: |
@@ -102,6 +102,14 @@ jobs:
             --configuration Release \
             --no-restore \
             -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-storage-packages" dotnet restore \
+            smoke/Portia.Storage.PackageConsumer/Host/Portia.Storage.PackageConsumer.csproj \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-storage-packages" dotnet run \
+            --project smoke/Portia.Storage.PackageConsumer/Host/Portia.Storage.PackageConsumer.csproj \
+            --configuration Release \
+            --no-restore \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
           NUGET_PACKAGES="$RUNNER_TEMP/portia-fitz-lexkey-packages" dotnet restore \
             smoke/Portia.Fitz.LexKey.PackageConsumer/Portia.Fitz.LexKey.PackageConsumer.csproj \
             --runtime linux-x64 \
@@ -118,16 +126,32 @@ jobs:
             -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
           artifacts/fitz-lexkey-native-aot/Portia.Fitz.LexKey.PackageConsumer
 
+      - name: Test S3 storage integration
+        env:
+          PORTIA_S3_TEST_ENDPOINT: http://127.0.0.1:9000
+        run: |
+          docker compose up -d sqrzl
+          if ! curl --fail --silent --show-error --retry 30 --retry-delay 1 \
+            --retry-connrefused --max-time 2 --output /dev/null \
+            http://127.0.0.1:9000/healthz; then
+            docker compose logs sqrzl
+            exit 1
+          fi
+          dotnet test Portia.slnx \
+            --configuration Release \
+            --no-build \
+            --filter "Category=StorageIntegration"
+
       - name: Test full broker integration
         env:
           FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
         run: |
-          docker compose up -d --wait
+          docker compose up -d --wait fitz
           dotnet test Portia.slnx \
             --configuration Release \
             --no-build \
             --filter "Category=BrokerIntegration"
 
-      - name: Stop Fitz server
+      - name: Stop integration services
         if: ${{ always() }}
         run: docker compose down --volumes

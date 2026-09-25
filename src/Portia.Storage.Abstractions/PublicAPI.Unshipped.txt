@@ -1,0 +1,99 @@
+#nullable enable
+Cntryl.Portia.Storage.IObjectStorage
+Cntryl.Portia.Storage.IObjectStorage.AbortUploadAsync(Cntryl.Portia.Storage.ObjectUploadSession! session, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Storage.IObjectStorage.CompleteUploadAsync(Cntryl.Portia.Storage.ObjectUploadSession! session, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Storage.ObjectPartReceipt!>! parts, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Storage.IObjectStorage.CreateDownloadAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.TimeSpan lifetime, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Storage.ObjectDownload!>
+Cntryl.Portia.Storage.IObjectStorage.CreateUploadAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Storage.ObjectUploadSession!>
+Cntryl.Portia.Storage.IObjectStorage.DeleteAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Storage.IObjectStorage.HeadAndVerifyAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.Storage.IObjectStorage.OpenReadAsync(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.IO.Stream?>
+Cntryl.Portia.Storage.IObjectStorage.SignPartAsync(Cntryl.Portia.Storage.ObjectUploadSession! session, int partNumber, System.TimeSpan lifetime, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Storage.ObjectUploadPart!>
+Cntryl.Portia.Storage.IObjectStorageTenantResolver
+Cntryl.Portia.Storage.IObjectStorageTenantResolver.ResolveAsync(Cntryl.Portia.TenantId tenantId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Storage.ObjectStorageLocation!>
+Cntryl.Portia.Storage.ObjectDigest
+Cntryl.Portia.Storage.ObjectDigest.<Clone>$() -> Cntryl.Portia.Storage.ObjectDigest!
+Cntryl.Portia.Storage.ObjectDigest.Equals(Cntryl.Portia.Storage.ObjectDigest? other) -> bool
+Cntryl.Portia.Storage.ObjectDigest.Length.get -> long
+Cntryl.Portia.Storage.ObjectDigest.ObjectDigest(string! sha256, long length) -> void
+Cntryl.Portia.Storage.ObjectDigest.Sha256.get -> string!
+Cntryl.Portia.Storage.ObjectDownload
+Cntryl.Portia.Storage.ObjectDownload.<Clone>$() -> Cntryl.Portia.Storage.ObjectDownload!
+Cntryl.Portia.Storage.ObjectDownload.Deconstruct(out System.Uri! DownloadUri, out System.DateTimeOffset ExpiresAt) -> void
+Cntryl.Portia.Storage.ObjectDownload.DownloadUri.get -> System.Uri!
+Cntryl.Portia.Storage.ObjectDownload.DownloadUri.init -> void
+Cntryl.Portia.Storage.ObjectDownload.Equals(Cntryl.Portia.Storage.ObjectDownload? other) -> bool
+Cntryl.Portia.Storage.ObjectDownload.ExpiresAt.get -> System.DateTimeOffset
+Cntryl.Portia.Storage.ObjectDownload.ExpiresAt.init -> void
+Cntryl.Portia.Storage.ObjectDownload.ObjectDownload(System.Uri! DownloadUri, System.DateTimeOffset ExpiresAt) -> void
+Cntryl.Portia.Storage.ObjectPartReceipt
+Cntryl.Portia.Storage.ObjectPartReceipt.<Clone>$() -> Cntryl.Portia.Storage.ObjectPartReceipt!
+Cntryl.Portia.Storage.ObjectPartReceipt.Deconstruct(out int PartNumber, out string! Token) -> void
+Cntryl.Portia.Storage.ObjectPartReceipt.Equals(Cntryl.Portia.Storage.ObjectPartReceipt? other) -> bool
+Cntryl.Portia.Storage.ObjectPartReceipt.ObjectPartReceipt(int PartNumber, string! Token) -> void
+Cntryl.Portia.Storage.ObjectPartReceipt.PartNumber.get -> int
+Cntryl.Portia.Storage.ObjectPartReceipt.PartNumber.init -> void
+Cntryl.Portia.Storage.ObjectPartReceipt.Token.get -> string!
+Cntryl.Portia.Storage.ObjectPartReceipt.Token.init -> void
+Cntryl.Portia.Storage.ObjectStorageLimits
+Cntryl.Portia.Storage.ObjectStorageLocation
+Cntryl.Portia.Storage.ObjectStorageLocation.<Clone>$() -> Cntryl.Portia.Storage.ObjectStorageLocation!
+Cntryl.Portia.Storage.ObjectStorageLocation.BucketReference.get -> string!
+Cntryl.Portia.Storage.ObjectStorageLocation.BucketReference.init -> void
+Cntryl.Portia.Storage.ObjectStorageLocation.Deconstruct(out string! BucketReference, out string! EncryptionKeyReference) -> void
+Cntryl.Portia.Storage.ObjectStorageLocation.EncryptionKeyReference.get -> string!
+Cntryl.Portia.Storage.ObjectStorageLocation.EncryptionKeyReference.init -> void
+Cntryl.Portia.Storage.ObjectStorageLocation.Equals(Cntryl.Portia.Storage.ObjectStorageLocation? other) -> bool
+Cntryl.Portia.Storage.ObjectStorageLocation.ObjectStorageLocation(string! BucketReference, string! EncryptionKeyReference) -> void
+Cntryl.Portia.Storage.ObjectStorageServiceCollectionExtensions
+Cntryl.Portia.Storage.ObjectUploadPart
+Cntryl.Portia.Storage.ObjectUploadPart.<Clone>$() -> Cntryl.Portia.Storage.ObjectUploadPart!
+Cntryl.Portia.Storage.ObjectUploadPart.Deconstruct(out int PartNumber, out System.Uri! UploadUri, out System.DateTimeOffset ExpiresAt) -> void
+Cntryl.Portia.Storage.ObjectUploadPart.Equals(Cntryl.Portia.Storage.ObjectUploadPart? other) -> bool
+Cntryl.Portia.Storage.ObjectUploadPart.ExpiresAt.get -> System.DateTimeOffset
+Cntryl.Portia.Storage.ObjectUploadPart.ExpiresAt.init -> void
+Cntryl.Portia.Storage.ObjectUploadPart.ObjectUploadPart(int PartNumber, System.Uri! UploadUri, System.DateTimeOffset ExpiresAt) -> void
+Cntryl.Portia.Storage.ObjectUploadPart.PartNumber.get -> int
+Cntryl.Portia.Storage.ObjectUploadPart.PartNumber.init -> void
+Cntryl.Portia.Storage.ObjectUploadPart.UploadUri.get -> System.Uri!
+Cntryl.Portia.Storage.ObjectUploadPart.UploadUri.init -> void
+Cntryl.Portia.Storage.ObjectUploadSession
+Cntryl.Portia.Storage.ObjectUploadSession.<Clone>$() -> Cntryl.Portia.Storage.ObjectUploadSession!
+Cntryl.Portia.Storage.ObjectUploadSession.Deconstruct(out string! Token) -> void
+Cntryl.Portia.Storage.ObjectUploadSession.Equals(Cntryl.Portia.Storage.ObjectUploadSession? other) -> bool
+Cntryl.Portia.Storage.ObjectUploadSession.ObjectUploadSession(string! Token) -> void
+Cntryl.Portia.Storage.ObjectUploadSession.Token.get -> string!
+Cntryl.Portia.Storage.ObjectUploadSession.Token.init -> void
+const Cntryl.Portia.Storage.ObjectStorageLimits.MaximumObjectLength = 268435456 -> long
+const Cntryl.Portia.Storage.ObjectStorageLimits.MinimumNonfinalPartLength = 5242880 -> int
+override Cntryl.Portia.Storage.ObjectDigest.Equals(object? obj) -> bool
+override Cntryl.Portia.Storage.ObjectDigest.GetHashCode() -> int
+override Cntryl.Portia.Storage.ObjectDigest.ToString() -> string!
+override Cntryl.Portia.Storage.ObjectDownload.Equals(object? obj) -> bool
+override Cntryl.Portia.Storage.ObjectDownload.GetHashCode() -> int
+override Cntryl.Portia.Storage.ObjectDownload.ToString() -> string!
+override Cntryl.Portia.Storage.ObjectPartReceipt.Equals(object? obj) -> bool
+override Cntryl.Portia.Storage.ObjectPartReceipt.GetHashCode() -> int
+override Cntryl.Portia.Storage.ObjectPartReceipt.ToString() -> string!
+override Cntryl.Portia.Storage.ObjectStorageLocation.Equals(object? obj) -> bool
+override Cntryl.Portia.Storage.ObjectStorageLocation.GetHashCode() -> int
+override Cntryl.Portia.Storage.ObjectStorageLocation.ToString() -> string!
+override Cntryl.Portia.Storage.ObjectUploadPart.Equals(object? obj) -> bool
+override Cntryl.Portia.Storage.ObjectUploadPart.GetHashCode() -> int
+override Cntryl.Portia.Storage.ObjectUploadPart.ToString() -> string!
+override Cntryl.Portia.Storage.ObjectUploadSession.Equals(object? obj) -> bool
+override Cntryl.Portia.Storage.ObjectUploadSession.GetHashCode() -> int
+override Cntryl.Portia.Storage.ObjectUploadSession.ToString() -> string!
+static Cntryl.Portia.Storage.ObjectDigest.operator !=(Cntryl.Portia.Storage.ObjectDigest? left, Cntryl.Portia.Storage.ObjectDigest? right) -> bool
+static Cntryl.Portia.Storage.ObjectDigest.operator ==(Cntryl.Portia.Storage.ObjectDigest? left, Cntryl.Portia.Storage.ObjectDigest? right) -> bool
+static Cntryl.Portia.Storage.ObjectDownload.operator !=(Cntryl.Portia.Storage.ObjectDownload? left, Cntryl.Portia.Storage.ObjectDownload? right) -> bool
+static Cntryl.Portia.Storage.ObjectDownload.operator ==(Cntryl.Portia.Storage.ObjectDownload? left, Cntryl.Portia.Storage.ObjectDownload? right) -> bool
+static Cntryl.Portia.Storage.ObjectPartReceipt.operator !=(Cntryl.Portia.Storage.ObjectPartReceipt? left, Cntryl.Portia.Storage.ObjectPartReceipt? right) -> bool
+static Cntryl.Portia.Storage.ObjectPartReceipt.operator ==(Cntryl.Portia.Storage.ObjectPartReceipt? left, Cntryl.Portia.Storage.ObjectPartReceipt? right) -> bool
+static Cntryl.Portia.Storage.ObjectStorageLocation.operator !=(Cntryl.Portia.Storage.ObjectStorageLocation? left, Cntryl.Portia.Storage.ObjectStorageLocation? right) -> bool
+static Cntryl.Portia.Storage.ObjectStorageLocation.operator ==(Cntryl.Portia.Storage.ObjectStorageLocation? left, Cntryl.Portia.Storage.ObjectStorageLocation? right) -> bool
+static Cntryl.Portia.Storage.ObjectStorageServiceCollectionExtensions.AddObjectStorage<TStorage>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Cntryl.Portia.Storage.ObjectUploadPart.operator !=(Cntryl.Portia.Storage.ObjectUploadPart? left, Cntryl.Portia.Storage.ObjectUploadPart? right) -> bool
+static Cntryl.Portia.Storage.ObjectUploadPart.operator ==(Cntryl.Portia.Storage.ObjectUploadPart? left, Cntryl.Portia.Storage.ObjectUploadPart? right) -> bool
+static Cntryl.Portia.Storage.ObjectUploadSession.operator !=(Cntryl.Portia.Storage.ObjectUploadSession? left, Cntryl.Portia.Storage.ObjectUploadSession? right) -> bool
+static Cntryl.Portia.Storage.ObjectUploadSession.operator ==(Cntryl.Portia.Storage.ObjectUploadSession? left, Cntryl.Portia.Storage.ObjectUploadSession? right) -> bool
+static readonly Cntryl.Portia.Storage.ObjectStorageLimits.MaximumDownloadLifetime -> System.TimeSpan

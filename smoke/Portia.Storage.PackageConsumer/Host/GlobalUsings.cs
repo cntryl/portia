@@ -1,0 +1,11 @@
+global using System;
+global using System.Linq;
+global using System.Threading;
+global using System.Threading.Tasks;
+global using Amazon.Runtime;
+global using Amazon.S3;
+global using Cntryl.Portia.Storage;
+global using Cntryl.Portia.Storage.Aws;
+global using Microsoft.AspNetCore.DataProtection;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Hosting;
