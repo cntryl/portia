@@ -946,6 +946,31 @@ public sealed class GeneratorDiagnosticsTests
         Assert.Equal(2, diagnostics.Count(diagnostic => diagnostic.Id == "PORTIA105"));
     }
 
+    [Theory]
+    [InlineData("PORTIA105", "IRequestGuard<Req>", "GuardAsync", "IProjectionStore")]
+    [InlineData("PORTIA106", "IRequestAuthorizer<Req>", "AuthorizeAsync", "IProjectionStore")]
+    [InlineData("PORTIA105", "IRequestGuard<Req>", "GuardAsync", "IProjectionCheckpointStore")]
+    [InlineData("PORTIA106", "IRequestAuthorizer<Req>", "AuthorizeAsync", "IProjectionCheckpointStore")]
+    public void PreflightProjectionStoreDiagnosticSuggestsQueryOnlyApplicationInterface(
+        string diagnosticId, string role, string method, string dependencyType)
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics($$"""
+                                                            using System.Threading;
+                                                            using System.Threading.Tasks;
+                                                            using Cntryl.Portia;
+                                                            public sealed record Req : IRequest;
+                                                            public sealed class Preflight({{dependencyType}} store) : {{role}}
+                                                            {
+                                                                public ValueTask<Result> {{method}}(
+                                                                    IRequestContext<Req> context, CancellationToken ct) => default;
+                                                            }
+                                                            """, new ComponentPracticeAnalyzer());
+
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == diagnosticId);
+        Assert.Contains("inject an application-owned query interface that exposes only the read this preflight needs",
+            diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Portia100IgnoresTheProjectorsOwnProjectionStore()
     {
