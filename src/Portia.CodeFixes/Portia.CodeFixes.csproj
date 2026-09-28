@@ -5,7 +5,7 @@
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <IncludeBuildOutput>false</IncludeBuildOutput>
-    <!-- Shipped inside Cntryl.Portia.DependencyInjection under analyzers/dotnet/cs, never on its own. -->
+    <!-- Shipped inside Cntryl.Portia.Analyzers under analyzers/dotnet/cs. -->
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>

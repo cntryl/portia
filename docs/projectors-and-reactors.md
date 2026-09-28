@@ -77,7 +77,8 @@ and a single registration is a reasonable shortcut. It stops being one as soon a
 consumes the repository: every such caller then depends on the checkpoint API, and every test
 double for it has to implement `BeginAsync`.
 
-`Cntryl.Portia.DependencyInjection` supplies the generator for typed dispatch.
+`Cntryl.Portia.Analyzers` supplies the generator for typed dispatch independently of the runtime
+package used to compose the application.
 `IProjectorContext` contains checkpoint identity and rebuild metadata, never application
 services. `WorkloadScope.PerTenant` requires `EventStreamPattern.ForTenant(...)` and binds its realm
 to the active tenant ID before checkpoints or reads; `WorkloadScope.Global` requires an exact

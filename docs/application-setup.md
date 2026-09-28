@@ -6,9 +6,10 @@ These APIs are implemented in the current source checkout.
 
 ## Shared application project
 
-Reference `Cntryl.Portia.Fitz`; it brings the core and dependency-injection packages. The
-dependency-injection package includes Portia's generator and compiler configuration.
-Applications without Fitz can reference `Cntryl.Portia.DependencyInjection` directly.
+Reference `Cntryl.Portia.Fitz`; it brings the core and dependency-injection packages. Add
+`Cntryl.Portia.Analyzers` to projects that use Portia's diagnostics and typed-dispatch generator.
+Applications without Fitz can reference `Cntryl.Portia.DependencyInjection` directly and choose the
+analyzer package independently.
 
 ```csharp
 using Cntryl.Portia;
@@ -77,9 +78,9 @@ pass `mapInboundClaims: false` when the API turns that mapping off, whether thro
 ## API deployment
 
 Reference the shared project and `Cntryl.Portia.AspNetCore`. The HTTP package depends directly on
-`Cntryl.Portia.DependencyInjection`, so it supplies the registration APIs, generator/analyzer assets,
-and interceptor compiler configuration transitively. The host does not need a separate
-dependency-injection or analyzer package, or a manual compiler property.
+`Cntryl.Portia.DependencyInjection` for registration APIs and contains its HTTP-specific generator
+and interceptor compiler configuration. Add `Cntryl.Portia.Analyzers` separately if the application
+uses Portia's diagnostics and typed-dispatch generator.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
