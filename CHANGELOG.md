@@ -4,7 +4,29 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
-## Unreleased
+## 0.6.1 - 2026-09-28
+
+### Added
+
+- Tenant-scoped object storage contracts and an AWS S3 adapter, including protected staged uploads,
+  integrity verification, conditional promotion, bounded downloads, and tenant isolation.
+- Explicit MCP resource and prompt registrations for HTTP and stdio hosts, with visibility policies,
+  request-bus dispatch, and resource/prompt telemetry.
+- Tenant selection in projector and reactor test scenarios, plus `AggregateScenario` shortcuts for
+  committing successful operations.
+
+### Improved
+
+- Testing scenarios compare event payloads structurally, including nested objects and collections,
+  without treating attached event metadata as payload.
+- PORTIA105 and PORTIA106 now give projection-specific guidance to inject a narrow application query
+  interface for preflight reads; the same approach is documented for guards and authorizers.
+
+### Fixed
+
+- Scheduled firings now survive transient actor-validator outages through bounded retries. Tenant
+  rosters can use durable Fitz KV snapshots to resume after restart without replaying their full
+  lifecycle history.
 
 ## 0.6.0 - 2026-09-24
 

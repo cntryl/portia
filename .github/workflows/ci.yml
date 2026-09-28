@@ -54,6 +54,8 @@ jobs:
 
       - name: Confirm packed consumers
         run: |
+          # Package consumer projects use source references by default so standalone dependency
+          # discovery can restore them. This property switches them to the freshly packed packages.
           dotnet pack Portia.slnx \
             --configuration Release \
             --no-build \

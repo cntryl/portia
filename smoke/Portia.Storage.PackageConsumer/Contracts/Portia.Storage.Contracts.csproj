@@ -4,10 +4,10 @@
     <IsPackable>false</IsPackable>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
-    <PortiaSmokePackageVersion Condition="'$(PortiaSmokePackageVersion)' == ''">1.0.0-smoke</PortiaSmokePackageVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Cntryl.Portia.Storage.Abstractions" Version="$(PortiaSmokePackageVersion)"/>
+    <PackageReference Include="Cntryl.Portia.Storage.Abstractions" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <ProjectReference Include="../../../src/Portia.Storage.Abstractions/Portia.Storage.Abstractions.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
   </ItemGroup>
 </Project>

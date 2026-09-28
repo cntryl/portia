@@ -4,12 +4,12 @@
     <IsPackable>false</IsPackable>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
-    <PortiaSmokePackageVersion Condition="'$(PortiaSmokePackageVersion)' == ''">1.0.0-smoke</PortiaSmokePackageVersion>
     <InvariantGlobalization>true</InvariantGlobalization>
     <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
     <PublishAot>true</PublishAot>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Cntryl.Portia.AspNetCore" Version="$(PortiaSmokePackageVersion)" />
+    <PackageReference Include="Cntryl.Portia.AspNetCore" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
   </ItemGroup>
 </Project>

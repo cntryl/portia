@@ -4,10 +4,11 @@
     <IsPackable>false</IsPackable>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
-    <PortiaSmokePackageVersion Condition="'$(PortiaSmokePackageVersion)' == ''">1.0.0-smoke</PortiaSmokePackageVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Cntryl.Portia.Mcp.AspNetCore" Version="$(PortiaSmokePackageVersion)" />
-    <PackageReference Include="Cntryl.Portia.Mcp.Testing" Version="$(PortiaSmokePackageVersion)" />
+    <PackageReference Include="Cntryl.Portia.Mcp.AspNetCore" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <PackageReference Include="Cntryl.Portia.Mcp.Testing" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <ProjectReference Include="../../src/Portia.Mcp.AspNetCore/Portia.Mcp.AspNetCore.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
+    <ProjectReference Include="../../src/Portia.Mcp.Testing/Portia.Mcp.Testing.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
   </ItemGroup>
 </Project>

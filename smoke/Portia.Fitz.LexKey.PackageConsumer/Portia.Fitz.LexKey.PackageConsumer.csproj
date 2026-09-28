@@ -7,7 +7,6 @@
     <IsAotCompatible>true</IsAotCompatible>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
     <ILLinkTreatWarningsAsErrors>true</ILLinkTreatWarningsAsErrors>
-    <PortiaSmokePackageVersion Condition="'$(PortiaSmokePackageVersion)' == ''">1.0.0-smoke</PortiaSmokePackageVersion>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
@@ -17,7 +16,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Cntryl.Portia.Fitz" Version="$(PortiaSmokePackageVersion)" />
+    <PackageReference Include="Cntryl.Portia.Fitz" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <ProjectReference Include="../../src/Portia.Fitz/Portia.Fitz.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
     <PackageReference Include="Cntryl.Fitz.Testing" Version="1.4.2" />
     <PackageReference Include="Cntryl.LexKey" Version="0.1.2" />
   </ItemGroup>
