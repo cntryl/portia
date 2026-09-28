@@ -170,6 +170,8 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
                 ? "inject IAggregateReader to hydrate aggregates"
                 : Matches(parameter.Type, ["Cntryl.Portia.IEventStore"])
                     ? "inject IDomainEventReader to read events"
+                    : Matches(parameter.Type, ProjectionContracts)
+                        ? "inject an application-owned query interface that exposes only the read this preflight needs"
                     : "move the effect into the request handler";
             if (guard)
                 findings.Add(Finding.Create(Kind.GuardEffect, Location(parameter), symbol.Name, Display(parameter),

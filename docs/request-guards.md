@@ -516,6 +516,8 @@ aggregate and `IDomainEventReader` to read events. Portia's practice analyzers r
 for a guard, and `PORTIA106` for an authorizer, that takes one of Portia's write or dispatch APIs:
 `IRequestBus`, a scheduler or queue publisher, `IAggregateWriter`, `IAggregateExecutor`, or an event or
 projection store. Reading through an HTTP policy service or a read-model database is not reported.
+If a repository also implements a projection-store contract, inject an application-facing query
+interface that exposes only the read the guard or authorizer needs.
 
 Every direct dispatch is a fresh attempt. Queue retry or redelivery creates a fresh dependency-
 injection delivery scope, resolves scoped guards again, and reruns them; guard outcomes are never
