@@ -1,11 +1,11 @@
 # Getting started
 
-Portia targets .NET 10. Most applications reference `Cntryl.Portia.Abstractions` and
-`Cntryl.Portia.DependencyInjection`, which includes the compile-time generator. An HTTP host may
-reference only `Cntryl.Portia.AspNetCore`: it depends directly on `Cntryl.Portia.DependencyInjection`, so the
-registration APIs, generator/analyzer assets, and interceptor compiler configuration arrive
-transitively. Add `Cntryl.Portia.Fitz` for Fitz storage/transports and `Cntryl.Portia.Jwt` when inbound work
-carries JWT actor identities. Packages use the
+Portia targets .NET 10. Applications choose the runtime packages they need and can add
+`Cntryl.Portia.Analyzers` independently for Portia diagnostics, code fixes, and compile-time
+generation. `Cntryl.Portia.DependencyInjection` supplies registration APIs but does not require DI-free
+Portia users to depend on it for tooling. `Cntryl.Portia.AspNetCore` includes its HTTP-specific
+generator and depends on the runtime DI package. Add `Cntryl.Portia.Fitz` for Fitz storage/transports
+and `Cntryl.Portia.Jwt` when inbound work carries JWT actor identities. Packages use the
 cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
 Add the optional `Cntryl.Portia.Telemetry` package and call `AddOpenTelemetry().WithPortia()` when the
 application wants Portia's traces, metrics, and structured logs registered with OpenTelemetry.
@@ -72,8 +72,9 @@ remains the defensive fallback for roots and resolver combinations that cross co
 boundaries or otherwise cannot be proven statically.
 
 Reference `Cntryl.Portia.DependencyInjection` in each assembly that registers handlers, authorizers,
-request guards, pipeline behaviors, or routed requests. The generator and interceptor configuration
-arrive with that package.
+request guards, pipeline behaviors, or routed requests. Add `Cntryl.Portia.Analyzers` to each project
+that uses Portia's compiler tooling; it supplies the generator, diagnostics, code fixes, and interceptor
+configuration.
 Because libraries and applications can compose components across assemblies, Portia cannot prove
 that every declared handler has been registered; the application composition root owns that
 selection.
@@ -422,10 +423,9 @@ Composition happens on first use rather than during startup, which keeps the cos
 path of a host that never serves the document. A document that cannot be composed — a duplicated
 operation ID, say — fails every request rather than being cached as a failure.
 
-`Cntryl.Portia.AspNetCore` depends directly on `Cntryl.Portia.DependencyInjection`, which supplies the generator
-and interceptor namespace to the HTTP host. A host referencing only the HTTP package therefore
-needs no separate dependency-injection/analyzer package or `InterceptorsNamespaces` property.
-Repository project references receive the analyzer directly from the dependency-injection project.
+`Cntryl.Portia.AspNetCore` supplies its HTTP-specific generator and interceptor namespace. Add
+`Cntryl.Portia.Analyzers` separately when the application also uses Portia's general diagnostics and
+typed-dispatch generator. Neither tooling package requires a manual `InterceptorsNamespaces` property.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);

@@ -4,6 +4,20 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.6.2 - 2026-09-28
+
+### Upgrading
+
+- Reference `Cntryl.Portia.Analyzers` in each project that uses Portia diagnostics, code fixes, or
+  source generation. `Cntryl.Portia.DependencyInjection` no longer carries those assets, so projects
+  can use Portia tooling without taking a dependency on DI.
+
+### Improved
+
+- Publish Portia analyzers, generators, and code fixes as the standalone
+  `Cntryl.Portia.Analyzers` package, independently of dependency injection. The ASP.NET Core
+  package retains its HTTP-specific generator and interceptor configuration.
+
 ## 0.6.1 - 2026-09-28
 
 ### Added
