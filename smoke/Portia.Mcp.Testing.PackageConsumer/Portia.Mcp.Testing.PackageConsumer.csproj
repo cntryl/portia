@@ -4,11 +4,14 @@
     <IsPackable>false</IsPackable>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <InterceptorsNamespaces Condition="'$(PortiaSmokePackageVersion)' == ''">$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Cntryl.Portia.Mcp.AspNetCore" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
     <PackageReference Include="Cntryl.Portia.Mcp.Testing" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <PackageReference Include="Cntryl.Portia.Analyzers" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
     <ProjectReference Include="../../src/Portia.Mcp.AspNetCore/Portia.Mcp.AspNetCore.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
     <ProjectReference Include="../../src/Portia.Mcp.Testing/Portia.Mcp.Testing.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
+    <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" Condition="'$(PortiaSmokePackageVersion)' == ''" />
   </ItemGroup>
 </Project>
