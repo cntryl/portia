@@ -7,9 +7,12 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
     <PublishAot>true</PublishAot>
+    <InterceptorsNamespaces Condition="'$(PortiaSmokePackageVersion)' == ''">$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Cntryl.Portia.AspNetCore" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <PackageReference Include="Cntryl.Portia.Analyzers" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
     <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
+    <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" Condition="'$(PortiaSmokePackageVersion)' == ''" />
   </ItemGroup>
 </Project>
