@@ -317,6 +317,9 @@ public sealed class AggregateTests
             Committed(new UnhandledEvent(), eventId, id, 1)
         ]));
 
+        var rejected = Assert.Throws<InvalidOperationException>(() => aggregate.ChangeValue(1));
+        Assert.Contains("discarded", rejected.Message, StringComparison.Ordinal);
+        aggregate = new TestAggregate(id);
         aggregate.Load([Committed(new ValueChanged(42), eventId, id, 1)]);
 
         Assert.Equal(42, aggregate.Value);

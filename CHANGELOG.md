@@ -8,6 +8,16 @@ alerts are as breaking to change as an API.
 
 ### Fixed
 
+- Aggregate replay now discards an instance after every `Apply` exception, including missing
+  handlers and overrides. Pre-application validation remains retryable; recover application failures
+  with a fresh aggregate.
+- Processor record/context capacity is bounded by both effective batch size and pass budget.
+- Projector/reactor scenarios drain complete finite histories across bounded passes, retaining
+  projector resumption and full reactor replay on each separate run.
+- Event-store conformance checks original payloads and complete metadata across read/resume paths.
+- Structural event assertions compare public instance fields as well as publicly readable properties;
+  private getters, static members, and indexers are excluded.
+
 - Request pipeline continuations now retain their originating invocation and behavior position.
   Retained delegates cannot execute a later, nested, or concurrent request; existing single-use
   and behavior-lifetime rules apply to commands, queries, and streams.

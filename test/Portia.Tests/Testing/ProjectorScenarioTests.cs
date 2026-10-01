@@ -6,6 +6,24 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class ProjectorScenarioTests
 {
+    /// <summary>Finite histories drain beyond the runtime pass budget without gaps or duplicate effects.</summary>
+    [Theory]
+    [InlineData(4097)]
+    [InlineData(8193)]
+    public async Task ShouldDrainHistoryAcrossBoundedPasses(int count)
+    {
+        var ids = Enumerable.Range(0, count).Select(_ => Uuid.CreateVersion4()).ToArray();
+        var scenario = new ProjectorScenario().Given(ids.Select(id => (DomainEvent)new UserCreated(id)).ToArray());
+        var users = new List<Uuid>();
+        var projector = new WelcomeProjector(users, scenario.Store);
+        await scenario.RunAsync(projector);
+        Assert.Equal(ids, users);
+        var checkpoint = await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern));
+        Assert.Equal(count.ToString(System.Globalization.CultureInfo.InvariantCulture), checkpoint.Cursor.ToString());
+        await scenario.RunAsync(projector);
+        Assert.Equal(ids, users);
+    }
+
     /// <summary>Every given event is projected, in order.</summary>
     [Fact]
     public async Task ShouldProjectGivenEventsInOrder()

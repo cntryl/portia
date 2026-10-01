@@ -308,6 +308,9 @@ cannot persist.
 The same instance can be hydrated again later. Reads start at its committed stream
 position and apply only newer raised events. A missing stream leaves it unchanged.
 Save pending changes before refreshing; do not mutate the instance during hydration.
+An exception from `Apply` discards the instance, including a missing handler or a custom override.
+Further hydration, raising, auditing, and saving reject it; recover by constructing a fresh aggregate.
+Complete-history validation runs before `Apply`, and validation failures remain retryable.
 No aggregate factory or aggregate registration is required. Constructor dependencies
 are passed by the application. See the
 [shared API and worker setup](application-setup.md) for two deployments

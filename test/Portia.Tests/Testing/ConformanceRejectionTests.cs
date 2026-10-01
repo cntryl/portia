@@ -112,6 +112,19 @@ public sealed class ConformanceRejectionTests
         /// <summary>Issues every record after the first the first record's cursor.</summary>
         PatternReadRepeatsFirstCursor,
 
+        /// <summary>Replaces original business data with a constant.</summary>
+        CorruptsPayload,
+        /// <summary>Substitutes a different event type.</summary>
+        SubstitutesType,
+        /// <summary>Rewrites original occurrence times consistently across reads.</summary>
+        RewritesMetadata,
+        /// <summary>Rewrites business data only on pattern reads.</summary>
+        CorruptsPatternPayload,
+        /// <summary>Rewrites business data only on stream offset resumes.</summary>
+        CorruptsOffsetPayload,
+        /// <summary>Rewrites business data only on issued cursor resumes.</summary>
+        CorruptsCursorPayload,
+
         /// <summary>Checks the expected position and appends in two separate steps.</summary>
         LosesConcurrentAppendRace
     }
@@ -150,6 +163,39 @@ public sealed class ConformanceRejectionTests
             EventStoreConformance.VerifyAsync(new DefectiveEventStoreProbe(defect)).AsTask());
 
         Assert.Contains(expected, exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Round-trip checks compare every read path against the original appended payload and metadata.</summary>
+    [Theory]
+    [InlineData(StoreDefect.CorruptsPayload, "payload")]
+    [InlineData(StoreDefect.SubstitutesType, "type")]
+    [InlineData(StoreDefect.RewritesMetadata, "metadata")]
+    [InlineData(StoreDefect.CorruptsPatternPayload, "payload")]
+    [InlineData(StoreDefect.CorruptsOffsetPayload, "payload")]
+    [InlineData(StoreDefect.CorruptsCursorPayload, "payload")]
+    public async Task ShouldRejectCorruptedOriginalRecords(StoreDefect defect, string expected)
+    {
+        var error = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
+            EventStoreConformance.VerifyAsync(new DefectiveEventStoreProbe(defect)).AsTask());
+        Assert.Contains(expected, error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Original metadata equality includes attribution and the audit discriminator.</summary>
+    [Theory]
+    [InlineData("OccurredOnOffset")]
+    [InlineData("EventId")]
+    [InlineData("AggregateId")]
+    [InlineData("AggregateVersion")]
+    [InlineData("CorrelationId")]
+    [InlineData("CausationId")]
+    [InlineData("ExecutionId")]
+    [InlineData("Actor")]
+    [InlineData("IsAudit")]
+    public async Task ShouldRejectRewriteOfEachOriginalMetadataMember(string member)
+    {
+        var error = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
+            EventStoreConformance.VerifyAsync(new DefectiveEventStoreProbe(StoreDefect.RewritesMetadata, member)).AsTask());
+        Assert.Contains(member == "AggregateVersion" ? "aggregate version" : "metadata", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -284,7 +330,7 @@ public sealed class ConformanceRejectionTests
         Assert.Contains("independent identity", exception.Message, StringComparison.Ordinal);
     }
 
-    sealed class DefectiveEventStoreProbe(StoreDefect defect) : IEventStoreConformanceProbe
+    sealed class DefectiveEventStoreProbe(StoreDefect defect, string? metadataMember = null) : IEventStoreConformanceProbe
     {
         readonly ConcurrentDictionary<EventStreamAddress, byte> _written = new();
         InMemoryEventStore _store = new();
@@ -303,7 +349,7 @@ public sealed class ConformanceRejectionTests
         public ValueTask<IEventStore> OpenAsync(CancellationToken ct = default) =>
             ValueTask.FromResult<IEventStore>(defect == StoreDefect.None
                 ? _store
-                : new DefectiveEventStore(_store, defect, Realm, Area, _written));
+                : new DefectiveEventStore(_store, defect, Realm, Area, _written, metadataMember));
     }
 
     // One decorator, one defect at a time: everything else delegates to a store the suite already
@@ -313,7 +359,7 @@ public sealed class ConformanceRejectionTests
         StoreDefect defect,
         string realm,
         string area,
-        ConcurrentDictionary<EventStreamAddress, byte> written) : IEventStore
+        ConcurrentDictionary<EventStreamAddress, byte> written, string? metadataMember) : IEventStore
     {
 
         public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
@@ -352,7 +398,7 @@ public sealed class ConformanceRejectionTests
                     {
                         Stream = new EventStreamAddress(realm, area, "elsewhere")
                     },
-                    _ => record
+                    _ => Corrupt(record, defect == StoreDefect.CorruptsOffsetPayload && fromOffset != 0)
                 };
             }
         }
@@ -413,8 +459,32 @@ public sealed class ConformanceRejectionTests
             {
                 yield return defect == StoreDefect.PatternReadOmitsAreaOffset
                     ? record with { NextCursor = EventCursor.Start }
-                    : record;
+                    : Corrupt(record, defect == StoreDefect.CorruptsPatternPayload ||
+                        defect == StoreDefect.CorruptsCursorPayload && cursor != EventCursor.Start);
             }
+        }
+
+        DomainEventRecord Corrupt(DomainEventRecord record, bool corruptPayload)
+        {
+            if (!corruptPayload && defect is not (StoreDefect.CorruptsPayload or StoreDefect.SubstitutesType or StoreDefect.RewritesMetadata))
+                return record;
+            DomainEvent replacement = defect == StoreDefect.SubstitutesType ? new ValueChanged(0)
+                : new ConformanceEvent(defect == StoreDefect.RewritesMetadata ? ((ConformanceEvent)record.Event).Sequence : 0);
+            replacement.AttachMetadata(defect == StoreDefect.RewritesMetadata
+                ? metadataMember switch
+                {
+                    "OccurredOnOffset" => record.Event.Metadata with { OccurredOn = record.Event.Metadata.OccurredOn.ToOffset(TimeSpan.FromHours(1)) },
+                    "EventId" => record.Event.Metadata with { EventId = Uuid.CreateVersion4() },
+                    "AggregateId" => record.Event.Metadata with { AggregateId = Uuid.CreateVersion4() },
+                    "AggregateVersion" => record.Event.Metadata with { AggregateVersion = 99 },
+                    "CorrelationId" => record.Event.Metadata with { CorrelationId = Uuid.CreateVersion4() },
+                    "CausationId" => record.Event.Metadata with { CausationId = Uuid.CreateVersion4() },
+                    "ExecutionId" => record.Event.Metadata with { ExecutionId = Uuid.CreateVersion4() },
+                    "Actor" => record.Event.Metadata with { Actor = new ActorAttribution("rewritten", "conformance-issuer") },
+                    "IsAudit" => record.Event.Metadata with { IsAudit = !record.Event.Metadata.IsAudit },
+                    _ => record.Event.Metadata with { OccurredOn = DateTimeOffset.UnixEpoch }
+                } : record.Event.Metadata);
+            return record with { Event = replacement };
         }
 
         public async ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,

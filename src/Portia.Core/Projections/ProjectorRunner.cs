@@ -43,7 +43,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         var batchSize = projector.IsBatch ? options.MaxBatchSize : 1;
         var identity = new CheckpointIdentity(projector.Name, projector.Pattern, options.RebuildId);
         var context = new ProjectorContext(identity);
-        var records = new List<DomainEventRecord>(batchSize);
+        var records = new List<DomainEventRecord>(Math.Min(batchSize, options.MaxEventsPerPass));
         var processed = 0;
         var budgetExhausted = false;
         await foreach (var record in _reader

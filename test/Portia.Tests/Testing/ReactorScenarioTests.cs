@@ -6,6 +6,21 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class ReactorScenarioTests
 {
+    /// <summary>Finite histories drain beyond the runtime pass budget without gaps or duplicate effects.</summary>
+    [Theory]
+    [InlineData(4097)]
+    [InlineData(8193)]
+    public async Task ShouldDrainHistoryAcrossBoundedPasses(int count)
+    {
+        var ids = Enumerable.Range(0, count).Select(_ => Uuid.CreateVersion4()).ToArray();
+        var scenario = new ReactorScenario().Given(ids.Select(id => (DomainEvent)new UserCreated(id)).ToArray());
+        var reactor = new WelcomeReactor(scenario.Requests);
+        await scenario.RunAsync(reactor);
+        Assert.Equal(ids.Select(id => (IRequestBase)new SendWelcomeEmail(id)), scenario.SentRequests);
+        await scenario.RunAsync(reactor);
+        Assert.Equal(ids.Concat(ids).Select(id => (IRequestBase)new SendWelcomeEmail(id)), scenario.SentRequests);
+    }
+
     /// <summary>Each given event reaches the reactor, and every request it sends is recorded in order.</summary>
     [Fact]
     public async Task ShouldRecordRequestsSentForEachGivenEvent()

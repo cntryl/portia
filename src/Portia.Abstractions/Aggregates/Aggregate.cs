@@ -115,6 +115,9 @@ public abstract class Aggregate(
             }
             catch
             {
+                // Apply may already have mutated application state, including custom overrides.
+                // Every Apply failure invalidates the instance; validation failures above remain retryable.
+                _discarded = true;
                 // Validation reserves the whole batch in the permanent set. Release the failed
                 // event and everything after it; events already applied stay committed and keep
                 // their IDs reserved.
@@ -287,7 +290,7 @@ public abstract class Aggregate(
         if (_discarded)
         {
             throw new InvalidOperationException(
-                "This aggregate instance's recorded changes were discarded, so its in-memory state no longer "
+                "This aggregate instance was discarded, so its in-memory state no longer "
                 + "matches its stream. Construct a new instance for the next operation.");
         }
 
