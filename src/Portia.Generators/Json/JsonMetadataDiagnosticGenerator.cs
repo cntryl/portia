@@ -222,6 +222,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
             .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
     static ImmutableArray<string> DeclaredCoverage(INamedTypeSymbol context) =>
+        JsonContextShape.UnsupportedReason(context) is not null ? [] :
     [
         .. context.GetAttributes()
             .Where(a => a.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializableAttribute")

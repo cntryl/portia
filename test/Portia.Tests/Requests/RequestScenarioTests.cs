@@ -148,11 +148,12 @@ public sealed class RequestScenarioTests
         await using var provider = Provider(RequestErrorKind.Conflict);
         var failing = RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand());
 
-        _ = failing.ExpectHandled();
+        var extended = failing.ExpectHandled();
 
         var result = await failing;
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Conflict, result.Error.Kind);
+        await Assert.ThrowsAsync<ScenarioExpectationException>(async () => await extended);
     }
 
     /// <summary>The scenario and its actor are immutable too.</summary>
@@ -294,6 +295,25 @@ public sealed class RequestScenarioTests
         _ = await Assert.ThrowsAsync<RequestAuthorizationException>(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioNestedDenialStream())
                 .ExpectFailure(RequestErrorKind.Forbidden));
+    }
+
+    /// <summary>Discarded immutable assertions are not executed; retaining them makes the failure observable.</summary>
+    [Fact]
+    public async Task ShouldRequireObservationOfTheReturnedAssertion()
+    {
+        await using var provider = Provider();
+        var log = provider.GetRequiredService<ScenarioLog>();
+        var kept = RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand());
+#pragma warning disable PORTIA107 // Deliberately reproduce the test pitfall the analyzer diagnoses.
+        _ = kept.ExpectDenied();
+#pragma warning restore PORTIA107
+        Assert.Equal(0, log.Handled);
+        await kept;
+        Assert.Equal(1, log.Handled);
+        var corrected = kept.ExpectDenied();
+        await Assert.ThrowsAsync<ScenarioExpectationException>(async () => await corrected);
+        await Assert.ThrowsAsync<ScenarioExpectationException>(async () => await corrected);
+        Assert.Equal(2, log.Handled);
     }
 
     static ServiceProvider Provider(RequestErrorKind? guardFailure = null, IPermissionEvaluator? permissions = null)

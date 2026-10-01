@@ -31,6 +31,16 @@ _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
     .OnResult((_, result) => result.IsSuccess
         ? Results.Bytes(Encoding.UTF8.GetBytes(result.Value.ToString()), "application/octet-stream")
         : null));
+// Referenced internal contexts are composed through public factory metadata, with reflection disabled.
+if (JsonSerializer.IsReflectionEnabledByDefault)
+    throw new InvalidOperationException("JSON reflection must be disabled in the NativeAOT consumer.");
+var jsonOptions = app.Services.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
+var firstType = (System.Text.Json.Serialization.Metadata.JsonTypeInfo<App_A.FirstPayload>)jsonOptions.GetTypeInfo(typeof(App_A.FirstPayload));
+var secondType = (System.Text.Json.Serialization.Metadata.JsonTypeInfo<App.SecondPayload>)jsonOptions.GetTypeInfo(typeof(App.SecondPayload));
+if (JsonSerializer.Serialize(new App_A.FirstPayload("contracts"), firstType) != "{\"value\":\"contracts\"}"
+    || JsonSerializer.Deserialize("{\"value\":42}", secondType)?.Value != 42)
+    throw new InvalidOperationException("Referenced JSON context composition failed.");
+
 await app.StartAsync();
 using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
 {

@@ -32,6 +32,18 @@ public sealed class JsonMetadataCodeFixTests
                                    }
                                    """;
 
+    [Theory]
+    [InlineData("[PortiaJsonContext] internal class WrongBase { }")]
+    [InlineData("[PortiaJsonContext] internal abstract partial class AbstractContext : System.Text.Json.Serialization.JsonSerializerContext;")]
+    [InlineData("[PortiaJsonContext] internal partial class GenericContext<T> : System.Text.Json.Serialization.JsonSerializerContext;")]
+    [InlineData("internal class Outer { [PortiaJsonContext] private partial class HiddenContext : System.Text.Json.Serialization.JsonSerializerContext; }")]
+    public async Task DoesNotOfferUnusableContextsAsRootTargets(string context)
+    {
+        var (actions, _) = await FixAsync(UnrootedRequest + context, "App.Query", projectName: "orders-api");
+        Assert.Single(actions, action => action.Title.StartsWith("Create a Portia JSON context", StringComparison.Ordinal));
+        Assert.DoesNotContain(actions, action => action.Title.StartsWith("Add App.Query to", StringComparison.Ordinal));
+    }
+
     // The multi-context cases need sibling namespaces, which a file-scoped namespace cannot express.
     const string UnrootedRequestInBlockNamespace = """
                                                    using System.Threading;

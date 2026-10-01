@@ -41,6 +41,22 @@ responsibility. Its code fix adds the attribute to the only context, prefers a u
 the root's namespace, or asks which context owns the root; when none exists it creates
 `PortiaJsonContext.cs` with Web defaults and `SnakeCaseLower`.
 
+`PORTIA030` diagnoses contexts that generated code cannot use: private/file-local contexts or enclosing
+types, generic shapes, abstract/wrong-base types, or inaccessible/missing options constructors. Public
+and internal contexts remain supported, including roots across partial files. A source-generated partial
+context needs a `JsonSerializable` root; a manually implemented context needs an accessible constructor
+accepting `JsonSerializerOptions`. Code fixes select usable hand-written contexts, including an empty
+partial context that becomes usable when the fix adds its first root.
+
+JSON factory identifiers now encode the full assembly and context identity injectively. Generated names
+change when recompiling a module; reference composition continues to use its advertised
+`PortiaJsonRootAttribute` factory, so already compiled factory metadata remains supported. Applications
+should use generated registration rather than naming generated factory classes themselves.
+
+HTTP mappings need concrete direct calls. `PORTIA016` diagnoses mapping method groups and expression
+trees before startup. Valid extension calls with static imports remain supported; bare unqualified
+extension-method groups are rejected by C# itself. HTTP generator assets ship in `Cntryl.Portia.AspNetCore`.
+
 The Microsoft OpenAPI schema generator receives the same frozen options, resolver chain,
 converters, property metadata, and naming policy. Document generation does not add a
 Portia-owned resolver or require reflection fallback; the reflection-disabled consumer exercises

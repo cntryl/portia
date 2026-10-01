@@ -3,19 +3,19 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Cntryl.Portia;
 
 /// <summary>
-///     Reports a Portia testing scenario used as a statement and never awaited. Request scenarios run only when
-///     awaited, so such a statement asserts nothing and the test passes regardless; outside an async method the
-///     compiler gives no warning of its own.
+///     Reports discarded Portia request expectations, including immutable assertion augmentation.
+///     Await or retain each returned expectation value so its assertions are observed.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class ScenarioObservationAnalyzer : DiagnosticAnalyzer
 {
-    static readonly DiagnosticDescriptor Unobserved = new("PORTIA107", "Test scenario is never awaited",
-        "'{0}' is discarded without being awaited, so it runs nothing and asserts nothing. Await it.",
+    static readonly DiagnosticDescriptor Unobserved = new("PORTIA107", "Request scenario assertions are discarded",
+        "'{0}' is discarded without observing its assertions. Await or retain the returned expectations.",
         "Portia", DiagnosticSeverity.Warning, true);
 
     /// <inheritdoc />
@@ -33,7 +33,8 @@ public sealed class ScenarioObservationAnalyzer : DiagnosticAnalyzer
         {
             if (Analyze(syntaxContext) is { } finding)
                 syntaxContext.ReportDiagnostic(Diagnostic.Create(Unobserved, finding.Location, finding.TypeName));
-        }, SyntaxKind.ExpressionStatement, SyntaxKind.ArrowExpressionClause);
+        }, SyntaxKind.ExpressionStatement, SyntaxKind.ArrowExpressionClause,
+            SyntaxKind.SimpleLambdaExpression, SyntaxKind.ParenthesizedLambdaExpression);
     }
 
     // Only When and the Expect methods return a scenario; every other statement is left unbound.
@@ -50,15 +51,24 @@ public sealed class ScenarioObservationAnalyzer : DiagnosticAnalyzer
 
     static (Location Location, string TypeName)? Analyze(SyntaxNodeAnalysisContext context)
     {
-        var expression = context.Node switch
+        var discarded = context.Node switch
         {
-            ExpressionStatementSyntax { Expression: InvocationExpressionSyntax invocation } statement
-                when MayBeScenario(invocation) => statement.Expression,
-            ArrowExpressionClauseSyntax { Expression: InvocationExpressionSyntax invocation } arrow
-                when MayBeScenario(invocation) && ReturnsVoid(arrow, context.SemanticModel, context.CancellationToken)
-                => arrow.Expression,
+            ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
+                when assignment.IsKind(SyntaxKind.SimpleAssignmentExpression)
+                     && context.SemanticModel.GetOperation(assignment.Left, context.CancellationToken) is IDiscardOperation
+                => assignment.Right,
+            ExpressionStatementSyntax statement => statement.Expression,
+            ArrowExpressionClauseSyntax arrow
+                when ReturnsVoid(arrow, context.SemanticModel, context.CancellationToken) => arrow.Expression,
+            LambdaExpressionSyntax { Body: ExpressionSyntax body } lambda
+                when context.SemanticModel.GetOperation(lambda, context.CancellationToken) is IAnonymousFunctionOperation
+                { Symbol.ReturnsVoid: true } => body,
             _ => null
         };
+        while (discarded is ParenthesizedExpressionSyntax parenthesized)
+            discarded = parenthesized.Expression;
+        var expression = discarded is InvocationExpressionSyntax invocation && MayBeScenario(invocation)
+            ? invocation : null;
         if (expression is null
             || context.SemanticModel.GetTypeInfo(expression, context.CancellationToken).Type is not INamedTypeSymbol type
             || !SymbolNames.IsInNamespace(type, "Cntryl.Portia.Testing")

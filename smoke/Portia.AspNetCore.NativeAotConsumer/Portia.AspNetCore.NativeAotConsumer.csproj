@@ -5,11 +5,13 @@
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
     <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
     <PublishAot>true</PublishAot>
     <InterceptorsNamespaces Condition="'$(PortiaSmokePackageVersion)' == ''">$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../Portia.Json.Contracts/Portia.Json.Contracts.csproj"/>
     <PackageReference Include="Cntryl.Portia.AspNetCore" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
     <PackageReference Include="Cntryl.Portia.Analyzers" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
     <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />

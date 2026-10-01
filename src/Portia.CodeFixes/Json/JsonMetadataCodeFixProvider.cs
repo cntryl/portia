@@ -78,6 +78,7 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
             foreach (var declaration in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
             {
                 if (model?.GetDeclaredSymbol(declaration, cancellationToken) is not INamedTypeSymbol symbol
+                    || JsonContextShape.UnsupportedReason(symbol, allowUnrootedGeneratedContext: true) is not null
                     || symbol.GetAttributes().FirstOrDefault(a =>
                             a.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonContextAttribute")
                         is not { } marker)

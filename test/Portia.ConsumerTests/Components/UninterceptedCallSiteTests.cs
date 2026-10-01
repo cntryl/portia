@@ -42,6 +42,8 @@ public sealed class UninterceptedCallSiteTests
 
         Assert.Contains("did not intercept this endpoint mapping", error.Message, StringComparison.Ordinal);
         Assert.Contains("analyzer assets", error.Message, StringComparison.Ordinal);
+        Assert.Contains("Cntryl.Portia.AspNetCore", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Portia.DependencyInjection", error.Message, StringComparison.Ordinal);
         Assert.Contains("generic method", error.Message, StringComparison.Ordinal);
     }
 
