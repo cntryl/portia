@@ -4,7 +4,6 @@ sealed class ResultRequestPipelinePlan<TOut>
 {
     static readonly AsyncLocal<RequestPipelineFrame<IRequest<TOut>>?> Current = new();
     readonly (IRequestBehaviorInvocation<TOut> Invocation, Type Owner)[] _behaviors;
-    readonly RequestPipelineNext<TOut>[] _continuations;
     readonly RequestGuardRegistration[] _guards;
 
     internal ResultRequestPipelinePlan(IEnumerable<RequestPipelineBehaviorRegistration> registrations,
@@ -14,7 +13,6 @@ sealed class ResultRequestPipelinePlan<TOut>
             .Where(registration => registration is IRequestBehaviorInvocation<TOut>)
             .Select(registration => ((IRequestBehaviorInvocation<TOut>)registration, registration.BehaviorType))
             .ToArray();
-        _continuations = Enumerable.Range(0, _behaviors.Length).Select(CreateContinuation).ToArray();
         _guards = guards;
     }
 
@@ -65,12 +63,12 @@ sealed class ResultRequestPipelinePlan<TOut>
         }
     }
 
-    RequestPipelineNext<TOut> CreateContinuation(int position) => token => Continue(position, token);
+    RequestPipelineNext<TOut> CreateContinuation(RequestPipelineFrame<IRequest<TOut>> frame, int position) =>
+        token => Continue(frame, position, token);
 
-    ValueTask<Result<TOut>> Continue(int position, CancellationToken ct)
+    ValueTask<Result<TOut>> Continue(RequestPipelineFrame<IRequest<TOut>> frame, int position, CancellationToken ct)
     {
-        var frame = Current.Value;
-        if (frame is null || !ReferenceEquals(frame.Plan, this))
+        if (!ReferenceEquals(Current.Value, frame))
             throw new InvalidOperationException(PipelineContinuationContract.SingleUseMessage);
         frame.Use(position);
         return InvokeAtAsync(frame, position + 1, ct);
@@ -110,7 +108,7 @@ sealed class ResultRequestPipelinePlan<TOut>
         try
         {
             var pending = behavior.Invocation.InvokeAsync(frame.Services, frame.Request, frame.Context,
-                _continuations[position], ct);
+                CreateContinuation(frame, position), ct);
             if (pending.IsCompletedSuccessfully)
             {
                 var result = pending.Result;

@@ -495,6 +495,11 @@ public sealed class ApplicationTransactionBehavior
 }
 ```
 
+A pipeline continuation belongs to one invocation and one behavior position. Call it at most once,
+while that behavior remains active. Awaiting before the call is supported; retaining it for another
+request, including nested or concurrent dispatch, is rejected with `InvalidOperationException`.
+For streaming behaviors, the lifetime ends when enumeration completes or is disposed.
+
 `AddRequestGuard<TGuard>()` is source-generated and reflection-free. The guard is registered as a
 scoped service. For every command, result-bearing query, and streamed request, Portia selects every
 guard whose scope is assignable from that request and runs them sequentially in registration order.

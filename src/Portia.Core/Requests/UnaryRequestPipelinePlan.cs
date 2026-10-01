@@ -4,7 +4,6 @@ sealed class UnaryRequestPipelinePlan
 {
     static readonly AsyncLocal<RequestPipelineFrame<IRequest>?> Current = new();
     readonly (IRequestBehaviorInvocation Invocation, Type Owner)[] _behaviors;
-    readonly RequestPipelineNext[] _continuations;
     readonly RequestGuardRegistration[] _guards;
 
     internal UnaryRequestPipelinePlan(IEnumerable<RequestPipelineBehaviorRegistration> registrations,
@@ -13,7 +12,6 @@ sealed class UnaryRequestPipelinePlan
         _behaviors = registrations.Reverse()
             .Where(registration => registration is IRequestBehaviorInvocation)
             .Select(registration => ((IRequestBehaviorInvocation)registration, registration.BehaviorType)).ToArray();
-        _continuations = Enumerable.Range(0, _behaviors.Length).Select(CreateContinuation).ToArray();
         _guards = guards;
     }
 
@@ -63,12 +61,12 @@ sealed class UnaryRequestPipelinePlan
         }
     }
 
-    RequestPipelineNext CreateContinuation(int position) => token => Continue(position, token);
+    RequestPipelineNext CreateContinuation(RequestPipelineFrame<IRequest> frame, int position) =>
+        token => Continue(frame, position, token);
 
-    ValueTask<Result> Continue(int position, CancellationToken ct)
+    ValueTask<Result> Continue(RequestPipelineFrame<IRequest> frame, int position, CancellationToken ct)
     {
-        var frame = Current.Value;
-        if (frame is null || !ReferenceEquals(frame.Plan, this))
+        if (!ReferenceEquals(Current.Value, frame))
             throw new InvalidOperationException(PipelineContinuationContract.SingleUseMessage);
         frame.Use(position);
         return InvokeAtAsync(frame, position + 1, ct);
@@ -106,7 +104,7 @@ sealed class UnaryRequestPipelinePlan
         try
         {
             var pending = behavior.Invocation.InvokeAsync(frame.Services, frame.Request, frame.Context,
-                _continuations[position], ct);
+                CreateContinuation(frame, position), ct);
             if (pending.IsCompletedSuccessfully)
             {
                 var result = pending.Result;

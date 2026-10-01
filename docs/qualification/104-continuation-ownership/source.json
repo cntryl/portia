@@ -1,0 +1,10 @@
+{
+  "baseCommit": "733d895314da7511a93155562a71ca9a92175d92",
+  "runtimeFilesSha256": {
+    "src/Portia.Core/Requests/UnaryRequestPipelinePlan.cs": "dfd026af9c1b8d73aefb72ca6020b98b3e5bef598444ab93ca652170245ad6d3",
+    "src/Portia.Core/Requests/ResultRequestPipelinePlan.cs": "6c40504b792fc1122bc4001137e2cb64d9b2809846f36e41c11636198d2ace63",
+    "src/Portia.Core/Requests/StreamRequestPipelinePlan.cs": "235fe10be1074dea1b8188e7293bb1a482d9421dfcb7c80be05fd9c629436308"
+  },
+  "command": "dotnet run --project bench/Portia.Benchmarks --configuration Release --no-build --no-restore -- --filter *RequestDispatchBenchmarks* --job Short --artifacts <directory> --exporters json",
+  "qualification": "Diagnostic ShortRun only; no timing improvement claimed. Local other verification processes overlapped the benchmark startup."
+}
