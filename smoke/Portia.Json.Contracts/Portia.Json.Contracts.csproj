@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Cntryl.Portia.Abstractions" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <PackageReference Include="Cntryl.Portia.Analyzers" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <ProjectReference Include="../../src/Portia.Abstractions/Portia.Abstractions.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
+    <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" Condition="'$(PortiaSmokePackageVersion)' == ''" />
+  </ItemGroup>
+</Project>

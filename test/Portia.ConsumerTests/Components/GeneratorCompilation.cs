@@ -163,14 +163,17 @@ static class GeneratorCompilation
             driver.GetRunResult().GeneratedTrees.Select(tree => tree.GetText().ToString()));
     }
 
-    public static MetadataReference Reference(string source, params IIncrementalGenerator[] generators)
+    public static MetadataReference Reference(string source, params IIncrementalGenerator[] generators) =>
+        ReferenceNamed("Reference_" + Guid.NewGuid().ToString("N"), source, generators);
+
+    public static MetadataReference ReferenceNamed(string assemblyName, string source, params IIncrementalGenerator[] generators)
     {
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
             .Distinct(StringComparer.Ordinal)
             .Select(path => MetadataReference.CreateFromFile(path));
         var compilation = CSharpCompilation.Create(
-            "Reference_" + Guid.NewGuid().ToString("N"),
+            assemblyName,
             [CSharpSyntaxTree.ParseText(source)],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));

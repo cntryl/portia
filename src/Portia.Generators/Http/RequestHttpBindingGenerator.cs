@@ -46,7 +46,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     {
         var calls = context.SyntaxProvider
             .CreateSyntaxProvider(
-                static (node, _) => IsCandidateInvocation(node),
+                static (node, _) => node is GenericNameSyntax name && MappingMethodNames.Contains(name.Identifier.ValueText),
                 static (syntaxContext, _) => AnalyzeCall(syntaxContext))
             .Where(static call => call is not null)
             .Select(static (call, _) => call!)
@@ -81,26 +81,24 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         });
     }
 
-    static bool IsCandidateInvocation(SyntaxNode node) =>
-        node is InvocationExpressionSyntax
-        {
-            Expression: MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.ValueText: var name } },
-            ArgumentList.Arguments.Count: > 0
-        }
-        && MappingMethodNames.Contains(name);
-
     static CallAnalysis? AnalyzeCall(GeneratorSyntaxContext context)
     {
-        var invocation = (InvocationExpressionSyntax)context.Node;
-
-        if (context.SemanticModel.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
+        var name = (GenericNameSyntax)context.Node;
+        if (name.Ancestors().OfType<CrefSyntax>().Any())
             return null;
-
-        if (method.ContainingType.ToDisplayString() != "Cntryl.Portia.PortiaEndpointRouteBuilderExtensions"
+        ExpressionSyntax expression = name.Parent is MemberAccessExpressionSyntax access && access.Name == name
+            ? access : name;
+        if (context.SemanticModel.GetSymbolInfo(expression).Symbol is not IMethodSymbol method
+            || method.ContainingType.ToDisplayString() != "Cntryl.Portia.PortiaEndpointRouteBuilderExtensions"
             || method.TypeArguments.Length is not (1 or 2))
-        {
             return null;
-        }
+        if (expression.Parent is not InvocationExpressionSyntax invocation || invocation.Expression != expression)
+            return Invalid(expression, "mapping method groups are unsupported; use a concrete direct mapping call");
+        foreach (var lambda in invocation.Ancestors().OfType<LambdaExpressionSyntax>())
+            if (context.SemanticModel.GetTypeInfo(lambda).ConvertedType is INamedTypeSymbol
+                { Name: "Expression", Arity: 1 } converted
+                && converted.ContainingNamespace.ToDisplayString() == "System.Linq.Expressions")
+                return Invalid(invocation, "expression-tree mappings are unsupported; use a concrete direct mapping call");
 
         if (method.TypeArguments[0] is not INamedTypeSymbol requestType || !GeneratedTypeShape.IsSupported(requestType))
             return Invalid(invocation, "use an accessible, concrete, non-generic request type");
@@ -163,7 +161,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         {
             var location = context.SemanticModel.GetInterceptableLocation(invocation);
             return location is null
-                ? null
+                ? Invalid(invocation, "this call cannot be intercepted; use a concrete direct mapping call")
                 : new CallAnalysis(new CallModel(
                     requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), requestType.Name,
                     resultType, kind, verb, parameters, InterceptableLocationModel.From(location),
@@ -244,7 +242,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         return Mapping(parameters, true);
     }
 
-    static CallAnalysis Invalid(InvocationExpressionSyntax invocation, string reason) =>
+    static CallAnalysis Invalid(ExpressionSyntax invocation, string reason) =>
         new(null, new HttpBindingDiagnostic(HttpBindingDiagnosticKind.UnsupportedBinding,
             DiagnosticLocation.From(invocation.GetLocation()), reason));
 

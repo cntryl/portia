@@ -8,6 +8,12 @@ alerts are as breaking to change as an API.
 
 ### Fixed
 
+- `PORTIA107` diagnoses discarded immutable request assertions and expression-bodied void callbacks.
+- JSON context factories use injective assembly/context identities; referenced compiled factory metadata
+  remains supported. `PORTIA030` diagnoses unusable contexts before factory or registration emission.
+- `PORTIA016` diagnoses unsupported HTTP method groups and expression-tree mappings at compile time;
+  fallback guidance names the ASP.NET Core package that owns HTTP generation.
+
 - Aggregate replay now discards an instance after every `Apply` exception, including missing
   handlers and overrides. Pre-application validation remains retryable; recover application failures
   with a fresh aggregate.

@@ -12,14 +12,16 @@ static class JsonContextDiscovery
         context.SyntaxProvider.ForAttributeWithMetadataName("Cntryl.Portia.PortiaJsonContextAttribute",
                 static (node, _) => node is TypeDeclarationSyntax,
                 static (ctx, _) => JsonContextModel((INamedTypeSymbol)ctx.TargetSymbol))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!)
             .Collect();
 
     public static IncrementalValueProvider<ImmutableArray<DiscoveredJsonContext>> ReferencedContexts(
         IncrementalGeneratorInitializationContext context) =>
         context.CompilationProvider.Select(static (compilation, _) => ReferencedJsonContexts(compilation));
 
-    static DiscoveredJsonContext JsonContextModel(INamedTypeSymbol symbol) =>
-        new(symbol.ToDisplayString(), Type(symbol));
+    static DiscoveredJsonContext? JsonContextModel(INamedTypeSymbol symbol) =>
+        JsonContextShape.UnsupportedReason(symbol) is null ? new(symbol.ToDisplayString(), Type(symbol)) : null;
 
     static ImmutableArray<DiscoveredJsonContext> ReferencedJsonContexts(Compilation compilation)
     {

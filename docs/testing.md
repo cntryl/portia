@@ -62,8 +62,11 @@ await RequestScenario.For(services)
 The actor defaults to anonymous. `TestPermissionEvaluator.AllowAll()` and `DenyAll()` stand in for the
 application's permission policy. A concurrency conflict is reported as the `Conflict` failure transports return; the bus itself rethrows `EventStreamConcurrencyException` to in-process callers.
 
-Scenarios run only when awaited; `PORTIA107` warns about one left as a statement, which would otherwise pass
-without running.
+Scenarios run when awaited or explicitly converted with `AsTask()`. Every `Expect…` returns a new,
+immutable expectation value. Await or retain that returned value: awaiting an earlier value does not
+observe assertions added to a discarded later value. `PORTIA107` warns about discarded statements,
+discard assignments and expression-bodied void callbacks, including discarded assertion augmentation.
+Use `kept = kept.ExpectHandled()` before `await kept`, or await the complete assertion chain.
 
 A scenario always dispatches through Portia's own bus, since that is what it observes. An application that
 decorates or replaces `IRequestBus` tests that wrapper by resolving its `IRequestBus` and dispatching through it

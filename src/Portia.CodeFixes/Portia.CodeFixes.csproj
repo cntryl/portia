@@ -9,6 +9,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../Portia.Generators/Json/JsonContextShape.cs" Link="Json/JsonContextShape.cs"/>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" PrivateAssets="all"/>
   </ItemGroup>
 </Project>

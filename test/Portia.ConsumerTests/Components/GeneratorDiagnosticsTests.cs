@@ -889,7 +889,7 @@ public sealed class GeneratorDiagnosticsTests
                                                                {
                                                                    await RequestScenario.For(services).When(new Request()).ExpectDenied();
                                                                    var kept = RequestScenario.For(services).When(new Request());
-                                                                   _ = kept.ExpectHandled();
+                                                                   kept = kept.ExpectHandled();
                                                                    await kept;
                                                                }
                                                            }

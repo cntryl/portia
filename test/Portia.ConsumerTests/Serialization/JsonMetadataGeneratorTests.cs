@@ -115,8 +115,9 @@ public sealed class JsonMetadataGeneratorTests
                                                              """, [contracts],
             new RegistrationCallInterceptorGenerator());
 
-        Assert.Contains("_Contracts_ContractsJsonContext.Create(options)", generated,
+        Assert.Contains("global::Cntryl.Portia.Generated.PortiaJsonContextFactory_", generated,
             StringComparison.Ordinal);
+        Assert.Contains(".Create(options)", generated, StringComparison.Ordinal);
     }
 
     [Fact]

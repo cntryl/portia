@@ -27,7 +27,7 @@ namespace Cntryl.Portia;
 ///     already carries it. That is a C# limitation, not a design choice: type arguments are inferred
 ///     from method arguments, never from a generic constraint, so there is no way to write a
 ///     one-type-argument overload that recovers <c>TOut</c> from <c>TRequest</c>.
-///     Portia.DependencyInjection supplies the generator to consumer compilations. Mapping patterns must be compile-time
+///     Cntryl.Portia.AspNetCore supplies the HTTP generator to consumer compilations. Mapping patterns must be compile-time
 ///     constants and request constructors must have supported binding shapes; unsupported mappings
 ///     receive compiler diagnostics. Generated binding and result writing use Portia's frozen,
 ///     application-owned JSON options and source-generated metadata.
@@ -256,7 +256,7 @@ public static class PortiaEndpointRouteBuilderExtensions
         ArgumentNullException.ThrowIfNull(app);
         ArgumentException.ThrowIfNullOrWhiteSpace(pattern);
         throw new InvalidOperationException(
-            "Portia.Generators did not intercept this endpoint mapping. Ensure Portia.DependencyInjection's analyzer assets are enabled. "
+            "Portia.AspNetCore.Generators did not intercept this endpoint mapping. Ensure Cntryl.Portia.AspNetCore's analyzer assets are enabled. "
             + "If the call is inside a generic method, the generator has no concrete request type to bind; map each request at its own call site.");
     }
 }
