@@ -1,0 +1,9 @@
+processor,events,max_batch,pass_budget,iterations,bytes_per_pass
+projector,0,1,1,16,856
+reactor,0,1,1,16,1944
+projector,0,1048576,1,16,856
+reactor,0,1048576,1,16,1944
+projector,1,1,1,16,1312
+reactor,1,1,1,16,2480
+projector,1,1048576,1,16,1312
+reactor,1,1048576,1,16,2480

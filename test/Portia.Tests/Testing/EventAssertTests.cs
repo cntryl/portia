@@ -63,6 +63,41 @@ public sealed class EventAssertTests
         EventAssert.Equal(expected, actual);
     }
 
+    /// <summary>Fields participate alongside properties at both event and nested payload levels.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShouldReportPublicFieldMismatch(bool nested)
+    {
+        DomainEvent expected = nested ? new NestedFields(new FieldValue { Extra = 2 }) : new MixedFields(1) { Extra = 2 };
+        DomainEvent actual = nested ? new NestedFields(new FieldValue { Extra = 3 }) : new MixedFields(1) { Extra = 3 };
+        var error = Assert.Throws<InvalidOperationException>(() => EventAssert.Equal(expected, actual));
+        Assert.Contains(nested ? "Details.Extra" : "MixedFields.Extra", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>Static state, indexers and non-public getters are outside the payload-member contract.</summary>
+    [Fact]
+    public void ShouldIgnoreStaticMembersIndexersAndNonPublicGetters()
+    {
+        EventAssert.Equal(new MixedFields(1) { Extra = 2 }, new MixedFields(1) { Extra = 2 });
+        EventAssert.Equal(new NestedFields(new FieldValue { Extra = 2 }), new NestedFields(new FieldValue { Extra = 2 }));
+    }
+
+    sealed record MixedFields(int Id) : DomainEvent
+    {
+        public int Extra;
+        public static int StaticValue => throw new InvalidOperationException("Static member read.");
+        public int this[int index] => throw new InvalidOperationException("Indexer read.");
+    }
+
+    sealed class FieldValue
+    {
+        public int Extra;
+        public int HiddenRead { private get => throw new InvalidOperationException("Non-public getter read."); set => Extra = value; }
+    }
+
+    sealed record NestedFields(FieldValue Details) : DomainEvent;
+
     sealed record RevisionDetails(IReadOnlyList<string> Tags);
 
     [Discriminator("test.scenario.criteria-revised")]

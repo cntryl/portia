@@ -129,8 +129,7 @@ public sealed class AggregateMetadataFactoryTests
 
     /// <summary>
     ///     Verifies that the read-only collection path releases the identities it reserved when an event
-    ///     in the batch fails to apply, so a retry with a corrected event of the same identity is still
-    ///     accepted rather than rejected as a duplicate.
+    ///     in the batch fails to apply, and invalidates the failed instance. A fresh instance accepts a corrected history.
     /// </summary>
     [Fact]
     public void ShouldReleaseReservedIdentitiesWhenAReadOnlyCollectionBatchFailsToApply()
@@ -141,6 +140,9 @@ public sealed class AggregateMetadataFactoryTests
 
         _ = Assert.Throws<InvalidOperationException>(() =>
             aggregate.Load(ReadOnly(Committed(new UnhandledEvent(), eventId, id, 1))));
+        var rejected = Assert.Throws<InvalidOperationException>(() => aggregate.ChangeValue(1));
+        Assert.Contains("discarded", rejected.Message, StringComparison.Ordinal);
+        aggregate = new TestAggregate(id);
         aggregate.Load(ReadOnly(Committed(new ValueChanged(42), eventId, id, 1)));
 
         Assert.Equal(42, aggregate.Value);

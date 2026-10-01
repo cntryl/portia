@@ -67,6 +67,16 @@ public sealed class ReactorScenario
         if (reactor.Pattern.IsTenantTemplate)
             reactor.BindWorkload(_history.Workload(reactor.Name), null);
         var store = await _history.ToStoreAsync(reactor.Pattern, ct).ConfigureAwait(false);
-        _ = await new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start, ct: ct).ConfigureAwait(false);
+        var runner = new ReactorRunner(store);
+        var checkpoint = ProjectionCheckpoint.Start;
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            var pass = await runner.ExecutePassAsync(reactor, checkpoint, ProjectionRunOptions.Default, ct)
+                .ConfigureAwait(false);
+            checkpoint = pass.Checkpoint;
+            if (!pass.ContinueImmediately)
+                return;
+        }
     }
 }

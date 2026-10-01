@@ -63,7 +63,7 @@ public sealed class ReactorRunner(
         var startingCheckpoint = checkpoint;
         var identity = new CheckpointIdentity(reactor.Name, reactor.Pattern);
         var batchSize = reactor.IsBatch ? options.MaxBatchSize : 1;
-        var contexts = new List<IReactorContext>(batchSize);
+        var contexts = new List<IReactorContext>(Math.Min(batchSize, options.MaxEventsPerPass));
         var processed = 0;
         var budgetExhausted = false;
         await foreach (var record in _reader.ReadAsync(reactor.Pattern, checkpoint.Cursor, ct).WithCancellation(ct)

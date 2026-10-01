@@ -11,3 +11,5 @@ if (discarded.Disposition is not AggregateDisposition.Discard || !ReferenceEqual
     throw new InvalidOperationException("A failed result was not preserved and discarded.");
 
 await ProjectionStoreConformance.VerifyAsync(new UserlandProjectionStoreProbe());
+
+await RuntimeTestingQualification.RunAsync();

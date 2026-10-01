@@ -10,7 +10,9 @@ public interface IAggregateReader
     ///     Applies raised events after the aggregate's committed stream position and returns that same instance.
     ///     An absent stream leaves the instance unchanged. Construction and dependencies belong to the caller.
     ///     Save pending changes first. Do not use the instance concurrently during hydration.
-    ///     Discard the instance if a domain event handler throws during replay.
+    ///     Any exception from event application (including missing handlers or Apply overrides) discards the
+    ///     instance: further hydration, emission and saving are rejected. Recover with a fresh instance.
+    ///     Validation failures before event application remain retryable.
     /// </summary>
     /// <typeparam name="TAggregate">The concrete aggregate type.</typeparam>
     /// <param name="aggregate">The caller-constructed aggregate.</param>

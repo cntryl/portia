@@ -5,14 +5,14 @@ using System.Runtime.CompilerServices;
 
 namespace Cntryl.Portia.Testing;
 
-/// <summary>Compares event business payloads structurally while ignoring Portia metadata.</summary>
+/// <summary>Compares public instance fields and publicly readable, non-indexed properties recursively, ignoring Portia metadata.</summary>
 public static class EventAssert
 {
     /// <summary>Asserts that two events have the same type and business payload.</summary>
     /// <param name="expected">The expected event.</param>
     /// <param name="actual">The observed event.</param>
     /// <exception cref="InvalidOperationException">The payloads differ.</exception>
-    [RequiresUnreferencedCode("Structural event assertions require public payload properties to be retained.")]
+    [RequiresUnreferencedCode("Structural event assertions require public payload fields and properties to be retained.")]
     public static void Equal(DomainEvent expected, DomainEvent actual)
     {
         ArgumentNullException.ThrowIfNull(expected);
@@ -26,7 +26,7 @@ public static class EventAssert
     /// <param name="expected">The expected events.</param>
     /// <param name="actual">The observed events.</param>
     /// <exception cref="InvalidOperationException">The sequences or their payloads differ.</exception>
-    [RequiresUnreferencedCode("Structural event assertions require public payload properties to be retained.")]
+    [RequiresUnreferencedCode("Structural event assertions require public payload fields and properties to be retained.")]
     public static void Equal(IReadOnlyList<DomainEvent> expected, IReadOnlyList<DomainEvent> actual)
     {
         ArgumentNullException.ThrowIfNull(expected);
@@ -42,7 +42,7 @@ public static class EventAssert
         }
     }
 
-    [RequiresUnreferencedCode("Structural event assertions require public payload properties to be retained.")]
+    [RequiresUnreferencedCode("Structural event assertions require public payload fields and properties to be retained.")]
     static string? Difference(object? expected, object? actual, string path, HashSet<(object, object)> visited)
     {
         if (ReferenceEquals(expected, actual))
@@ -75,17 +75,27 @@ public static class EventAssert
             return Equals(expected, actual) ? null : path;
 
         var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public)
-            .Where(property => property.CanRead && property.GetIndexParameters().Length == 0
+            .Where(property => property.GetMethod is { IsPublic: true } && property.GetIndexParameters().Length == 0
                                && property.DeclaringType != typeof(DomainEvent))
             .OrderBy(property => property.Name, StringComparer.Ordinal)
             .ToArray();
-        if (properties.Length == 0)
+        var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public)
+            .OrderBy(field => field.Name, StringComparer.Ordinal).ToArray();
+        if (properties.Length == 0 && fields.Length == 0)
             return Equals(expected, actual) ? null : path;
 
         foreach (var property in properties)
         {
             var difference = Difference(property.GetValue(expected), property.GetValue(actual),
                 $"{path}.{property.Name}", visited);
+            if (difference is not null)
+                return difference;
+        }
+
+        foreach (var field in fields)
+        {
+            var difference = Difference(field.GetValue(expected), field.GetValue(actual),
+                $"{path}.{field.Name}", visited);
             if (difference is not null)
                 return difference;
         }

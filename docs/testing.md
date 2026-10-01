@@ -119,3 +119,21 @@ Both component scenarios run a tenant-scoped component (`EventStreamPattern.ForT
 `"scenario"` test tenant by default. Pass a `TenantId` to either scenario constructor to bind it to a
 specific tenant, as hosting would bind it per tenant. For a tenant-scoped component, given events are
 placed on that tenant's streams.
+
+
+Event payload assertions compare public instance fields and publicly readable, non-indexed
+properties recursively. They exclude Portia metadata, static members, and private getters; ordered
+collections and cycles retain their existing comparison behavior. Use an application assertion or
+comparer for payload state outside those supported members. Mismatches identify event/member/index paths.
+
+Projector and reactor scenarios drain finite histories through bounded production passes, including
+histories larger than 4,096 events. A projector resumes its committed checkpoint across calls;
+a reactor starts at the beginning on each separate run, while continuing its checkpoint between
+passes within that run. Cancellation and suffix failures propagate and preserve the last successful
+checkpoint. A fake application read model does not gain rollback semantics from the scenario helper.
+
+Event-store conformance compares the original appended concrete payload and complete metadata
+against stream reads, stream-offset resumes, pattern reads, and every issued cursor resume. Seeds
+include UTC timestamps, identities, correlation/causation, execution/actor attribution, and an audit
+record. These exercised round-trip, ordering, isolation, and append-conflict checks do not establish
+crash durability or atomicity under untested failure injection.

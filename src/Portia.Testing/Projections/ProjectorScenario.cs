@@ -47,6 +47,14 @@ public sealed class ProjectorScenario
         var store = await _history.ToStoreAsync(projector.Pattern, ct).ConfigureAwait(false);
         var identity = new CheckpointIdentity(projector.Name, projector.Pattern);
         var checkpoint = await projector.Store.LoadCheckpointAsync(identity, ct).ConfigureAwait(false);
-        _ = await new ProjectorRunner(store).RunAsync(projector, checkpoint, ct: ct).ConfigureAwait(false);
+        var runner = new ProjectorRunner(store);
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            var pass = await runner.RunPassAsync(projector, checkpoint, ct: ct).ConfigureAwait(false);
+            checkpoint = pass.Checkpoint;
+            if (!pass.ContinueImmediately)
+                return;
+        }
     }
 }
