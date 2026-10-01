@@ -1,0 +1,14 @@
+  Failed Cntryl.Portia.RequestPipelineBehaviorTests.ShouldRejectContinuationBorrowedFromActiveInvocation(shape: 2, nested: False) [24 ms]
+  Failed Cntryl.Portia.RequestPipelineBehaviorTests.ShouldRejectContinuationBorrowedFromActiveInvocation(shape: 0, nested: False) [4 ms]
+  Failed Cntryl.Portia.RequestPipelineBehaviorTests.ShouldRejectContinuationBorrowedFromActiveInvocation(shape: 1, nested: True) [2 ms]
+  Failed Cntryl.Portia.RequestPipelineBehaviorTests.ShouldRejectContinuationBorrowedFromActiveInvocation(shape: 2, nested: True) [< 1 ms]
+  Failed Cntryl.Portia.RequestPipelineBehaviorTests.ShouldRejectContinuationBorrowedFromActiveInvocation(shape: 0, nested: True) [< 1 ms]
+  Failed Cntryl.Portia.RequestPipelineBehaviorTests.ShouldRejectContinuationBorrowedFromActiveInvocation(shape: 1, nested: False) [< 1 ms]
+  Failed Cntryl.Portia.RequestPipelineBehaviorTests.ShouldRejectExpiredContinuationsInsideLaterInvocations(shape: 0, useFirst: True) [1 ms]
+  Failed Cntryl.Portia.RequestPipelineBehaviorTests.ShouldRejectExpiredContinuationsInsideLaterInvocations(shape: 1, useFirst: True) [< 1 ms]
+  Failed Cntryl.Portia.RequestPipelineBehaviorTests.ShouldRejectExpiredContinuationsInsideLaterInvocations(shape: 2, useFirst: False) [< 1 ms]
+  Failed Cntryl.Portia.RequestPipelineBehaviorTests.ShouldRejectExpiredContinuationsInsideLaterInvocations(shape: 1, useFirst: False) [< 1 ms]
+  Failed Cntryl.Portia.RequestPipelineBehaviorTests.ShouldRejectExpiredContinuationsInsideLaterInvocations(shape: 2, useFirst: True) [< 1 ms]
+  Failed Cntryl.Portia.RequestPipelineBehaviorTests.ShouldRejectExpiredContinuationsInsideLaterInvocations(shape: 0, useFirst: False) [< 1 ms]
+Total tests: 12
+     Failed: 12

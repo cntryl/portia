@@ -4,6 +4,14 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## Unreleased
+
+### Fixed
+
+- Request pipeline continuations now retain their originating invocation and behavior position.
+  Retained delegates cannot execute a later, nested, or concurrent request; existing single-use
+  and behavior-lifetime rules apply to commands, queries, and streams.
+
 ## 0.6.2 - 2026-09-28
 
 ### Upgrading

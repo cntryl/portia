@@ -28,20 +28,22 @@ public sealed class RequestPipelineBehaviorTests
     }
 
     /// <summary>The extended-state boundary enforces use-after-close and use-after-completion.</summary>
-    [Fact]
-    public void ShouldEnforceSingleUseAtExtendedStateBoundary()
+    [Theory]
+    [InlineData(30)]
+    [InlineData(31)]
+    public void ShouldEnforceSingleUseAtExtendedStateBoundary(int position)
     {
         var closed = new RequestPipelineFrame<PipelineAction>(
             new object(), null!, null!, new PipelineAction(), null!, 32);
-        closed.Use(31);
-        closed.Close(31);
+        closed.Use(position);
+        closed.Close(position);
 
-        var closedFailure = Assert.Throws<InvalidOperationException>(() => closed.Use(31));
+        var closedFailure = Assert.Throws<InvalidOperationException>(() => closed.Use(position));
 
         var completed = new RequestPipelineFrame<PipelineAction>(
             new object(), null!, null!, new PipelineAction(), null!, 32);
         completed.Complete();
-        var completedFailure = Assert.Throws<InvalidOperationException>(() => completed.Use(31));
+        var completedFailure = Assert.Throws<InvalidOperationException>(() => completed.Use(position));
         Assert.Equal(SingleUseMessage, closedFailure.Message);
         Assert.Equal(SingleUseMessage, completedFailure.Message);
     }
@@ -323,6 +325,141 @@ public sealed class RequestPipelineBehaviorTests
 
         Assert.Equal(SingleUseMessage, queryFailure.Message);
         Assert.Equal(SingleUseMessage, streamFailure.Message);
+    }
+
+    /// <summary>Unused and used continuations cannot adopt later unary, result, or stream invocations.</summary>
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(0, true)]
+    [InlineData(1, false)]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    [InlineData(2, true)]
+    public async Task ShouldRejectExpiredContinuationsInsideLaterInvocations(int shape, bool useFirst)
+    {
+        var calls = new List<string>();
+        var services = Services(calls);
+        _ = services.AddSingleton(new StaleContinuationBehavior(useFirst));
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineAction, PipelineActionHandler>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineQuery, PipelineQueryHandler, int>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new StreamRequestRegistration<PipelineStream, PipelineStreamHandler, int>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineAction, StaleContinuationBehavior>(0));
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineQuery, StaleContinuationBehavior, int>(0));
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new StreamRequestPipelineBehaviorRegistration<PipelineStream, StaleContinuationBehavior, int>(0));
+        using var provider = services.BuildServiceProvider();
+        var bus = provider.GetRequiredService<IRequestBus>();
+
+        async Task DispatchAsync()
+        {
+            if (shape == 0)
+                _ = await bus.SendAsync(new PipelineAction(), RequestActor.System);
+            else if (shape == 1)
+                _ = await bus.SendAsync(new PipelineQuery(), RequestActor.System);
+            else
+                await foreach (var _ in bus.StreamAsync(new PipelineStream(), RequestActor.System))
+                    break; // Dispose a live stream as well as exercising natural short-circuit completion.
+        }
+
+        await DispatchAsync();
+        var initialCalls = calls.Count;
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(DispatchAsync);
+        Assert.Equal(SingleUseMessage, failure.Message);
+        Assert.Equal(initialCalls, calls.Count);
+    }
+
+    /// <summary>A live continuation cannot be borrowed by a nested or concurrent invocation.</summary>
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(0, true)]
+    [InlineData(1, false)]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    [InlineData(2, true)]
+    public async Task ShouldRejectContinuationBorrowedFromActiveInvocation(int shape, bool nested)
+    {
+        var behavior = new BorrowingContinuationBehavior();
+        var services = Services([]);
+        _ = services.AddSingleton(behavior);
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineAction, PipelineActionHandler>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PipelineQuery, PipelineQueryHandler, int>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new StreamRequestRegistration<PipelineStream, PipelineStreamHandler, int>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineAction, BorrowingContinuationBehavior>(0));
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<PipelineQuery, BorrowingContinuationBehavior, int>(0));
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new StreamRequestPipelineBehaviorRegistration<PipelineStream, BorrowingContinuationBehavior, int>(0));
+        using var provider = services.BuildServiceProvider();
+        var bus = provider.GetRequiredService<IRequestBus>();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        async Task DispatchAsync()
+        {
+            if (shape == 0)
+                Assert.True((await bus.SendAsync(new PipelineAction(), RequestActor.System, timeout.Token)).IsSuccess);
+            else if (shape == 1)
+                Assert.Equal(41, (await bus.SendAsync(new PipelineQuery(), RequestActor.System, timeout.Token)).Value);
+            else
+            {
+                var items = new List<int>();
+                await foreach (var item in bus.StreamAsync(new PipelineStream(), RequestActor.System, timeout.Token))
+                    items.Add(item);
+                Assert.Equal([1, 2], items);
+            }
+        }
+
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        behavior.OnFirst = nested ? DispatchAsync : () => release.Task.WaitAsync(timeout.Token);
+        var first = DispatchAsync();
+        if (!nested)
+        {
+            try
+            {
+                await behavior.Ready.Task.WaitAsync(timeout.Token);
+                await DispatchAsync();
+            }
+            finally
+            {
+                release.TrySetResult();
+            }
+        }
+        await first;
+        Assert.Equal(SingleUseMessage, Assert.Single(behavior.Failures).Message);
+    }
+
+    /// <summary>The inline and extended position states both admit one concurrent winner.</summary>
+    [Theory]
+    [InlineData(30)]
+    [InlineData(31)]
+    public async Task ShouldAllowOneConcurrentWinnerAtStateBoundary(int position)
+    {
+        var frame = new RequestPipelineFrame<PipelineAction>(
+            new object(), null!, null!, new PipelineAction(), null!, 32);
+        using var ready = new Barrier(2);
+        Task<bool> Attempt() => Task.Run(() =>
+        {
+            Assert.True(ready.SignalAndWait(TimeSpan.FromSeconds(10)));
+            try
+            {
+                frame.Use(position);
+                return true;
+            }
+            catch (InvalidOperationException failure)
+            {
+                Assert.Equal(SingleUseMessage, failure.Message);
+                return false;
+            }
+        });
+        Assert.Equal(1, (await Task.WhenAll(Attempt(), Attempt())).Count(won => won));
     }
 
     /// <summary>The concrete typed context instance is shared through a family behavior and handler.</summary>
@@ -635,6 +772,104 @@ public sealed class RequestPipelineBehaviorTests
         {
             _ = await continuation(ct);
             return await inner.Continuation!(ct);
+        }
+    }
+
+    internal sealed class BorrowingContinuationBehavior : IRequestPipelineBehavior<PipelineAction>,
+        IRequestPipelineBehavior<PipelineQuery, int>, IStreamRequestPipelineBehavior<PipelineStream, int>
+    {
+        int _invocations;
+        Func<CancellationToken, Task>? _borrowed;
+        public Func<Task> OnFirst { get; set; } = null!;
+        public TaskCompletionSource Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public List<InvalidOperationException> Failures { get; } = [];
+
+        async Task EnterAsync(Func<CancellationToken, Task> continuation, CancellationToken ct)
+        {
+            if (Interlocked.Increment(ref _invocations) == 1)
+            {
+                _borrowed = continuation;
+                Ready.TrySetResult();
+                await OnFirst();
+            }
+            else
+            {
+                try
+                {
+                    await _borrowed!(ct);
+                }
+                catch (InvalidOperationException failure)
+                {
+                    Failures.Add(failure);
+                }
+            }
+        }
+
+        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation, CancellationToken ct)
+        {
+            await EnterAsync(async token => { _ = await continuation(token); }, ct);
+            return await continuation(ct);
+        }
+
+        public async ValueTask<Result<int>> HandleAsync(IRequestContext<PipelineQuery> context,
+            RequestPipelineNext<int> continuation, CancellationToken ct)
+        {
+            await EnterAsync(async token => { _ = await continuation(token); }, ct);
+            return await continuation(ct);
+        }
+
+        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context,
+            StreamRequestPipelineNext<int> continuation, [EnumeratorCancellation] CancellationToken ct)
+        {
+            await EnterAsync(async token =>
+            {
+                await foreach (var _ in continuation(token).WithCancellation(token))
+                { }
+            }, ct);
+            await foreach (var item in continuation(ct).WithCancellation(ct))
+                yield return item;
+        }
+    }
+
+    internal sealed class StaleContinuationBehavior(bool useFirst) : IRequestPipelineBehavior<PipelineAction>,
+        IRequestPipelineBehavior<PipelineQuery, int>, IStreamRequestPipelineBehavior<PipelineStream, int>
+    {
+        RequestPipelineNext? _unary;
+        RequestPipelineNext<int>? _result;
+        StreamRequestPipelineNext<int>? _stream;
+
+        public ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation, CancellationToken ct)
+        {
+            if (_unary is not null)
+                return _unary(ct);
+            _unary = continuation;
+            return useFirst ? continuation(ct) : ValueTask.FromResult(Result.Success);
+        }
+
+        public ValueTask<Result<int>> HandleAsync(IRequestContext<PipelineQuery> context,
+            RequestPipelineNext<int> continuation, CancellationToken ct)
+        {
+            if (_result is not null)
+                return _result(ct);
+            _result = continuation;
+            return useFirst ? continuation(ct) : ValueTask.FromResult(Result<int>.Success(0));
+        }
+
+        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context,
+            StreamRequestPipelineNext<int> continuation, [EnumeratorCancellation] CancellationToken ct)
+        {
+            if (_stream is null)
+            {
+                _stream = continuation;
+                if (useFirst)
+                    await foreach (var item in continuation(ct).WithCancellation(ct))
+                        yield return item;
+                yield break;
+            }
+            await foreach (var item in _stream(ct).WithCancellation(ct))
+                yield return item;
         }
     }
 

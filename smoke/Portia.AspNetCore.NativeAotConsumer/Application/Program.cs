@@ -7,10 +7,12 @@ using Cntryl.Portia;
 var builder = WebApplication.CreateSlimBuilder(args);
 builder.WebHost.UseUrls("http://127.0.0.1:0");
 _ = builder.Services.AddSingleton<SmokeGuardProbe>();
+_ = builder.Services.AddSingleton<SmokeContinuationProbe>();
 _ = builder.Services.AddPortia().ConfigureJson(options => options.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower)
     .AddHttp()
     .AddRequestHandler<SmokeRequestHandler>()
     .AddRequestHandler<SmokeUploadHandler>()
+    .AddRequestPipelineBehavior<SmokeRequestBehavior>()
     .AddRequestGuard<SmokeRequestGuard>();
 _ = builder.Services.AddCors(options => options.AddPolicy("smoke", policy => policy.WithOrigins("https://trusted.example")));
 var app = builder.Build();
@@ -98,6 +100,26 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
                 $"Cross-origin upload from {origin} returned {(int)rejection.StatusCode}, expected {(int)expected}.");
     }
 }
+// This path also runs from freshly packed packages on Linux NativeAOT in CI.
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
+    var retained = await bus.SendAsync(new SmokeRequest("retain-continuation"), RequestActor.System);
+    if (!retained.IsSuccess)
+        throw new InvalidOperationException("Retaining smoke behavior failed.");
+    var rejected = false;
+    try
+    {
+        _ = await bus.SendAsync(new SmokeRequest("invoke-retained-continuation"), RequestActor.System);
+    }
+    catch (InvalidOperationException failure) when (failure.Message ==
+        "A request pipeline continuation may be invoked at most once and only during its behavior invocation.")
+    {
+        rejected = true;
+    }
+    if (!rejected)
+        throw new InvalidOperationException("An expired pipeline continuation adopted a later invocation.");
+}
 await app.StopAsync();
 
 [Discriminator("portia.smoke.native-aot.request")]
@@ -108,6 +130,27 @@ sealed class SmokeRequestHandler : IRequestHandler<SmokeRequest, SmokePayload>
 {
     public ValueTask<Result<SmokePayload>> HandleAsync(IRequestContext<SmokeRequest> context, CancellationToken ct) =>
         ValueTask.FromResult(Result<SmokePayload>.Success(new SmokePayload(context.Request.Name)));
+}
+
+sealed class SmokeContinuationProbe
+{
+    public RequestPipelineNext<SmokePayload>? Retained { get; set; }
+}
+
+sealed class SmokeRequestBehavior(SmokeContinuationProbe probe) : IRequestPipelineBehavior<SmokeRequest, SmokePayload>
+{
+    public ValueTask<Result<SmokePayload>> HandleAsync(IRequestContext<SmokeRequest> context,
+        RequestPipelineNext<SmokePayload> continuation, CancellationToken ct)
+    {
+        if (context.Request.Name == "retain-continuation")
+        {
+            probe.Retained = continuation;
+            return ValueTask.FromResult(Result<SmokePayload>.Success(new SmokePayload(context.Request.Name)));
+        }
+        return context.Request.Name == "invoke-retained-continuation"
+            ? probe.Retained!(ct)
+            : continuation(ct);
+    }
 }
 
 sealed record SmokePayload(string DisplayName, SmokePayload? NextNode = null);
