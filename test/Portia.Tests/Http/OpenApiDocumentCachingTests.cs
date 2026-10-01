@@ -12,6 +12,7 @@ namespace Cntryl.Portia;
 ///     same for every caller, so repeating that work on an unauthenticated route is both waste and
 ///     an amplification anyone can reach.
 /// </summary>
+[Collection(ProcessAllocationTestGroup.Name)]
 public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
 {
     WebApplication? _app;
