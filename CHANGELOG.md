@@ -4,10 +4,13 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
-## Unreleased
+## 0.7.0 - 2026-10-02
 
 ### Added
 
+- Runtime, Fitz append and compiler benchmark harnesses with reproducible campaign scripts
+  (`scripts/runtime-campaign.sh`, `fitz-append-campaign.sh`, `compiler-campaign.sh`). They pin the
+  source commit and publish no measured results; baselines are collected by running the scripts.
 - Request scenarios accept caller cancellation for commands, queries and streams. Finite stream
   overloads collect a positive maximum and dispose enumeration and the asynchronous scope.
 - Compiled manual processor example distinguishes bounded passes from commit batch size and
@@ -15,6 +18,9 @@ alerts are as breaking to change as an API.
 
 ### Fixed
 
+- `InMemoryEventStore` seeds a stream in near-linear allocation by indexing committed event IDs per
+  stream instead of rebuilding the set on every append. Duplicate rejection, atomic rejection,
+  optimistic concurrency and cursor ordering are unchanged.
 - Queue, notice and schedule outcome/fault logs retain delivery trace/span correlation through
   disposition and scope cleanup, with one exception event per fault and unchanged span counts.
 - Dashboard queries are verified against actual Prometheus 3.15.0 exports using stable OTLP
