@@ -51,6 +51,12 @@ jobs:
       - name: Qualify actual Prometheus dashboard queries
         run: scripts/qualify-prometheus.sh "$RUNNER_TEMP/portia-prometheus-evidence"
 
+      - name: Validate compiler benchmark consumers
+        run: scripts/compiler-campaign.sh "$RUNNER_TEMP/portia-compiler-control" 2 small 1
+
+      - name: Qualify runtime performance fixtures with JSON reflection disabled
+        run: dotnet run --project bench/Portia.Benchmarks/Portia.Benchmarks.csproj --configuration Release --no-build -- --runtime-qualification
+
       - name: Test solution
         run: >-
           dotnet test Portia.slnx

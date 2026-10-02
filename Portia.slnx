@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/bench/">
+    <Project Path="bench/Portia.CompilerBenchmarks/Portia.CompilerBenchmarks.csproj"/>
     <Project Path="bench/Portia.Benchmarks/Portia.Benchmarks.csproj"/>
   </Folder>
   <Folder Name="/src/">
