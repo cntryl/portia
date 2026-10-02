@@ -1,0 +1,20 @@
+services:
+  fitz:
+    image: ghcr.io/cntryl/fitz@sha256:95d600dc12c74258b41e333b891000889ec806df8d4ba809ca57ab9ea4d7f79e
+    environment:
+      FITZ_ADMIN_AUTH_MODE: open
+      FITZ_AUTH_REQUIRED: "false"
+      FITZ_HTTP_PORT: "4090"
+      FITZ_STORAGE_MODE: local
+      FITZ_STORAGE_PATH: /data/fitz
+      FITZ_TCP_ENABLED: "false"
+    init: true
+    ports:
+      - "127.0.0.1:${FITZ_PERFORMANCE_PORT:-40902}:4090"
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - fitz-performance-data:/data
+
+volumes:
+  fitz-performance-data:
