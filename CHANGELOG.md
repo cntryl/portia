@@ -15,6 +15,11 @@ alerts are as breaking to change as an API.
 
 ### Fixed
 
+- Queue, notice and schedule outcome/fault logs retain delivery trace/span correlation through
+  disposition and scope cleanup, with one exception event per fault and unchanged span counts.
+- Dashboard queries are verified against actual Prometheus 3.15.0 exports using stable OTLP
+  1.19.1, cumulative temporality, translated suffixes and explicit histogram buckets.
+
 - Terminal unexpected queue read faults record one fault, one terminal warning, and one terminal
   disposition before continuing; classified envelope and ownership policies remain intact.
 - Linked deliveries start independent roots under ambient activities, and received wire context

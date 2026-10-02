@@ -34,3 +34,7 @@ scripts/qualify-prometheus.sh /tmp/portia-prometheus-evidence
 Final-head hosted qualification must additionally pass packed consumers, Linux NativeAOT, broker/storage tests and CodeQL; exact merged-commit checks gate tracker updates.
 
 Focused runner, linked-root, sampling and existing telemetry controls: 131 passes, zero skips (`runner-controls.log`). CI runs the actual Prometheus qualification script on every final head and merged commit as well as the stable-dependency gate.
+
+After rebasing onto `ff4fc50322a9874ca1ff5829982a4451f2554fb4`, the full Release suite passes 1,743 tests (1,160 core, 509 compiler/consumer, 71 existing MCP, three reflection-disabled), zero skips. The Release build has zero warnings/errors. Raw logs are retained. Runtime source is based on `4e64a73a1bdee4e08987ae3525242972c909ca50`; subsequent evidence/documentation changes do not change the measured workload.
+
+Fresh isolated digest-pinned Fitz/S3 services also pass 61 broker/storage tests (24 core plus 37 consumer), zero skips (`broker-storage.log`). Project `portia070observability` uses ports 40901/49000/49001 and is removed with its own volume after qualification.
