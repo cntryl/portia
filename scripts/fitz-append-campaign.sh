@@ -13,7 +13,10 @@ dotnet --info > "$output/dotnet-info.txt"
 docker info --format '{{json .}}' > "$output/docker-info.json"
 dotnet restore "$root/bench/Portia.Benchmarks/Portia.Benchmarks.csproj" --locked-mode
 dotnet build "$root/bench/Portia.Benchmarks/Portia.Benchmarks.csproj" -c Release --no-restore
-cleanup() { "${compose[@]}" down -v > "$output/cleanup.log" 2>&1; }
+cleanup() {
+  "${compose[@]}" logs --no-color > "$output/broker.log" 2>&1 || true
+  "${compose[@]}" down -v > "$output/cleanup.log" 2>&1
+}
 trap cleanup EXIT
 "${compose[@]}" up -d
 "${compose[@]}" config > "$output/broker-config.yaml"
