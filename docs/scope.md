@@ -52,9 +52,11 @@ current, deliberate boundary.
   `Cntryl.Portia.Testing` supplies backend-neutral projection and optional reaction deduplication
   conformance suites so application implementations can prove the required invariants for any
   other backend.
-- Portia's MCP integration exposes only explicitly selected unary `IRequest`/`IRequest<T>` and
-  `ICallable` requests as tools. It does not infer resources, prompts, sampling, elicitation,
-  streaming tools, durable tasks, or queue/schedule control surfaces.
+- Portia's MCP integration exposes explicitly selected unary `IRequest`/`IRequest<T>` and
+  `ICallable` requests as tools, and explicitly bound `IRequest<T>`/`ICallable` requests as resources
+  and prompts over Streamable HTTP or stdio. Every invocation enters the shared application bus;
+  resource/prompt visibility also protects discovery and guessed lookups. Sampling, elicitation,
+  streaming tools, durable tasks, and queue/schedule control surfaces remain unsupported.
 
 See [design decisions](design-decisions.md) for the reasoning and enforcement behind these
 boundaries. See [performance and scaling](performance-and-scaling.md) for measured hot paths,

@@ -241,6 +241,11 @@ public sealed class QueueRunner(
             : QueuedRequestTerminalReason.RetryLimitReached;
         if (permanent || IsRetryLimitReached(scope, queued))
         {
+            if (!permanent && RequestEnvelopeFailure.GetKind(exception) is null)
+            {
+                PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, exception, _logger);
+            }
+
             return await CompleteTerminalAsync(scope, queued, null, exception, terminal, requestName, ct,
                     invocation: invocation, readQueuedFields: false)
                 .ConfigureAwait(false);
