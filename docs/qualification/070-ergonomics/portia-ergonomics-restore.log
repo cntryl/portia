@@ -1,0 +1,10 @@
+  Determining projects to restore...
+  Restored /private/tmp/portia-070-core-ergonomics/src/Portia.Analyzers/Portia.Analyzers.csproj (in 85 ms).
+  Restored /private/tmp/portia-070-core-ergonomics/test/Portia.McpContracts/Portia.McpContracts.csproj (in 185 ms).
+  Restored /private/tmp/portia-070-core-ergonomics/test/Portia.ReflectionDisabledTests/Portia.ReflectionDisabledTests.csproj (in 163 ms).
+  Restored /private/tmp/portia-070-core-ergonomics/src/Portia.Mcp.Testing/Portia.Mcp.Testing.csproj (in 151 ms).
+  Restored /private/tmp/portia-070-core-ergonomics/src/Portia.Mcp.AspNetCore/Portia.Mcp.AspNetCore.csproj (in 135 ms).
+  Restored /private/tmp/portia-070-core-ergonomics/smoke/Portia.McpStdioHost/Portia.McpStdioHost.csproj (in 210 ms).
+  Restored /private/tmp/portia-070-core-ergonomics/test/Portia.McpTests/Portia.McpTests.csproj (in 163 ms).
+  Restored /private/tmp/portia-070-core-ergonomics/bench/Portia.Benchmarks/Portia.Benchmarks.csproj (in 220 ms).
+  19 of 27 projects are up-to-date for restore.

@@ -6,6 +6,13 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+### Added
+
+- Request scenarios accept caller cancellation for commands, queries and streams. Finite stream
+  overloads collect a positive maximum and dispose enumeration and the asynchronous scope.
+- Compiled manual processor example distinguishes bounded passes from commit batch size and
+  resumes a 4,097-event history through returned checkpoints.
+
 ### Fixed
 
 - Terminal unexpected queue read faults record one fault, one terminal warning, and one terminal

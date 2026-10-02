@@ -1,0 +1,19 @@
+  Portia.Abstractions -> /private/tmp/portia-070-core-ergonomics/src/Portia.Abstractions/bin/Release/net10.0/Portia.Abstractions.dll
+  Portia.Core -> /private/tmp/portia-070-core-ergonomics/src/Portia.Core/bin/Release/net10.0/Portia.Core.dll
+  Portia.DependencyInjection -> /private/tmp/portia-070-core-ergonomics/src/Portia.DependencyInjection/bin/Release/net10.0/Portia.DependencyInjection.dll
+  Portia.Generators -> /private/tmp/portia-070-core-ergonomics/src/Portia.Generators/bin/Release/netstandard2.0/Portia.Generators.dll
+  Consumer.Contracts -> /private/tmp/portia-070-core-ergonomics/test/Consumer.Contracts/bin/Release/net10.0/Consumer.Contracts.dll
+  Consumer.FeatureOne -> /private/tmp/portia-070-core-ergonomics/test/Consumer.FeatureOne/bin/Release/net10.0/Consumer.FeatureOne.dll
+  Consumer.FeatureTwo -> /private/tmp/portia-070-core-ergonomics/test/Consumer.FeatureTwo/bin/Release/net10.0/Consumer.FeatureTwo.dll
+  Portia.Storage.Abstractions -> /private/tmp/portia-070-core-ergonomics/src/Portia.Storage.Abstractions/bin/Release/net10.0/Portia.Storage.Abstractions.dll
+  Portia.Testing -> /private/tmp/portia-070-core-ergonomics/src/Portia.Testing/bin/Release/net10.0/Portia.Testing.dll
+  Portia.AspNetCore.Generators -> /private/tmp/portia-070-core-ergonomics/src/Portia.AspNetCore.Generators/bin/Release/netstandard2.0/Portia.AspNetCore.Generators.dll
+  Portia.AspNetCore -> /private/tmp/portia-070-core-ergonomics/src/Portia.AspNetCore/bin/Release/net10.0/Portia.AspNetCore.dll
+  Portia.Fitz -> /private/tmp/portia-070-core-ergonomics/src/Portia.Fitz/bin/Release/net10.0/Portia.Fitz.dll
+  Portia.Mcp -> /private/tmp/portia-070-core-ergonomics/src/Portia.Mcp/bin/Release/net10.0/Portia.Mcp.dll
+  Portia.CodeFixes -> /private/tmp/portia-070-core-ergonomics/src/Portia.CodeFixes/bin/Release/netstandard2.0/Portia.CodeFixes.dll
+  Portia.ConsumerTests -> /private/tmp/portia-070-core-ergonomics/test/Portia.ConsumerTests/bin/Release/net10.0/Portia.ConsumerTests.dll
+Test run for /private/tmp/portia-070-core-ergonomics/test/Portia.ConsumerTests/bin/Release/net10.0/Portia.ConsumerTests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:    17, Skipped:     0, Total:    17, Duration: 5 s - Portia.ConsumerTests.dll (net10.0)

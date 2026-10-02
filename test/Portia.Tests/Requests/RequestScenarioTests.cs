@@ -316,6 +316,69 @@ public sealed class RequestScenarioTests
         Assert.Equal(2, log.Handled);
     }
 
+    /// <summary>A finite scenario stops without requesting another item and disposes both owners.</summary>
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(5, 2)]
+    public async Task ShouldBoundStreamAndDisposeScope(int limit, int count)
+    {
+        await using var provider = Provider();
+        var log = provider.GetRequiredService<ScenarioLog>();
+        var expectations = RequestScenario.For(provider).GivenActor(Member)
+            .When(new ScenarioStream(), limit).ExpectSuccess().ExpectHandled();
+        var items = await expectations;
+        Assert.Equal(Enumerable.Range(1, count), items);
+        Assert.Equal(items, await expectations);
+        Assert.Equal(count, log.StreamProduced);
+        Assert.Equal(1, log.StreamDisposed);
+        Assert.True(Assert.Single(log.Scopes).Disposed);
+    }
+
+    /// <summary>Invalid limits are rejected before a scenario can dispatch.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void ShouldRejectInvalidStreamLimits(int limit)
+    {
+        using var provider = Provider();
+        Assert.Throws<ArgumentOutOfRangeException>(() => RequestScenario.For(provider).When(new ScenarioStream(), limit));
+        Assert.Empty(provider.GetRequiredService<ScenarioLog>().Scopes);
+    }
+
+    /// <summary>Cancellation between items unwinds the enumerator and asynchronous service scope.</summary>
+    [Fact]
+    public async Task ShouldCancelStreamAndDisposeScope()
+    {
+        await using var provider = Provider();
+        using var cancellation = new CancellationTokenSource();
+        var log = provider.GetRequiredService<ScenarioLog>();
+        log.CancelStream = cancellation;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioStream(), cancellation.Token));
+        Assert.Equal(1, log.StreamDisposed);
+        Assert.True(Assert.Single(log.Scopes).Disposed);
+    }
+
+    /// <summary>Caller cancellation reaches unary lifecycle components and asynchronous scope disposal.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldCancelUnaryRequestAndDisposeScope(bool query)
+    {
+        await using var provider = Provider();
+        using var cancellation = new CancellationTokenSource();
+        var log = provider.GetRequiredService<ScenarioLog>();
+        Task operation = query
+            ? RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCancelledQuery(), cancellation.Token).AsTask()
+            : RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCancelledCommand(), cancellation.Token).AsTask();
+        await log.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
+        Assert.True(Assert.Single(log.Scopes).Disposed);
+        Assert.Equal(query ? 3 : 4, log.Tokens.Count);
+        Assert.All(log.Tokens, token => Assert.Equal(cancellation.Token, token));
+    }
+
     static ServiceProvider Provider(RequestErrorKind? guardFailure = null, IPermissionEvaluator? permissions = null)
     {
         var services = new ServiceCollection();
@@ -328,6 +391,11 @@ public sealed class RequestScenarioTests
         _ = services.AddScoped<ScenarioPermissionCommandHandler>();
         _ = services.AddScoped<ScenarioQueryHandler>();
         _ = services.AddScoped<ScenarioStreamHandler>();
+        _ = services.AddScoped<CancelledHandler>();
+        _ = services.AddScoped<CancelledBehavior>();
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(new RequestPipelineBehaviorRegistration<ScenarioCancelledCommand, CancelledBehavior>(0));
+        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<ScenarioCancelledCommand, CancelledHandler>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<ScenarioCancelledQuery, CancelledHandler, int>());
         _ = services.AddScoped<ScenarioExplodingCommandHandler>();
         _ = services.AddScoped<ScenarioConflictCommandHandler>();
         _ = services.AddScoped<ScenarioNestedDenialStreamHandler>();
@@ -367,11 +435,24 @@ public sealed class RequestScenarioTests
     {
         public RequestErrorKind? GuardFailure { get; init; }
         public int Handled { get; set; }
+        public int StreamDisposed { get; set; }
+        public int StreamProduced { get; set; }
+        public List<CancellationToken> Tokens { get; } = [];
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public CancellationTokenSource? CancelStream { get; set; }
         public List<string> Steps { get; } = [];
         public List<ScopeMarker> Scopes { get; } = [];
     }
 
-    internal sealed class ScopeMarker;
+    internal sealed class ScopeMarker : IAsyncDisposable
+    {
+        public bool Disposed { get; private set; }
+        public ValueTask DisposeAsync()
+        {
+            Disposed = true;
+            return ValueTask.CompletedTask;
+        }
+    }
 
     internal interface IScenarioFamily : IRequestBase;
 
@@ -382,6 +463,42 @@ public sealed class RequestScenarioTests
     internal sealed record ScenarioPermissionCommand : IRequest;
 
     internal sealed record ScenarioQuery : IRequest<int>, IScenarioFamily;
+
+    internal sealed record ScenarioCancelledCommand : IRequest, IScenarioFamily;
+    internal sealed record ScenarioCancelledQuery : IRequest<int>, IScenarioFamily;
+
+    internal sealed class CancelledBehavior(ScenarioLog log) : IRequestPipelineBehavior<ScenarioCancelledCommand>
+    {
+        public ValueTask<Result> HandleAsync(IRequestContext<ScenarioCancelledCommand> context, RequestPipelineNext next, CancellationToken ct)
+        {
+            log.Tokens.Add(ct);
+            return next(ct);
+        }
+    }
+
+    internal sealed class CancelledHandler(ScenarioLog log, ScopeMarker scope)
+        : IRequestHandler<ScenarioCancelledCommand>, IRequestHandler<ScenarioCancelledQuery, int>
+    {
+        public async ValueTask<Result> HandleAsync(IRequestContext<ScenarioCancelledCommand> context, CancellationToken ct)
+        {
+            await WaitAsync(ct);
+            return Result.Success;
+        }
+
+        public async ValueTask<Result<int>> HandleAsync(IRequestContext<ScenarioCancelledQuery> context, CancellationToken ct)
+        {
+            await WaitAsync(ct);
+            return Result<int>.Success(1);
+        }
+
+        async Task WaitAsync(CancellationToken ct)
+        {
+            log.Scopes.Add(scope);
+            log.Tokens.Add(ct);
+            log.Started.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+        }
+    }
 
     internal sealed record ScenarioStream : IStreamRequest<int>, IScenarioFamily;
 
@@ -438,14 +555,26 @@ public sealed class RequestScenarioTests
             ValueTask.FromResult(Result<int>.Success(42));
     }
 
-    internal sealed class ScenarioStreamHandler : IStreamRequestHandler<ScenarioStream, int>
+    internal sealed class ScenarioStreamHandler(ScenarioLog log, ScopeMarker scope) : IStreamRequestHandler<ScenarioStream, int>
     {
         public async IAsyncEnumerable<int> HandleAsync(IRequestContext<ScenarioStream> context,
             [EnumeratorCancellation] CancellationToken ct)
         {
-            yield return 1;
-            await Task.Yield();
-            yield return 2;
+            log.Scopes.Add(scope);
+            try
+            {
+                log.StreamProduced++;
+                yield return 1;
+                log.CancelStream?.Cancel();
+                await Task.Yield();
+                ct.ThrowIfCancellationRequested();
+                log.StreamProduced++;
+                yield return 2;
+            }
+            finally
+            {
+                log.StreamDisposed++;
+            }
         }
     }
 
@@ -455,18 +584,22 @@ public sealed class RequestScenarioTests
             throw new DivideByZeroException();
     }
 
-    internal sealed class ScenarioAuthorizer : IRequestAuthorizer<IScenarioFamily>
+    internal sealed class ScenarioAuthorizer(ScenarioLog log) : IRequestAuthorizer<IScenarioFamily>
     {
-        public ValueTask<Result> AuthorizeAsync(IRequestContext<IScenarioFamily> context, CancellationToken ct) =>
-            ValueTask.FromResult(context.Actor.Identity?.IsAuthenticated == true
+        public ValueTask<Result> AuthorizeAsync(IRequestContext<IScenarioFamily> context, CancellationToken ct)
+        {
+            log.Tokens.Add(ct);
+            return ValueTask.FromResult(context.Actor.Identity?.IsAuthenticated == true
                 ? Result.Success
                 : Result.Failure(new RequestError(RequestErrorKind.Forbidden, "Members only.")));
+        }
     }
 
     internal sealed class SlugGuard(ScenarioLog log) : IRequestGuard<IScenarioFamily>
     {
         public ValueTask<Result> GuardAsync(IRequestContext<IScenarioFamily> context, CancellationToken ct)
         {
+            log.Tokens.Add(ct);
             log.Steps.Add("guard");
             return ValueTask.FromResult(log.GuardFailure is { } kind
                 ? Result.Failure(new RequestError(kind, "The slug is taken."))

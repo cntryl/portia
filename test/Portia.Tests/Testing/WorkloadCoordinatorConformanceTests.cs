@@ -77,8 +77,10 @@ public sealed class WorkloadCoordinatorConformanceTests
     public async Task ShouldBoundCancellationCleanup()
     {
         var verification = WorkloadCoordinatorConformance.VerifyAsync(new IgnoringCancellationProbe()).AsTask();
+        // The probe still enforces its 500 ms convergence limit. This independent hang watchdog
+        // needs scheduler headroom on loaded runners; its timeout must never count as conformance.
         var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            verification.WaitAsync(TimeSpan.FromSeconds(2)));
+            verification.WaitAsync(TimeSpan.FromSeconds(10)));
 
         Assert.Contains("shutdown", exception.Message, StringComparison.OrdinalIgnoreCase);
     }

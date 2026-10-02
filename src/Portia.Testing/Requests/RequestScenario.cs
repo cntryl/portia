@@ -50,14 +50,20 @@ public sealed class RequestScenario
     /// <summary>Describes dispatching a request with no result.</summary>
     /// <param name="request">The request.</param>
     /// <returns>Expectations to add before awaiting.</returns>
-    public RequestExpectations When(IRequest request)
+    public RequestExpectations When(IRequest request) => When(request, CancellationToken.None);
+
+    /// <summary>Describes dispatching a request with caller cancellation.</summary>
+    /// <param name="request">The request.</param>
+    /// <param name="cancellationToken">Cancellation propagated through the request lifecycle.</param>
+    /// <returns>Expectations to add before awaiting.</returns>
+    public RequestExpectations When(IRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         return new RequestExpectations(Definition(request, async (bus, context) =>
         {
             try
             {
-                var result = await bus.DispatchAsync(request, context).ConfigureAwait(false);
+                var result = await bus.DispatchAsync(request, context, cancellationToken).ConfigureAwait(false);
                 return (ScenarioOutcome.From(result.IsSuccess, result.Error), result);
             }
             catch (EventStreamConcurrencyException)
@@ -72,14 +78,21 @@ public sealed class RequestScenario
     /// <typeparam name="TOut">The type of the value on success.</typeparam>
     /// <param name="request">The request.</param>
     /// <returns>Expectations to add before awaiting.</returns>
-    public RequestExpectations<TOut> When<TOut>(IRequest<TOut> request)
+    public RequestExpectations<TOut> When<TOut>(IRequest<TOut> request) => When(request, CancellationToken.None);
+
+    /// <summary>Describes dispatching a request with caller cancellation.</summary>
+    /// <typeparam name="TOut">The successful result type.</typeparam>
+    /// <param name="request">The request.</param>
+    /// <param name="cancellationToken">Cancellation propagated through the request lifecycle.</param>
+    /// <returns>Expectations to add before awaiting.</returns>
+    public RequestExpectations<TOut> When<TOut>(IRequest<TOut> request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         return new RequestExpectations<TOut>(Definition(request, async (bus, context) =>
         {
             try
             {
-                var result = await bus.DispatchAsync(request, context).ConfigureAwait(false);
+                var result = await bus.DispatchAsync(request, context, cancellationToken).ConfigureAwait(false);
                 return (ScenarioOutcome.From(result.IsSuccess, result.Error), result);
             }
             catch (EventStreamConcurrencyException)
@@ -94,7 +107,31 @@ public sealed class RequestScenario
     /// <typeparam name="TOut">The type of each item.</typeparam>
     /// <param name="request">The request.</param>
     /// <returns>Expectations to add before awaiting.</returns>
-    public StreamRequestExpectations<TOut> When<TOut>(IStreamRequest<TOut> request)
+    public StreamRequestExpectations<TOut> When<TOut>(IStreamRequest<TOut> request) => When(request, CancellationToken.None);
+
+    /// <summary>Collects a stream with caller cancellation.</summary>
+    /// <typeparam name="TOut">The item type.</typeparam>
+    /// <param name="request">The request.</param>
+    /// <param name="cancellationToken">Cancellation propagated through dispatch and enumeration.</param>
+    /// <returns>Expectations for the observed sequence.</returns>
+    public StreamRequestExpectations<TOut> When<TOut>(IStreamRequest<TOut> request, CancellationToken cancellationToken) =>
+        Stream(request, null, cancellationToken);
+
+    /// <summary>Collects at most the requested number of items, disposing the stream when the limit is reached.</summary>
+    /// <typeparam name="TOut">The item type.</typeparam>
+    /// <param name="request">The request.</param>
+    /// <param name="maxItems">A positive maximum; early completion is accepted.</param>
+    /// <param name="cancellationToken">Cancellation propagated through dispatch and enumeration.</param>
+    /// <returns>Expectations for the observed sequence.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The limit is not positive.</exception>
+    public StreamRequestExpectations<TOut> When<TOut>(IStreamRequest<TOut> request, int maxItems,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxItems);
+        return Stream(request, maxItems, cancellationToken);
+    }
+
+    StreamRequestExpectations<TOut> Stream<TOut>(IStreamRequest<TOut> request, int? maxItems, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         return new StreamRequestExpectations<TOut>(Definition(request, async (bus, context) =>
@@ -102,8 +139,12 @@ public sealed class RequestScenario
             var items = new List<TOut>();
             try
             {
-                await foreach (var item in bus.DispatchStreamAsync(request, context).ConfigureAwait(false))
+                await foreach (var item in bus.DispatchStreamAsync(request, context, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+                {
                     items.Add(item);
+                    if (items.Count == maxItems)
+                        break;
+                }
             }
             catch (RequestAuthorizationException ex)
             {

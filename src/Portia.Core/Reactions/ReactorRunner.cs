@@ -20,14 +20,14 @@ public sealed class ReactorRunner(
     readonly IDomainEventReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
 
     /// <summary>
-    ///     Processes available events. Single-event reactors checkpoint each event; batch reactors
+    ///     Processes one pass, bounded by the default source-record budget. Single-event reactors checkpoint each event; batch reactors
     ///     checkpoint after the bounded batch succeeds. Failures can replay external effects.
     /// </summary>
     /// <param name="reactor">The reactor to run.</param>
     /// <param name="checkpoint">The authoritative progress the pass starts from.</param>
-    /// <param name="maxBatchSize">The upper bound on events read per pass; ignored by single-event reactors.</param>
+    /// <param name="maxBatchSize">The upper bound on events per committed batch; ignored by single-event reactors. The pass budget remains independent.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>The progress reached by this pass.</returns>
+    /// <returns>The progress reached by this pass. Resume from it until a pass makes no progress.</returns>
     /// <exception cref="InvalidOperationException">The principal provider returned a non-system principal.</exception>
     public async ValueTask<ProjectionCheckpoint> RunAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
         int maxBatchSize = 512, CancellationToken ct = default)

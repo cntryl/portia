@@ -140,3 +140,31 @@ against stream reads, stream-offset resumes, pattern reads, and every issued cur
 include UTC timestamps, identities, correlation/causation, execution/actor attribution, and an audit
 record. These exercised round-trip, ordering, isolation, and append-conflict checks do not establish
 crash durability or atomicity under untested failure injection.
+
+### Cancellation and finite request streams
+
+Pass a caller token to `When(request, cancellationToken)` for commands, queries, or streams.
+Cancellation propagates through the real request lifecycle and asynchronous enumeration; it is
+reported as cancellation rather than a successful scenario result. The scenario disposes its
+asynchronous service scope even when dispatch or enumeration throws.
+
+For a long-running stream, use `When(streamRequest, maxItems: 10, cancellationToken)`.
+The positive limit is validated before dispatch. The scenario collects at most ten items,
+accepts earlier completion, and disposes the enumerator upon reaching the limit. `ExpectItems`
+asserts exactly the sequence collected. Repeated awaits of the same expectations reuse its result.
+
+### Running bounded processors manually
+
+`ProjectorRunner.RunAsync` and `ReactorRunner.RunAsync` execute one bounded pass, not complete
+catch-up. The default source budget is 4,096 records. `MaxBatchSize` bounds each transactional
+commit separately (and is ignored by single-event processors). Keep the returned checkpoint and
+run again until it does not advance. An empty pass means this reader observed no further progress;
+it does not promise that another producer cannot append later. Cancellation interrupts the pass,
+so restart from the authoritative committed checkpoint after a failure.
+
+The compiled [manual example](../smoke/Portia.ProjectionStore.PackageConsumer/ManualBoundedPassExample.cs)
+seeds 4,097 events, resumes both processors after the first 4,096, checks the final event, verifies
+an empty pass, and exercises cancellation. Run it with
+`dotnet run -c Release --project smoke/Portia.ProjectionStore.PackageConsumer`.
+CI also runs this example against freshly packed packages. Returned checkpoints are sufficient
+for this catch-up loop; no public pass-result API is needed.
