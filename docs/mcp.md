@@ -43,6 +43,7 @@ Presentation metadata can be refined without changing the domain request:
 ```
 
 MCP annotations are client hints, never authorization or execution policy.
+Portia never automatically retries commands, including tools marked `Idempotent()`.
 
 ## Resources and prompts
 

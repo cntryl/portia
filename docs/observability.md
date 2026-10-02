@@ -32,6 +32,8 @@ trace. Queue, notice, and schedule producers end their send span before delivery
 retry, or schedule firing starts a distinct root trace linked to the producer context, with at most
 one process span and one execute child. Queue retries never parent their next attempt, notice fanout
 does not create a wide producer trace, and recurring schedules never extend an earlier firing.
+Linked deliveries remain roots even when an unrelated activity is ambient. Wire trace context is
+marked remote at ingress so parent-based samplers distinguish received context from local activity.
 
 Polling, reservation renewal, acknowledgement, retry delay, checkpoints, event processing, tenant
 scans, reconciliation, assignment, and hosted-service lifecycle create no spans. Envelopes propagate
@@ -53,6 +55,8 @@ fault). Expected
 `RequestError` values record their bounded kind and error status without the business message.
 Unexpected failures, including unrequested cancellation, record `fault`, error status, and the full
 exception event when the activity was sampled for data.
+An unrelated exception remains a fault even if the caller token was also canceled. Stream
+preflight exceptions retain their exception event and every started request balances the active count.
 
 ## Instruments
 

@@ -1,0 +1,5 @@
+Test run for /private/tmp/portia-070-core-transport/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+Results File: /private/tmp/portia-070-core-transport/test/Portia.Tests/TestResults/integration.trx
+
+Passed!  - Failed:     0, Passed:    24, Skipped:     0, Total:    24, Duration: 21 s - Portia.Tests.dll (net10.0)
