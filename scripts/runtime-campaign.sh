@@ -14,7 +14,7 @@ dotnet run --project "$root/bench/Portia.Benchmarks/Portia.Benchmarks.csproj" -c
 cd "$root"
 dotnet run --project bench/Portia.Benchmarks/Portia.Benchmarks.csproj -c Release --no-build -- \
   --filter '*RequestLifecycle*' '*RequestContextAndPreflight*' '*RequestDispatchBenchmarks*' '*RequestTelemetryBenchmarks*' \
-    '*AggregateLifecycle*' '*EnvelopeLifecycle*' '*AggregateRepositoryBenchmarks*' '*HttpLifecycle*' '*HttpBindingBenchmarks*' \
+    '*AggregateLifecycle*' '*EnvelopeLifecycle*' '*FitzSerializationCpu*' '*AggregateRepositoryBenchmarks*' '*HttpLifecycle*' '*HttpBindingBenchmarks*' \
     '*MixedProcessorLifecycle*' '*MixedReactorLifecycle*' '*ReactorDispatchBenchmarks*' \
   --iterationCount 20 --warmupCount 5 --launchCount 1 --iterationTime 250 \
   --outliers DontRemove --keepFiles --allStats \

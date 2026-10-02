@@ -98,11 +98,11 @@ static class FitzAppendCampaign
             new WebSocketTransport(configuration.Url, configuration.Timeout ?? TimeSpan.FromSeconds(20),
                 configuration.MaxFrameSize, configuration.WebSocket, configuration.Heartbeat), counts)));
 
-    static JsonDomainEventSerializer Serializer() => new(
+    internal static JsonDomainEventSerializer Serializer() => new(
         new DomainEventTypeCatalog().Register<FitzCampaignEvent>(1, "benchmark.fitz.append"), null,
         FitzCampaignJsonContext.Default.Options);
 
-    static DomainEvent[] CreateEvents(Uuid aggregate, ulong position, int count, string payload) =>
+    internal static DomainEvent[] CreateEvents(Uuid aggregate, ulong position, int count, string payload) =>
         Enumerable.Range(0, count).Select(index =>
         {
             var ev = new FitzCampaignEvent(payload);

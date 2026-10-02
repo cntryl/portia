@@ -28,6 +28,8 @@ static class RuntimeQualification
                 var benchmark = new EnvelopeLifecycleBenchmarks { PayloadLength = size, Text = text };
                 benchmark.Setup();
             }
+        foreach (var size in new[] { 256, 4096 })
+            new FitzSerializationCpuBenchmarks { PayloadBytes = size }.Setup();
         foreach (var transport in new[] { "inprocess", "loopback" })
             foreach (var size in new[] { 256, 4096, 65536 })
             {
