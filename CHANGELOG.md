@@ -8,6 +8,18 @@ alerts are as breaking to change as an API.
 
 ### Fixed
 
+- Terminal unexpected queue read faults record one fault, one terminal warning, and one terminal
+  disposition before continuing; classified envelope and ownership policies remain intact.
+- Linked deliveries start independent roots under ambient activities, and received wire context
+  is marked remote for sampling. Request telemetry classifies the actual exception, retains stream
+  preflight exception events, and balances active counts.
+- MCP input schemas follow strict binding requiredness and setter nullability, cache per configured
+  JSON options, and diagnose unsupported root shapes before serving. Output metadata stays separate.
+- MCP resource reads and prompt gets export bounded process/execute spans and correlated unexpected
+  fault logs. Caller cancellation propagates and deadline failures remain sanitized.
+- Development commands exclude both live integration categories; MCP and serializer documentation
+  now describe the implemented tools/resources/prompts and generated metadata contracts.
+
 - `PORTIA107` diagnoses discarded immutable request assertions and expression-bodied void callbacks.
 - JSON context factories use injective assembly/context identities; referenced compiled factory metadata
   remains supported. `PORTIA030` diagnoses unusable contexts before factory or registration emission.

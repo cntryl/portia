@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace Cntryl.Portia;
 
 /// <summary>
-///     A reflection-at-the-wire-boundary (not hot-path) <see cref="IDomainEventSerializer" />: a JSON
+///     A source-generated-metadata <see cref="IDomainEventSerializer" />: a JSON
 ///     envelope carrying an event's logical name and schema version (see
 ///     <see cref="DiscriminatorAttribute" />), its metadata, and its business payload. Deserializing
 ///     resolves the event's current CLR type via <see cref="DomainEventTypeCatalog" /> — an exact

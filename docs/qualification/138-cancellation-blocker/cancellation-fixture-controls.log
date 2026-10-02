@@ -1,0 +1,19 @@
+  Portia.Abstractions -> /private/tmp/portia-pass1-transport-mcp/src/Portia.Abstractions/bin/Release/net10.0/Portia.Abstractions.dll
+  Portia.Telemetry -> /private/tmp/portia-pass1-transport-mcp/src/Portia.Telemetry/bin/Release/net10.0/Portia.Telemetry.dll
+  Portia.Storage.Abstractions -> /private/tmp/portia-pass1-transport-mcp/src/Portia.Storage.Abstractions/bin/Release/net10.0/Portia.Storage.Abstractions.dll
+  Portia.Core -> /private/tmp/portia-pass1-transport-mcp/src/Portia.Core/bin/Release/net10.0/Portia.Core.dll
+  Portia.DependencyInjection -> /private/tmp/portia-pass1-transport-mcp/src/Portia.DependencyInjection/bin/Release/net10.0/Portia.DependencyInjection.dll
+  Portia.Testing -> /private/tmp/portia-pass1-transport-mcp/src/Portia.Testing/bin/Release/net10.0/Portia.Testing.dll
+  Portia.Mcp -> /private/tmp/portia-pass1-transport-mcp/src/Portia.Mcp/bin/Release/net10.0/Portia.Mcp.dll
+  Portia.AspNetCore.Generators -> /private/tmp/portia-pass1-transport-mcp/src/Portia.AspNetCore.Generators/bin/Release/netstandard2.0/Portia.AspNetCore.Generators.dll
+  Portia.AspNetCore -> /private/tmp/portia-pass1-transport-mcp/src/Portia.AspNetCore/bin/Release/net10.0/Portia.AspNetCore.dll
+  Portia.Mcp.AspNetCore -> /private/tmp/portia-pass1-transport-mcp/src/Portia.Mcp.AspNetCore/bin/Release/net10.0/Portia.Mcp.AspNetCore.dll
+  Portia.Mcp.Testing -> /private/tmp/portia-pass1-transport-mcp/src/Portia.Mcp.Testing/bin/Release/net10.0/Portia.Mcp.Testing.dll
+  Portia.Generators -> /private/tmp/portia-pass1-transport-mcp/src/Portia.Generators/bin/Release/netstandard2.0/Portia.Generators.dll
+  Portia.McpContracts -> /private/tmp/portia-pass1-transport-mcp/test/Portia.McpContracts/bin/Release/net10.0/Portia.McpContracts.dll
+  Portia.McpStdioHost -> /private/tmp/portia-pass1-transport-mcp/smoke/Portia.McpStdioHost/bin/Release/net10.0/Portia.McpStdioHost.dll
+  Portia.McpTests -> /private/tmp/portia-pass1-transport-mcp/test/Portia.McpTests/bin/Release/net10.0/Portia.McpTests.dll
+Test run for /private/tmp/portia-pass1-transport-mcp/test/Portia.McpTests/bin/Release/net10.0/Portia.McpTests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:    28, Skipped:     0, Total:    28, Duration: 12 s - Portia.McpTests.dll (net10.0)
