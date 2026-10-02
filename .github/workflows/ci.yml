@@ -48,6 +48,9 @@ jobs:
       - name: Build solution
         run: dotnet build Portia.slnx --configuration Release --no-restore
 
+      - name: Qualify actual Prometheus dashboard queries
+        run: scripts/qualify-prometheus.sh "$RUNNER_TEMP/portia-prometheus-evidence"
+
       - name: Test solution
         run: >-
           dotnet test Portia.slnx

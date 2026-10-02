@@ -32,3 +32,5 @@ scripts/qualify-prometheus.sh /tmp/portia-prometheus-evidence
 ```
 
 Final-head hosted qualification must additionally pass packed consumers, Linux NativeAOT, broker/storage tests and CodeQL; exact merged-commit checks gate tracker updates.
+
+Focused runner, linked-root, sampling and existing telemetry controls: 131 passes, zero skips (`runner-controls.log`). CI runs the actual Prometheus qualification script on every final head and merged commit as well as the stable-dependency gate.

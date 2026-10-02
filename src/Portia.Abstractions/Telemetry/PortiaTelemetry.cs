@@ -478,8 +478,9 @@ public static partial class PortiaTelemetry
     /// <param name="logger">An optional logger for the structured fault event.</param>
     /// <param name="recordException">Whether to add an exception event; delivery runners avoid recording one twice.</param>
     /// <remarks>
-    ///     This method never starts an activity. When an activity is already current,
-    ///     <paramref name="exception" /> is attached to it as an exception event. Metrics retain only
+    ///     This method never starts an activity. When an activity is already current and
+    ///     <paramref name="recordException" /> is enabled, <paramref name="exception" /> is attached
+    ///     to it as an exception event. Metrics retain only
     ///     the bounded runner and stage. The structured log retains the exception type and full
     ///     exception for operator diagnosis.
     /// </remarks>
