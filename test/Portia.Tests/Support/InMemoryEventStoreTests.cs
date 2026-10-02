@@ -114,6 +114,50 @@ public sealed class InMemoryEventStoreTests
         Assert.Equal(new DomainEvent[] { other, shared, rejected }, resource.Select(record => record.Event));
     }
 
+    /// <summary>Verifies an event ID already committed to the stream is rejected without publishing the batch.</summary>
+    [Fact]
+    public async Task ShouldRejectEventIdAlreadyCommittedToStream()
+    {
+        var id = Uuid.CreateVersion4();
+        var stream = new EventStreamAddress("test", "aggregates", id.ToString());
+        var store = new InMemoryEventStore();
+        var first = Committed(new ValueChanged(1), id, 1);
+        await store.AppendAsync(stream, 0, [first]);
+        var fresh = Committed(new ValueChanged(2), id, 2);
+
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.AppendAsync(stream, 1, [fresh, first]));
+        await store.AppendAsync(stream, 1, [fresh]);
+
+        var events = await store.ReadAsync(stream).Select(record => record.Event).ToListAsync();
+        Assert.Equal(new DomainEvent[] { first, fresh }, events);
+    }
+
+    /// <summary>Verifies seeding one stream by individual appends allocates near-linearly, not quadratically.</summary>
+    [Fact]
+    public async Task ShouldAllocateNearLinearlyWhenSeedingOneStreamByIndividualAppends()
+    {
+        await SeedAsync(256);
+        var small = await SeedAsync(1_024);
+        var large = await SeedAsync(4_096);
+
+        // Four times the events: linear growth is ~4x, a per-append rebuild of the ID set is ~16x.
+        Assert.True(large < small * 8.0, $"4,096 appends allocated {large:N0} bytes vs {small:N0} for 1,024.");
+    }
+
+    static async Task<long> SeedAsync(int count)
+    {
+        var id = Uuid.CreateVersion4();
+        var stream = new EventStreamAddress("test", "aggregates", id.ToString());
+        var store = new InMemoryEventStore();
+        var events = Enumerable.Range(1, count).Select(i => Committed(new ValueChanged(i), id, (ulong)i)).ToArray();
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < events.Length; i++)
+            await store.AppendAsync(stream, (ulong)i, [events[i]]);
+
+        return GC.GetAllocatedBytesForCurrentThread() - before;
+    }
+
     static T Committed<T>(T ev, Uuid aggregateId, ulong aggregateVersion)
         where T : DomainEvent
     {
