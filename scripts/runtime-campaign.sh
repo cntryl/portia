@@ -17,4 +17,5 @@ dotnet run --project bench/Portia.Benchmarks/Portia.Benchmarks.csproj -c Release
     '*AggregateLifecycle*' '*EnvelopeLifecycle*' '*AggregateRepositoryBenchmarks*' '*HttpLifecycle*' '*HttpBindingBenchmarks*' \
     '*MixedProcessorLifecycle*' '*MixedReactorLifecycle*' '*ReactorDispatchBenchmarks*' \
   --iterationCount 20 --warmupCount 5 --launchCount 1 --iterationTime 250 \
+  --outliers DontRemove --keepFiles --allStats \
   --exporters json csv --artifacts "$output/BenchmarkDotNet.Artifacts" > "$output/campaign.log" 2>&1
