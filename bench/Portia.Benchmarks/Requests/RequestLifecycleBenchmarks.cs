@@ -205,6 +205,7 @@ sealed class RuntimeApplication : IDisposable
     static readonly RuntimeCommand Command = new();
     static readonly RuntimeQuery Query = new();
     static readonly RuntimeStream Stream = new();
+    static readonly RuntimeSecure Secure = new();
     readonly ServiceProvider _provider;
     readonly IServiceScope _scope;
     readonly RuntimeState _state;
@@ -261,7 +262,7 @@ sealed class RuntimeApplication : IDisposable
         return await CollectAsync(boundary == "dispatch" ? Bus.DispatchStreamAsync(Stream, Context) : Bus.StreamAsync(Stream, Actor));
     }
 
-    internal ValueTask<Result> SecureAsync() => Bus.SendAsync(new RuntimeSecure(), Actor);
+    internal ValueTask<Result> SecureAsync() => Bus.SendAsync(Secure, Actor);
 
     static async ValueTask<int> CollectAsync(IAsyncEnumerable<int> values)
     {
@@ -277,6 +278,15 @@ sealed class RuntimeApplication : IDisposable
         {
             if (!(await CommandAsync(boundary)).IsSuccess || (await QueryAsync(boundary)).Value != 42 || await StreamAsync(boundary) != 28)
                 throw new InvalidOperationException("Lifecycle fixture failed to consume the expected results.");
+            if (boundary == "scope")
+            {
+                await using var scope = _provider.CreateAsyncScope();
+                await VerifySequenceAsync(scope.ServiceProvider.GetRequiredService<IRequestBus>().StreamAsync(Stream, Actor));
+            }
+            else
+            {
+                await VerifySequenceAsync(boundary == "dispatch" ? Bus.DispatchStreamAsync(Stream, Context) : Bus.StreamAsync(Stream, Actor));
+            }
         }
         var disposed = _state.StreamDisposals;
         await foreach (var _ in Bus.StreamAsync(Stream, Actor))
@@ -297,6 +307,18 @@ sealed class RuntimeApplication : IDisposable
         if (!(await SecureAsync()).IsSuccess || string.Join(',', _state.Order) != "permission,authorizer,behavior,guard,handler")
             throw new InvalidOperationException("Preflight fixture violated pipeline ordering.");
         _state.RecordOrder = false;
+    }
+
+    static async Task VerifySequenceAsync(IAsyncEnumerable<int> values)
+    {
+        var index = 0;
+        await foreach (var value in values)
+        {
+            if (index >= 8 || value != index++)
+                throw new InvalidOperationException("Finite lifecycle stream did not preserve the expected sequence.");
+        }
+        if (index != 8)
+            throw new InvalidOperationException("Finite lifecycle stream emitted the wrong number of items.");
     }
 
     public void Dispose()
