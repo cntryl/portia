@@ -41,3 +41,10 @@ MCP helper changes remain isolated in the preserved earlier worktree.
 Raw command output is retained with hashes. Empty consumer logs indicate silent successful
 assertions; the shell pipeline completed with exit status zero. Hosted final-head and exact merged
 commit CI/CodeQL are separate gates, not inferred from these local controls.
+
+Hosted PR CI exposed an existing cancellation-conformance fixture watchdog race under load:
+its outer two-second timeout expired instead of observing the probe's 500 ms convergence violation.
+The probe's acceptance limit is unchanged; the independent hang watchdog now allows ten seconds
+of scheduling headroom and still requires the exact ConformanceViolationException (a watchdog
+TimeoutException remains failure). The same original head passed push CI; the repaired final head
+must qualify independently, with no test exclusions or blanket failure acceptance.
