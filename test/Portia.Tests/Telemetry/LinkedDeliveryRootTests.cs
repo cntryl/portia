@@ -33,6 +33,33 @@ public sealed class LinkedDeliveryRootTests
         Assert.Equal("remote.rpc", Assert.Single(exported).GetTagItem("portia.request.name"));
     }
 
+    /// <summary>A linked delivery uses root sampling independently of an unrelated sampled caller.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ShouldUseRootSamplingForLinkedDelivery(bool sampleRoot)
+    {
+        var exported = new List<Activity>();
+        var services = new ServiceCollection();
+        services.AddOpenTelemetry().WithPortia().WithTracing(tracing => tracing
+            .SetSampler(new ParentBasedSampler(sampleRoot ? new AlwaysOnSampler() : new AlwaysOffSampler()))
+            .AddInMemoryExporter(exported));
+        using var provider = services.BuildServiceProvider();
+        var tracer = provider.GetRequiredService<TracerProvider>();
+        using var caller = new Activity("sampled-unrelated-caller").SetIdFormat(ActivityIdFormat.W3C).Start();
+        caller.ActivityTraceFlags = ActivityTraceFlags.Recorded;
+        using (var process = PortiaTelemetry.StartProcess("linked.sampling", new QueueInvocation("queue://test", 1),
+                   new RequestTraceContext(Parent)))
+        {
+            Assert.Equal(sampleRoot, process?.Recorded == true);
+            if (process is not null)
+                Assert.Equal(default, process.ParentSpanId);
+        }
+        Assert.Same(caller, Activity.Current);
+        Assert.True(tracer.ForceFlush());
+        Assert.Equal(sampleRoot ? 1 : 0, exported.Count);
+    }
+
     /// <summary>Retries and firings preserve a producer link and restore ambient state through asynchronous scopes.</summary>
     [Theory]
     [InlineData("queue", "valid")]

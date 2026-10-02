@@ -49,6 +49,16 @@ public static class RequestDispatch
         ArgumentNullException.ThrowIfNull(delivery);
 
         using var process = StartProcess(delivery);
+        return await SendInProcessAsync(actorValidator, bus, request, delivery, process, ct, complete)
+            .ConfigureAwait(false);
+    }
+
+    // Delivery runners own this existing activity through disposition and cleanup logging.
+    // Public dispatch still owns and disposes its own process, with no additional spans.
+    internal static async ValueTask<RequestDispatchOutcome> SendInProcessAsync(
+        IRequestActorValidator actorValidator, IRequestBus bus, IRequest request, RequestDelivery delivery,
+        Activity? process, CancellationToken ct, Func<Result, CancellationToken, ValueTask>? complete = null)
+    {
         try
         {
             var actorResult = await actorValidator.ValidateAsync(delivery.ActorToken, ct).ConfigureAwait(false);

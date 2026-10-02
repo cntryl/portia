@@ -36,6 +36,7 @@ public sealed class RequestNotificationRunner(
             var requestName = delivered.Name ?? delivered.Request.GetType().Name;
             var transport = delivered.Invocation.TransportName;
             var completed = false;
+            using var process = PortiaTelemetry.StartProcess(requestName, delivered.Invocation, delivered.TraceContext);
             try
             {
                 await using var scope = await _scopeFactory.CreateAsync(ct).ConfigureAwait(false);
@@ -53,8 +54,6 @@ public sealed class RequestNotificationRunner(
                     // the invocation through RequestDispatch — a fired schedule must not report a
                     // different transport depending on which authentication path delivered it.
                     var trusted = delivered.ToDelivery(scope.TimeProvider);
-                    using var process = PortiaTelemetry.StartProcess(trusted.Name, trusted.Invocation,
-                        trusted.TraceContext);
                     try
                     {
                         var outcome = await scope.Bus.DispatchAsync(delivered.Request,
@@ -76,8 +75,8 @@ public sealed class RequestNotificationRunner(
                 }
                 else
                 {
-                    var dispatch = await RequestDispatch.SendAsync(scope.ActorValidator, scope.Bus,
-                        delivered.Request, delivered.ToDelivery(scope.TimeProvider), ct).ConfigureAwait(false);
+                    var dispatch = await RequestDispatch.SendInProcessAsync(scope.ActorValidator, scope.Bus,
+                        delivered.Request, delivered.ToDelivery(scope.TimeProvider), process, ct).ConfigureAwait(false);
                     completed = dispatch.WasDispatched && dispatch.Outcome.IsSuccess;
                 }
 
@@ -86,12 +85,19 @@ public sealed class RequestNotificationRunner(
                     PortiaTelemetry.RecordLostDelivery(requestName, transport, _logger);
                 }
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                PortiaTelemetry.RecordCanceled(process);
+                throw;
+            }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
                 // Nothing to abandon or redeliver at this transport's level; a failed dispatch
                 // is simply lost. Continue processing later deliveries.
+                if (process?.GetTagItem("portia.outcome") is not "fault")
+                    PortiaTelemetry.RecordFault(process, ex);
                 PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), RunnerFaultStage.Execution, ex,
-                    _logger);
+                    _logger, recordException: false);
             }
             finally
             {

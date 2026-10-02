@@ -10,8 +10,41 @@ namespace Cntryl.Portia;
 ///     no-redelivery guarantee — a failed dispatch is simply lost, never retried — holds for both an
 ///     ordinary handler failure and an actor token that fails re-validation.
 /// </summary>
+[Collection(TelemetryTestGroup.Name)]
 public sealed class RequestNotificationRunnerTests
 {
+    /// <summary>Lost and fault notifications export their own process correlation under ambient callers.</summary>
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, true)]
+    public async Task ShouldExportCorrelatedActualNotificationOutcomeLogs(bool fault, bool ambient, bool schedule)
+    {
+        using var capture = new RunnerExportCapture();
+        using var caller = ambient ? new Activity("unrelated-caller").Start() : null;
+        using var busHost = TestRequestBus.Create(telemetryFailureActionHandler:
+            fault ? new TelemetryFailureActionHandler(new InvalidOperationException("Controlled handler fault.")) : null);
+        var notifications = Enumerable.Range(1, 2).Select(_ => new RequestNotification(
+            fault || schedule ? new TelemetryFailureAction() : new ChangeValue(1),
+            fault ? "valid-token" : "invalid-token", RequestMetadata.Create(),
+            schedule ? new ScheduleInvocation("schedule://test/work/item") : new NoticeInvocation("notice://test/work/item"),
+            new RequestTraceContext(RunnerExportCapture.Parent), schedule ? RequestActor.System : null)).ToArray();
+        var runner = new RequestNotificationRunner(new FakeRequestNotificationConsumer(notifications),
+            RequestDeliveryScopes.Fixed(busHost.Bus, new TestRequestActorValidator("invalid-token")), capture.Logger<RequestNotificationRunner>());
+        await runner.RunAsync();
+        Assert.Same(caller, Activity.Current);
+        capture.AssertCorrelated(fault ? 1002 : 1004,
+            fault ? Microsoft.Extensions.Logging.LogLevel.Error : Microsoft.Extensions.Logging.LogLevel.Warning,
+            2, fault || schedule ? 2 : 0);
+        Assert.All(capture.Activities.Where(activity => activity.OperationName == PortiaTelemetry.ProcessActivityName),
+            process => Assert.True(Assert.Single(process.Links).Context.IsRemote));
+    }
+
     /// <summary>
     ///     Verifies that every delivered request is dispatched to its handler.
     /// </summary>
