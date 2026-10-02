@@ -30,6 +30,15 @@ if [[ -s "$portia_compiler_output/source-status.txt" ]]; then
   exit 1
 fi
 dotnet --info > "$portia_compiler_output/dotnet-info.txt"
-dotnet run --project bench/Portia.CompilerBenchmarks --configuration Release --no-build \
-  -- "$portia_compiler_output" "$portia_json_generator" "$portia_compiler_repetitions" "$portia_compiler_filter"
-python3 scripts/compiler-build-campaign.py "$portia_compiler_output" "$portia_build_repetitions"
+for portia_profile in plain small medium large features json http unrelated-1000 unrelated-10000 combined; do
+  if [[ -n "$portia_compiler_filter" && "$portia_profile" != *"$portia_compiler_filter"* ]]; then
+    continue
+  fi
+  # Bound memory retention and isolate each workload's compiler/JIT lifetime. Each process still
+  # performs its full output controls and warmup before collecting the declared repetitions.
+  portia_profile_output="$portia_compiler_output/profiles/$portia_profile"
+  dotnet run --project bench/Portia.CompilerBenchmarks --configuration Release --no-build \
+    -- "$portia_profile_output" "$portia_json_generator" "$portia_compiler_repetitions" "$portia_profile"
+  python3 scripts/compiler-build-campaign.py "$portia_profile_output" "$portia_build_repetitions"
+done
+python3 scripts/compiler-merge-campaign.py "$portia_compiler_output" "$portia_compiler_repetitions"

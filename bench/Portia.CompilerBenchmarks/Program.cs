@@ -59,7 +59,7 @@ static class CompilerCampaign
             .Single(type => !type.IsAbstract && typeof(IIncrementalGenerator).IsAssignableFrom(type));
         var rows = new List<Row>();
         var controls = new List<object>();
-        foreach (var workload in Workloads.Where(item => filter is null || item.Name.Contains(filter, StringComparison.Ordinal)))
+        foreach (var workload in Workloads.Where(item => string.IsNullOrEmpty(filter) || item.Name == filter))
         {
             var features = Enumerable.Range(0, workload.Features).Select(index => Feature(index, false, jsonGenerator)).ToArray();
             var replacement = Feature(0, true, jsonGenerator);
@@ -109,10 +109,13 @@ static class CompilerCampaign
                     _ = Measure(isolated, isolatedCompilation, workload.Name, "isolated.unchanged", repetition, rows, type.FullName);
                 }
                 await AnalyzeAsync(generated, workload.Name, "analyzers", repetition, rows);
+                // Persist outside measured operations. An interrupted later repetition must never
+                // truncate the completed samples, and progress is announced only after the rename.
+                await WriteAtomicAsync(Path.Combine(output, "raw.json"), JsonSerializer.Serialize(rows));
+                await WriteAtomicAsync(Path.Combine(output, "controls.json"), JsonSerializer.Serialize(controls));
+                Console.WriteLine($"{workload.Name}: saved repetition {repetition + 1}/{repetitions}.");
             }
             Console.WriteLine($"{workload.Name}: {repetitions} repetitions, valid generated output, {variants.Count} edits.");
-            await File.WriteAllTextAsync(Path.Combine(output, "raw.json"), JsonSerializer.Serialize(rows));
-            await File.WriteAllTextAsync(Path.Combine(output, "controls.json"), JsonSerializer.Serialize(controls));
         }
         await File.WriteAllTextAsync(Path.Combine(output, "environment.json"), JsonSerializer.Serialize(new
         {
@@ -147,6 +150,13 @@ static class CompilerCampaign
                 .Append(row.AllocatedBytes).Append(',').Append(row.GeneratedBytes).Append(',').Append(Csv(JsonSerializer.Serialize(row.Reasons))).Append('\n');
         await File.WriteAllTextAsync(Path.Combine(output, "raw.csv"), csv.ToString());
         await CancellationAsync(output, jsonGenerator);
+    }
+
+    static async Task WriteAtomicAsync(string path, string value)
+    {
+        var temporary = path + ".tmp";
+        await File.WriteAllTextAsync(temporary, value);
+        File.Move(temporary, path, overwrite: true);
     }
 
     static GeneratorDriver Measure(GeneratorDriver driver, Compilation compilation, string workload, string edit, int repetition, List<Row> rows, string? isolatedComponent = null)
