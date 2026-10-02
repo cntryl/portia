@@ -817,11 +817,12 @@ public sealed class QueueRunnerTests
             throwOnInvocation: throwInvocation);
         var next = new FakeQueuedRequest(new ChangeValue(9));
         var handler = new RecordingTerminalHandler();
+        var logger = new CapturingLogger();
         using var deliveries = ListenToDeliveries(out var outcomes);
         using var faults = ListenToRunnerFaults(out var recordedFaults);
         var runner = new QueueRunner(new FakeQueueConsumer([failed, next]), RequestDeliveryScopes.FixedQueue(
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = terminalAttempt },
-            handler));
+            handler), logger);
 
         await runner.RunAsync();
 
@@ -835,11 +836,23 @@ public sealed class QueueRunnerTests
         Assert.Equal(2, outcomes.Count);
         Assert.Contains(terminal ? "terminal" : "abandoned", outcomes);
         Assert.Contains("completed", outcomes);
-        Assert.Equal(faultLogged ? 1 : 0, recordedFaults.Count);
+        var expectedFault = faultLogged || throwInvocation;
+        Assert.Equal(expectedFault ? 1 : 0, recordedFaults.Count);
+        Assert.Equal(expectedFault ? 1 : 0, logger.Entries.Count(entry => entry.EventId.Id == 1002));
+        Assert.Equal(terminal ? 1 : 0, logger.Entries.Count(entry => entry.Level == LogLevel.Warning));
+        Assert.Equal(terminal ? 1 : 0, logger.Entries.Count(entry => entry.EventId.Id == 1005));
+        if (expectedFault)
+        {
+            var recorded = Assert.Single(logger.Entries, entry => entry.EventId.Id == 1002).Exception;
+            if (throwInvocation)
+                Assert.Equal("Invocation is unavailable.", recorded?.Message);
+            else
+                Assert.Same(exception, recorded);
+        }
     }
 
     /// <summary>B11-at: An unclassified terminal read failure records its runner fault exactly once.</summary>
-    [Fact(Skip = "POLICY CONFLICT: B11-at")]
+    [Fact]
     public Task ShouldRecordFaultGivenUnclassifiedReadFailureAtTerminalThreshold() =>
         ShouldApplyQueueReadFailurePolicyGivenMatrixCell("B11-at", "unclassified", 3, 3, true, true, false);
 

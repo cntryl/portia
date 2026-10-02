@@ -239,6 +239,123 @@ public sealed class TelemetryCompletionTests
         }
     }
 
+    /// <summary>Cancellation state cannot turn an unrelated fault into cancellation.</summary>
+    /// <param name="shape">The dispatch lifecycle stage.</param>
+    /// <param name="cancel">Whether the fault also cancels the caller token.</param>
+    /// <param name="cancellationException">Whether the failure is a cancellation exception.</param>
+    [Theory]
+    [InlineData("command", true, false)]
+    [InlineData("query", true, false)]
+    [InlineData("stream", true, false)]
+    [InlineData("enumerator", true, false)]
+    [InlineData("enumerator", true, true)]
+    [InlineData("dispose", true, false)]
+    [InlineData("preflight", true, false)]
+    [InlineData("preflight", false, false)]
+    [InlineData("preflight", true, true)]
+    [InlineData("preflight", false, true)]
+    [InlineData("command", true, true)]
+    [InlineData("query", false, true)]
+    [InlineData("stream", true, true)]
+    [InlineData("dispose", true, true)]
+    public async Task ShouldClassifyTheActualDispatchFailure(string shape, bool cancel, bool cancellationException)
+    {
+        using var measurements = new OutcomeMeasurements();
+        using var listener = ListenToActivities(out var stopped);
+        using var cancellation = new CancellationTokenSource();
+        var failure = new DispatchFailure(cancellation, cancel, cancellationException, shape);
+        using var services = new ServiceCollection().AddSingleton(failure)
+            .AddSingleton<FailureCommandHandler>().AddSingleton<FailureQueryHandler>()
+            .AddSingleton<FailureStreamHandler>().AddSingleton<FailureStreamAuthorizer>().BuildServiceProvider();
+        var bus = new RequestBus(services, new RequestRegistry(
+            [new RequestRegistration<FailureCommand, FailureCommandHandler>(),
+                new RequestRegistration<FailureQuery, FailureQueryHandler, int>(),
+                new StreamRequestRegistration<FailureStream, FailureStreamHandler, int>()],
+            shape == "preflight" ? [new RequestAuthorizerRegistration<FailureStream, FailureStreamAuthorizer>()] : [],
+            [], [], []));
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            var context = bus.CreateContext(RequestActor.System);
+            if (shape == "command")
+                _ = await bus.DispatchAsync(new FailureCommand(), context, cancellation.Token);
+            else if (shape == "query")
+                _ = await bus.DispatchAsync(new FailureQuery(), context, cancellation.Token);
+            else
+                await foreach (var _ in bus.DispatchStreamAsync(new FailureStream(), context, cancellation.Token))
+                {
+                    if (shape == "dispose")
+                        break;
+                }
+        });
+        Assert.Same(failure.Exception, exception);
+        var expected = cancel && cancellationException ? "canceled" : "fault";
+        Assert.Equal(expected, measurements.SingleOutcome("portia.request.duration"));
+        Assert.Equal(2, measurements.Counts("portia.request.active", "portia.transport.name", "local"));
+        Assert.Equal(0, measurements.Sum("portia.request.active", "portia.transport.name", "local"));
+        var activity = Assert.Single(stopped, item => item.OperationName == PortiaTelemetry.ExecuteActivityName);
+        Assert.Equal(expected, activity.GetTagItem("portia.outcome"));
+        Assert.Equal(expected == "fault" ? ActivityStatusCode.Error : ActivityStatusCode.Unset, activity.Status);
+        var events = activity.Events.Where(item => item.Name == "exception").ToArray();
+        Assert.Equal(expected == "fault" ? 1 : 0, events.Length);
+        if (expected == "fault")
+            Assert.Equal(failure.Exception.GetType().FullName,
+                Assert.Single(events[0].Tags, item => item.Key == "exception.type").Value);
+    }
+
+    internal sealed record FailureCommand : IRequest;
+    internal sealed record FailureQuery : IRequest<int>;
+    internal sealed record FailureStream : IStreamRequest<int>;
+
+    internal sealed class DispatchFailure(CancellationTokenSource source, bool cancel, bool cancellationException,
+        string shape)
+    {
+        public string Shape { get; } = shape;
+        public Exception Exception { get; } = cancellationException
+            ? new OperationCanceledException("unrelated or requested cancellation")
+            : new IOException("sensitive fault detail");
+        public Exception Fail()
+        {
+            if (cancel)
+                source.Cancel();
+            return Exception;
+        }
+    }
+
+    internal sealed class FailureCommandHandler(DispatchFailure failure) : IRequestHandler<FailureCommand>
+    {
+        public ValueTask<Result> HandleAsync(IRequestContext<FailureCommand> context, CancellationToken ct) =>
+            ValueTask.FromException<Result>(failure.Fail());
+    }
+
+    internal sealed class FailureQueryHandler(DispatchFailure failure) : IRequestHandler<FailureQuery, int>
+    {
+        public ValueTask<Result<int>> HandleAsync(IRequestContext<FailureQuery> context, CancellationToken ct) =>
+            ValueTask.FromException<Result<int>>(failure.Fail());
+    }
+
+    internal sealed class FailureStreamAuthorizer(DispatchFailure failure) : IRequestAuthorizer<FailureStream>
+    {
+        public ValueTask<Result> AuthorizeAsync(IRequestContext<FailureStream> context, CancellationToken ct) =>
+            ValueTask.FromException<Result>(failure.Fail());
+    }
+
+    internal sealed class FailureStreamHandler(DispatchFailure failure) : IStreamRequestHandler<FailureStream, int>
+    {
+        public IAsyncEnumerable<int> HandleAsync(IRequestContext<FailureStream> context, CancellationToken ct) =>
+            new FailureEnumerator(failure);
+    }
+
+    sealed class FailureEnumerator(DispatchFailure failure) : IAsyncEnumerable<int>, IAsyncEnumerator<int>
+    {
+        public int Current => 1;
+        public IAsyncEnumerator<int> GetAsyncEnumerator(CancellationToken cancellationToken = default) =>
+            failure.Shape == "enumerator" ? throw failure.Fail() : this;
+        public ValueTask<bool> MoveNextAsync() => failure.Shape == "dispose"
+            ? ValueTask.FromResult(true) : ValueTask.FromException<bool>(failure.Fail());
+        public ValueTask DisposeAsync() => failure.Shape == "dispose"
+            ? ValueTask.FromException(failure.Fail()) : ValueTask.CompletedTask;
+    }
+
     static RequestBus GuardBus(GuardBehavior behavior, params RequestGuardRegistration[] guards)
     {
         var services = new ServiceCollection()
@@ -702,6 +819,9 @@ public sealed class TelemetryCompletionTests
         }
 
         public int Count(string name, string tagKey, string tagValue) => _measurements.Count(item =>
+            item.Name == name && item.Tags.Any(tag => tag.Key == tagKey && Equals(tag.Value, tagValue)));
+
+        public int Counts(string name, string tagKey, string tagValue) => _counts.Count(item =>
             item.Name == name && item.Tags.Any(tag => tag.Key == tagKey && Equals(tag.Value, tagValue)));
 
         public long Sum(string name, string tagKey, string tagValue) => _counts.Where(item =>

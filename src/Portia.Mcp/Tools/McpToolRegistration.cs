@@ -16,7 +16,7 @@ namespace Cntryl.Portia;
 public abstract class McpToolRegistration
 {
     static readonly ConditionalWeakTable<JsonSerializerOptions, JsonSerializerOptions> BindingOptions = [];
-    Tool? _protocolTool;
+    readonly ConditionalWeakTable<JsonSerializerOptions, Tool> _protocolTools = [];
 
     internal McpToolRegistration(Type requestType, Type? resultType, string name, string description,
         McpToolOptions options)
@@ -72,13 +72,40 @@ public abstract class McpToolRegistration
     /// <summary>Gets the open-world hint.</summary>
     public bool? OpenWorld { get; }
 
-    internal Tool CreateProtocolTool(JsonSerializerOptions json)
+    internal Tool CreateProtocolTool(JsonSerializerOptions json) => _protocolTools.GetValue(json, BuildProtocolTool);
+
+    Tool BuildProtocolTool(JsonSerializerOptions json)
     {
-        if (_protocolTool is not null)
-            return _protocolTool;
-        var input = json.GetTypeInfo(RequestType).GetJsonSchemaAsNode();
-        if (input is JsonObject inputObject)
-            inputObject["type"] = "object";
+        var binding = Strict(json).GetTypeInfo(RequestType);
+        if (binding.Kind != JsonTypeInfoKind.Object)
+            throw new InvalidOperationException(
+                $"MCP tool '{Name}' requires object-shaped JSON input metadata for '{RequestType}'. "
+                + "Use an object request without a root converter.");
+        var input = binding.GetJsonSchemaAsNode(new JsonSchemaExporterOptions
+        {
+            TransformSchemaNode = static (context, node) =>
+            {
+                // The BCL exporter requires every non-optional constructor parameter. Binding only
+                // requires effective IsRequired members, including configured constructor policy.
+                if (context.TypeInfo.Kind == JsonTypeInfoKind.Object && node is JsonObject schema &&
+                    schema["required"] is JsonArray required)
+                {
+                    for (var index = required.Count - 1; index >= 0; index--)
+                    {
+                        var name = required[index]?.GetValue<string>();
+                        var property = context.TypeInfo.Properties.FirstOrDefault(member => member.Name == name);
+                        if (property is { IsRequired: false })
+                            required.RemoveAt(index);
+                    }
+                    if (required.Count == 0)
+                        schema.Remove("required");
+                }
+                return node;
+            }
+        });
+        if (input is not JsonObject inputObject)
+            throw new InvalidOperationException($"MCP tool '{Name}' did not produce an object input schema.");
+        inputObject["type"] = "object";
         var result = ResultType is null ? null : json.GetTypeInfo(ResultType).GetJsonSchemaAsNode();
         if (result is not null)
             RewriteResultReferences(result);
@@ -106,7 +133,7 @@ public abstract class McpToolRegistration
                 OpenWorldHint = OpenWorld
             }
         };
-        return Interlocked.CompareExchange(ref _protocolTool, tool, null) ?? tool;
+        return tool;
     }
 
     internal abstract ValueTask<McpToolInvocationResult> InvokeAsync(
@@ -173,6 +200,10 @@ public abstract class McpToolRegistration
     {
         foreach (var property in typeInfo.Properties)
         {
+            // This options copy only deserializes inputs. Schema nullability must follow the setter
+            // contract; the original output metadata keeps the independent getter contract.
+            if (property.IsGetNullable != property.IsSetNullable)
+                property.IsGetNullable = property.IsSetNullable;
             if (property.AssociatedParameter is { HasDefaultValue: false, IsNullable: false })
                 property.IsRequired = true;
         }

@@ -118,23 +118,29 @@ is modeled honestly as an at-least-once reactor effect instead.
 - [Scope](docs/scope.md) and [design decisions](docs/design-decisions.md): guarantees and deliberate limits
 - [Performance and scaling](docs/performance-and-scaling.md): measured hot paths and scaling model
 - [NativeAOT](docs/native-aot.md): trimming and source-generated JSON setup
-- [Model Context Protocol](docs/mcp.md): generated tools over stdio and Streamable HTTP
+- [Model Context Protocol](docs/mcp.md): request-backed tools, resources, and prompts over stdio and Streamable HTTP
 - [Migrating to Portia 0.4](docs/migration-0.4.md): JSON ownership, tenant templates, and MCP tests
 
 ## Development
 
 ```sh
-dotnet format Portia.slnx --verify-no-changes
-dotnet build Portia.slnx --configuration Release
-dotnet test Portia.slnx --configuration Release --no-build --filter "Category!=BrokerIntegration"
+dotnet restore Portia.slnx --locked-mode
+dotnet format Portia.slnx --verify-no-changes --no-restore
+dotnet build Portia.slnx --configuration Release --no-restore
+dotnet test Portia.slnx --configuration Release --no-build --filter "Category!=BrokerIntegration&Category!=StorageIntegration"
 docker compose up --detach --wait fitz
 dotnet test Portia.slnx --configuration Release --no-build --filter "Category=BrokerIntegration"
+docker compose up --detach sqrzl
+curl --fail --silent --show-error --retry 30 --retry-delay 1 --retry-connrefused --max-time 2 --output /dev/null http://127.0.0.1:9000/healthz
+PORTIA_S3_TEST_ENDPOINT=http://127.0.0.1:9000 dotnet test Portia.slnx --configuration Release --no-build --filter "Category=StorageIntegration"
 docker compose down --volumes
 ```
 
 Broker integration uses `ws://127.0.0.1:4090/ws` by default. Override it with
-`FITZ_TEST_ENDPOINT`. CI runs the same format, build, broker-free test, packed-consumer, and broker integration
-sequence.
+`FITZ_TEST_ENDPOINT`. Storage integration requires the Sqrzl S3 endpoint supplied by
+`PORTIA_S3_TEST_ENDPOINT`. CI runs locked restore, formatting, Release build, broker/storage-free
+tests, packed consumers, and both real integration categories. The first test command needs
+neither service.
 
 ## License
 

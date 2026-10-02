@@ -1,0 +1,172 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="53b394e3-360b-46c7-8c39-09856df30d71" name="@Machine 2026-10-01 21:19:39" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-01T21:19:39.4250130-04:00" queuing="2026-10-01T21:19:39.4250130-04:00" start="2026-10-01T21:19:37.6398360-04:00" finish="2026-10-01T21:19:58.3270100-04:00" />
+  <TestSettings name="default" id="74ca1ddd-f455-4e35-83ec-1d28708ce193">
+    <Deployment runDeploymentRoot="_Machine_2026-10-01_21_19_39" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="35032332-e8d3-4b6f-b08b-d3c436031d66" testId="9d2b7291-6cbc-f818-0373-1a7e84089b63" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldEmitLinkedNoticeTopologyAgainstRealFitzBroker" computerName="Machine" duration="00:00:00.2449970" startTime="2026-10-01T21:19:46.6825580-04:00" endTime="2026-10-01T21:19:46.9275850-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="35032332-e8d3-4b6f-b08b-d3c436031d66" />
+    <UnitTestResult executionId="307d9f39-1a35-48d4-bf06-3d4c584a4d05" testId="808aa144-7337-2b6a-f4cb-2046b09c1c57" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldUpsertAndCancelDeclarativeScheduleAgainstRealFitzBroker" computerName="Machine" duration="00:00:00.2599489" startTime="2026-10-01T21:19:45.8994320-04:00" endTime="2026-10-01T21:19:46.1599700-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="307d9f39-1a35-48d4-bf06-3d4c584a4d05" />
+    <UnitTestResult executionId="914dedcf-2094-4c6a-b8c7-754f08a72584" testId="68f027ac-72f7-b32c-2679-77959f4ea79c" testName="Cntryl.Portia.FitzKvDirectoryProjectionTests.ShouldPageEachTenantsProjectedTeamsInNameOrder" computerName="Machine" duration="00:00:00.4860753" startTime="2026-10-01T21:19:41.9345500-04:00" endTime="2026-10-01T21:19:42.4220020-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="914dedcf-2094-4c6a-b8c7-754f08a72584" />
+    <UnitTestResult executionId="3780af01-9fa4-4d89-b3ff-169a6eadc312" testId="9e4f0a04-b220-a7af-0ea8-c2c48f12aeb6" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldFailFastWhenNoWorkerIsRegisteredForRoute" computerName="Machine" duration="00:00:00.1099945" startTime="2026-10-01T21:19:47.3782980-04:00" endTime="2026-10-01T21:19:47.4883060-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3780af01-9fa4-4d89-b3ff-169a6eadc312" />
+    <UnitTestResult executionId="90788b4b-74df-436f-b835-3e0a2a13309a" testId="b4a31fb4-6e30-a3e7-d10a-1c6c95b69629" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldThrowConcurrencyExceptionGivenAnotherClientOwnsAppendSession" computerName="Machine" duration="00:00:00.2570120" startTime="2026-10-01T21:19:46.1602430-04:00" endTime="2026-10-01T21:19:46.4175510-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="90788b4b-74df-436f-b835-3e0a2a13309a" />
+    <UnitTestResult executionId="01ff5109-d486-48de-9cd3-533ae5e2da9b" testId="7893b003-a9ae-9203-cdbf-d6f680c3bcb6" testName="Cntryl.Portia.Tests.Storage.AwsObjectStorageIntegrationTests.ShouldPassSharedConformanceAgainstSqrzl" computerName="Machine" duration="00:00:00.3268645" startTime="2026-10-01T21:19:38.2618820-04:00" endTime="2026-10-01T21:19:38.5946950-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="01ff5109-d486-48de-9cd3-533ae5e2da9b" />
+    <UnitTestResult executionId="e4a9ff5b-f391-47f9-a054-4b6a0bc9a80f" testId="20229f72-0949-b30b-06b5-22563a6bb417" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldUpcastEventReadFromRealFitzStreamWrittenByOlderSchemaVersion" computerName="Machine" duration="00:00:00.1631008" startTime="2026-10-01T21:19:46.9278850-04:00" endTime="2026-10-01T21:19:47.0999180-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e4a9ff5b-f391-47f9-a054-4b6a0bc9a80f" />
+    <UnitTestResult executionId="23ffbb2e-b5cc-4ab2-a259-4f4866ed7975" testId="2020b675-75c2-698b-c180-68c87bdf37ed" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldSatisfyWorkloadCoordinatorConformanceAgainstRealFitzBroker" computerName="Machine" duration="00:00:02.7297879" startTime="2026-10-01T21:19:42.4222920-04:00" endTime="2026-10-01T21:19:45.1523050-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="23ffbb2e-b5cc-4ab2-a259-4f4866ed7975" />
+    <UnitTestResult executionId="c77f4f22-388e-4ac8-829d-51f70fe45f9f" testId="58675dac-f3d1-b135-5f30-44d2c5cde192" testName="Cntryl.Portia.Tests.Storage.AwsObjectStorageIntegrationTests.ShouldCompleteInApiAndReadInSeparateWorkerAgainstSqrzl" computerName="Machine" duration="00:00:02.7250050" startTime="2026-10-01T21:19:38.6452320-04:00" endTime="2026-10-01T21:19:41.3703320-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c77f4f22-388e-4ac8-829d-51f70fe45f9f" />
+    <UnitTestResult executionId="0e0db18c-8f9f-41c5-98df-2110ca1615cb" testId="e8fbc95d-d8fe-f2fc-2f6c-2a0a3beea730" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldSaveOneTenantsReactorCheckpointWhileAnotherTenantsIsInFlight" computerName="Machine" duration="00:00:00.1156803" startTime="2026-10-01T21:19:45.7834530-04:00" endTime="2026-10-01T21:19:45.8990430-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0e0db18c-8f9f-41c5-98df-2110ca1615cb" />
+    <UnitTestResult executionId="e711cdaf-72d9-4ffc-9396-b5dc3886d7ba" testId="6e26e21a-e1e6-aa18-cf31-bcb26099e6aa" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldPersistScheduleProducerContextAgainstRealFitzBroker" computerName="Machine" duration="00:00:00.1260686" startTime="2026-10-01T21:19:45.1527460-04:00" endTime="2026-10-01T21:19:45.2788030-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e711cdaf-72d9-4ffc-9396-b5dc3886d7ba" />
+    <UnitTestResult executionId="5ae23ba4-0e21-4def-94ed-eab78b3407ee" testId="b5bfe76c-a475-8e98-4c6b-dd32f8595c43" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldThrowConcurrencyExceptionWhenAppendingWithStaleExpectedVersion" computerName="Machine" duration="00:00:00.1158540" startTime="2026-10-01T21:19:50.5543910-04:00" endTime="2026-10-01T21:19:50.6706970-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5ae23ba4-0e21-4def-94ed-eab78b3407ee" />
+    <UnitTestResult executionId="82300940-e53d-4c74-8aea-75b75b5390b6" testId="b9db05a5-702e-b122-9e0f-52a7d9aa6d6e" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldEmitLinkedQueueTopologyAgainstRealFitzBroker" computerName="Machine" duration="00:00:00.2774452" startTime="2026-10-01T21:19:47.1001440-04:00" endTime="2026-10-01T21:19:47.3779470-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="82300940-e53d-4c74-8aea-75b75b5390b6" />
+    <UnitTestResult executionId="3cba4341-4dec-48fb-87d9-d0e7e1f5e345" testId="13a66c90-54fd-f61c-00fc-495f06d71b0e" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldSatisfyProjectionStoreConformanceAgainstRealFitzKv" computerName="Machine" duration="00:00:03.0653337" startTime="2026-10-01T21:19:47.4886170-04:00" endTime="2026-10-01T21:19:50.5538960-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3cba4341-4dec-48fb-87d9-d0e7e1f5e345" />
+    <UnitTestResult executionId="39e88b70-f964-467d-8e3b-cbc92db33ab8" testId="43c64092-6660-aec9-1168-d4f0f589b046" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldReleaseRealFitzTransactionAfterMalformedCheckpointValidation" computerName="Machine" duration="00:00:00.2238306" startTime="2026-10-01T21:19:45.2790470-04:00" endTime="2026-10-01T21:19:45.5029760-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="39e88b70-f964-467d-8e3b-cbc92db33ab8" />
+    <UnitTestResult executionId="23f96ab3-ee46-4857-a7fc-bfee78468d59" testId="653e163e-2d40-cb1f-fb7d-86316003582e" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldRoundTripDomainEventThroughRealFitzBroker" computerName="Machine" duration="00:00:00.1140838" startTime="2026-10-01T21:19:50.8232650-04:00" endTime="2026-10-01T21:19:50.9375530-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="23f96ab3-ee46-4857-a7fc-bfee78468d59" />
+    <UnitTestResult executionId="e7b946df-4a00-4650-8d61-2814dd3ad1b1" testId="9bed00b9-d0aa-cf6f-6482-64c26ee58f4f" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldPersistReactorCheckpointsThroughRealFitzKv" computerName="Machine" duration="00:00:00.1522836" startTime="2026-10-01T21:19:50.6708250-04:00" endTime="2026-10-01T21:19:50.8231640-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e7b946df-4a00-4650-8d61-2814dd3ad1b1" />
+    <UnitTestResult executionId="5d0413ce-256b-4b0c-add0-2e1bd6c9b7f8" testId="b16ed103-2904-b484-8acb-d0843c996374" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldSatisfyEventStoreConformanceAgainstRealFitzBroker" computerName="Machine" duration="00:00:00.2641586" startTime="2026-10-01T21:19:46.4177780-04:00" endTime="2026-10-01T21:19:46.6822980-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5d0413ce-256b-4b0c-add0-2e1bd6c9b7f8" />
+    <UnitTestResult executionId="60ce249a-70a0-4f9e-85a6-9ef77fddbd9e" testId="448085f5-8e4d-ca61-f628-8b29f3d4265f" testName="Cntryl.Portia.FitzKvDirectoryProjectionTests.ShouldRejectOneTenantsCursorOnAnotherTenantsList" computerName="Machine" duration="00:00:00.3329823" startTime="2026-10-01T21:19:41.5928800-04:00" endTime="2026-10-01T21:19:41.9342690-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="60ce249a-70a0-4f9e-85a6-9ef77fddbd9e" />
+    <UnitTestResult executionId="ca5ec2dc-ba51-4500-8146-4285906eb689" testId="72900bae-b49d-d68a-b6e4-383a5b9546e4" testName="Cntryl.Portia.FitzBrokerFleetIntegrationTests.ShouldRenewLeaseAutomaticallyWhileCallbackOutlivesTtl" computerName="Machine" duration="00:00:07.1148346" startTime="2026-10-01T21:19:50.9382640-04:00" endTime="2026-10-01T21:19:58.0541140-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ca5ec2dc-ba51-4500-8146-4285906eb689" />
+    <UnitTestResult executionId="f2afcad7-3740-4f7b-b490-118553184929" testId="e20c14c7-7d06-da18-5875-93f12f2ba327" testName="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldRoundTripRequestThroughRealFitzBroker" computerName="Machine" duration="00:00:00.2794428" startTime="2026-10-01T21:19:45.5031450-04:00" endTime="2026-10-01T21:19:45.7831420-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f2afcad7-3740-4f7b-b490-118553184929" />
+    <UnitTestResult executionId="68913329-ef13-474f-8f2b-d5ea7200b7b8" testId="9ed70dff-b3af-3635-17e7-728ce95e4ead" testName="Cntryl.Portia.Tests.Storage.AwsObjectStorageIntegrationTests.ShouldRejectConditionalOverwriteAgainstSqrzl" computerName="Machine" duration="00:00:00.0490358" startTime="2026-10-01T21:19:38.6018290-04:00" endTime="2026-10-01T21:19:38.6448860-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="68913329-ef13-474f-8f2b-d5ea7200b7b8" />
+    <UnitTestResult executionId="d6bdf863-6e63-4b3d-b498-21618846f665" testId="7867072f-47bb-6c7c-b24e-f40a294bb99f" testName="Cntryl.Portia.FitzBrokerFleetIntegrationTests.ShouldGrantPartitionToWaitingWorkerWhenHolderDisconnectsWithoutReleasing" computerName="Machine" duration="00:00:00.2238887" startTime="2026-10-01T21:19:58.0547110-04:00" endTime="2026-10-01T21:19:58.2784170-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d6bdf863-6e63-4b3d-b498-21618846f665" />
+    <UnitTestResult executionId="3e3f767c-74f5-4f38-9ad3-0d2aff7e2b75" testId="32a9c097-c7d8-14be-4a3e-861e0a9826af" testName="Cntryl.Portia.FitzKvTenantDirectorySnapshotBrokerTests.ShouldRoundTripAndIsolateLifecyclePatterns" computerName="Machine" duration="00:00:00.2188162" startTime="2026-10-01T21:19:41.3739070-04:00" endTime="2026-10-01T21:19:41.5925690-04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3e3f767c-74f5-4f38-9ad3-0d2aff7e2b75" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Cntryl.Portia.FitzKvDirectoryProjectionTests.ShouldRejectOneTenantsCursorOnAnotherTenantsList" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="448085f5-8e4d-ca61-f628-8b29f3d4265f">
+      <Execution id="60ce249a-70a0-4f9e-85a6-9ef77fddbd9e" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzKvDirectoryProjectionTests" name="ShouldRejectOneTenantsCursorOnAnotherTenantsList" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.Tests.Storage.AwsObjectStorageIntegrationTests.ShouldRejectConditionalOverwriteAgainstSqrzl" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="9ed70dff-b3af-3635-17e7-728ce95e4ead">
+      <Execution id="68913329-ef13-474f-8f2b-d5ea7200b7b8" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.Tests.Storage.AwsObjectStorageIntegrationTests" name="ShouldRejectConditionalOverwriteAgainstSqrzl" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldPersistReactorCheckpointsThroughRealFitzKv" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="9bed00b9-d0aa-cf6f-6482-64c26ee58f4f">
+      <Execution id="e7b946df-4a00-4650-8d61-2814dd3ad1b1" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldPersistReactorCheckpointsThroughRealFitzKv" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzKvDirectoryProjectionTests.ShouldPageEachTenantsProjectedTeamsInNameOrder" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="68f027ac-72f7-b32c-2679-77959f4ea79c">
+      <Execution id="914dedcf-2094-4c6a-b8c7-754f08a72584" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzKvDirectoryProjectionTests" name="ShouldPageEachTenantsProjectedTeamsInNameOrder" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldReleaseRealFitzTransactionAfterMalformedCheckpointValidation" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="43c64092-6660-aec9-1168-d4f0f589b046">
+      <Execution id="39e88b70-f964-467d-8e3b-cbc92db33ab8" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldReleaseRealFitzTransactionAfterMalformedCheckpointValidation" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldUpcastEventReadFromRealFitzStreamWrittenByOlderSchemaVersion" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="20229f72-0949-b30b-06b5-22563a6bb417">
+      <Execution id="e4a9ff5b-f391-47f9-a054-4b6a0bc9a80f" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldUpcastEventReadFromRealFitzStreamWrittenByOlderSchemaVersion" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldFailFastWhenNoWorkerIsRegisteredForRoute" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="9e4f0a04-b220-a7af-0ea8-c2c48f12aeb6">
+      <Execution id="3780af01-9fa4-4d89-b3ff-169a6eadc312" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldFailFastWhenNoWorkerIsRegisteredForRoute" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerFleetIntegrationTests.ShouldGrantPartitionToWaitingWorkerWhenHolderDisconnectsWithoutReleasing" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="7867072f-47bb-6c7c-b24e-f40a294bb99f">
+      <Execution id="d6bdf863-6e63-4b3d-b498-21618846f665" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerFleetIntegrationTests" name="ShouldGrantPartitionToWaitingWorkerWhenHolderDisconnectsWithoutReleasing" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldSatisfyProjectionStoreConformanceAgainstRealFitzKv" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="13a66c90-54fd-f61c-00fc-495f06d71b0e">
+      <Execution id="3cba4341-4dec-48fb-87d9-d0e7e1f5e345" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldSatisfyProjectionStoreConformanceAgainstRealFitzKv" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldEmitLinkedQueueTopologyAgainstRealFitzBroker" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="b9db05a5-702e-b122-9e0f-52a7d9aa6d6e">
+      <Execution id="82300940-e53d-4c74-8aea-75b75b5390b6" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldEmitLinkedQueueTopologyAgainstRealFitzBroker" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldSatisfyWorkloadCoordinatorConformanceAgainstRealFitzBroker" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="2020b675-75c2-698b-c180-68c87bdf37ed">
+      <Execution id="23ffbb2e-b5cc-4ab2-a259-4f4866ed7975" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldSatisfyWorkloadCoordinatorConformanceAgainstRealFitzBroker" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerFleetIntegrationTests.ShouldRenewLeaseAutomaticallyWhileCallbackOutlivesTtl" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="72900bae-b49d-d68a-b6e4-383a5b9546e4">
+      <Execution id="ca5ec2dc-ba51-4500-8146-4285906eb689" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerFleetIntegrationTests" name="ShouldRenewLeaseAutomaticallyWhileCallbackOutlivesTtl" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.Tests.Storage.AwsObjectStorageIntegrationTests.ShouldPassSharedConformanceAgainstSqrzl" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="7893b003-a9ae-9203-cdbf-d6f680c3bcb6">
+      <Execution id="01ff5109-d486-48de-9cd3-533ae5e2da9b" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.Tests.Storage.AwsObjectStorageIntegrationTests" name="ShouldPassSharedConformanceAgainstSqrzl" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldThrowConcurrencyExceptionGivenAnotherClientOwnsAppendSession" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="b4a31fb4-6e30-a3e7-d10a-1c6c95b69629">
+      <Execution id="90788b4b-74df-436f-b835-3e0a2a13309a" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldThrowConcurrencyExceptionGivenAnotherClientOwnsAppendSession" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldUpsertAndCancelDeclarativeScheduleAgainstRealFitzBroker" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="808aa144-7337-2b6a-f4cb-2046b09c1c57">
+      <Execution id="307d9f39-1a35-48d4-bf06-3d4c584a4d05" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldUpsertAndCancelDeclarativeScheduleAgainstRealFitzBroker" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldPersistScheduleProducerContextAgainstRealFitzBroker" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="6e26e21a-e1e6-aa18-cf31-bcb26099e6aa">
+      <Execution id="e711cdaf-72d9-4ffc-9396-b5dc3886d7ba" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldPersistScheduleProducerContextAgainstRealFitzBroker" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldRoundTripDomainEventThroughRealFitzBroker" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="653e163e-2d40-cb1f-fb7d-86316003582e">
+      <Execution id="23f96ab3-ee46-4857-a7fc-bfee78468d59" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldRoundTripDomainEventThroughRealFitzBroker" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.Tests.Storage.AwsObjectStorageIntegrationTests.ShouldCompleteInApiAndReadInSeparateWorkerAgainstSqrzl" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="58675dac-f3d1-b135-5f30-44d2c5cde192">
+      <Execution id="c77f4f22-388e-4ac8-829d-51f70fe45f9f" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.Tests.Storage.AwsObjectStorageIntegrationTests" name="ShouldCompleteInApiAndReadInSeparateWorkerAgainstSqrzl" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldEmitLinkedNoticeTopologyAgainstRealFitzBroker" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="9d2b7291-6cbc-f818-0373-1a7e84089b63">
+      <Execution id="35032332-e8d3-4b6f-b08b-d3c436031d66" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldEmitLinkedNoticeTopologyAgainstRealFitzBroker" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzKvTenantDirectorySnapshotBrokerTests.ShouldRoundTripAndIsolateLifecyclePatterns" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="32a9c097-c7d8-14be-4a3e-861e0a9826af">
+      <Execution id="3e3f767c-74f5-4f38-9ad3-0d2aff7e2b75" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzKvTenantDirectorySnapshotBrokerTests" name="ShouldRoundTripAndIsolateLifecyclePatterns" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldRoundTripRequestThroughRealFitzBroker" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="e20c14c7-7d06-da18-5875-93f12f2ba327">
+      <Execution id="f2afcad7-3740-4f7b-b490-118553184929" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldRoundTripRequestThroughRealFitzBroker" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldSaveOneTenantsReactorCheckpointWhileAnotherTenantsIsInFlight" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="e8fbc95d-d8fe-f2fc-2f6c-2a0a3beea730">
+      <Execution id="0e0db18c-8f9f-41c5-98df-2110ca1615cb" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldSaveOneTenantsReactorCheckpointWhileAnotherTenantsIsInFlight" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldThrowConcurrencyExceptionWhenAppendingWithStaleExpectedVersion" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="b5bfe76c-a475-8e98-4c6b-dd32f8595c43">
+      <Execution id="5ae23ba4-0e21-4def-94ed-eab78b3407ee" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldThrowConcurrencyExceptionWhenAppendingWithStaleExpectedVersion" />
+    </UnitTest>
+    <UnitTest name="Cntryl.Portia.FitzBrokerIntegrationTests.ShouldSatisfyEventStoreConformanceAgainstRealFitzBroker" storage="/private/tmp/portia-pass1-transport-mcp/test/portia.tests/bin/release/net10.0/portia.tests.dll" id="b16ed103-2904-b484-8acb-d0843c996374">
+      <Execution id="5d0413ce-256b-4b0c-add0-2e1bd6c9b7f8" />
+      <TestMethod codeBase="/private/tmp/portia-pass1-transport-mcp/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Cntryl.Portia.FitzBrokerIntegrationTests" name="ShouldSatisfyEventStoreConformanceAgainstRealFitzBroker" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="9d2b7291-6cbc-f818-0373-1a7e84089b63" executionId="35032332-e8d3-4b6f-b08b-d3c436031d66" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="808aa144-7337-2b6a-f4cb-2046b09c1c57" executionId="307d9f39-1a35-48d4-bf06-3d4c584a4d05" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="68f027ac-72f7-b32c-2679-77959f4ea79c" executionId="914dedcf-2094-4c6a-b8c7-754f08a72584" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9e4f0a04-b220-a7af-0ea8-c2c48f12aeb6" executionId="3780af01-9fa4-4d89-b3ff-169a6eadc312" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b4a31fb4-6e30-a3e7-d10a-1c6c95b69629" executionId="90788b4b-74df-436f-b835-3e0a2a13309a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7893b003-a9ae-9203-cdbf-d6f680c3bcb6" executionId="01ff5109-d486-48de-9cd3-533ae5e2da9b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="20229f72-0949-b30b-06b5-22563a6bb417" executionId="e4a9ff5b-f391-47f9-a054-4b6a0bc9a80f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2020b675-75c2-698b-c180-68c87bdf37ed" executionId="23ffbb2e-b5cc-4ab2-a259-4f4866ed7975" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="58675dac-f3d1-b135-5f30-44d2c5cde192" executionId="c77f4f22-388e-4ac8-829d-51f70fe45f9f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e8fbc95d-d8fe-f2fc-2f6c-2a0a3beea730" executionId="0e0db18c-8f9f-41c5-98df-2110ca1615cb" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6e26e21a-e1e6-aa18-cf31-bcb26099e6aa" executionId="e711cdaf-72d9-4ffc-9396-b5dc3886d7ba" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b5bfe76c-a475-8e98-4c6b-dd32f8595c43" executionId="5ae23ba4-0e21-4def-94ed-eab78b3407ee" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b9db05a5-702e-b122-9e0f-52a7d9aa6d6e" executionId="82300940-e53d-4c74-8aea-75b75b5390b6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="13a66c90-54fd-f61c-00fc-495f06d71b0e" executionId="3cba4341-4dec-48fb-87d9-d0e7e1f5e345" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="43c64092-6660-aec9-1168-d4f0f589b046" executionId="39e88b70-f964-467d-8e3b-cbc92db33ab8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="653e163e-2d40-cb1f-fb7d-86316003582e" executionId="23f96ab3-ee46-4857-a7fc-bfee78468d59" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9bed00b9-d0aa-cf6f-6482-64c26ee58f4f" executionId="e7b946df-4a00-4650-8d61-2814dd3ad1b1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b16ed103-2904-b484-8acb-d0843c996374" executionId="5d0413ce-256b-4b0c-add0-2e1bd6c9b7f8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="448085f5-8e4d-ca61-f628-8b29f3d4265f" executionId="60ce249a-70a0-4f9e-85a6-9ef77fddbd9e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="72900bae-b49d-d68a-b6e4-383a5b9546e4" executionId="ca5ec2dc-ba51-4500-8146-4285906eb689" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e20c14c7-7d06-da18-5875-93f12f2ba327" executionId="f2afcad7-3740-4f7b-b490-118553184929" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9ed70dff-b3af-3635-17e7-728ce95e4ead" executionId="68913329-ef13-474f-8f2b-d5ea7200b7b8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7867072f-47bb-6c7c-b24e-f40a294bb99f" executionId="d6bdf863-6e63-4b3d-b498-21618846f665" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="32a9c097-c7d8-14be-4a3e-861e0a9826af" executionId="3e3f767c-74f5-4f38-9ad3-0d2aff7e2b75" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="24" executed="24" passed="24" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.0+05679a7ab5 (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.13]   Discovering: Portia.Tests
+[xUnit.net 00:00:00.30]   Discovered:  Portia.Tests
+[xUnit.net 00:00:00.32]   Starting:    Portia.Tests
+[xUnit.net 00:00:20.35]   Finished:    Portia.Tests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

@@ -1,0 +1,16 @@
+  Determining projects to restore...
+  Restored /private/tmp/portia-pass1-transport-mcp/src/Portia.Mcp.Testing/Portia.Mcp.Testing.csproj (in 544 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/src/Portia.Core/Portia.Core.csproj (in 544 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/src/Portia.Abstractions/Portia.Abstractions.csproj (in 544 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/src/Portia.AspNetCore/Portia.AspNetCore.csproj (in 544 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/smoke/Portia.McpStdioHost/Portia.McpStdioHost.csproj (in 547 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/src/Portia.Generators/Portia.Generators.csproj (in 544 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/test/Portia.McpContracts/Portia.McpContracts.csproj (in 545 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/src/Portia.AspNetCore.Generators/Portia.AspNetCore.Generators.csproj (in 544 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/test/Portia.McpTests/Portia.McpTests.csproj (in 547 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/src/Portia.Mcp.AspNetCore/Portia.Mcp.AspNetCore.csproj (in 544 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/src/Portia.Testing/Portia.Testing.csproj (in 9 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/src/Portia.DependencyInjection/Portia.DependencyInjection.csproj (in 11 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/src/Portia.Storage.Abstractions/Portia.Storage.Abstractions.csproj (in 10 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/src/Portia.Mcp/Portia.Mcp.csproj (in 11 ms).
+  Restored /private/tmp/portia-pass1-transport-mcp/src/Portia.Telemetry/Portia.Telemetry.csproj (in 18 ms).

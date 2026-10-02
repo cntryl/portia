@@ -103,7 +103,8 @@ The repository stays a persistence abstraction.
 
 ## MCP is another Portia ingress, not another application model
 
-Applications declare an MCP tool beside the request handler with `AddMcpTool<TRequest>()` and
+Applications declare MCP tools, resources, and prompts beside request handlers with
+`AddMcpTool<TRequest>()`, `AddMcpResource<TRequest, TOut>()`, and `AddMcpPrompt<TRequest, TOut>()`, then
 activate that shared catalog at a host boundary with either `AddMcpStdio()` or the explicit
 `AddMcpHttp()` plus `MapPortiaMcp()` pair.
 There is no second composition root, MCP-specific handler, or runtime assembly scan. `ICallable`
@@ -114,7 +115,8 @@ shape is the entire input. Explicit metadata overrides presentation only and nev
 An invocation binds the generated request and enters the same `IRequestBus` pipeline used by other
 Portia receivers. HTTP authentication or an explicit stdio `IMcpActorProvider` owns identity.
 `RequestRoute` continues to describe routing transports and does not manufacture MCP parameters.
-The optional packages own tools only: resources, prompts, sampling, elicitation, streaming requests,
+Resource/prompt visibility protects discovery and guessed lookups; the application's authorizers
+still decide tenant and object access on every dispatch. Sampling, elicitation, streaming requests,
 queues-as-tasks, and schedules-as-tools remain unsupported until they have native Portia semantics.
 
 ## Fitz owns distributed workload leases

@@ -157,7 +157,10 @@ public static partial class PortiaTelemetry
     ///     context is a parent or a link.
     /// </remarks>
     internal static Activity? StartProcess(string requestName, RequestInvocation invocation,
-        RequestTraceContext? propagated)
+        RequestTraceContext? propagated) => StartProcess(requestName, invocation, propagated, true);
+
+    internal static Activity? StartProcess(string requestName, RequestInvocation invocation,
+        RequestTraceContext? propagated, bool receivedTraceContext)
     {
         ArgumentNullException.ThrowIfNull(invocation);
         ActivityContext parent = default;
@@ -172,10 +175,17 @@ public static partial class PortiaTelemetry
             return null;
         }
 
+        if (receivedTraceContext && parent != default)
+        {
+            parent = new ActivityContext(parent.TraceId, parent.SpanId, parent.TraceFlags, parent.TraceState, true);
+        }
+
         var linked = invocation.TraceRelationship == RequestTraceRelationship.Link;
         var links = linked && parent != default ? new[] { new ActivityLink(parent) } : null;
-        var activity = ActivitySource.StartActivity(ProcessActivityName, ActivityKind.Consumer,
-            linked ? default : parent, null, links);
+        var activity = linked
+            ? ActivitySource.CreateActivity(ProcessActivityName, ActivityKind.Consumer, string.Empty, null, links, ActivityIdFormat.W3C)
+                ?.Start()
+            : ActivitySource.StartActivity(ProcessActivityName, ActivityKind.Consumer, parent);
         if (activity?.IsAllDataRequested == true)
         {
             _ = activity.SetTag("portia.request.name", requestName);

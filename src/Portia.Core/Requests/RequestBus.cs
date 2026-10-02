@@ -43,18 +43,17 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         var started = PortiaTelemetry.StartTimestamp();
         PortiaTelemetry.RequestStarted(policies.Name, transport);
         var outcome = "fault";
-        var completed = false;
         try
         {
             var result = await ExecuteAsync(registration, policies, request, context, ct).ConfigureAwait(false);
             PortiaTelemetry.RecordOutcome(activity, result.IsSuccess, result.Error);
             outcome = PortiaTelemetry.Outcome(result.IsSuccess, result.Error);
-            completed = true;
             return result;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             PortiaTelemetry.RecordCanceled(activity);
+            outcome = "canceled";
             throw;
         }
         catch (EventStreamConcurrencyException)
@@ -62,7 +61,6 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             var error = ConcurrencyError();
             PortiaTelemetry.RecordOutcome(activity, false, error);
             outcome = PortiaTelemetry.Outcome(false, error);
-            completed = true;
             throw;
         }
         catch (Exception ex)
@@ -72,7 +70,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         finally
         {
-            PortiaTelemetry.RequestFinished(started, policies.Name, transport, Finish(completed, outcome, ct));
+            PortiaTelemetry.RequestFinished(started, policies.Name, transport, outcome);
         }
     }
 
@@ -89,18 +87,17 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         var started = PortiaTelemetry.StartTimestamp();
         PortiaTelemetry.RequestStarted(policies.Name, transport);
         var outcome = "fault";
-        var completed = false;
         try
         {
             var result = await ExecuteAsync(registration, policies, request, context, ct).ConfigureAwait(false);
             PortiaTelemetry.RecordOutcome(activity, result.IsSuccess, result.Error);
             outcome = PortiaTelemetry.Outcome(result.IsSuccess, result.Error);
-            completed = true;
             return result;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             PortiaTelemetry.RecordCanceled(activity);
+            outcome = "canceled";
             throw;
         }
         catch (EventStreamConcurrencyException)
@@ -108,7 +105,6 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             var error = ConcurrencyError();
             PortiaTelemetry.RecordOutcome(activity, false, error);
             outcome = PortiaTelemetry.Outcome(false, error);
-            completed = true;
             throw;
         }
         catch (Exception ex)
@@ -118,7 +114,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         finally
         {
-            PortiaTelemetry.RequestFinished(started, policies.Name, transport, Finish(completed, outcome, ct));
+            PortiaTelemetry.RequestFinished(started, policies.Name, transport, outcome);
         }
     }
 
@@ -142,10 +138,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         var suspended = false;
         try
         {
-            if (policies.IsUnprotected)
-                ThrowUnprotectedRequest(registration.RequestType);
-            var authorization =
-                await AuthorizeAsync(registration, policies, request, requestContext, ct).ConfigureAwait(false);
+            var authorization = await AuthorizeStreamAsync(registration, policies, request, requestContext,
+                activity, observed, ct).ConfigureAwait(false);
             if (!authorization.IsSuccess)
             {
                 PortiaTelemetry.RecordOutcome(activity, false, authorization.Error);
@@ -179,8 +173,14 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
                 completed = true;
             }
 
-            // Stopping early cancels the rest of the stream. It is a fault only if disposing the stream faulted.
-            if (!completed && suspended && !observed.Faulted)
+            if (!completed && observed.Faulted)
+            {
+                outcome = "fault";
+                completed = true;
+            }
+
+            // Stopping early cancels the remaining work unless disposal observed a different failure.
+            if (!completed && (observed.Canceled || suspended))
             {
                 PortiaTelemetry.RecordCanceled(activity);
                 outcome = "canceled";
@@ -188,27 +188,43 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             }
 
             if (!completed)
-            {
-                if (ct.IsCancellationRequested)
-                {
-                    PortiaTelemetry.RecordCanceled(activity);
-                }
-                else if (activity is not null && activity.GetTagItem("portia.outcome") is null)
-                {
-                    PortiaTelemetry.RecordFault(activity);
-                }
-            }
+                PortiaTelemetry.RecordFault(activity);
 
-            PortiaTelemetry.RequestFinished(started, policies.Name, transport, Finish(completed, outcome, ct));
+            PortiaTelemetry.RequestFinished(started, policies.Name, transport, outcome);
         }
     }
 
-    // The three dispatch paths deliberately repeat this preamble rather than share it through a
-    // generic unifier: the streaming path cannot use one (a yield return cannot sit inside a try
-    // with a catch), so a unifier would have covered two of three call sites while costing a
-    // five-argument delegate at each. Only the outcome-selection rule is shared.
-    static string Finish(bool completed, string outcome, CancellationToken ct) =>
-        completed ? outcome : ct.IsCancellationRequested ? "canceled" : "fault";
+    // Preflight runs outside an iterator catch so its exception is recorded before the iterator settles.
+    async ValueTask<Result> AuthorizeStreamAsync(RequestHandlerRegistration registration, RequestPolicies policies,
+        IRequestBase request, IRequestContext requestContext, Activity? activity, StreamObservation observed,
+        CancellationToken ct)
+    {
+        try
+        {
+            if (policies.IsUnprotected)
+                ThrowUnprotectedRequest(registration.RequestType);
+            return await AuthorizeAsync(registration, policies, request, requestContext, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            observed.Canceled = true;
+            PortiaTelemetry.RecordCanceled(activity);
+            throw;
+        }
+        catch (EventStreamConcurrencyException)
+        {
+            observed.Failure = ConcurrencyError();
+            PortiaTelemetry.RecordOutcome(activity, false, observed.Failure);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            observed.Faulted = true;
+            observed.Canceled = false;
+            PortiaTelemetry.RecordFault(activity, ex);
+            throw;
+        }
+    }
 
     internal static RequestError ConcurrencyError() => new(RequestErrorKind.Conflict,
         "The request conflicted with a concurrent update.", true);
@@ -265,12 +281,14 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            observed.Canceled = true;
             PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
         catch (Exception ex)
         {
             observed.Faulted = true;
+            observed.Canceled = false;
             PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }
@@ -286,6 +304,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             observed.Failure = null;
+            observed.Faulted = false;
+            observed.Canceled = true;
             PortiaTelemetry.RecordCanceled(activity);
             throw;
         }
@@ -300,6 +320,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         {
             observed.Failure = null;
             observed.Faulted = true;
+            observed.Canceled = false;
             PortiaTelemetry.RecordFault(activity, ex);
             throw;
         }
@@ -313,6 +334,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
 
         // An unexpected failure, including one raised while an early stop disposes the stream.
         public bool Faulted { get; set; }
+
+        public bool Canceled { get; set; }
     }
 
     // Behaviors are selected by scope assignability, which says nothing about request shape: a

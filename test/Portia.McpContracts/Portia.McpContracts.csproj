@@ -3,10 +3,13 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <IsPackable>false</IsPackable>
     <IsTestProject>false</IsTestProject>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
     <RootNamespace>Cntryl.Portia.McpContracts</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <Using Remove="Xunit"/>
     <ProjectReference Include="../../src/Portia.Abstractions/Portia.Abstractions.csproj"/>
+    <ProjectReference Include="../../src/Portia.DependencyInjection/Portia.DependencyInjection.csproj"/>
+    <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false"/>
   </ItemGroup>
 </Project>
