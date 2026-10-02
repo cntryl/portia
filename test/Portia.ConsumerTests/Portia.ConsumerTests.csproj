@@ -5,6 +5,7 @@
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all"/>
     <FrameworkReference Include="Microsoft.AspNetCore.App"/>
     <PackageReference Include="Cntryl.Conventions.Testing.Analyzers"/>
     <PackageReference Include="Cntryl.Conventions.Testing.CodeFixes"/>

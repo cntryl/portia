@@ -1,0 +1,13 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "architecture": "arm64",
+  "dotnet": "10.0.400",
+  "prometheus": "3.15.0",
+  "prometheusImage": "prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e",
+  "otlpExporter": "1.19.1",
+  "metricsEndpoint": "http://127.0.0.1:49090/api/v1/otlp/v1/metrics",
+  "temporality": "Cumulative",
+  "translation": "UnderscoreEscapingWithSuffixes",
+  "requests": 321,
+  "workerAndBatchCounters": "controlled instrument fixtures; request counters use actual generated RequestBus dispatch"
+}

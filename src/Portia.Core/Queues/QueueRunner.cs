@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -44,6 +45,7 @@ public sealed class QueueRunner(
             var requestName = "unknown";
             var transport = "queue";
             var deliveryOutcome = RequestDeliveryOutcome.Fault;
+            Activity? process = null;
             try
             {
                 await using var scope = await _scopeFactory.CreateAsync(ct).ConfigureAwait(false);
@@ -77,6 +79,7 @@ public sealed class QueueRunner(
                     {
                         var safeInvocation = TryReadInvocation(queued);
                         transport = safeInvocation.TransportName;
+                        process = PortiaTelemetry.StartProcess(requestName, safeInvocation, null);
                         RequestMetadata? safeMetadata = null;
                         try
                         {
@@ -97,6 +100,7 @@ public sealed class QueueRunner(
                     {
                         var safeInvocation = TryReadInvocation(queued);
                         transport = safeInvocation.TransportName;
+                        process = PortiaTelemetry.StartProcess(requestName, safeInvocation, null);
                         deliveryOutcome = await HandleReadFailureAsync(scope, queued, ex, requestName, safeInvocation,
                                 ct)
                             .ConfigureAwait(false);
@@ -105,9 +109,11 @@ public sealed class QueueRunner(
 
                     using var delivery =
                         CancellationTokenSource.CreateLinkedTokenSource(ct, queued.ReservationCancellation);
-                    var dispatch = await RequestDispatch.SendAsync(scope.ActorValidator, scope.Bus, request,
-                            RequestDelivery.For(request, wireName, invocation, metadata,
-                                actorToken, traceContext, scope.TimeProvider), delivery.Token)
+                    var facts = RequestDelivery.For(request, wireName, invocation, metadata,
+                        actorToken, traceContext, scope.TimeProvider);
+                    process = PortiaTelemetry.StartProcess(facts.Name, facts.Invocation, facts.TraceContext);
+                    var dispatch = await RequestDispatch.SendInProcessAsync(scope.ActorValidator, scope.Bus, request,
+                            facts, process, delivery.Token)
                         .ConfigureAwait(false);
 
                     // A lost reservation returned the delivery to the transport, which redelivers it and
@@ -137,8 +143,9 @@ public sealed class QueueRunner(
                         }
                         catch (Exception acknowledgmentException) when (!ct.IsCancellationRequested)
                         {
+                            PortiaTelemetry.RecordFault(process, acknowledgmentException);
                             PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Cleanup,
-                                acknowledgmentException, _logger);
+                                acknowledgmentException, _logger, recordException: false);
                         }
                     }
                     else if (dispatch.Outcome.Error is { IsTransient: false } permanent)
@@ -177,7 +184,12 @@ public sealed class QueueRunner(
                     // other failure is still this delivery's own.
                     var reservationLost = queued.ReservationCancellation.IsCancellationRequested;
                     if (!reservationLost || ex is not OperationCanceledException)
-                        PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, _logger);
+                    {
+                        if (process?.GetTagItem("portia.outcome") is not "fault")
+                            PortiaTelemetry.RecordFault(process, ex);
+                        PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, _logger,
+                            recordException: false);
+                    }
                     if (reservationLost)
                         continue;
 
@@ -199,11 +211,19 @@ public sealed class QueueRunner(
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 deliveryOutcome = RequestDeliveryOutcome.Canceled;
+                PortiaTelemetry.RecordCanceled(process);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (process?.GetTagItem("portia.outcome") is not "fault")
+                    PortiaTelemetry.RecordFault(process, ex);
                 throw;
             }
             finally
             {
-                PortiaTelemetry.RecordDelivery(requestName, transport, deliveryOutcome);
+                using (process)
+                    PortiaTelemetry.RecordDelivery(requestName, transport, deliveryOutcome);
             }
         }
     }
@@ -283,8 +303,9 @@ public sealed class QueueRunner(
         }
         catch (Exception acknowledgmentException) when (!ct.IsCancellationRequested)
         {
+            PortiaTelemetry.RecordFault(Activity.Current, acknowledgmentException);
             PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Cleanup, acknowledgmentException,
-                _logger);
+                _logger, recordException: false);
             return RequestDeliveryOutcome.Fault;
         }
 

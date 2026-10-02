@@ -1,0 +1,109 @@
+  Portia.Abstractions -> /private/tmp/portia-070-observability/src/Portia.Abstractions/bin/Release/net10.0/Portia.Abstractions.dll
+  Portia.Core -> /private/tmp/portia-070-observability/src/Portia.Core/bin/Release/net10.0/Portia.Core.dll
+  Portia.Storage.Abstractions -> /private/tmp/portia-070-observability/src/Portia.Storage.Abstractions/bin/Release/net10.0/Portia.Storage.Abstractions.dll
+  Portia.DependencyInjection -> /private/tmp/portia-070-observability/src/Portia.DependencyInjection/bin/Release/net10.0/Portia.DependencyInjection.dll
+  Portia.Testing -> /private/tmp/portia-070-observability/src/Portia.Testing/bin/Release/net10.0/Portia.Testing.dll
+  Portia.Storage.Aws -> /private/tmp/portia-070-observability/src/Portia.Storage.Aws/bin/Release/net10.0/Portia.Storage.Aws.dll
+  Portia.Telemetry -> /private/tmp/portia-070-observability/src/Portia.Telemetry/bin/Release/net10.0/Portia.Telemetry.dll
+  Portia.AspNetCore.Generators -> /private/tmp/portia-070-observability/src/Portia.AspNetCore.Generators/bin/Release/netstandard2.0/Portia.AspNetCore.Generators.dll
+  Portia.AspNetCore -> /private/tmp/portia-070-observability/src/Portia.AspNetCore/bin/Release/net10.0/Portia.AspNetCore.dll
+  Portia.Fitz -> /private/tmp/portia-070-observability/src/Portia.Fitz/bin/Release/net10.0/Portia.Fitz.dll
+  Portia.Jwt -> /private/tmp/portia-070-observability/src/Portia.Jwt/bin/Release/net10.0/Portia.Jwt.dll
+  Portia.Generators -> /private/tmp/portia-070-observability/src/Portia.Generators/bin/Release/netstandard2.0/Portia.Generators.dll
+  Portia.Tests -> /private/tmp/portia-070-observability/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll
+Test run for /private/tmp/portia-070-observability/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.44]     Cntryl.Portia.RequestNotificationRunnerTests.ShouldExportCorrelatedActualNotificationOutcomeLogs(fault: False, ambient: True) [FAIL]
+[xUnit.net 00:00:00.46]     Cntryl.Portia.RequestNotificationRunnerTests.ShouldExportCorrelatedActualNotificationOutcomeLogs(fault: True, ambient: True) [FAIL]
+[xUnit.net 00:00:00.46]     Cntryl.Portia.RequestNotificationRunnerTests.ShouldExportCorrelatedActualNotificationOutcomeLogs(fault: False, ambient: False) [FAIL]
+[xUnit.net 00:00:00.46]     Cntryl.Portia.RequestNotificationRunnerTests.ShouldExportCorrelatedActualNotificationOutcomeLogs(fault: True, ambient: False) [FAIL]
+[xUnit.net 00:00:00.48]     Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(mode: "fault", ambient: True) [FAIL]
+[xUnit.net 00:00:00.48]     Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(mode: "terminal", ambient: True) [FAIL]
+[xUnit.net 00:00:00.49]     Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(mode: "fault", ambient: False) [FAIL]
+[xUnit.net 00:00:00.49]     Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(mode: "ack", ambient: True) [FAIL]
+[xUnit.net 00:00:00.49]     Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(mode: "ack", ambient: False) [FAIL]
+  Failed Cntryl.Portia.RequestNotificationRunnerTests.ShouldExportCorrelatedActualNotificationOutcomeLogs(fault: False, ambient: True) [95 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 2
+Actual:   0
+  Stack Trace:
+     at Cntryl.Portia.RunnerExportCapture.AssertCorrelated(Int32 expectedEventId, LogLevel expectedLevel, Int32 expectedDeliveries) in /private/tmp/portia-070-observability/test/Portia.Tests/Telemetry/RunnerExportCapture.cs:line 42
+   at Cntryl.Portia.RequestNotificationRunnerTests.ShouldExportCorrelatedActualNotificationOutcomeLogs(Boolean fault, Boolean ambient) in /private/tmp/portia-070-observability/test/Portia.Tests/Requests/RequestNotificationRunnerTests.cs:line 37
+--- End of stack trace from previous location ---
+  Failed Cntryl.Portia.RequestNotificationRunnerTests.ShouldExportCorrelatedActualNotificationOutcomeLogs(fault: True, ambient: True) [16 ms]
+  Error Message:
+   Assert.Contains() Failure: Filter not matched in collection
+Collection: [Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0021460, ··· }, Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0002040, ··· }]
+  Stack Trace:
+     at Cntryl.Portia.RunnerExportCapture.AssertCorrelated(Int32 expectedEventId, LogLevel expectedLevel, Int32 expectedDeliveries) in /private/tmp/portia-070-observability/test/Portia.Tests/Telemetry/RunnerExportCapture.cs:line 46
+   at Cntryl.Portia.RequestNotificationRunnerTests.ShouldExportCorrelatedActualNotificationOutcomeLogs(Boolean fault, Boolean ambient) in /private/tmp/portia-070-observability/test/Portia.Tests/Requests/RequestNotificationRunnerTests.cs:line 37
+--- End of stack trace from previous location ---
+  Failed Cntryl.Portia.RequestNotificationRunnerTests.ShouldExportCorrelatedActualNotificationOutcomeLogs(fault: False, ambient: False) [1 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 2
+Actual:   0
+  Stack Trace:
+     at Cntryl.Portia.RunnerExportCapture.AssertCorrelated(Int32 expectedEventId, LogLevel expectedLevel, Int32 expectedDeliveries) in /private/tmp/portia-070-observability/test/Portia.Tests/Telemetry/RunnerExportCapture.cs:line 42
+   at Cntryl.Portia.RequestNotificationRunnerTests.ShouldExportCorrelatedActualNotificationOutcomeLogs(Boolean fault, Boolean ambient) in /private/tmp/portia-070-observability/test/Portia.Tests/Requests/RequestNotificationRunnerTests.cs:line 37
+--- End of stack trace from previous location ---
+  Failed Cntryl.Portia.RequestNotificationRunnerTests.ShouldExportCorrelatedActualNotificationOutcomeLogs(fault: True, ambient: False) [2 ms]
+  Error Message:
+   Assert.Contains() Failure: Filter not matched in collection
+Collection: [Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0002470, ··· }, Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0001380, ··· }]
+  Stack Trace:
+     at Cntryl.Portia.RunnerExportCapture.AssertCorrelated(Int32 expectedEventId, LogLevel expectedLevel, Int32 expectedDeliveries) in /private/tmp/portia-070-observability/test/Portia.Tests/Telemetry/RunnerExportCapture.cs:line 46
+   at Cntryl.Portia.RequestNotificationRunnerTests.ShouldExportCorrelatedActualNotificationOutcomeLogs(Boolean fault, Boolean ambient) in /private/tmp/portia-070-observability/test/Portia.Tests/Requests/RequestNotificationRunnerTests.cs:line 37
+--- End of stack trace from previous location ---
+  Failed Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(mode: "fault", ambient: True) [8 ms]
+  Error Message:
+   Assert.Contains() Failure: Filter not matched in collection
+Collection: [Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0003490, ··· }, Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0000510, ··· }]
+  Stack Trace:
+     at Cntryl.Portia.RunnerExportCapture.AssertCorrelated(Int32 expectedEventId, LogLevel expectedLevel, Int32 expectedDeliveries) in /private/tmp/portia-070-observability/test/Portia.Tests/Telemetry/RunnerExportCapture.cs:line 46
+   at Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(String mode, Boolean ambient) in /private/tmp/portia-070-observability/test/Portia.Tests/Queues/QueueRunnerTests.cs:line 36
+--- End of stack trace from previous location ---
+  Failed Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(mode: "terminal", ambient: True) [8 ms]
+  Error Message:
+   Assert.Contains() Failure: Filter not matched in collection
+Collection: [Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0011970, ··· }, Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0000960, ··· }]
+  Stack Trace:
+     at Cntryl.Portia.RunnerExportCapture.AssertCorrelated(Int32 expectedEventId, LogLevel expectedLevel, Int32 expectedDeliveries) in /private/tmp/portia-070-observability/test/Portia.Tests/Telemetry/RunnerExportCapture.cs:line 46
+   at Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(String mode, Boolean ambient) in /private/tmp/portia-070-observability/test/Portia.Tests/Queues/QueueRunnerTests.cs:line 36
+--- End of stack trace from previous location ---
+  Failed Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(mode: "fault", ambient: False) [1 ms]
+  Error Message:
+   Assert.Contains() Failure: Filter not matched in collection
+Collection: [Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0001990, ··· }, Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0001020, ··· }]
+  Stack Trace:
+     at Cntryl.Portia.RunnerExportCapture.AssertCorrelated(Int32 expectedEventId, LogLevel expectedLevel, Int32 expectedDeliveries) in /private/tmp/portia-070-observability/test/Portia.Tests/Telemetry/RunnerExportCapture.cs:line 46
+   at Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(String mode, Boolean ambient) in /private/tmp/portia-070-observability/test/Portia.Tests/Queues/QueueRunnerTests.cs:line 36
+--- End of stack trace from previous location ---
+  Failed Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(mode: "ack", ambient: True) [1 ms]
+  Error Message:
+   Assert.Contains() Failure: Filter not matched in collection
+Collection: [Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0000580, ··· }, Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0000490, ··· }]
+  Stack Trace:
+     at Cntryl.Portia.RunnerExportCapture.AssertCorrelated(Int32 expectedEventId, LogLevel expectedLevel, Int32 expectedDeliveries) in /private/tmp/portia-070-observability/test/Portia.Tests/Telemetry/RunnerExportCapture.cs:line 46
+   at Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(String mode, Boolean ambient) in /private/tmp/portia-070-observability/test/Portia.Tests/Queues/QueueRunnerTests.cs:line 36
+--- End of stack trace from previous location ---
+  Failed Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(mode: "ack", ambient: False) [2 ms]
+  Error Message:
+   Assert.Contains() Failure: Filter not matched in collection
+Collection: [Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0000750, ··· }, Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0000100, ··· }]
+  Stack Trace:
+     at Cntryl.Portia.RunnerExportCapture.AssertCorrelated(Int32 expectedEventId, LogLevel expectedLevel, Int32 expectedDeliveries) in /private/tmp/portia-070-observability/test/Portia.Tests/Telemetry/RunnerExportCapture.cs:line 46
+   at Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(String mode, Boolean ambient) in /private/tmp/portia-070-observability/test/Portia.Tests/Queues/QueueRunnerTests.cs:line 36
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.50]     Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(mode: "terminal", ambient: False) [FAIL]
+  Failed Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(mode: "terminal", ambient: False) [6 ms]
+  Error Message:
+   Assert.Contains() Failure: Filter not matched in collection
+Collection: [Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0002540, ··· }, Activity { ActivityTraceFlags = Recorded, Baggage = [], Context = System.Diagnostics.ActivityContext, DisplayName = "portia.request.process", Duration = 00:00:00.0000260, ··· }]
+  Stack Trace:
+     at Cntryl.Portia.RunnerExportCapture.AssertCorrelated(Int32 expectedEventId, LogLevel expectedLevel, Int32 expectedDeliveries) in /private/tmp/portia-070-observability/test/Portia.Tests/Telemetry/RunnerExportCapture.cs:line 46
+   at Cntryl.Portia.QueueRunnerTests.ShouldExportCorrelatedActualQueueOutcomeLogs(String mode, Boolean ambient) in /private/tmp/portia-070-observability/test/Portia.Tests/Queues/QueueRunnerTests.cs:line 36
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:    10, Passed:     0, Skipped:     0, Total:    10, Duration: 159 ms - Portia.Tests.dll (net10.0)

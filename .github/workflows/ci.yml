@@ -39,11 +39,17 @@ jobs:
       - name: Restore locked packages
         run: dotnet restore Portia.slnx --locked-mode
 
+      - name: Verify stable external dependencies
+        run: python3 scripts/verify-stable-dependencies.py
+
       - name: Check formatting
         run: dotnet format Portia.slnx --verify-no-changes --no-restore
 
       - name: Build solution
         run: dotnet build Portia.slnx --configuration Release --no-restore
+
+      - name: Qualify actual Prometheus dashboard queries
+        run: scripts/qualify-prometheus.sh "$RUNNER_TEMP/portia-prometheus-evidence"
 
       - name: Test solution
         run: >-

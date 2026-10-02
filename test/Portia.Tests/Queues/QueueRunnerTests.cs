@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
@@ -11,6 +12,55 @@ namespace Cntryl.Portia;
 [Collection(TelemetryTestGroup.Name)]
 public sealed class QueueRunnerTests
 {
+    /// <summary>Actual terminal, acknowledgment and fault logs correlate to their delivery process.</summary>
+    [Theory]
+    [InlineData("terminal", false)]
+    [InlineData("terminal", true)]
+    [InlineData("ack", false)]
+    [InlineData("ack", true)]
+    [InlineData("fault", false)]
+    [InlineData("fault", true)]
+    [InlineData("terminal-ack", false)]
+    [InlineData("terminal-ack", true)]
+    public async Task ShouldExportCorrelatedActualQueueOutcomeLogs(string mode, bool ambient)
+    {
+        using var capture = new RunnerExportCapture();
+        using var caller = ambient ? new Activity("unrelated-caller").Start() : null;
+        using var busHost = TestRequestBus.Create(telemetryFailureActionHandler:
+            mode == "fault" ? new TelemetryFailureActionHandler(new InvalidOperationException("Controlled handler fault.")) : null);
+        var items = Enumerable.Range(1, 2).Select(value => (IQueuedRequest)new FakeQueuedRequest(
+            mode is "terminal" or "terminal-ack" ? new InvalidChangeValue(value)
+                : mode == "fault" ? new TelemetryFailureAction() : new ChangeValue(value),
+            throwOnAcknowledge: mode is "ack" or "terminal-ack",
+            traceContext: ambient ? new RequestTraceContext(RunnerExportCapture.Parent) : null)).ToArray();
+        var runner = new QueueRunner(new FakeQueueConsumer(items), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), terminalHandler: new RecordingTerminalHandler()),
+            capture.Logger<QueueRunner>());
+        await runner.RunAsync();
+        Assert.Same(caller, Activity.Current);
+        capture.AssertCorrelated(mode == "terminal" ? 1005 : 1002,
+            mode == "terminal" ? LogLevel.Warning : LogLevel.Error, 2);
+        if (ambient)
+            Assert.All(capture.Activities.Where(activity => activity.OperationName == PortiaTelemetry.ProcessActivityName),
+                process => Assert.True(Assert.Single(process.Links).Context.IsRemote));
+    }
+
+    /// <summary>Simultaneous runners retain distinct delivery roots and restore their shared caller context.</summary>
+    [Fact]
+    public async Task ShouldKeepConcurrentRunnerLogCorrelationsSeparate()
+    {
+        using var capture = new RunnerExportCapture();
+        using var caller = new Activity("unrelated-concurrent-caller").Start();
+        using var busHost = TestRequestBus.Create(telemetryFailureActionHandler:
+            new TelemetryFailureActionHandler(new InvalidOperationException("Controlled concurrent fault.")));
+        Task RunAsync() => new QueueRunner(new FakeQueueConsumer([new FakeQueuedRequest(new TelemetryFailureAction())]),
+            RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator(), terminalHandler: new RecordingTerminalHandler()),
+            capture.Logger<QueueRunner>()).RunAsync();
+        await Task.WhenAll(RunAsync(), RunAsync());
+        Assert.Same(caller, Activity.Current);
+        capture.AssertCorrelated(1002, LogLevel.Error, 2);
+    }
+
     /// <summary>Each reservation records one final disposition and only terminal/fault logs.</summary>
     [Fact]
     public async Task ShouldRecordOneDeliveryOutcomeWithoutRetryOrBusinessErrorLogNoise()
@@ -1021,9 +1071,11 @@ public sealed class QueueRunnerTests
         bool invocationMayBeReadOnce = false,
         Exception? readException = null,
         bool throwOnInvocation = false,
+        RequestTraceContext? traceContext = null,
         CancellationToken reservation = default) : IQueuedRequest
     {
         public CancellationToken ReservationCancellation => reservation;
+        public RequestTraceContext? TraceContext => traceContext;
 
         public int CompletionCount { get; private set; }
 
