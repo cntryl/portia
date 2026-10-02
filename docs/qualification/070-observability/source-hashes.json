@@ -27,6 +27,6 @@
   "test/Portia.Tests/Queues/QueueRunnerTests.cs": "c03f6b87535295a6e4718f2ca5675c43e5a3b25e6f81a93bc23b2d3a5526a3e8",
   "test/Portia.Tests/Requests/RequestNotificationRunnerTests.cs": "f5dee720936715bb47ca984a94f9ba98a9eb0b1f700efba35a621b5b0d7b3f7f",
   "test/Portia.Tests/Telemetry/LinkedDeliveryRootTests.cs": "68751738dcb97f0cdb7396c681817fc4873ae230e46e72334dafb17006d27f36",
-  "test/Portia.Tests/Telemetry/RunnerExportCapture.cs": "60505c446721803ffc7f89fb20e6691bca3e3b0956364d88beb8174dcf7155f2",
+  "test/Portia.Tests/Telemetry/RunnerExportCapture.cs": "d2dd5672f5ec143defb1c6bf8a35c5447f737dfa5e160f92b8379919a59fd42e",
   "test/Portia.Tests/Telemetry/TelemetryFailureActionHandler.cs": "bb0aded5cebe777c8ac828df95f373ed9a2de1f8ebf80bb003770991c47eef97"
 }

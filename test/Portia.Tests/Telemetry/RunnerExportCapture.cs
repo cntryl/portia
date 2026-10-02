@@ -53,6 +53,16 @@ sealed class RunnerExportCapture : IDisposable
                 Assert.NotNull(log.Exception);
                 var process = processes.Single(item => item.TraceId == log.TraceId && item.SpanId == log.SpanId);
                 Assert.Single(process.Events, item => item.Name == "exception");
+                Assert.Equal("fault", process.GetTagItem("portia.outcome"));
+                Assert.Equal(ActivityStatusCode.Error, process.Status);
+                Assert.Contains(log.Attributes!, attribute => attribute.Key == "RunnerName" && attribute.Value is nameof(QueueRunner) or nameof(RequestNotificationRunner));
+                Assert.Contains(log.Attributes!, attribute => attribute.Key == "Stage" && attribute.Value is "execution" or "cleanup");
+                Assert.Contains(log.Attributes!, attribute => attribute.Key == "ErrorType" && attribute.Value is string);
+            }
+            else
+            {
+                Assert.Contains(log.Attributes!, attribute => attribute.Key == "RequestName" && attribute.Value is string);
+                Assert.Contains(log.Attributes!, attribute => attribute.Key == "Transport" && attribute.Value is "queue" or "notice" or "schedule");
             }
         }
         Assert.Equal(expectedDeliveries + (expectedExecutions ?? expectedDeliveries), Activities.Count);

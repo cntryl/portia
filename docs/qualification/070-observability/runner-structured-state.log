@@ -14,4 +14,4 @@
 Test run for /private/tmp/portia-070-observability/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll (.NETCoreApp,Version=v10.0)
 A total of 1 test files matched the specified pattern.
 
-Passed!  - Failed:     0, Passed:   131, Skipped:     0, Total:   131, Duration: 732 ms - Portia.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    17, Skipped:     0, Total:    17, Duration: 281 ms - Portia.Tests.dll (net10.0)
