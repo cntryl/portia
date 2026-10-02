@@ -9,13 +9,13 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
     readonly IDomainEventReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
 
     /// <summary>
-    ///     Projects all currently readable events beginning at a checkpoint.
+    ///     Projects one bounded pass beginning at a checkpoint. Resume from the returned checkpoint until a pass makes no progress.
     /// </summary>
     /// <param name="projector">The projector to run.</param>
     /// <param name="checkpoint">The first scope offset to read.</param>
-    /// <param name="options">The batching and rebuild options.</param>
+    /// <param name="options">The transactional batch size, source-record pass budget, and rebuild options.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>The next checkpoint after every committed batch.</returns>
+    /// <returns>The checkpoint after the last committed batch in this pass; unchanged when no progress was made.</returns>
     public async ValueTask<ProjectionCheckpoint> RunAsync(
         Projector projector,
         ProjectionCheckpoint checkpoint,

@@ -13,3 +13,7 @@ if (discarded.Disposition is not AggregateDisposition.Discard || !ReferenceEqual
 await ProjectionStoreConformance.VerifyAsync(new UserlandProjectionStoreProbe());
 
 await RuntimeTestingQualification.RunAsync();
+
+await ManualBoundedPassExample.RunAsync();
+
+await RequestScenarioQualification.RunAsync();

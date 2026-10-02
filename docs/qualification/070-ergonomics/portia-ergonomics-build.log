@@ -1,0 +1,33 @@
+  Portia.Abstractions -> /private/tmp/portia-070-core-ergonomics/src/Portia.Abstractions/bin/Release/net10.0/Portia.Abstractions.dll
+  Portia.Core -> /private/tmp/portia-070-core-ergonomics/src/Portia.Core/bin/Release/net10.0/Portia.Core.dll
+  Portia.DependencyInjection -> /private/tmp/portia-070-core-ergonomics/src/Portia.DependencyInjection/bin/Release/net10.0/Portia.DependencyInjection.dll
+  Portia.AspNetCore.Generators -> /private/tmp/portia-070-core-ergonomics/src/Portia.AspNetCore.Generators/bin/Release/netstandard2.0/Portia.AspNetCore.Generators.dll
+  Portia.AspNetCore -> /private/tmp/portia-070-core-ergonomics/src/Portia.AspNetCore/bin/Release/net10.0/Portia.AspNetCore.dll
+  Portia.Storage.Abstractions -> /private/tmp/portia-070-core-ergonomics/src/Portia.Storage.Abstractions/bin/Release/net10.0/Portia.Storage.Abstractions.dll
+  Portia.Testing -> /private/tmp/portia-070-core-ergonomics/src/Portia.Testing/bin/Release/net10.0/Portia.Testing.dll
+  Portia.Generators -> /private/tmp/portia-070-core-ergonomics/src/Portia.Generators/bin/Release/netstandard2.0/Portia.Generators.dll
+  Portia.Benchmarks -> /private/tmp/portia-070-core-ergonomics/bench/Portia.Benchmarks/bin/Release/net10.0/Portia.Benchmarks.dll
+  Portia.Mcp -> /private/tmp/portia-070-core-ergonomics/src/Portia.Mcp/bin/Release/net10.0/Portia.Mcp.dll
+  Portia.McpStdioHost -> /private/tmp/portia-070-core-ergonomics/smoke/Portia.McpStdioHost/bin/Release/net10.0/Portia.McpStdioHost.dll
+  Portia.CodeFixes -> /private/tmp/portia-070-core-ergonomics/src/Portia.CodeFixes/bin/Release/netstandard2.0/Portia.CodeFixes.dll
+  Portia.Analyzers -> /private/tmp/portia-070-core-ergonomics/src/Portia.Analyzers/bin/Release/net10.0/Portia.Analyzers.dll
+  Portia.Fitz -> /private/tmp/portia-070-core-ergonomics/src/Portia.Fitz/bin/Release/net10.0/Portia.Fitz.dll
+  Portia.Jwt -> /private/tmp/portia-070-core-ergonomics/src/Portia.Jwt/bin/Release/net10.0/Portia.Jwt.dll
+  Portia.Mcp.AspNetCore -> /private/tmp/portia-070-core-ergonomics/src/Portia.Mcp.AspNetCore/bin/Release/net10.0/Portia.Mcp.AspNetCore.dll
+  Portia.Mcp.Testing -> /private/tmp/portia-070-core-ergonomics/src/Portia.Mcp.Testing/bin/Release/net10.0/Portia.Mcp.Testing.dll
+  Portia.Storage.Aws -> /private/tmp/portia-070-core-ergonomics/src/Portia.Storage.Aws/bin/Release/net10.0/Portia.Storage.Aws.dll
+  Portia.Telemetry -> /private/tmp/portia-070-core-ergonomics/src/Portia.Telemetry/bin/Release/net10.0/Portia.Telemetry.dll
+  Consumer.Contracts -> /private/tmp/portia-070-core-ergonomics/test/Consumer.Contracts/bin/Release/net10.0/Consumer.Contracts.dll
+  Consumer.FeatureOne -> /private/tmp/portia-070-core-ergonomics/test/Consumer.FeatureOne/bin/Release/net10.0/Consumer.FeatureOne.dll
+  Consumer.FeatureTwo -> /private/tmp/portia-070-core-ergonomics/test/Consumer.FeatureTwo/bin/Release/net10.0/Consumer.FeatureTwo.dll
+  Portia.ConsumerTests -> /private/tmp/portia-070-core-ergonomics/test/Portia.ConsumerTests/bin/Release/net10.0/Portia.ConsumerTests.dll
+  Portia.McpContracts -> /private/tmp/portia-070-core-ergonomics/test/Portia.McpContracts/bin/Release/net10.0/Portia.McpContracts.dll
+  Portia.McpTests -> /private/tmp/portia-070-core-ergonomics/test/Portia.McpTests/bin/Release/net10.0/Portia.McpTests.dll
+  Portia.ReflectionDisabledTests -> /private/tmp/portia-070-core-ergonomics/test/Portia.ReflectionDisabledTests/bin/Release/net10.0/Portia.ReflectionDisabledTests.dll
+  Portia.Tests -> /private/tmp/portia-070-core-ergonomics/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:21.78
