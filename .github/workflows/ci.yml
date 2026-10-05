@@ -40,7 +40,7 @@ jobs:
         run: dotnet restore Portia.slnx --locked-mode
 
       - name: Verify stable external dependencies
-        run: python3 scripts/verify-stable-dependencies.py
+        run: dotnet run --project eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj --configuration Release -- verify-stable-dependencies --root .
 
       - name: Check formatting
         run: dotnet format Portia.slnx --verify-no-changes --no-restore
@@ -74,7 +74,10 @@ jobs:
             --no-restore \
             --output artifacts/packages \
             -p:PackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          python3 eng/verify-packed-compiler.py \
+          dotnet run --project eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj \
+            --configuration Release \
+            --no-build \
+            -- verify-packed-compiler \
             --version "$PORTIA_SMOKE_PACKAGE_VERSION" \
             --packages artifacts/packages
           NUGET_PACKAGES="$RUNNER_TEMP/portia-aot-packages" dotnet restore \
