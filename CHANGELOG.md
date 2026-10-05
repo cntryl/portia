@@ -10,6 +10,9 @@ alerts are as breaking to change as an API.
 
 - MCP tool input schemas now mirror strict binding requiredness and setter nullability for each
   configured JSON contract; unsupported root converter shapes fail during registration.
+- MCP resources and prompts report bounded process/execute telemetry, sanitize client failures, and
+  correlate unexpected-fault logs. Stateless HTTP operations own an asynchronous request scope after
+  transport configuration, including when the caller cancels.
 
 ## 0.7.0 - 2026-10-02
 

@@ -131,6 +131,13 @@ single-user development convenience; production hosts use `UseActorProvider<TPro
 frames use standard output; `AddMcpStdio()` routes the built-in console logger to standard error so
 hosting diagnostics cannot corrupt the protocol stream.
 
+Handlers receive cancellation through the SDK's request token. For stdio, a client must send the
+MCP `notifications/cancelled` message with the matching request ID for the server to observe caller
+cancellation. The pinned C# SDK 2.2.0 client currently cancels its local wait without sending that
+notification; Portia cannot cancel work for a notification that never arrives. See the
+[cancellation qualification](qualification/138-cancellation-blocker/README.md) and the upstream
+[SDK issue](https://github.com/modelcontextprotocol/csharp-sdk/issues/1365).
+
 ## Results and failures
 
 `IRequest<T>` successes return an object-shaped `{ "result": T }` as MCP structured content and as

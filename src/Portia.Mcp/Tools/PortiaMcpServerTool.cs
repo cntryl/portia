@@ -41,7 +41,7 @@ sealed class PortiaMcpServerTool(
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(limits.OperationDeadline);
         using var receive = PortiaTelemetry.StartProcess(registration.RequestName, registration.Invocation,
-            PortiaTelemetry.CaptureTraceContext());
+            PortiaTelemetry.CaptureTraceContext(), receivedTraceContext: false);
         try
         {
             var result = await registration.InvokeAsync(request, json, deadline.Token).ConfigureAwait(false);
@@ -77,10 +77,10 @@ sealed class PortiaMcpServerTool(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _ = receive?.SetTag("portia.outcome", "canceled");
+            PortiaTelemetry.RecordCanceled(receive);
             throw;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
             PortiaTelemetry.RecordOutcome(receive, false, null);
             return InternalFailure;
