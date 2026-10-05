@@ -39,11 +39,23 @@ jobs:
       - name: Restore locked packages
         run: dotnet restore Portia.slnx --locked-mode
 
+      - name: Verify stable external dependencies
+        run: dotnet run --project eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj --configuration Release -- verify-stable-dependencies --root .
+
       - name: Check formatting
         run: dotnet format Portia.slnx --verify-no-changes --no-restore
 
       - name: Build solution
         run: dotnet build Portia.slnx --configuration Release --no-restore
+
+      - name: Qualify actual Prometheus dashboard queries
+        run: scripts/qualify-prometheus.sh "$RUNNER_TEMP/portia-prometheus-evidence"
+
+      - name: Validate compiler benchmark consumers
+        run: scripts/compiler-campaign.sh "$RUNNER_TEMP/portia-compiler-control" 2 small 1
+
+      - name: Qualify runtime performance fixtures with JSON reflection disabled
+        run: dotnet run --project bench/Portia.Benchmarks/Portia.Benchmarks.csproj --configuration Release --no-build -- --runtime-qualification
 
       - name: Test solution
         run: >-
@@ -62,7 +74,10 @@ jobs:
             --no-restore \
             --output artifacts/packages \
             -p:PackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          python3 eng/verify-packed-compiler.py \
+          dotnet run --project eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj \
+            --configuration Release \
+            --no-build \
+            -- verify-packed-compiler \
             --version "$PORTIA_SMOKE_PACKAGE_VERSION" \
             --packages artifacts/packages
           NUGET_PACKAGES="$RUNNER_TEMP/portia-aot-packages" dotnet restore \

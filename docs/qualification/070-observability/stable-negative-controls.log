@@ -1,0 +1,7 @@
+transitive control: exit 1
+Prerelease external dependencies are not allowed:
+packages.lock.json [net10.0] External.Dependency 1.2.3-beta.1
+
+declared control: exit 1
+Prerelease external dependencies are not allowed:
+Directory.Packages.props External.Direct 1.2.3-rc.1

@@ -255,7 +255,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task MalformedUnexpectedAndTerminalFailuresKeepTheirTransportOwnershipRules()
+    public async Task MalformedUnexpectedAndTerminalFailuresRemainUnacknowledged()
     {
         var serializer = ConsumerJson.CreateSerializer();
         var malformed = new Reserved("{"u8.ToArray(), 4);
@@ -279,9 +279,9 @@ public sealed class QueueConsumerContractTests
             var completed = await Task.WhenAny(queue.Idle.Task, run).WaitAsync(TimeSpan.FromSeconds(10));
             await completed;
             Assert.Same(queue.Idle.Task, completed);
-            Assert.Equal(1, malformed.Completions);
+            Assert.Equal(0, malformed.Completions);
             Assert.Equal(0, failed.Completions);
-            Assert.Equal(1, terminal.Completions);
+            Assert.Equal(0, terminal.Completions);
             Assert.Equal(1, success.Completions);
             Assert.Collection(terminalHandler.Contexts,
                 malformedContext =>
@@ -313,7 +313,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task TransportMismatchRetainsEnvelopeForTerminalHandlingAndAcknowledgment()
+    public async Task TransportMismatchRetainsEnvelopeAndLeavesItUnacknowledged()
     {
         var registration = new RequestTransportRegistration(typeof(ScopeRequest),
             [RequestTransportId.Callable],
@@ -346,7 +346,7 @@ public sealed class QueueConsumerContractTests
             Assert.Equal(request, Assert.IsType<ScopeRequest>(failure.Request));
             Assert.Equal(metadata, failure.Metadata);
             _ = Assert.IsType<InvalidRequestTransportException>(failure.Exception);
-            Assert.Equal(1, item.Completions);
+            Assert.Equal(0, item.Completions);
             Assert.Empty(provider.GetRequiredService<ConsumerHost.Effects>().Items);
         }
         finally

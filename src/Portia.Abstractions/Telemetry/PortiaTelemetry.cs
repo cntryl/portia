@@ -182,10 +182,28 @@ public static partial class PortiaTelemetry
 
         var linked = invocation.TraceRelationship == RequestTraceRelationship.Link;
         var links = linked && parent != default ? new[] { new ActivityLink(parent) } : null;
-        var activity = linked
-            ? ActivitySource.CreateActivity(ProcessActivityName, ActivityKind.Consumer, string.Empty, null, links, ActivityIdFormat.W3C)
-                ?.Start()
-            : ActivitySource.StartActivity(ProcessActivityName, ActivityKind.Consumer, parent);
+        Activity? activity;
+        if (linked)
+        {
+            var previous = Activity.Current;
+            try
+            {
+                Activity.Current = null;
+                activity = ActivitySource.CreateActivity(ProcessActivityName, ActivityKind.Consumer,
+                    default(ActivityContext), links: links);
+            }
+            finally
+            {
+                Activity.Current = previous;
+            }
+            // A non-W3C parent sentinel prevents Start from adopting Activity.Current.
+            // Sampling ran with an empty context above; the resulting span remains a root.
+            activity?.SetParentId(" ").Start();
+        }
+        else
+        {
+            activity = ActivitySource.StartActivity(ProcessActivityName, ActivityKind.Consumer, parent);
+        }
         if (activity?.IsAllDataRequested == true)
         {
             _ = activity.SetTag("portia.request.name", requestName);
@@ -458,14 +476,16 @@ public static partial class PortiaTelemetry
     /// <param name="stage">The phase of the runner's work that faulted.</param>
     /// <param name="exception">The unexpected exception, when available.</param>
     /// <param name="logger">An optional logger for the structured fault event.</param>
+    /// <param name="recordException">Whether to add an exception event; delivery runners avoid recording one twice.</param>
     /// <remarks>
-    ///     This method never starts an activity. When an activity is already current,
-    ///     <paramref name="exception" /> is attached to it as an exception event. Metrics retain only
+    ///     This method never starts an activity. When an activity is already current and
+    ///     <paramref name="recordException" /> is enabled, <paramref name="exception" /> is attached
+    ///     to it as an exception event. Metrics retain only
     ///     the bounded runner and stage. The structured log retains the exception type and full
     ///     exception for operator diagnosis.
     /// </remarks>
     internal static void RecordRunnerFault(string runnerName, RunnerFaultStage stage, Exception? exception = null,
-        ILogger? logger = null)
+        ILogger? logger = null, bool recordException = true)
     {
         WorkerFailure.Add(1, new KeyValuePair<string, object?>("portia.runner.name", runnerName),
             new KeyValuePair<string, object?>("portia.stage", StageName(stage)));
@@ -475,7 +495,7 @@ public static partial class PortiaTelemetry
                 exception);
         }
 
-        if (exception is not null && Activity.Current is { IsAllDataRequested: true } activity)
+        if (recordException && exception is not null && Activity.Current is { IsAllDataRequested: true } activity)
         {
             _ = activity.AddException(exception);
         }
@@ -528,7 +548,7 @@ public static partial class PortiaTelemetry
         }
     }
 
-    /// <summary>Logs one queue delivery successfully handled by terminal policy.</summary>
+    /// <summary>Logs one queue delivery classified as terminal and returned unacknowledged to its transport.</summary>
     internal static void RecordTerminalDelivery(string requestName, string transport, ILogger? logger)
     {
         if (logger is not null)
@@ -566,6 +586,6 @@ public static partial class PortiaTelemetry
     static partial void LogLostDelivery(ILogger logger, string requestName, string transport);
 
     [LoggerMessage(EventId = 1005, Level = LogLevel.Warning,
-        Message = "Portia terminalized queue request {RequestName} on {Transport}")]
+        Message = "Portia classified queue request {RequestName} as terminal on {Transport}; transport retains delivery")]
     static partial void LogTerminalDelivery(ILogger logger, string requestName, string transport);
 }

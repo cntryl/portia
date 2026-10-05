@@ -8,17 +8,38 @@ alerts are as breaking to change as an API.
 
 ### Fixed
 
+- MCP tool input schemas now mirror strict binding requiredness and setter nullability for each
+  configured JSON contract; unsupported root converter shapes fail during registration.
+
+## 0.7.0 - 2026-10-02
+
+### Added
+
+- Runtime, Fitz append and compiler benchmark harnesses with reproducible campaign scripts
+  (`scripts/runtime-campaign.sh`, `fitz-append-campaign.sh`, `compiler-campaign.sh`). They pin the
+  source commit and publish no measured results; baselines are collected by running the scripts.
+- Request scenarios accept caller cancellation for commands, queries and streams. Finite stream
+  overloads collect a positive maximum and dispose enumeration and the asynchronous scope.
+- Compiled manual processor example distinguishes bounded passes from commit batch size and
+  resumes a 4,097-event history through returned checkpoints.
+
+### Fixed
+
+- `InMemoryEventStore` seeds a stream in near-linear allocation by indexing committed event IDs per
+  stream instead of rebuilding the set on every append. Duplicate rejection, atomic rejection,
+  optimistic concurrency and cursor ordering are unchanged.
+- Queue, notice and schedule outcome/fault logs retain delivery trace/span correlation through
+  disposition and scope cleanup, with one exception event per fault and unchanged span counts.
+- Dashboard queries are verified against actual Prometheus 3.15.0 exports using stable OTLP
+  1.19.1, cumulative temporality, translated suffixes and explicit histogram buckets.
+
 - Terminal unexpected queue read faults record one fault, one terminal warning, and one terminal
   disposition before continuing; classified envelope and ownership policies remain intact.
 - Linked deliveries start independent roots under ambient activities, and received wire context
   is marked remote for sampling. Request telemetry classifies the actual exception, retains stream
   preflight exception events, and balances active counts.
-- MCP input schemas follow strict binding requiredness and setter nullability, cache per configured
-  JSON options, and diagnose unsupported root shapes before serving. Output metadata stays separate.
-- MCP resource reads and prompt gets export bounded process/execute spans and correlated unexpected
-  fault logs. Caller cancellation propagates and deadline failures remain sanitized.
 - Development commands exclude both live integration categories; MCP and serializer documentation
-  now describe the implemented tools/resources/prompts and generated metadata contracts.
+  describe the existing tools/resources/prompts and generated metadata contracts.
 
 - `PORTIA107` diagnoses discarded immutable request assertions and expression-bodied void callbacks.
 - JSON context factories use injective assembly/context identities; referenced compiled factory metadata

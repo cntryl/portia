@@ -48,7 +48,7 @@ public sealed class QueueBrokerTests
         var serializer = ConsumerJson.CreateSerializer();
         _ = await client.Queue.EnqueueAsync(route,
             serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null, RequestMetadata.Create(), null));
-        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog(), 1);
+        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog(), 3);
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
 
         Assert.True(await reader.MoveNextAsync());

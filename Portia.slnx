@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/bench/">
+    <Project Path="bench/Portia.CompilerBenchmarks/Portia.CompilerBenchmarks.csproj"/>
     <Project Path="bench/Portia.Benchmarks/Portia.Benchmarks.csproj"/>
   </Folder>
   <Folder Name="/src/">
@@ -33,5 +34,8 @@
   </Folder>
   <Folder Name="/smoke/">
     <Project Path="smoke/Portia.McpStdioHost/Portia.McpStdioHost.csproj"/>
+  </Folder>
+  <Folder Name="/eng/">
+    <Project Path="eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj"/>
   </Folder>
 </Solution>

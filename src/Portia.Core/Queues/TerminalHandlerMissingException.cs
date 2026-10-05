@@ -1,8 +1,8 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-///     Thrown when a queued delivery is terminal but the application has not registered its
-///     terminal-failure handler. The delivery remains unacknowledged and transport-owned.
+///     Legacy exception type from the former required-terminal-handler contract. Built-in queue
+///     runners no longer throw it because terminal observers are optional.
 /// </summary>
 /// <param name="reason">Why the delivery became terminal.</param>
 public sealed class TerminalHandlerMissingException(QueuedRequestTerminalReason reason)

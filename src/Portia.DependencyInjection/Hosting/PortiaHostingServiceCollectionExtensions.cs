@@ -21,8 +21,8 @@ public static class PortiaHostingServiceCollectionExtensions
     /// <summary>
     ///     Hosts a <see cref="QueueRunner" /> for the life of the host. Requires
     ///     <see cref="IRequestQueueConsumer" />, <see cref="IRequestBus" />,
-    ///     <see cref="IRequestActorValidator" />, and an application-selected
-    ///     <see cref="IQueuedRequestTerminalHandler" /> to already be registered.
+    ///     and <see cref="IRequestActorValidator" /> to already be registered. A terminal-failure
+    ///     observer is optional; failed deliveries remain unacknowledged for transport disposition.
     /// </summary>
     /// <param name="services">The service collection to add to.</param>
     /// <returns><paramref name="services" />, for chaining.</returns>

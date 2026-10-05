@@ -45,14 +45,6 @@ Presentation metadata can be refined without changing the domain request:
 MCP annotations are client hints, never authorization or execution policy.
 Portia never automatically retries commands, including tools marked `Idempotent()`.
 
-Tool input schemas use the same strict, generated JSON metadata as argument binding. Effective
-required members must be present; nullable constructor arguments may be omitted unless the
-configured JSON contract requires them. JSON names, defaults, nested types, collections, enum
-converters, and setter nullability remain authoritative. Tool inputs must have object-shaped
-metadata: root converters and collection/scalar shapes fail before serving with the tool name and
-an actionable diagnostic. Successful output schemas use the application's original serialization
-metadata independently, including nullable results and references inside the `result` envelope.
-
 ## Resources and prompts
 
 Resources and prompts explicitly bind strings to an `IRequest<T>` that implements `ICallable`.
@@ -138,9 +130,6 @@ provider is registered. `UseLocalDevelopmentActor()` is intentionally named and 
 single-user development convenience; production hosts use `UseActorProvider<TProvider>()`. Protocol
 frames use standard output; `AddMcpStdio()` routes the built-in console logger to standard error so
 hosting diagnostics cannot corrupt the protocol stream.
-An actor that commits events also needs a stable `NameIdentifier` or `sub` claim with an issuer,
-as required by the application event-attribution contract. The local-development convenience
-supplies a display name; an application-owned actor provider supplies production attribution.
 
 ## Results and failures
 
@@ -185,14 +174,6 @@ actor resolution stay inside the test.
 16 messages, 1 MiB, and two minutes. The existing HTTP request body limit remains in force.
 If a configured URI limit is shorter than an existing resource URI or template, configuration fails
 without changing the active limits.
-MCP cancellation notifications reach tool, resource, and prompt handlers. SDK 2.2.0's stdio
-client token cancellation currently fails to emit those notifications; the retained release
-qualification tests expose that limitation, and 0.7.0 remains blocked on its resolution.
-A server deadline returns a sanitized transport failure; it does not retry the operation.
-Every invocation uses a fresh scope, including concurrent calls and calls following a binding,
-handler, or projection failure. HTTP operation scopes dispose when the handler exits, including
-caller cancellation, independently of response stream cleanup. `AddMcpHttp` preserves the
-application's `ConfigureSessionOptions` callback and enables operation scopes after that callback.
 
 ## Current boundary
 

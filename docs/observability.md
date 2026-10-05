@@ -33,10 +33,7 @@ retry, or schedule firing starts a distinct root trace linked to the producer co
 one process span and one execute child. Queue retries never parent their next attempt, notice fanout
 does not create a wide producer trace, and recurring schedules never extend an earlier firing.
 Linked deliveries remain roots even when an unrelated activity is ambient. Wire trace context is
-marked remote at ingress so parent-based samplers can distinguish received context from a local
-SDK activity. MCP tools, resource reads, and prompt gets create one process span and one execute
-child, retaining their local SDK parent when present. Their transport names are `mcp`,
-`mcp-resource`, and `mcp-prompt`; resource templates and prompt names are startup-bounded labels.
+marked remote at ingress so parent-based samplers distinguish received context from local activity.
 
 Polling, reservation renewal, acknowledgement, retry delay, checkpoints, event processing, tenant
 scans, reconciliation, assignment, and hosted-service lifecycle create no spans. Envelopes propagate
@@ -59,38 +56,36 @@ fault). Expected
 Unexpected failures, including unrequested cancellation, record `fault`, error status, and the full
 exception event when the activity was sampled for data.
 An unrelated exception remains a fault even if the caller token was also canceled. Stream
-authorization exceptions retain their exception event and all started requests balance the active
-count. MCP process spans include projection and result limits; unexpected faults produce a
-correlated runner fault log while client failures retain sanitized transport envelopes.
+preflight exceptions retain their exception event and every started request balances the active count.
 
 ## Instruments
 
 Durations use monotonic seconds. Hot-path measurements use fixed tag order and at most three
 dimensions.
 
-| Instrument | Unit | Dimensions |
-|---|---:|---|
-| `portia.request.duration` | `s` | `portia.request.name`, `portia.transport.name`, `portia.outcome` |
-| `portia.request.active` | `{request}` | `portia.request.name`, `portia.transport.name` |
-| `portia.request.delivery.count` | `{delivery}` | `portia.request.name`, `portia.transport.name`, `portia.outcome` |
-| `portia.authorization.duration` | `s` | `portia.component.name`, `portia.stage`, `portia.outcome` |
-| `portia.guard.duration` | `s` | `portia.component.name`, `portia.outcome` |
-| `portia.transport.operation.duration` | `s` | `portia.transport.name`, `portia.operation`, `portia.outcome` |
-| `portia.transport.trace_context.invalid` | `{request}` | `portia.transport.name` |
-| `portia.aggregate.operation.duration` | `s` | `portia.operation`, `portia.outcome` |
-| `portia.aggregate.event.count` | `{event}` | `portia.operation` |
-| `portia.event_store.operation.duration` | `s` | `portia.operation`, `portia.scope`, `portia.outcome` |
-| `portia.event_store.event.count` | `{event}` | `portia.operation`, `portia.scope` |
-| `portia.processor.batch.duration` | `s` | `portia.component.name`, `portia.runner.name`, `portia.outcome` |
-| `portia.processor.event.count` | `{event}` | `portia.component.name`, `portia.runner.name` |
-| `portia.processor.lag` | `s` | `portia.component.name`, `portia.runner.name` |
-| `portia.tenant_directory.operation.duration` | `s` | `portia.operation`, `portia.phase`, `portia.outcome` |
-| `portia.tenant_directory.event.count` | `{event}` | `portia.operation`, `portia.phase`, `portia.outcome` |
-| `portia.tenant_directory.active.count` | `{tenant}` | `portia.operation`, `portia.phase`, `portia.outcome` |
-| `portia.workload.active` | `{workload}` | `portia.component.name`, `portia.scope` |
-| `portia.worker.failure` | `{failure}` | `portia.runner.name`, `portia.stage` |
-| `portia.worker.restart` | `{restart}` | `portia.runner.name`, `portia.stage` |
-| `portia.fleet.assignment.active` | `{assignment}` | `portia.scope` |
+| Instrument | Kind | Unit | Dimensions |
+|---|---|---:|---|
+| `portia.request.duration` | Histogram | `s` | `portia.request.name`, `portia.transport.name`, `portia.outcome` |
+| `portia.request.active` | UpDownCounter | `{request}` | `portia.request.name`, `portia.transport.name` |
+| `portia.request.delivery.count` | Counter | `{delivery}` | `portia.request.name`, `portia.transport.name`, `portia.outcome` |
+| `portia.authorization.duration` | Histogram | `s` | `portia.component.name`, `portia.stage`, `portia.outcome` |
+| `portia.guard.duration` | Histogram | `s` | `portia.component.name`, `portia.outcome` |
+| `portia.transport.operation.duration` | Histogram | `s` | `portia.transport.name`, `portia.operation`, `portia.outcome` |
+| `portia.transport.trace_context.invalid` | Counter | `{request}` | `portia.transport.name` |
+| `portia.aggregate.operation.duration` | Histogram | `s` | `portia.operation`, `portia.outcome` |
+| `portia.aggregate.event.count` | Counter | `{event}` | `portia.operation` |
+| `portia.event_store.operation.duration` | Histogram | `s` | `portia.operation`, `portia.scope`, `portia.outcome` |
+| `portia.event_store.event.count` | Counter | `{event}` | `portia.operation`, `portia.scope` |
+| `portia.processor.batch.duration` | Histogram | `s` | `portia.component.name`, `portia.runner.name`, `portia.outcome` |
+| `portia.processor.event.count` | Counter | `{event}` | `portia.component.name`, `portia.runner.name` |
+| `portia.processor.lag` | Histogram | `s` | `portia.component.name`, `portia.runner.name` |
+| `portia.tenant_directory.operation.duration` | Histogram | `s` | `portia.operation`, `portia.phase`, `portia.outcome` |
+| `portia.tenant_directory.event.count` | Counter | `{event}` | `portia.operation`, `portia.phase`, `portia.outcome` |
+| `portia.tenant_directory.active.count` | Histogram | `{tenant}` | `portia.operation`, `portia.phase`, `portia.outcome` |
+| `portia.workload.active` | UpDownCounter | `{workload}` | `portia.component.name`, `portia.scope` |
+| `portia.worker.failure` | Counter | `{failure}` | `portia.runner.name`, `portia.stage` |
+| `portia.worker.restart` | Counter | `{restart}` | `portia.runner.name`, `portia.stage` |
+| `portia.fleet.assignment.active` | UpDownCounter | `{assignment}` | `portia.scope` |
 
 Delivery outcomes are closed by transport. RPC records `completed` only after the response is
 written. Queue records exactly one of `completed`, `abandoned`, `terminal`, `canceled`, or `fault`
@@ -111,8 +106,16 @@ batch records only its duration and outcome.
 | 1002 | Error | swallowed unexpected background fault, with the full exception |
 | 1003 | Debug | workload lifecycle |
 | 1004 | Warning | irrecoverably lost one-way delivery |
-| 1005 | Warning | successfully terminalized queue delivery |
+| 1005 | Warning | terminal queue delivery returned unacknowledged to its transport |
 | 1101 | Error | Fitz partition termination timeout |
+
+Queue and notification runners retain their existing process span through disposition and cleanup
+logging. Events 1002, 1004 and 1005 emitted for a dispatched delivery correlate to that process,
+including under an unrelated ambient caller. Execute spans end when handler execution ends;
+process duration additionally includes acknowledgment or abandonment, terminal callbacks and scope cleanup.
+This extends an existing span's lifetime and adds no spans. The runner restores the caller's
+ambient activity before processing another delivery. Public RequestDispatch still owns its own
+process lifetime. Invalid envelopes are handled by the runner before dispatch.
 
 Routine success, retry, and abandonment are silent. Expected actor or request failures are not
 worker faults. Application exception text can enter event 1002, event 1101, and sampled trace
@@ -123,14 +126,76 @@ Scheduled actor validation is the exception to silent retry: each thrown excepti
 result records a validation-stage worker fault. A firing is tried at most three times, with one- and
 two-second delays, and is recorded lost once after permanent rejection or exhaustion.
 
-## Dashboard starting points
+## Verified Prometheus dashboards
 
-- Rate: `rate(portia_request_duration_seconds_count[5m])`
-- Errors: request duration rate where `portia.outcome != "success"`
-- Latency: p50/p95/p99 grouped by `portia.request.name`
-- Lag: max `portia_processor_lag_seconds` by `portia.component.name`
-- Retries/failures: rate of `portia_worker_restart_total` and `portia_worker_failure_total`
-- Active work: `portia_request_active`, `portia_workload_active`, and `portia_fleet_assignment_active`
+These expressions are qualified against **Prometheus 3.15.0** and the **OpenTelemetry OTLP
+exporter 1.19.1**, using metrics-specific HTTP/protobuf export, cumulative temporality and
+`UnderscoreEscapingWithSuffixes` translation. Other exporters/backends need their own name check.
+The compiled [qualification workload](../bench/Portia.Benchmarks/Telemetry/PrometheusQualification.cs)
+executes 321 real requests: 41 successes, 40 of each expected refusal kind, 40 in-handler caller
+cancellations and 40 unexpected faults. It asserts exact exported counts, request/workload active
+values of one then zero, and worker failure/restart counters of two. Worker and committed-batch
+observations are controlled framework-instrument fixtures, separate from the real request bus.
 
-Exporter-specific instrument-name normalization varies; verify the final names in the selected
-backend.
+Run `bash scripts/qualify-prometheus.sh artifacts/prometheus` after locked restore. This starts an
+isolated, digest-pinned receiver on port 49090, waits for readiness with bounded polling, retains
+raw samples/names/query JSON, and removes only its own container. No exporter wait enters an
+operation performance measurement. [Configuration](../bench/Portia.Benchmarks/Telemetry/prometheus.yaml)
+enables underscore translation; the receiver starts with `--web.enable-otlp-receiver`.
+
+The tested C# configuration is:
+
+```csharp
+using var metrics = Sdk.CreateMeterProviderBuilder()
+    .AddMeter("Cntryl.Portia")
+    .AddView("portia.request.duration", new ExplicitBucketHistogramConfiguration
+    { Boundaries = [0.001, 0.01, 0.1, 1, 10] })
+    .AddView("portia.processor.lag", new ExplicitBucketHistogramConfiguration
+    { Boundaries = [0.1, 1, 10, 60, 300] })
+    .AddOtlpExporter((exporter, reader) =>
+    {
+        exporter.Protocol = OtlpExportProtocol.HttpProtobuf;
+        exporter.Endpoint = new Uri("http://127.0.0.1:49090/api/v1/otlp/v1/metrics");
+        reader.TemporalityPreference = MetricReaderTemporalityPreference.Cumulative;
+        reader.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = 1000;
+    }).Build();
+```
+
+The full endpoint includes `/api/v1/otlp/v1/metrics`; a signal-specific exporter must not be given
+only the OTLP base URL. Explicit histogram buckets match this qualification. Portia's instrument
+advice remains available for applications selecting their own wider production buckets.
+
+| Panel | Verified PromQL |
+|---|---|
+| Throughput | `sum(rate(portia_request_duration_seconds_count[1m]))` |
+| Request p95 | `histogram_quantile(0.95, sum by (le) (rate(portia_request_duration_seconds_bucket[1m])))` |
+| Expected refusals (cumulative count) | `sum(portia_request_duration_seconds_count{portia_outcome=~"validation\|unauthorized\|forbidden\|not_found\|conflict"})` |
+| Requested cancellations (cumulative count) | `sum(portia_request_duration_seconds_count{portia_outcome="canceled"})` |
+| Unexpected faults (cumulative count) | `sum(portia_request_duration_seconds_count{portia_outcome="fault"})` |
+| Mean observed commit age (cumulative) | `sum(portia_processor_lag_seconds_sum) / sum(portia_processor_lag_seconds_count)` |
+| Commit-age p95 | `histogram_quantile(0.95, sum by (le) (rate(portia_processor_lag_seconds_bucket[1m])))` |
+| Active requests/workloads | `sum(portia_request_active)` / `sum(portia_workload_active)` |
+| Worker failures/restarts (cumulative) | `sum(portia_worker_failure_total)` / `sum(portia_worker_restart_total)` |
+
+For operational refusal/cancellation/fault rates, apply `rate(...[1m])` to the selected count
+series before summing. To split by operation, retain `portia_request_name` in the aggregation;
+quantiles also retain `le`. Five minutes is a useful wider production window; this controlled
+workload uses one minute. Counter panels grow monotonically; active UpDownCounters translate
+into gauge-like series and are summed directly, never interpreted as counters.
+
+Expected refusals and requested cancellation are separate from unexpected worker/infrastructure
+faults. An optional broader non-success panel must be named explicitly; applications own alert
+policy and should not count every refusal as a worker fault.
+
+`portia.processor.lag` is a **histogram of event age observed at committed batches**. The qualified
+mean is about five seconds; p95 is about 9.55 seconds because it is interpolated within explicit
+histogram buckets, not an exact event-age gauge. For a rolling mean use rates of `_sum` and
+`_count` with the same window. Idle or failed processors add no lag observations: a rolling mean
+or quantile can be absent/NaN, while a cumulative mean retains historical observations. Neither
+proves current backlog nor detects a stalled worker. There is no scalar `portia_processor_lag_seconds`
+series to `max`; preserve the instrument's histogram semantics.
+
+Bounded polling and exact raw samples establish the backend semantics, beyond query parsing.
+MCP workloads are deferred with #137–#142. The release dependency check rejects prerelease
+external direct and locked transitive NuGet dependencies; the existing transitive analyzer now
+uses its stable 5.9.0 release.

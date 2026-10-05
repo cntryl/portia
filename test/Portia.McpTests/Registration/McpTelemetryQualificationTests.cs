@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -143,3 +144,7 @@ public sealed class McpTelemetryQualificationTests
                 : ValueTask.FromResult(Result<string>.Success("ok"));
     }
 }
+
+[PortiaJsonContext]
+[JsonSerializable(typeof(McpTelemetryQualificationTests.ReadTelemetry))]
+sealed partial class McpTelemetryJsonContext : JsonSerializerContext;

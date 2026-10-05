@@ -1,0 +1,16 @@
+Test run for /private/tmp/portia-070-observability/test/Portia.ConsumerTests/bin/Release/net10.0/Portia.ConsumerTests.dll (.NETCoreApp,Version=v10.0)
+Test run for /private/tmp/portia-070-observability/test/Portia.ReflectionDisabledTests/bin/Release/net10.0/Portia.ReflectionDisabledTests.dll (.NETCoreApp,Version=v10.0)
+Test run for /private/tmp/portia-070-observability/test/Portia.McpTests/bin/Release/net10.0/Portia.McpTests.dll (.NETCoreApp,Version=v10.0)
+Test run for /private/tmp/portia-070-observability/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+A total of 1 test files matched the specified pattern.
+A total of 1 test files matched the specified pattern.
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:     3, Skipped:     0, Total:     3, Duration: 490 ms - Portia.ReflectionDisabledTests.dll (net10.0)
+
+Passed!  - Failed:     0, Passed:    71, Skipped:     0, Total:    71, Duration: 24 s - Portia.McpTests.dll (net10.0)
+
+Passed!  - Failed:     0, Passed:  1160, Skipped:     0, Total:  1160, Duration: 50 s - Portia.Tests.dll (net10.0)
+
+Passed!  - Failed:     0, Passed:   509, Skipped:     0, Total:   509, Duration: 1 m 27 s - Portia.ConsumerTests.dll (net10.0)

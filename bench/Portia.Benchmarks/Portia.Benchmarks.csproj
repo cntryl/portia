@@ -5,6 +5,8 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet"/>
+    <PackageReference Include="Microsoft.AspNetCore.TestHost"/>
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol"/>
   </ItemGroup>
 
   <ItemGroup>
@@ -12,7 +14,12 @@
     <ProjectReference Include="../../src/Portia.DependencyInjection/Portia.DependencyInjection.csproj"/>
     <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj"/>
     <ProjectReference Include="../../src/Portia.Testing/Portia.Testing.csproj"/>
+    <ProjectReference Include="../../src/Portia.Fitz/Portia.Fitz.csproj"/>
+    <ProjectReference Include="../../src/Portia.Telemetry/Portia.Telemetry.csproj"/>
     <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"/>
+    <ProjectReference Include="../../src/Portia.AspNetCore.Generators/Portia.AspNetCore.Generators.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false"/>
   </ItemGroup>

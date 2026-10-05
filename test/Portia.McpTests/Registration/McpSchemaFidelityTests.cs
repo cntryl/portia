@@ -134,6 +134,39 @@ public sealed class McpSchemaFidelityTests
         }
     }
 
+    [Fact]
+    public async Task ShouldAdvertiseAndEnforceTheInputContractOverStdio()
+    {
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var host = Path.GetFullPath(
+            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net10.0/Portia.McpStdioHost.dll",
+            AppContext.BaseDirectory);
+        await using var client = await McpClient.CreateAsync(new StdioClientTransport(
+            new StdioClientTransportOptions
+            {
+                Command = "dotnet",
+                Arguments = [host],
+                Name = "MCP schema qualification",
+                ShutdownTimeout = TimeSpan.FromSeconds(1)
+            }));
+
+        var tool = Assert.Single(await client.ListToolsAsync());
+        var schema = JsonSchema.Build(tool.JsonSchema,
+            new BuildOptions { Dialect = Dialect.Draft202012, SchemaRegistry = new() });
+        using var missing = JsonDocument.Parse("{}");
+        Assert.False(schema.Evaluate(missing.RootElement).IsValid);
+        var rejected = await client.CallToolAsync(tool.Name, new Dictionary<string, object?>());
+        Assert.True(rejected.IsError);
+
+        var arguments = new Dictionary<string, object?> { ["name"] = "stdio" };
+        using var valid = JsonDocument.Parse(JsonSerializer.Serialize(arguments));
+        Assert.True(schema.Evaluate(valid.RootElement).IsValid);
+        var accepted = await client.CallToolAsync(tool.Name, arguments);
+        Assert.False(accepted.IsError);
+        Assert.Contains("stdio", Assert.IsType<TextContentBlock>(Assert.Single(accepted.Content)).Text,
+            StringComparison.Ordinal);
+    }
+
     public sealed class InvocationCount
     {
         public int Count { get; set; }
@@ -215,5 +248,4 @@ public sealed class McpSchemaFidelityTests
 [JsonSerializable(typeof(McpSchemaFidelityTests.NullableReply))]
 [JsonSerializable(typeof(McpSchemaFidelityTests.NoResult))]
 [JsonSerializable(typeof(int?))]
-[JsonSerializable(typeof(McpTelemetryQualificationTests.ReadTelemetry))]
 sealed partial class McpSchemaJsonContext : JsonSerializerContext;

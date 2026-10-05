@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -8,7 +9,7 @@ namespace Cntryl.Portia;
 ///     is the same regardless of whether it originated over HTTP, a queue, or RPC.
 /// </summary>
 /// <param name="consumer">The long-lived transport consumer.</param>
-/// <param name="scopeFactory">Creates each delivery's application dependencies and terminal policy.</param>
+/// <param name="scopeFactory">Creates each delivery's application dependencies and optional terminal observer.</param>
 /// <param name="logger">Reports failed deliveries.</param>
 public sealed class QueueRunner(
     IRequestQueueConsumer consumer,
@@ -25,10 +26,10 @@ public sealed class QueueRunner(
     ///     Reserves and dispatches queued requests until the queue is exhausted or cancellation is
     ///     requested. A request is completed after its handler succeeds. Permanent handler failures,
     ///     actor-validation failures, and retryable or unexpected failures at the configured
-    ///     terminal attempt are first passed to the application terminal handler and are completed
-    ///     only after that callback succeeds. A terminal delivery without a handler faults the
-    ///     runner and remains transport-owned. Retryable or unexpected failures below the threshold
-    ///     are abandoned for redelivery.
+    ///     terminal attempt are optionally reported to the application terminal observer and then
+    ///     abandoned without acknowledgment, leaving redelivery and dead-letter policy to the
+    ///     transport. Retryable or unexpected failures below the threshold are also abandoned for
+    ///     redelivery.
     /// </summary>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the run.</returns>
@@ -44,6 +45,7 @@ public sealed class QueueRunner(
             var requestName = "unknown";
             var transport = "queue";
             var deliveryOutcome = RequestDeliveryOutcome.Fault;
+            Activity? process = null;
             try
             {
                 await using var scope = await _scopeFactory.CreateAsync(ct).ConfigureAwait(false);
@@ -77,6 +79,7 @@ public sealed class QueueRunner(
                     {
                         var safeInvocation = TryReadInvocation(queued);
                         transport = safeInvocation.TransportName;
+                        process = PortiaTelemetry.StartProcess(requestName, safeInvocation, null);
                         RequestMetadata? safeMetadata = null;
                         try
                         {
@@ -87,7 +90,7 @@ public sealed class QueueRunner(
                             // The transport mismatch remains the primary terminal reason.
                         }
 
-                        deliveryOutcome = await CompleteTerminalAsync(scope, queued, null, mismatch,
+                        deliveryOutcome = await HandleTerminalAsync(scope, queued, null, mismatch,
                                 QueuedRequestTerminalReason.InvalidTransport, requestName, ct, mismatch.Request,
                                 safeMetadata, safeInvocation, false)
                             .ConfigureAwait(false);
@@ -97,6 +100,7 @@ public sealed class QueueRunner(
                     {
                         var safeInvocation = TryReadInvocation(queued);
                         transport = safeInvocation.TransportName;
+                        process = PortiaTelemetry.StartProcess(requestName, safeInvocation, null);
                         deliveryOutcome = await HandleReadFailureAsync(scope, queued, ex, requestName, safeInvocation,
                                 ct)
                             .ConfigureAwait(false);
@@ -105,9 +109,11 @@ public sealed class QueueRunner(
 
                     using var delivery =
                         CancellationTokenSource.CreateLinkedTokenSource(ct, queued.ReservationCancellation);
-                    var dispatch = await RequestDispatch.SendAsync(scope.ActorValidator, scope.Bus, request,
-                            RequestDelivery.For(request, wireName, invocation, metadata,
-                                actorToken, traceContext, scope.TimeProvider), delivery.Token)
+                    var facts = RequestDelivery.For(request, wireName, invocation, metadata,
+                        actorToken, traceContext, scope.TimeProvider);
+                    process = PortiaTelemetry.StartProcess(facts.Name, facts.Invocation, facts.TraceContext);
+                    var dispatch = await RequestDispatch.SendInProcessAsync(scope.ActorValidator, scope.Bus, request,
+                            facts, process, delivery.Token)
                         .ConfigureAwait(false);
 
                     // A lost reservation returned the delivery to the transport, which redelivers it and
@@ -121,7 +127,7 @@ public sealed class QueueRunner(
 
                     if (!dispatch.WasDispatched)
                     {
-                        deliveryOutcome = await CompleteTerminalAsync(scope, queued, dispatch.Outcome.Error, null,
+                        deliveryOutcome = await HandleTerminalAsync(scope, queued, dispatch.Outcome.Error, null,
                                 QueuedRequestTerminalReason.ActorValidationFailure, requestName, ct, request, metadata,
                                 invocation)
                             .ConfigureAwait(false);
@@ -137,20 +143,21 @@ public sealed class QueueRunner(
                         }
                         catch (Exception acknowledgmentException) when (!ct.IsCancellationRequested)
                         {
+                            PortiaTelemetry.RecordFault(process, acknowledgmentException);
                             PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Cleanup,
-                                acknowledgmentException, _logger);
+                                acknowledgmentException, _logger, recordException: false);
                         }
                     }
                     else if (dispatch.Outcome.Error is { IsTransient: false } permanent)
                     {
-                        deliveryOutcome = await CompleteTerminalAsync(scope, queued, permanent, null,
+                        deliveryOutcome = await HandleTerminalAsync(scope, queued, permanent, null,
                                 QueuedRequestTerminalReason.PermanentFailure, requestName, ct, request, metadata,
                                 invocation)
                             .ConfigureAwait(false);
                     }
                     else if (IsRetryLimitReached(scope, queued))
                     {
-                        deliveryOutcome = await CompleteTerminalAsync(scope, queued, dispatch.Outcome.Error, null,
+                        deliveryOutcome = await HandleTerminalAsync(scope, queued, dispatch.Outcome.Error, null,
                                 QueuedRequestTerminalReason.RetryLimitReached, requestName, ct, request, metadata,
                                 invocation)
                             .ConfigureAwait(false);
@@ -167,7 +174,7 @@ public sealed class QueueRunner(
                 {
                     if (ex is InvalidRequestTransportException mismatch)
                     {
-                        deliveryOutcome = await CompleteTerminalAsync(scope, queued, null, mismatch,
+                        deliveryOutcome = await HandleTerminalAsync(scope, queued, null, mismatch,
                                 QueuedRequestTerminalReason.InvalidTransport, requestName, ct, mismatch.Request)
                             .ConfigureAwait(false);
                         continue;
@@ -177,7 +184,12 @@ public sealed class QueueRunner(
                     // other failure is still this delivery's own.
                     var reservationLost = queued.ReservationCancellation.IsCancellationRequested;
                     if (!reservationLost || ex is not OperationCanceledException)
-                        PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, _logger);
+                    {
+                        if (process?.GetTagItem("portia.outcome") is not "fault")
+                            PortiaTelemetry.RecordFault(process, ex);
+                        PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, _logger,
+                            recordException: false);
+                    }
                     if (reservationLost)
                         continue;
 
@@ -185,7 +197,7 @@ public sealed class QueueRunner(
                     // silently dropping the request) is the safer default.
                     if (IsRetryLimitReached(scope, queued))
                     {
-                        deliveryOutcome = await CompleteTerminalAsync(scope, queued, null, ex,
+                        deliveryOutcome = await HandleTerminalAsync(scope, queued, null, ex,
                                 QueuedRequestTerminalReason.RetryLimitReached, requestName, ct)
                             .ConfigureAwait(false);
                     }
@@ -199,11 +211,19 @@ public sealed class QueueRunner(
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 deliveryOutcome = RequestDeliveryOutcome.Canceled;
+                PortiaTelemetry.RecordCanceled(process);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (process?.GetTagItem("portia.outcome") is not "fault")
+                    PortiaTelemetry.RecordFault(process, ex);
                 throw;
             }
             finally
             {
-                PortiaTelemetry.RecordDelivery(requestName, transport, deliveryOutcome);
+                using (process)
+                    PortiaTelemetry.RecordDelivery(requestName, transport, deliveryOutcome);
             }
         }
     }
@@ -211,12 +231,7 @@ public sealed class QueueRunner(
     static bool IsRetryLimitReached(IQueueDeliveryScope scope, IQueuedRequest queued) =>
         scope.Options.TerminalAttempt is { } terminal && queued.Attempt >= terminal;
 
-    static void ValidateScope(IQueueDeliveryScope scope)
-    {
-        scope.Options.Validate();
-        if (scope.TerminalHandler is null)
-            throw new QueueConfigurationException(typeof(IQueuedRequestTerminalHandler));
-    }
+    static void ValidateScope(IQueueDeliveryScope scope) => scope.Options.Validate();
 
     static RequestInvocation TryReadInvocation(IQueuedRequest queued)
     {
@@ -246,7 +261,7 @@ public sealed class QueueRunner(
                 PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, exception, _logger);
             }
 
-            return await CompleteTerminalAsync(scope, queued, null, exception, terminal, requestName, ct,
+            return await HandleTerminalAsync(scope, queued, null, exception, terminal, requestName, ct,
                     invocation: invocation, readQueuedFields: false)
                 .ConfigureAwait(false);
         }
@@ -256,35 +271,37 @@ public sealed class QueueRunner(
         return RequestDeliveryOutcome.Abandoned;
     }
 
-    async ValueTask<RequestDeliveryOutcome> CompleteTerminalAsync(IQueueDeliveryScope scope, IQueuedRequest queued,
+    async ValueTask<RequestDeliveryOutcome> HandleTerminalAsync(IQueueDeliveryScope scope, IQueuedRequest queued,
         RequestError? error, Exception? exception, QueuedRequestTerminalReason reason, string requestName,
         CancellationToken ct, IRequest? request = null, RequestMetadata? metadata = null,
         RequestInvocation? invocation = null, bool readQueuedFields = true)
     {
-        var terminalHandler = scope.TerminalHandler ?? throw new TerminalHandlerMissingException(reason);
+        if (scope.TerminalHandler is { } terminalHandler)
+        {
+            try
+            {
+                await terminalHandler.HandleAsync(new QueuedRequestFailureContext(
+                            request ?? (readQueuedFields ? queued.Request : null),
+                            metadata ?? (readQueuedFields ? queued.Metadata : null),
+                            invocation ?? TryReadInvocation(queued), queued.Attempt, error, exception)
+                { Reason = reason }, ct)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception handlerException) when (!ct.IsCancellationRequested)
+            {
+                throw new TerminalHandlerFailureException(handlerException);
+            }
+        }
 
         try
         {
-            await terminalHandler.HandleAsync(new QueuedRequestFailureContext(
-                        request ?? (readQueuedFields ? queued.Request : null),
-                        metadata ?? (readQueuedFields ? queued.Metadata : null),
-                        invocation ?? TryReadInvocation(queued), queued.Attempt, error, exception)
-            { Reason = reason }, ct)
-                .ConfigureAwait(false);
+            await queued.AbandonAsync(ct).ConfigureAwait(false);
         }
-        catch (Exception handlerException) when (!ct.IsCancellationRequested)
+        catch (Exception abandonmentException) when (!ct.IsCancellationRequested)
         {
-            throw new TerminalHandlerFailureException(handlerException);
-        }
-
-        try
-        {
-            await queued.CompleteAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception acknowledgmentException) when (!ct.IsCancellationRequested)
-        {
-            PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Cleanup, acknowledgmentException,
-                _logger);
+            PortiaTelemetry.RecordFault(Activity.Current, abandonmentException);
+            PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Cleanup, abandonmentException,
+                _logger, recordException: false);
             return RequestDeliveryOutcome.Fault;
         }
 

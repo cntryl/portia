@@ -122,7 +122,9 @@ public class RequestDispatchBenchmarks
 }
 
 [PortiaJsonContext]
+[JsonSerializable(typeof(PrometheusQualification.MetricRequest))]
 [JsonSerializable(typeof(RequestDispatchBenchmarks.BenchmarkRequest))]
 [JsonSerializable(typeof(ProcessorBenchmarkEvent))]
 [JsonSerializable(typeof(SerializationBenchmarkEvent))]
+[JsonSerializable(typeof(Cntryl.Portia.Testing.ConformanceEvent))]
 sealed partial class BenchmarkJsonContext : JsonSerializerContext;

@@ -11,7 +11,9 @@ public sealed class GeneratorCacheModelTests
     [Fact]
     public void IncrementalGeneratorCacheModelsDoNotRetainCompilerObjects()
     {
-        var generators = typeof(DomainEventCatalogGenerator).Assembly.GetTypes()
+        var assemblies = new[] { typeof(DomainEventCatalogGenerator).Assembly, typeof(RequestHttpBindingGenerator).Assembly };
+        Assert.Equal(2, assemblies.Distinct().Count());
+        var generators = assemblies.SelectMany(assembly => assembly.GetTypes())
             .Where(type => typeof(IIncrementalGenerator).IsAssignableFrom(type) && !type.IsAbstract)
             .ToArray();
         var cacheModels = generators
@@ -21,6 +23,7 @@ public sealed class GeneratorCacheModelTests
         var fields = cacheModels.SelectMany(static type => type.GetFields(
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)).ToArray();
 
+        Assert.All(assemblies, assembly => Assert.Contains(generators, generator => generator.Assembly == assembly));
         Assert.NotEmpty(generators);
         Assert.NotEmpty(cacheModels);
         Assert.NotEmpty(fields);
@@ -28,6 +31,12 @@ public sealed class GeneratorCacheModelTests
             Assert.False(ContainsCompilerRoot(field.FieldType),
                 $"{field.DeclaringType!.Name}.{field.Name} retains {field.FieldType}."));
     }
+
+    [Theory]
+    [InlineData(typeof(IReadOnlyList<Dictionary<string, ISymbol>>))]
+    [InlineData(typeof((string, SyntaxNode[])))]
+    public void RecursiveCacheInspectionDetectsNestedCompilerObjects(Type type) =>
+        Assert.True(ContainsCompilerRoot(type));
 
     [Fact]
     public void DomainEventCatalogCodeGenerationIgnoresDiagnosticLocationChanges()
@@ -188,7 +197,8 @@ public sealed class GeneratorCacheModelTests
             return true;
 
         return visited.Add(type)
-               && type.Assembly == typeof(DomainEventCatalogGenerator).Assembly
+               && (type.Assembly == typeof(DomainEventCatalogGenerator).Assembly
+                   || type.Assembly == typeof(RequestHttpBindingGenerator).Assembly)
                && type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                    .Any(field => ContainsCompilerRoot(field.FieldType, visited));
     }

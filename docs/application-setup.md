@@ -125,17 +125,15 @@ and non-transient handler results remain intrinsically terminal. Malformed, inco
 invalid-metadata, and invalid known-contract request payloads always use `DeserializationFailure`.
 Any readable unsupported integer envelope version is classified as retryable before that version's
 remaining fields are inspected. Unknown contract/version pairs and unclassified read failures are
-also retryable, becoming `RetryLimitReached` only at a durable threshold. Every queue runner requires an
-application-supplied `IQueuedRequestTerminalHandler`; Fitz queue hosting validates that registration
-before opening its broker connection, while direct and generic hosted runners validate a fresh scope
-before transport enumeration. Portia does not install a default policy that silently acknowledges poison
-messages. Every delivery scope is checked again as a backstop for inconsistent custom factories.
-Callback failure uses `TerminalHandlerFailureException` and leaves transport ownership unchanged;
-`TerminalHandlerMissingException` remains an invariant backstop. The callback receives
-`QueuedRequestTerminalReason` plus the original
-request, metadata, invocation, attempt, error, and exception, and completes before Portia
-acknowledges once. Callback and acknowledgment are not atomic, so terminal handlers must tolerate
-replay; an acknowledgment failure is logged while transport ownership expires. Expected business rejection continues
+also retryable, becoming `RetryLimitReached` only at a durable threshold. An
+`IQueuedRequestTerminalHandler` is optional and observes a terminal failure; its
+successful return does not acknowledge the delivery. Portia stops renewing the
+reservation and leaves expiration, redelivery, and dead-letter policy to the
+transport. The callback receives `QueuedRequestTerminalReason` plus the original
+request, metadata, invocation, attempt, error, and exception. Because the transport
+may redeliver a terminal failure, callback effects must tolerate replay. Callback
+failure uses `TerminalHandlerFailureException` and leaves the delivery unacknowledged.
+Expected business rejection continues
 to use `Result.Failure(new RequestError(RequestErrorKind.Validation, ...))` (and the other
 `RequestErrorKind` values); validation policy belongs to the application rather than a separate
 framework validation pipeline.
@@ -312,7 +310,8 @@ and asynchronously dispose exactly one scope per delivery. Directly constructed 
 the scoped factories installed by `AddPortiaQueueRunner()` and
 `AddPortiaRequestNotificationRunner()`. A queue runner additionally creates and disposes one
 preflight scope before it enumerates its consumer; custom queue scope factories must provide an
-`IQueuedRequestTerminalHandler` consistently in that scope and every delivery scope.
+`IQueuedRequestTerminalHandler` in each delivery scope where terminal failure reporting is wanted;
+the observer is optional in both preflight and delivery scopes.
 
 Low-level hosting APIs are available for manually managed runners. Do not also start the same
 component or listener through them. Duplicate component hosting is rejected before

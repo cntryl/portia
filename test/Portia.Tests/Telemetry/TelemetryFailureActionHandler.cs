@@ -1,7 +1,8 @@
 namespace Cntryl.Portia;
 
-sealed class TelemetryFailureActionHandler : IRequestHandler<TelemetryFailureAction>
+sealed class TelemetryFailureActionHandler(Exception? exception = null) : IRequestHandler<TelemetryFailureAction>
 {
     public ValueTask<Result> HandleAsync(IRequestContext<TelemetryFailureAction> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result.Failure(new RequestError(RequestErrorKind.Validation, "Invalid.")));
+        exception is not null ? ValueTask.FromException<Result>(exception)
+            : ValueTask.FromResult(Result.Failure(new RequestError(RequestErrorKind.Validation, "Invalid.")));
 }

@@ -14,6 +14,7 @@ public sealed class InMemoryEventStore : IEventStore
     readonly Dictionary<(EventStreamAddress Stream, ulong ResourceOffset), (ulong Area, ulong Realm)>
         _scopeOffsets = [];
 
+    readonly Dictionary<EventStreamAddress, HashSet<Uuid>> _eventIds = [];
     readonly Dictionary<EventStreamAddress, List<DomainEventRecord>> _streams = [];
 
     /// <inheritdoc />
@@ -101,16 +102,18 @@ public sealed class InMemoryEventStore : IEventStore
                     $"Aggregate stream '{stream}' is at position '{committedRecords.Count}', not expected position '{expectedStreamPosition}'.");
             }
 
-            var eventIds = committedRecords.Select(record => record.Event.Metadata.EventId).ToHashSet();
+            _eventIds.TryGetValue(stream, out var committedIds);
+            var batchIds = new HashSet<Uuid>(events.Count);
 
             for (var index = 0; index < events.Count; index++)
             {
                 var ev = events[index];
                 DomainEventValidation.Validate(ev);
+                var eventId = ev.Metadata.EventId;
 
-                if (!eventIds.Add(ev.Metadata.EventId))
+                if ((committedIds?.Contains(eventId) ?? false) || !batchIds.Add(eventId))
                 {
-                    throw new InvalidOperationException($"Event ID '{ev.Metadata.EventId}' has already been appended.");
+                    throw new InvalidOperationException($"Event ID '{eventId}' has already been appended.");
                 }
             }
 
@@ -123,6 +126,13 @@ public sealed class InMemoryEventStore : IEventStore
             var finalAreaOffset = checked(areaOffset + (ulong)events.Count);
             var finalRealmOffset = checked(realmOffset + (ulong)events.Count);
             _streams[stream] = committedRecords;
+
+            if (committedIds is null)
+            {
+                _eventIds[stream] = committedIds = new HashSet<Uuid>(batchIds.Count);
+            }
+
+            committedIds.UnionWith(batchIds);
 
             for (var index = 0; index < events.Count; index++)
             {
