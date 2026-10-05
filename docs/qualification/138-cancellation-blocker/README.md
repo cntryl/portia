@@ -1,3 +1,19 @@
+# Current disposition: upstream cancellation cases temporarily skipped
+
+The nine ordinary stdio token-cancellation cases are temporarily skipped at the
+user's direction while SDK 2.2.0 is affected by upstream
+[issue #1365](https://github.com/modelcontextprotocol/csharp-sdk/issues/1365).
+Each skipped data row names that issue and requires re-enabling after a verified
+SDK fix. HTTP cancellation, explicit matched-ID notification controls, deadlines,
+and async scope disposal assertions remain active. A green run with these skips
+does not establish ordinary stdio token-cancellation support.
+
+The report below is retained as historical investigation evidence; its prohibition
+on skipping these upstream cases is superseded by this disposition. The HTTP
+scope-disposal issue described below has since been repaired on PR #147.
+
+---
+
 # 0.7.0 cancellation qualification: release blocked
 
 Batch 1 has not passed qualification. Do not merge it, advance dependent batches,
