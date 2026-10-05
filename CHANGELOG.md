@@ -4,6 +4,13 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## Unreleased
+
+### Fixed
+
+- MCP tool input schemas now mirror strict binding requiredness and setter nullability for each
+  configured JSON contract; unsupported root converter shapes fail during registration.
+
 ## 0.7.0 - 2026-10-02
 
 ### Added
