@@ -106,13 +106,13 @@ batch records only its duration and outcome.
 | 1002 | Error | swallowed unexpected background fault, with the full exception |
 | 1003 | Debug | workload lifecycle |
 | 1004 | Warning | irrecoverably lost one-way delivery |
-| 1005 | Warning | successfully terminalized queue delivery |
+| 1005 | Warning | terminal queue delivery returned unacknowledged to its transport |
 | 1101 | Error | Fitz partition termination timeout |
 
 Queue and notification runners retain their existing process span through disposition and cleanup
 logging. Events 1002, 1004 and 1005 emitted for a dispatched delivery correlate to that process,
 including under an unrelated ambient caller. Execute spans end when handler execution ends;
-process duration additionally includes acknowledgement, terminal callbacks and scope cleanup.
+process duration additionally includes acknowledgment or abandonment, terminal callbacks and scope cleanup.
 This extends an existing span's lifetime and adds no spans. The runner restores the caller's
 ambient activity before processing another delivery. Public RequestDispatch still owns its own
 process lifetime. Invalid envelopes are handled by the runner before dispatch.

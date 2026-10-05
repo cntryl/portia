@@ -14,13 +14,13 @@ public static class RequestDeliveryScopes
     public static IRequestDeliveryScopeFactory Fixed(IRequestBus bus, IRequestActorValidator actorValidator,
         TimeProvider? timeProvider = null) => new FixedFactory(bus, actorValidator, timeProvider);
 
-    /// <summary>Uses the supplied queue dependencies and terminal policy for every delivery.</summary>
+    /// <summary>Uses the supplied queue dependencies and optional terminal observer for every delivery.</summary>
     /// <param name="bus">The bus that executes validated requests.</param>
     /// <param name="actorValidator">The transport-boundary actor-token validator.</param>
     /// <param name="options">The queue runner settings, or <see langword="null" /> for the defaults.</param>
     /// <param name="terminalHandler">
-    ///     Runs before a terminal delivery is acknowledged. A queue runner rejects a
-    ///     <see langword="null" /> handler before it begins transport enumeration.
+    ///     Observes terminal failures before the unacknowledged delivery is returned to its transport.
+    ///     The handler is optional and its completion does not acknowledge the delivery.
     /// </param>
     /// <param name="timeProvider">
     ///     The clock request contexts are stamped with, or

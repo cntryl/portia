@@ -4,10 +4,7 @@ sealed record FitzQueueWorkerDefinition(string Route) : FitzRoutedWorkerDefiniti
 {
     internal const string QueueScheme = "queue";
 
-    static readonly Type[] QueueRequiredServices =
-        [.. RoutedRequiredServices, typeof(IQueuedRequestTerminalHandler)];
-
-    internal override IReadOnlyCollection<Type> Requirements => QueueRequiredServices;
+    internal override IReadOnlyCollection<Type> Requirements => RoutedRequiredServices;
 
     internal static FitzQueueWorkerDefinition For(RequestRouteAttribute route) =>
         new(Format(QueueScheme, route, false));

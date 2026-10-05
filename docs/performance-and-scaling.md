@@ -126,9 +126,10 @@ a fresh dependency-injection scope. Its event subscription is retained across su
 then disposed and recreated after a notification failure. Polling remains the authoritative
 reconciliation backstop.
 
-Each queue runner reserves, dispatches, and acknowledges one delivery at a time. Scale queue
-throughput with additional processes and independently routed consumers. Portia does not expose
-in-process prefetch, delivery parallelism, or a hidden workload scheduler.
+Each queue runner reserves and dispatches one delivery at a time, acknowledging successful work
+and leaving failures unacknowledged for the transport. Scale queue throughput with additional
+processes and independently routed consumers. Portia does not expose in-process prefetch, delivery
+parallelism, or a hidden workload scheduler.
 
 `IResumableTenantDirectory` is an optional capability. `MultiTenantRunner` opens one cursor and
 reuses it across watch failures, so an `EventSourcedTenantDirectory` resumes at its next in-process
@@ -180,13 +181,12 @@ stable effect ID or an integration-owned inbox/outbox with the target's transact
 Terminal queue outcomes include permanent handler failure, actor-validation failure, and reaching
 an explicitly configured retry limit when the transport reports a durable attempt count. Fitz's
 wire protocol does not report queue attempts, so its worker rejects a positive
-`QueueRunnerOptions.TerminalAttempt` at startup. Every queue runner requires an application-selected `IQueuedRequestTerminalHandler`, even
-when a queue is expected to contain only successful work. Direct and generic hosted runners validate
-a disposable scope before enumerating the transport, and each delivery scope is rechecked. Portia
-supplies no default poison-message acknowledgment policy. The callback completes before the single
-transport acknowledgment. Those operations are not atomic, so the handler must tolerate replay.
-The Fitz adapter retains delivery ownership when either terminal callback setup or execution
-faults; Portia does not claim a broker-independent durable dead-letter transaction.
+`QueueRunnerOptions.TerminalAttempt` at startup. An application-selected `IQueuedRequestTerminalHandler` is optional;
+it observes terminal failures but cannot acknowledge them. Portia abandons terminal deliveries and leaves
+expiration, redelivery, and dead-letter policy to the transport. Direct and generic hosted runners validate
+a disposable scope before enumerating the transport, and each delivery scope is rechecked. Callback effects
+must tolerate replay. The Fitz adapter retains delivery ownership when terminal callback execution faults;
+Portia does not claim a broker-independent durable dead-letter transaction.
 
 HTTP input is buffered in full and bounded to 10 MiB by default, including unknown-length bodies
 declared for a custom `OnBind` binder. Oversize bodies return 413 before binding or dispatch. The

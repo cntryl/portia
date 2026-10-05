@@ -41,9 +41,9 @@ public sealed class PortiaFitzBuilderTests
         Assert.Contains("Fitz:ApplicationName", error.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>Queue workers require an application terminal disposition policy before connecting.</summary>
+    /// <summary>Queue workers can start without an optional terminal failure observer.</summary>
     [Fact]
-    public async Task ShouldRejectQueueWorkerStartupWithoutTerminalHandler()
+    public async Task ShouldAllowQueueWorkerStartupWithoutTerminalHandler()
     {
         var services = new ServiceCollection();
         _ = services.AddSingleton<IRequestActorValidator, TestRequestActorValidator>();
@@ -56,12 +56,10 @@ public sealed class PortiaFitzBuilderTests
         var lifecycle = Assert.IsAssignableFrom<IHostedLifecycleService>(
             Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => lifecycle.StartingAsync(default));
-
-        Assert.Contains(typeof(IQueuedRequestTerminalHandler).FullName!, error.Message, StringComparison.Ordinal);
+        await lifecycle.StartingAsync(default);
     }
 
-    /// <summary>A scoped terminal policy satisfies queue-worker startup validation.</summary>
+    /// <summary>A scoped terminal observer remains available to queue workers.</summary>
     [Fact]
     public async Task ShouldAllowQueueWorkerStartupWithScopedTerminalHandler()
     {

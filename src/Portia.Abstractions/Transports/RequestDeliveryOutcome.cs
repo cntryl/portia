@@ -9,7 +9,7 @@ public enum RequestDeliveryOutcome
     /// <summary>The delivery was deliberately returned to its transport for another attempt.</summary>
     Abandoned,
 
-    /// <summary>The delivery was handled by the application's terminal policy and acknowledged.</summary>
+    /// <summary>The delivery was classified as terminal and left unacknowledged for transport disposition.</summary>
     Terminal,
 
     /// <summary>A one-way delivery could not be processed and cannot be redelivered.</summary>
