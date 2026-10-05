@@ -15,13 +15,16 @@ namespace Cntryl.Portia.Tests;
 [Collection("MCP HTTP integration")]
 public sealed class McpLifecycleQualificationTests
 {
+    const string UpstreamCancellationSkip =
+        "SDK 2.2.0: https://github.com/modelcontextprotocol/csharp-sdk/issues/1365. Re-enable after a verified fix.";
+
     [Theory]
-    [InlineData("tool", "2026-07-28", false, Skip = "Upstream SDK 2.2.0 cancellation race: https://github.com/modelcontextprotocol/csharp-sdk/issues/1365. Re-enable when fixed.")]
-    [InlineData("resource", "2026-07-28", false, Skip = "Upstream SDK 2.2.0 cancellation race: https://github.com/modelcontextprotocol/csharp-sdk/issues/1365. Re-enable when fixed.")]
-    [InlineData("prompt", "2026-07-28", false, Skip = "Upstream SDK 2.2.0 cancellation race: https://github.com/modelcontextprotocol/csharp-sdk/issues/1365. Re-enable when fixed.")]
-    [InlineData("tool", "2025-11-25", false, Skip = "Upstream SDK 2.2.0 cancellation race: https://github.com/modelcontextprotocol/csharp-sdk/issues/1365. Re-enable when fixed.")]
-    [InlineData("resource", "2025-11-25", false, Skip = "Upstream SDK 2.2.0 cancellation race: https://github.com/modelcontextprotocol/csharp-sdk/issues/1365. Re-enable when fixed.")]
-    [InlineData("prompt", "2025-11-25", false, Skip = "Upstream SDK 2.2.0 cancellation race: https://github.com/modelcontextprotocol/csharp-sdk/issues/1365. Re-enable when fixed.")]
+    [InlineData("tool", "2026-07-28", false, Skip = UpstreamCancellationSkip)]
+    [InlineData("resource", "2026-07-28", false, Skip = UpstreamCancellationSkip)]
+    [InlineData("prompt", "2026-07-28", false, Skip = UpstreamCancellationSkip)]
+    [InlineData("tool", "2025-11-25", false, Skip = UpstreamCancellationSkip)]
+    [InlineData("resource", "2025-11-25", false, Skip = UpstreamCancellationSkip)]
+    [InlineData("prompt", "2025-11-25", false, Skip = UpstreamCancellationSkip)]
     [InlineData("tool", "2026-07-28", true)]
     [InlineData("resource", "2026-07-28", true)]
     [InlineData("prompt", "2026-07-28", true)]
@@ -119,9 +122,9 @@ public sealed class McpLifecycleQualificationTests
     [InlineData("http", "tool", false, false)]
     [InlineData("http", "resource", false, false)]
     [InlineData("http", "prompt", false, false)]
-    [InlineData("stdio", "tool", false, false, Skip = "Upstream SDK 2.2.0 cancellation race: https://github.com/modelcontextprotocol/csharp-sdk/issues/1365. Re-enable when fixed.")]
-    [InlineData("stdio", "resource", false, false, Skip = "Upstream SDK 2.2.0 cancellation race: https://github.com/modelcontextprotocol/csharp-sdk/issues/1365. Re-enable when fixed.")]
-    [InlineData("stdio", "prompt", false, false, Skip = "Upstream SDK 2.2.0 cancellation race: https://github.com/modelcontextprotocol/csharp-sdk/issues/1365. Re-enable when fixed.")]
+    [InlineData("stdio", "tool", false, false, Skip = UpstreamCancellationSkip)]
+    [InlineData("stdio", "resource", false, false, Skip = UpstreamCancellationSkip)]
+    [InlineData("stdio", "prompt", false, false, Skip = UpstreamCancellationSkip)]
     [InlineData("http", "tool", true, false)]
     [InlineData("http", "resource", true, false)]
     [InlineData("http", "prompt", true, false)]

@@ -1,4 +1,0 @@
-ModelContextProtocol.Core 2.2.0
-Repository https://github.com/modelcontextprotocol/csharp-sdk
-Source commit 6fa3825973949a9c4f0cd8af344e15a8db09dc35
-Package SHA256 146b28079d752ce216651f48287f5846e9061e1525c08181c3854fef1a1b7aba
