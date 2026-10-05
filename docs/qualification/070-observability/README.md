@@ -24,7 +24,7 @@ A central stable Microsoft.CodeAnalysis.Analyzers 5.9.0 pin replaces the prerele
 
 ```sh
 dotnet restore Portia.slnx --locked-mode
-python3 scripts/verify-stable-dependencies.py
+dotnet run --project eng/Portia.RepositoryTools --configuration Release -- verify-stable-dependencies --root .
 dotnet format Portia.slnx --verify-no-changes --no-restore
 dotnet build Portia.slnx -c Release --no-restore
 dotnet test Portia.slnx -c Release --no-build --filter 'Category!=BrokerIntegration&Category!=StorageIntegration'

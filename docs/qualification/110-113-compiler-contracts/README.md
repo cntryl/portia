@@ -15,7 +15,7 @@ Compiler baseline: `e734be327106b710264f26270f101bdfa059e016`; the batch incorpo
 
 ```sh
 dotnet pack Portia.slnx --configuration Release --no-build --no-restore --output artifacts/packages -p:PackageVersion=0.7.0-ci.110.113
-python3 eng/verify-packed-compiler.py --version 0.7.0-ci.110.113 --packages artifacts/packages
+dotnet run --project eng/Portia.RepositoryTools --configuration Release -- verify-packed-compiler --version 0.7.0-ci.110.113 --packages artifacts/packages
 ```
 
 The script uses a new external directory/cache, explicit independent analyzer assets, application-source diagnostics, and no project references. It requires successful direct HTTP compilation with and without the independent general analyzer package; it rejects false success or an incidental build failure when a specific diagnostic is required. Six packed request assertions verify `PORTIA107`; packed contexts verify `PORTIA030`; HTTP-only and general-analyzer consumers verify `PORTIA016`. A packed executable with the HTTP analyzer item explicitly removed before compilation invokes the real fallback and requires its message to name the ASP.NET Core owner.

@@ -35,4 +35,7 @@
   <Folder Name="/smoke/">
     <Project Path="smoke/Portia.McpStdioHost/Portia.McpStdioHost.csproj"/>
   </Folder>
+  <Folder Name="/eng/">
+    <Project Path="eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj"/>
+  </Folder>
 </Solution>

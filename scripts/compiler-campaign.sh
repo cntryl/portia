@@ -12,17 +12,13 @@ fi
 cd "$portia_compiler_root"
 dotnet restore bench/Portia.CompilerBenchmarks --locked-mode
 dotnet build bench/Portia.CompilerBenchmarks --configuration Release --no-restore
+dotnet restore eng/Portia.RepositoryTools --locked-mode
+dotnet build eng/Portia.RepositoryTools --configuration Release --no-restore
 mkdir -p "$portia_compiler_output"
 dotnet msbuild bench/Portia.CompilerBenchmarks/Portia.CompilerBenchmarks.csproj \
   -target:ResolveReferences -getItem:Analyzer -verbosity:quiet > "$portia_compiler_output/resolved-analyzers.json"
-portia_json_generator=$(python3 - "$portia_compiler_output/resolved-analyzers.json" <<'PY'
-import json, sys
-items = json.load(open(sys.argv[1]))['Items']['Analyzer']
-matches = [item['Identity'] for item in items if item['Identity'].endswith('/System.Text.Json.SourceGeneration.dll')]
-assert len(matches) == 1, matches
-print(matches[0])
-PY
-)
+portia_json_generator=$(dotnet run --project eng/Portia.RepositoryTools --configuration Release --no-build -- \
+  resolve-json-generator "$portia_compiler_output/resolved-analyzers.json")
 git rev-parse HEAD > "$portia_compiler_output/source-commit.txt"
 git status --porcelain > "$portia_compiler_output/source-status.txt"
 if [[ -s "$portia_compiler_output/source-status.txt" ]]; then
@@ -39,6 +35,8 @@ for portia_profile in plain small medium large features json http unrelated-1000
   portia_profile_output="$portia_compiler_output/profiles/$portia_profile"
   dotnet run --project bench/Portia.CompilerBenchmarks --configuration Release --no-build \
     -- "$portia_profile_output" "$portia_json_generator" "$portia_compiler_repetitions" "$portia_profile"
-  python3 scripts/compiler-build-campaign.py "$portia_profile_output" "$portia_build_repetitions"
+  dotnet run --project eng/Portia.RepositoryTools --configuration Release --no-build -- \
+    compiler-build-campaign "$portia_profile_output" "$portia_build_repetitions"
 done
-python3 scripts/compiler-merge-campaign.py "$portia_compiler_output" "$portia_compiler_repetitions"
+dotnet run --project eng/Portia.RepositoryTools --configuration Release --no-build -- \
+  compiler-merge-campaign "$portia_compiler_output" "$portia_compiler_repetitions"
