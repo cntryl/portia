@@ -614,18 +614,18 @@ deserializer and the `RequestTransportCatalog` that checks each request's declar
 services.AddSingleton<IRequestQueueConsumer>(provider => new FitzRequestQueueConsumer(
     fitz.Queue, provider.GetRequiredService<IRequestDeserializer>(),
     "queue://consumer/business/account-id", provider.GetRequiredService<RequestTransportCatalog>()));
-services.AddScoped<IQueuedRequestTerminalHandler, ApplicationQueueFailurePolicy>();
 services.AddPortiaQueueRunner();
 ```
 
-The terminal handler is required even when the queue is expected to contain only successful work.
-Portia does not install a default policy that acknowledges poison messages; the application must
-choose its own dead-letter, quarantine, alerting, or other terminal disposition before consumption.
+An `IQueuedRequestTerminalHandler` is optional. Use it to record or report terminal failures; its
+successful return does not acknowledge the delivery. Portia stops renewing the reservation and
+leaves expiration, redelivery, and dead-letter policy to Fitz. A callback may run again if Fitz
+redelivers the same message, so make its effects idempotent.
 
 Queue polling defaults to a five-second wait and one reserved item. Active work
-renews its Fitz reservation. Malformed or unexpectedly failed requests stop renewal
-and remain unacknowledged; Fitz controls expiration, redelivery, and configured
-dead-letter policy. Hosted stream failures reconnect after backoff. This does not
+renews its Fitz reservation. Terminally failed requests stop renewal and remain
+unacknowledged; Fitz controls expiration, redelivery, and configured dead-letter
+policy. Hosted stream failures reconnect after backoff. This does not
 republish failed messages or add application retry counters.
 
 Projector and reactor passes use a separate bounded policy: failures leave the checkpoint

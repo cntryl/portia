@@ -38,8 +38,9 @@ public sealed class QueueRunnerTests
             capture.Logger<QueueRunner>());
         await runner.RunAsync();
         Assert.Same(caller, Activity.Current);
-        capture.AssertCorrelated(mode == "terminal" ? 1005 : 1002,
-            mode == "terminal" ? LogLevel.Warning : LogLevel.Error, 2);
+        var terminal = mode is "terminal" or "terminal-ack";
+        capture.AssertCorrelated(terminal ? 1005 : 1002,
+            terminal ? LogLevel.Warning : LogLevel.Error, 2);
         if (ambient)
             Assert.All(capture.Activities.Where(activity => activity.OperationName == PortiaTelemetry.ProcessActivityName),
                 process => Assert.True(Assert.Single(process.Links).Context.IsRemote));
@@ -139,11 +140,10 @@ public sealed class QueueRunnerTests
     }
 
     /// <summary>
-    ///     Verifies that a non-transient <see cref="RequestError" /> completes (drops) the request
-    ///     instead of abandoning it for redelivery, since it would fail identically again.
+    ///     Verifies that a non-transient <see cref="RequestError" /> is reported then left to the transport.
     /// </summary>
     [Fact]
-    public async Task ShouldCompleteNonTransientFailureInsteadOfAbandoning()
+    public async Task ShouldLeaveNonTransientFailureForTransportRedeliveryAfterCallback()
     {
         using var busHost = TestRequestBus.Create();
         var bus = busHost.Bus;
@@ -163,13 +163,13 @@ public sealed class QueueRunnerTests
         Assert.Equal(invalid.Attempt, failure.Attempt);
         Assert.Equal("Value is invalid.", failure.Error?.Message);
         Assert.Null(failure.Exception);
-        Assert.True(invalid.Completed);
-        Assert.False(invalid.Abandoned);
+        Assert.False(invalid.Completed);
+        Assert.True(invalid.Abandoned);
     }
 
-    /// <summary>A direct runner refuses to enumerate without an application terminal policy.</summary>
+    /// <summary>A direct runner abandons a terminal failure when no application observer is registered.</summary>
     [Fact]
-    public async Task ShouldRejectMissingHandlerBeforeConsumerEnumeration()
+    public async Task ShouldAbandonTerminalFailureWithoutOptionalHandler()
     {
         using var busHost = TestRequestBus.Create();
         var queued = new FakeQueuedRequest(new InvalidChangeValue(1));
@@ -177,39 +177,34 @@ public sealed class QueueRunnerTests
         var runner = new QueueRunner(consumer,
             RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator()));
 
-        var failure = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync());
+        await runner.RunAsync();
 
-        Assert.Equal(typeof(IQueuedRequestTerminalHandler), failure.MissingServiceType);
-        Assert.Contains(typeof(IQueuedRequestTerminalHandler).FullName!, failure.Message, StringComparison.Ordinal);
-        Assert.Equal(0, consumer.EnumerationCount);
+        Assert.Equal(1, consumer.EnumerationCount);
         Assert.False(queued.Completed);
-        Assert.False(queued.Abandoned);
+        Assert.True(queued.Abandoned);
     }
 
-    /// <summary>Even a queue containing only successful work requires an explicit terminal policy.</summary>
+    /// <summary>A success-only queue does not need an unused terminal observer.</summary>
     [Fact]
-    public async Task ShouldRejectMissingHandlerForSuccessfulOnlyQueue()
+    public async Task ShouldRunSuccessfulQueueWithoutOptionalHandler()
     {
-        using var busHost = TestRequestBus.Create();
+        using var busHost = TestRequestBus.Create(new ChangeValueHandler());
         var queued = new FakeQueuedRequest(new ChangeValue(1));
         var runner = new QueueRunner(new FakeQueueConsumer([queued]),
             RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator()));
 
-        _ = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync());
+        await runner.RunAsync();
 
-        Assert.False(queued.Completed);
+        Assert.True(queued.Completed);
         Assert.False(queued.Abandoned);
     }
 
     /// <summary>
-    ///     Verifies that a request whose carried actor token fails re-validation — e.g. it expired
-    ///     since it was enqueued — is dropped (completed, not redelivered) without ever reaching the
-    ///     handler. Retrying would not make an expired token valid, so this must never be abandoned
-    ///     for redelivery, and expiry must always be honored even though the request already made it
-    ///     onto the queue.
+    ///     Verifies that a request whose carried actor token fails re-validation is reported and left
+    ///     to the transport without reaching the handler.
     /// </summary>
     [Fact]
-    public async Task ShouldCompleteRequestWithoutDispatchingWhenActorTokenFailsRevalidation()
+    public async Task ShouldLeaveRequestForTransportWhenActorTokenFailsRevalidation()
     {
         var handler = new ChangeValueHandler();
         using var busHost = TestRequestBus.Create(handler);
@@ -227,8 +222,8 @@ public sealed class QueueRunnerTests
         Assert.Equal(QueuedRequestTerminalReason.ActorValidationFailure, failure.Reason);
         Assert.Equal(RequestErrorKind.Unauthorized, failure.Error?.Kind);
         Assert.Null(failure.Exception);
-        Assert.True(expired.Completed);
-        Assert.False(expired.Abandoned);
+        Assert.False(expired.Completed);
+        Assert.True(expired.Abandoned);
         Assert.Null(handler.LastValue);
     }
 
@@ -252,14 +247,15 @@ public sealed class QueueRunnerTests
 
         await runner.RunAsync();
 
-        Assert.True(expired.Completed);
+        Assert.False(expired.Completed);
+        Assert.True(expired.Abandoned);
         Assert.True(valid.Completed);
         Assert.Equal(2, handler.LastValue);
     }
 
-    /// <summary>Callback completion precedes the one transport acknowledgment.</summary>
+    /// <summary>Callback completion precedes returning a terminal delivery to its transport.</summary>
     [Fact]
-    public async Task ShouldCompleteCallbackBeforeAcknowledgingTerminalDeliveryExactlyOnce()
+    public async Task ShouldAbandonAfterTerminalCallbackExactlyOnce()
     {
         using var busHost = TestRequestBus.Create();
         var operations = new List<string>();
@@ -270,14 +266,14 @@ public sealed class QueueRunnerTests
 
         await runner.RunAsync();
 
-        Assert.Equal(["terminal", "complete"], operations);
-        Assert.Equal(1, queued.CompletionCount);
-        Assert.Equal(0, queued.AbandonmentCount);
+        Assert.Equal(["terminal", "abandon"], operations);
+        Assert.Equal(0, queued.CompletionCount);
+        Assert.Equal(1, queued.AbandonmentCount);
     }
 
-    /// <summary>The transport invocation is snapshot data even when terminal handling inspects it.</summary>
+    /// <summary>The transport invocation is snapshot data through terminal callback and abandonment.</summary>
     [Fact]
-    public async Task ShouldReadInvocationOnceThroughTerminalCallbackAndAcknowledgment()
+    public async Task ShouldReadInvocationOnceThroughTerminalCallbackAndAbandonment()
     {
         using var busHost = TestRequestBus.Create();
         var queued = new FakeQueuedRequest(new InvalidChangeValue(1), invocationMayBeReadOnce: true);
@@ -289,17 +285,14 @@ public sealed class QueueRunnerTests
 
         Assert.Equal(1, queued.InvocationReadCount);
         _ = Assert.Single(terminal.Failures);
-        Assert.Equal(1, queued.CompletionCount);
+        Assert.Equal(1, queued.AbandonmentCount);
     }
 
     /// <summary>
-    ///     Verifies that a broker which refuses the acknowledgment after a terminal delivery has already
-    ///     been handled does not fault the runner. The application's terminal handler has run and its
-    ///     side effects are done; killing the run would only stop every later delivery over a failure
-    ///     that redelivery already covers, so the fault is recorded and the run continues.
+    ///     Verifies that a terminal delivery never attempts acknowledgment and later deliveries continue.
     /// </summary>
     [Fact]
-    public async Task ShouldContinueAndRecordAFaultWhenTheBrokerRefusesATerminalAcknowledgment()
+    public async Task ShouldContinueAndLeaveTerminalDeliveryWithTransport()
     {
         using var busHost = TestRequestBus.Create();
         var faults = new List<KeyValuePair<string, object?>[]>();
@@ -323,12 +316,12 @@ public sealed class QueueRunnerTests
         await runner.RunAsync();
 
         _ = Assert.Single(terminal.Failures);
-        Assert.Equal(1, refused.CompletionCount);
+        Assert.Equal(0, refused.CompletionCount);
+        Assert.Equal(1, refused.AbandonmentCount);
         Assert.True(later.Completed);
         meterListener.Dispose();
-        Assert.Contains(faults, tags => tags.Any(tag => Equals(tag.Value, nameof(QueueRunner)))
-                                        && tags.Any(tag => Equals(tag.Value, "cleanup")));
-        Assert.Equal(["completed", "fault"], deliveryOutcomes.Order());
+        Assert.Empty(faults);
+        Assert.Equal(["completed", "terminal"], deliveryOutcomes.Order());
     }
 
     /// <summary>
@@ -446,8 +439,8 @@ public sealed class QueueRunnerTests
         Assert.Equal(QueuedRequestTerminalReason.RetryLimitReached, failure.Reason);
         Assert.True(failure.Error?.IsTransient);
         Assert.Null(failure.Exception);
-        Assert.True(queued.Completed);
-        Assert.False(queued.Abandoned);
+        Assert.False(queued.Completed);
+        Assert.True(queued.Abandoned);
     }
 
     /// <summary>An unknown wire contract remains transport-owned below its durable threshold.</summary>
@@ -468,9 +461,9 @@ public sealed class QueueRunnerTests
         Assert.False(queued.Completed);
     }
 
-    /// <summary>A retryable read failure becomes terminal only when both threshold and callback exist.</summary>
+    /// <summary>A retryable read failure reaches the callback at threshold and remains transport-owned.</summary>
     [Fact]
-    public async Task ShouldCompleteRetryableEnvelopeFailureAtTerminalAttemptGivenHandler()
+    public async Task ShouldAbandonRetryableEnvelopeFailureAtTerminalAttemptGivenHandler()
     {
         using var busHost = TestRequestBus.Create();
         var queued = new FakeQueuedRequest(new ChangeValue(1), attempt: 3,
@@ -482,7 +475,8 @@ public sealed class QueueRunnerTests
         await runner.RunAsync();
 
         Assert.Equal(QueuedRequestTerminalReason.RetryLimitReached, Assert.Single(terminal.Failures).Reason);
-        Assert.True(queued.Completed);
+        Assert.False(queued.Completed);
+        Assert.True(queued.Abandoned);
     }
 
     /// <summary>A permanent lazy read always reaches the terminal callback and later work continues.</summary>
@@ -501,8 +495,8 @@ public sealed class QueueRunnerTests
         await runner.RunAsync();
 
         Assert.Equal(QueuedRequestTerminalReason.DeserializationFailure, Assert.Single(terminal.Failures).Reason);
-        Assert.True(malformed.Completed);
-        Assert.False(malformed.Abandoned);
+        Assert.False(malformed.Completed);
+        Assert.True(malformed.Abandoned);
         Assert.True(later.Completed);
         Assert.Equal(7, handler.LastValue);
     }
@@ -535,9 +529,9 @@ public sealed class QueueRunnerTests
         Assert.Contains(fault, tag => Equals(tag.Value, "execution"));
     }
 
-    /// <summary>A malformed read with an application callback retains deserialization terminal semantics.</summary>
+    /// <summary>A malformed read with an application callback retains terminal classification and broker ownership.</summary>
     [Fact]
-    public async Task ShouldCompletePermanentEnvelopeFailureAsDeserializationFailureGivenHandler()
+    public async Task ShouldAbandonPermanentEnvelopeFailureAsDeserializationFailureGivenHandler()
     {
         using var busHost = TestRequestBus.Create();
         var queued = new FakeQueuedRequest(new ChangeValue(1),
@@ -549,7 +543,8 @@ public sealed class QueueRunnerTests
         await runner.RunAsync();
 
         Assert.Equal(QueuedRequestTerminalReason.DeserializationFailure, Assert.Single(terminal.Failures).Reason);
-        Assert.True(queued.Completed);
+        Assert.False(queued.Completed);
+        Assert.True(queued.Abandoned);
     }
 
     /// <summary>A retryable lazy read is terminalized at its durable threshold.</summary>
@@ -566,8 +561,8 @@ public sealed class QueueRunnerTests
         await runner.RunAsync();
 
         Assert.Equal(QueuedRequestTerminalReason.RetryLimitReached, Assert.Single(terminal.Failures).Reason);
-        Assert.False(queued.Abandoned);
-        Assert.True(queued.Completed);
+        Assert.True(queued.Abandoned);
+        Assert.False(queued.Completed);
     }
 
     /// <summary>A terminal threshold is rejected by the runner when the adapter has no durable count.</summary>
@@ -629,9 +624,9 @@ public sealed class QueueRunnerTests
                 .WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
-    /// <summary>A request that did not declare queue delivery is terminal and never dispatched.</summary>
+    /// <summary>A request that did not declare queue delivery is terminal, never dispatched, and returned to transport.</summary>
     [Fact]
-    public async Task ShouldCompleteAsInvalidTransportGivenQueueCapabilityMismatch()
+    public async Task ShouldAbandonAsInvalidTransportGivenQueueCapabilityMismatch()
     {
         using var busHost = TestRequestBus.Create();
         var queued = new FakeQueuedRequest(new ChangeValue(1), transportMismatch: true);
@@ -644,7 +639,8 @@ public sealed class QueueRunnerTests
         var failure = Assert.Single(terminal.Failures);
         Assert.Equal(QueuedRequestTerminalReason.InvalidTransport, failure.Reason);
         _ = Assert.IsType<InvalidRequestTransportException>(failure.Exception);
-        Assert.True(queued.Completed);
+        Assert.False(queued.Completed);
+        Assert.True(queued.Abandoned);
     }
 
     /// <summary>An unexpected exception at the configured threshold also becomes terminal.</summary>
@@ -663,8 +659,8 @@ public sealed class QueueRunnerTests
         Assert.Equal((uint)3, failure.Attempt);
         Assert.Equal(QueuedRequestTerminalReason.RetryLimitReached, failure.Reason);
         Assert.NotNull(failure.Exception);
-        Assert.True(queued.Completed);
-        Assert.False(queued.Abandoned);
+        Assert.False(queued.Completed);
+        Assert.True(queued.Abandoned);
     }
 
     /// <summary>A retryable result remains broker-owned until a configured threshold is reached.</summary>
@@ -724,20 +720,19 @@ public sealed class QueueRunnerTests
         Assert.False(queued.Abandoned);
     }
 
-    /// <summary>A configured retry threshold cannot make a missing terminal policy valid.</summary>
+    /// <summary>A configured retry threshold remains transport-owned without an optional terminal observer.</summary>
     [Fact]
-    public async Task ShouldFaultWithoutAcknowledgmentGivenRetryLimitAndMissingHandler()
+    public async Task ShouldAbandonAtRetryLimitGivenNoTerminalHandler()
     {
         using var busHost = TestRequestBus.Create();
         var queued = new FakeQueuedRequest(new ChangeValue(1), true, attempt: 3);
         var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }));
 
-        var failure = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync());
+        await runner.RunAsync();
 
-        Assert.Equal(typeof(IQueuedRequestTerminalHandler), failure.MissingServiceType);
         Assert.False(queued.Completed);
-        Assert.False(queued.Abandoned);
+        Assert.True(queued.Abandoned);
     }
 
     /// <summary>Failures remain retryable below the configured terminal threshold.</summary>
@@ -756,34 +751,31 @@ public sealed class QueueRunnerTests
         Assert.True(queued.Abandoned);
     }
 
-    /// <summary>The hosted transport exposes startup configuration failure instead of restarting.</summary>
+    /// <summary>A hosted queue can run without registering a terminal observer.</summary>
     [Fact]
-    public async Task ShouldFaultHostedRunnerGivenTerminalHandlerMissing()
+    public async Task ShouldRunHostedQueueWithoutTerminalHandler()
     {
-        using var busHost = TestRequestBus.Create();
-        var queued = new FakeQueuedRequest(new InvalidChangeValue(1));
-        var runner = new QueueRunner(new FakeQueueConsumer([queued]),
+        using var busHost = TestRequestBus.Create(new ChangeValueHandler());
+        var queued = new FakeQueuedRequest(new ChangeValue(1));
+        var consumer = new OneThenWaitQueueConsumer(queued);
+        var runner = new QueueRunner(consumer,
             RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator()));
         using var hosted = new QueueRunnerHostedService(runner);
 
         await hosted.StartAsync(default);
-        var failure = await Assert.ThrowsAsync<QueueConfigurationException>(async () =>
-            await (hosted.ExecuteTask ?? throw new InvalidOperationException("The hosted runner did not start.")));
+        await consumer.Waiting.WaitAsync(TimeSpan.FromSeconds(5));
+        await hosted.StopAsync(default);
 
-        Assert.Equal(typeof(IQueuedRequestTerminalHandler), failure.MissingServiceType);
-        Assert.False(queued.Completed);
+        Assert.True(queued.Completed);
+        Assert.Equal(1, queued.CompletionCount);
         Assert.False(queued.Abandoned);
     }
 
     /// <summary>Fitz's combined worker host must propagate both terminal ownership faults.</summary>
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ShouldFaultFitzWorkerRestartBoundaryGivenTerminalOwnershipFailure(bool missing)
+    [Fact]
+    public async Task ShouldFaultFitzWorkerRestartBoundaryGivenTerminalCallbackFailure()
     {
-        var expected = missing
-            ? (Exception)new TerminalHandlerMissingException(QueuedRequestTerminalReason.PermanentFailure)
-            : new TerminalHandlerFailureException(new InvalidOperationException("terminal failed"));
+        var expected = new TerminalHandlerFailureException(new InvalidOperationException("terminal failed"));
         var attempts = 0;
 
         var failure = await Assert.ThrowsAsync(expected.GetType(), () => FitzApplicationWorkers.RetryAsync(
@@ -801,7 +793,7 @@ public sealed class QueueRunnerTests
     [Fact]
     public async Task ShouldFaultFitzWorkerRestartBoundaryGivenQueueConfigurationFailure()
     {
-        var expected = new QueueConfigurationException(typeof(IQueuedRequestTerminalHandler));
+        var expected = new QueueConfigurationException("Invalid queue runner configuration.");
         var attempts = 0;
 
         var failure = await Assert.ThrowsAsync<QueueConfigurationException>(() => FitzApplicationWorkers.RetryAsync(
@@ -832,21 +824,20 @@ public sealed class QueueRunnerTests
         Assert.True(queued.Completed);
     }
 
-    /// <summary>Every delivery scope is checked even after startup preflight succeeds.</summary>
+    /// <summary>A terminal observer may be absent from an individual delivery scope.</summary>
     [Fact]
-    public async Task ShouldRejectInconsistentDeliveryScopeWithoutChangingTransportOwnership()
+    public async Task ShouldAllowDeliveryScopeWithoutOptionalTerminalObserver()
     {
         using var busHost = TestRequestBus.Create();
         var scopes = new RecordingQueueScopeFactory(busHost.Bus, new TestRequestActorValidator(),
             index => index == 0);
         var queued = new FakeQueuedRequest(new ChangeValue(1));
 
-        _ = await Assert.ThrowsAsync<QueueConfigurationException>(() =>
-            new QueueRunner(new FakeQueueConsumer([queued]), scopes).RunAsync());
+        await new QueueRunner(new FakeQueueConsumer([queued]), scopes).RunAsync();
 
         Assert.Equal(2, scopes.Created.Count);
         Assert.All(scopes.Created, scope => Assert.True(scope.Disposed));
-        Assert.False(queued.Completed);
+        Assert.True(queued.Completed);
         Assert.False(queued.Abandoned);
     }
 
@@ -877,11 +868,11 @@ public sealed class QueueRunnerTests
         await runner.RunAsync();
 
         Assert.Equal(terminal ? 1 : 0, handler.Failures.Count);
-        Assert.Equal(terminal, failed.Completed);
-        Assert.Equal(!terminal, failed.Abandoned);
+        Assert.False(failed.Completed);
+        Assert.True(failed.Abandoned);
         Assert.False(failed.Completed && failed.Abandoned);
-        Assert.Equal(terminal ? 1 : 0, failed.CompletionCount);
-        Assert.Equal(terminal ? 0 : 1, failed.AbandonmentCount);
+        Assert.Equal(0, failed.CompletionCount);
+        Assert.Equal(1, failed.AbandonmentCount);
         Assert.True(next.Completed);
         Assert.Equal(2, outcomes.Count);
         Assert.Contains(terminal ? "terminal" : "abandoned", outcomes);
@@ -1021,6 +1012,21 @@ public sealed class QueueRunnerTests
                 await Task.Yield();
                 yield return item;
             }
+        }
+    }
+
+    sealed class OneThenWaitQueueConsumer(IQueuedRequest item) : IRequestQueueConsumer
+    {
+        readonly TaskCompletionSource _waiting = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Waiting => _waiting.Task;
+
+        public async IAsyncEnumerable<IQueuedRequest> ReadAsync(
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            yield return item;
+            _waiting.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
         }
     }
 

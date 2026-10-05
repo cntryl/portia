@@ -390,8 +390,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             TestJson.Catalog(RequestTransportId.Queue, typeof(UniversalAction)), 5,
             TimeSpan.FromMilliseconds(100));
         var runner = new QueueRunner(new OneQueueConsumer(consumer),
-            RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator(),
-                terminalHandler: new IgnoreTerminalRequest()));
+            RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator()));
         var publisher = new FitzRequestQueuePublisher(callerClient.Queue, serializer);
 
         await publisher.EnqueueAsync(new UniversalAction(74), RequestRouteValues.None, "valid-token");
@@ -400,6 +399,49 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         Assert.Contains(74, handler.HandledValues);
         AssertLinkedFitzTopology(activities, "test.shared.universal-action", "queue");
         AssertCompletedDelivery(deliveries, "test.shared.universal-action", "queue");
+    }
+
+    /// <summary>A terminal queue delivery expires and becomes reservable again through Fitz.</summary>
+    [Fact]
+    public async Task ShouldRedeliverTerminalQueueFailureThroughFitz()
+    {
+        await using var workerClient = await _broker.CreateClientAsync();
+        await using var callerClient = await _broker.CreateClientAsync();
+        var routeSuffix = Guid.NewGuid().ToString("N");
+        var route = $"queue://test/shared/terminal-{routeSuffix}";
+        var catalog = new RequestTransportCatalog([
+            new RequestTransportRegistration(typeof(UniversalAction), [RequestTransportId.Queue],
+                new RequestRouteAttribute("test", "shared", $"terminal-{routeSuffix}", "run"),
+                new DiscriminatorAttribute("test.shared.universal-action"))
+        ]);
+        var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var publisher = new FitzRequestQueuePublisher(callerClient.Queue, serializer, catalog);
+        var handler = new UniversalActionHandler();
+        using var busHost = TestRequestBus.Create(universalActionHandler: handler);
+        var failures = new List<QueuedRequestFailureContext>();
+        var consumer = new FitzRequestQueueConsumer(workerClient.Queue, serializer, route, catalog, 2,
+            TimeSpan.FromMilliseconds(100));
+        var runner = new QueueRunner(new OneQueueConsumer(consumer), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator("expired-token"),
+            terminalHandler: new RecordingTerminalRequest(failures)));
+
+        await publisher.EnqueueAsync(new UniversalAction(76), RequestRouteValues.None, "expired-token");
+        await runner.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(QueuedRequestTerminalReason.ActorValidationFailure, Assert.Single(failures).Reason);
+        Assert.Empty(handler.HandledValues);
+        var redelivered = Assert.Single(await workerClient.Queue.ReserveAsync(route, TimeSpan.FromSeconds(2),
+            wait: TimeSpan.FromSeconds(5)));
+        try
+        {
+            var envelope = serializer.DeserializeEnvelope(redelivered.Body);
+            Assert.Equal(new UniversalAction(76), Assert.IsType<UniversalAction>(envelope.Request));
+            await redelivered.CompleteAsync();
+        }
+        finally
+        {
+            await redelivered.DisposeAsync();
+        }
     }
 
     /// <summary>A real notice delivery starts a linked root and records one completed delivery.</summary>
@@ -821,10 +863,14 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             ValueTask.FromResult(Result<ClaimsPrincipal>.Success(RequestActor.System));
     }
 
-    sealed class IgnoreTerminalRequest : IQueuedRequestTerminalHandler
+    sealed class RecordingTerminalRequest(List<QueuedRequestFailureContext> failures)
+        : IQueuedRequestTerminalHandler
     {
-        public ValueTask HandleAsync(QueuedRequestFailureContext context, CancellationToken ct = default) =>
-            ValueTask.CompletedTask;
+        public ValueTask HandleAsync(QueuedRequestFailureContext context, CancellationToken ct = default)
+        {
+            failures.Add(context);
+            return ValueTask.CompletedTask;
+        }
     }
 }
 

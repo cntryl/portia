@@ -548,7 +548,7 @@ public static partial class PortiaTelemetry
         }
     }
 
-    /// <summary>Logs one queue delivery successfully handled by terminal policy.</summary>
+    /// <summary>Logs one queue delivery classified as terminal and returned unacknowledged to its transport.</summary>
     internal static void RecordTerminalDelivery(string requestName, string transport, ILogger? logger)
     {
         if (logger is not null)
@@ -586,6 +586,6 @@ public static partial class PortiaTelemetry
     static partial void LogLostDelivery(ILogger logger, string requestName, string transport);
 
     [LoggerMessage(EventId = 1005, Level = LogLevel.Warning,
-        Message = "Portia terminalized queue request {RequestName} on {Transport}")]
+        Message = "Portia classified queue request {RequestName} as terminal on {Transport}; transport retains delivery")]
     static partial void LogTerminalDelivery(ILogger logger, string requestName, string transport);
 }
