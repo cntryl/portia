@@ -14,7 +14,7 @@ static class DependencyVerifier
         var root = ParseRoot(args);
         var failures = new List<string>();
 
-        foreach (var lockFile in EnumerateLockFiles(root))
+        foreach (var lockFile in EnumerateLockFiles(root).Order(StringComparer.Ordinal))
         {
             using var document = JsonDocument.Parse(File.ReadAllText(lockFile));
             var dependencies = document.RootElement.GetProperty("dependencies");
@@ -61,7 +61,7 @@ static class DependencyVerifier
 
     static string ParseRoot(string[] args)
     {
-        var root = Directory.GetCurrentDirectory();
+        var root = FindRepositoryRoot();
         for (var index = 1; index < args.Length; index++)
         {
             if (args[index] == "--root")
@@ -77,6 +77,19 @@ static class DependencyVerifier
         }
 
         return Path.GetFullPath(root);
+    }
+
+    static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "Portia.slnx")))
+                return directory.FullName;
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate Portia.slnx above the repository-tools assembly.");
     }
 
     static IEnumerable<string> EnumerateLockFiles(string root)
