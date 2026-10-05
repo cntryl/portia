@@ -34,6 +34,9 @@ one process span and one execute child. Queue retries never parent their next at
 does not create a wide producer trace, and recurring schedules never extend an earlier firing.
 Linked deliveries remain roots even when an unrelated activity is ambient. Wire trace context is
 marked remote at ingress so parent-based samplers distinguish received context from local activity.
+MCP tools, resource reads, and prompt gets create one process span and one execute child, retaining
+their local SDK parent when present. Their transport names are `mcp`, `mcp-resource`, and `mcp-prompt`;
+resource templates and prompt names are startup-bounded labels.
 
 Polling, reservation renewal, acknowledgement, retry delay, checkpoints, event processing, tenant
 scans, reconciliation, assignment, and hosted-service lifecycle create no spans. Envelopes propagate
@@ -57,6 +60,8 @@ Unexpected failures, including unrequested cancellation, record `fault`, error s
 exception event when the activity was sampled for data.
 An unrelated exception remains a fault even if the caller token was also canceled. Stream
 preflight exceptions retain their exception event and every started request balances the active count.
+MCP process spans include projection and result limits; unexpected faults produce a correlated runner
+fault log while client failures retain sanitized transport envelopes.
 
 ## Instruments
 
