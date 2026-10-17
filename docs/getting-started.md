@@ -417,7 +417,9 @@ Return `null` for ordinary serializer schemas. Register both the converter-backe
 representation (here `ItemSelection[]`) in the application's `[PortiaJsonContext]` with explicit
 `[JsonSerializable]` attributes. The representation is exported through Portia's configured JSON
 metadata, so item property names, converters and recursive references use the same serializer policy.
-Nested properties and response types receive the mapping in both JSON and YAML documents. The
+Dictionary values, polymorphic derived properties, nested collections and response types receive
+the mapping in both JSON and YAML documents. A nullable value type reuses its underlying type
+mapping unless the application supplies a separate mapping for the nullable type. The
 original property's requiredness, nullability and constructor default remain authoritative. Mapping
 is only a documentation declaration; it does not change the converter or validate its behavior.
 Compare actual runtime JSON with the schema in application tests. Missing representation metadata

@@ -9,7 +9,9 @@ builder.WebHost.UseUrls("http://127.0.0.1:0");
 _ = builder.Services.AddSingleton<SmokeGuardProbe>();
 _ = builder.Services.AddSingleton<SmokeContinuationProbe>();
 _ = builder.Services.AddPortia().ConfigureJson(options => options.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower)
-    .AddHttp(options => options.OpenApiSchemaType = type => type == typeof(SmokeNames) ? typeof(string[]) : null)
+    .AddHttp(options => options.OpenApiSchemaType = type => type == typeof(SmokeNames)
+        ? typeof(string[])
+        : type == typeof(SmokeCount) ? typeof(int) : null)
     .AddRequestHandler<SmokeRequestHandler>()
     .AddRequestHandler<SmokeUploadHandler>()
     .AddRequestPipelineBehavior<SmokeRequestBehavior>()
@@ -47,7 +49,12 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     var response = await client.GetStringAsync("/smoke?name=native-aot");
     using var payload = JsonDocument.Parse(response);
     if (payload.RootElement.GetProperty("display_name").GetString() != "native-aot" ||
-        payload.RootElement.GetProperty("aliases")[0].GetString() != "native-aot")
+        payload.RootElement.GetProperty("aliases")[0].GetString() != "native-aot" ||
+        payload.RootElement.GetProperty("groups").GetProperty("primary")[0].GetString() != "native-aot" ||
+        payload.RootElement.GetProperty("count").GetInt32() != 42 ||
+        payload.RootElement.GetProperty("empty_count").ValueKind != JsonValueKind.Null ||
+        payload.RootElement.GetProperty("variant").GetProperty("kind").GetString() != "names" ||
+        payload.RootElement.GetProperty("variant").GetProperty("names")[0].GetString() != "native-aot")
         throw new InvalidOperationException($"Unexpected response: {response}");
 
     // Describing an endpoint is the part of the OpenAPI path most easily lost to an AOT-motivated
@@ -72,6 +79,24 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
         : aliasItemType.GetString() == "string";
     if (!aliases.GetProperty("type").EnumerateArray().Any(type => type.GetString() == "array") || !stringItems)
         throw new InvalidOperationException($"Converted collection schema is not a typed array: {document}");
+    var groups = ResolveSchema(properties.GetProperty("groups"), components);
+    var groupValues = ResolveSchema(groups.GetProperty("additionalProperties"), components);
+    if (!HasSchemaType(groups, "object") || groups.TryGetProperty("items", out _) ||
+        !HasSchemaType(groupValues, "array") || !HasSchemaType(ResolveSchema(groupValues.GetProperty("items"), components), "string"))
+        throw new InvalidOperationException($"Converted dictionary values are not typed arrays: {document}");
+    foreach (var name in new[] { "count", "empty_count" })
+    {
+        var count = ResolveSchema(properties.GetProperty(name), components);
+        if (!HasSchemaType(count, "integer") || !HasSchemaType(count, "null") || count.TryGetProperty("items", out _))
+            throw new InvalidOperationException($"Nullable converted value schema does not reuse its underlying type mapping: {document}");
+    }
+    var variants = ResolveSchema(properties.GetProperty("variant"), components).GetProperty("anyOf");
+    var namesVariant = variants.EnumerateArray().Select(variant => ResolveSchema(variant, components)).Single(variant =>
+        variant.TryGetProperty("properties", out var members) && members.TryGetProperty("names", out _));
+    var variantNames = ResolveSchema(namesVariant.GetProperty("properties").GetProperty("names"), components);
+    if (!HasSchemaType(variantNames, "array") || HasSchemaType(variantNames, "null") ||
+        !HasSchemaType(ResolveSchema(variantNames.GetProperty("items"), components), "string"))
+        throw new InvalidOperationException($"Polymorphic converted property is not a typed array: {document}");
     var recursiveId = properties.GetProperty("next_node").GetProperty("properties").GetProperty("next_node").GetProperty("$ref").GetString()!.Split('/')[^1];
     if (!components.GetProperty(recursiveId).GetProperty("properties").TryGetProperty("display_name", out _))
         throw new InvalidOperationException($"Recursive Portia schema does not resolve: {document}");
@@ -140,6 +165,28 @@ await using (var scope = app.Services.CreateAsyncScope())
 }
 await app.StopAsync();
 
+static JsonElement ResolveSchema(JsonElement schema, JsonElement components)
+{
+    var visited = new HashSet<string>(StringComparer.Ordinal);
+    while (schema.TryGetProperty("$ref", out var reference))
+    {
+        var target = reference.GetString()!;
+        if (!target.StartsWith("#/components/schemas/", StringComparison.Ordinal) || !visited.Add(target))
+            throw new InvalidOperationException($"Unexpected schema reference: {target}");
+        schema = components.GetProperty(target.Split('/')[^1]);
+    }
+    return schema;
+}
+
+static bool HasSchemaType(JsonElement schema, string expected)
+{
+    if (!schema.TryGetProperty("type", out var type))
+        return false;
+    return type.ValueKind == JsonValueKind.Array
+        ? type.EnumerateArray().Any(value => value.GetString() == expected)
+        : type.GetString() == expected;
+}
+
 [Discriminator("portia.smoke.native-aot.request")]
 [RequestRoute("portia-smoke", "requests", "native-aot", "get")]
 sealed record SmokeRequest(string Name) : IRequest<SmokePayload>, ICallable, ISmokeRequest;
@@ -147,7 +194,10 @@ sealed record SmokeRequest(string Name) : IRequest<SmokePayload>, ICallable, ISm
 sealed class SmokeRequestHandler : IRequestHandler<SmokeRequest, SmokePayload>
 {
     public ValueTask<Result<SmokePayload>> HandleAsync(IRequestContext<SmokeRequest> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result<SmokePayload>.Success(new SmokePayload(context.Request.Name, Aliases: new SmokeNames([context.Request.Name]))));
+        ValueTask.FromResult(Result<SmokePayload>.Success(new SmokePayload(context.Request.Name,
+            Aliases: new SmokeNames([context.Request.Name]),
+            Groups: new Dictionary<string, SmokeNames> { ["primary"] = new([context.Request.Name]) },
+            Count: new SmokeCount(42), Variant: new SmokeNamesVariant(new SmokeNames([context.Request.Name])))));
 }
 
 sealed class SmokeContinuationProbe
@@ -171,7 +221,9 @@ sealed class SmokeRequestBehavior(SmokeContinuationProbe probe) : IRequestPipeli
     }
 }
 
-sealed record SmokePayload(string DisplayName, SmokePayload? NextNode = null, SmokeNames? Aliases = null);
+sealed record SmokePayload(string DisplayName, SmokePayload? NextNode = null, SmokeNames? Aliases = null,
+    Dictionary<string, SmokeNames>? Groups = null, SmokeCount? Count = null, SmokeCount? EmptyCount = null,
+    SmokeVariant? Variant = null);
 
 [JsonConverter(typeof(SmokeNamesConverter))]
 sealed record SmokeNames(string[] Values);
@@ -186,6 +238,27 @@ sealed class SmokeNamesConverter : JsonConverter<SmokeNames>
         JsonSerializer.Serialize(writer, value.Values,
             (System.Text.Json.Serialization.Metadata.JsonTypeInfo<string[]>)options.GetTypeInfo(typeof(string[])));
 }
+
+[JsonConverter(typeof(SmokeCountConverter))]
+readonly record struct SmokeCount(int Value);
+
+sealed class SmokeCountConverter : JsonConverter<SmokeCount>
+{
+    public override SmokeCount Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        new(reader.GetInt32());
+
+    public override void Write(Utf8JsonWriter writer, SmokeCount value, JsonSerializerOptions options) =>
+        writer.WriteNumberValue(value.Value);
+}
+
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+[JsonDerivedType(typeof(SmokeNamesVariant), "names")]
+[JsonDerivedType(typeof(SmokeTextVariant), "text")]
+abstract record SmokeVariant;
+
+sealed record SmokeNamesVariant(SmokeNames Names) : SmokeVariant;
+
+sealed record SmokeTextVariant(string Description) : SmokeVariant;
 
 [Discriminator("portia.smoke.native-aot.upload")]
 [RequestRoute("portia-smoke", "requests", "native-aot", "upload")]
@@ -225,5 +298,8 @@ sealed class SmokeGuardProbe
 [JsonSerializable(typeof(SmokePayload))]
 [JsonSerializable(typeof(SmokeNames))]
 [JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(Dictionary<string, SmokeNames>))]
+[JsonSerializable(typeof(SmokeCount))]
+[JsonSerializable(typeof(SmokeVariant))]
 [JsonSerializable(typeof(SmokeUpload))]
 sealed partial class SmokeJsonContext : JsonSerializerContext;

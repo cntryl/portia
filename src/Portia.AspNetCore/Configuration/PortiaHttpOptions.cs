@@ -16,7 +16,8 @@ public sealed class PortiaHttpOptions
     /// <remarks>
     ///     Use this for converter-backed types whose JSON shape the serializer cannot infer. Both types
     ///     must have metadata in Portia's configured JSON resolver. The mapping changes documentation
-    ///     only; converters still own runtime JSON. Property nullability, defaults and requiredness are
+    ///     only; converters still own runtime JSON. Nullable value types reuse their underlying type's
+    ///     mapping unless explicitly overridden. Property nullability, defaults and requiredness are
     ///     retained. Configure the mapping before the first document request; documents are cached.
     /// </remarks>
     public Func<Type, Type?>? OpenApiSchemaType { get; set; }
