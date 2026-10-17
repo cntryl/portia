@@ -400,6 +400,30 @@ builder.Services.Configure<PortiaHttpOptions>(options => options.ServerSentEvent
 Portia does not emit `id:` or `retry:`, so a client reconnecting after a drop resumes from wherever
 the request's own parameters place it, not from a `Last-Event-ID`.
 
+### Describing converter-backed JSON types
+
+A JSON converter owns its wire representation. Portia cannot infer that an application collection
+serializes as an array, or that a value object serializes as a string. Declare that representation
+through `PortiaHttpOptions.OpenApiSchemaType` before the first OpenAPI document request:
+
+```csharp
+builder.Services.AddPortia().AddHttp(options =>
+    options.OpenApiSchemaType = type =>
+        type == typeof(ValueList<ItemSelection>) ? typeof(ItemSelection[]) :
+        type == typeof(Money) ? typeof(string) : null);
+```
+
+Return `null` for ordinary serializer schemas. Register both the converter-backed contract and its
+representation (here `ItemSelection[]`) in the application's `[PortiaJsonContext]` with explicit
+`[JsonSerializable]` attributes. The representation is exported through Portia's configured JSON
+metadata, so item property names, converters and recursive references use the same serializer policy.
+Nested properties and response types receive the mapping in both JSON and YAML documents. The
+original property's requiredness, nullability and constructor default remain authoritative. Mapping
+is only a documentation declaration; it does not change the converter or validate its behavior.
+Compare actual runtime JSON with the schema in application tests. Missing representation metadata
+fails document generation; a cyclic chain of type mappings is rejected. Documents are cached after
+successful generation, so configure deterministic mappings at startup.
+
 ### Choosing where the document is served
 
 The routes are served only when the application explicitly calls `MapPortiaOpenApi()`.

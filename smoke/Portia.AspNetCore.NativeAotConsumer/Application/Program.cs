@@ -9,7 +9,7 @@ builder.WebHost.UseUrls("http://127.0.0.1:0");
 _ = builder.Services.AddSingleton<SmokeGuardProbe>();
 _ = builder.Services.AddSingleton<SmokeContinuationProbe>();
 _ = builder.Services.AddPortia().ConfigureJson(options => options.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower)
-    .AddHttp()
+    .AddHttp(options => options.OpenApiSchemaType = type => type == typeof(SmokeNames) ? typeof(string[]) : null)
     .AddRequestHandler<SmokeRequestHandler>()
     .AddRequestHandler<SmokeUploadHandler>()
     .AddRequestPipelineBehavior<SmokeRequestBehavior>()
@@ -46,7 +46,8 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
 {
     var response = await client.GetStringAsync("/smoke?name=native-aot");
     using var payload = JsonDocument.Parse(response);
-    if (payload.RootElement.GetProperty("display_name").GetString() != "native-aot")
+    if (payload.RootElement.GetProperty("display_name").GetString() != "native-aot" ||
+        payload.RootElement.GetProperty("aliases")[0].GetString() != "native-aot")
         throw new InvalidOperationException($"Unexpected response: {response}");
 
     // Describing an endpoint is the part of the OpenAPI path most easily lost to an AOT-motivated
@@ -64,6 +65,10 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     var properties = components.GetProperty(schemaId).GetProperty("properties");
     if (!properties.TryGetProperty("display_name", out _) || properties.TryGetProperty("displayName", out _))
         throw new InvalidOperationException($"Portia schema does not match its JSON contract: {document}");
+    var aliases = properties.GetProperty("aliases");
+    if (!aliases.GetProperty("type").EnumerateArray().Any(type => type.GetString() == "array") ||
+        aliases.GetProperty("items").GetProperty("type").GetString() != "string")
+        throw new InvalidOperationException($"Converted collection schema is not a typed array: {document}");
     var recursiveId = properties.GetProperty("next_node").GetProperty("properties").GetProperty("next_node").GetProperty("$ref").GetString()!.Split('/')[^1];
     if (!components.GetProperty(recursiveId).GetProperty("properties").TryGetProperty("display_name", out _))
         throw new InvalidOperationException($"Recursive Portia schema does not resolve: {document}");
@@ -139,7 +144,7 @@ sealed record SmokeRequest(string Name) : IRequest<SmokePayload>, ICallable, ISm
 sealed class SmokeRequestHandler : IRequestHandler<SmokeRequest, SmokePayload>
 {
     public ValueTask<Result<SmokePayload>> HandleAsync(IRequestContext<SmokeRequest> context, CancellationToken ct) =>
-        ValueTask.FromResult(Result<SmokePayload>.Success(new SmokePayload(context.Request.Name)));
+        ValueTask.FromResult(Result<SmokePayload>.Success(new SmokePayload(context.Request.Name, Aliases: new SmokeNames([context.Request.Name]))));
 }
 
 sealed class SmokeContinuationProbe
@@ -163,7 +168,21 @@ sealed class SmokeRequestBehavior(SmokeContinuationProbe probe) : IRequestPipeli
     }
 }
 
-sealed record SmokePayload(string DisplayName, SmokePayload? NextNode = null);
+sealed record SmokePayload(string DisplayName, SmokePayload? NextNode = null, SmokeNames? Aliases = null);
+
+[JsonConverter(typeof(SmokeNamesConverter))]
+sealed record SmokeNames(string[] Values);
+
+sealed class SmokeNamesConverter : JsonConverter<SmokeNames>
+{
+    public override SmokeNames Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        new(JsonSerializer.Deserialize(ref reader,
+            (System.Text.Json.Serialization.Metadata.JsonTypeInfo<string[]>)options.GetTypeInfo(typeof(string[])))!);
+
+    public override void Write(Utf8JsonWriter writer, SmokeNames value, JsonSerializerOptions options) =>
+        JsonSerializer.Serialize(writer, value.Values,
+            (System.Text.Json.Serialization.Metadata.JsonTypeInfo<string[]>)options.GetTypeInfo(typeof(string[])));
+}
 
 [Discriminator("portia.smoke.native-aot.upload")]
 [RequestRoute("portia-smoke", "requests", "native-aot", "upload")]
@@ -201,5 +220,7 @@ sealed class SmokeGuardProbe
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(int))]
 [JsonSerializable(typeof(SmokePayload))]
+[JsonSerializable(typeof(SmokeNames))]
+[JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(SmokeUpload))]
 sealed partial class SmokeJsonContext : JsonSerializerContext;

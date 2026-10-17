@@ -28,6 +28,85 @@ public sealed class OpenApiTests : IAsyncDisposable
         }
     }
 
+    /// <summary>Converter-backed collections retain their application-declared wire shape in both documents.</summary>
+    [Fact]
+    public async Task ShouldDescribeConvertedCollectionsAtEveryContractPosition()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia().AddHttp(options =>
+            options.OpenApiSchemaType = type => type == typeof(OpenApiSelectionList) ? typeof(OpenApiSelection[]) : null)
+            .AddRequestHandler<OpenApiConvertedHandler>();
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+        _ = _app.MapPortiaPost<OpenApiConvertedRequest, OpenApiSelectionList>("/converted");
+        await _app.StartAsync();
+        using var client = _app.GetTestClient();
+        using var response = await client.PostAsync("/converted", new StringContent(
+            """{"payload":{"items":[{"item_id":"item-1","revision":2,"next":{"item_id":"child","revision":3}}],"optional_items":null}}""",
+            Encoding.UTF8, "application/json"));
+        response.EnsureSuccessStatusCode();
+        using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("item-1", actual.RootElement[0].GetProperty("item_id").GetString());
+        Assert.Equal(3, actual.RootElement[0].GetProperty("next").GetProperty("revision").GetInt64());
+
+        foreach (var format in new[] { "json", "yml" })
+        {
+            var settings = new OpenApiReaderSettings();
+            settings.AddYamlReader();
+            var rawDocument = await client.GetStringAsync("/openapi/v1." + format);
+            var parsed = OpenApiDocument.Parse(rawDocument,
+                format == "yml" ? "yaml" : "json", settings);
+            Assert.Empty(parsed.Diagnostic!.Errors);
+            var operation = parsed.Document!.Paths!["/converted"].Operations![HttpMethod.Post];
+            var envelope = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
+            Assert.Contains("items", envelope.Required!);
+            Assert.DoesNotContain("optional_items", envelope.Required!);
+            var required = envelope.Properties!["items"];
+            Assert.Equal(JsonSchemaType.Array, required.Type);
+            var optional = envelope.Properties["optional_items"];
+            Assert.Equal(JsonSchemaType.Array | JsonSchemaType.Null, optional.Type);
+            var result = operation.Responses!["200"].Content!["application/json"].Schema!;
+            foreach (var collection in new[] { required, optional, result })
+            {
+                Assert.True(collection.Type!.Value.HasFlag(JsonSchemaType.Array));
+                Assert.Equal(JsonSchemaType.String, collection.Items!.Properties!["item_id"].Type);
+                Assert.True(collection.Items.Properties["revision"].Type!.Value.HasFlag(JsonSchemaType.Integer));
+                Assert.Contains("item_id", collection.Items.Properties["next"].Properties!.Keys);
+            }
+        }
+    }
+
+    /// <summary>Invalid mappings fail document generation clearly and do not poison its cache.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldRejectInvalidSchemaMappings(bool missingMetadata)
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia().AddHttp(options => options.OpenApiSchemaType = type =>
+            type == typeof(OpenApiSelectionList)
+                ? missingMetadata ? typeof(OpenApiMissingRepresentation) : typeof(OpenApiSelection[])
+                : !missingMetadata && type == typeof(OpenApiSelection[]) ? typeof(OpenApiSelectionList) : null)
+            .AddRequestHandler<OpenApiConvertedHandler>();
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+        _ = _app.MapPortiaPost<OpenApiConvertedRequest, OpenApiSelectionList>("/converted");
+        await _app.StartAsync();
+        using var client = _app.GetTestClient();
+        foreach (var format in new[] { "json", "yml" })
+        {
+            if (missingMetadata)
+                _ = await Assert.ThrowsAsync<NotSupportedException>(() => client.GetStringAsync("/openapi/v1." + format));
+            else
+            {
+                var error = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetStringAsync("/openapi/v1." + format));
+                Assert.Contains("Cyclic OpenAPI schema type mapping", error.Message, StringComparison.Ordinal);
+            }
+        }
+    }
+
     /// <summary>HTTP activation never replaces the application's global ASP.NET JSON policy.</summary>
     [Fact]
     public void ShouldLeaveAspNetCoreJsonOptionsOwnedByTheApplication()
@@ -42,14 +121,17 @@ public sealed class OpenApiTests : IAsyncDisposable
     }
 
     /// <summary>Portia schemas describe its payloads while ordinary endpoints retain their own contract.</summary>
-    [Fact]
-    public async Task ShouldDescribePortiaSerializerContractsSeparately()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldDescribePortiaSerializerContractsSeparately(bool customizeMoney)
     {
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.Configure<JsonOptions>(options =>
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
-        _ = builder.Services.AddPortia().AddHttp()
+        _ = builder.Services.AddPortia().AddHttp(options => options.OpenApiSchemaType = type =>
+                customizeMoney && type == typeof(HttpMoney) ? typeof(string) : null)
             .AddRequestHandler<OpenApiContractHandler>()
             .AddRequestHandler<OpenApiContractStreamHandler>()
             .ConfigureJson(options =>
@@ -102,7 +184,7 @@ public sealed class OpenApiTests : IAsyncDisposable
                 Assert.Contains("wire-name", schema.Properties.Keys);
                 Assert.Contains("display_name", schema.Required!);
                 Assert.Contains(schema.Properties["day_value"].Enum!, value => value!.GetValue<string>() == "Monday");
-                Assert.Null(schema.Properties["custom_value"].Type);
+                Assert.Equal(customizeMoney ? JsonSchemaType.String : (JsonSchemaType?)null, schema.Properties["custom_value"].Type);
                 Assert.Equal(JsonSchemaType.String, schema.Properties["team_id"].Type);
                 Assert.Equal("uuid", schema.Properties["team_id"].Format);
                 var candidateApplicationIds = schema.Properties["candidate_application_ids"];

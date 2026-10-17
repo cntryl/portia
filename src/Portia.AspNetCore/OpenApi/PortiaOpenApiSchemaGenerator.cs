@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Schema;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.OpenApi;
 using Microsoft.OpenApi.Reader;
 
@@ -12,27 +13,13 @@ namespace Cntryl.Portia;
 // Export the actual Portia contract, independently of application-owned ASP.NET JSON options.
 static class PortiaOpenApiSchemaGenerator
 {
-    public static IOpenApiSchema Create(Type type, JsonSerializerOptions options, OpenApiDocument document)
+    public static IOpenApiSchema Create(Type type, JsonSerializerOptions options, OpenApiDocument document,
+        Func<Type, Type?>? schemaType = null)
     {
         if (typeof(Stream).IsAssignableFrom(type))
             return new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" };
-        var node = options.GetTypeInfo(type).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
-        {
-            // The OpenAPI reader expects object nodes for entries in a properties map.
-            TransformSchemaNode = (context, schema) =>
-                (context.PropertyInfo?.PropertyType ?? context.TypeInfo.Type) switch
-            {
-                var uuid when uuid == typeof(Uuid) => UuidSchema(schema, false),
-                var nullableUuid when nullableUuid == typeof(Uuid?) => UuidSchema(schema, true),
-                _ => schema.GetValueKind() switch
-                {
-                    JsonValueKind.True => new JsonObject(),
-                    JsonValueKind.False => new JsonObject { ["not"] = new JsonObject() },
-                    _ => schema
-                }
-            }
-        });
-        node = ApplyUuidSchemas(node, type);
+        var activeMappings = new Dictionary<Type, string>();
+        var node = Export(type, []);
         var nodes = new Dictionary<string, JsonNode>(StringComparer.Ordinal);
         var references = new List<(JsonObject Node, string Target)>();
         Visit(node, "#");
@@ -100,6 +87,65 @@ static class PortiaOpenApiSchemaGenerator
             }
         }
 
+        JsonNode Export(Type contractType, string[] prefix)
+        {
+            var exported = options.GetTypeInfo(contractType).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
+            {
+                TransformSchemaNode = (context, schema) =>
+                {
+                    var currentType = context.PropertyInfo?.PropertyType ?? context.TypeInfo.Type;
+                    var normalized = currentType == typeof(Uuid) || currentType == typeof(Uuid?)
+                        ? UuidSchema(schema, currentType == typeof(Uuid?))
+                        : schema.GetValueKind() switch
+                        {
+                            JsonValueKind.True => new JsonObject(),
+                            JsonValueKind.False => new JsonObject { ["not"] = new JsonObject() },
+                            _ => schema
+                        };
+                    if (normalized is JsonObject reference && reference["$ref"] is JsonValue value &&
+                        value.TryGetValue<string>(out var target) && target.StartsWith('#'))
+                        reference["$ref"] = Pointer(prefix) + target[1..];
+                    return normalized;
+                }
+            });
+            return ApplyContractSchemas(exported, contractType, prefix);
+        }
+
+        static string Pointer(IEnumerable<string> path) => "#" + string.Concat(path.Select(segment =>
+            "/" + segment.Replace("~", "~0", StringComparison.Ordinal).Replace("/", "~1", StringComparison.Ordinal)));
+
+        static JsonNode PropertySchema(JsonNode mapped, JsonNode original, JsonPropertyInfo? property)
+        {
+            if (property is null || mapped is not JsonObject mappedObject)
+                return mapped;
+            var nullable = property.IsGetNullable || property.IsSetNullable ||
+                           Nullable.GetUnderlyingType(property.PropertyType) is not null;
+            if (mappedObject["type"] is { } mappedType)
+            {
+                var names = mappedType is JsonArray types
+                    ? types.Select(item => item!.GetValue<string>()).Where(name => name != "null").ToList()
+                    : [mappedType.GetValue<string>()];
+                if (nullable)
+                    names.Add("null");
+                mappedObject["type"] = names.Count == 1
+                    ? JsonValue.Create(names[0])
+                    : new JsonArray(names.Select(name => (JsonNode?)JsonValue.Create(name)).ToArray());
+            }
+            else
+            {
+                mappedObject = nullable
+                    ? new JsonObject { ["anyOf"] = new JsonArray(mappedObject, new JsonObject { ["type"] = "null" }) }
+                    : new JsonObject
+                    {
+                        ["allOf"] = new JsonArray(mappedObject,
+                            new JsonObject { ["not"] = new JsonObject { ["type"] = "null" } })
+                    };
+            }
+            if (original is JsonObject originalObject && originalObject.ContainsKey("default"))
+                mappedObject["default"] = originalObject["default"]?.DeepClone();
+            return mappedObject;
+        }
+
         static JsonObject UuidSchema(JsonNode schema, bool nullable)
         {
             // Preserve exporter-owned keywords such as a constructor parameter's default. The
@@ -113,34 +159,57 @@ static class PortiaOpenApiSchemaGenerator
             return result;
         }
 
-        JsonNode ApplyUuidSchemas(JsonNode schema, Type schemaType)
+        JsonNode ApplyContractSchemas(JsonNode schema, Type contractType, string[] path, JsonPropertyInfo? property = null)
         {
+            var representation = schemaType?.Invoke(contractType);
+            if (representation is not null && representation != contractType)
+            {
+                var pointer = Pointer(path);
+                if (activeMappings.TryGetValue(contractType, out var existing))
+                {
+                    if (existing == pointer)
+                        throw new InvalidOperationException($"Cyclic OpenAPI schema type mapping for '{contractType}'.");
+                    return PropertySchema(new JsonObject { ["$ref"] = existing }, schema, property);
+                }
+                activeMappings.Add(contractType, pointer);
+                try
+                {
+                    return PropertySchema(Export(representation, path), schema, property);
+                }
+                finally
+                {
+                    _ = activeMappings.Remove(contractType);
+                }
+            }
             if (schema is not JsonObject schemaObject)
             {
-                return schemaType == typeof(Uuid) || schemaType == typeof(Uuid?)
-                    ? UuidSchema(schema, schemaType == typeof(Uuid?))
+                return contractType == typeof(Uuid) || contractType == typeof(Uuid?)
+                    ? UuidSchema(schema, contractType == typeof(Uuid?))
                     : schema;
             }
 
-            if (schemaType == typeof(Uuid) || schemaType == typeof(Uuid?))
-                return UuidSchema(schemaObject, schemaType == typeof(Uuid?));
+            if (contractType == typeof(Uuid) || contractType == typeof(Uuid?))
+                return UuidSchema(schemaObject, contractType == typeof(Uuid?));
 
-            if (options.GetTypeInfo(schemaType).ElementType is { } elementType)
+            if (schemaObject.ContainsKey("$ref"))
+                return schemaObject;
+
+            if (options.GetTypeInfo(contractType).ElementType is { } elementType)
             {
-                schemaObject["items"] = ApplyUuidSchemas(
-                    schemaObject["items"] ?? new JsonObject(), elementType);
+                schemaObject["items"] = ApplyContractSchemas(
+                    schemaObject["items"] ?? new JsonObject(), elementType, [.. path, "items"]);
                 return schemaObject;
             }
 
             if (schemaObject["properties"] is not JsonObject properties)
                 return schemaObject;
 
-            var typeInfo = options.GetTypeInfo(schemaType);
-            foreach (var property in typeInfo.Properties)
+            var typeInfo = options.GetTypeInfo(contractType);
+            foreach (var member in typeInfo.Properties)
             {
-                if (properties[property.Name] is not { } propertySchema)
+                if (properties[member.Name] is not { } propertySchema)
                     continue;
-                properties[property.Name] = ApplyUuidSchemas(propertySchema, property.PropertyType);
+                properties[member.Name] = ApplyContractSchemas(propertySchema, member.PropertyType, [.. path, "properties", member.Name], member);
             }
             return schemaObject;
         }
