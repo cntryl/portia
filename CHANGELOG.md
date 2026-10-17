@@ -4,7 +4,23 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
-## Unreleased
+## 0.8.0 - 2026-10-17
+
+### Changed
+
+- Upgrade to Fitz .NET 2.0.0 and the compatible 0.2.0 broker. Existing deployments require a
+  coordinated broker migration; see [the migration guide](docs/migration-0.8.md).
+- KV checkpoint, projection, and tenant-directory writes default to `Buffered`, with explicit
+  `Sync` overloads. Authoritative event-stream commits remain synchronous.
+- `InMemoryRpcClient.CallAsync` returns `RpcCall`, validates timeout budgets, enforces deadlines
+  independently of worker cooperation, and reports cancellation outcomes consistently.
+- Refresh stable dependencies and pin the .NET SDK to 10.0.402. Retain package locks for tests
+  and executable hosts; reusable libraries resolve through central package versions.
+
+### Added
+
+- Application-owned OpenAPI schema type mappings support converter-backed JSON contracts,
+  including nested collections, dictionaries, nullable values, and recursive schemas.
 
 ### Fixed
 

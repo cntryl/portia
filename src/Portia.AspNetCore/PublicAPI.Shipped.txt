@@ -156,3 +156,6 @@ Cntryl.Portia.HttpUnsupportedMediaTypeException
 Cntryl.Portia.HttpUnsupportedMediaTypeException.HttpUnsupportedMediaTypeException(string! message) -> void
 static Cntryl.Portia.PortiaHttpBinding.RejectCrossOrigin(Microsoft.AspNetCore.Http.HttpContext! context) -> Microsoft.AspNetCore.Http.IResult?
 static Cntryl.Portia.PortiaHttpBinding.RequireHttpServices(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app) -> void
+static Cntryl.Portia.PortiaHttpBinding.HasCredentials(Microsoft.AspNetCore.Http.HttpContext! context) -> bool
+Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaType.get -> System.Func<System.Type!, System.Type?>?
+Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaType.set -> void

@@ -154,7 +154,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                         ct: ct).ConfigureAwait(false);
                 }
 
-                await session.CommitAsync(ct).ConfigureAwait(false);
+                await session.CommitAsync(StreamCommitMode.Sync, ct).ConfigureAwait(false);
                 telemetryCount = events.Count;
                 telemetryOutcome = "success";
             }

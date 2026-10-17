@@ -327,6 +327,12 @@ public sealed class FitzNotificationFaultTests
 
         public Task CancelAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
 
+        public Task CreateBatchAsync(IReadOnlyList<ScheduleEntry> entries, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<ScheduleCursorPage> ListV2Async(string? cursor, ulong? limit, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
         public Task<ScheduleListPage> ListAsync(ulong? offset, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
@@ -352,6 +358,12 @@ public sealed class FitzNotificationFaultTests
             ReadOnlyMemory<byte> body, CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task CancelAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public Task CreateBatchAsync(IReadOnlyList<ScheduleEntry> entries, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<ScheduleCursorPage> ListV2Async(string? cursor, ulong? limit, CancellationToken ct = default) =>
+            throw new NotSupportedException();
 
         public Task<ScheduleListPage> ListAsync(ulong? offset, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();

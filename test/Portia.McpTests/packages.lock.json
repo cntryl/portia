@@ -4,27 +4,27 @@
     "net10.0": {
       "JsonSchema.Net": {
         "type": "Direct",
-        "requested": "[9.4.0, )",
-        "resolved": "9.4.0",
-        "contentHash": "muE4nPuzbD9x5XA1mkXJNqX4mhz47oF3EY8qFLY1pyUY7lhXFKq65t/dSKIHeNSLBV17zwZuq24MD1em90rMNg==",
+        "requested": "[9.4.1, )",
+        "resolved": "9.4.1",
+        "contentHash": "7Nh0XyIse3a5nsc1nJJTECZVjxqHVE5jANGEPpQc2H+/M7u2sLueL93X6ZUuJLkLYy/pYzFmJhKYEpVIctaUZw==",
         "dependencies": {
-          "JsonPointer.Net": "7.0.2"
+          "JsonPointer.Net": "7.0.3"
         }
       },
       "Microsoft.AspNetCore.TestHost": {
         "type": "Direct",
-        "requested": "[10.0.12, )",
-        "resolved": "10.0.12",
-        "contentHash": "bTHgbcjSrLxlqSasYRDU9BcJ3hDGoqIjtDY0soLNrndOWi3kxtOyddwUMaNZgtoI2Uf6y7ZQs2EuVj0c20B7mA=="
+        "requested": "[10.0.13, )",
+        "resolved": "10.0.13",
+        "contentHash": "8xzbDfEOWg5GRp5byA42Axr4TbockbxCvdHTYk27ZIdst79DO0CLBp/Zw5sduK2goRii7of4EeuTjG/yPH4tsg=="
       },
       "Microsoft.NET.Test.Sdk": {
         "type": "Direct",
-        "requested": "[18.10.1, )",
-        "resolved": "18.10.1",
-        "contentHash": "SxCFvJE/2ltUQgCgv6+Ixagohw4sZc9hM7Wid2foaNM7paBscktoHLoRDz91fW8wbHG87Rg9Ku59/8PXumqUrA==",
+        "requested": "[18.11.0, )",
+        "resolved": "18.11.0",
+        "contentHash": "xf/bR0LNkhK0SnadDRlZIQmC4sac5Wk0e1WAdiQjRN3MSo6gQ9M2c4c1XRNnVGjfOvckh704W5CJ19AL0/Xsdg==",
         "dependencies": {
-          "Microsoft.CodeCoverage": "18.10.1",
-          "Microsoft.TestPlatform.TestHost": "18.10.1"
+          "Microsoft.CodeCoverage": "18.11.0",
+          "Microsoft.TestPlatform.TestHost": "18.11.0"
         }
       },
       "xunit": {
@@ -40,9 +40,9 @@
       },
       "xunit.runner.visualstudio": {
         "type": "Direct",
-        "requested": "[4.0.0, )",
-        "resolved": "4.0.0",
-        "contentHash": "kzLFyBYUnoidpGOXvpNOfIo8C92gVgVR6X8ncHwhcrDYugiOut5rrhDkr0L3cWHd7J2pKXf6LgaeXoBBDlx1ag=="
+        "requested": "[4.0.1, )",
+        "resolved": "4.0.1",
+        "contentHash": "8CoAaZkniVekR1ycJyxn+hOz+6ZQCDPcoIsIs6ujd4WyFcBMlxGNU15Qb8Uxd4iO4UmOuETb0M6vzBbwX/mfLA=="
       },
       "Humanizer.Core": {
         "type": "Transitive",
@@ -56,8 +56,8 @@
       },
       "JsonPointer.Net": {
         "type": "Transitive",
-        "resolved": "7.0.2",
-        "contentHash": "oClYHv2ooeRrtPZyC9sb/Za/ie5pGhjTbNHlAyFg4XOCyU+606FdoZKS7UdaWvtsPlrF+U2w0Ja3TRvn5+spyA==",
+        "resolved": "7.0.3",
+        "contentHash": "It/10weZ3oA+BGL+Gqyw9M6wsi4Tc16vWwU+u7x6LBwty57Y3aUh7bfcn2VWAzgVTAfGuCPb5KUpsH6IFjR08A==",
         "dependencies": {
           "Humanizer.Core": "3.0.10",
           "Json.More.Net": "3.0.1"
@@ -65,8 +65,8 @@
       },
       "Microsoft.CodeCoverage": {
         "type": "Transitive",
-        "resolved": "18.10.1",
-        "contentHash": "tV7tCyp/t+DuwQugLkCeUN7NBFFB4fEGRPr0gkMQ2nQgAvQQjmGlZZi1dsLzbyoe/A0mbnKybmkIh8qhT9p4Zw=="
+        "resolved": "18.11.0",
+        "contentHash": "MhN9wpvL1Es4hfIYslrsVgIsUdDFxuOBTbAl9mGIMvFo8PP5CLf4DrGdNrfwWSyn0lqi6sssm+I/qkkLL3MU+g=="
       },
       "Microsoft.Extensions.AI.Abstractions": {
         "type": "Transitive",
@@ -75,15 +75,15 @@
       },
       "Microsoft.TestPlatform.ObjectModel": {
         "type": "Transitive",
-        "resolved": "18.10.1",
-        "contentHash": "o+PuLDRVp1iwiVAPBADZItXgm9Ck23XtPhE4kZtZVi0uYnMiiz1Dx9Cjh75kJ+ijfqnORL3VOTOaQVKi0f/ixg=="
+        "resolved": "18.11.0",
+        "contentHash": "BXBHYnwSOljKute8UYCMXOLAdB7awxEMppPSpqOF1ZxLD/W/OH+vTBgFaXA7q0aditJTVXSMVenel+wOkEIyNg=="
       },
       "Microsoft.TestPlatform.TestHost": {
         "type": "Transitive",
-        "resolved": "18.10.1",
-        "contentHash": "KYz2omqkoz9E2mWa4fdgT+Ycie1wi5968EmyJlusjlp87RxxtA2FvDm8tcBEYIDzLnkWGnsKjE4d13Z7/rxkQA==",
+        "resolved": "18.11.0",
+        "contentHash": "AKjwKpyRBwoQFQmpcchtoYlfJEBlaY/40uxBRi+qXP4NR7xT8t+XTJtOyEyumfvfJcH5pASs75LwNdXYRr4XNA==",
         "dependencies": {
-          "Microsoft.TestPlatform.ObjectModel": "18.10.1"
+          "Microsoft.TestPlatform.ObjectModel": "18.11.0"
         }
       },
       "ModelContextProtocol.Core": {
@@ -140,37 +140,37 @@
       "Cntryl.Portia.AspNetCore": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.6.0, )",
-          "Cntryl.Portia.DependencyInjection": "[0.6.0, )",
-          "Microsoft.AspNetCore.OpenApi": "[10.0.12, )",
-          "Microsoft.OpenApi": "[2.12.0, )"
+          "Cntryl.Portia.Abstractions": "[0.7.0, )",
+          "Cntryl.Portia.DependencyInjection": "[0.7.0, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.13, )",
+          "Microsoft.OpenApi": "[2.12.2, )"
         }
       },
       "Cntryl.Portia.Core": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.6.0, )"
+          "Cntryl.Portia.Abstractions": "[0.7.0, )"
         }
       },
       "Cntryl.Portia.DependencyInjection": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.6.0, )",
-          "Cntryl.Portia.Core": "[0.6.0, )"
+          "Cntryl.Portia.Abstractions": "[0.7.0, )",
+          "Cntryl.Portia.Core": "[0.7.0, )"
         }
       },
       "Cntryl.Portia.Mcp": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.DependencyInjection": "[0.6.0, )",
+          "Cntryl.Portia.DependencyInjection": "[0.7.0, )",
           "ModelContextProtocol": "[2.2.0, )"
         }
       },
       "Cntryl.Portia.Mcp.AspNetCore": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.AspNetCore": "[0.6.0, )",
-          "Cntryl.Portia.Mcp": "[0.6.0, )",
+          "Cntryl.Portia.AspNetCore": "[0.7.0, )",
+          "Cntryl.Portia.Mcp": "[0.7.0, )",
           "ModelContextProtocol.AspNetCore": "[2.2.0, )"
         }
       },
@@ -183,23 +183,23 @@
       "portia.mcpcontracts": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.6.0, )"
+          "Cntryl.Portia.Abstractions": "[0.7.0, )"
         }
       },
       "Microsoft.AspNetCore.OpenApi": {
         "type": "CentralTransitive",
-        "requested": "[10.0.12, )",
-        "resolved": "10.0.12",
-        "contentHash": "7RnQ/UKn+kK3JDLmTpW+vVqNErWthGPAVAy1aIiBzv4ucQ6g9NFvOJUuT0PHcpvcJxGVxctMxj6t+NESWMrgHQ==",
+        "requested": "[10.0.13, )",
+        "resolved": "10.0.13",
+        "contentHash": "XVuqUBGjVUVyb4DXR5BrSkrW0Br7sYKq39f723ILhQLlFHCyhAgWe1PkJBc42R/5mKBIgHiKVSY+PN5/4XtcQw==",
         "dependencies": {
-          "Microsoft.OpenApi": "[2.12.0, 3.0.0)"
+          "Microsoft.OpenApi": "[2.12.2, 3.0.0)"
         }
       },
       "Microsoft.OpenApi": {
         "type": "CentralTransitive",
-        "requested": "[2.12.0, )",
-        "resolved": "2.12.0",
-        "contentHash": "0xB/be+f6qYOhvQPUrVsLrau+fkowYv6gt9RIkajMhwT7sZnqtcA797yW3bS5kgSje+AQW4xZgyLnW641YFioQ=="
+        "requested": "[2.12.2, )",
+        "resolved": "2.12.2",
+        "contentHash": "ZkT7qiJe0Kj0+DTZOZo+xrDy1kNmdsWFQVPIQLNx9ZJ0T9cB2LG7r+Bi60so8/+yg1nkS7QCPadrzsTG4VPKrA=="
       },
       "ModelContextProtocol": {
         "type": "CentralTransitive",

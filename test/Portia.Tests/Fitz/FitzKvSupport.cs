@@ -36,7 +36,7 @@ sealed class FakeKvClient : IKvClient
     /// </summary>
     internal HashSet<string> WriteLocks { get; } = new(StringComparer.Ordinal);
 
-    public Task<IKvTransaction> BeginAsync(string route, KvDurability durability, KvMode mode = KvMode.ReadWrite,
+    public Task<IKvTransaction> BeginAsync(string route, KvMode mode = KvMode.ReadWrite,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -45,7 +45,7 @@ sealed class FakeKvClient : IKvClient
                 $"'{route}' is locked by another read-write transaction.", "TX_CONFLICT",
                 domainCode: FitzErrorCodes.KvIsolationConflict));
 
-        var transaction = new FakeKvTransaction(this, route, durability, mode);
+        var transaction = new FakeKvTransaction(this, route, mode);
         Transactions.Add(transaction);
         return Task.FromResult<IKvTransaction>(transaction);
     }
@@ -59,14 +59,14 @@ sealed class FakeKvClient : IKvClient
 }
 
 /// <summary>One transaction opened against <see cref="FakeKvClient" />.</summary>
-sealed class FakeKvTransaction(FakeKvClient client, string route, KvDurability durability, KvMode mode)
+sealed class FakeKvTransaction(FakeKvClient client, string route, KvMode mode)
     : IKvTransaction
 {
     readonly Dictionary<string, byte[]> _staged = new(StringComparer.Ordinal);
 
     public string Route => route;
 
-    public KvDurability Durability => durability;
+    public KvDurability? Durability { get; private set; }
 
     public KvMode Mode => mode;
 
@@ -117,8 +117,9 @@ sealed class FakeKvTransaction(FakeKvClient client, string route, KvDurability d
     public Task<KvScanResult> ScanAsync(KvScanQuery query, CancellationToken ct = default) =>
         throw new NotSupportedException();
 
-    public Task CommitAsync(CancellationToken ct = default)
+    public Task CommitAsync(KvDurability durability, CancellationToken ct = default)
     {
+        Durability = durability;
         Commits++;
         if (client.CommitFailure is { } failure)
         {

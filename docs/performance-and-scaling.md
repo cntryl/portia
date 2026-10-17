@@ -162,6 +162,11 @@ after 256 further events. On restart the directory resumes from that cursor and 
 workers save conditionally, so a stale replay cannot replace a newer snapshot. Without a snapshot
 store, the directory continues to replay from the beginning.
 
+KV projections, reactor checkpoints and tenant snapshots use buffered commits by default; event
+stream commits remain synchronous. Buffered KV batches retain atomicity but may need more replay
+after a crash. Each KV store exposes an explicit durability constructor for applications choosing
+synchronous persistence; reactor registration also accepts `UseKvCheckpoints(route, KvDurability.Sync)`.
+
 Normal tenant removal has one `MultiTenantRunnerOptions.TenantStopTimeout` deadline shared by
 workload cancellation and the stop callback. Ignoring that deadline faults the runner with
 `TenantStopTimeoutException`; host shutdown continues to use the shared `ShutdownGrace` budget.

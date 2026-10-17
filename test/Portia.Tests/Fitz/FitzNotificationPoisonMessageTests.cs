@@ -262,6 +262,8 @@ public sealed class FitzNotificationPoisonMessageTests
 
     sealed class ScriptedNoticeClient(IReadOnlyList<ReadOnlyMemory<byte>> bodies) : INoticeClient
     {
+        public Task UnsubscribeAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
+
         public Task PublishAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
@@ -290,6 +292,12 @@ public sealed class FitzNotificationPoisonMessageTests
             ReadOnlyMemory<byte> payload, CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task CancelAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public Task CreateBatchAsync(IReadOnlyList<ScheduleEntry> entries, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<ScheduleCursorPage> ListV2Async(string? cursor, ulong? limit, CancellationToken ct = default) =>
+            throw new NotSupportedException();
 
         public Task<ScheduleListPage> ListAsync(ulong? offset, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();

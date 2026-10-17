@@ -88,7 +88,7 @@ static class FitzKvCheckpoints
     {
         try
         {
-            return await client.BeginAsync(route, KvDurability.Sync, mode, ct).ConfigureAwait(false);
+            return await client.BeginAsync(route, mode, ct).ConfigureAwait(false);
         }
         catch (KvException ex) when (ex.DomainCode == FitzErrorCodes.KvIsolationConflict)
         {
@@ -133,6 +133,11 @@ static class FitzKvCheckpoints
         Exception cause) =>
         new($"{subject} for '{identity.ComponentName}' in stream area '{identity.Pattern.Area ?? "*"}' conflicted "
             + "with a concurrent writer; reload the authoritative checkpoint before retrying.", cause);
+
+    /// <summary>Rejects undefined persistence choices before opening a transaction.</summary>
+    public static KvDurability RequireDurability(KvDurability durability) => Enum.IsDefined(durability)
+        ? durability
+        : throw new ArgumentOutOfRangeException(nameof(durability), durability, "Unknown Fitz KV durability.");
 
     /// <summary>Best-effort rollback that never replaces the failure that caused it.</summary>
     public static async Task RollbackAsync(IKvTransaction transaction)

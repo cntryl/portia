@@ -6,8 +6,7 @@ namespace Cntryl.Portia;
 
 /// <summary>
 ///     Verifies the durable reactor checkpoint store backed by Fitz KV: what it writes, what it reads
-///     back, and — the part a reactor's exactly-once story depends on — what it does when the write
-///     fails partway through.
+///     back, and how a failed write preserves the checkpoint from which a reactor replays.
 /// </summary>
 public sealed class FitzKvCheckpointStoreTests
 {
@@ -57,7 +56,7 @@ public sealed class FitzKvCheckpointStoreTests
         Assert.Equal(new ProjectionCheckpoint(new EventCursor("4096")), await store.LoadAsync(Identity));
         var stored = Assert.Single(client.Committed).Value;
         Assert.Equal("portia-checkpoint-v1\0"u8.ToArray().Concat("4096"u8.ToArray()), stored);
-        Assert.Equal(KvDurability.Sync, client.Transactions[0].Durability);
+        Assert.Equal(KvDurability.Buffered, client.Transactions[0].Durability);
         Assert.Equal(KvMode.ReadWrite, client.Transactions[0].Mode);
     }
 
@@ -197,7 +196,7 @@ public sealed class FitzKvCheckpointStoreTests
         var tenantA = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-a", "orders"));
         var tenantB = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-b", "orders"));
         await store.SaveAsync(tenantA, new ProjectionCheckpoint(new EventCursor("1")));
-        await using var held = await client.BeginAsync(client.LastTransaction.Route, KvDurability.Sync);
+        await using var held = await client.BeginAsync(client.LastTransaction.Route);
 
         await store.SaveAsync(tenantB, new ProjectionCheckpoint(new EventCursor("1")));
 

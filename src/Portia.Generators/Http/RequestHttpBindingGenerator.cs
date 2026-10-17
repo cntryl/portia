@@ -786,7 +786,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
         if (call.Kind == CallKind.Queue)
         {
-            // Accepting onto a durable queue is as consequential as running the request, so the
+            // Accepting queued work is as consequential as running the request, so the
             // caller's authorization is settled here rather than at the worker: a 202 is final,
             // and deferring the refusal would turn an unauthorized call into a dead letter that
             // the caller never learns about. For the same reason an anonymous caller is answered

@@ -801,27 +801,7 @@ static Cntryl.Portia.HttpInvocation.operator ==(Cntryl.Portia.HttpInvocation? le
 static Cntryl.Portia.NoticeInvocation.operator !=(Cntryl.Portia.NoticeInvocation? left, Cntryl.Portia.NoticeInvocation? right) -> bool
 static Cntryl.Portia.NoticeInvocation.operator ==(Cntryl.Portia.NoticeInvocation? left, Cntryl.Portia.NoticeInvocation? right) -> bool
 static Cntryl.Portia.PortiaTelemetry.ActivitySource.get -> System.Diagnostics.ActivitySource!
-static Cntryl.Portia.PortiaTelemetry.AggregateFinished(long started, string! operation, string! outcome, int eventCount = 0) -> void
-static Cntryl.Portia.PortiaTelemetry.AuthorizationFinished(long started, string! policy, string! stage, string! outcome) -> void
-static Cntryl.Portia.PortiaTelemetry.GuardFinished(long started, string! guard, string! outcome) -> void
-static Cntryl.Portia.PortiaTelemetry.CaptureTraceContext() -> Cntryl.Portia.RequestTraceContext?
-static Cntryl.Portia.PortiaTelemetry.EventStoreFinished(long started, string! operation, string! scope, string! outcome, int eventCount = 0) -> void
 static Cntryl.Portia.PortiaTelemetry.Meter.get -> System.Diagnostics.Metrics.Meter!
-static Cntryl.Portia.PortiaTelemetry.Outcome(bool success, Cntryl.Portia.RequestError? error = null) -> string!
-static Cntryl.Portia.PortiaTelemetry.ProcessorBatchFinished(long started, string! component, string! runner, string! outcome, int eventCount, System.DateTimeOffset? lastOccurrence = null) -> void
-static Cntryl.Portia.PortiaTelemetry.RecordDelivery(string! requestName, string! transport, Cntryl.Portia.RequestDeliveryOutcome outcome) -> void
-static Cntryl.Portia.PortiaTelemetry.RecordFleetAssignment(string! workerId, string! partition, bool assigned, Microsoft.Extensions.Logging.ILogger? logger = null) -> void
-static Cntryl.Portia.PortiaTelemetry.RecordOutcome(System.Diagnostics.Activity? activity, bool isSuccess, Cntryl.Portia.RequestError? error) -> void
-static Cntryl.Portia.PortiaTelemetry.RecordRunnerFault(string! runnerName, Cntryl.Portia.RunnerFaultStage stage, System.Exception? exception = null, Microsoft.Extensions.Logging.ILogger? logger = null) -> void
-static Cntryl.Portia.PortiaTelemetry.RecordWorkerRestart(string! runner, string! stage) -> void
-static Cntryl.Portia.PortiaTelemetry.RecordWorkload(string! component, string! scope, bool active, Microsoft.Extensions.Logging.ILogger? logger = null) -> void
-static Cntryl.Portia.PortiaTelemetry.RequestFinished(long started, string! requestName, string! transport, string! outcome) -> void
-static Cntryl.Portia.PortiaTelemetry.RequestStarted(string! requestName, string! transport) -> void
-static Cntryl.Portia.PortiaTelemetry.StartExecute(string! requestName, string! transport) -> System.Diagnostics.Activity?
-static Cntryl.Portia.PortiaTelemetry.StartProcess(string! requestName, Cntryl.Portia.RequestInvocation! invocation, Cntryl.Portia.RequestTraceContext? propagated) -> System.Diagnostics.Activity?
-static Cntryl.Portia.PortiaTelemetry.StartSend(string! requestName, string! transport, string? messagingSystem) -> System.Diagnostics.Activity?
-static Cntryl.Portia.PortiaTelemetry.StartTimestamp() -> long
-static Cntryl.Portia.PortiaTelemetry.TransportFinished(long started, string! transport, string! operation, string! outcome) -> void
 static Cntryl.Portia.ProjectionBatchContext.operator !=(Cntryl.Portia.ProjectionBatchContext? left, Cntryl.Portia.ProjectionBatchContext? right) -> bool
 static Cntryl.Portia.ProjectionBatchContext.operator ==(Cntryl.Portia.ProjectionBatchContext? left, Cntryl.Portia.ProjectionBatchContext? right) -> bool
 static Cntryl.Portia.ProjectionCheckpoint.Start.get -> Cntryl.Portia.ProjectionCheckpoint
@@ -959,3 +939,7 @@ static Cntryl.Portia.AggregateOutcome.Discard(Cntryl.Portia.Result result) -> Cn
 static Cntryl.Portia.AggregateOutcome.Discard<TOut>(Cntryl.Portia.Result<TOut> result) -> Cntryl.Portia.AggregateOutcome<TOut>
 static Cntryl.Portia.AggregateOutcome.Commit(Cntryl.Portia.Result result) -> Cntryl.Portia.AggregateOutcome
 static Cntryl.Portia.AggregateOutcome.Commit<TOut>(Cntryl.Portia.Result<TOut> result) -> Cntryl.Portia.AggregateOutcome<TOut>
+override Cntryl.Portia.UuidJsonConverter.ReadAsPropertyName(ref System.Text.Json.Utf8JsonReader reader, System.Type! typeToConvert, System.Text.Json.JsonSerializerOptions! options) -> Cntryl.Portia.Uuid
+override Cntryl.Portia.UuidJsonConverter.WriteAsPropertyName(System.Text.Json.Utf8JsonWriter! writer, Cntryl.Portia.Uuid value, System.Text.Json.JsonSerializerOptions! options) -> void
+Cntryl.Portia.PortiaServiceKeys
+const Cntryl.Portia.PortiaServiceKeys.Json = "Cntryl.Portia.Json" -> string!

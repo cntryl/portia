@@ -147,8 +147,11 @@ public sealed class FitzPersistenceFailureTests
             ReadOnlyMemory<byte>? metadata = null, string? discriminator = null, CancellationToken ct = default)
             => failureAt == "append" ? throw Failure : Task.FromResult<ulong?>(expectedOffset);
 
-        public Task CommitAsync(CancellationToken ct = default)
-            => failureAt == "commit" ? throw Failure : Task.CompletedTask;
+        public Task CommitAsync(StreamCommitMode mode, CancellationToken ct = default)
+        {
+            Assert.Equal(StreamCommitMode.Sync, mode);
+            return failureAt == "commit" ? throw Failure : Task.CompletedTask;
+        }
 
         public Task RollbackAsync(CancellationToken ct = default)
         {
