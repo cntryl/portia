@@ -1,2 +1,4 @@
 #nullable enable
 static Cntryl.Portia.PortiaHttpBinding.HasCredentials(Microsoft.AspNetCore.Http.HttpContext! context) -> bool
+Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaType.get -> System.Func<System.Type!, System.Type?>?
+Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaType.set -> void

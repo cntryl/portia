@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 
 namespace Cntryl.Portia;
@@ -54,6 +55,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
         operation.OperationId = metadata.OperationId;
         operation.Parameters = [];
+        var schemaType = context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.OpenApiSchemaType;
         var jsonOptions = context.ApplicationServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
         foreach (var responseMetadata in explicitResponses)
         {
@@ -71,7 +73,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                         _ => new OpenApiMediaType
                         {
                             Schema = PortiaOpenApiSchemaGenerator.Create(responseMetadata.Type, jsonOptions,
-                                context.Document!)
+                                context.Document!, schemaType)
                         }, StringComparer.Ordinal);
             }
 
@@ -94,7 +96,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     _ => throw new InvalidOperationException("Unknown Portia HTTP parameter location.")
                 },
                 Required = parameter.Location == PortiaHttpParameterLocation.Route || parameter.Required,
-                Schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!)
+                Schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!, schemaType)
             });
         }
 
@@ -109,7 +111,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
         foreach (var parameter in custom is null ? metadata.Parameters.Where(parameter => !IsBody(parameter)) : [])
         {
-            var schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!);
+            var schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!, schemaType);
             if (parameter.HasDefault && parameter.DefaultValue is not null && schema is OpenApiSchema concreteSchema)
             {
                 concreteSchema.Default =
@@ -142,7 +144,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     _ => new OpenApiMediaType
                     {
                         Schema = PortiaOpenApiSchemaGenerator.Create(accepts.RequestType, jsonOptions,
-                            context.Document!)
+                            context.Document!, schemaType)
                     }, StringComparer.Ordinal)
             };
         }
@@ -156,7 +158,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             {
                 var name = parameter.WireName ?? jsonOptions.PropertyNamingPolicy?.ConvertName(parameter.ClrName) ??
                     parameter.ClrName;
-                properties[name] = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!);
+                properties[name] = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!, schemaType);
                 if (parameter.Required)
                 {
                     _ = jsonRequired.Add(name);
@@ -199,7 +201,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         }
         else if (metadata.JsonStream || metadata.ServerSentEvents)
         {
-            var item = PortiaOpenApiSchemaGenerator.Create(metadata.ResultType!, jsonOptions, context.Document!);
+            var item = PortiaOpenApiSchemaGenerator.Create(metadata.ResultType!, jsonOptions, context.Document!, schemaType);
             var schema = metadata.JsonStream
                 ? new OpenApiSchema { Type = JsonSchemaType.Array, Items = item }
                 : item;
@@ -212,7 +214,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         }
         else
         {
-            var schema = PortiaOpenApiSchemaGenerator.Create(metadata.ResultType!, jsonOptions, context.Document!);
+            var schema = PortiaOpenApiSchemaGenerator.Create(metadata.ResultType!, jsonOptions, context.Document!, schemaType);
             SetDefaultResponse("200", Response("OK", "application/json", schema));
         }
 
