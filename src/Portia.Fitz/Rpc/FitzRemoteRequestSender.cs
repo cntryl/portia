@@ -4,13 +4,16 @@ namespace Cntryl.Portia;
 ///     Sends requests to an out-of-process handler over Fitz RPC.
 /// </summary>
 /// <remarks>
-///     This deliberately imposes no timeout of its own on <see cref="IRpcClient.CallAsync" /> — how
+///     This deliberately imposes no timeout of its own on <see cref="IRpcClient.CallAsync(string, ReadOnlyMemory{byte}, CancellationToken)" /> — how
 ///     (or whether) a call to a route with no registered worker fails is entirely Fitz's contract to
 ///     honor, not Portia's to second-guess with an opinionated default. Confirmed against a real
 ///     broker (see <c>FitzBrokerIntegrationTests.ShouldFailFastWhenNoWorkerIsRegisteredForRoute</c>):
 ///     Fitz itself fails a call to an unregistered route in milliseconds, not by hanging, so this
 ///     isn't a gap left open on faith. If a caller needs to bound how long it waits regardless, pass
 ///     a <see cref="CancellationToken" /> that cancels after however long is appropriate for that call.
+///     Fitz forwards cancellation to the remote worker on a best-effort basis. Ending the caller's
+///     wait does not guarantee that the remote handler has stopped or that its effects were rolled
+///     back; handlers must cooperate with cancellation and callers must reconcile uncertain outcomes.
 /// </remarks>
 /// <param name="rpc">The Fitz RPC client.</param>
 /// <param name="requestSerializer">Serializes outbound requests.</param>

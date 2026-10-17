@@ -1,4 +1,11 @@
 <Project>
+  <!-- Evaluate after project properties so test libraries and executable hosts opt in,
+       while shared libraries and explicit package-consumer opt-outs stay unlocked. -->
+  <PropertyGroup>
+    <RestorePackagesWithLockFile Condition="'$(RestorePackagesWithLockFile)' == '' and ('$(IsTestProject)' == 'true' or '$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe')">true</RestorePackagesWithLockFile>
+    <RestorePackagesWithLockFile Condition="'$(RestorePackagesWithLockFile)' == ''">false</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
   <Target Name="BuildProjectReferencedAnalyzersForDesignTime"
           BeforeTargets="CoreCompile"
           Condition="'$(DesignTimeBuild)' == 'true'">

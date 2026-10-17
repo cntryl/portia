@@ -291,11 +291,17 @@ A view across tenants is a different query with its own projector: register a gl
 builds that read model, rather than opening every tenant's resource in turn.
 
 `UseKvCheckpoints` covers reactors instead. Their effects can never join a transaction, so their
-progress is an independent durable write. Its route is a base as well: one checkpoint store serves
+progress is an independent KV write. Its route is a base as well: one checkpoint store serves
 every reactor, and each reactor in each tenant gets its own derived resource, so one tenant's save
 never waits on another's. It is an explicit selection rather than a default: a reactor that silently
 fell back to an in-memory checkpoint would reissue its entire backlog of external effects after
 every restart.
+
+Fitz KV commits default to `KvDurability.Buffered`; stream appends remain synchronous. Projection
+data and checkpoint advance atomically, but a crash can rewind recent KV progress and trigger
+replay. Reactor effects must tolerate replay regardless of persistence mode. Select synchronous
+KV commits explicitly with `UseKvCheckpoints(route, KvDurability.Sync)`, the four-argument
+`FitzKvProjectionStore` base constructor, or the three-argument tenant snapshot store constructor.
 
 Checkpoint values use a fixed format prefix followed by the backend-owned cursor as UTF-8. Readers
 also accept the Portia 0.1.x representation—exactly eight bytes containing an unsigned big-endian

@@ -773,7 +773,7 @@ public sealed class TelemetryCompletionTests
             return Task.FromException<ulong?>(new IOException("append failed"));
         }
 
-        public Task CommitAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task CommitAsync(StreamCommitMode mode, CancellationToken ct = default) => Task.CompletedTask;
 
         public Task RollbackAsync(CancellationToken ct = default) => Task.CompletedTask;
 

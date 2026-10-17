@@ -120,8 +120,14 @@ is modeled honestly as an at-least-once reactor effect instead.
 - [NativeAOT](docs/native-aot.md): trimming and source-generated JSON setup
 - [Model Context Protocol](docs/mcp.md): request-backed tools, resources, and prompts over stdio and Streamable HTTP
 - [Migrating to Portia 0.4](docs/migration-0.4.md): JSON ownership, tenant templates, and MCP tests
+- [Unreleased migration notes](docs/migration-next.md): Fitz 2.0 compatibility and queue persistence
 
 ## Development
+
+Tests, benchmarks, and executable hosts check in `packages.lock.json` for reproducible restores.
+Shared libraries resolve dependencies without their own lockfiles; `--locked-mode` applies to
+the projects with locking enabled. Package-consumer smoke projects opt out because their
+package versions and target runtimes vary during qualification. `global.json` pins the .NET SDK.
 
 ```sh
 dotnet restore Portia.slnx --locked-mode

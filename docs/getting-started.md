@@ -7,6 +7,10 @@ Portia users to depend on it for tooling. `Cntryl.Portia.AspNetCore` includes it
 generator and depends on the runtime DI package. Add `Cntryl.Portia.Fitz` for Fitz storage/transports
 and `Cntryl.Portia.Jwt` when inbound work carries JWT actor identities. Packages use the
 cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
+The repository's unreleased Fitz dependency update uses the .NET 2.0.0 client and requires a
+compatible Fitz 0.2.0 broker. For an existing deployment, follow the
+[next-release migration notes](migration-next.md#fitz-20-client-and-020-broker) before reconnecting
+an upgraded application. Published Portia 0.7.0 uses Fitz .NET 1.4.2.
 Add the optional `Cntryl.Portia.Telemetry` package and call `AddOpenTelemetry().WithPortia()` when the
 application wants Portia's traces, metrics, and structured logs registered with OpenTelemetry.
 Portia does not select an exporter, resource, sampling policy, filter, endpoint, or credential.
@@ -618,8 +622,10 @@ the schedule and cancellation identity. Reapplying an identical definition keeps
 changing it at the same route uses Fitz's native last-write-wins upsert. Removing a declaration does
 not cancel it: explicitly call `IScheduleClient.CancelAsync` with the concrete route. The native
 client is available from DI for listing and administration over Portia's shared Fitz connection.
-A durable schedule definition produces live, non-backlogged Fitz firing deliveries; use a queue
-when every missed delivery must remain pending.
+A durable schedule definition produces live, non-backlogged Fitz firing deliveries. Fitz queues
+add reservations, acknowledgment and redelivery, with best-effort persistence in Fitz 0.2.0.
+Applications that require crash-safe work admission need durable intent and recovery independent
+of queue acceptance; see [queue acceptance and crash recovery](migration-next.md#fitz-queue-acceptance-and-crash-recovery).
 
 Keep Fitz connections long-lived and register an `IRequestActorValidator` for inbound work.
 Fitz supplies the request serializers and creates a fresh dependency-injection scope for each

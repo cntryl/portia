@@ -181,7 +181,9 @@ after it. Up to 32 firings per route wait to retry at once; beyond that, reading
 finishes. Hosted retries use the registered `TimeProvider`, record every failed attempt, and resolve a
 fresh disposed scope each time. Caller cancellation propagates. Fitz schedule notifications have no
 acknowledgment or redelivery handle, so process loss can still lose a firing that has already been
-received; use a durable queue for work that requires that guarantee.
+received. Work that requires crash recovery needs a queue provider with that guarantee or durable
+application intent and a recovery mechanism. Fitz 0.2.0 queue acceptance has best-effort persistence;
+see [queue acceptance and crash recovery](migration-next.md#fitz-queue-acceptance-and-crash-recovery).
 
 ## Construct and hydrate aggregates directly
 
