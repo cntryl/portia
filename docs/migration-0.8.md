@@ -1,7 +1,7 @@
-# Migration notes for the next Portia release
+# Migrating to Portia 0.8.0
 
-Status: unreleased. These notes describe the dependency update after Portia 0.7.0, which used
-Fitz .NET 1.4.2. The next Portia release version will be assigned during release preparation.
+Portia 0.8.0 upgrades Fitz .NET from 1.4.2 to 2.0.0. Review the broker cutover and
+KV durability changes before upgrading an existing deployment.
 
 ## Fitz 2.0 client and 0.2.0 broker
 

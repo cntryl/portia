@@ -120,7 +120,7 @@ is modeled honestly as an at-least-once reactor effect instead.
 - [NativeAOT](docs/native-aot.md): trimming and source-generated JSON setup
 - [Model Context Protocol](docs/mcp.md): request-backed tools, resources, and prompts over stdio and Streamable HTTP
 - [Migrating to Portia 0.4](docs/migration-0.4.md): JSON ownership, tenant templates, and MCP tests
-- [Unreleased migration notes](docs/migration-next.md): Fitz 2.0 compatibility and queue persistence
+- [Portia 0.8 migration notes](docs/migration-0.8.md): Fitz 2.0 compatibility and queue persistence
 
 ## Development
 

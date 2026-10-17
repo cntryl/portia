@@ -11,7 +11,9 @@ public sealed partial class DocumentationContractTests
 
     static readonly string[] DiagnosticReleaseManifests =
     [
+        "docs/AnalyzerReleases.Shipped.md",
         "docs/AnalyzerReleases.Unshipped.md",
+        "src/Portia.AspNetCore.Generators/AnalyzerReleases.Shipped.md",
         "src/Portia.AspNetCore.Generators/AnalyzerReleases.Unshipped.md"
     ];
 

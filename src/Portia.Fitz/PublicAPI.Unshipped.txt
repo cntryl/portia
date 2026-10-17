@@ -1,12 +1,1 @@
 #nullable enable
-Cntryl.Portia.FitzKvCheckpointStore.FitzKvCheckpointStore(Cntryl.Fitz.IKvClient! client, string! route, Cntryl.Fitz.KvDurability durability) -> void
-Cntryl.Portia.FitzKvProjectionStore.FitzKvProjectionStore(Cntryl.Fitz.IKvClient! client, string! route, string! componentName, Cntryl.Fitz.KvDurability durability) -> void
-Cntryl.Portia.FitzKvTenantDirectorySnapshotStore.FitzKvTenantDirectorySnapshotStore(Cntryl.Fitz.IKvClient! client, string! route, Cntryl.Fitz.KvDurability durability) -> void
-Cntryl.Portia.PortiaFitzBuilder.UseKvCheckpoints(string! route, Cntryl.Fitz.KvDurability durability) -> Cntryl.Portia.PortiaFitzBuilder!
-*REMOVED*Cntryl.Portia.Testing.InMemoryRpcClient.CallAsync(string! route, System.ReadOnlyMemory<byte> body, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Fitz.RpcResponseFrame!>!
-Cntryl.Portia.Testing.InMemoryRpcClient.CallAsync(string! route, System.ReadOnlyMemory<byte> body, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> Cntryl.Fitz.RpcCall!
-Cntryl.Portia.Testing.InMemoryRpcClient.CallAsync(string! route, System.ReadOnlyMemory<byte> body, System.TimeSpan? timeout, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> Cntryl.Fitz.RpcCall!
-Cntryl.Portia.FitzKvTenantDirectorySnapshotStore
-Cntryl.Portia.FitzKvTenantDirectorySnapshotStore.FitzKvTenantDirectorySnapshotStore(Cntryl.Fitz.IKvClient! client, string! route) -> void
-Cntryl.Portia.FitzKvTenantDirectorySnapshotStore.LoadAsync(Cntryl.Portia.EventStreamPattern! pattern, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.TenantDirectorySnapshot?>
-Cntryl.Portia.FitzKvTenantDirectorySnapshotStore.TrySaveAsync(Cntryl.Portia.EventStreamPattern! pattern, Cntryl.Portia.EventCursor? expectedCursor, Cntryl.Portia.TenantDirectorySnapshot! snapshot, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>

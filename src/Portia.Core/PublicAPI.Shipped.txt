@@ -130,3 +130,13 @@ Cntryl.Portia.AggregateExecutor
 Cntryl.Portia.AggregateExecutor.AggregateExecutor(Cntryl.Portia.IAggregateReader! reader, Cntryl.Portia.IAggregateWriter! writer) -> void
 Cntryl.Portia.AggregateExecutor.ExecuteAsync<TAggregate, TOut>(TAggregate! aggregate, System.Func<TAggregate!, Cntryl.Portia.AggregateOutcome<TOut>>! operation, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result<TOut>>
 Cntryl.Portia.AggregateExecutor.ExecuteAsync<TAggregate>(TAggregate! aggregate, System.Func<TAggregate!, Cntryl.Portia.AggregateOutcome>! operation, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
+Cntryl.Portia.MultiTenantRunner.MultiTenantRunner(Cntryl.Portia.ITenantDirectory! tenantDirectory, Cntryl.Portia.MultiTenantRunnerOptions? options = null, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.MultiTenantRunner!>? logger = null, System.TimeProvider? timeProvider = null) -> void
+Cntryl.Portia.ITenantDirectorySnapshotStore
+Cntryl.Portia.ITenantDirectorySnapshotStore.LoadAsync(Cntryl.Portia.EventStreamPattern! pattern, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.TenantDirectorySnapshot?>
+Cntryl.Portia.ITenantDirectorySnapshotStore.TrySaveAsync(Cntryl.Portia.EventStreamPattern! pattern, Cntryl.Portia.EventCursor? expectedCursor, Cntryl.Portia.TenantDirectorySnapshot! snapshot, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.TenantDirectorySnapshot
+Cntryl.Portia.TenantDirectorySnapshot.ActiveTenants.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.TenantId>!
+Cntryl.Portia.TenantDirectorySnapshot.Cursor.get -> Cntryl.Portia.EventCursor
+Cntryl.Portia.TenantDirectorySnapshot.TenantDirectorySnapshot(Cntryl.Portia.EventCursor cursor, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.TenantId>! activeTenants) -> void
+Cntryl.Portia.TenantDirectorySnapshots
+static Cntryl.Portia.TenantDirectorySnapshots.Create<TStartEvent, TStopEvent>(Cntryl.Portia.IDomainEventReader! reader, Cntryl.Portia.EventStreamPattern! pattern, System.Func<Cntryl.Portia.DomainEvent!, Cntryl.Portia.TenantId>! getTenantId, Cntryl.Portia.ITenantDirectorySnapshotStore! snapshotStore, System.TimeSpan? pollInterval = null, System.TimeProvider? timeProvider = null, Cntryl.Portia.IDomainEventNotifier? notifier = null) -> Cntryl.Portia.EventSourcedTenantDirectory<TStartEvent!, TStopEvent!>!

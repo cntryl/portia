@@ -183,7 +183,7 @@ fresh disposed scope each time. Caller cancellation propagates. Fitz schedule no
 acknowledgment or redelivery handle, so process loss can still lose a firing that has already been
 received. Work that requires crash recovery needs a queue provider with that guarantee or durable
 application intent and a recovery mechanism. Fitz 0.2.0 queue acceptance has best-effort persistence;
-see [queue acceptance and crash recovery](migration-next.md#fitz-queue-acceptance-and-crash-recovery).
+see [queue acceptance and crash recovery](migration-0.8.md#fitz-queue-acceptance-and-crash-recovery).
 
 ## Construct and hydrate aggregates directly
 
