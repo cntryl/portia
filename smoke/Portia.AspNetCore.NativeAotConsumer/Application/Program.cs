@@ -66,8 +66,11 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     if (!properties.TryGetProperty("display_name", out _) || properties.TryGetProperty("displayName", out _))
         throw new InvalidOperationException($"Portia schema does not match its JSON contract: {document}");
     var aliases = properties.GetProperty("aliases");
-    if (!aliases.GetProperty("type").EnumerateArray().Any(type => type.GetString() == "array") ||
-        aliases.GetProperty("items").GetProperty("type").GetString() != "string")
+    var aliasItemType = aliases.GetProperty("items").GetProperty("type");
+    var stringItems = aliasItemType.ValueKind == JsonValueKind.Array
+        ? aliasItemType.EnumerateArray().Any(type => type.GetString() == "string")
+        : aliasItemType.GetString() == "string";
+    if (!aliases.GetProperty("type").EnumerateArray().Any(type => type.GetString() == "array") || !stringItems)
         throw new InvalidOperationException($"Converted collection schema is not a typed array: {document}");
     var recursiveId = properties.GetProperty("next_node").GetProperty("properties").GetProperty("next_node").GetProperty("$ref").GetString()!.Split('/')[^1];
     if (!components.GetProperty(recursiveId).GetProperty("properties").TryGetProperty("display_name", out _))
