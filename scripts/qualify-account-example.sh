@@ -54,6 +54,20 @@ portia_cleanup() {
     wait "$portia_worker_pid"
   fi
   portia_compose logs --no-color otel-collector >"$portia_evidence_directory/otel-export.log" 2>&1
+  if [[ "$exit_code" != 0 ]]; then
+    printf 'Account example qualification failed with exit code %s. Captured evidence follows.\n' \
+      "$exit_code" >&2
+    for portia_log_file in \
+      "$portia_evidence_directory/api.log" \
+      "$portia_evidence_directory/worker.log" \
+      "$portia_evidence_directory/account.response" \
+      "$portia_evidence_directory/otel-export.log"; do
+      if [[ -f "$portia_log_file" ]]; then
+        printf '\n--- %s ---\n' "$portia_log_file" >&2
+        cat "$portia_log_file" >&2
+      fi
+    done
+  fi
   portia_compose down --remove-orphans
   exit "$exit_code"
 }
