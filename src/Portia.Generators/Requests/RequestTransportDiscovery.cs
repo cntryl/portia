@@ -18,6 +18,16 @@ static class RequestTransportDiscovery
     const string RequestWithResultMetadataName = "IRequest`1";
     const string StreamRequestMetadataName = "IStreamRequest`1";
 
+    static readonly SymbolDisplayFormat NullableTypeDisplayFormat =
+        SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
+            SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions
+            | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
+    public static string Type(ITypeSymbol symbol) => symbol.ToDisplayString(NullableTypeDisplayFormat);
+
+    public static string RuntimeType(ITypeSymbol symbol) =>
+        symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
     public static bool IsCandidate(SyntaxNode node) => node is TypeDeclarationSyntax;
 
     public static RequestTransportComponent? GetRequestTransportComponent(GeneratorSyntaxContext context)
@@ -170,6 +180,7 @@ static class RequestTransportDiscovery
             iface.OriginalDefinition.ContainingNamespace.ToDisplayString() == "Cntryl.Portia"
             && iface.OriginalDefinition.MetadataName == RequestWithResultMetadataName);
 
+        var resultType = resultTypeInterface?.TypeArguments[0];
         return new RequestTransportComponent(
             symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             transports,
@@ -179,7 +190,8 @@ static class RequestTransportDiscovery
             (string?)routeAttribute.ConstructorArguments[3].Value ?? wildcard,
             (int?)discriminatorAttribute.ConstructorArguments[1].Value ?? 0,
             (string?)discriminatorAttribute.ConstructorArguments[0].Value ?? string.Empty,
-            resultTypeInterface?.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+            resultType is null ? null : Type(resultType),
+            resultType is null ? null : RuntimeType(resultType));
     }
 
     public static string FormatTransports(IReadOnlyList<string> transports) =>

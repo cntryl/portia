@@ -175,9 +175,9 @@ public sealed class FitzRpcRoundTripTests
         Assert.Equal("Transport canceled.", exception.Message);
     }
 
-    /// <summary>A response already received remains definitive when cancellation races with stream completion.</summary>
+    /// <summary>A response frame followed by interrupted enumeration does not prove completion.</summary>
     [Fact]
-    public async Task ShouldKeepFinalResponseWhenCallerCancellationArrivesAfterResponseFrame()
+    public async Task ShouldReportUnknownOutcomeWhenCallerCancellationInterruptsAfterResponseFrame()
     {
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
         var response = serializer.SerializeResult(Result<int>.Success(7));
@@ -193,9 +193,7 @@ public sealed class FitzRpcRoundTripTests
         cancellation.Cancel();
         var outcome = await sending.WaitAsync(HangGuard);
 
-        var completed = Assert.IsType<RemoteRequestOutcome<int>.Completed>(outcome);
-        Assert.True(completed.Result.IsSuccess);
-        Assert.Equal(7, completed.Result.Value);
+        _ = Assert.IsType<RemoteRequestOutcome<int>.OutcomeUnknown>(outcome);
     }
 
     /// <summary>

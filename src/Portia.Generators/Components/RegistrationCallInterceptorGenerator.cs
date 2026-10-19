@@ -576,7 +576,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         return literal.Substring(1, literal.Length - 2).Replace("{", "{{").Replace("}", "}}");
     }
 
-    static string Type(ITypeSymbol symbol) => symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+    static string Type(ITypeSymbol symbol) => RequestTransportDiscovery.Type(symbol);
 
     static void Generate(SourceProductionContext context, ImmutableArray<Call> calls,
         ImmutableArray<RequestTransportComponent> dispatchedRequests, SharedRegistrationsModel shared)

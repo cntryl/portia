@@ -24,7 +24,7 @@ sealed class OpenApiSelectionListConverter : JsonConverter<OpenApiSelectionList>
 [Discriminator("test.openapi.converted-root")]
 [RequestRoute("test", "openapi", "converted-root", "echo")]
 [JsonConverter(typeof(OpenApiRootSelectionRequestConverter))]
-sealed record OpenApiRootSelectionRequest(OpenApiSelection[] Values) : IRequest<OpenApiSelectionList>, ICallable;
+sealed record OpenApiRootSelectionRequest(OpenApiSelection[] Values) : IRequest<OpenApiSelectionList?>, ICallable;
 
 sealed class OpenApiRootSelectionRequestConverter : JsonConverter<OpenApiRootSelectionRequest>
 {
@@ -37,11 +37,16 @@ sealed class OpenApiRootSelectionRequestConverter : JsonConverter<OpenApiRootSel
             (System.Text.Json.Serialization.Metadata.JsonTypeInfo<OpenApiSelection[]>)options.GetTypeInfo(typeof(OpenApiSelection[])));
 }
 
-sealed class OpenApiRootSelectionHandler : IRequestHandler<OpenApiRootSelectionRequest, OpenApiSelectionList>
+sealed class OpenApiRootSelectionHandler : IRequestHandler<OpenApiRootSelectionRequest, OpenApiSelectionList?>
 {
-    public ValueTask<Result<OpenApiSelectionList>> HandleAsync(IRequestContext<OpenApiRootSelectionRequest> context,
-        CancellationToken ct) => ValueTask.FromResult(
-        Result<OpenApiSelectionList>.Success(new OpenApiSelectionList(context.Request.Values)));
+    public ValueTask<Result<OpenApiSelectionList?>> HandleAsync(IRequestContext<OpenApiRootSelectionRequest> context,
+        CancellationToken ct)
+    {
+        var result = context.Request.Values.Length == 0
+            ? null
+            : new OpenApiSelectionList(context.Request.Values);
+        return ValueTask.FromResult(Result<OpenApiSelectionList?>.Success(result));
+    }
 }
 
 sealed record OpenApiSelectionEnvelope(OpenApiSelectionList Items, OpenApiSelectionList? OptionalItems = null);

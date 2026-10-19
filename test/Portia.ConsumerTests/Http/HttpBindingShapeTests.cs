@@ -24,6 +24,47 @@ public sealed class HttpBindingShapeTests
     }
 
     [Fact]
+    public void NullableAndEscapedHttpContractTypesCompileWithRuntimeMetadata()
+    {
+        const string source = """
+                            #nullable enable
+                            using System.Collections.Generic;
+                            using Cntryl.Portia;
+                            using Microsoft.AspNetCore.Routing;
+
+                            public sealed record @class(string Value);
+                            public sealed record NullableUnaryRequest(List<@class?[]?>? Items)
+                                : IRequest<List<@class?[]?>?>, ICallable;
+                            public sealed record NullableValueRequest : IRequest<int?>, ICallable;
+                            public sealed record NullableStreamRequest : IStreamRequest<string?>, ICallable;
+
+                            public static class Scenario
+                            {
+                                static void Configure(
+                                    PortiaEndpointConfiguration<NullableUnaryRequest, List<@class?[]?>?> endpoint)
+                                {
+                                    endpoint.NoInput();
+                                    endpoint.OnResult((_, result) => null);
+                                }
+
+                                public static void Map(IEndpointRouteBuilder app)
+                                {
+                                    app.MapPortiaPost<NullableUnaryRequest, List<@class?[]?>?>("/nullable", Configure);
+                                    app.MapPortiaPost<NullableValueRequest, int?>("/nullable-value");
+                                    app.MapPortiaGetStream<NullableStreamRequest, string?>("/stream");
+                                }
+                            }
+                            """;
+
+        var generated = GeneratorCompilation.GeneratedSource(source, new RequestHttpBindingGenerator());
+
+        _ = GeneratorCompilation.Compile(source, new RequestHttpBindingGenerator());
+        Assert.Contains("new global::Cntryl.Portia.PortiaOpenApiOperation(\"nullableValueRequest\", typeof(int?), false",
+            generated, StringComparison.Ordinal);
+        Assert.Contains("ResultIsNullable = true", generated, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task GeneratedHttpMapsCommitConcurrencyToSafeTransientConflictWithoutRetry()
     {
         var assembly = GeneratorCompilation.Compile("""

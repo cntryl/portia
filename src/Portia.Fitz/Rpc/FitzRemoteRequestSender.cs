@@ -256,6 +256,8 @@ public sealed class FitzRemoteRequestSender(
     {
         var call = _rpc.CallAsync(route, body, ct);
         RpcResponseFrame? lastFrame = null;
+        // A received frame is not necessarily terminal; only normal enumeration completion below
+        // proves that the last frame is the complete response.
         try
         {
             await foreach (var frame in call.WithCancellation(ct).ConfigureAwait(false))
@@ -263,8 +265,8 @@ public sealed class FitzRemoteRequestSender(
         }
         catch (OperationCanceledException exception) when (ct.IsCancellationRequested)
         {
-            if (lastFrame is { } response)
-                return new FitzRpcCallOutcome(response, null, null);
+            if (lastFrame is not null)
+                return new FitzRpcCallOutcome(null, RemoteRequestOutcomeKind.OutcomeUnknown, exception);
 
             var cancellation = await TryGetCancellationOutcomeAsync(call).ConfigureAwait(false);
             return new FitzRpcCallOutcome(null, cancellation is { } observed
@@ -277,8 +279,8 @@ public sealed class FitzRemoteRequestSender(
         }
         catch (Exception exception)
         {
-            if (lastFrame is { } response)
-                return new FitzRpcCallOutcome(response, null, null);
+            if (lastFrame is not null)
+                return new FitzRpcCallOutcome(null, RemoteRequestOutcomeKind.OutcomeUnknown, exception);
 
             var cancellation = await TryGetCancellationOutcomeAsync(call).ConfigureAwait(false);
             return new FitzRpcCallOutcome(null, cancellation is { } observed

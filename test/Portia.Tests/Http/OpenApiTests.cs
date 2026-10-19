@@ -137,7 +137,7 @@ public sealed class OpenApiTests : IAsyncDisposable
         }
     }
 
-    /// <summary>Mapped non-nullable request and response roots retain their runtime array contract.</summary>
+    /// <summary>Mapped request and nullable response roots retain their runtime array contract.</summary>
     [Fact]
     public async Task ShouldSerializeAndDescribeMappedRequestAndResponseRoots()
     {
@@ -152,7 +152,7 @@ public sealed class OpenApiTests : IAsyncDisposable
         }).AddRequestHandler<OpenApiRootSelectionHandler>();
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
-        var rootEndpoint = _app.MapPortiaPost<OpenApiRootSelectionRequest, OpenApiSelectionList>("/converted-root", configure =>
+        _ = _app.MapPortiaPost<OpenApiRootSelectionRequest, OpenApiSelectionList?>("/converted-root", configure =>
             configure.Accepts<OpenApiRootSelectionRequest>("application/json").OnBind(async (context, ct) =>
             {
                 var json = context.RequestServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
@@ -161,12 +161,6 @@ public sealed class OpenApiTests : IAsyncDisposable
                         typeof(OpenApiRootSelectionRequest)), ct);
                 return request ?? throw new JsonException("The test request body was null.");
             }));
-        rootEndpoint.Add(endpointBuilder =>
-        {
-            var metadata = endpointBuilder.Metadata.OfType<PortiaOpenApiOperation>().Single();
-            endpointBuilder.Metadata.Remove(metadata);
-            endpointBuilder.Metadata.Add(metadata with { ResultIsNullable = true });
-        });
         await _app.StartAsync();
         using var client = _app.GetTestClient();
         using var response = await client.PostAsync("/converted-root", new StringContent(
