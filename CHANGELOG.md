@@ -8,7 +8,7 @@ alerts are as breaking to change as an API.
 
 ### Changed
 
-- The repository requires the .NET 10 SDK family, with a 10.0.100 minimum and latest-feature-band
+- The repository requires the .NET 10 SDK family, with a 10.0.400 minimum and latest-feature-band
   roll-forward. It no longer pins one SDK patch release.
 
 ### Added
@@ -20,6 +20,8 @@ alerts are as breaking to change as an API.
 ### Fixed
 
 - Preserve declared OpenAPI root and value nullability for mapped JSON schemas.
+- Keep nullable HTTP result types in generated signatures while using runtime-compatible types for
+  serialization and OpenAPI metadata.
 
 ## 0.8.0 - 2026-10-17
 
