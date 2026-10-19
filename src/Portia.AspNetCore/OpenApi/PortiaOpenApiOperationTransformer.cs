@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.OpenApi;
@@ -10,6 +11,8 @@ namespace Cntryl.Portia;
 
 sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 {
+    static readonly ConditionalWeakTable<OpenApiDocument, DefaultErrorResponses> DefaultErrorResponsesByDocument = [];
+
     public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context,
         CancellationToken cancellationToken)
     {
@@ -249,47 +252,15 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             }));
         }
 
+        var defaultErrorResponses = DefaultErrorResponsesByDocument.GetValue(context.Document!,
+            static document => new DefaultErrorResponses(document));
         foreach (var status in new[] { "400", "401", "403", "404", "409", "413", "415", "500" })
         {
-            var response = status == "401"
-                ? new OpenApiResponse
-                {
-                    Description = "Unauthorized",
-                    Headers = new Dictionary<string, IOpenApiHeader>
-                    {
-                        ["WWW-Authenticate"] = new OpenApiHeader
-                        {
-                            Required = true,
-                            Schema = new OpenApiSchema { Type = JsonSchemaType.String }
-                        },
-                        [ResultHttpExtensions.TransientHeaderName] = new OpenApiHeader
-                        {
-                            Required = true,
-                            Schema = new OpenApiSchema { Type = JsonSchemaType.Boolean }
-                        }
-                    }
-                }
-                : Response("Error", "application/problem+json", new OpenApiSchema
-                {
-                    Type = JsonSchemaType.Object,
-                    Properties = new Dictionary<string, IOpenApiSchema>
-                    {
-                        ["type"] = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri-reference" },
-                        ["title"] = new OpenApiSchema { Type = JsonSchemaType.String },
-                        ["status"] = new OpenApiSchema { Type = JsonSchemaType.Integer },
-                        ["detail"] = new OpenApiSchema { Type = JsonSchemaType.String },
-                        ["instance"] = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri-reference" },
-                        ["transient"] = new OpenApiSchema { Type = JsonSchemaType.Boolean }
-                    },
-                    Required = new HashSet<string> { "type", "title", "status", "detail", "instance" }
-                });
-            response.Headers ??= new Dictionary<string, IOpenApiHeader>();
-            _ = response.Headers.TryAdd(ResultHttpExtensions.TransientHeaderName, new OpenApiHeader
-            {
-                Required = status == "401",
-                Schema = new OpenApiSchema { Type = JsonSchemaType.Boolean }
-            });
-            SetDefaultResponse(status, response);
+            if (explicitStatuses.Contains(status))
+                continue;
+
+            SetDefaultResponse(status,
+                status == "401" ? defaultErrorResponses.Unauthorized : defaultErrorResponses.Problem);
         }
 
         return Task.CompletedTask;
@@ -300,6 +271,86 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         Description = description,
         Content = new Dictionary<string, OpenApiMediaType> { [mediaType] = new() { Schema = schema } }
     };
+
+    sealed class DefaultErrorResponses(OpenApiDocument document)
+    {
+        const string ProblemName = "CntrylPortiaProblem";
+        const string UnauthorizedName = "CntrylPortiaUnauthorized";
+
+        readonly object _gate = new();
+        string? _problemName;
+        string? _unauthorizedName;
+
+        public IOpenApiResponse Problem => GetReference(ref _problemName, ProblemName, CreateProblemResponse);
+
+        public IOpenApiResponse Unauthorized =>
+            GetReference(ref _unauthorizedName, UnauthorizedName, CreateUnauthorizedResponse);
+
+        OpenApiResponseReference GetReference(ref string? cachedName, string preferredName,
+            Func<OpenApiResponse> createResponse)
+        {
+            lock (_gate)
+            {
+                if (cachedName is null)
+                {
+                    var components = document.Components ??= new OpenApiComponents();
+                    var responses = components.Responses ??= new Dictionary<string, IOpenApiResponse>(StringComparer.Ordinal);
+                    var name = preferredName;
+                    for (var suffix = 2; responses.ContainsKey(name); suffix++)
+                        name = $"{preferredName}_{suffix.ToString(CultureInfo.InvariantCulture)}";
+                    responses.Add(name, createResponse());
+                    cachedName = name;
+                }
+
+                return new OpenApiResponseReference(cachedName, document);
+            }
+        }
+
+        static OpenApiResponse CreateProblemResponse()
+        {
+            var response = Response("Error", "application/problem+json", new OpenApiSchema
+            {
+                Type = JsonSchemaType.Object,
+                Properties = new Dictionary<string, IOpenApiSchema>
+                {
+                    ["type"] = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri-reference" },
+                    ["title"] = new OpenApiSchema { Type = JsonSchemaType.String },
+                    ["status"] = new OpenApiSchema { Type = JsonSchemaType.Integer },
+                    ["detail"] = new OpenApiSchema { Type = JsonSchemaType.String },
+                    ["instance"] = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri-reference" },
+                    ["transient"] = new OpenApiSchema { Type = JsonSchemaType.Boolean }
+                },
+                Required = new HashSet<string> { "type", "title", "status", "detail", "instance" }
+            });
+            response.Headers = new Dictionary<string, IOpenApiHeader>
+            {
+                [ResultHttpExtensions.TransientHeaderName] = new OpenApiHeader
+                {
+                    Required = false,
+                    Schema = new OpenApiSchema { Type = JsonSchemaType.Boolean }
+                }
+            };
+            return response;
+        }
+
+        static OpenApiResponse CreateUnauthorizedResponse() => new()
+        {
+            Description = "Unauthorized",
+            Headers = new Dictionary<string, IOpenApiHeader>
+            {
+                ["WWW-Authenticate"] = new OpenApiHeader
+                {
+                    Required = true,
+                    Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+                },
+                [ResultHttpExtensions.TransientHeaderName] = new OpenApiHeader
+                {
+                    Required = true,
+                    Schema = new OpenApiSchema { Type = JsonSchemaType.Boolean }
+                }
+            }
+        };
+    }
 
     sealed record DeclaredAccepts(Type? RequestType, bool IsOptional, IReadOnlyList<string> ContentTypes);
 

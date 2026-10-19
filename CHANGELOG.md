@@ -20,6 +20,7 @@ alerts are as breaking to change as an API.
 ### Fixed
 
 - Preserve declared OpenAPI root and value nullability for mapped JSON schemas.
+- Reuse OpenAPI response components for Portia's default problem and unauthorized responses.
 - Keep nullable HTTP result types in generated signatures while using runtime-compatible types for
   serialization and OpenAPI metadata.
 

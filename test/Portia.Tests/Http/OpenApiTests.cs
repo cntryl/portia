@@ -396,6 +396,8 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.Equal(OpenApiSpecVersion.OpenApi3_1, jsonDiagnostic.SpecificationVersion);
         Assert.Equal(OpenApiSpecVersion.OpenApi3_1, yamlDiagnostic.SpecificationVersion);
         Assert.Equal(jsonDocument.Paths.Keys.Order(), yamlDocument.Paths.Keys.Order());
+        var yamlCreate = yamlDocument.Paths["/api/orders"].Operations![HttpMethod.Post];
+        Assert.IsType<OpenApiResponseReference>(yamlCreate.Responses!["400"]);
 
         using var raw = JsonDocument.Parse(json);
         Assert.Equal("3.1.1", raw.RootElement.GetProperty("openapi").GetString());
@@ -468,16 +470,28 @@ public sealed class OpenApiTests : IAsyncDisposable
             .GetProperty("application/json").GetProperty("schema");
         Assert.Equal("string", createdId.GetProperty("type").GetString());
         Assert.Equal("uuid", createdId.GetProperty("format").GetString());
-        var problemSchema = responses.GetProperty("400").GetProperty("content")
-            .GetProperty("application/problem+json").GetProperty("schema");
+        const string problemRef = "#/components/responses/CntrylPortiaProblem";
+        const string unauthorizedRef = "#/components/responses/CntrylPortiaUnauthorized";
+        foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
+            Assert.Equal(problemRef, responses.GetProperty(status).GetProperty("$ref").GetString());
+        Assert.Equal(problemRef, getResponses.GetProperty("400").GetProperty("$ref").GetString());
+        Assert.Equal(problemRef, paths.GetProperty("/api/ping").GetProperty("post").GetProperty("responses")
+            .GetProperty("400").GetProperty("$ref").GetString());
+        Assert.Equal(unauthorizedRef, responses.GetProperty("401").GetProperty("$ref").GetString());
+        var componentResponses = raw.RootElement.GetProperty("components").GetProperty("responses");
+        Assert.Equal(2, componentResponses.EnumerateObject().Count());
+        var problem = componentResponses.GetProperty("CntrylPortiaProblem");
+        var problemSchema = problem.GetProperty("content").GetProperty("application/problem+json").GetProperty("schema");
         Assert.True(problemSchema.GetProperty("properties").TryGetProperty("status", out _));
         Assert.True(problemSchema.GetProperty("properties").TryGetProperty("detail", out _));
         Assert.False(problemSchema.GetProperty("properties").TryGetProperty("message", out _));
-        Assert.True(responses.GetProperty("400").GetProperty("headers")
+        Assert.True(problem.GetProperty("headers")
             .TryGetProperty(ResultHttpExtensions.TransientHeaderName, out _));
-        Assert.True(responses.GetProperty("415").GetProperty("content")
+        Assert.True(problem.GetProperty("content")
             .TryGetProperty("application/problem+json", out _));
-        Assert.True(responses.GetProperty("401").GetProperty("headers").TryGetProperty("WWW-Authenticate", out _));
+        Assert.True(componentResponses.GetProperty("CntrylPortiaUnauthorized").GetProperty("headers")
+            .TryGetProperty("WWW-Authenticate", out _));
+        Assert.Contains("#/components/responses/CntrylPortiaProblem", yaml, StringComparison.Ordinal);
         Assert.True(paths.TryGetProperty("/health", out _));
         Assert.False(paths.TryGetProperty("/api/widget-events", out _));
     }
