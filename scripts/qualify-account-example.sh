@@ -145,15 +145,25 @@ portia_stop_host "$portia_worker_pid" "$portia_evidence_directory/worker.log"
 portia_worker_pid=
 
 portia_compose logs --no-color otel-collector >"$portia_evidence_directory/otel-export.log" 2>&1
-grep -Eq 'portia.request.execute' "$portia_evidence_directory/otel-export.log"
-grep -Eq 'portia.request.duration' "$portia_evidence_directory/otel-export.log"
-grep -Eq 'Account request lifecycle stage' "$portia_evidence_directory/otel-export.log"
-grep -Eq 'Account projection worker started' "$portia_evidence_directory/otel-export.log"
-grep -Eq 'portia.accounts.api' "$portia_evidence_directory/otel-export.log"
-grep -Eq 'portia.accounts.worker' "$portia_evidence_directory/otel-export.log"
-grep -Eqi 'Trace ID[[:space:]]*:[[:space:]]*[0-9a-f]{32}' "$portia_evidence_directory/otel-export.log"
-grep -Eqi 'Span ID[[:space:]]*:[[:space:]]*[0-9a-f]{16}' "$portia_evidence_directory/otel-export.log"
-awk '
+portia_require_otel_pattern() {
+  local pattern=$1
+  local description=$2
+  if ! grep -Eqi "$pattern" "$portia_evidence_directory/otel-export.log"; then
+    printf 'Missing expected OTLP evidence: %s\n' "$description" >&2
+    cat "$portia_evidence_directory/otel-export.log" >&2
+    exit 1
+  fi
+}
+
+portia_require_otel_pattern 'portia.request.execute' 'request execute activity'
+portia_require_otel_pattern 'portia.request.duration' 'request duration metric'
+portia_require_otel_pattern 'Account request lifecycle stage' 'API lifecycle log'
+portia_require_otel_pattern 'Account projection worker started' 'worker startup log'
+portia_require_otel_pattern 'portia.accounts.api' 'API service identity'
+portia_require_otel_pattern 'portia.accounts.worker' 'worker service identity'
+portia_require_otel_pattern 'Trace ID[[:space:]]*:[[:space:]]*[0-9a-f]{32}' 'correlated trace ID'
+portia_require_otel_pattern 'Span ID[[:space:]]*:[[:space:]]*[0-9a-f]{16}' 'correlated span ID'
+if ! awk '
   /LogRecord #[0-9]+/ {
     if (lifecycle && length(trace) == 32 && length(span) == 16) correlated = 1
     lifecycle = 0
@@ -167,6 +177,10 @@ awk '
     if (lifecycle && length(trace) == 32 && length(span) == 16) correlated = 1
     exit !correlated
   }
-' "$portia_evidence_directory/otel-export.log"
+' "$portia_evidence_directory/otel-export.log"; then
+  printf 'No exported lifecycle log contains both trace and span IDs.\n' >&2
+  cat "$portia_evidence_directory/otel-export.log" >&2
+  exit 1
+fi
 
 printf 'Account package and OTLP qualification passed. Evidence: %s\n' "$portia_evidence_directory"
