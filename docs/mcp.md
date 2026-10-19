@@ -27,6 +27,10 @@ hosts.
 By default, the request's `Discriminator` name is the MCP tool name and its XML summary is the
 model-facing description. The request's existing Portia JSON contract is the complete input schema.
 `RequestRoute` stays transport-routing metadata and does not add synthetic MCP arguments.
+MCP tool arguments must have an object-shaped JSON contract. A root converter makes the request
+metadata opaque to the object-schema exporter, so Portia rejects it during host startup before
+serving tools, even if the converter writes an object. Expose an object-shaped request contract for
+the tool, such as a dedicated request with named properties and no root converter.
 When a referenced contracts assembly does not publish XML documentation, Portia supplies a stable
 `Invokes the {RequestType} request.` fallback; use `DescribedAs(...)` when that fallback is not
 specific enough for a model to choose the tool confidently.
@@ -78,7 +82,7 @@ Reference `Cntryl.Portia.Mcp.AspNetCore`, build the same application, and map on
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddAccountsApplication(builder.Configuration)
+builder.Services.AddAccountsApplication(builder.Configuration, builder.Environment)
     .AddMcpHttp();
 
 var app = builder.Build();
@@ -120,7 +124,7 @@ below, a request for any other host returns 400 before it reaches the endpoint:
 Reference `Cntryl.Portia.Mcp`, register an `IMcpActorProvider`, and activate stdio:
 
 ```csharp
-builder.Services.AddAccountsApplication(builder.Configuration)
+builder.Services.AddAccountsApplication(builder.Configuration, builder.Environment)
     .AddMcpStdio(options => options.UseLocalDevelopmentActor());
 await builder.Build().RunAsync();
 ```

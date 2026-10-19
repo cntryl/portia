@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <NoWarn>$(NoWarn);CS1574;CS1591</NoWarn>
+    <InterceptorsNamespaces Condition="'$(PortiaSmokePackageVersion)' == ''">$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Cntryl.Portia.Fitz" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <PackageReference Include="Cntryl.Portia.Telemetry" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <PackageReference Include="Cntryl.Portia.Analyzers" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.0" />
+    <ProjectReference Include="../../../src/Portia.Fitz/Portia.Fitz.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
+    <ProjectReference Include="../../../src/Portia.Telemetry/Portia.Telemetry.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
+    <ProjectReference Include="../../../src/Portia.Generators/Portia.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" Condition="'$(PortiaSmokePackageVersion)' == ''" />
+  </ItemGroup>
+</Project>

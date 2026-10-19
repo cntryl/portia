@@ -154,7 +154,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         var resultType = kind is CallKind.Queue
             ? null
             : method.TypeArguments.Length == 2
-                ? method.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                ? method.TypeArguments[1].ToDisplayString(
+                    SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
+                        SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
+                        SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier))
                 : null;
 
         CallAnalysis? Mapping(ParameterModel[] parameters, bool hasDefaultBinder)
@@ -437,10 +440,13 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 .Append(Literal(parameter.Source.ToString().ToLowerInvariant())).Append(", ")
                 .Append(!parameter.Nullable && parameter.Default is null ? "true" : "false").Append(", ")
                 .Append(parameter.Default is not null ? "true" : "false").Append(", ")
-                .Append(parameter.Default ?? "null").Append(", ").Append(wireNameExpression).AppendLine("),");
+                .Append(parameter.Default ?? "null").Append(", ").Append(wireNameExpression)
+                .Append(") { IsNullable = ").Append(parameter.Nullable ? "true" : "false").AppendLine(" },");
         }
 
-        _ = source.AppendLine("            }));");
+        _ = source.Append("            }) { ResultIsNullable = ")
+            .Append(call.ResultType?.EndsWith("?", StringComparison.Ordinal) == true ? "true" : "false")
+            .AppendLine(" });");
         if (call.Configured)
             _ = source.AppendLine("        configuration.ApplyMetadata(app, builder);");
         _ = source.AppendLine("        return builder;").AppendLine();

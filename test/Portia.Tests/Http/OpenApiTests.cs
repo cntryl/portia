@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Json;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -35,7 +36,13 @@ public sealed class OpenApiTests : IAsyncDisposable
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia().AddHttp(options =>
-            options.OpenApiSchemaType = type => type == typeof(OpenApiSelectionList) ? typeof(OpenApiSelection[]) : null)
+            options.OpenApiSchemaType = type => type switch
+            {
+                var value when value == typeof(OpenApiSelectionList) => typeof(OpenApiSelection[]),
+                var value when value == typeof(OpenApiRootSelectionRequest) => typeof(OpenApiSelection[]),
+                var value when value == typeof(OpenApiSelection) => typeof(OpenApiSelectionSchema),
+                _ => null
+            })
             .AddRequestHandler<OpenApiConvertedHandler>();
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
@@ -67,13 +74,119 @@ public sealed class OpenApiTests : IAsyncDisposable
             var optional = envelope.Properties["optional_items"];
             Assert.Equal(JsonSchemaType.Array | JsonSchemaType.Null, optional.Type);
             var result = operation.Responses!["200"].Content!["application/json"].Schema!;
+            Assert.Equal(JsonSchemaType.Array, result.Type);
             foreach (var collection in new[] { required, optional, result })
             {
                 Assert.True(collection.Type!.Value.HasFlag(JsonSchemaType.Array));
-                Assert.Equal(JsonSchemaType.String, collection.Items!.Properties!["item_id"].Type);
-                Assert.True(collection.Items.Properties["revision"].Type!.Value.HasFlag(JsonSchemaType.Integer));
-                Assert.Contains("item_id", collection.Items.Properties["next"].Properties!.Keys);
+                var item = collection.Items!;
+                Assert.False(item.Type?.HasFlag(JsonSchemaType.Null) ?? false,
+                    $"type={item.Type}, anyOf={item.AnyOf?.Count ?? 0}, allOf={item.AllOf?.Count ?? 0}");
+                Assert.DoesNotContain(item.AnyOf ?? [], schema => schema.Type == JsonSchemaType.Null);
+                Assert.Equal(JsonSchemaType.String, item.Properties!["item_id"].Type);
+                Assert.True(item.Properties["revision"].Type!.Value.HasFlag(JsonSchemaType.Integer));
+                var next = item.Properties["next"];
+                Assert.Contains(next.AnyOf!, schema => schema.Type == JsonSchemaType.Null);
+                Assert.Contains(next.AnyOf!, schema => schema is OpenApiSchemaReference);
             }
+
+        }
+    }
+
+    /// <summary>Collection nullability metadata applies to mapped and ordinary collection elements.</summary>
+    [Theory]
+    [InlineData("json")]
+    [InlineData("yml")]
+    public async Task ShouldPreserveNullableMappedAndDeclaredCollectionElements(string format)
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia().AddHttp(options =>
+            {
+                options.OpenApiSchemaType = type => type == typeof(OpenApiSelection)
+                    ? typeof(OpenApiSelectionSchema)
+                    : null;
+                options.OpenApiSchemaCollectionElementIsNullable = (contractType, elementType) =>
+                    elementType == typeof(OpenApiSelection) &&
+                    (contractType == typeof(List<OpenApiSelection>) ||
+                     contractType == typeof(Dictionary<string, OpenApiSelection>)) ||
+                    contractType == typeof(List<string>) && elementType == typeof(string)
+                        ? true
+                        : null;
+            })
+            .AddRequestHandler<OpenApiCollectionNullabilityHandler>();
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+        _ = _app.MapPortiaPost<OpenApiCollectionNullabilityRequest, OpenApiMappedCollectionNullability>(
+            "/collection-nullability");
+        await _app.StartAsync();
+        using var client = _app.GetTestClient();
+
+        var settings = new OpenApiReaderSettings();
+        settings.AddYamlReader();
+        var serialized = await client.GetStringAsync("/openapi/v1." + format);
+        var parsed = OpenApiDocument.Parse(serialized, format == "yml" ? "yaml" : "json", settings);
+        Assert.Empty(parsed.Diagnostic!.Errors);
+        var operation = parsed.Document!.Paths!["/collection-nullability"].Operations![HttpMethod.Post];
+        var request = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
+        var result = operation.Responses!["200"].Content!["application/json"].Schema!;
+        foreach (var envelope in new[] { request, result })
+        {
+            Assert.True(envelope.Properties!["items"].Items!.Type!.Value.HasFlag(JsonSchemaType.Null));
+            Assert.True(envelope.Properties["values"].AdditionalProperties!.Type!.Value.HasFlag(JsonSchemaType.Null));
+            Assert.True(envelope.Properties["labels"].Items!.Type!.Value.HasFlag(JsonSchemaType.Null));
+        }
+    }
+
+    /// <summary>Mapped non-nullable request and response roots retain their runtime array contract.</summary>
+    [Fact]
+    public async Task ShouldSerializeAndDescribeMappedRequestAndResponseRoots()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia().AddHttp(options => options.OpenApiSchemaType = type => type switch
+        {
+            var value when value == typeof(OpenApiSelectionList) => typeof(OpenApiSelection[]),
+            var value when value == typeof(OpenApiRootSelectionRequest) => typeof(OpenApiSelection[]),
+            var value when value == typeof(OpenApiSelection) => typeof(OpenApiSelectionSchema),
+            _ => null
+        }).AddRequestHandler<OpenApiRootSelectionHandler>();
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+        var rootEndpoint = _app.MapPortiaPost<OpenApiRootSelectionRequest, OpenApiSelectionList>("/converted-root", configure =>
+            configure.Accepts<OpenApiRootSelectionRequest>("application/json").OnBind(async (context, ct) =>
+            {
+                var json = context.RequestServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
+                var request = await JsonSerializer.DeserializeAsync(context.Request.Body,
+                    (System.Text.Json.Serialization.Metadata.JsonTypeInfo<OpenApiRootSelectionRequest>)json.GetTypeInfo(
+                        typeof(OpenApiRootSelectionRequest)), ct);
+                return request ?? throw new JsonException("The test request body was null.");
+            }));
+        rootEndpoint.Add(endpointBuilder =>
+        {
+            var metadata = endpointBuilder.Metadata.OfType<PortiaOpenApiOperation>().Single();
+            endpointBuilder.Metadata.Remove(metadata);
+            endpointBuilder.Metadata.Add(metadata with { ResultIsNullable = true });
+        });
+        await _app.StartAsync();
+        using var client = _app.GetTestClient();
+        using var response = await client.PostAsync("/converted-root", new StringContent(
+            """[{"item_id":"item-1","revision":2,"next":null}]""", Encoding.UTF8, "application/json"));
+        response.EnsureSuccessStatusCode();
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("item-1", payload.RootElement[0].GetProperty("item_id").GetString());
+
+        foreach (var format in new[] { "json", "yml" })
+        {
+            var settings = new OpenApiReaderSettings();
+            settings.AddYamlReader();
+            var raw = await client.GetStringAsync("/openapi/v1." + format);
+            var parsed = OpenApiDocument.Parse(raw, format == "yml" ? "yaml" : "json", settings);
+            Assert.Empty(parsed.Diagnostic!.Errors);
+            var operation = parsed.Document!.Paths!["/converted-root"].Operations![HttpMethod.Post];
+            Assert.Equal(JsonSchemaType.Array,
+                operation.RequestBody!.Content!["application/json"].Schema!.Type);
+            Assert.Equal(JsonSchemaType.Array | JsonSchemaType.Null,
+                operation.Responses!["200"].Content!["application/json"].Schema!.Type);
         }
     }
 

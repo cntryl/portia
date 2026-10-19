@@ -37,6 +37,18 @@ one-argument overload now selects `Buffered`. A derived projection repository ca
 `base(kv, route, componentName, KvDurability.Sync)`, and tenant snapshots can use
 `new FitzKvTenantDirectorySnapshotStore(kv, route, KvDurability.Sync)`.
 
+## Portia terminal queue deliveries
+
+Portia 0.7 completed a terminal delivery after its required terminal handler returned successfully.
+In 0.8, `IQueuedRequestTerminalHandler` is an optional observer; after it returns, Portia abandons
+the delivery without acknowledging it. The transport controls expiration, redelivery, and
+dead-letter policy, and may invoke the observer again for the same failure. Review terminal
+handlers that relied on their successful return to acknowledge a message, and make their effects
+safe to replay. A callback failure also leaves the delivery unacknowledged. Portia does not provide
+a broker-independent durable dead-letter transaction. The `terminal` value of
+`portia.request.delivery.count` now describes an unacknowledged terminal delivery; warning event
+1005 says the transport retains it.
+
 ## Fitz queue acceptance and crash recovery
 
 Fitz 0.2.0 queues provide reservations, acknowledgment and redelivery, with best-effort persistence.

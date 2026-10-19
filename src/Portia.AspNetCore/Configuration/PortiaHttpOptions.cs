@@ -22,6 +22,19 @@ public sealed class PortiaHttpOptions
     /// </remarks>
     public Func<Type, Type?>? OpenApiSchemaType { get; set; }
 
+    /// <summary>
+    ///     Gets or sets application-owned nullability for array elements or dictionary values when
+    ///     <see cref="OpenApiSchemaType" /> maps a contract to a collection representation.
+    /// </summary>
+    /// <remarks>
+    ///     C# reference nullability is erased from <see cref="Type" />. Return <see langword="true" />
+    ///     or <see langword="false" /> when the representation's element or value nullability is
+    ///     declared by a converter but absent from serializer type metadata; return <see langword="null" />
+    ///     to use the serializer metadata. The callback receives the mapped contract type and the
+    ///     representation's element or value type.
+    /// </remarks>
+    public Func<Type, Type, bool?>? OpenApiSchemaCollectionElementIsNullable { get; set; }
+
     /// <summary>Gets or sets the maximum JSON request-body size.</summary>
     public long MaxJsonBodyBytes { get; set; } = DefaultMaxJsonBodyBytes;
 

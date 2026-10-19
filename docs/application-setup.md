@@ -15,12 +15,14 @@ analyzer package independently.
 using Cntryl.Portia;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 public static class ApplicationSetup
 {
     public static PortiaBuilder AddAccountsApplication(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         // Application-specific dependencies are ordinary DI registrations.
         // ActorValidator implements IRequestActorValidator using the application's identity policy.
@@ -84,7 +86,7 @@ uses Portia's diagnostics and typed-dispatch generator.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddAccountsApplication(builder.Configuration);
+builder.Services.AddAccountsApplication(builder.Configuration, builder.Environment);
 builder.Services.AddPortia().AddHttp();
 
 var app = builder.Build();
@@ -138,12 +140,20 @@ to use `Result.Failure(new RequestError(RequestErrorKind.Validation, ...))` (and
 `RequestErrorKind` values); validation policy belongs to the application rather than a separate
 framework validation pipeline.
 
+Fitz 0.2.0 currently constructs its queue actors with `max_attempts: None`, which means expired
+reservations redeliver indefinitely and the standard broker does not move messages to a DLQ. The
+Fitz Rust `QueueActor` has an internal `max_attempts` constructor option, but neither the broker
+configuration nor its .NET client exposes it. It cannot be set through `QueueRunnerOptions` or
+Portia configuration. A Fitz deployment that exposes an attempt limit must configure it at the
+broker; that policy remains provider-owned, and Fitz queue persistence is best-effort as described
+in the [migration guide](migration-0.8.md#fitz-queue-acceptance-and-crash-recovery).
+
 Use the standard .NET worker host, referencing the shared project:
 
 ```csharp
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services
-    .AddAccountsApplication(builder.Configuration)
+    .AddAccountsApplication(builder.Configuration, builder.Environment)
     .AddWorkers();
 
 await builder.Build().RunAsync();

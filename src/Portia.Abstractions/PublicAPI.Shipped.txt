@@ -849,6 +849,8 @@ static Cntryl.Portia.RequestSenderContextExtensions.PublishAsync<TRequest>(this 
 static Cntryl.Portia.RequestSenderContextExtensions.ScheduleAsync<TRequest>(this Cntryl.Portia.IRequestScheduler! sender, TRequest request, Cntryl.Portia.RequestScheduleSpec! spec, Cntryl.Portia.RequestRouteValues! routeValues, System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.IExecutionContext! parent, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<string!>
 static Cntryl.Portia.RequestSenderContextExtensions.SendAsync<TRequest, TOut>(this Cntryl.Portia.IRemoteRequestSender! sender, TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, Cntryl.Portia.IExecutionContext! parent, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result<TOut>>
 static Cntryl.Portia.RequestSenderContextExtensions.SendAsync<TRequest>(this Cntryl.Portia.IRemoteRequestSender! sender, TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, Cntryl.Portia.IExecutionContext! parent, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
+static Cntryl.Portia.RequestSenderContextExtensions.SendWithOutcomeAsync<TRequest, TOut>(this Cntryl.Portia.IRemoteRequestSender! sender, TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, Cntryl.Portia.IExecutionContext! parent, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.RemoteRequestOutcome<TOut>!>
+static Cntryl.Portia.RequestSenderContextExtensions.SendWithOutcomeAsync<TRequest>(this Cntryl.Portia.IRemoteRequestSender! sender, TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, Cntryl.Portia.IExecutionContext! parent, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.RemoteRequestOutcome!>
 static Cntryl.Portia.RequestTraceContext.operator !=(Cntryl.Portia.RequestTraceContext? left, Cntryl.Portia.RequestTraceContext? right) -> bool
 static Cntryl.Portia.RequestTraceContext.operator ==(Cntryl.Portia.RequestTraceContext? left, Cntryl.Portia.RequestTraceContext? right) -> bool
 static Cntryl.Portia.RequestTransportId.Callable.get -> Cntryl.Portia.RequestTransportId
@@ -943,3 +945,42 @@ override Cntryl.Portia.UuidJsonConverter.ReadAsPropertyName(ref System.Text.Json
 override Cntryl.Portia.UuidJsonConverter.WriteAsPropertyName(System.Text.Json.Utf8JsonWriter! writer, Cntryl.Portia.Uuid value, System.Text.Json.JsonSerializerOptions! options) -> void
 Cntryl.Portia.PortiaServiceKeys
 const Cntryl.Portia.PortiaServiceKeys.Json = "Cntryl.Portia.Json" -> string!
+Cntryl.Portia.IRemoteRequestSender.SendWithOutcomeAsync<TRequest, TOut>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, Cntryl.Portia.RequestMetadata! metadata, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.RemoteRequestOutcome<TOut>!>
+Cntryl.Portia.IRemoteRequestSender.SendWithOutcomeAsync<TRequest, TOut>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.RemoteRequestOutcome<TOut>!>
+Cntryl.Portia.IRemoteRequestSender.SendWithOutcomeAsync<TRequest>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, Cntryl.Portia.RequestMetadata! metadata, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.RemoteRequestOutcome!>
+Cntryl.Portia.IRemoteRequestSender.SendWithOutcomeAsync<TRequest>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.RemoteRequestOutcome!>
+Cntryl.Portia.RemoteRequestOutcome
+Cntryl.Portia.RemoteRequestOutcome.CancellationForwarded
+Cntryl.Portia.RemoteRequestOutcome.CancellationForwarded.CancellationForwarded() -> void
+Cntryl.Portia.RemoteRequestOutcome.Completed
+Cntryl.Portia.RemoteRequestOutcome.Completed.Completed(Cntryl.Portia.Result result) -> void
+Cntryl.Portia.RemoteRequestOutcome.Completed.Result.get -> Cntryl.Portia.Result
+Cntryl.Portia.RemoteRequestOutcome.NotDispatched
+Cntryl.Portia.RemoteRequestOutcome.NotDispatched.NotDispatched() -> void
+Cntryl.Portia.RemoteRequestOutcome.OutcomeUnknown
+Cntryl.Portia.RemoteRequestOutcome.OutcomeUnknown.OutcomeUnknown() -> void
+Cntryl.Portia.RemoteRequestOutcome<TOut>
+Cntryl.Portia.RemoteRequestOutcome<TOut>.CancellationForwarded
+Cntryl.Portia.RemoteRequestOutcome<TOut>.CancellationForwarded.CancellationForwarded() -> void
+Cntryl.Portia.RemoteRequestOutcome<TOut>.Completed
+Cntryl.Portia.RemoteRequestOutcome<TOut>.Completed.Completed(Cntryl.Portia.Result<TOut> result) -> void
+Cntryl.Portia.RemoteRequestOutcome<TOut>.Completed.Result.get -> Cntryl.Portia.Result<TOut>
+Cntryl.Portia.RemoteRequestOutcome<TOut>.NotDispatched
+Cntryl.Portia.RemoteRequestOutcome<TOut>.NotDispatched.NotDispatched() -> void
+Cntryl.Portia.RemoteRequestOutcome<TOut>.OutcomeUnknown
+Cntryl.Portia.RemoteRequestOutcome<TOut>.OutcomeUnknown.OutcomeUnknown() -> void
+Cntryl.Portia.RemoteRequestOutcomeKind
+Cntryl.Portia.RemoteRequestOutcomeKind.CancellationForwarded = 2 -> Cntryl.Portia.RemoteRequestOutcomeKind
+Cntryl.Portia.RemoteRequestOutcomeKind.Completed = 0 -> Cntryl.Portia.RemoteRequestOutcomeKind
+Cntryl.Portia.RemoteRequestOutcomeKind.NotDispatched = 1 -> Cntryl.Portia.RemoteRequestOutcomeKind
+Cntryl.Portia.RemoteRequestOutcomeKind.OutcomeUnknown = 3 -> Cntryl.Portia.RemoteRequestOutcomeKind
+abstract Cntryl.Portia.RemoteRequestOutcome.Kind.get -> Cntryl.Portia.RemoteRequestOutcomeKind
+abstract Cntryl.Portia.RemoteRequestOutcome<TOut>.Kind.get -> Cntryl.Portia.RemoteRequestOutcomeKind
+override Cntryl.Portia.RemoteRequestOutcome.CancellationForwarded.Kind.get -> Cntryl.Portia.RemoteRequestOutcomeKind
+override Cntryl.Portia.RemoteRequestOutcome.Completed.Kind.get -> Cntryl.Portia.RemoteRequestOutcomeKind
+override Cntryl.Portia.RemoteRequestOutcome.NotDispatched.Kind.get -> Cntryl.Portia.RemoteRequestOutcomeKind
+override Cntryl.Portia.RemoteRequestOutcome.OutcomeUnknown.Kind.get -> Cntryl.Portia.RemoteRequestOutcomeKind
+override Cntryl.Portia.RemoteRequestOutcome<TOut>.CancellationForwarded.Kind.get -> Cntryl.Portia.RemoteRequestOutcomeKind
+override Cntryl.Portia.RemoteRequestOutcome<TOut>.Completed.Kind.get -> Cntryl.Portia.RemoteRequestOutcomeKind
+override Cntryl.Portia.RemoteRequestOutcome<TOut>.NotDispatched.Kind.get -> Cntryl.Portia.RemoteRequestOutcomeKind
+override Cntryl.Portia.RemoteRequestOutcome<TOut>.OutcomeUnknown.Kind.get -> Cntryl.Portia.RemoteRequestOutcomeKind

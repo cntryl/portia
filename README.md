@@ -127,7 +127,9 @@ is modeled honestly as an at-least-once reactor effect instead.
 Tests, benchmarks, and executable hosts check in `packages.lock.json` for reproducible restores.
 Shared libraries resolve dependencies without their own lockfiles; `--locked-mode` applies to
 the projects with locking enabled. Package-consumer smoke projects opt out because their
-package versions and target runtimes vary during qualification. `global.json` pins the .NET SDK.
+package versions and target runtimes vary during qualification. Install a stable .NET 10 SDK;
+`global.json` sets 10.0.100 as the minimum SDK and rolls forward to the latest installed .NET 10
+feature band.
 
 ```sh
 dotnet restore Portia.slnx --locked-mode

@@ -55,15 +55,131 @@ public sealed class RequestTransportMarkerTests
         Assert.NotNull(scheduleId);
     }
 
+    /// <summary>A legacy sender implementation reports completed results through the default outcome API.</summary>
+    [Fact]
+    public async Task ShouldReportCompletedOutcomeForLegacySenderImplementation()
+    {
+        IRemoteRequestSender sender = new FakeRemoteRequestSender();
+
+        var outcome = await sender.SendWithOutcomeAsync<CreateUser, Uuid>(
+            new CreateUser("ada@example.com", "Ada Lovelace"), new RequestRouteValues("tenant-123"), null);
+
+        var completed = Assert.IsType<RemoteRequestOutcome<Uuid>.Completed>(outcome);
+        Assert.True(completed.Result.IsSuccess);
+    }
+
+    /// <summary>A legacy sender returns not-dispatched without invoking the implementation for prior cancellation.</summary>
+    [Fact]
+    public async Task ShouldReportNotDispatchedOutcomeForPreCancelledLegacySender()
+    {
+        var implementation = new FakeRemoteRequestSender();
+        IRemoteRequestSender sender = implementation;
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var outcome = await sender.SendWithOutcomeAsync<CreateUser, Uuid>(
+            new CreateUser("ada@example.com", "Ada Lovelace"), new RequestRouteValues("tenant-123"), null,
+            cancellation.Token);
+
+        _ = Assert.IsType<RemoteRequestOutcome<Uuid>.NotDispatched>(outcome);
+        Assert.Equal(0, implementation.CallCount);
+    }
+
+    /// <summary>A legacy sender reports an unknown outcome when cancellation interrupts an active send.</summary>
+    [Fact]
+    public async Task ShouldReportUnknownOutcomeWhenLegacySenderIsCancelledAfterDispatch()
+    {
+        var implementation = new WaitingRemoteRequestSender();
+        IRemoteRequestSender sender = implementation;
+        using var cancellation = new CancellationTokenSource();
+        var sending = sender.SendWithOutcomeAsync<CreateUser, Uuid>(
+            new CreateUser("ada@example.com", "Ada Lovelace"), new RequestRouteValues("tenant-123"), null,
+            cancellation.Token).AsTask();
+
+        await implementation.Dispatched.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+        var outcome = await sending.WaitAsync(TimeSpan.FromSeconds(5));
+
+        _ = Assert.IsType<RemoteRequestOutcome<Uuid>.OutcomeUnknown>(outcome);
+    }
+
+    /// <summary>Outcome-aware child sends inherit their parent's correlation and causation identities.</summary>
+    [Fact]
+    public async Task ShouldPreserveParentContextWhenSendingOutcomeAwareRequests()
+    {
+        var parentMetadata = new RequestMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), Uuid.CreateVersion4());
+        var parent = new RequestContext<ClockProbe>(new ClockProbe(),
+            new RequestDispatchContext(RequestActor.System, metadata: parentMetadata));
+        var implementation = new FakeRemoteRequestSender();
+        IRemoteRequestSender sender = implementation;
+        var routeValues = new RequestRouteValues("tenant-123");
+
+        var noResultOutcome = await sender.SendWithOutcomeAsync(
+            new SendWelcomeEmail(Uuid.CreateVersion4()), routeValues, null, parent);
+        var noResultMetadata = Assert.IsType<RequestMetadata>(implementation.LastMetadata);
+        _ = Assert.IsType<RemoteRequestOutcome.Completed>(noResultOutcome);
+        Assert.NotEqual(parent.RequestId, noResultMetadata.RequestId);
+        Assert.Equal(parent.CorrelationId, noResultMetadata.CorrelationId);
+        Assert.Equal(parent.RequestId, noResultMetadata.CausationId);
+
+        var resultOutcome = await sender.SendWithOutcomeAsync<CreateUser, Uuid>(
+            new CreateUser("ada@example.com", "Ada Lovelace"), routeValues, null, parent);
+        var resultMetadata = Assert.IsType<RequestMetadata>(implementation.LastMetadata);
+        _ = Assert.IsType<RemoteRequestOutcome<Uuid>.Completed>(resultOutcome);
+        Assert.NotEqual(parent.RequestId, resultMetadata.RequestId);
+        Assert.Equal(parent.CorrelationId, resultMetadata.CorrelationId);
+        Assert.Equal(parent.RequestId, resultMetadata.CausationId);
+    }
+
     sealed class FakeRemoteRequestSender : IRemoteRequestSender
     {
+        public int CallCount { get; private set; }
+
+        public RequestMetadata? LastMetadata { get; private set; }
+
         public ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues,
             string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
-            where TRequest : IRequest, ICallable => ValueTask.FromResult(Result.Success);
+            where TRequest : IRequest, ICallable
+        {
+            LastMetadata = metadata;
+            return ValueTask.FromResult(Result.Success);
+        }
 
         public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues,
             string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
-            where TRequest : IRequest<TOut>, ICallable => ValueTask.FromResult(Result<TOut>.Success(default!));
+            where TRequest : IRequest<TOut>, ICallable
+        {
+            CallCount++;
+            LastMetadata = metadata;
+            return ValueTask.FromResult(Result<TOut>.Success(default!));
+        }
+    }
+
+    sealed class WaitingRemoteRequestSender : IRemoteRequestSender
+    {
+        public TaskCompletionSource Dispatched { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues,
+            string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+            where TRequest : IRequest, ICallable => new(WaitAsync(ct));
+
+        public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues,
+            string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+            where TRequest : IRequest<TOut>, ICallable => new(WaitAsync<TOut>(ct));
+
+        async Task<Result> WaitAsync(CancellationToken ct)
+        {
+            Dispatched.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return Result.Success;
+        }
+
+        async Task<Result<TOut>> WaitAsync<TOut>(CancellationToken ct)
+        {
+            Dispatched.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return Result<TOut>.Success(default!);
+        }
     }
 
     sealed class FakeRequestQueuePublisher : IRequestQueuePublisher

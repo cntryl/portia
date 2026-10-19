@@ -108,6 +108,22 @@ sealed class OpenApiRecursiveTraversalHandler : IRequestHandler<OpenApiRecursive
         ValueTask.FromResult(Result<OpenApiRecursiveArray>.Success(context.Request.Payload.Tree!));
 }
 
+sealed record OpenApiMappedCollectionNullability(List<OpenApiSelection?> Items,
+    Dictionary<string, OpenApiSelection?> Values, List<string> Labels);
+
+[Discriminator("test.openapi.collection-nullability")]
+[RequestRoute("test", "openapi", "collection-nullability", "echo")]
+sealed record OpenApiCollectionNullabilityRequest(OpenApiMappedCollectionNullability Payload)
+    : IRequest<OpenApiMappedCollectionNullability>, ICallable;
+
+sealed class OpenApiCollectionNullabilityHandler
+    : IRequestHandler<OpenApiCollectionNullabilityRequest, OpenApiMappedCollectionNullability>
+{
+    public ValueTask<Result<OpenApiMappedCollectionNullability>> HandleAsync(
+        IRequestContext<OpenApiCollectionNullabilityRequest> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result<OpenApiMappedCollectionNullability>.Success(context.Request.Payload));
+}
+
 [PortiaJsonContext]
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(OpenApiDictionaryTraversalRequest))]
@@ -123,4 +139,8 @@ sealed class OpenApiRecursiveTraversalHandler : IRequestHandler<OpenApiRecursive
 [JsonSerializable(typeof(OpenApiRecursiveArrayEnvelope))]
 [JsonSerializable(typeof(OpenApiRecursiveArray))]
 [JsonSerializable(typeof(OpenApiRecursiveArray[]))]
+[JsonSerializable(typeof(OpenApiCollectionNullabilityRequest))]
+[JsonSerializable(typeof(OpenApiMappedCollectionNullability))]
+[JsonSerializable(typeof(OpenApiSelection))]
+[JsonSerializable(typeof(OpenApiSelectionSchema))]
 sealed partial class OpenApiTraversalJsonContext : JsonSerializerContext;

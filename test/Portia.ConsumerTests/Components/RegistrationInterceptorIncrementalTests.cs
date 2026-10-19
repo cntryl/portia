@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
 
@@ -102,6 +103,36 @@ public sealed class RegistrationInterceptorIncrementalTests
             $"Call-site models were {reason} after an unrelated event was added."));
     }
 
+    /// <summary>A request sent only through the outcome-aware API still enters the generated transport catalog.</summary>
+    [Fact]
+    public void ShouldRegisterRequestDispatchedThroughOutcomeAwareSender()
+    {
+        const string source = """
+                                using Cntryl.Portia;
+                                using Microsoft.Extensions.DependencyInjection;
+                                [RequestRoute("test", "generators", "outcome", "only")]
+                                [Discriminator("outcome.only", 1)]
+                                public sealed record OutcomeOnlyRequest : IRequest<int>, ICallable;
+                                public static class Composition
+                                {
+                                    public static PortiaBuilder Compose(IServiceCollection services) => services.AddPortia();
+                                    public static void Dispatch(IRemoteRequestSender sender) => _ =
+                                        sender.SendWithOutcomeAsync<OutcomeOnlyRequest, int>(new OutcomeOnlyRequest(),
+                                            new RequestRouteValues(), null);
+                                }
+                                """;
+        var assembly = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
+        var services = new ServiceCollection();
+        _ = assembly.GetType("Composition")!.GetMethod("Compose")!.Invoke(null, [services]);
+        var registration = Assert.Single(services.Where(descriptor =>
+                descriptor.ServiceType == typeof(RequestTransportRegistration))
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<RequestTransportRegistration>());
+
+        Assert.Equal(assembly.GetType("OutcomeOnlyRequest"), registration.RequestType);
+        Assert.Equal("outcome.only", registration.Discriminator.Name);
+    }
+
     static string Generated(GeneratorDriver driver)
     {
         var result = driver.GetRunResult();
@@ -112,6 +143,7 @@ public sealed class RegistrationInterceptorIncrementalTests
     static IEnumerable<MetadataReference> References() =>
         ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
         .Append(typeof(Aggregate).Assembly.Location)
+        .Append(typeof(IRemoteRequestSender).Assembly.Location)
         .Append(typeof(PortiaBuilder).Assembly.Location)
         .Distinct(StringComparer.Ordinal)
         .Select(path => MetadataReference.CreateFromFile(path));

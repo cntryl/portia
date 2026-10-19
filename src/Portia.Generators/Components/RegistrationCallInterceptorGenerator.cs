@@ -59,7 +59,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 {
                     Expression: MemberAccessExpressionSyntax
                     {
-                        Name.Identifier.ValueText: "SendAsync" or "StreamAsync" or "DispatchAsync"
+                        Name.Identifier.ValueText: "SendAsync" or "SendWithOutcomeAsync" or "StreamAsync" or "DispatchAsync"
                         or "DispatchStreamAsync"
                         or "EnqueueAsync" or "PublishAsync" or "ScheduleAsync" or "EnsureAsync"
                         or "AddRequestSchedule"

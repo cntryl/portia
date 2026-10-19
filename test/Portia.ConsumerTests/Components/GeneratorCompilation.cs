@@ -13,6 +13,7 @@ static class GeneratorCompilation
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
+            .Append(typeof(IRemoteRequestSender).Assembly.Location)
             .Distinct(StringComparer.Ordinal)
             .Select(path => MetadataReference.CreateFromFile(path));
         var compilation = CSharpCompilation.Create(
@@ -36,6 +37,7 @@ static class GeneratorCompilation
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
+            .Append(typeof(IRemoteRequestSender).Assembly.Location)
             .Distinct(StringComparer.Ordinal)
             .Select(path => MetadataReference.CreateFromFile(path))
             .Concat(additionalReferences);
@@ -61,6 +63,7 @@ static class GeneratorCompilation
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
+            .Append(typeof(IRemoteRequestSender).Assembly.Location)
             .Distinct(StringComparer.Ordinal)
             .Select(path => MetadataReference.CreateFromFile(path))
             .Concat(additionalReferences);
@@ -81,6 +84,7 @@ static class GeneratorCompilation
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
+            .Append(typeof(IRemoteRequestSender).Assembly.Location)
             .Distinct(StringComparer.Ordinal)
             .Select(path => MetadataReference.CreateFromFile(path))
             .Concat(additionalReferences);
@@ -148,6 +152,7 @@ static class GeneratorCompilation
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
+            .Append(typeof(IRemoteRequestSender).Assembly.Location)
             .Distinct(StringComparer.Ordinal)
             .Select(path => MetadataReference.CreateFromFile(path))
             .Concat(additionalReferences);
@@ -170,6 +175,7 @@ static class GeneratorCompilation
     {
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
+            .Append(typeof(IRemoteRequestSender).Assembly.Location)
             .Distinct(StringComparer.Ordinal)
             .Select(path => MetadataReference.CreateFromFile(path));
         var compilation = CSharpCompilation.Create(

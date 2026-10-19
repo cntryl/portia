@@ -21,4 +21,8 @@ public sealed record PortiaOpenApiParameter(
     bool Required,
     bool HasDefault,
     object? DefaultValue,
-    string? WireName);
+    string? WireName)
+{
+    /// <summary>Gets whether the declared parameter value can be null.</summary>
+    public bool IsNullable { get; init; }
+}

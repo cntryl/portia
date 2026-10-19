@@ -5,6 +5,25 @@ namespace Cntryl.Portia.Consumer;
 public sealed class HttpBindingShapeTests
 {
     [Fact]
+    public void NullableReferenceResultIsCarriedIntoGeneratedOpenApiMetadata()
+    {
+        var generated = GeneratorCompilation.GeneratedSource("""
+                                                             #nullable enable
+                                                             using Cntryl.Portia;
+                                                             using Microsoft.AspNetCore.Routing;
+                                                             public sealed record NullableResult(string Value);
+                                                             public sealed record Query : IRequest<NullableResult?>, ICallable;
+                                                             public static class Scenario
+                                                             {
+                                                                 public static void Map(IEndpointRouteBuilder app)
+                                                                     => app.MapPortiaPost<Query, NullableResult?>("/query");
+                                                             }
+                                                             """, new RequestHttpBindingGenerator());
+
+        Assert.Contains("ResultIsNullable = true", generated, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task GeneratedHttpMapsCommitConcurrencyToSafeTransientConflictWithoutRetry()
     {
         var assembly = GeneratorCompilation.Compile("""

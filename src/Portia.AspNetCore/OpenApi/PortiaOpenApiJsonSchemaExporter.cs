@@ -8,14 +8,16 @@ namespace Cntryl.Portia;
 // Let the serializer identify schema locations, including dictionary values and polymorphic
 // branches. Its callback omits some properties with null defaults; their containing object still
 // supplies the exact property metadata needed to complete those locations.
-sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func<Type, Type?>? schemaType)
+sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func<Type, Type?>? schemaType,
+    Func<Type, Type, bool?>? schemaCollectionElementIsNullable)
 {
     readonly Dictionary<Type, string> _activeMappings = [];
     readonly HashSet<JsonNode> _processed = new(ReferenceEqualityComparer.Instance);
 
-    public JsonNode Export(Type type) => Export(type, []);
+    public JsonNode Export(Type type, bool rootIsNullable = false) => Export(type, [], rootIsNullable);
 
-    JsonNode Export(Type type, string[] prefix) =>
+    JsonNode Export(Type type, string[] prefix, bool rootIsNullable = false,
+        bool? rootCollectionElementIsNullable = null) =>
         options.GetTypeInfo(type).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
         {
             TransformSchemaNode = (context, schema) =>
@@ -29,16 +31,21 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
                     value.TryGetValue<string>(out var target) && target.StartsWith('#'))
                     reference["$ref"] = Pointer(prefix) + target[1..];
 
-                var mapped = Map(normalized, contractType, path, context.PropertyInfo);
+                var declaredNullable = context.Path.IsEmpty && prefix.Length == 0
+                    ? rootIsNullable
+                    : IsNullable(contractType, context.PropertyInfo, path);
+                var mapped = Map(normalized, contractType, path, context.PropertyInfo, declaredNullable);
                 var result = mapped ?? normalized;
                 if (mapped is null)
-                    CompleteChildren(result, context.TypeInfo, path);
+                    CompleteChildren(result, context.TypeInfo, path,
+                        context.Path.IsEmpty ? rootCollectionElementIsNullable : null);
                 _ = _processed.Add(result);
                 return result;
             }
         });
 
-    void CompleteChildren(JsonNode schema, JsonTypeInfo typeInfo, string[] path)
+    void CompleteChildren(JsonNode schema, JsonTypeInfo typeInfo, string[] path,
+        bool? collectionElementIsNullable = null)
     {
         if (schema is not JsonObject obj || obj.ContainsKey("$ref"))
             return;
@@ -52,15 +59,21 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
         {
             var original = obj[keyword];
             var child = original ?? new JsonObject();
-            if (!_processed.Contains(child))
+            string[] childPath = [.. path, keyword];
+            var declaredElementNullable = collectionElementIsNullable ??
+                                          schemaCollectionElementIsNullable?.Invoke(typeInfo.Type, elementType);
+            var elementNullable = declaredElementNullable ?? IsNullable(elementType, null, childPath);
+            var normalized = Normalize(child.DeepClone(), elementType);
+            JsonNode? mapped = null;
+            var completed = _processed.Contains(child)
+                ? ApplyAnnotations(child.DeepClone(), child, elementNullable)
+                : (mapped = Map(normalized, elementType, childPath, null, elementNullable)) ??
+                  ApplyAnnotations(normalized, child, elementNullable);
+            if (original is not null || mapped is not null || declaredElementNullable.HasValue || elementNullable ||
+                elementType == typeof(Uuid) || elementType == typeof(Uuid?))
             {
-                var normalized = Normalize(child, elementType);
-                var mapped = Map(normalized, elementType, [.. path, keyword], null);
-                if (original is not null || mapped is not null || elementType == typeof(Uuid) || elementType == typeof(Uuid?))
-                {
-                    obj[keyword] = mapped ?? normalized;
-                    _ = _processed.Add(obj[keyword]!);
-                }
+                obj[keyword] = completed;
+                _ = _processed.Add(completed);
             }
             return;
         }
@@ -71,15 +84,17 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
         {
             if (properties[property.Name] is not { } original || _processed.Contains(original))
                 continue;
+            string[] childPath = [.. path, "properties", property.Name];
             var normalized = Normalize(original, property.PropertyType);
-            var result = Map(normalized, property.PropertyType, [.. path, "properties", property.Name], property)
+            var result = Map(normalized, property.PropertyType, childPath, property,
+                    IsNullable(property.PropertyType, property, childPath))
                          ?? normalized;
             properties[property.Name] = result;
             _ = _processed.Add(result);
         }
     }
 
-    JsonNode? Map(JsonNode original, Type contractType, string[] path, JsonPropertyInfo? property)
+    JsonNode? Map(JsonNode original, Type contractType, string[] path, JsonPropertyInfo? property, bool nullable)
     {
         var mappingType = contractType;
         var representation = schemaType?.Invoke(mappingType);
@@ -91,18 +106,24 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
         if (representation is null || representation == mappingType)
             return null;
 
+        var representationElementType = options.GetTypeInfo(representation).ElementType;
+        var elementIsNullable = representationElementType is null
+            ? null
+            : schemaCollectionElementIsNullable?.Invoke(mappingType, representationElementType);
+
         var pointer = Pointer(path);
         if (_activeMappings.TryGetValue(mappingType, out var existing))
         {
             if (existing == pointer)
                 throw new InvalidOperationException($"Cyclic OpenAPI schema type mapping for '{mappingType}'.");
-            return ApplyAnnotations(new JsonObject { ["$ref"] = existing }, original, contractType, property);
+            return ApplyAnnotations(new JsonObject { ["$ref"] = existing }, original, nullable);
         }
 
         _activeMappings.Add(mappingType, pointer);
         try
         {
-            return ApplyAnnotations(Export(representation, path), original, contractType, property);
+            return ApplyAnnotations(Export(representation, path,
+                rootCollectionElementIsNullable: elementIsNullable), original, nullable);
         }
         finally
         {
@@ -130,12 +151,20 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
         };
     }
 
-    static JsonNode ApplyAnnotations(JsonNode mapped, JsonNode original, Type contractType, JsonPropertyInfo? property)
+    static bool IsNullable(Type contractType, JsonPropertyInfo? property, string[] path)
+    {
+        if (Nullable.GetUnderlyingType(contractType) is not null)
+            return true;
+        if (property is not null && property.PropertyType == contractType && path.Length >= 2 &&
+            path[^2] == "properties" && string.Equals(path[^1], property.Name, StringComparison.Ordinal))
+            return property.IsGetNullable || property.IsSetNullable;
+        return false;
+    }
+
+    static JsonNode ApplyAnnotations(JsonNode mapped, JsonNode original, bool nullable)
     {
         if (mapped is not JsonObject result)
             return mapped;
-        var nullable = Nullable.GetUnderlyingType(contractType) is not null ||
-                       (!contractType.IsValueType && (property is null || property.IsGetNullable || property.IsSetNullable));
         if (result["type"] is { } mappedType)
         {
             var names = mappedType is JsonArray types
