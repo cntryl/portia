@@ -430,6 +430,13 @@ Compare actual runtime JSON with the schema in application tests. Missing repres
 fails document generation; a cyclic chain of type mappings is rejected. Documents are cached after
 successful generation, so configure deterministic mappings at startup.
 
+CLR `Type` values do not retain nullable-reference annotations on collection elements or dictionary
+values. When a mapped converter represents nullable elements or values and the JSON metadata cannot
+describe that, set `PortiaHttpOptions.OpenApiSchemaCollectionElementIsNullable` for that mapped
+contract. Return `true` or `false` for the representation type; return `null` for contracts whose
+serializer metadata already describes their value nullability. Unspecified collection elements are
+non-nullable by default, so absent property metadata does not silently add `null` to a schema.
+
 ### Choosing where the document is served
 
 The routes are served only when the application explicitly calls `MapPortiaOpenApi()`.
@@ -659,6 +666,13 @@ renews its Fitz reservation. Terminally failed requests stop renewal and remain
 unacknowledged; Fitz controls expiration, redelivery, and configured dead-letter
 policy. Hosted stream failures reconnect after backoff. This does not
 republish failed messages or add application retry counters.
+
+Fitz 0.2.0 currently constructs its queue actors with no `max_attempts` limit, so expired
+reservations redeliver indefinitely. The Rust actor's `max_attempts` option is internal; neither
+the broker configuration nor .NET client exposes it, and `QueueRunnerOptions.TerminalAttempt`
+cannot set it. Fitz deployments that expose their own limit make that a broker policy; Fitz 0.2.0
+does not report attempt counts to Portia, so Portia rejects a positive `TerminalAttempt` at startup.
+See [shared application setup](application-setup.md#worker-deployment) for the full boundary.
 
 Projector and reactor passes use a separate bounded policy: failures leave the checkpoint
 unchanged, retry with exponential backoff, and fault the worker with `WorkloadFailureException`

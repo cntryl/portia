@@ -11,7 +11,8 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 {
     static readonly HashSet<string> CandidateMethods = new(StringComparer.Ordinal)
     {
-        "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "AddMcpTool", "AddMcpResource", "AddMcpPrompt", "SendAsync", "StreamAsync",
+        "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "AddMcpTool", "AddMcpResource", "AddMcpPrompt", "SendAsync",
+        "SendWithOutcomeAsync", "StreamAsync",
         "DispatchAsync",
         "DispatchStreamAsync", "EnqueueAsync", "PublishAsync", "ScheduleAsync", "EnsureAsync", "AddRequestSchedule",
         "MapPortiaGet", "MapPortiaPost", "MapPortiaPut", "MapPortiaPatch", "MapPortiaDelete", "MapPortiaGetStream",
@@ -281,7 +282,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 
     static bool IsPortiaDispatch(IMethodSymbol method)
     {
-        if (method.Name is not ("SendAsync" or "StreamAsync" or "DispatchAsync" or "DispatchStreamAsync"
+        if (method.Name is not ("SendAsync" or "SendWithOutcomeAsync" or "StreamAsync" or "DispatchAsync" or "DispatchStreamAsync"
             or "EnqueueAsync" or "PublishAsync" or "ScheduleAsync" or "EnsureAsync" or "AddRequestSchedule"))
         {
             return false;

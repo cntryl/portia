@@ -161,9 +161,15 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
     {
         var builder = CreateBuilder();
         _ = builder.Services.AddPortia().AddHttp(options =>
+            {
                 options.OpenApiSchemaType = type => type == typeof(OpenApiRecursiveArray)
                     ? typeof(OpenApiRecursiveArray[])
-                    : null)
+                    : null;
+                options.OpenApiSchemaCollectionElementIsNullable = (contractType, elementType) =>
+                    contractType == typeof(OpenApiRecursiveArray) && elementType == typeof(OpenApiRecursiveArray)
+                        ? true
+                        : null;
+            })
             .AddRequestHandler<OpenApiRecursiveTraversalHandler>();
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
@@ -185,7 +191,8 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
         var requestTree = envelope.Properties!["a~/b"];
         Assert.Equal(JsonSchemaType.Array | JsonSchemaType.Null, requestTree.Type);
         AssertRecursiveArraySchema(requestTree);
-        AssertRecursiveArraySchema(operation.Responses!["200"].Content!["application/json"].Schema!);
+        AssertRecursiveArraySchema(operation.Responses!["200"].Content!["application/json"].Schema!,
+            rootNullable: false);
 
         if (format == "json")
         {
@@ -236,12 +243,13 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
         Assert.Contains("item_id", child.Properties["next"].Properties!.Keys);
     }
 
-    static void AssertRecursiveArraySchema(IOpenApiSchema array)
+    static void AssertRecursiveArraySchema(IOpenApiSchema array, bool rootNullable = true)
     {
-        Assert.Equal(JsonSchemaType.Array | JsonSchemaType.Null, array.Type);
+        Assert.Equal(rootNullable ? JsonSchemaType.Array | JsonSchemaType.Null : JsonSchemaType.Array, array.Type);
         Assert.Equal(2, array.Items!.AnyOf!.Count);
         var recursive = Assert.Single(array.Items.AnyOf, branch => branch is OpenApiSchemaReference);
-        Assert.Equal(JsonSchemaType.Array | JsonSchemaType.Null, recursive.Type);
+        Assert.Equal(rootNullable ? JsonSchemaType.Array | JsonSchemaType.Null : JsonSchemaType.Array,
+            recursive.Type);
         Assert.NotNull(recursive.Items!.AnyOf);
         Assert.Single(array.Items.AnyOf, branch => branch.Type == JsonSchemaType.Null);
     }

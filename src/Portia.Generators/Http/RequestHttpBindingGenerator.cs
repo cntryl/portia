@@ -41,6 +41,11 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         "MapPortiaGetStream", "MapPortiaGetSse"
     ];
 
+    static readonly SymbolDisplayFormat NullableTypeDisplayFormat =
+        SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
+            SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions
+            | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -151,11 +156,12 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 "asynchronous queue dispatch requires a no-result IRequest; remove IQueuable from a result-bearing request");
         }
 
-        var resultType = kind is CallKind.Queue
+        var resultTypeSymbol = kind is CallKind.Queue || method.TypeArguments.Length != 2
             ? null
-            : method.TypeArguments.Length == 2
-                ? method.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                : null;
+            : method.TypeArguments[1];
+        var resultType = resultTypeSymbol?.ToDisplayString(NullableTypeDisplayFormat);
+        var resultRuntimeType = resultTypeSymbol?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var resultIsNullable = resultTypeSymbol is not null && IsNullableType(resultTypeSymbol);
 
         CallAnalysis? Mapping(ParameterModel[] parameters, bool hasDefaultBinder)
         {
@@ -164,7 +170,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 ? Invalid(invocation, "this call cannot be intercepted; use a concrete direct mapping call")
                 : new CallAnalysis(new CallModel(
                     requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), requestType.Name,
-                    resultType, kind, verb, parameters, InterceptableLocationModel.From(location),
+                    resultType, resultRuntimeType, resultIsNullable, kind, verb, parameters,
+                    InterceptableLocationModel.From(location),
                     DiagnosticLocation.From(invocation.GetLocation()), ContainingScope(invocation),
                     IsExcludedFromDescription(invocation), configured, hasDefaultBinder), null);
         }
@@ -210,12 +217,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                         a.AttributeClass?.ToDisplayString() ==
                         "System.Text.Json.Serialization.JsonPropertyNameAttribute")
                     ?.ConstructorArguments.FirstOrDefault().Value as string;
-                var typeName = parameter.Type.ToDisplayString(
-                    SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
-                        SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
-                        SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier));
+                var typeName = parameter.Type.ToDisplayString(NullableTypeDisplayFormat);
+                var runtimeTypeName = parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 return new ParameterModel(
-                    parameter.Name, typeName,
+                    parameter.Name, typeName, runtimeTypeName,
                     underlying.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), source, routeToken,
                     parameter.NullableAnnotation == NullableAnnotation.Annotated ||
                     !SymbolEqualityComparer.Default.Equals(underlying, parameter.Type),
@@ -245,6 +250,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     static CallAnalysis Invalid(ExpressionSyntax invocation, string reason) =>
         new(null, new HttpBindingDiagnostic(HttpBindingDiagnosticKind.UnsupportedBinding,
             DiagnosticLocation.From(invocation.GetLocation()), reason));
+
+    static bool IsNullableType(ITypeSymbol type) =>
+        type.NullableAnnotation == NullableAnnotation.Annotated
+        || type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
 
     static string DefaultValue(IParameterSymbol parameter, string typeName) => parameter.ExplicitDefaultValue is null
         ? "default!"
@@ -420,7 +429,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .Append(formBindable ? "new global::Cntryl.Portia.PortiaFormBindableBody(), " : string.Empty)
             .Append("new global::Cntryl.Portia.PortiaOpenApiOperation(")
             .Append(Literal(call.OperationId)).Append(", ")
-            .Append(call.ResultType is null ? "null" : $"typeof({call.ResultType.TrimEnd('?')})").Append(", ")
+            .Append(call.ResultRuntimeType is null ? "null" : $"typeof({call.ResultRuntimeType})").Append(", ")
             .Append(call.ResultType is null && call.Kind is CallKind.Send or CallKind.Queue ? "true" : "false")
             .Append(", ")
             .Append(call.Kind == CallKind.Stream ? "true" : "false").Append(", ")
@@ -433,14 +442,17 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             var wireNameExpression = parameter.Source == ParameterSource.Route ? Literal(parameter.RouteToken!)
                 : parameter.JsonName is not null ? Literal(parameter.JsonName) : "default(string)";
             _ = source.Append("                new(").Append(Literal(parameter.Name)).Append(", typeof(")
-                .Append(parameter.Type.TrimEnd('?')).Append("), ")
+                .Append(parameter.RuntimeType).Append("), ")
                 .Append(Literal(parameter.Source.ToString().ToLowerInvariant())).Append(", ")
                 .Append(!parameter.Nullable && parameter.Default is null ? "true" : "false").Append(", ")
                 .Append(parameter.Default is not null ? "true" : "false").Append(", ")
-                .Append(parameter.Default ?? "null").Append(", ").Append(wireNameExpression).AppendLine("),");
+                .Append(parameter.Default ?? "null").Append(", ").Append(wireNameExpression)
+                .Append(") { IsNullable = ").Append(parameter.Nullable ? "true" : "false").AppendLine(" },");
         }
 
-        _ = source.AppendLine("            }));");
+        _ = source.Append("            }) { ResultIsNullable = ")
+            .Append(call.ResultIsNullable ? "true" : "false")
+            .AppendLine(" });");
         if (call.Configured)
             _ = source.AppendLine("        configuration.ApplyMetadata(app, builder);");
         _ = source.AppendLine("        return builder;").AppendLine();
@@ -837,7 +849,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 .Append("            return portiaResult.ToHttpResult(")
                 .Append(call.ResultType is null
                     ? string.Empty
-                    : $"(global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<{call.ResultType}>)jsonOptions.GetTypeInfo(typeof({call.ResultType}))")
+                    : $"(global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<{call.ResultType}>)jsonOptions.GetTypeInfo(typeof({call.ResultRuntimeType}))")
                 .AppendLine(");"),
             _ => throw new ArgumentOutOfRangeException(nameof(call))
         };
@@ -895,6 +907,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     sealed record ParameterModel(
         string Name,
         string Type,
+        string RuntimeType,
         string UnderlyingType,
         ParameterSource Source,
         string? RouteToken,
@@ -909,6 +922,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         string requestTypeFullName,
         string requestTypeName,
         string? resultType,
+        string? resultRuntimeType,
+        bool resultIsNullable,
         CallKind kind,
         string verb,
         ParameterModel[] parameters,
@@ -924,6 +939,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         public string RequestTypeName { get; } = requestTypeName;
 
         public string? ResultType { get; } = resultType;
+
+        public string? ResultRuntimeType { get; } = resultRuntimeType;
+
+        public bool ResultIsNullable { get; } = resultIsNullable;
 
         public string OperationId { get; } = CamelCase(requestTypeName);
 
@@ -949,6 +968,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             string.Equals(RequestTypeFullName, other.RequestTypeFullName, StringComparison.Ordinal)
             && string.Equals(RequestTypeName, other.RequestTypeName, StringComparison.Ordinal)
             && string.Equals(ResultType, other.ResultType, StringComparison.Ordinal)
+            && string.Equals(ResultRuntimeType, other.ResultRuntimeType, StringComparison.Ordinal)
+            && ResultIsNullable == other.ResultIsNullable
             && Kind == other.Kind
             && string.Equals(Verb, other.Verb, StringComparison.Ordinal)
             && Parameters.SequenceEqual(other.Parameters)
@@ -966,6 +987,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 var hash = StringComparer.Ordinal.GetHashCode(RequestTypeFullName);
                 hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(RequestTypeName);
                 hash = (hash * 397) ^ (ResultType is null ? 0 : StringComparer.Ordinal.GetHashCode(ResultType));
+                hash = (hash * 397) ^ (ResultRuntimeType is null ? 0 : StringComparer.Ordinal.GetHashCode(ResultRuntimeType));
+                hash = (hash * 397) ^ ResultIsNullable.GetHashCode();
                 hash = (hash * 397) ^ (int)Kind;
                 hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(Verb);
                 foreach (var parameter in Parameters)

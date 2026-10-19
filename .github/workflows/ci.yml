@@ -151,6 +151,7 @@ jobs:
             --output artifacts/fitz-lexkey-native-aot \
             -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
           artifacts/fitz-lexkey-native-aot/Portia.Fitz.LexKey.PackageConsumer
+          scripts/qualify-account-example.sh "$RUNNER_TEMP/portia-account-otel-evidence"
 
       - name: Test S3 storage integration
         env:

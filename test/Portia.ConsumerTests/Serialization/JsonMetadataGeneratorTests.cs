@@ -322,6 +322,27 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
+    public void RequiresJsonMetadataForOutcomeAwareRequestAndResultRoots()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using Cntryl.Portia;
+                                                           [RequestRoute("test", "generators", "outcome", "only")]
+                                                           [Discriminator("outcome.only", 1)]
+                                                           public sealed record Ping : IRequest<Pong>, ICallable;
+                                                           public sealed record Pong;
+                                                           public static class Scenario
+                                                           {
+                                                               public static void Send(IRemoteRequestSender sender) => _ =
+                                                                   sender.SendWithOutcomeAsync<Ping, Pong>(new Ping(),
+                                                                       new RequestRouteValues(), null);
+                                                           }
+                                                           """, new JsonMetadataDiagnosticGenerator());
+
+        Assert.Equal(["Ping", "Pong"], diagnostics.Where(d => d.Id == "PORTIA025")
+            .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void AcceptsAnUpcasterForAReferencedDomainEventUsedByTheApplication()
     {
         var contracts = GeneratorCompilation.Reference("""

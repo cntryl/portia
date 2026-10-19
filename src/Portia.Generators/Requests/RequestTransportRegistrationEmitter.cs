@@ -45,7 +45,7 @@ static class RequestTransportRegistrationEmitter
                 _ = source.Append(", null");
             }
 
-            _ = source.Append(", typeof(").Append(request.ResultType).Append(')');
+            _ = source.Append(", typeof(").Append(request.ResultRuntimeType).Append(')');
         }
 
         _ = source.Append(')');

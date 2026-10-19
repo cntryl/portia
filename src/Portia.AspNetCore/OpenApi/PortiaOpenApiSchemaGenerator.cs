@@ -12,11 +12,13 @@ namespace Cntryl.Portia;
 static class PortiaOpenApiSchemaGenerator
 {
     public static IOpenApiSchema Create(Type type, JsonSerializerOptions options, OpenApiDocument document,
-        Func<Type, Type?>? schemaType = null)
+        Func<Type, Type?>? schemaType = null, bool rootIsNullable = false,
+        Func<Type, Type, bool?>? schemaCollectionElementIsNullable = null)
     {
         if (typeof(Stream).IsAssignableFrom(type))
             return new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" };
-        var node = new PortiaOpenApiJsonSchemaExporter(options, schemaType).Export(type);
+        var node = new PortiaOpenApiJsonSchemaExporter(options, schemaType, schemaCollectionElementIsNullable)
+            .Export(type, rootIsNullable);
         var nodes = new Dictionary<string, JsonNode>(StringComparer.Ordinal);
         var references = new List<(JsonObject Node, string Target)>();
         Visit(node, "#");

@@ -66,6 +66,38 @@ public static class RequestSenderContextExtensions
         where TRequest : IRequest<TOut>, ICallable
         => sender.SendAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromParent(parent), ct);
 
+    /// <summary>Sends a no-result child request and reports its transport outcome.</summary>
+    /// <typeparam name="TRequest">The concrete request type.</typeparam>
+    /// <param name="sender">The sender that carries the request.</param>
+    /// <param name="request">The request to send.</param>
+    /// <param name="routeValues">Values for wildcard route segments.</param>
+    /// <param name="actorToken">The caller's raw bearer token, or <see langword="null" />.</param>
+    /// <param name="parent">The execution this request inherits correlation and causation from.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>The completed result or a transport-aware outcome.</returns>
+    public static ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(this IRemoteRequestSender sender,
+        TRequest request, RequestRouteValues routeValues, string? actorToken, IExecutionContext parent,
+        CancellationToken ct = default)
+        where TRequest : IRequest, ICallable
+        => sender.SendWithOutcomeAsync(request, routeValues, actorToken, RequestMetadata.FromParent(parent), ct);
+
+    /// <summary>Sends a result-bearing child request and reports its transport outcome.</summary>
+    /// <typeparam name="TRequest">The concrete request type.</typeparam>
+    /// <typeparam name="TOut">The value returned when the request completes.</typeparam>
+    /// <param name="sender">The sender that carries the request.</param>
+    /// <param name="request">The request to send.</param>
+    /// <param name="routeValues">Values for wildcard route segments.</param>
+    /// <param name="actorToken">The caller's raw bearer token, or <see langword="null" />.</param>
+    /// <param name="parent">The execution this request inherits correlation and causation from.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>The completed result or a transport-aware outcome.</returns>
+    public static ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(
+        this IRemoteRequestSender sender, TRequest request, RequestRouteValues routeValues, string? actorToken,
+        IExecutionContext parent, CancellationToken ct = default)
+        where TRequest : IRequest<TOut>, ICallable
+        => sender.SendWithOutcomeAsync<TRequest, TOut>(request, routeValues, actorToken,
+            RequestMetadata.FromParent(parent), ct);
+
     /// <summary>Publishes a new child notification.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
     /// <param name="sender">The sender that broadcasts the request.</param>

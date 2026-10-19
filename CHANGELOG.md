@@ -4,18 +4,41 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.8.1 - Unreleased
+
+### Changed
+
+- The repository requires the .NET 10 SDK family, with a 10.0.400 minimum and latest-feature-band
+  roll-forward. It no longer pins one SDK patch release.
+
+### Added
+
+- Add typed remote RPC outcomes that distinguish completed results, calls not dispatched, a
+  cancellation signal forwarded by the transport, and unknown results after dispatch.
+- Add a packed Account CQRS example and OpenTelemetry recipe for API and worker hosts.
+
+### Fixed
+
+- Preserve declared OpenAPI root and value nullability for mapped JSON schemas.
+- Keep nullable HTTP result types in generated signatures while using runtime-compatible types for
+  serialization and OpenAPI metadata.
+
 ## 0.8.0 - 2026-10-17
 
 ### Changed
 
 - Upgrade to Fitz .NET 2.0.0 and the compatible 0.2.0 broker. Existing deployments require a
   coordinated broker migration; see [the migration guide](docs/migration-0.8.md).
+- Terminal queue failures now use an optional observer and remain unacknowledged after observation.
+  The transport controls redelivery and dead-letter policy, so observer effects must tolerate replay.
+- The `terminal` value of `portia.request.delivery.count` now describes an unacknowledged terminal
+  delivery; warning event 1005 says the transport retains it.
 - KV checkpoint, projection, and tenant-directory writes default to `Buffered`, with explicit
   `Sync` overloads. Authoritative event-stream commits remain synchronous.
 - `InMemoryRpcClient.CallAsync` returns `RpcCall`, validates timeout budgets, enforces deadlines
   independently of worker cooperation, and reports cancellation outcomes consistently.
-- Refresh stable dependencies and pin the .NET SDK to 10.0.402. Retain package locks for tests
-  and executable hosts; reusable libraries resolve through central package versions.
+- Refresh stable dependencies and pin the .NET SDK to 10.0.402. Retain package locks for tests and
+  executable hosts; reusable libraries resolve through central package versions.
 
 ### Added
 

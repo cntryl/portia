@@ -59,7 +59,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 {
                     Expression: MemberAccessExpressionSyntax
                     {
-                        Name.Identifier.ValueText: "SendAsync" or "StreamAsync" or "DispatchAsync"
+                        Name.Identifier.ValueText: "SendAsync" or "SendWithOutcomeAsync" or "StreamAsync" or "DispatchAsync"
                         or "DispatchStreamAsync"
                         or "EnqueueAsync" or "PublishAsync" or "ScheduleAsync" or "EnsureAsync"
                         or "AddRequestSchedule"
@@ -576,7 +576,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         return literal.Substring(1, literal.Length - 2).Replace("{", "{{").Replace("}", "}}");
     }
 
-    static string Type(ITypeSymbol symbol) => symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+    static string Type(ITypeSymbol symbol) => RequestTransportDiscovery.Type(symbol);
 
     static void Generate(SourceProductionContext context, ImmutableArray<Call> calls,
         ImmutableArray<RequestTransportComponent> dispatchedRequests, SharedRegistrationsModel shared)
