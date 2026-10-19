@@ -597,6 +597,60 @@ public sealed class OpenApiTests : IAsyncDisposable
             operationResponses.GetProperty("400").GetProperty("$ref").GetString());
     }
 
+    /// <summary>A thousand generated operation contracts keep default response output compact.</summary>
+    [Fact]
+    public async Task ShouldKeepThousandOperationOpenApiDocumentCompact()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddFrameworkTests();
+        _ = builder.Services.AddPortia().AddHttp();
+        _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+
+        for (var index = 0; index < 1_000; index++)
+        {
+            var operationId = $"GeneratedOperation{index:D4}";
+            _ = _app.MapGet($"/api/operation-{index:D4}", static () => "ok")
+                .WithMetadata(new PortiaOpenApiOperation(
+                    operationId,
+                    typeof(string),
+                    NoContent: false,
+                    JsonStream: false,
+                    ServerSentEvents: false,
+                    QueueCapable: false,
+                    Parameters: []));
+        }
+
+        await _app.StartAsync();
+        using var client = _app.GetTestClient();
+        var response = await client.GetAsync("/openapi/v1.json");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var json = await response.Content.ReadAsStringAsync();
+        var jsonSize = System.Text.Encoding.UTF8.GetByteCount(json);
+        Assert.True(jsonSize < 1_500_000, $"The 1,000-operation document was {jsonSize:N0} bytes.");
+        var parsed = OpenApiDocument.Parse(json, "json", new OpenApiReaderSettings());
+        Assert.Empty(Assert.IsType<OpenApiDiagnostic>(parsed.Diagnostic).Errors);
+        var document = Assert.IsType<OpenApiDocument>(parsed.Document);
+        Assert.Equal(1_000, document.Paths.Count);
+        Assert.Equal(2, document.Components!.Responses!.Count);
+
+        using var raw = JsonDocument.Parse(json);
+        var components = raw.RootElement.GetProperty("components").GetProperty("responses");
+        Assert.Equal(2, components.EnumerateObject().Count());
+        foreach (var path in raw.RootElement.GetProperty("paths").EnumerateObject())
+        {
+            var responses = path.Value.GetProperty("get").GetProperty("responses");
+            foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
+                Assert.Equal("#/components/responses/CntrylPortiaHttpProblemResponse",
+                    responses.GetProperty(status).GetProperty("$ref").GetString());
+            Assert.Equal("#/components/responses/CntrylPortiaHttpUnauthorizedResponse",
+                responses.GetProperty("401").GetProperty("$ref").GetString());
+        }
+    }
+
     /// <summary>
     ///     Explicit HTTP activation composes the document, so an application can
     ///     map it where and how it wants — behind authorization, on an internal path, or on a
