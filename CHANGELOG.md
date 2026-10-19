@@ -4,7 +4,7 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
-## 0.8.1 - Unreleased
+## 0.8.1 - 2026-10-19
 
 ### Changed
 
@@ -20,6 +20,7 @@ alerts are as breaking to change as an API.
 ### Fixed
 
 - Preserve declared OpenAPI root and value nullability for mapped JSON schemas.
+- Reuse OpenAPI response components for Portia's default problem and unauthorized responses.
 - Keep nullable HTTP result types in generated signatures while using runtime-compatible types for
   serialization and OpenAPI metadata.
 
