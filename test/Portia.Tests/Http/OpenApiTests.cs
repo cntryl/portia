@@ -484,11 +484,30 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.Equal("uuid", createdId.GetProperty("format").GetString());
         const string problemRef = "#/components/responses/CntrylPortiaHttpProblemResponse";
         const string unauthorizedRef = "#/components/responses/CntrylPortiaHttpUnauthorizedResponse";
+        foreach (var path in paths.EnumerateObject()
+                     .Where(path => path.Name.StartsWith("/api/", StringComparison.Ordinal)))
+        {
+            foreach (var operation in path.Value.EnumerateObject())
+            {
+                var operationResponses = operation.Value.GetProperty("responses");
+                foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
+                {
+                    if (path.Name == "/api/upload" && status == "400")
+                        continue;
+
+                    Assert.Equal(
+                        problemRef,
+                        operationResponses.GetProperty(status).GetProperty("$ref").GetString());
+                }
+
+                Assert.Equal(
+                    unauthorizedRef,
+                    operationResponses.GetProperty("401").GetProperty("$ref").GetString());
+            }
+        }
+
         foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
             Assert.Equal(problemRef, responses.GetProperty(status).GetProperty("$ref").GetString());
-        Assert.Equal(problemRef, getResponses.GetProperty("400").GetProperty("$ref").GetString());
-        Assert.Equal(problemRef, paths.GetProperty("/api/ping").GetProperty("post").GetProperty("responses")
-            .GetProperty("400").GetProperty("$ref").GetString());
         Assert.Equal(unauthorizedRef, responses.GetProperty("401").GetProperty("$ref").GetString());
         var componentResponses = raw.RootElement.GetProperty("components").GetProperty("responses");
         Assert.Equal(2, componentResponses.EnumerateObject().Count());
