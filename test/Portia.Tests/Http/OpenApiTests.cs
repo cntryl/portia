@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -363,6 +364,7 @@ public sealed class OpenApiTests : IAsyncDisposable
             .Accepts<Stream>("application/octet-stream")
             .OnBind(_ => new HttpOptionalBody())
             .Produces<Stream>(StatusCodes.Status200OK, "application/octet-stream")
+            .Produces(StatusCodes.Status400BadRequest)
             .OnResult((_, result) => result.IsSuccess ? Results.Stream(Stream.Null) : null));
         _ = group.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}/update", endpoint => endpoint
             .FromQuery(x => x.DryRun));
@@ -397,7 +399,14 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.Equal(OpenApiSpecVersion.OpenApi3_1, yamlDiagnostic.SpecificationVersion);
         Assert.Equal(jsonDocument.Paths.Keys.Order(), yamlDocument.Paths.Keys.Order());
         var yamlCreate = yamlDocument.Paths["/api/orders"].Operations![HttpMethod.Post];
-        Assert.IsType<OpenApiResponseReference>(yamlCreate.Responses!["400"]);
+        var yamlResponses = yamlCreate.Responses!;
+        foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
+            Assert.IsType<OpenApiResponseReference>(yamlResponses[status]);
+        Assert.IsType<OpenApiResponseReference>(yamlResponses["401"]);
+        Assert.Equal(2, yamlDocument.Components!.Responses!.Count);
+        var yamlUpload = yamlDocument.Paths["/api/upload"].Operations![HttpMethod.Post];
+        Assert.IsType<OpenApiResponse>(yamlUpload.Responses!["400"]);
+        Assert.Null(yamlUpload.Responses["400"].Content);
 
         using var raw = JsonDocument.Parse(json);
         Assert.Equal("3.1.1", raw.RootElement.GetProperty("openapi").GetString());
@@ -453,6 +462,9 @@ public sealed class OpenApiTests : IAsyncDisposable
         var binary = upload.GetProperty("content").GetProperty("application/octet-stream").GetProperty("schema");
         Assert.Equal("string", binary.GetProperty("type").GetString());
         Assert.Equal("binary", binary.GetProperty("format").GetString());
+        var explicitBadRequest = uploadOperation.GetProperty("responses").GetProperty("400");
+        Assert.False(explicitBadRequest.TryGetProperty("$ref", out _));
+        Assert.False(explicitBadRequest.TryGetProperty("content", out _));
         var binaryResponse = uploadOperation.GetProperty("responses").GetProperty("200").GetProperty("content")
             .GetProperty("application/octet-stream").GetProperty("schema");
         Assert.Equal("string", binaryResponse.GetProperty("type").GetString());
@@ -470,8 +482,8 @@ public sealed class OpenApiTests : IAsyncDisposable
             .GetProperty("application/json").GetProperty("schema");
         Assert.Equal("string", createdId.GetProperty("type").GetString());
         Assert.Equal("uuid", createdId.GetProperty("format").GetString());
-        const string problemRef = "#/components/responses/CntrylPortiaProblem";
-        const string unauthorizedRef = "#/components/responses/CntrylPortiaUnauthorized";
+        const string problemRef = "#/components/responses/CntrylPortiaHttpProblemResponse";
+        const string unauthorizedRef = "#/components/responses/CntrylPortiaHttpUnauthorizedResponse";
         foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
             Assert.Equal(problemRef, responses.GetProperty(status).GetProperty("$ref").GetString());
         Assert.Equal(problemRef, getResponses.GetProperty("400").GetProperty("$ref").GetString());
@@ -480,18 +492,26 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.Equal(unauthorizedRef, responses.GetProperty("401").GetProperty("$ref").GetString());
         var componentResponses = raw.RootElement.GetProperty("components").GetProperty("responses");
         Assert.Equal(2, componentResponses.EnumerateObject().Count());
-        var problem = componentResponses.GetProperty("CntrylPortiaProblem");
+        var problem = componentResponses.GetProperty("CntrylPortiaHttpProblemResponse");
+        Assert.Equal("Error", problem.GetProperty("description").GetString());
         var problemSchema = problem.GetProperty("content").GetProperty("application/problem+json").GetProperty("schema");
         Assert.True(problemSchema.GetProperty("properties").TryGetProperty("status", out _));
         Assert.True(problemSchema.GetProperty("properties").TryGetProperty("detail", out _));
         Assert.False(problemSchema.GetProperty("properties").TryGetProperty("message", out _));
-        Assert.True(problem.GetProperty("headers")
-            .TryGetProperty(ResultHttpExtensions.TransientHeaderName, out _));
+        var problemHeaders = problem.GetProperty("headers");
+        Assert.True(problemHeaders.TryGetProperty(ResultHttpExtensions.TransientHeaderName, out var problemTransient));
+        Assert.False(problemTransient.TryGetProperty("required", out var problemHeaderRequired) &&
+                     problemHeaderRequired.GetBoolean());
         Assert.True(problem.GetProperty("content")
             .TryGetProperty("application/problem+json", out _));
-        Assert.True(componentResponses.GetProperty("CntrylPortiaUnauthorized").GetProperty("headers")
-            .TryGetProperty("WWW-Authenticate", out _));
-        Assert.Contains("#/components/responses/CntrylPortiaProblem", yaml, StringComparison.Ordinal);
+        var unauthorized = componentResponses.GetProperty("CntrylPortiaHttpUnauthorizedResponse");
+        Assert.Equal("Unauthorized", unauthorized.GetProperty("description").GetString());
+        Assert.False(unauthorized.TryGetProperty("content", out _));
+        var unauthorizedHeaders = unauthorized.GetProperty("headers");
+        Assert.True(unauthorizedHeaders.GetProperty("WWW-Authenticate").GetProperty("required").GetBoolean());
+        Assert.True(unauthorizedHeaders.GetProperty(ResultHttpExtensions.TransientHeaderName)
+            .GetProperty("required").GetBoolean());
+        Assert.Contains("#/components/responses/CntrylPortiaHttpProblemResponse", yaml, StringComparison.Ordinal);
         Assert.True(paths.TryGetProperty("/health", out _));
         Assert.False(paths.TryGetProperty("/api/widget-events", out _));
     }
@@ -520,6 +540,42 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.NotFound, yaml.StatusCode);
         // Publishing the document is independent from whether the application runs.
         Assert.Equal(HttpStatusCode.OK, widget.StatusCode);
+    }
+
+    /// <summary>Application-owned components with similar names do not replace Portia error references.</summary>
+    [Fact]
+    public async Task ShouldAvoidApplicationResponseComponentNameCollision()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddFrameworkTests();
+        builder.Services.Configure<OpenApiOptions>("v1", options => options.AddOperationTransformer((_, context, _) =>
+        {
+            var components = context.Document!.Components ??= new OpenApiComponents();
+            var responses = components.Responses ??= new Dictionary<string, IOpenApiResponse>();
+            responses["CntrylPortiaProblem"] = new OpenApiResponse { Description = "Application-owned response." };
+            return Task.CompletedTask;
+        }));
+        _ = builder.Services.AddPortia().AddHttp();
+        _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+        _ = _app.MapPortiaPost<HttpSendPing>("/ping");
+        await _app.StartAsync();
+
+        using var client = _app.GetTestClient();
+        var raw = await client.GetStringAsync("/openapi/v1.json");
+        var parsed = OpenApiDocument.Parse(raw, "json", new OpenApiReaderSettings());
+        Assert.Empty(parsed.Diagnostic!.Errors);
+        using var document = JsonDocument.Parse(raw);
+        var responses = document.RootElement.GetProperty("components").GetProperty("responses");
+        Assert.Equal("Application-owned response.", responses.GetProperty("CntrylPortiaProblem")
+            .GetProperty("description").GetString());
+        Assert.True(responses.TryGetProperty("CntrylPortiaHttpProblemResponse", out _));
+        var operationResponses = document.RootElement.GetProperty("paths").GetProperty("/ping")
+            .GetProperty("post").GetProperty("responses");
+        Assert.Equal("#/components/responses/CntrylPortiaHttpProblemResponse",
+            operationResponses.GetProperty("400").GetProperty("$ref").GetString());
     }
 
     /// <summary>

@@ -274,8 +274,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
     sealed class DefaultErrorResponses(OpenApiDocument document)
     {
-        const string ProblemName = "CntrylPortiaProblem";
-        const string UnauthorizedName = "CntrylPortiaUnauthorized";
+        const string ProblemName = "CntrylPortiaHttpProblemResponse";
+        const string UnauthorizedName = "CntrylPortiaHttpUnauthorizedResponse";
 
         readonly object _gate = new();
         string? _problemName;
