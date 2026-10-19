@@ -89,8 +89,24 @@ ASPNETCORE_URLS=http://127.0.0.1:5088 \
   >"$portia_evidence_directory/api.log" 2>&1 &
 portia_api_pid=$!
 
-curl --fail --silent --show-error --retry 30 --retry-delay 1 --retry-connrefused \
-  --max-time 2 --output /dev/null http://127.0.0.1:5088/openapi/v1.json
+portia_api_ready=false
+for _ in {1..30}; do
+  if curl --fail --silent --max-time 2 --output /dev/null \
+    http://127.0.0.1:5088/openapi/v1.json; then
+    portia_api_ready=true
+    break
+  fi
+  if ! kill -0 "$portia_api_pid" 2>/dev/null; then
+    break
+  fi
+  sleep 1
+done
+if [[ "$portia_api_ready" != true ]]; then
+  printf 'Account API did not become ready at http://127.0.0.1:5088/openapi/v1.json.\n' >&2
+  cat "$portia_evidence_directory/api.log"
+  cat "$portia_evidence_directory/worker.log"
+  exit 1
+fi
 
 portia_account_id=01234567-89ab-4cde-8fab-0123456789ab
 curl --fail-with-body --silent --show-error -X POST \
