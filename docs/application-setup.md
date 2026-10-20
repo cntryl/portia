@@ -105,6 +105,9 @@ integration behind [cross-origin protection](getting-started.md#cross-origin-req
 explicitly registers Microsoft's `v1` OpenAPI 3.1 document before the provider is built. `MapPortiaOpenApi()` explicitly maps `/openapi/v1.json` and `/openapi/v1.yml`; omit it or map
 ASP.NET Core's document on another path when the schema should not be public. See
 [getting started](getting-started.md#choosing-where-the-document-is-served).
+The `MapPortiaOpenApi(configureEndpoint)` overload applies ASP.NET conventions to both formats,
+such as `app.MapPortiaOpenApi(endpoint => endpoint.AllowAnonymous())` when anonymous access is
+intentional.
 Registration and mapping are idempotent across
 route groups and multiple Portia endpoints and add no hosted service. `AddPortia()` itself adds
 only the host-neutral startup validator described below; it does not activate transport or

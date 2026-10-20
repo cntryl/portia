@@ -831,15 +831,24 @@ builder.Services.AddPortia()
     .RequireSecureHost(options => options.AllowAnonymous<PublicCatalogQuery>());
 ```
 
+The request allowance above does not make the ASP.NET route anonymous. Apply the matching endpoint
+convention when mapping it:
+
+```csharp
+app.MapPortiaGet<PublicCatalogQuery, CatalogPage>("/catalog").AllowAnonymous();
+```
+
 The profile also requires ASP.NET authorization on every generated Portia HTTP route and the
 generated OpenAPI document endpoints. It registers ASP.NET authentication/authorization services
 and fails startup when no default authenticate/challenge scheme is configured or a Portia endpoint
-lacks authorization metadata. A Portia request mapped to GET must implement `IReadOnlyRequest`;
-Portia fails startup if a generated GET request endpoint lacks that marker. Only add the marker when
+lacks authorization metadata after its endpoint conventions run. A Portia request mapped to GET must
+implement `IReadOnlyRequest`; an unsafe GET is rejected when it is mapped. Only add the marker when
 handling has no state changes or externally visible side effects. OpenAPI document endpoints have no
-Portia request contract, so their exposure is controlled by ASP.NET endpoint authorization alone. To
-allow an otherwise unprotected request anonymously, configure both a Portia request allowance and the
-endpoint's explicit `.AllowAnonymous()` convention; Portia request authorization still runs. Keep
+Portia request contract, so their exposure is controlled by ASP.NET endpoint authorization alone.
+To expose both OpenAPI formats anonymously, configure both mapped endpoints with
+`app.MapPortiaOpenApi(endpoint => endpoint.AllowAnonymous())`. To allow an otherwise unprotected
+request anonymously, configure both a Portia request allowance and the endpoint's explicit
+`.AllowAnonymous()` convention; Portia request authorization still runs. Keep
 `UseAuthentication()` before `UseAuthorization()` in hosts that configure middleware explicitly. This
 profile enforces the Portia request and HTTP boundaries; the host still owns the correctness of its
 authentication scheme and tenant policies, `AllowedHosts` for HTTP MCP, and the TLS, ACL, quota, and

@@ -100,11 +100,13 @@ ASPNETCORE_URLS=http://127.0.0.1:5088 \
   >"$portia_evidence_directory/api.log" 2>&1 &
 portia_api_pid=$!
 
+portia_account_id=01234567-89ab-4cde-8fab-0123456789ab
 portia_stage='API readiness'
 curl --fail --silent --show-error --retry 30 --retry-delay 1 --retry-connrefused \
-  --max-time 2 --output /dev/null http://127.0.0.1:5088/openapi/v1.json
+  --max-time 2 --output /dev/null \
+  -H 'X-Demo-Tenant: demo' -H "X-Demo-Account: $portia_account_id" \
+  http://127.0.0.1:5088/openapi/v1.json
 
-portia_account_id=01234567-89ab-4cde-8fab-0123456789ab
 portia_stage='open account'
 curl --fail-with-body --silent --show-error -X POST \
   -H 'Content-Type: application/json' -H 'X-Demo-Tenant: demo' -H "X-Demo-Account: $portia_account_id" \

@@ -30,8 +30,7 @@ public static class PortiaMcpEndpointRouteBuilderExtensions
                       ?? PortiaHttpOptions.DefaultMaxJsonBodyBytes;
         if (maximum <= 0)
             throw new InvalidOperationException($"{nameof(PortiaHttpOptions.MaxJsonBodyBytes)} must be positive.");
-        var builder = endpoints.MapMcp(pattern).WithMetadata(new McpRequestSizeLimit(maximum))
-            .RequireAuthorization();
+        var builder = endpoints.MapMcp(pattern).WithMetadata(new McpRequestSizeLimit(maximum));
         // The MCP endpoints share Portia's cross-origin rule, which refuses a request another browser origin
         // starts. That alone does not meet the Streamable HTTP rule against DNS rebinding: a page on a rebound
         // host name is same-origin with the host it reaches, so only ASP.NET Core host filtering (AllowedHosts),
@@ -44,7 +43,7 @@ public static class PortiaMcpEndpointRouteBuilderExtensions
                 ? rejection.ExecuteAsync(context)
                 : PortiaMcpHttpMarker.InvokeAsync(() => next(context));
         });
-        _ = PortiaHttpBinding.ApplySecureHostAuthorization(endpoints, builder);
+        _ = PortiaHttpBinding.ApplyRequiredEndpointAuthorization(endpoints, builder);
         return builder;
     }
 
