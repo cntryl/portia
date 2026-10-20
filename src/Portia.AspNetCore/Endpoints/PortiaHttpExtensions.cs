@@ -77,8 +77,6 @@ public static class PortiaHttpExtensions
         _ = builder.Services.AddAuthentication();
         _ = builder.Services.AddAuthorization();
         builder.Services.TryAddSingleton<PortiaSecureHostMarker>();
-        builder.Services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IHostedService, PortiaHttpSecurityStartupValidator>());
         return builder;
     }
 
@@ -86,8 +84,17 @@ public static class PortiaHttpExtensions
     /// <param name="app">The endpoint route builder.</param>
     /// <returns>The same endpoint route builder, for chaining.</returns>
     public static IEndpointRouteBuilder MapPortiaOpenApi(this IEndpointRouteBuilder app)
+        => MapPortiaOpenApi(app, static _ => { });
+
+    /// <summary>Maps Portia's OpenAPI 3.1 document and configures both document endpoints.</summary>
+    /// <param name="app">The endpoint route builder.</param>
+    /// <param name="configureEndpoint">Applies ASP.NET conventions to the JSON and YAML endpoints.</param>
+    /// <returns>The same endpoint route builder, for chaining.</returns>
+    public static IEndpointRouteBuilder MapPortiaOpenApi(this IEndpointRouteBuilder app,
+        Action<IEndpointConventionBuilder> configureEndpoint)
     {
         ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(configureEndpoint);
 
         // Mapped as request delegates, which keeps RequestDelegateFactory out of an AOT build and
         // leaves these two routes out of the very document they serve.
@@ -98,8 +105,12 @@ public static class PortiaHttpExtensions
             (RequestDelegate)(context => cache.WriteAsync(context, true)));
         PortiaHttpBinding.ApplySecureHostAuthorization(app, json);
         PortiaHttpBinding.ApplySecureHostAuthorization(app, yaml);
+        configureEndpoint(json);
+        configureEndpoint(yaml);
         return app;
     }
 
     internal sealed class PortiaOpenApiMarker;
 }
+
+sealed class PortiaSecureHostMarker;

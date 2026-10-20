@@ -3,6 +3,8 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -57,13 +59,7 @@ public static partial class PortiaHttpBinding
     {
         ArgumentNullException.ThrowIfNull(app);
         ArgumentNullException.ThrowIfNull(endpoint);
-        if (app.ServiceProvider.GetService<PortiaSecureHostMarker>() is { } secureHost)
-        {
-            secureHost.Register(app.DataSources);
-            endpoint.Add(builder => builder.Metadata.Add(new PortiaHttpEndpointMarker(typeof(TRequest), method)));
-            endpoint.RequireAuthorization();
-        }
-        return endpoint;
+        return ApplySecureHostAuthorization(app, endpoint, typeof(TRequest), method, false);
     }
 
     /// <summary>Applies the secure-host endpoint policy to a Portia HTTP endpoint without a request contract.</summary>
@@ -75,13 +71,64 @@ public static partial class PortiaHttpBinding
     {
         ArgumentNullException.ThrowIfNull(app);
         ArgumentNullException.ThrowIfNull(endpoint);
-        if (app.ServiceProvider.GetService<PortiaSecureHostMarker>() is { } secureHost)
+        return ApplySecureHostAuthorization(app, endpoint, null, null, false);
+    }
+
+    /// <summary>Requires authorization for a Portia endpoint and applies secure-host validation when enabled.</summary>
+    /// <param name="app">The endpoint route builder.</param>
+    /// <param name="endpoint">The endpoint builder.</param>
+    /// <returns>The same endpoint builder for further conventions.</returns>
+    public static IEndpointConventionBuilder ApplyRequiredEndpointAuthorization(IEndpointRouteBuilder app,
+        IEndpointConventionBuilder endpoint)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        return ApplySecureHostAuthorization(app, endpoint, null, null, true);
+    }
+
+    static IEndpointConventionBuilder ApplySecureHostAuthorization(IEndpointRouteBuilder app,
+        IEndpointConventionBuilder endpoint, Type? requestType, string? method, bool requireWhenProfileDisabled)
+    {
+        var secureHost = app.ServiceProvider.GetService<PortiaSecureHostMarker>() is not null;
+        if (secureHost)
         {
-            secureHost.Register(app.DataSources);
-            endpoint.Add(builder => builder.Metadata.Add(new PortiaHttpEndpointMarker(null, "GET")));
-            endpoint.RequireAuthorization();
+            var validations = app.ServiceProvider.GetRequiredService<PortiaStartupValidationRegistry>();
+            validations.Add("secure-host-authentication", () => ValidateDefaultAuthenticationScheme(app.ServiceProvider));
+
+            if (method is "GET" && requestType is not null
+                && !typeof(IReadOnlyRequest).IsAssignableFrom(requestType))
+            {
+                throw new InvalidOperationException(
+                    $"RequireSecureHost() requires GET endpoints to map requests that implement IReadOnlyRequest: {requestType.FullName ?? requestType.Name}. GET must not change application state or cause externally visible side effects.");
+            }
+
+            endpoint.Finally(ValidateEndpointAuthorization);
         }
+
+        if (secureHost || requireWhenProfileDisabled)
+            endpoint.RequireAuthorization();
         return endpoint;
+    }
+
+    static void ValidateDefaultAuthenticationScheme(IServiceProvider services)
+    {
+        var authenticationSchemes = services.GetRequiredService<IAuthenticationSchemeProvider>();
+        if (authenticationSchemes.GetDefaultAuthenticateSchemeAsync().GetAwaiter().GetResult() is null
+            || authenticationSchemes.GetDefaultChallengeSchemeAsync().GetAwaiter().GetResult() is null)
+        {
+            throw new InvalidOperationException(
+                "RequireSecureHost() needs a default ASP.NET authentication and challenge scheme. Configure one with AddAuthentication(defaultScheme) before starting the host.");
+        }
+    }
+
+    static void ValidateEndpointAuthorization(EndpointBuilder endpoint)
+    {
+        if (!endpoint.Metadata.OfType<IAllowAnonymous>().Any()
+            && !endpoint.Metadata.OfType<IAuthorizeData>().Any())
+        {
+            throw new InvalidOperationException(
+                $"RequireSecureHost() found Portia HTTP endpoint '{endpoint.DisplayName ?? "<unnamed>"}' without ASP.NET authorization metadata. Apply RequireAuthorization(), or explicitly mark the route AllowAnonymous().");
+        }
     }
 
     /// <summary>Reports whether an exact RFC 7240 preference token requests asynchronous handling.</summary>

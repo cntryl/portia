@@ -14,10 +14,22 @@ sealed class PortiaStartupValidator(
     RequestRegistry requests,
     PortiaStartupValidationRegistry validations,
     IServiceProviderIsService available,
-    PortiaBuilder builder) : IHostedService
+    PortiaBuilder builder) : IHostedLifecycleService
 {
-    public Task StartAsync(CancellationToken cancellationToken)
+    bool _validated;
+
+    public Task StartingAsync(CancellationToken cancellationToken)
     {
+        _ = cancellationToken;
+        ValidateStartup();
+        return Task.CompletedTask;
+    }
+
+    void ValidateStartup()
+    {
+        if (_validated)
+            return;
+
         // Resolution is the validation step: DI must construct the frozen JSON options and the
         // configured serializer before any endpoint or worker can deserialize an event. The
         // default JsonDomainEventSerializer constructor validates all upcaster identities and
@@ -47,8 +59,39 @@ sealed class PortiaStartupValidator(
                 $"Authorization is required, but these request types have no applicable request authorizer or [RequiresPermission]: {string.Join(", ", unprotected)}. Register an authorizer, declare a permission, or allow them with RequireAuthorization(options => options.AllowAnonymous<TRequest>()).");
         }
 
+        _validated = true;
+    }
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        _ = cancellationToken;
+        // Legacy IWebHost implementations call only IHostedService.StartAsync, without the
+        // IHostedLifecycleService pre-start callbacks. Retain the validation path for those hosts.
+        ValidateStartup();
         return Task.CompletedTask;
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StartedAsync(CancellationToken cancellationToken)
+    {
+        _ = cancellationToken;
+        return Task.CompletedTask;
+    }
+
+    public Task StoppingAsync(CancellationToken cancellationToken)
+    {
+        _ = cancellationToken;
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        _ = cancellationToken;
+        return Task.CompletedTask;
+    }
+
+    public Task StoppedAsync(CancellationToken cancellationToken)
+    {
+        _ = cancellationToken;
+        return Task.CompletedTask;
+    }
 }
