@@ -44,6 +44,7 @@ public static class PortiaMcpEndpointRouteBuilderExtensions
                 ? rejection.ExecuteAsync(context)
                 : PortiaMcpHttpMarker.InvokeAsync(() => next(context));
         });
+        _ = PortiaHttpBinding.ApplySecureHostAuthorization(endpoints, builder);
         return builder;
     }
 

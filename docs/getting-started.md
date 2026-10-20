@@ -782,6 +782,27 @@ unprotected request with an exception that names the fix, so a missing allowance
 for a real denial. A principal-stage `IRequestAuthorizer<IRequestBase>` protects every request.
 Request types stay free of authorization attributes.
 
+For an ASP.NET Core production host, prefer `RequireSecureHost()` from the HTTP integration package:
+
+```csharp
+builder.Services.AddAuthentication("Bearer")
+    .AddJwtBearer("Bearer", options => { /* configure issuer and audience validation */ });
+builder.Services.AddPortia()
+    .RequireSecureHost(options => options.AllowAnonymous<PublicCatalogQuery>());
+```
+
+The profile also requires ASP.NET authorization on every generated Portia HTTP route and the
+generated OpenAPI document endpoints. It registers ASP.NET authentication/authorization services
+and fails startup when no default authenticate/challenge scheme is configured or a Portia endpoint
+lacks authorization metadata. A GET route must map a request that implements `IReadOnlyRequest`;
+Portia fails startup if a GET request lacks that marker. Only add the marker when handling has no
+state changes or externally visible side effects. A deliberately public HTTP route needs both a Portia request
+allowance and the endpoint's explicit `.AllowAnonymous()` convention; request authorization still
+runs. Keep `UseAuthentication()` before `UseAuthorization()` in hosts that configure middleware
+explicitly. This profile enforces the Portia request and HTTP boundaries; the host still owns the
+correctness of its authentication scheme and tenant policies, `AllowedHosts` for HTTP MCP, and the
+TLS, ACL, quota, and lifecycle policies for brokers and object storage.
+
 `MapPortiaGetStream<TRequest, TOut>` writes an incremental JSON array;
 `MapPortiaGetSse<TRequest, TOut>` writes SSE. Both enumerate once and check the first
 move before starting the response, so authentication/authorization failures become

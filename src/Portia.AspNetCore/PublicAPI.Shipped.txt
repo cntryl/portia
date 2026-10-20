@@ -74,6 +74,7 @@ static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPut<TRequest,
 static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.MapPortiaPut<TRequest>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
 static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions.WithPortiaRouteValues(this Microsoft.AspNetCore.Builder.IEndpointConventionBuilder! builder, System.Func<Microsoft.AspNetCore.Http.HttpContext!, Cntryl.Portia.RequestRouteValues!>! resolver) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
 static Cntryl.Portia.PortiaHttpExtensions.AddHttp(this Cntryl.Portia.PortiaBuilder! builder, System.Action<Cntryl.Portia.PortiaHttpOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!
+static Cntryl.Portia.PortiaHttpExtensions.RequireSecureHost(this Cntryl.Portia.PortiaBuilder! builder, System.Action<Cntryl.Portia.PortiaAuthorizationOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!
 static Cntryl.Portia.PortiaHttpExtensions.MapPortiaOpenApi(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app) -> Microsoft.AspNetCore.Routing.IEndpointRouteBuilder!
 static Cntryl.Portia.PortiaHttpBinding.Accepted(Microsoft.AspNetCore.Http.HttpContext! context, Cntryl.Portia.Uuid requestId) -> Microsoft.AspNetCore.Http.IResult!
 static Cntryl.Portia.PortiaHttpBinding.CreateDispatchContext(Microsoft.AspNetCore.Http.HttpContext! context) -> Cntryl.Portia.RequestDispatchContext!
@@ -160,6 +161,8 @@ Cntryl.Portia.HttpUnsupportedMediaTypeException
 Cntryl.Portia.HttpUnsupportedMediaTypeException.HttpUnsupportedMediaTypeException(string! message) -> void
 static Cntryl.Portia.PortiaHttpBinding.RejectCrossOrigin(Microsoft.AspNetCore.Http.HttpContext! context) -> Microsoft.AspNetCore.Http.IResult?
 static Cntryl.Portia.PortiaHttpBinding.RequireHttpServices(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app) -> void
+static Cntryl.Portia.PortiaHttpBinding.ApplySecureHostAuthorization<TRequest>(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Microsoft.AspNetCore.Builder.IEndpointConventionBuilder! endpoint, string! method) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaHttpBinding.ApplySecureHostAuthorization(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Microsoft.AspNetCore.Builder.IEndpointConventionBuilder! endpoint) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
 static Cntryl.Portia.PortiaHttpBinding.HasCredentials(Microsoft.AspNetCore.Http.HttpContext! context) -> bool
 Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaType.get -> System.Func<System.Type!, System.Type?>?
 Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaType.set -> void

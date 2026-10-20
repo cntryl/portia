@@ -452,7 +452,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
         _ = source.Append("            }) { ResultIsNullable = ")
             .Append(call.ResultIsNullable ? "true" : "false")
-            .AppendLine(" });");
+            .AppendLine(" });")
+            .Append("        global::Cntryl.Portia.PortiaHttpBinding.ApplySecureHostAuthorization<")
+            .Append(call.RequestTypeFullName).Append(">(app, builder, ")
+            .Append(Literal(call.Verb.ToUpperInvariant())).AppendLine(");");
         if (call.Configured)
             _ = source.AppendLine("        configuration.ApplyMetadata(app, builder);");
         _ = source.AppendLine("        return builder;").AppendLine();

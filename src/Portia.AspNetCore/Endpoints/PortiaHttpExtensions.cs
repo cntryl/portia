@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi;
 
@@ -60,6 +61,27 @@ public static class PortiaHttpExtensions
         return builder;
     }
 
+    /// <summary>
+    ///     Applies Portia's fail-closed authorization baseline to the request bus and generated HTTP endpoints.
+    ///     The host must configure a default authentication scheme before it starts.
+    /// </summary>
+    /// <param name="builder">The Portia composition root.</param>
+    /// <param name="configure">Allows named requests or request families to dispatch anonymously.</param>
+    /// <returns>The same builder for further composition.</returns>
+    public static PortiaBuilder RequireSecureHost(this PortiaBuilder builder,
+        Action<PortiaAuthorizationOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.RequireAuthorization(configure);
+        builder.AddHttp();
+        _ = builder.Services.AddAuthentication();
+        _ = builder.Services.AddAuthorization();
+        builder.Services.TryAddSingleton<PortiaSecureHostMarker>();
+        builder.Services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IHostedService, PortiaHttpSecurityStartupValidator>());
+        return builder;
+    }
+
     /// <summary>Maps Portia's OpenAPI 3.1 document as JSON and YAML.</summary>
     /// <param name="app">The endpoint route builder.</param>
     /// <returns>The same endpoint route builder, for chaining.</returns>
@@ -70,10 +92,12 @@ public static class PortiaHttpExtensions
         // Mapped as request delegates, which keeps RequestDelegateFactory out of an AOT build and
         // leaves these two routes out of the very document they serve.
         var cache = app.ServiceProvider.GetRequiredService<PortiaOpenApiDocumentCache>();
-        _ = app.MapMethods($"/openapi/{DocumentName}.json", Get,
+        var json = app.MapMethods($"/openapi/{DocumentName}.json", Get,
             (RequestDelegate)(context => cache.WriteAsync(context, false)));
-        _ = app.MapMethods($"/openapi/{DocumentName}.yml", Get,
+        var yaml = app.MapMethods($"/openapi/{DocumentName}.yml", Get,
             (RequestDelegate)(context => cache.WriteAsync(context, true)));
+        PortiaHttpBinding.ApplySecureHostAuthorization(app, json);
+        PortiaHttpBinding.ApplySecureHostAuthorization(app, yaml);
         return app;
     }
 

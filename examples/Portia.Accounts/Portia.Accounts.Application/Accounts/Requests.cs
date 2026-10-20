@@ -34,7 +34,7 @@ public sealed record DepositFunds(string Tenant, Uuid AccountId, long AmountCent
 [Discriminator("accounts.get")]
 [RequestRoute("accounts", "account", "*", "get")]
 public sealed record GetAccount(string Tenant, Uuid AccountId)
-    : IRequest<AccountReadModel>, ICallable, IAccountRequest;
+    : IRequest<AccountReadModel>, IReadOnlyRequest, ICallable, IAccountRequest;
 
 /// <summary>The account data returned by the read model.</summary>
 /// <param name="AccountId">The account identity.</param>

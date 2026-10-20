@@ -8,7 +8,7 @@ using OpenTelemetry.Trace;
 using Portia.Accounts;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddAccountsApplication(builder.Configuration, builder.Environment);
+var portia = builder.Services.AddAccountsApplication(builder.Configuration, builder.Environment);
 builder.Services.AddAccountsTelemetry("portia.accounts.api",
     tracing => tracing.AddAspNetCoreInstrumentation());
 var useDemoAuthentication = builder.Environment.IsDevelopment();
@@ -21,7 +21,7 @@ if (useDemoAuthentication)
     authentication.AddScheme<AuthenticationSchemeOptions, AccountDemoAuthenticationHandler>(
         AccountDemoAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization();
-_ = builder.Services.AddPortia().AddHttp();
+_ = portia.RequireSecureHost();
 
 await using var app = builder.Build();
 app.UseAuthentication();
