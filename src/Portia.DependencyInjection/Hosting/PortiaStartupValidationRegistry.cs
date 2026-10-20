@@ -1,3 +1,5 @@
+using System.Runtime.ExceptionServices;
+
 namespace Cntryl.Portia;
 
 sealed class PortiaStartupValidationRegistry
@@ -5,6 +7,7 @@ sealed class PortiaStartupValidationRegistry
     readonly Dictionary<string, Action> _validations = new(StringComparer.Ordinal);
     TaskCompletionSource _endpointValidations = CompletedSource();
     int _pendingEndpointValidations;
+    Exception? _endpointValidationError;
     bool _validated;
 
     public bool HasPendingEndpointValidations
@@ -12,7 +15,7 @@ sealed class PortiaStartupValidationRegistry
         get
         {
             lock (_validations)
-                return _pendingEndpointValidations != 0;
+                return _pendingEndpointValidations != 0 || _endpointValidationError is not null;
         }
     }
 
@@ -20,7 +23,7 @@ sealed class PortiaStartupValidationRegistry
     {
         lock (_validations)
         {
-            if (_pendingEndpointValidations++ == 0)
+            if (_pendingEndpointValidations++ == 0 && _endpointValidationError is null)
                 _endpointValidations = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
@@ -33,6 +36,15 @@ sealed class PortiaStartupValidationRegistry
         lock (_validations)
             ready = _endpointValidations.Task;
         return ready.WaitAsync(ct);
+    }
+
+    public void ThrowIfEndpointValidationFailed()
+    {
+        Exception? error;
+        lock (_validations)
+            error = _endpointValidationError;
+        if (error is not null)
+            ExceptionDispatchInfo.Throw(error);
     }
 
     public void Add(string name, Action validation)
@@ -61,16 +73,19 @@ sealed class PortiaStartupValidationRegistry
         }
     }
 
-    void CompleteEndpointValidation()
+    void CompleteEndpointValidation(Exception? error = null)
     {
-        TaskCompletionSource? ready = null;
         lock (_validations)
         {
-            if (--_pendingEndpointValidations == 0)
-                ready = _endpointValidations;
+            _pendingEndpointValidations--;
+            _endpointValidationError ??= error;
+            // A captured web-host error still blocks subsequent workers. Keep the first failure
+            // across later mappings and never publish a successful gate over a failed one.
+            if (_endpointValidationError is { } failure)
+                _endpointValidations.TrySetException(failure);
+            else if (_pendingEndpointValidations == 0)
+                _endpointValidations.TrySetResult();
         }
-
-        _ = ready?.TrySetResult();
     }
 
     static TaskCompletionSource CompletedSource()
@@ -88,6 +103,13 @@ sealed class PortiaStartupValidationRegistry
         {
             if (Interlocked.Exchange(ref _completed, 1) == 0)
                 owner.CompleteEndpointValidation();
+        }
+
+        public void Fail(Exception error)
+        {
+            ArgumentNullException.ThrowIfNull(error);
+            if (Interlocked.Exchange(ref _completed, 1) == 0)
+                owner.CompleteEndpointValidation(error);
         }
     }
 }

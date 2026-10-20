@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -124,17 +125,17 @@ public sealed class PortiaSecureHostTests
     [Fact]
     public async Task ShouldNotRequireAuthenticationSchemeWhenNoPortiaHttpEndpointsAreMapped()
     {
-        var builder = WebApplication.CreateBuilder();
-        _ = builder.WebHost.UseTestServer();
+        var builder = Host.CreateApplicationBuilder();
         builder.Services.AddPortia()
             .RequireSecureHost(options => options.AllowAnonymous<HttpGetWidget>())
             .AddRequestHandler<HttpGetWidgetHandler>();
 
-        await using var app = builder.Build();
+        using var app = builder.Build();
 
         await app.StartAsync();
 
-        Assert.True(app.Lifetime.ApplicationStarted.IsCancellationRequested);
+        Assert.True(app.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.IsCancellationRequested);
+        await app.StopAsync();
     }
 
     /// <summary>Secure hosts reject GET routes whose request contract does not declare read-only behavior.</summary>
@@ -171,8 +172,7 @@ public sealed class PortiaSecureHostTests
             .AddRequestHandler<HttpGetWidgetHandler>();
 
         await using var app = builder.Build();
-        app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}",
-                endpoint => endpoint.FromQuery(request => request.IncludeArchived))
+        app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}")
             .Add(endpoint =>
             {
                 foreach (var authorization in endpoint.Metadata.OfType<IAuthorizeData>().ToArray())
@@ -209,8 +209,10 @@ public sealed class PortiaSecureHostTests
     }
 
     /// <summary>Validation registered after other services still fails before those services start.</summary>
-    [Fact]
-    public async Task ShouldValidateEndpointAuthorizationBeforeEarlierHostedServicesStart()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldValidateEndpointAuthorizationBeforeEarlierHostedServicesStart(bool nonCachingPolicies)
     {
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
@@ -220,12 +222,13 @@ public sealed class PortiaSecureHostTests
         builder.Services.AddHostedService(provider => provider.GetRequiredService<HostedServiceProbe>());
         _ = builder.Services.AddAuthentication(TestScheme)
             .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(TestScheme, _ => { });
+        if (nonCachingPolicies)
+            builder.Services.AddSingleton<IAuthorizationPolicyProvider, NonCachingAuthorizationPolicyProvider>();
         portia.RequireSecureHost(options => options.AllowAnonymous<HttpGetWidget>())
             .AddRequestHandler<HttpGetWidgetHandler>();
 
         await using var app = builder.Build();
-        app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}",
-                endpoint => endpoint.FromQuery(request => request.IncludeArchived))
+        app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}")
             .Add(endpoint =>
             {
                 foreach (var authorization in endpoint.Metadata.OfType<IAuthorizeData>().ToArray())
@@ -236,6 +239,289 @@ public sealed class PortiaSecureHostTests
 
         Assert.Contains("without ASP.NET authorization metadata", error.Message, StringComparison.Ordinal);
         Assert.False(probe.Started);
+    }
+
+    /// <summary>Authorization is checked after endpoint and enclosing group final conventions finish.</summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ShouldRejectAuthorizationRemovedByFinalConventions(bool grouped, bool clearMetadata)
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddAuthentication(TestScheme)
+            .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(TestScheme, _ => { });
+        builder.Services.AddPortia().RequireSecureHost();
+        builder.Services.AddSingleton<IAuthorizationPolicyProvider, NonCachingAuthorizationPolicyProvider>();
+
+        await using var app = builder.Build();
+        if (grouped)
+        {
+            var group = app.MapGroup("/documents");
+            group.MapPortiaOpenApi();
+            ((IEndpointConventionBuilder)group).Finally(RemoveAuthorization);
+        }
+        else
+        {
+            app.MapPortiaOpenApi(endpoint => endpoint.Finally(RemoveAuthorization));
+        }
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => app.StartAsync());
+
+        Assert.Contains("without ASP.NET authorization metadata", error.Message, StringComparison.Ordinal);
+
+        void RemoveAuthorization(EndpointBuilder endpoint)
+        {
+            if (clearMetadata)
+            {
+                endpoint.Metadata.Clear();
+                return;
+            }
+
+            foreach (var authorization in endpoint.Metadata.OfType<IAuthorizeData>().ToArray())
+                endpoint.Metadata.Remove(authorization);
+        }
+    }
+
+    /// <summary>Late mappings finish their conventions before validation releases startup schedules.</summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ShouldValidateLateRoutesBeforeStartupSchedules(bool grouped, bool allowAnonymous)
+    {
+        var scheduler = new RecordingStartupScheduler();
+        var hostStarted = false;
+        using var host = Host.CreateDefaultBuilder()
+            .ConfigureWebHost(web => web.UseTestServer()
+                .ConfigureServices(services =>
+                {
+                    services.AddRouting();
+                    _ = services.AddAuthentication(TestScheme)
+                        .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(TestScheme, _ => { });
+                    services.AddSingleton<IAuthorizationPolicyProvider, NonCachingAuthorizationPolicyProvider>();
+                    services.AddSingleton<IRequestScheduler>(scheduler);
+                    services.AddPortia()
+                        .AddRequestSchedule(new FitzHostedRequest(), new RequestScheduleSpec("0 0 * * *"),
+                            new RequestRouteValues("started"), RequestActor.System)
+                        .RequireSecureHost(options => options.AllowAnonymous<IRequestBase>())
+                        .AddRequestHandler<HttpGetWidgetHandler>()
+                        .AddWorkers();
+                })
+                .Configure(app =>
+                {
+                    app.UseRouting();
+                    app.UseAuthentication();
+                    app.UseAuthorization();
+                    app.UseEndpoints(endpoints =>
+                    {
+                        var group = grouped ? endpoints.MapGroup("/tenants/{tenant_id}") : null;
+                        var routes = (IEndpointRouteBuilder?)group ?? endpoints;
+                        var endpoint = routes.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");
+                        (group is null ? endpoint : (IEndpointConventionBuilder)group).Finally(FinalConvention);
+                    });
+                }))
+            .Build();
+
+        if (allowAnonymous)
+        {
+            await host.StartAsync();
+            hostStarted = true;
+            Assert.Equal(["started"], scheduler.Requests);
+            var path = (grouped ? "/tenants/demo" : "") + $"/widgets/{Uuid.CreateVersion4()}";
+            var response = await host.GetTestClient().GetAsync(path);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            await host.StopAsync();
+        }
+        else
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+            Assert.Contains("without ASP.NET authorization metadata", error.Message, StringComparison.Ordinal);
+            Assert.Empty(scheduler.Requests);
+        }
+
+        void FinalConvention(EndpointBuilder endpoint)
+        {
+            if (!hostStarted)
+                Assert.Empty(scheduler.Requests);
+            foreach (var authorization in endpoint.Metadata.OfType<IAuthorizeData>().ToArray())
+                endpoint.Metadata.Remove(authorization);
+            if (allowAnonymous)
+                endpoint.Metadata.Add(new AllowAnonymousAttribute());
+        }
+    }
+
+    /// <summary>Early security validation only materializes Portia's mapping scopes.</summary>
+    [Fact]
+    public async Task ShouldNotMaterializeUnrelatedRootRoutesBeforeHostedServicesStart()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        var probe = new HostedServiceProbe();
+        builder.Services.AddSingleton(probe);
+        builder.Services.AddHostedService(provider => provider.GetRequiredService<HostedServiceProbe>());
+        _ = builder.Services.AddAuthentication(TestScheme)
+            .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(TestScheme, _ => { });
+        builder.Services.AddPortia().RequireSecureHost();
+
+        await using var app = builder.Build();
+        app.MapGet("/metadata", () => "ordinary").Add(_ => Assert.True(probe.Started));
+        app.MapPortiaOpenApi();
+
+        await app.StartAsync();
+
+        var response = await app.GetTestClient().GetAsync("/metadata");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>Startup filters must finish before grouped security checks release schedules.</summary>
+    [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(false, true, false, false)]
+    [InlineData(true, false, false, false)]
+    [InlineData(true, true, false, false)]
+    [InlineData(false, false, true, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(false, false, true, true)]
+    [InlineData(true, false, true, true)]
+    public async Task ShouldRejectAuthorizationRemovedAfterOtherStartupFilters(
+        bool nonCachingPolicies, bool registerFilterFirst, bool prependFilter, bool duringBuild)
+    {
+        var scheduler = new RecordingStartupScheduler();
+        RouteGroupBuilder? group = null;
+        void RemoveAuthorization() =>
+            ((IEndpointConventionBuilder)group!).Finally(endpoint =>
+            {
+                foreach (var authorization in endpoint.Metadata.OfType<IAuthorizeData>().ToArray())
+                    endpoint.Metadata.Remove(authorization);
+            });
+        IStartupFilter filter = duringBuild
+            ? new DuringBuildStartupFilter(RemoveAuthorization)
+            : new AfterConfigureStartupFilter(_ => RemoveAuthorization());
+        using var host = Host.CreateDefaultBuilder()
+            .ConfigureWebHost(web => web.UseTestServer()
+                .ConfigureServices(services =>
+                {
+                    services.AddRouting();
+                    _ = services.AddAuthentication(TestScheme)
+                        .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(TestScheme, _ => { });
+                    if (nonCachingPolicies)
+                        services.AddSingleton<IAuthorizationPolicyProvider, NonCachingAuthorizationPolicyProvider>();
+                    if (registerFilterFirst)
+                        services.AddSingleton<IStartupFilter>(filter);
+                    services.AddSingleton<IRequestScheduler>(scheduler);
+                    services.AddPortia()
+                        .AddRequestSchedule(new FitzHostedRequest(), new RequestScheduleSpec("0 0 * * *"),
+                            new RequestRouteValues("started"), RequestActor.System)
+                        .RequireSecureHost(options => options.AllowAnonymous<IRequestBase>())
+                        .AddWorkers();
+                    if (!registerFilterFirst)
+                    {
+                        if (prependFilter)
+                            services.Insert(0, ServiceDescriptor.Singleton<IStartupFilter>(filter));
+                        else
+                            services.AddSingleton<IStartupFilter>(filter);
+                    }
+                })
+                .Configure(app =>
+                {
+                    app.UseRouting();
+                    app.UseAuthentication();
+                    app.UseAuthorization();
+                    app.UseEndpoints(endpoints =>
+                    {
+                        group = endpoints.MapGroup("/documents");
+                        group.MapPortiaOpenApi();
+                    });
+                }))
+            .Build();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+
+        Assert.Contains("without ASP.NET authorization metadata", error.Message, StringComparison.Ordinal);
+        Assert.Empty(scheduler.Requests);
+    }
+
+    /// <summary>Captured web-pipeline errors cannot grant permission to run later startup schedules.</summary>
+    [Fact]
+    public async Task ShouldKeepSchedulesBlockedWhenWebHostCapturesValidationErrors()
+    {
+        var scheduler = new RecordingStartupScheduler();
+        using var host = Host.CreateDefaultBuilder()
+            .ConfigureWebHost(web => web.UseTestServer().CaptureStartupErrors(true)
+                .ConfigureServices(services =>
+                {
+                    services.AddRouting();
+                    _ = services.AddAuthentication(TestScheme)
+                        .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(TestScheme, _ => { });
+                    services.AddPortia().RequireSecureHost(options => options.AllowAnonymous<IRequestBase>());
+                })
+                .Configure(app =>
+                {
+                    app.UseRouting();
+                    app.UseAuthentication();
+                    app.UseAuthorization();
+                    app.UseEndpoints(endpoints => endpoints.MapPortiaOpenApi(endpoint => endpoint.Finally(current =>
+                    {
+                        foreach (var authorization in current.Metadata.OfType<IAuthorizeData>().ToArray())
+                            current.Metadata.Remove(authorization);
+                    })));
+                }))
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton<IRequestScheduler>(scheduler);
+                services.AddPortia()
+                    .AddRequestSchedule(new FitzHostedRequest(), new RequestScheduleSpec("0 0 * * *"),
+                        new RequestRouteValues("started"), RequestActor.System)
+                    .AddWorkers();
+            })
+            .Build();
+
+        _ = await Assert.ThrowsAnyAsync<Exception>(() => host.StartAsync());
+
+        Assert.Empty(scheduler.Requests);
+    }
+
+    /// <summary>Configured late mappings accept caller conventions before endpoint materialization.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldApplyConventionsToConfiguredLateRoutes(bool grouped)
+    {
+        using var host = Host.CreateDefaultBuilder()
+            .ConfigureWebHost(web => web.UseTestServer()
+                .ConfigureServices(services =>
+                {
+                    services.AddRouting();
+                    _ = services.AddAuthentication(TestScheme)
+                        .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(TestScheme, _ => { });
+                    services.AddPortia()
+                        .RequireSecureHost(options => options.AllowAnonymous<HttpGetWidget>())
+                        .AddRequestHandler<HttpGetWidgetHandler>();
+                })
+                .Configure(app =>
+                {
+                    app.UseRouting();
+                    app.UseAuthentication();
+                    app.UseAuthorization();
+                    app.UseEndpoints(endpoints =>
+                    {
+                        var routes = grouped ? endpoints.MapGroup("/tenants/{tenant_id}") : endpoints;
+                        routes.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}",
+                                endpoint => endpoint.FromQuery(request => request.IncludeArchived))
+                            .AllowAnonymous();
+                    });
+                }))
+            .Build();
+
+        await host.StartAsync();
+        var path = (grouped ? "/tenants/demo" : "") + $"/widgets/{Uuid.CreateVersion4()}";
+        var response = await host.GetTestClient().GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await host.StopAsync();
     }
 
     /// <summary>Portia endpoints mapped by the legacy Startup pipeline are validated when that pipeline builds.</summary>
@@ -304,6 +590,34 @@ public sealed class PortiaSecureHostTests
             _ = cancellationToken;
             return Task.CompletedTask;
         }
+    }
+
+    sealed class NonCachingAuthorizationPolicyProvider(IOptions<AuthorizationOptions> options)
+        : DefaultAuthorizationPolicyProvider(options)
+    {
+        public override bool AllowsCachingPolicies => false;
+    }
+
+    sealed class AfterConfigureStartupFilter(Action<IApplicationBuilder> after) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            next(app);
+            after(app);
+        };
+    }
+
+    sealed class DuringBuildStartupFilter(Action action) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use(nextMiddleware =>
+            {
+                action();
+                return nextMiddleware;
+            });
+            next(app);
+        };
     }
 
     /// <summary>Maps an unsafe GET from the legacy ASP.NET Core startup hook.</summary>

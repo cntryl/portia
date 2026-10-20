@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi;
 
@@ -76,7 +76,15 @@ public static class PortiaHttpExtensions
         builder.AddHttp();
         _ = builder.Services.AddAuthentication();
         _ = builder.Services.AddAuthorization();
-        builder.Services.TryAddSingleton<PortiaSecureHostMarker>();
+        if (!builder.Services.Any(item => item.ServiceType == typeof(PortiaSecureHostMarker)))
+        {
+            builder.Services.AddSingleton<PortiaSecureHostMarker>();
+            builder.Services.AddSingleton<PortiaHttpSecurityValidation>();
+            builder.Services.AddSingleton<IPortiaStartupValidationParticipant>(provider =>
+                provider.GetRequiredService<PortiaHttpSecurityValidation>());
+            builder.Services.AddSingleton<IStartupFilter>(provider =>
+                provider.GetRequiredService<PortiaHttpSecurityValidation>());
+        }
         return builder;
     }
 
@@ -99,9 +107,10 @@ public static class PortiaHttpExtensions
         // Mapped as request delegates, which keeps RequestDelegateFactory out of an AOT build and
         // leaves these two routes out of the very document they serve.
         var cache = app.ServiceProvider.GetRequiredService<PortiaOpenApiDocumentCache>();
-        var json = app.MapMethods($"/openapi/{DocumentName}.json", Get,
+        var routes = PortiaHttpBinding.CreateSecureHostEndpointRouteBuilder(app);
+        var json = routes.MapMethods($"/openapi/{DocumentName}.json", Get,
             (RequestDelegate)(context => cache.WriteAsync(context, false)));
-        var yaml = app.MapMethods($"/openapi/{DocumentName}.yml", Get,
+        var yaml = routes.MapMethods($"/openapi/{DocumentName}.yml", Get,
             (RequestDelegate)(context => cache.WriteAsync(context, true)));
         PortiaHttpBinding.ApplySecureHostAuthorization(app, json);
         PortiaHttpBinding.ApplySecureHostAuthorization(app, yaml);

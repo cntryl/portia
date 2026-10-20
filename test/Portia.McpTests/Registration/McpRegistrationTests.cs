@@ -9,7 +9,9 @@ using System.Text.Json.Serialization;
 using Cntryl.Portia.McpContracts;
 using Cntryl.Portia.Testing;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
@@ -799,6 +801,140 @@ public sealed class McpRegistrationTests
         Assert.Equal(HttpStatusCode.Unauthorized, error.StatusCode);
     }
 
+    [Theory]
+    [InlineData("GET", false)]
+    [InlineData("POST", false)]
+    [InlineData("DELETE", false)]
+    [InlineData("GET", true)]
+    [InlineData("POST", true)]
+    [InlineData("DELETE", true)]
+    public async Task ShouldRejectSecureMcpWhenFinalConventionsRemoveEndpointAuthorization(string method,
+        bool useGroupConvention)
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddAuthentication("test")
+            .AddScheme<AuthenticationSchemeOptions, UnauthenticatedHandler>("test", _ => { });
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .RequireSecureHost(options => options.AllowAnonymous<ReadGreeting>())
+            .AddMcpTool<ReadGreeting>()
+            .AddMcpHttp(options => options.Stateless = false);
+        await using var app = builder.Build();
+        IEndpointRouteBuilder routes = useGroupConvention ? app.MapGroup("/tenants/{tenant_id}") : app;
+        var endpoint = routes.MapPortiaMcp();
+        var conventions = useGroupConvention ? (IEndpointConventionBuilder)routes : endpoint;
+        var removedAuthorization = false;
+        conventions.Finally(current =>
+        {
+            if (!current.Metadata.OfType<IHttpMethodMetadata>()
+                    .Any(metadata => metadata.HttpMethods.Contains(method, StringComparer.Ordinal)))
+                return;
+
+            for (var index = current.Metadata.Count - 1; index >= 0; index--)
+            {
+                if (current.Metadata[index] is not IAuthorizeData)
+                    continue;
+                current.Metadata.RemoveAt(index);
+                removedAuthorization = true;
+            }
+        });
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => app.StartAsync());
+
+        Assert.True(removedAuthorization);
+        Assert.Contains("without ASP.NET authorization metadata", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldProtectEverySecureMcpHttpMethod(bool useGroup)
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddAuthentication("test")
+            .AddScheme<AuthenticationSchemeOptions, UnauthenticatedHandler>("test", _ => { });
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .RequireSecureHost(options => options.AllowAnonymous<ReadGreeting>())
+            .AddMcpTool<ReadGreeting>()
+            .AddMcpHttp(options => options.Stateless = false);
+        await using var app = builder.Build();
+        IEndpointRouteBuilder routes = useGroup ? app.MapGroup("/tenants/{tenant_id}") : app;
+        _ = routes.MapPortiaMcp();
+        await app.StartAsync();
+        using var http = app.GetTestClient();
+        var path = useGroup ? "/tenants/tenant-1/mcp" : "/mcp";
+
+        foreach (var method in new[] { HttpMethod.Get, HttpMethod.Post, HttpMethod.Delete })
+        {
+            using var request = new HttpRequestMessage(method, path);
+            using var response = await http.SendAsync(request);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task ShouldAllowExplicitlyAnonymousSecureMcpInRouteGroup()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddAuthentication("test")
+            .AddScheme<AuthenticationSchemeOptions, UnauthenticatedHandler>("test", _ => { });
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .RequireSecureHost(options => options.AllowAnonymous<ReadGreeting>())
+            .AddMcpTool<ReadGreeting>()
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        _ = app.MapGroup("/tenants/{tenant_id}").MapPortiaMcp().AllowAnonymous();
+        await app.StartAsync();
+        using var http = app.GetTestClient();
+        await using var scenario = await McpScenario.ConnectAsync(http,
+            new Uri("http://localhost/tenants/tenant-1/mcp"));
+
+        var result = await scenario.When("greetings.read", new Dictionary<string, object?>
+        {
+            ["name"] = "Portia"
+        }).ExpectSuccess();
+
+        Assert.Equal("Hello, Portia.", result.StructuredJson?.GetProperty("result").GetString());
+    }
+
+    [Fact]
+    public async Task ShouldApplySecureMcpConventionsAfterEarlyEndpointMaterialization()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddAuthentication("test")
+            .AddScheme<AuthenticationSchemeOptions, UnauthenticatedHandler>("test", _ => { });
+        IEndpointConventionBuilder? endpoint = null;
+        builder.Services.AddSingleton<IStartupFilter>(new AfterConfigureStartupFilter(() =>
+        {
+            Assert.NotNull(endpoint);
+            endpoint.AllowAnonymous();
+        }));
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .RequireSecureHost(options => options.AllowAnonymous<ReadGreeting>())
+            .AddMcpTool<ReadGreeting>()
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        endpoint = app.MapPortiaMcp();
+        Assert.NotEmpty(((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints));
+        await app.StartAsync();
+        using var http = app.GetTestClient();
+        await using var scenario = await McpScenario.ConnectAsync(http, new Uri("http://localhost/mcp"));
+
+        var result = await scenario.When("greetings.read", new Dictionary<string, object?>
+        {
+            ["name"] = "Portia"
+        }).ExpectSuccess();
+
+        Assert.Equal("Hello, Portia.", result.StructuredJson?.GetProperty("result").GetString());
+    }
+
     [Fact]
     public async Task ShouldComposeWithAspNetAuthorization()
     {
@@ -1195,6 +1331,15 @@ public sealed class McpRegistrationTests
     {
         protected override Task<AuthenticateResult> HandleAuthenticateAsync() =>
             Task.FromResult(AuthenticateResult.NoResult());
+    }
+
+    sealed class AfterConfigureStartupFilter(Action after) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            next(app);
+            after();
+        };
     }
 
     /// <summary>Waits until the MCP client cancels its invocation.</summary>
