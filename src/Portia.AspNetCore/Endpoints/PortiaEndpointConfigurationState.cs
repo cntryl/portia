@@ -147,20 +147,25 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         // RouteGroupBuilder.DataSources contains the group's unprefixed child sources. Building
         // those directly both loses ancestor route parameters and caches the wrong endpoint shape;
         // ASP.NET builds them through the root data source with the complete RouteGroupContext.
-        validations.Add("http-endpoints", () =>
+        // Secure scopes own materialization and defer late mappings until Configure has returned.
+        if (app.ServiceProvider.GetService<PortiaHttpSecurityValidation>() is null)
         {
-            if (app is RouteGroupBuilder)
+            validations.Add("http-endpoints", () =>
             {
-                // Prime the root composite so ASP.NET's later attachment validates the complete
-                // grouped pattern; the endpoint-validation gate below holds Portia workers until then.
-                foreach (var source in app.ServiceProvider.GetServices<EndpointDataSource>())
-                    _ = source.Endpoints;
-                return;
-            }
+                if (app is RouteGroupBuilder)
+                {
+                    // Prime the root composite so ASP.NET's later attachment validates the complete
+                    // grouped pattern; the endpoint-validation gate below holds Portia workers until then.
+                    foreach (var source in app.ServiceProvider.GetServices<EndpointDataSource>())
+                        _ = source.Endpoints;
+                    return;
+                }
 
-            foreach (var source in app.DataSources)
-                _ = source.Endpoints;
-        });
+                foreach (var source in app.DataSources)
+                    _ = source.Endpoints;
+            });
+        }
+
         if (BodyType is not null)
         {
             if (typeof(Stream).IsAssignableFrom(BodyType))

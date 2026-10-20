@@ -1,1 +1,7 @@
 #nullable enable
+static Cntryl.Portia.PortiaHttpBinding.CreateSecureHostEndpointRouteBuilder(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app) -> Microsoft.AspNetCore.Routing.IEndpointRouteBuilder!
+static Cntryl.Portia.PortiaHttpBinding.ApplyRequiredEndpointAuthorization(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Microsoft.AspNetCore.Builder.IEndpointConventionBuilder! endpoint) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaHttpBinding.ApplySecureHostAuthorization<TRequest>(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Microsoft.AspNetCore.Builder.IEndpointConventionBuilder! endpoint, string! method) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaHttpBinding.ApplySecureHostAuthorization(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Microsoft.AspNetCore.Builder.IEndpointConventionBuilder! endpoint) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaHttpExtensions.MapPortiaOpenApi(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, System.Action<Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!>! configureEndpoint) -> Microsoft.AspNetCore.Routing.IEndpointRouteBuilder!
+static Cntryl.Portia.PortiaHttpExtensions.RequireSecureHost(this Cntryl.Portia.PortiaBuilder! builder, System.Action<Cntryl.Portia.PortiaAuthorizationOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!

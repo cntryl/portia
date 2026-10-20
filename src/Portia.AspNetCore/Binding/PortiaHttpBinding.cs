@@ -3,6 +3,8 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,6 +45,88 @@ public static partial class PortiaHttpBinding
         if (app.ServiceProvider.GetService<PortiaHttpExtensions.PortiaOpenApiMarker>() is null)
             throw new InvalidOperationException(
                 "Portia HTTP endpoints require AddHttp() in the shared Portia application composition.");
+    }
+
+    /// <summary>Creates a mapping scope that validates completed secure-host endpoints.</summary>
+    /// <param name="app">The parent endpoint route builder.</param>
+    /// <returns>The mapping scope, or the parent when the secure-host profile is disabled.</returns>
+    public static IEndpointRouteBuilder CreateSecureHostEndpointRouteBuilder(IEndpointRouteBuilder app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        return app.ServiceProvider.GetService<PortiaHttpSecurityValidation>() is { } validation
+            ? validation.CreateRouteBuilder(app)
+            : app;
+    }
+
+    /// <summary>Applies the secure-host endpoint policy when the shared Portia composition enables it.</summary>
+    /// <typeparam name="TRequest">The request type mapped by the endpoint.</typeparam>
+    /// <param name="app">The endpoint route builder.</param>
+    /// <param name="endpoint">The generated Portia endpoint.</param>
+    /// <param name="method">The HTTP method used by the generated endpoint.</param>
+    /// <returns>The same endpoint builder for further conventions.</returns>
+    public static IEndpointConventionBuilder ApplySecureHostAuthorization<TRequest>(IEndpointRouteBuilder app,
+        IEndpointConventionBuilder endpoint, string method)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        return ApplySecureHostAuthorization(app, endpoint, typeof(TRequest), method, false);
+    }
+
+    /// <summary>Applies the secure-host endpoint policy to a Portia HTTP endpoint without a request contract.</summary>
+    /// <param name="app">The endpoint route builder.</param>
+    /// <param name="endpoint">The generated Portia endpoint.</param>
+    /// <returns>The same endpoint builder for further conventions.</returns>
+    public static IEndpointConventionBuilder ApplySecureHostAuthorization(IEndpointRouteBuilder app,
+        IEndpointConventionBuilder endpoint)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        return ApplySecureHostAuthorization(app, endpoint, null, null, false);
+    }
+
+    /// <summary>Requires authorization for a Portia endpoint and applies secure-host validation when enabled.</summary>
+    /// <param name="app">The endpoint route builder.</param>
+    /// <param name="endpoint">The endpoint builder.</param>
+    /// <returns>The same endpoint builder for further conventions.</returns>
+    public static IEndpointConventionBuilder ApplyRequiredEndpointAuthorization(IEndpointRouteBuilder app,
+        IEndpointConventionBuilder endpoint)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        return ApplySecureHostAuthorization(app, endpoint, null, null, true);
+    }
+
+    static IEndpointConventionBuilder ApplySecureHostAuthorization(IEndpointRouteBuilder app,
+        IEndpointConventionBuilder endpoint, Type? requestType, string? method, bool requireWhenProfileDisabled)
+    {
+        var secureHost = app.ServiceProvider.GetService<PortiaSecureHostMarker>() is not null;
+        if (secureHost)
+        {
+            var validations = app.ServiceProvider.GetRequiredService<PortiaStartupValidationRegistry>();
+            validations.Add("secure-host-authentication", () => ValidateDefaultAuthenticationScheme(app.ServiceProvider));
+
+            if (method is "GET" && requestType is not null
+                && !typeof(IReadOnlyRequest).IsAssignableFrom(requestType))
+            {
+                throw new InvalidOperationException(
+                    $"RequireSecureHost() requires GET endpoints to map requests that implement IReadOnlyRequest: {requestType.FullName ?? requestType.Name}. GET must not change application state or cause externally visible side effects.");
+            }
+        }
+
+        if (secureHost || requireWhenProfileDisabled)
+            endpoint.RequireAuthorization();
+        return endpoint;
+    }
+
+    static void ValidateDefaultAuthenticationScheme(IServiceProvider services)
+    {
+        var authenticationSchemes = services.GetRequiredService<IAuthenticationSchemeProvider>();
+        if (authenticationSchemes.GetDefaultAuthenticateSchemeAsync().GetAwaiter().GetResult() is null
+            || authenticationSchemes.GetDefaultChallengeSchemeAsync().GetAwaiter().GetResult() is null)
+        {
+            throw new InvalidOperationException(
+                "RequireSecureHost() needs a default ASP.NET authentication and challenge scheme. Configure one with AddAuthentication(defaultScheme) before starting the host.");
+        }
     }
 
     /// <summary>Reports whether an exact RFC 7240 preference token requests asynchronous handling.</summary>

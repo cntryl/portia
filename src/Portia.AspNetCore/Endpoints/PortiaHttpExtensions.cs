@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,22 +61,65 @@ public static class PortiaHttpExtensions
         return builder;
     }
 
+    /// <summary>
+    ///     Applies Portia's fail-closed authorization baseline to the request bus and generated HTTP endpoints.
+    ///     The host must configure a default authentication scheme before it starts.
+    /// </summary>
+    /// <param name="builder">The Portia composition root.</param>
+    /// <param name="configure">Allows named requests or request families to dispatch anonymously.</param>
+    /// <returns>The same builder for further composition.</returns>
+    public static PortiaBuilder RequireSecureHost(this PortiaBuilder builder,
+        Action<PortiaAuthorizationOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.RequireAuthorization(configure);
+        builder.AddHttp();
+        _ = builder.Services.AddAuthentication();
+        _ = builder.Services.AddAuthorization();
+        if (!builder.Services.Any(item => item.ServiceType == typeof(PortiaSecureHostMarker)))
+        {
+            builder.Services.AddSingleton<PortiaSecureHostMarker>();
+            builder.Services.AddSingleton<PortiaHttpSecurityValidation>();
+            builder.Services.AddSingleton<IPortiaStartupValidationParticipant>(provider =>
+                provider.GetRequiredService<PortiaHttpSecurityValidation>());
+            builder.Services.AddSingleton<IStartupFilter>(provider =>
+                provider.GetRequiredService<PortiaHttpSecurityValidation>());
+        }
+        return builder;
+    }
+
     /// <summary>Maps Portia's OpenAPI 3.1 document as JSON and YAML.</summary>
     /// <param name="app">The endpoint route builder.</param>
     /// <returns>The same endpoint route builder, for chaining.</returns>
     public static IEndpointRouteBuilder MapPortiaOpenApi(this IEndpointRouteBuilder app)
+        => MapPortiaOpenApi(app, static _ => { });
+
+    /// <summary>Maps Portia's OpenAPI 3.1 document and configures both document endpoints.</summary>
+    /// <param name="app">The endpoint route builder.</param>
+    /// <param name="configureEndpoint">Applies ASP.NET conventions to the JSON and YAML endpoints.</param>
+    /// <returns>The same endpoint route builder, for chaining.</returns>
+    public static IEndpointRouteBuilder MapPortiaOpenApi(this IEndpointRouteBuilder app,
+        Action<IEndpointConventionBuilder> configureEndpoint)
     {
         ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(configureEndpoint);
 
         // Mapped as request delegates, which keeps RequestDelegateFactory out of an AOT build and
         // leaves these two routes out of the very document they serve.
         var cache = app.ServiceProvider.GetRequiredService<PortiaOpenApiDocumentCache>();
-        _ = app.MapMethods($"/openapi/{DocumentName}.json", Get,
+        var routes = PortiaHttpBinding.CreateSecureHostEndpointRouteBuilder(app);
+        var json = routes.MapMethods($"/openapi/{DocumentName}.json", Get,
             (RequestDelegate)(context => cache.WriteAsync(context, false)));
-        _ = app.MapMethods($"/openapi/{DocumentName}.yml", Get,
+        var yaml = routes.MapMethods($"/openapi/{DocumentName}.yml", Get,
             (RequestDelegate)(context => cache.WriteAsync(context, true)));
+        PortiaHttpBinding.ApplySecureHostAuthorization(app, json);
+        PortiaHttpBinding.ApplySecureHostAuthorization(app, yaml);
+        configureEndpoint(json);
+        configureEndpoint(yaml);
         return app;
     }
 
     internal sealed class PortiaOpenApiMarker;
 }
+
+sealed class PortiaSecureHostMarker;

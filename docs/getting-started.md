@@ -782,6 +782,43 @@ unprotected request with an exception that names the fix, so a missing allowance
 for a real denial. A principal-stage `IRequestAuthorizer<IRequestBase>` protects every request.
 Request types stay free of authorization attributes.
 
+For an ASP.NET Core production host, prefer `RequireSecureHost()` from the HTTP integration package:
+
+```csharp
+builder.Services.AddAuthentication("Bearer")
+    .AddJwtBearer("Bearer", options => { /* configure issuer and audience validation */ });
+builder.Services.AddPortia()
+    .RequireSecureHost(options => options.AllowAnonymous<PublicCatalogQuery>());
+```
+
+The request allowance above does not make the ASP.NET route anonymous. Apply the matching endpoint
+convention when mapping it:
+
+```csharp
+app.MapPortiaGet<PublicCatalogQuery, CatalogPage>("/catalog").AllowAnonymous();
+```
+
+The profile also requires ASP.NET authorization on every generated Portia HTTP route and the
+generated OpenAPI document endpoints. It registers ASP.NET authentication/authorization services
+and fails startup when no default authenticate/challenge scheme is configured or a Portia endpoint
+lacks authorization metadata after all endpoint and route-group final conventions run. Portia workers
+and startup schedules wait until the HTTP pipeline's endpoints have passed this check. A worker-only
+host with no mapped Portia HTTP endpoints does not need a default HTTP authentication scheme.
+Configure conventions on root Portia endpoints before starting the host; pre-start validation
+materializes these endpoints and freezes their convention collections.
+A Portia request mapped to GET must implement `IReadOnlyRequest`; an unsafe GET is rejected when it
+is mapped. Only add the marker when
+handling has no state changes or externally visible side effects. OpenAPI document endpoints have no
+Portia request contract, so their exposure is controlled by ASP.NET endpoint authorization alone.
+To expose both OpenAPI formats anonymously, configure both mapped endpoints with
+`app.MapPortiaOpenApi(endpoint => endpoint.AllowAnonymous())`. To allow an otherwise unprotected
+request anonymously, configure both a Portia request allowance and the endpoint's explicit
+`.AllowAnonymous()` convention; Portia request authorization still runs. Keep
+`UseAuthentication()` before `UseAuthorization()` in hosts that configure middleware explicitly. This
+profile enforces the Portia request and HTTP boundaries; the host still owns the correctness of its
+authentication scheme and tenant policies, `AllowedHosts` for HTTP MCP, and the TLS, ACL, quota, and
+lifecycle policies for brokers and object storage.
+
 `MapPortiaGetStream<TRequest, TOut>` writes an incremental JSON array;
 `MapPortiaGetSse<TRequest, TOut>` writes SSE. Both enumerate once and check the first
 move before starting the response, so authentication/authorization failures become

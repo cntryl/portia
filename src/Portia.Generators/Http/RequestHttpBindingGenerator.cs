@@ -422,7 +422,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             // overload adds no MethodInfo, and ApiExplorer describes only endpoints that carry
             // one, so the handler's own metadata is supplied explicitly beside Portia's.
             .AppendLine("        global::Microsoft.AspNetCore.Http.RequestDelegate handler = Dispatch;")
-            .Append("        var builder = app.MapMethods(pattern, new[] { \"").Append(call.Verb.ToUpperInvariant())
+            .AppendLine("        var routes = global::Cntryl.Portia.PortiaHttpBinding.CreateSecureHostEndpointRouteBuilder(app);")
+            .Append("        var builder = routes.MapMethods(pattern, new[] { \"").Append(call.Verb.ToUpperInvariant())
             .Append("\" }, handler)")
             .AppendLine()
             .Append("            .WithMetadata(handler.Method, ")
@@ -452,7 +453,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
         _ = source.Append("            }) { ResultIsNullable = ")
             .Append(call.ResultIsNullable ? "true" : "false")
-            .AppendLine(" });");
+            .AppendLine(" });")
+            .Append("        global::Cntryl.Portia.PortiaHttpBinding.ApplySecureHostAuthorization<")
+            .Append(call.RequestTypeFullName).Append(">(app, builder, ")
+            .Append(Literal(call.Verb.ToUpperInvariant())).AppendLine(");");
         if (call.Configured)
             _ = source.AppendLine("        configuration.ApplyMetadata(app, builder);");
         _ = source.AppendLine("        return builder;").AppendLine();
