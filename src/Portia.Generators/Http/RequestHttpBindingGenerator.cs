@@ -425,7 +425,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             // overload adds no MethodInfo, and ApiExplorer describes only endpoints that carry
             // one, so the handler's own metadata is supplied explicitly beside Portia's.
             .AppendLine("        global::Microsoft.AspNetCore.Http.RequestDelegate handler = Dispatch;")
-            .Append("        var builder = app.MapMethods(pattern, new[] { \"").Append(call.Verb.ToUpperInvariant())
+            .AppendLine("        var routes = global::Cntryl.Portia.PortiaHttpBinding.CreateSecureHostEndpointRouteBuilder(app);")
+            .Append("        var builder = routes.MapMethods(pattern, new[] { \"").Append(call.Verb.ToUpperInvariant())
             .Append("\" }, handler)")
             .AppendLine()
             .Append("            .WithMetadata(handler.Method, ")

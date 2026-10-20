@@ -13,14 +13,17 @@ sealed class PortiaStartupValidator(
     IDomainEventSerializer eventSerializer,
     RequestRegistry requests,
     PortiaStartupValidationRegistry validations,
+    IEnumerable<IPortiaStartupValidationParticipant> participants,
     IServiceProviderIsService available,
     PortiaBuilder builder) : IHostedLifecycleService
 {
     bool _validated;
+    bool _usesLifecycle;
 
     public Task StartingAsync(CancellationToken cancellationToken)
     {
         _ = cancellationToken;
+        _usesLifecycle = true;
         ValidateStartup();
         return Task.CompletedTask;
     }
@@ -36,6 +39,8 @@ sealed class PortiaStartupValidator(
         // transitions; retaining both references here makes that startup contract explicit.
         _ = json;
         _ = eventSerializer;
+        foreach (var participant in participants)
+            participant.Initialize();
         validations.Validate();
         if (requests.PermissionRequestTypes.Count > 0 && !available.IsService(typeof(IPermissionEvaluator)))
         {
@@ -74,13 +79,25 @@ sealed class PortiaStartupValidator(
         // Legacy IWebHost implementations call only IHostedService.StartAsync, without the
         // IHostedLifecycleService pre-start callbacks. Retain the validation path for those hosts.
         ValidateStartup();
+        if (!_usesLifecycle)
+            CompleteStartup();
         return Task.CompletedTask;
     }
 
     public Task StartedAsync(CancellationToken cancellationToken)
     {
         _ = cancellationToken;
+        CompleteStartup();
         return Task.CompletedTask;
+    }
+
+    void CompleteStartup()
+    {
+        // Generic hosts finish building the HTTP pipeline in a hosted service's StartAsync.
+        // Complete validation after every StartAsync, before Portia's later StartedAsync workers.
+        // Legacy IWebHost builds the pipeline before calling hosted services at all.
+        foreach (var participant in participants)
+            participant.Complete();
     }
 
     public Task StoppingAsync(CancellationToken cancellationToken)

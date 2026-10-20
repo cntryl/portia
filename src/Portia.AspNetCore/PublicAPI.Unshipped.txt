@@ -1,4 +1,5 @@
 #nullable enable
+static Cntryl.Portia.PortiaHttpBinding.CreateSecureHostEndpointRouteBuilder(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app) -> Microsoft.AspNetCore.Routing.IEndpointRouteBuilder!
 static Cntryl.Portia.PortiaHttpBinding.ApplyRequiredEndpointAuthorization(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Microsoft.AspNetCore.Builder.IEndpointConventionBuilder! endpoint) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
 static Cntryl.Portia.PortiaHttpBinding.ApplySecureHostAuthorization<TRequest>(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Microsoft.AspNetCore.Builder.IEndpointConventionBuilder! endpoint, string! method) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
 static Cntryl.Portia.PortiaHttpBinding.ApplySecureHostAuthorization(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Microsoft.AspNetCore.Builder.IEndpointConventionBuilder! endpoint) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!

@@ -95,7 +95,10 @@ dispatch throws instead of returning `Forbidden`, which would disguise the mista
 An ASP.NET Core host can opt into the stronger `RequireSecureHost()` profile from Portia.AspNetCore.
 It applies the request-bus requirement, adds ASP.NET authorization metadata to generated Portia HTTP
 and OpenAPI endpoints, and fails startup if a default authentication/challenge scheme is missing or a
-Portia endpoint lacks authorization metadata after its endpoint conventions run. Generated GET request
+Portia endpoint lacks authorization metadata after all endpoint and route-group final conventions run.
+Validation inspects the completed endpoints, and Portia workers and startup schedules wait for the
+HTTP pipeline's validation to finish, including routes mapped from `Startup.Configure`. A worker-only
+host with no Portia HTTP endpoints does not need an HTTP authentication scheme. Generated GET request
 routes must use the `IReadOnlyRequest` marker, which the profile checks when the endpoint is mapped
 because GET skips Portia's cross-origin guard. OpenAPI document endpoints have no Portia request
 contract and are controlled by ASP.NET endpoint authorization; the `MapPortiaOpenApi` convention

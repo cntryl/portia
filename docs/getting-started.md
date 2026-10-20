@@ -841,8 +841,13 @@ app.MapPortiaGet<PublicCatalogQuery, CatalogPage>("/catalog").AllowAnonymous();
 The profile also requires ASP.NET authorization on every generated Portia HTTP route and the
 generated OpenAPI document endpoints. It registers ASP.NET authentication/authorization services
 and fails startup when no default authenticate/challenge scheme is configured or a Portia endpoint
-lacks authorization metadata after its endpoint conventions run. A Portia request mapped to GET must
-implement `IReadOnlyRequest`; an unsafe GET is rejected when it is mapped. Only add the marker when
+lacks authorization metadata after all endpoint and route-group final conventions run. Portia workers
+and startup schedules wait until the HTTP pipeline's endpoints have passed this check. A worker-only
+host with no mapped Portia HTTP endpoints does not need a default HTTP authentication scheme.
+Configure conventions on root Portia endpoints before starting the host; pre-start validation
+materializes these endpoints and freezes their convention collections.
+A Portia request mapped to GET must implement `IReadOnlyRequest`; an unsafe GET is rejected when it
+is mapped. Only add the marker when
 handling has no state changes or externally visible side effects. OpenAPI document endpoints have no
 Portia request contract, so their exposure is controlled by ASP.NET endpoint authorization alone.
 To expose both OpenAPI formats anonymously, configure both mapped endpoints with
