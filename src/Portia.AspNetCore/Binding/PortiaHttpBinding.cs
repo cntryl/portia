@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,6 +44,44 @@ public static partial class PortiaHttpBinding
         if (app.ServiceProvider.GetService<PortiaHttpExtensions.PortiaOpenApiMarker>() is null)
             throw new InvalidOperationException(
                 "Portia HTTP endpoints require AddHttp() in the shared Portia application composition.");
+    }
+
+    /// <summary>Applies the secure-host endpoint policy when the shared Portia composition enables it.</summary>
+    /// <typeparam name="TRequest">The request type mapped by the endpoint.</typeparam>
+    /// <param name="app">The endpoint route builder.</param>
+    /// <param name="endpoint">The generated Portia endpoint.</param>
+    /// <param name="method">The HTTP method used by the generated endpoint.</param>
+    /// <returns>The same endpoint builder for further conventions.</returns>
+    public static IEndpointConventionBuilder ApplySecureHostAuthorization<TRequest>(IEndpointRouteBuilder app,
+        IEndpointConventionBuilder endpoint, string method)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        if (app.ServiceProvider.GetService<PortiaSecureHostMarker>() is { } secureHost)
+        {
+            secureHost.Register(app.DataSources);
+            endpoint.Add(builder => builder.Metadata.Add(new PortiaHttpEndpointMarker(typeof(TRequest), method)));
+            endpoint.RequireAuthorization();
+        }
+        return endpoint;
+    }
+
+    /// <summary>Applies the secure-host endpoint policy to a Portia HTTP endpoint without a request contract.</summary>
+    /// <param name="app">The endpoint route builder.</param>
+    /// <param name="endpoint">The generated Portia endpoint.</param>
+    /// <returns>The same endpoint builder for further conventions.</returns>
+    public static IEndpointConventionBuilder ApplySecureHostAuthorization(IEndpointRouteBuilder app,
+        IEndpointConventionBuilder endpoint)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        if (app.ServiceProvider.GetService<PortiaSecureHostMarker>() is { } secureHost)
+        {
+            secureHost.Register(app.DataSources);
+            endpoint.Add(builder => builder.Metadata.Add(new PortiaHttpEndpointMarker(null, "GET")));
+            endpoint.RequireAuthorization();
+        }
+        return endpoint;
     }
 
     /// <summary>Reports whether an exact RFC 7240 preference token requests asynchronous handling.</summary>

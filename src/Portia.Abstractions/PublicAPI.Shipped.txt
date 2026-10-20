@@ -221,6 +221,7 @@ Cntryl.Portia.IRequestActorValidator.ValidateAsync(string? token, System.Threadi
 Cntryl.Portia.IRequestAuthorizer<TRequest>
 Cntryl.Portia.IRequestAuthorizer<TRequest>.AuthorizeAsync(Cntryl.Portia.IRequestContext<TRequest>! context, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
 Cntryl.Portia.IRequestBase
+Cntryl.Portia.IReadOnlyRequest
 Cntryl.Portia.IRequestBus
 Cntryl.Portia.IRequestBus.AuthorizeAsync(Cntryl.Portia.IRequestBase! request, Cntryl.Portia.RequestDispatchContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
 Cntryl.Portia.IRequestBus.CreateContext(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.RequestMetadata? metadata = null) -> Cntryl.Portia.RequestDispatchContext!

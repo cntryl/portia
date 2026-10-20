@@ -8,10 +8,11 @@ and the feature's account authorization, a behavior, a configured-tenant guard, 
 and then the handler.
 
 The API enables its demo header authentication only in Development. Send both `X-Demo-Tenant` and
-`X-Demo-Account`; the account grant is scoped to that tenant. Configure real authentication and
-account authorization for other environments. The `Accounts:Tenant` setting defaults to `demo` only
-in Development and must be set explicitly in every other environment. Fitz and the OTLP collector
-are local demo services; Fitz queue/KV/event state uses a disposable local filesystem.
+`X-Demo-Account`; the account grant is scoped to that tenant. Configure a real default authentication
+scheme and account authorization for other environments; the secure host profile fails startup when
+no default scheme is configured. The `Accounts:Tenant` setting defaults to `demo` only in Development
+and must be set explicitly in every other environment. Fitz and the OTLP collector are local demo
+services; Fitz queue/KV/event state uses a disposable local filesystem.
 
 ## Run from a checkout
 
