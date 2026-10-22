@@ -6,7 +6,7 @@ portia_example_root="$portia_qualification_root/examples/Portia.Accounts"
 portia_compose_file="$portia_example_root/compose.yaml"
 portia_project="portia-accounts-qualification-$$"
 portia_evidence_directory=${1:-"$portia_qualification_root/artifacts/account-otel"}
-portia_package_version=${PORTIA_SMOKE_PACKAGE_VERSION:-0.8.1}
+portia_package_version=${PORTIA_SMOKE_PACKAGE_VERSION:-0.9.0}
 portia_test_project="$portia_example_root/Portia.Accounts.Tests/Portia.Accounts.Tests.csproj"
 portia_api_project="$portia_example_root/Portia.Accounts.Api/Portia.Accounts.Api.csproj"
 portia_worker_project="$portia_example_root/Portia.Accounts.Worker/Portia.Accounts.Worker.csproj"
@@ -145,6 +145,8 @@ portia_stage='worker shutdown'
 portia_stop_host "$portia_worker_pid" "$portia_evidence_directory/worker.log"
 portia_worker_pid=
 
+portia_stage='collector shutdown'
+portia_compose stop otel-collector
 portia_compose logs --no-color otel-collector >"$portia_evidence_directory/otel-export.log" 2>&1
 portia_stage='OTLP assertions'
 grep -Eq 'portia.request.execute' "$portia_evidence_directory/otel-export.log"

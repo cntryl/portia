@@ -984,3 +984,8 @@ override Cntryl.Portia.RemoteRequestOutcome<TOut>.CancellationForwarded.Kind.get
 override Cntryl.Portia.RemoteRequestOutcome<TOut>.Completed.Kind.get -> Cntryl.Portia.RemoteRequestOutcomeKind
 override Cntryl.Portia.RemoteRequestOutcome<TOut>.NotDispatched.Kind.get -> Cntryl.Portia.RemoteRequestOutcomeKind
 override Cntryl.Portia.RemoteRequestOutcome<TOut>.OutcomeUnknown.Kind.get -> Cntryl.Portia.RemoteRequestOutcomeKind
+Cntryl.Portia.IIdentifiedRequest
+Cntryl.Portia.IIdentifiedRequest.RequestId.get -> Cntryl.Portia.Uuid
+Cntryl.Portia.RequestDispatchContext.BindRequest(Cntryl.Portia.IRequestBase! request) -> Cntryl.Portia.Result<Cntryl.Portia.RequestDispatchContext!>
+Cntryl.Portia.RequestMetadata.Validate(Cntryl.Portia.IRequestBase! request) -> void
+static Cntryl.Portia.RequestMetadata.FromRequest(Cntryl.Portia.IRequestBase! request, Cntryl.Portia.IExecutionContext? parent = null) -> Cntryl.Portia.RequestMetadata!

@@ -1,6 +1,1 @@
 #nullable enable
-Cntryl.Portia.IIdentifiedRequest
-Cntryl.Portia.IIdentifiedRequest.RequestId.get -> Cntryl.Portia.Uuid
-Cntryl.Portia.RequestDispatchContext.BindRequest(Cntryl.Portia.IRequestBase! request) -> Cntryl.Portia.Result<Cntryl.Portia.RequestDispatchContext!>
-Cntryl.Portia.RequestMetadata.Validate(Cntryl.Portia.IRequestBase! request) -> void
-static Cntryl.Portia.RequestMetadata.FromRequest(Cntryl.Portia.IRequestBase! request, Cntryl.Portia.IExecutionContext? parent = null) -> Cntryl.Portia.RequestMetadata!
