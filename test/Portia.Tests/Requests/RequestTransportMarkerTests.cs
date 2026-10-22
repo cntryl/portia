@@ -11,6 +11,21 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class RequestTransportMarkerTests
 {
+    /// <summary>A child send cannot silently become a new root operation when its parent is missing.</summary>
+    [Fact]
+    public async Task ShouldRejectMissingParentGivenChildTransportSend()
+    {
+        // Arrange
+        var implementation = new FakeRemoteRequestSender();
+        IRemoteRequestSender sender = implementation;
+        var request = new RequestIdentityTests.IdentifiedCommand(Uuid.CreateVersion4());
+
+        // Act and Assert
+        _ = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+            await sender.SendAsync(request, new RequestRouteValues(), null, (IExecutionContext)null!));
+        Assert.Null(implementation.LastMetadata);
+    }
+
     /// <summary>Default transport helpers carry the caller's typed operation identity.</summary>
     [Fact]
     public async Task ShouldPreserveTypedIdentityGivenDefaultTransportHelpers()
