@@ -178,6 +178,33 @@ public static partial class PortiaHttpBinding
         return TryGetBodyProperty(body, binding.Options, binding.Name, out _);
     }
 
+    /// <summary>Rejects a supplied JSON duplicate that disagrees with an authoritative routed value.</summary>
+    /// <typeparam name="TRequest">The request whose member metadata names the duplicate.</typeparam>
+    /// <typeparam name="TValue">The routed member type.</typeparam>
+    /// <param name="body">The parsed object body; the routed member may be omitted.</param>
+    /// <param name="options">The application's frozen JSON options.</param>
+    /// <param name="memberIndex">The primary-constructor member index.</param>
+    /// <param name="fallbackName">The wire name used without member metadata.</param>
+    /// <param name="expected">The value already bound from the route.</param>
+    public static void ValidateRoutedBody<TRequest, TValue>(JsonElement body, JsonSerializerOptions options,
+        int memberIndex, string fallbackName, TValue expected)
+    {
+        if (body.ValueKind != JsonValueKind.Object)
+            throw new BadHttpRequestException("Expected a JSON object.");
+        var binding = BindingCaches.GetValue(options, static current => new OptionsBindingCache(current))
+            .Get(typeof(TRequest), typeof(TValue), memberIndex, fallbackName);
+        var comparison = binding.Options.PropertyNameCaseInsensitive
+            ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        foreach (var property in body.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, binding.Name, comparison))
+                continue;
+            var actual = property.Value.Deserialize((JsonTypeInfo<TValue>)binding.Options.GetTypeInfo(typeof(TValue)));
+            if (!EqualityComparer<TValue>.Default.Equals(expected, actual))
+                throw new BadHttpRequestException("A body value conflicts with its route value.");
+        }
+    }
+
     static bool TryGetBodyProperty(JsonElement body, JsonSerializerOptions options, string name, out JsonElement value)
     {
         if (body.TryGetProperty(name, out value))

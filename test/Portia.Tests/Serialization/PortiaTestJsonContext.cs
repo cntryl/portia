@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 
 namespace Cntryl.Portia;
 
+[JsonSerializable(typeof(RequestIdentityTests.IdentifiedQuery))]
+[JsonSerializable(typeof(RequestIdentityTests.IdentifiedCommand))]
 [JsonSerializable(typeof(OpenApiContractRequest))]
 [JsonSerializable(typeof(OpenApiContractStream))]
 [JsonSerializable(typeof(OpenApiContractNode))]

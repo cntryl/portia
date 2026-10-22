@@ -43,7 +43,7 @@ public interface IRequestScheduler
         ClaimsPrincipal actor,
         CancellationToken ct = default)
         where TRequest : IRequest, ISchedulable
-        => ScheduleAsync(request, spec, routeValues, actor, RequestMetadata.Create(), ct);
+        => ScheduleAsync(request, spec, routeValues, actor, RequestMetadata.FromRequest(request), ct);
 
     /// <summary>Schedules a template with explicit causal identity.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>

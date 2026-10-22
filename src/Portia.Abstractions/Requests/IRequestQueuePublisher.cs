@@ -25,7 +25,7 @@ public interface IRequestQueuePublisher
     ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
         CancellationToken ct = default)
         where TRequest : IRequest, IQueuable
-        => EnqueueAsync(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+        => EnqueueAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <summary>Transmits a request with explicit logical identity and separately supplied credentials.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>

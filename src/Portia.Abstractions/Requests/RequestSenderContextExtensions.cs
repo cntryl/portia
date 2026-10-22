@@ -23,7 +23,7 @@ public static class RequestSenderContextExtensions
     public static ValueTask EnqueueAsync<TRequest>(this IRequestQueuePublisher sender, TRequest request,
         RequestRouteValues routeValues, string? actorToken, IExecutionContext parent, CancellationToken ct = default)
         where TRequest : IRequest, IQueuable
-        => sender.EnqueueAsync(request, routeValues, actorToken, RequestMetadata.FromParent(parent), ct);
+        => sender.EnqueueAsync(request, routeValues, actorToken, ChildMetadata(request, parent), ct);
 
     /// <summary>Calls a new child request remotely.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
@@ -43,7 +43,7 @@ public static class RequestSenderContextExtensions
     public static ValueTask<Result> SendAsync<TRequest>(this IRemoteRequestSender sender, TRequest request,
         RequestRouteValues routeValues, string? actorToken, IExecutionContext parent, CancellationToken ct = default)
         where TRequest : IRequest, ICallable
-        => sender.SendAsync(request, routeValues, actorToken, RequestMetadata.FromParent(parent), ct);
+        => sender.SendAsync(request, routeValues, actorToken, ChildMetadata(request, parent), ct);
 
     /// <summary>Calls a result-bearing child request remotely.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
@@ -64,7 +64,7 @@ public static class RequestSenderContextExtensions
     public static ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(this IRemoteRequestSender sender, TRequest request,
         RequestRouteValues routeValues, string? actorToken, IExecutionContext parent, CancellationToken ct = default)
         where TRequest : IRequest<TOut>, ICallable
-        => sender.SendAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromParent(parent), ct);
+        => sender.SendAsync<TRequest, TOut>(request, routeValues, actorToken, ChildMetadata(request, parent), ct);
 
     /// <summary>Sends a no-result child request and reports its transport outcome.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
@@ -79,7 +79,7 @@ public static class RequestSenderContextExtensions
         TRequest request, RequestRouteValues routeValues, string? actorToken, IExecutionContext parent,
         CancellationToken ct = default)
         where TRequest : IRequest, ICallable
-        => sender.SendWithOutcomeAsync(request, routeValues, actorToken, RequestMetadata.FromParent(parent), ct);
+        => sender.SendWithOutcomeAsync(request, routeValues, actorToken, ChildMetadata(request, parent), ct);
 
     /// <summary>Sends a result-bearing child request and reports its transport outcome.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
@@ -96,7 +96,7 @@ public static class RequestSenderContextExtensions
         IExecutionContext parent, CancellationToken ct = default)
         where TRequest : IRequest<TOut>, ICallable
         => sender.SendWithOutcomeAsync<TRequest, TOut>(request, routeValues, actorToken,
-            RequestMetadata.FromParent(parent), ct);
+            ChildMetadata(request, parent), ct);
 
     /// <summary>Publishes a new child notification.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
@@ -116,7 +116,7 @@ public static class RequestSenderContextExtensions
     public static ValueTask PublishAsync<TRequest>(this INoticeRequestSender sender, TRequest request,
         RequestRouteValues routeValues, string? actorToken, IExecutionContext parent, CancellationToken ct = default)
         where TRequest : IRequest, INotifiable
-        => sender.PublishAsync(request, routeValues, actorToken, RequestMetadata.FromParent(parent), ct);
+        => sender.PublishAsync(request, routeValues, actorToken, ChildMetadata(request, parent), ct);
 
     /// <summary>Creates a schedule template caused by the current execution.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
@@ -138,5 +138,10 @@ public static class RequestSenderContextExtensions
         RequestScheduleSpec spec, RequestRouteValues routeValues, ClaimsPrincipal actor, IExecutionContext parent,
         CancellationToken ct = default)
         where TRequest : IRequest, ISchedulable
-        => sender.ScheduleAsync(request, spec, routeValues, actor, RequestMetadata.FromParent(parent), ct);
+        => sender.ScheduleAsync(request, spec, routeValues, actor, ChildMetadata(request, parent), ct);
+    static RequestMetadata ChildMetadata(IRequestBase request, IExecutionContext parent)
+    {
+        ArgumentNullException.ThrowIfNull(parent);
+        return RequestMetadata.FromRequest(request, parent);
+    }
 }

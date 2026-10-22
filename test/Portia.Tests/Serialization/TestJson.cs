@@ -22,6 +22,8 @@ static class TestJson
 
     static RequestRouteAttribute Route(Type type, int index) => type == typeof(UniversalAction)
         ? new RequestRouteAttribute("test", "shared", "action", "run")
+        : type == typeof(RequestIdentityTests.IdentifiedCommand)
+            ? new RequestRouteAttribute("test", "identity", "command", "apply")
         : type == typeof(RpcGetValue)
             ? new RequestRouteAttribute("test", "rpc", "value", "get")
             : type == typeof(RpcChangeValue)

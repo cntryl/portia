@@ -21,7 +21,7 @@ public sealed class FitzNoticeRequestSender(
     public ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
         CancellationToken ct = default)
         where TRequest : IRequest, INotifiable
-        => PublishAsync(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+        => PublishAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <inheritdoc />
     public async ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,

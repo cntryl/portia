@@ -28,6 +28,67 @@ namespace Cntryl.Portia.Tests;
 [Collection("MCP HTTP integration")]
 public sealed class McpRegistrationTests
 {
+    [Fact]
+    public async Task ShouldBindTypedIdentityAndRejectMissingInputGivenMcpTool()
+    {
+        // Arrange
+        var probe = new IdentifiedProbe();
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton(probe);
+        _ = builder.Services.AddPortia().AddRequestHandler<IdentifiedInvocationHandler>()
+            .AddMcpTool<IdentifiedInvocation>().AddMcpHttp();
+        await using var app = builder.Build();
+        UseTestActor(app);
+        _ = app.MapPortiaMcp().AllowAnonymous();
+        await app.StartAsync();
+        await using var client = await HttpClientAsync(app);
+        var id = Uuid.CreateVersion4();
+        var arguments = new Dictionary<string, object?> { ["command_id"] = id.ToString() };
+
+        // Act
+        var first = await client.CallToolAsync("identities.record", arguments);
+        var retry = await client.CallToolAsync("identities.record", arguments);
+        var missing = await client.CallToolAsync("identities.record", new Dictionary<string, object?>());
+        var empty = await client.CallToolAsync("identities.record", new Dictionary<string, object?>
+        {
+            ["command_id"] = Uuid.Empty.ToString(),
+        });
+
+        // Assert
+        Assert.False(first.IsError);
+        Assert.False(retry.IsError);
+        Assert.True(missing.IsError);
+        Assert.True(empty.IsError);
+        Assert.Equal("Binding", PortiaFailure(missing).GetProperty("kind").GetString());
+        Assert.Equal("Validation", PortiaFailure(empty).GetProperty("kind").GetString());
+        Assert.Equal(2, probe.RequestIds.Count);
+        Assert.All(probe.RequestIds, actual => Assert.Equal(id, actual));
+        Assert.Equal(2, probe.Executions.Distinct().Count());
+    }
+
+    [Discriminator("identities.record", 1)]
+    public sealed record IdentifiedInvocation([property: JsonPropertyName("command_id")] Uuid CommandId)
+        : IRequest<string>, ICallable, IIdentifiedRequest
+    {
+        Uuid IIdentifiedRequest.RequestId => CommandId;
+    }
+
+    public sealed class IdentifiedProbe
+    {
+        public List<Uuid> RequestIds { get; } = [];
+        public List<Uuid> Executions { get; } = [];
+    }
+
+    public sealed class IdentifiedInvocationHandler(IdentifiedProbe probe) : IRequestHandler<IdentifiedInvocation, string>
+    {
+        public ValueTask<Result<string>> HandleAsync(IRequestContext<IdentifiedInvocation> context, CancellationToken ct)
+        {
+            probe.RequestIds.Add(context.RequestId);
+            probe.Executions.Add(context.ExecutionId);
+            return ValueTask.FromResult(Result<string>.Success(context.RequestId.ToString()));
+        }
+    }
     static readonly int[] NestedInputValues = [2, 3, 5];
     static readonly int[] MalformedInputValues = [1];
 
@@ -1350,6 +1411,7 @@ public sealed class McpRegistrationTests
 }
 
 [PortiaJsonContext]
+[JsonSerializable(typeof(McpRegistrationTests.IdentifiedInvocation))]
 [JsonSerializable(typeof(McpRegistrationTests.ReadGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.RejectGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.InspectNestedInput))]

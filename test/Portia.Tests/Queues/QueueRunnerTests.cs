@@ -12,6 +12,33 @@ namespace Cntryl.Portia;
 [Collection(TelemetryTestGroup.Name)]
 public sealed class QueueRunnerTests
 {
+    /// <summary>Redelivery preserves the typed logical key while each worker execution is new.</summary>
+    [Fact]
+    public async Task ShouldPreserveTypedIdentityAcrossAttemptsGivenQueuedRedelivery()
+    {
+        // Arrange
+        var handler = new RequestIdentityTests.IdentifiedCommandHandler();
+        using var provider = RequestIdentityTests.Compose(new RequestIdentityTests.IdentifiedQueryHandler(),
+            handler, new RequestIdentityTests.IdentityAuthorizer());
+        using var scope = provider.CreateScope();
+        var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
+        var request = new RequestIdentityTests.IdentifiedCommand(Uuid.CreateVersion4());
+        var metadata = RequestMetadata.FromRequest(request);
+        var items = new[] { new FakeQueuedRequest(request, metadata: metadata),
+            new FakeQueuedRequest(request, attempt: 2, metadata: metadata) };
+        var runner = new QueueRunner(new FakeQueueConsumer(items), RequestDeliveryScopes.FixedQueue(
+            bus, new TestRequestActorValidator(), terminalHandler: new RecordingTerminalHandler()));
+
+        // Act
+        await runner.RunAsync();
+
+        // Assert
+        Assert.All(items, item => Assert.True(item.Completed));
+        Assert.Equal(2, handler.Contexts.Count);
+        Assert.All(handler.Contexts, context => Assert.Equal(request.CommandId, context.RequestId));
+        Assert.Equal(2, handler.Contexts.Select(context => context.ExecutionId).Distinct().Count());
+    }
+
     /// <summary>Actual terminal, acknowledgment and fault logs correlate to their delivery process.</summary>
     [Theory]
     [InlineData("terminal", false)]
@@ -1078,6 +1105,7 @@ public sealed class QueueRunnerTests
         Exception? readException = null,
         bool throwOnInvocation = false,
         RequestTraceContext? traceContext = null,
+        RequestMetadata? metadata = null,
         CancellationToken reservation = default) : IQueuedRequest
     {
         public CancellationToken ReservationCancellation => reservation;
@@ -1091,7 +1119,7 @@ public sealed class QueueRunnerTests
 
         public bool Abandoned { get; private set; }
         public int InvocationReadCount { get; private set; }
-        public RequestMetadata Metadata { get; } = RequestMetadata.Create();
+        public RequestMetadata Metadata { get; } = metadata ?? RequestMetadata.Create();
 
         public RequestInvocation Invocation => !throwOnInvocation &&
                                                (++InvocationReadCount == 1 || !invocationMayBeReadOnce)

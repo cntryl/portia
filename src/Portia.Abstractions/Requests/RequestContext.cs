@@ -15,7 +15,7 @@ public sealed class RequestContext<TRequest> : RequestDispatchContext, IRequestC
     /// <summary>Creates a direct context with an explicit actor.</summary>
     /// <param name="request">The business input handed to the handler.</param>
     /// <param name="actor">The actor the request executes as.</param>
-    public RequestContext(TRequest request, ClaimsPrincipal actor) : this(request, new RequestDispatchContext(actor))
+    public RequestContext(TRequest request, ClaimsPrincipal actor) : this(request, CreateExecution(request, actor))
     {
     }
 
@@ -30,4 +30,13 @@ public sealed class RequestContext<TRequest> : RequestDispatchContext, IRequestC
 
     /// <inheritdoc />
     public TRequest Request { get; }
+
+    static RequestDispatchContext CreateExecution(TRequest request, ClaimsPrincipal actor)
+    {
+        var context = new RequestDispatchContext(actor);
+        if (request is not IRequestBase command)
+            return context;
+        var bound = context.BindRequest(command);
+        return bound.IsSuccess ? bound.Value : throw new ArgumentException(bound.Error.Message, nameof(request));
+    }
 }

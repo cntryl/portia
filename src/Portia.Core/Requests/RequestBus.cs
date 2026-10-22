@@ -21,6 +21,10 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     {
         ArgumentNullException.ThrowIfNull(context);
         Validate(request, context, ct);
+        var binding = context.BindRequest(request);
+        if (!binding.IsSuccess)
+            return ValueTask.FromResult(Result.Failure(binding.Error));
+        context = binding.Value;
         var registration = registry.Handler(request.GetType());
         var policies = registry.Policies(registration.RequestType);
         if (policies.IsUnprotected)
@@ -36,6 +40,10 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     {
         ArgumentNullException.ThrowIfNull(context);
         Validate(request, context, ct);
+        var binding = context.BindRequest(request);
+        if (!binding.IsSuccess)
+            return Result.Failure(binding.Error);
+        context = binding.Value;
         var registration = registry.Handler(request.GetType());
         var policies = registry.Policies(registration.RequestType);
         var transport = context.Invocation.TransportName;
@@ -80,6 +88,10 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     {
         ArgumentNullException.ThrowIfNull(context);
         Validate(request, context, ct);
+        var binding = context.BindRequest(request);
+        if (!binding.IsSuccess)
+            return Result<TOut>.Failure(binding.Error);
+        context = binding.Value;
         var registration = registry.Handler(request.GetType());
         var policies = registry.Policies(registration.RequestType);
         var transport = context.Invocation.TransportName;
@@ -125,6 +137,10 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     {
         ArgumentNullException.ThrowIfNull(context);
         Validate(request, context, ct);
+        var binding = context.BindRequest(request);
+        if (!binding.IsSuccess)
+            throw new RequestGuardException(binding.Error);
+        context = binding.Value;
         var registration = registry.Handler(request.GetType());
         var policies = registry.Policies(registration.RequestType);
         var requestContext = registration.CreateContext(request, context);

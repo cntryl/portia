@@ -11,6 +11,52 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class RequestTransportMarkerTests
 {
+    /// <summary>A child send cannot silently become a new root operation when its parent is missing.</summary>
+    [Fact]
+    public async Task ShouldRejectMissingParentGivenChildTransportSend()
+    {
+        // Arrange
+        var implementation = new FakeRemoteRequestSender();
+        IRemoteRequestSender sender = implementation;
+        var request = new RequestIdentityTests.IdentifiedCommand(Uuid.CreateVersion4());
+
+        // Act and Assert
+        _ = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+            await sender.SendAsync(request, new RequestRouteValues(), null, (IExecutionContext)null!));
+        Assert.Null(implementation.LastMetadata);
+    }
+
+    /// <summary>Default transport helpers carry the caller's typed operation identity.</summary>
+    [Fact]
+    public async Task ShouldPreserveTypedIdentityGivenDefaultTransportHelpers()
+    {
+        // Arrange
+        var remote = new FakeRemoteRequestSender();
+        var queue = new FakeRequestQueuePublisher();
+        var notice = new FakeNoticeRequestSender();
+        var scheduler = new FakeRequestScheduler();
+        var request = new RequestIdentityTests.IdentifiedCommand(Uuid.CreateVersion4());
+        var route = new RequestRouteValues();
+
+        // Act and Assert
+        _ = await ((IRemoteRequestSender)remote).SendAsync(request, route, null);
+        Assert.Equal(request.CommandId, remote.LastMetadata!.RequestId);
+        _ = await ((IRemoteRequestSender)remote).SendWithOutcomeAsync(request, route, null);
+        Assert.Equal(request.CommandId, remote.LastMetadata!.RequestId);
+        var query = new RequestIdentityTests.IdentifiedQuery(Uuid.CreateVersion4());
+        _ = await ((IRemoteRequestSender)remote).SendAsync<RequestIdentityTests.IdentifiedQuery, Uuid>(query, route, null);
+        Assert.Equal(query.CommandId, remote.LastMetadata!.RequestId);
+        _ = await ((IRemoteRequestSender)remote).SendWithOutcomeAsync<RequestIdentityTests.IdentifiedQuery, Uuid>(query, route, null);
+        Assert.Equal(query.CommandId, remote.LastMetadata!.RequestId);
+        await ((IRequestQueuePublisher)queue).EnqueueAsync(request, route, null);
+        Assert.Equal(request.CommandId, queue.LastMetadata!.RequestId);
+        await ((INoticeRequestSender)notice).PublishAsync(request, route, null);
+        _ = await ((IRequestScheduler)scheduler).ScheduleAsync(request, new RequestScheduleSpec("* * * * *"),
+            route, RequestActor.System);
+        Assert.Equal(request.CommandId, notice.LastMetadata!.RequestId);
+        Assert.Equal(request.CommandId, scheduler.LastMetadata!.RequestId);
+    }
+
     /// <summary>
     ///     Verifies that a result-bearing request is accepted by the RPC sender.
     /// </summary>
@@ -184,20 +230,34 @@ public sealed class RequestTransportMarkerTests
 
     sealed class FakeRequestQueuePublisher : IRequestQueuePublisher
     {
+        public RequestMetadata? LastMetadata { get; private set; }
+
         public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
             RequestMetadata metadata, CancellationToken ct = default)
-            where TRequest : IRequest, IQueuable => ValueTask.CompletedTask;
+            where TRequest : IRequest, IQueuable
+        {
+            LastMetadata = metadata;
+            return ValueTask.CompletedTask;
+        }
     }
 
     sealed class FakeNoticeRequestSender : INoticeRequestSender
     {
+        public RequestMetadata? LastMetadata { get; private set; }
+
         public ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
             RequestMetadata metadata, CancellationToken ct = default)
-            where TRequest : IRequest, INotifiable => ValueTask.CompletedTask;
+            where TRequest : IRequest, INotifiable
+        {
+            LastMetadata = metadata;
+            return ValueTask.CompletedTask;
+        }
     }
 
     sealed class FakeRequestScheduler : IRequestScheduler
     {
+        public RequestMetadata? LastMetadata { get; private set; }
+
         public ValueTask<string> ScheduleAsync<TRequest>(
             TRequest request,
             RequestScheduleSpec spec,
@@ -205,7 +265,11 @@ public sealed class RequestTransportMarkerTests
             ClaimsPrincipal actor,
             RequestMetadata metadata,
             CancellationToken ct = default)
-            where TRequest : IRequest, ISchedulable => ValueTask.FromResult("schedule-id");
+            where TRequest : IRequest, ISchedulable
+        {
+            LastMetadata = metadata;
+            return ValueTask.FromResult("schedule-id");
+        }
 
         public ValueTask CancelAsync(string scheduleId, CancellationToken ct = default) => ValueTask.CompletedTask;
     }

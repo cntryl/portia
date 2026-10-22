@@ -29,6 +29,83 @@ public sealed class HttpBindingTests : IAsyncDisposable
 {
     WebApplication? _app;
 
+    /// <summary>Queue acceptance carries the route identity through both authorization and enqueue metadata.</summary>
+    [Fact]
+    public async Task ShouldPreserveTypedIdentityGivenHttpQueueAcceptance()
+    {
+        // Arrange
+        var publisher = new RecordingRequestQueuePublisher();
+        var authorization = new RequestIdentityTests.IdentityAuthorizer();
+        var client = await StartAsync(app =>
+                app.MapPortiaPost<RequestIdentityTests.IdentifiedCommand>("/identified/{command_id}"), services =>
+            {
+                _ = services.AddSingleton<IRequestQueuePublisher>(publisher);
+                _ = services.AddSingleton(authorization);
+                _ = services.AddPortia().AddRequestHandler<RequestIdentityTests.IdentifiedCommandHandler>()
+                    .AddRequestAuthorizer<RequestIdentityTests.IdentityAuthorizer>();
+            });
+        var id = Uuid.CreateVersion4();
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/identified/{id}")
+        {
+            Content = JsonContent.Create(new { }),
+        };
+        request.Headers.Add("Prefer", "respond-async");
+        request.Headers.Add("Authorization", "Bearer carried");
+
+        // Act
+        var response = await client.SendAsync(request);
+        using var receipt = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal(id.ToString(), receipt.RootElement.GetProperty("request_id").GetString());
+        Assert.Equal(id, Assert.Single(publisher.Metadata).RequestId);
+        Assert.Equal(id, Assert.IsType<RequestIdentityTests.IdentifiedCommand>(Assert.Single(publisher.Enqueued)).CommandId);
+        Assert.Equal(id, authorization.LastRequestId);
+    }
+
+    /// <summary>A routed-only command still rejects a contradictory form identity.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldValidateFormDuplicateGivenRouteOnlyCommand(bool conflict)
+    {
+        // Arrange
+        var client = await StartAsync(app =>
+            app.MapPortiaPost<RequestIdentityTests.IdentifiedCommand>("/form-identity/{command_id}").DisableAntiforgery(),
+            services =>
+            {
+                _ = services.AddSingleton<IRequestQueuePublisher>(new RecordingRequestQueuePublisher());
+                _ = services.AddPortia().AddRequestHandler<RequestIdentityTests.IdentifiedCommandHandler>()
+                    .AddRequestAuthorizer<RequestIdentityTests.IdentityAuthorizer>();
+            });
+        var id = Uuid.CreateVersion4();
+
+        // Act
+        var response = await client.PostAsync($"/form-identity/{id}",
+            Form(("command_id", (conflict ? Uuid.CreateVersion4() : id).ToString())));
+
+        // Assert
+        Assert.Equal(conflict ? HttpStatusCode.BadRequest : HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    /// <summary>A form body cannot contradict a typed value already supplied by the route.</summary>
+    [Fact]
+    public async Task ShouldRejectConflictingFormDuplicateGivenRoutedValue()
+    {
+        // Arrange
+        var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/duplicate/{widget_id}")
+            .DisableAntiforgery());
+        var id = Uuid.CreateVersion4();
+
+        // Act
+        var response = await client.PostAsync($"/duplicate/{id}",
+            Form(("widget_id", Uuid.CreateVersion4().ToString()), ("name", "cog"), ("quantity", "2")));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
@@ -1505,6 +1582,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     {
         public List<object> Enqueued { get; } = [];
         public List<string?> ActorTokens { get; } = [];
+        public List<RequestMetadata> Metadata { get; } = [];
 
         public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
             RequestMetadata metadata, CancellationToken ct = default)
@@ -1512,6 +1590,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         {
             Enqueued.Add(request);
             ActorTokens.Add(actorToken);
+            Metadata.Add(metadata);
             return ValueTask.CompletedTask;
         }
     }

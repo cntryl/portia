@@ -4,6 +4,19 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.9.0 - 2026-10-22
+
+### Added
+
+- Add `IIdentifiedRequest` and immutable logical identity binding across direct, HTTP, MCP and
+  worker transports, preserving execution attempts and rejecting empty or conflicting identities.
+
+### Fixed
+
+- Reject conflicting JSON/form duplicates of mutation route parameters while allowing omission.
+- Preserve fixed typed operation identity through scheduling and sender default overloads.
+- Drain the example telemetry collector before asserting its asynchronously batched output.
+
 ## 0.8.1 - 2026-10-19
 
 ### Changed
