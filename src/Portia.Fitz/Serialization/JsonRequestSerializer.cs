@@ -62,6 +62,7 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
 
             var request = (IRequestBase?)payload.Deserialize(descriptor.JsonTypeInfo)
                           ?? throw Permanent($"The '{name}' payload deserialized to null.");
+            metadata.Validate(request);
             var trace = traceparent is null
                 ? null
                 : new RequestTraceContext(traceparent, tracestate);
@@ -154,7 +155,7 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(metadata);
-        metadata.Validate();
+        metadata.Validate(request);
         var type = request.GetType();
         var descriptor = _byType.TryGetValue(type, out var registered)
             ? registered

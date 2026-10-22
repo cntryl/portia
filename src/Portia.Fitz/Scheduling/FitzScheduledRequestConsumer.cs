@@ -290,8 +290,9 @@ public sealed class FitzScheduledRequestConsumer(
     {
         public RequestNotification Deliver(ClaimsPrincipal actor) =>
             new(Request, null,
-                new RequestMetadata(Uuid.CreateVersion4(), Envelope.Metadata.CorrelationId,
-                    Envelope.Metadata.RequestId),
+                Request is IIdentifiedRequest ? Envelope.Metadata :
+                    new RequestMetadata(Uuid.CreateVersion4(), Envelope.Metadata.CorrelationId,
+                        Envelope.Metadata.RequestId),
                 new ScheduleInvocation(Route) { MessagingSystem = "fitz" }, Envelope.TraceContext,
                 actor, Envelope.Name);
     }

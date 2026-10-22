@@ -377,7 +377,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     {
         var bodyParameters = call.Parameters.Where(p => p.Source == ParameterSource.Body).ToArray();
         var hasBody = bodyParameters.Length > 0;
+        var checksRoutedBody = call.Verb is "Post" or "Put" or "Patch" or "Delete" &&
+            call.Parameters.Any(parameter => parameter.Source == ParameterSource.Route);
         var formBindable = hasBody && bodyParameters.All(p => p.FormBindable);
+        var readsForm = formBindable || checksRoutedBody && !hasBody;
         var configurationType = call.Kind is CallKind.Stream or CallKind.Sse
             ? $"global::Cntryl.Portia.PortiaStreamingEndpointConfiguration<{call.RequestTypeFullName}>"
             : $"global::Cntryl.Portia.PortiaEndpointConfiguration<{call.RequestTypeFullName}{(call.ResultType is not null ? ", " + call.ResultType : string.Empty)}>";
@@ -633,7 +636,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     !parameter.FormBindable && !parameter.Nullable && parameter.Default is null)
                     ? "true"
                     : "false") + ", ct).ConfigureAwait(false);";
-            if (formBindable)
+            if (readsForm)
             {
                 // Scalar-only bodies also accept HTML forms; the JSON wire names name the fields.
                 _ = source.AppendLine(
@@ -653,6 +656,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             {
                 if (hasBody)
                     _ = source.Append("                ").AppendLine(jsonBody);
+                else if (checksRoutedBody)
+                    _ = source.Append("                using var body = httpContext.Request.HasJsonContentType() ? await global::Cntryl.Portia.PortiaHttpBinding.ReadJsonBodyAsync(httpContext, false, ct).ConfigureAwait(false) : global::System.Text.Json.JsonDocument.Parse(\"{}\");").AppendLine();
                 AppendValues(false, "                ");
             }
 
@@ -757,6 +762,39 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     }
 
                     _ = source.Append(pad).AppendLine("}");
+                    if (parameter.Source == ParameterSource.Route && checksRoutedBody && !form)
+                        _ = source.Append(pad).Append("global::Cntryl.Portia.PortiaHttpBinding.ValidateRoutedBody<")
+                            .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
+                            .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ").Append(name)
+                            .Append(", value").Append(i).AppendLine(");");
+                    if (parameter.Source == ParameterSource.Route && checksRoutedBody && form)
+                    {
+                        _ = source.Append(pad).Append("var duplicate").Append(i)
+                            .Append(" = global::Cntryl.Portia.PortiaHttpBinding.ReadForm(form, ").Append(name)
+                            .AppendLine(", false);")
+                            .Append(pad).Append("if (duplicate").Append(i).AppendLine(" is not null)")
+                            .Append(pad).AppendLine("{");
+                        var duplicateValue = "duplicate" + i;
+                        if (!IsString(parameter.UnderlyingType))
+                        {
+                            var parseDuplicate = parameter.IsEnum
+                                ? $"global::System.Enum.TryParse<{parameter.UnderlyingType}>(duplicate{i}, true, out var duplicateValue{i})"
+                                : IsBoolean(parameter.UnderlyingType)
+                                    ? $"global::Cntryl.Portia.PortiaHttpBinding.TryParseFormBoolean(duplicate{i}, out var duplicateValue{i})"
+                                    : $"{parameter.UnderlyingType}.TryParse(duplicate{i}, " +
+                                      (parameter.ParseKind == HttpBindingShape.TextParseKind.FormatProvider
+                                          ? "global::System.Globalization.CultureInfo.InvariantCulture, " : "") +
+                                      $"out var duplicateValue{i})";
+                            _ = source.Append(pad).Append("    if (!").Append(parseDuplicate).AppendLine(")")
+                                .Append(pad).AppendLine("        throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Invalid duplicate route value.\");");
+                            duplicateValue = "duplicateValue" + i;
+                        }
+                        _ = source.Append(pad).Append("    if (!global::System.Collections.Generic.EqualityComparer<")
+                            .Append(parameter.Type).Append(">.Default.Equals(value").Append(i).Append(", ")
+                            .Append(duplicateValue).AppendLine("))")
+                            .Append(pad).AppendLine("        throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"A body value conflicts with its route value.\");")
+                            .Append(pad).AppendLine("}");
+                    }
                     if (cascade)
                         _ = source.Append(indent).AppendLine("}");
                 }
@@ -794,7 +832,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         // The actor is never inferred beyond this point — httpContext.User is where "ambient"
         // stops and an explicit value starts, exactly like every other transport's call site.
         _ = source.AppendLine(
-            "            var context = global::Cntryl.Portia.PortiaHttpBinding.CreateDispatchContext(httpContext);");
+            "            var identityBinding = global::Cntryl.Portia.PortiaHttpBinding.CreateDispatchContext(httpContext).BindRequest(request);")
+            .AppendLine("            if (!identityBinding.IsSuccess)")
+            .AppendLine("                return global::Cntryl.Portia.Result.Failure(identityBinding.Error).ToHttpResult();")
+            .AppendLine("            var context = identityBinding.Value;");
 
         if (call.Kind == CallKind.Queue)
         {

@@ -4,6 +4,68 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed class HttpBindingConsumerTests
 {
+    [Theory]
+    [InlineData("/binding", 404)]
+    [InlineData("/binding/malformed", 400)]
+    [InlineData("/binding/00000000-0000-0000-0000-000000000000", 400)]
+    [InlineData("/binding/11111111-1111-4111-8111-111111111111", 200)]
+    public async Task ShouldValidateRequiredTypedIdentityGivenHttpRoute(string path, int expectedStatus)
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(Uuid CommandId, string Value) : IRequest<string>, ICallable, IIdentifiedRequest { Uuid IIdentifiedRequest.RequestId => CommandId; }",
+            "context.RequestId.ToString()",
+            "app.MapPortiaPost<Binding, string>(\"/binding/{command_id}\");");
+
+        // Act
+        var (status, _) = await HttpConsumerScenario.RunAsync(assembly, path, "{\"value\":\"ok\"}");
+
+        // Assert
+        Assert.Equal(expectedStatus, status);
+    }
+
+    [Fact]
+    public async Task ShouldUseTypedLogicalIdentityGivenRoutedCommand()
+    {
+        // Arrange
+        var id = Uuid.CreateVersion4();
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(Uuid CommandId, string Value) : IRequest<string>, ICallable, IIdentifiedRequest { Uuid IIdentifiedRequest.RequestId => CommandId; }",
+            "context.RequestId.ToString()",
+            "app.MapPortiaPost<Binding, string>(\"/binding/{command_id}\");");
+
+        // Act
+        var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding/" + id, "{\"value\":\"ok\"}");
+
+        // Assert
+        Assert.Equal(200, status);
+        Assert.Equal(JsonSerializer.Serialize(id.ToString()), body);
+    }
+
+    [Theory]
+    [InlineData("{\"value\":\"ok\"}", 200)]
+    [InlineData("{\"commandId\":7,\"value\":\"ok\"}", 200)]
+    [InlineData("{\"commandId\":8,\"value\":\"ok\"}", 400)]
+    [InlineData("{\"commandId\":null,\"value\":\"ok\"}", 400)]
+    [InlineData("{\"commandId\":\"bad\",\"value\":\"ok\"}", 400)]
+    [InlineData("{\"commandId\":7,\"CommandId\":8,\"value\":\"ok\"}", 400)]
+    [InlineData("{\"commandId\":8,\"CommandId\":7,\"value\":\"ok\"}", 400)]
+    [InlineData("{\"commandId\":7,\"commandId\":7,\"value\":\"ok\"}", 200)]
+    public async Task ShouldRejectConflictingBodyDuplicateGivenRequiredRouteValue(string json, int expectedStatus)
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(int CommandId, string Value) : IRequest<string>, ICallable;",
+            "request.CommandId.ToString(CultureInfo.InvariantCulture) + request.Value",
+            "app.MapPortiaPost<Binding, string>(\"/binding/{command_id}\");");
+
+        // Act
+        var (status, _) = await HttpConsumerScenario.RunAsync(assembly, "/binding/7", json);
+
+        // Assert
+        Assert.Equal(expectedStatus, status);
+    }
+
     [Fact]
     public async Task LiteralRouteBaselineCompilesAndExecutes()
     {

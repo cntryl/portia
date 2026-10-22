@@ -40,7 +40,7 @@ public sealed class FitzRemoteRequestSender(
     public ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
         CancellationToken ct = default)
         where TRequest : IRequest, ICallable
-        => SendAsync(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+        => SendAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <inheritdoc />
     public async ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues,
@@ -87,7 +87,7 @@ public sealed class FitzRemoteRequestSender(
     public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues,
         string? actorToken, CancellationToken ct = default)
         where TRequest : IRequest<TOut>, ICallable
-        => SendAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+        => SendAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <inheritdoc />
     public async ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues,
@@ -136,7 +136,7 @@ public sealed class FitzRemoteRequestSender(
     public ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(TRequest request,
         RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
         where TRequest : IRequest, ICallable
-        => SendWithOutcomeAsync(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+        => SendWithOutcomeAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <inheritdoc />
     public async ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(TRequest request,
@@ -195,7 +195,7 @@ public sealed class FitzRemoteRequestSender(
     public ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(TRequest request,
         RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
         where TRequest : IRequest<TOut>, ICallable
-        => SendWithOutcomeAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+        => SendWithOutcomeAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <inheritdoc />
     public async ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(TRequest request,

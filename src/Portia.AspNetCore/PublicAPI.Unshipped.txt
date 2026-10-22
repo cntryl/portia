@@ -1,1 +1,2 @@
 #nullable enable
+static Cntryl.Portia.PortiaHttpBinding.ValidateRoutedBody<TRequest, TValue>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, int memberIndex, string! fallbackName, TValue expected) -> void

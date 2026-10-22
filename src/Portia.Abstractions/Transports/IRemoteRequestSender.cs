@@ -19,7 +19,7 @@ public interface IRemoteRequestSender
     ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(TRequest request,
         RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
         where TRequest : IRequest, ICallable
-        => SendWithOutcomeAsync(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+        => SendWithOutcomeAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <summary>Sends a no-result request with explicit logical identity and reports its transport outcome.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
@@ -58,7 +58,7 @@ public interface IRemoteRequestSender
     ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(TRequest request,
         RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
         where TRequest : IRequest<TOut>, ICallable
-        => SendWithOutcomeAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+        => SendWithOutcomeAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <summary>Sends a result-bearing request with explicit logical identity and reports its transport outcome.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
@@ -107,7 +107,7 @@ public interface IRemoteRequestSender
     ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
         CancellationToken ct = default)
         where TRequest : IRequest, ICallable
-        => SendAsync(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+        => SendAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <summary>Transmits a request with explicit logical identity and separately supplied credentials.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
@@ -147,7 +147,7 @@ public interface IRemoteRequestSender
     ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues,
         string? actorToken, CancellationToken ct = default)
         where TRequest : IRequest<TOut>, ICallable
-        => SendAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+        => SendAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <summary>Transmits a request with explicit logical identity and separately supplied credentials.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>

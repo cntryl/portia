@@ -31,7 +31,8 @@ public sealed class FitzRequestScheduler(
         ArgumentNullException.ThrowIfNull(actor);
         var route = FitzRouting.ResolveScheduleRoute(_catalog, request, routeValues);
         var id = Uuid.CreateVersion5(Uuid.UrlNamespace, "portia:schedule:" + route);
-        return CreateAsync(request, spec, actor, new RequestMetadata(id, id), route, false, ct);
+        var metadata = request is IIdentifiedRequest ? RequestMetadata.FromRequest(request) : new RequestMetadata(id, id);
+        return CreateAsync(request, spec, actor, metadata, route, false, ct);
     }
 
     /// <inheritdoc />
@@ -42,7 +43,7 @@ public sealed class FitzRequestScheduler(
         ClaimsPrincipal actor,
         CancellationToken ct = default)
         where TRequest : IRequest, ISchedulable
-        => ScheduleAsync(request, spec, routeValues, actor, RequestMetadata.Create(), ct);
+        => ScheduleAsync(request, spec, routeValues, actor, RequestMetadata.FromRequest(request), ct);
 
     /// <inheritdoc />
     public async ValueTask<string> ScheduleAsync<TRequest>(
