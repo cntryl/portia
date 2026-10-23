@@ -1,3 +1,4 @@
+using Cntryl.Fitz;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,6 +27,22 @@ public sealed class FitzKvRegistrationTests
         _ = services.AddPortia().AddFitz(Configuration());
 
         var descriptor = Assert.Single(services, item => item.ServiceType == typeof(IKvClient));
+        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+    }
+
+    /// <summary>
+    ///     An application adapter that needs realm or global broker positions (a source-fact resolver, a
+    ///     fixed-cut reader) reads through the same connection the event store uses, so it never opens a
+    ///     second connection to learn what the first one already knows.
+    /// </summary>
+    [Fact]
+    public void FitzPublishesItsStreamClientForApplicationReaders()
+    {
+        var services = new ServiceCollection();
+
+        _ = services.AddPortia().AddFitz(Configuration());
+
+        var descriptor = Assert.Single(services, item => item.ServiceType == typeof(IStreamClient));
         Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
     }
 
