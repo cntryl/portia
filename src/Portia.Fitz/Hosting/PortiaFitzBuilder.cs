@@ -65,6 +65,21 @@ public sealed class PortiaFitzBuilder
         return this;
     }
 
+    /// <summary>
+    ///     Publishes the shared connection's stream client, so an application adapter that needs broker
+    ///     positions the event store does not expose (realm and global offsets, captured watermarks) takes
+    ///     <see cref="IStreamClient" /> as an ordinary constructor dependency instead of owning a second
+    ///     connection to the same broker.
+    /// </summary>
+    internal PortiaFitzBuilder AddStreamClient()
+    {
+        if (!_capabilities.Add("stream"))
+            return this;
+        _application.Services.TryAddSingleton<IStreamClient>(provider =>
+            provider.GetRequiredService<FitzApplicationConnection>().Client.Stream);
+        return this;
+    }
+
     /// <summary>Registers outbound RPC, queue, notice, and scheduling clients without starting listeners.</summary>
     internal PortiaFitzBuilder AddRequestClients()
     {
