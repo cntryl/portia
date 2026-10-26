@@ -87,8 +87,9 @@ Registration calls are rewritten at the call site, so each one must keep its com
 Group registrations in ordinary, feature-local extension methods when that keeps application setup
 clear. Inside the method, make each call explicitly, such as
 `builder.AddRequestHandler<DepositAccountHandler>()`. Do not forward the type through a generic helper,
-method group, delegate, or reflection; the generator cannot emit a typed descriptor for those forms.
-`PORTIA019` explains this constraint when it detects an unsupported call site.
+method group, or delegate; the generator cannot emit a typed descriptor for those forms. `PORTIA019`
+reports unsupported call-site shapes that it can see at compile time. Calls hidden behind reflection
+cannot be diagnosed at their call site.
 
 Select handlers, authorizers, guards, and pipeline behaviors through the stable generic methods
 `AddRequestHandler<T>()`, `AddRequestAuthorizer<T>()`, `AddRequestGuard<T>()`, and

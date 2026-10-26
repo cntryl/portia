@@ -39,7 +39,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     static readonly DiagnosticDescriptor UnsupportedRegistrationCallSite = new(
         "PORTIA019",
         "Unsupported registration call site",
-        "Portia cannot generate the '{0}' registration here. Keep the type concrete in an ordinary call or feature-local extension method; do not forward it through a generic helper, method group, delegate, or reflection.",
+        "Portia cannot generate the '{0}' registration here. Keep the type concrete in an ordinary call or feature-local extension method; do not forward it through a generic helper, method group, or delegate.",
         "Portia",
         DiagnosticSeverity.Error,
         true);
