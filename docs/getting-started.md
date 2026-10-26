@@ -83,12 +83,13 @@ Because libraries and applications can compose components across assemblies, Por
 that every declared handler has been registered; the application composition root owns that
 selection.
 
-Registration calls are rewritten at the call site, so each one must appear literally where you
-compose the application. They cannot be wrapped in a helper that takes the component as a type
-parameter, passed as a delegate, or invoked through reflection — the generator has no call site
-to intercept in those forms, and the call throws at startup (`PORTIA019` catches the shapes it
-can see at compile time). Grouping registrations in an ordinary extension method is fine; it is
-only forwarding the *generic argument* that does not work.
+Registration calls are rewritten at the call site, so each one must keep its component type concrete.
+Group registrations in ordinary, feature-local extension methods when that keeps application setup
+clear. Inside the method, make each call explicitly, such as
+`builder.AddRequestHandler<DepositAccountHandler>()`. Do not forward the type through a generic helper,
+method group, or delegate; the generator cannot emit a typed descriptor for those forms. `PORTIA019`
+reports unsupported call-site shapes that it can see at compile time. Calls hidden behind reflection
+cannot be diagnosed at their call site.
 
 Select handlers, authorizers, guards, and pipeline behaviors through the stable generic methods
 `AddRequestHandler<T>()`, `AddRequestAuthorizer<T>()`, `AddRequestGuard<T>()`, and

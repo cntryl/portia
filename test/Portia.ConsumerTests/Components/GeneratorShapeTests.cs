@@ -82,7 +82,11 @@ public sealed class GeneratorShapeTests
                                                            }
                                                            """, new RegistrationCallInterceptorGenerator());
 
-        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA019");
+        var diagnostic = Assert.Single(diagnostics, candidate => candidate.Id == "PORTIA019");
+        Assert.Contains("ordinary call or feature-local extension method",
+            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        Assert.DoesNotContain("reflection", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
