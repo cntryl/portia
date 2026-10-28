@@ -39,7 +39,7 @@ public sealed class AccountFeatureTests
         _ = services.AddAccountsApplication(configuration, environment);
         using var provider = services.BuildServiceProvider();
 
-        Assert.True(provider.GetRequiredService<IAccountTenantScope>().Serves("demo"));
+        Assert.True(provider.GetRequiredService<IAccountTenantScope>().Serves(new TenantId("demo")));
     }
 
     /// <summary>Authorization, behavior, guard, and handler run in the declared order.</summary>
@@ -51,7 +51,7 @@ public sealed class AccountFeatureTests
         var actor = AccountActor(AccountId);
 
         await RequestScenario.For(services).GivenActor(actor)
-            .When(new OpenAccount(Tenant.Value, AccountId, 500))
+            .When(new OpenAccount(Tenant, AccountId, 500))
             .ExpectAuthorized()
             .ExpectGuardPassed<AccountTenantGuard>()
             .ExpectGuardPassed<AccountOperationsGuard>()
@@ -60,7 +60,7 @@ public sealed class AccountFeatureTests
 
         trace.Clear();
         await RequestScenario.For(services).GivenActor(actor)
-            .When(new DepositFunds(Tenant.Value, AccountId, 125))
+            .When(new DepositFunds(Tenant, AccountId, 125))
             .ExpectAuthorized()
             .ExpectGuardPassed<AccountTenantGuard>()
             .ExpectGuardPassed<AccountOperationsGuard>()
@@ -79,7 +79,7 @@ public sealed class AccountFeatureTests
         await using var services = CreateServices(trace, available: false);
 
         await RequestScenario.For(services).GivenActor(AccountActor(AccountId))
-            .When(new DepositFunds(Tenant.Value, AccountId, 125))
+            .When(new DepositFunds(Tenant, AccountId, 125))
             .ExpectAuthorized()
             .ExpectGuardPassed<AccountTenantGuard>()
             .ExpectGuardFailed<AccountOperationsGuard>(RequestErrorKind.Conflict)
@@ -97,14 +97,17 @@ public sealed class AccountFeatureTests
         await using var services = CreateServices(trace, available: true);
 
         await RequestScenario.For(services).GivenActor(AccountActor(Uuid.CreateVersion4()))
-            .When(new DepositFunds(Tenant.Value, AccountId, 125))
+            .When(new DepositFunds(Tenant, AccountId, 125))
             .ExpectDenied(RequestErrorKind.Forbidden)
             .ExpectNotHandled();
 
         Assert.Equal(["authorizer"], trace.Stages);
     }
 
-    /// <summary>The same account identifier in another tenant is outside the actor's grant.</summary>
+    /// <summary>
+    ///     The same account identifier in another tenant is denied by Portia's tenant authorizer before the
+    ///     feature's own account authorizer runs.
+    /// </summary>
     [Fact]
     public async Task ShouldDenyAccountWhenActorTenantDoesNotMatchRequestTenant()
     {
@@ -112,11 +115,11 @@ public sealed class AccountFeatureTests
         await using var services = CreateServices(trace, available: true);
 
         await RequestScenario.For(services).GivenActor(AccountActor(Tenant.Value, AccountId))
-            .When(new DepositFunds("tenant-b", AccountId, 125))
+            .When(new DepositFunds(new TenantId("tenant-b"), AccountId, 125))
             .ExpectDenied(RequestErrorKind.Forbidden)
             .ExpectNotHandled();
 
-        Assert.Equal(["authorizer"], trace.Stages);
+        Assert.Empty(trace.Stages);
     }
 
     /// <summary>A tenant without a configured projector is rejected before any account handler runs.</summary>
@@ -127,7 +130,7 @@ public sealed class AccountFeatureTests
         await using var services = CreateServices(trace, available: true);
 
         await RequestScenario.For(services).GivenActor(RequestActor.System)
-            .When(new OpenAccount("tenant-b", AccountId, 500))
+            .When(new OpenAccount(new TenantId("tenant-b"), AccountId, 500))
             .ExpectGuardFailed<AccountTenantGuard>(RequestErrorKind.Validation)
             .ExpectNotHandled()
             .ExpectFailure(RequestErrorKind.Validation);
@@ -144,7 +147,7 @@ public sealed class AccountFeatureTests
         await using var services = CreateServices(trace, available: true, readModel);
 
         var result = await RequestScenario.For(services).GivenActor(AccountActor(AccountId))
-            .When(new GetAccount(Tenant.Value, AccountId))
+            .When(new GetAccount(Tenant, AccountId))
             .ExpectAuthorized()
             .ExpectGuardPassed<AccountTenantGuard>()
             .ExpectGuardPassed<AccountOperationsGuard>()
@@ -158,7 +161,7 @@ public sealed class AccountFeatureTests
     [Fact]
     public void ShouldRejectInvalidDepositAndKeepBalanceUnchanged()
     {
-        var scenario = new AggregateScenario<Account>(new Account(Tenant.Value, AccountId))
+        var scenario = new AggregateScenario<Account>(new Account(Tenant, AccountId))
             .Given(new AccountOpened(500));
 
         var result = scenario.WhenCommitOnSuccess(account => account.Deposit(0));
@@ -181,7 +184,7 @@ public sealed class AccountFeatureTests
         await scenario.RunAsync(new AccountProjector(repository, scenario.Store));
 
         Assert.Equal(new AccountReadModel(AccountId, 625),
-            await repository.GetAsync(Tenant.Value, AccountId, default));
+            await repository.GetAsync(Tenant, AccountId, default));
     }
 
     static ServiceProvider CreateServices(RecordingAccountLifecycle trace, bool available,
@@ -189,8 +192,9 @@ public sealed class AccountFeatureTests
     {
         var services = new ServiceCollection();
         _ = services.AddSingleton<IEventStore>(new InMemoryEventStore());
+        _ = services.AddSingleton<IActorTenantResolver>(new ClaimTenantResolver("tenant_id"));
         _ = services.AddSingleton<IAccountAccess, ClaimAccountAccess>();
-        _ = services.AddSingleton<IAccountTenantScope>(new FixedAccountTenantScope(Tenant.Value));
+        _ = services.AddSingleton<IAccountTenantScope>(new FixedAccountTenantScope(Tenant));
         _ = services.AddSingleton<IAccountOperations>(new FixedAccountOperations(available));
         _ = services.AddSingleton<IAccountLifecycleObserver>(trace);
         _ = services.AddSingleton<IAccountReadRepository>(new InMemoryAccountProjectionRepository(readModel));
@@ -207,9 +211,9 @@ public sealed class AccountFeatureTests
             new Claim("sub", "account-test-user", ClaimValueTypes.String, "https://accounts.example.test")],
         "AccountTests"));
 
-    sealed class FixedAccountTenantScope(string tenant) : IAccountTenantScope
+    sealed class FixedAccountTenantScope(TenantId tenant) : IAccountTenantScope
     {
-        public bool Serves(string candidate) => string.Equals(candidate, tenant, StringComparison.Ordinal);
+        public bool Serves(TenantId candidate) => candidate == tenant;
     }
 
     sealed class TestHostEnvironment(string environmentName) : IHostEnvironment
@@ -222,7 +226,7 @@ public sealed class AccountFeatureTests
 
     sealed class FixedAccountOperations(bool available) : IAccountOperations
     {
-        public bool IsAvailable(string tenant) => available;
+        public bool IsAvailable(TenantId tenant) => available;
     }
 
     sealed class RecordingAccountLifecycle : IAccountLifecycleObserver
@@ -248,7 +252,7 @@ public sealed class AccountFeatureTests
             ? []
             : new Dictionary<Uuid, AccountReadModel> { [initial.AccountId] = initial };
 
-        public ValueTask<AccountReadModel?> GetAsync(string tenant, Uuid accountId, CancellationToken ct) =>
+        public ValueTask<AccountReadModel?> GetAsync(TenantId tenant, Uuid accountId, CancellationToken ct) =>
             ValueTask.FromResult(_accounts.GetValueOrDefault(accountId));
 
         public ValueTask<AccountReadModel?> GetForUpdateAsync(Uuid accountId, CancellationToken ct) =>

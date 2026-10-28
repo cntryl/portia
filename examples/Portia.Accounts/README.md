@@ -3,8 +3,9 @@
 This example puts one Account feature composition in `Portia.Accounts.Application`. The API,
 worker, and application tests all use it. The feature opens accounts and deposits funds through an
 aggregate repository, projects committed events with a pure reducer into an ordinary Fitz KV
-repository, and serves a read query from that projection. The request pipeline applies account
-authorization, a behavior, a configured-tenant guard, an operational guard, and then the handler.
+repository, and serves a read query from that projection. The request pipeline applies Portia's tenant authorization
+and the feature's account authorization, a behavior, a configured-tenant guard, an operational guard,
+and then the handler.
 
 The API enables its demo header authentication only in Development. Send both `X-Demo-Tenant` and
 `X-Demo-Account`; the account grant is scoped to that tenant. Configure real authentication and
@@ -58,11 +59,11 @@ Open an account, deposit funds, and read the asynchronously projected balance:
 account_id=01234567-89ab-4cde-8fab-0123456789ab
 curl --fail-with-body -i -X POST \
   -H 'Content-Type: application/json' -H 'X-Demo-Tenant: demo' -H "X-Demo-Account: $account_id" \
-  -d "{\"tenant\":\"demo\",\"account_id\":\"$account_id\",\"initial_balance_cents\":500}" \
+  -d "{\"account_id\":\"$account_id\",\"initial_balance_cents\":500}" \
   "http://127.0.0.1:5088/tenants/demo/accounts/$account_id/open"
 curl --fail-with-body -i -X POST \
   -H 'Content-Type: application/json' -H 'X-Demo-Tenant: demo' -H "X-Demo-Account: $account_id" \
-  -d "{\"tenant\":\"demo\",\"account_id\":\"$account_id\",\"amount_cents\":125}" \
+  -d "{\"account_id\":\"$account_id\",\"amount_cents\":125}" \
   "http://127.0.0.1:5088/tenants/demo/accounts/$account_id/deposits"
 curl --fail-with-body -H 'X-Demo-Tenant: demo' -H "X-Demo-Account: $account_id" \
   "http://127.0.0.1:5088/tenants/demo/accounts/$account_id"

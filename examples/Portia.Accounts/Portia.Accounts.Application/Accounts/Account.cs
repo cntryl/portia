@@ -14,10 +14,10 @@ public sealed record FundsDeposited(long AmountCents) : DomainEvent;
 public sealed class Account : Aggregate
 {
     /// <summary>Creates an account aggregate for one tenant and stable account identity.</summary>
-    /// <param name="tenant">The tenant owning the account.</param>
+    /// <param name="tenant">The tenant owning the account; its ID is the realm of the account's stream.</param>
     /// <param name="id">The account identity.</param>
-    public Account(string tenant, Uuid id)
-        : base(id, new EventStreamAddress(tenant, "accounts", id.ToString()))
+    public Account(TenantId tenant, Uuid id)
+        : base(id, new EventStreamAddress(tenant.Value, "accounts", id.ToString()))
     {
         On<AccountOpened>(ev =>
         {
@@ -39,9 +39,9 @@ public sealed class Account : Aggregate
     public Result Open(long initialBalanceCents)
     {
         if (IsOpen)
-            return Failure(RequestErrorKind.Conflict, "The account is already open.");
+            return RequestError.Conflict("The account is already open.");
         if (initialBalanceCents < 0)
-            return Failure(RequestErrorKind.Validation, "The opening balance cannot be negative.");
+            return RequestError.Validation("The opening balance cannot be negative.");
 
         RaiseEvent(new AccountOpened(initialBalanceCents));
         return Result.Success;
@@ -53,16 +53,13 @@ public sealed class Account : Aggregate
     public Result Deposit(long amountCents)
     {
         if (!IsOpen)
-            return Failure(RequestErrorKind.NotFound, "The account is not open.");
+            return RequestError.NotFound("The account is not open.");
         if (amountCents <= 0)
-            return Failure(RequestErrorKind.Validation, "The deposit must be positive.");
+            return RequestError.Validation("The deposit must be positive.");
         if (amountCents > long.MaxValue - BalanceCents)
-            return Failure(RequestErrorKind.Validation, "The deposit exceeds the supported balance.");
+            return RequestError.Validation("The deposit exceeds the supported balance.");
 
         RaiseEvent(new FundsDeposited(amountCents));
         return Result.Success;
     }
-
-    static Result Failure(RequestErrorKind kind, string message) =>
-        Result.Failure(new RequestError(kind, message));
 }

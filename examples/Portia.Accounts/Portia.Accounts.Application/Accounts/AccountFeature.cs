@@ -7,11 +7,10 @@ public static class AccountFeature
     /// <param name="builder">The shared Portia application composition.</param>
     /// <returns>The same builder for further host composition.</returns>
     public static PortiaBuilder AddAccountsFeature(this PortiaBuilder builder) => builder
-        .AddEvent<AccountOpened>()
-        .AddEvent<FundsDeposited>()
         .AddRequestHandler<OpenAccountHandler>()
         .AddRequestHandler<DepositFundsHandler>()
         .AddRequestHandler<GetAccountHandler>()
+        .AddRequestAuthorizer<TenantRequestAuthorizer>()
         .AddRequestAuthorizer<AccountRequestAuthorizer>()
         .AddRequestPipelineBehavior<AccountRequestBehavior>(order: 100)
         .AddRequestGuard<AccountTenantGuard>()
@@ -35,15 +34,16 @@ public static class AccountsApplication
         ArgumentNullException.ThrowIfNull(environment);
 
         var projectionRoute = configuration["Accounts:ProjectionRoute"] ?? "kv://portia/accounts/read-model";
-        var tenant = configuration["Accounts:Tenant"];
-        if (string.IsNullOrWhiteSpace(tenant))
+        var configured = configuration["Accounts:Tenant"];
+        if (string.IsNullOrWhiteSpace(configured))
         {
             if (!environment.IsDevelopment())
                 throw new InvalidOperationException(
                     "Configuration value 'Accounts:Tenant' is required outside Development.");
-            tenant = "demo";
+            configured = "demo";
         }
 
+        var tenant = new TenantId(configured);
         services.TryAddSingleton<IAccountTenantScope>(_ => new ConfiguredAccountTenantScope(tenant));
         services.TryAddScoped<IAccountRepository, AccountRepository>();
         services.TryAddScoped<AccountProjectionRepository>(provider => new AccountProjectionRepository(
@@ -52,10 +52,11 @@ public static class AccountsApplication
         services.TryAddScoped<IAccountProjectionRepository>(provider =>
             provider.GetRequiredService<AccountProjectionRepository>());
         services.TryAddScoped<IAccountReadRepository>(provider => provider.GetRequiredService<AccountProjectionRepository>());
+        services.TryAddSingleton<IActorTenantResolver>(_ => new ClaimTenantResolver("tenant_id"));
         services.TryAddSingleton<IAccountAccess, ClaimAccountAccess>();
         services.TryAddSingleton<IAccountOperations, ConfiguredAccountOperations>();
         services.TryAddSingleton<IAccountLifecycleObserver, LoggingAccountLifecycleObserver>();
-        services.TryAddSingleton<ITenantDirectory>(_ => new ConfiguredAccountTenantDirectory(tenant));
+        services.TryAddSingleton<ITenantDirectory>(_ => new FixedTenantDirectory(tenant));
 
         return services.AddPortia()
             .RequireAuthorization()
@@ -64,25 +65,25 @@ public static class AccountsApplication
     }
 }
 
-/// <summary>Account authorization supplied by the host's authenticated principal.</summary>
+/// <summary>Account-level authorization supplied by the host's authenticated principal.</summary>
 public interface IAccountAccess
 {
-    /// <summary>Determines whether the principal may access the account within the specified tenant.</summary>
-    bool CanAccess(ClaimsPrincipal actor, string tenant, Uuid accountId);
+    /// <summary>Determines whether the principal may access the account.</summary>
+    bool CanAccess(ClaimsPrincipal actor, Uuid accountId);
 }
 
 /// <summary>Identifies tenants served by the account feature's configured projector.</summary>
 public interface IAccountTenantScope
 {
     /// <summary>Reports whether the account feature serves the tenant.</summary>
-    bool Serves(string tenant);
+    bool Serves(TenantId tenant);
 }
 
 /// <summary>Account operational switch used only as a preflight guard.</summary>
 public interface IAccountOperations
 {
     /// <summary>Reports whether account operations are currently available for the tenant.</summary>
-    bool IsAvailable(string tenant);
+    bool IsAvailable(TenantId tenant);
 }
 
 /// <summary>Receives bounded account lifecycle observations.</summary>
@@ -92,25 +93,25 @@ public interface IAccountLifecycleObserver
     void Record(string stage);
 }
 
-/// <summary>Authorizes account access using tenant and account grants on the authenticated principal.</summary>
+/// <summary>
+///     Authorizes account access using the account grant on the authenticated principal. Tenant membership is
+///     Portia's <see cref="TenantRequestAuthorizer" />'s decision, made before this runs.
+/// </summary>
 public sealed class ClaimAccountAccess : IAccountAccess
 {
     /// <inheritdoc />
-    public bool CanAccess(ClaimsPrincipal actor, string tenant, Uuid accountId) =>
-        RequestActor.IsSystem(actor)
-        || (!string.IsNullOrWhiteSpace(tenant)
-            && actor.HasClaim("tenant_id", tenant)
-            && actor.HasClaim("account_id", accountId.ToString()));
+    public bool CanAccess(ClaimsPrincipal actor, Uuid accountId) =>
+        RequestActor.IsSystem(actor) || actor.HasClaim("account_id", accountId.ToString());
 }
 
-sealed class ConfiguredAccountTenantScope(string configuredTenant) : IAccountTenantScope
+sealed class ConfiguredAccountTenantScope(TenantId configuredTenant) : IAccountTenantScope
 {
-    public bool Serves(string tenant) => string.Equals(tenant, configuredTenant, StringComparison.Ordinal);
+    public bool Serves(TenantId tenant) => tenant == configuredTenant;
 }
 
 sealed class ConfiguredAccountOperations(IConfiguration configuration) : IAccountOperations
 {
-    public bool IsAvailable(string tenant) =>
+    public bool IsAvailable(TenantId tenant) =>
         !bool.TryParse(configuration["Accounts:Paused"], out var paused) || !paused;
 }
 
@@ -125,22 +126,4 @@ static partial class AccountLifecycleLog
     [LoggerMessage(EventId = 1, Level = LogLevel.Information,
         Message = "Account request lifecycle stage {Stage}")]
     public static partial void Record(ILogger logger, string stage);
-}
-
-sealed class ConfiguredAccountTenantDirectory(string tenant) : ITenantDirectory
-{
-    public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync(
-        [EnumeratorCancellation] CancellationToken ct = default)
-    {
-        await Task.Yield();
-        ct.ThrowIfCancellationRequested();
-        yield return new TenantId(tenant);
-    }
-
-    public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync(
-        [EnumeratorCancellation] CancellationToken ct = default)
-    {
-        yield return new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId(tenant));
-        await Task.Delay(Timeout.InfiniteTimeSpan, ct).ConfigureAwait(false);
-    }
 }

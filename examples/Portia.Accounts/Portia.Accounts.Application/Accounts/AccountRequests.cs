@@ -1,6 +1,9 @@
 namespace Portia.Accounts;
 
-/// <summary>Authorizes access to account commands and reads.</summary>
+/// <summary>
+///     Authorizes access to one account within the actor's tenant. Tenant membership itself is decided
+///     before this runs by Portia's <see cref="TenantRequestAuthorizer" />.
+/// </summary>
 public sealed class AccountRequestAuthorizer(IAccountAccess access, IAccountLifecycleObserver lifecycle)
     : IRequestAuthorizer<IAccountRequest>
 {
@@ -8,9 +11,9 @@ public sealed class AccountRequestAuthorizer(IAccountAccess access, IAccountLife
     public ValueTask<Result> AuthorizeAsync(IRequestContext<IAccountRequest> context, CancellationToken ct)
     {
         lifecycle.Record("authorizer");
-        return ValueTask.FromResult(access.CanAccess(context.Actor, context.Request.Tenant, context.Request.AccountId)
+        return ValueTask.FromResult(access.CanAccess(context.Actor, context.Request.AccountId)
             ? Result.Success
-            : Result.Failure(new RequestError(RequestErrorKind.Forbidden, "The actor cannot access this account.")));
+            : RequestError.Forbidden("The actor cannot access this account."));
     }
 }
 
@@ -24,8 +27,7 @@ public sealed class AccountTenantGuard(IAccountTenantScope tenants, IAccountLife
         lifecycle.Record("tenant.guard");
         return ValueTask.FromResult(tenants.Serves(context.Request.Tenant)
             ? Result.Success
-            : Result.Failure(new RequestError(RequestErrorKind.Validation,
-                "The account feature is not configured for this tenant.")));
+            : RequestError.Validation("The account feature is not configured for this tenant."));
     }
 }
 
@@ -39,7 +41,7 @@ public sealed class AccountOperationsGuard(IAccountOperations operations, IAccou
         lifecycle.Record("guard");
         return ValueTask.FromResult(operations.IsAvailable(context.Request.Tenant)
             ? Result.Success
-            : Result.Failure(new RequestError(RequestErrorKind.Conflict, "Account operations are paused.")));
+            : RequestError.Conflict("Account operations are paused."));
     }
 }
 
@@ -91,8 +93,6 @@ public sealed class GetAccountHandler(IAccountReadRepository accounts) : IReques
     {
         var account = await accounts.GetAsync(context.Request.Tenant, context.Request.AccountId, ct)
             .ConfigureAwait(false);
-        return account is null
-            ? Result<AccountReadModel>.Failure(new RequestError(RequestErrorKind.NotFound, "The account was not found."))
-            : Result<AccountReadModel>.Success(account);
+        return account is null ? RequestError.NotFound("The account was not found.") : account;
     }
 }

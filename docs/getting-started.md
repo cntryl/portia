@@ -71,9 +71,11 @@ chooses a different convention or adds converters. Portia registers its options 
 changes Portia's wire format; resolve Portia's with
 `GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json)`.
 
-`PORTIA025` catches JSON roots that the generator can discover at compile time. Startup validation
-remains the defensive fallback for roots and resolver combinations that cross compilation
-boundaries or otherwise cannot be proven statically.
+`PORTIA025` catches JSON roots that the generator can discover at compile time, and its code fix
+adds the missing `[JsonSerializable]` entries, for one file or the whole project. A root's members
+need no entries of their own: `System.Text.Json` generates metadata for every type reachable from a
+declared root. Startup validation remains the defensive fallback for roots and resolver combinations
+that cross compilation boundaries or otherwise cannot be proven statically.
 
 Reference `Cntryl.Portia.DependencyInjection` in each assembly that registers handlers, authorizers,
 request guards, pipeline behaviors, or routed requests. Add `Cntryl.Portia.Analyzers` to each project
@@ -255,7 +257,7 @@ public sealed class Account : Aggregate
     public Result Deposit(int amount)
     {
         if (amount <= 0)
-            return Result.Failure(new RequestError(RequestErrorKind.Validation, "Deposit a positive amount."));
+            return RequestError.Validation("Deposit a positive amount.");
         RaiseEvent(new Deposited(amount));
         return Result.Success;
     }
@@ -264,6 +266,11 @@ public sealed class Account : Aggregate
     public void Decline(string reason) => AuditEvent(new Declined(reason));
 }
 ```
+
+A rejection is one expression: `RequestError.Validation`, `NotFound`, `Conflict`, `Forbidden`, and
+`Unauthorized` build an error of that kind, and a `RequestError` converts implicitly to `Result` and
+`Result<T>`. A value converts implicitly to `Result<T>`, so a query handler returns the value itself
+on success and the error on failure.
 
 Configure persistence once in the shared application setup:
 
@@ -485,6 +492,10 @@ turn and uses the first place that supplies it:
    or `TryParse` scalar, an `application/x-www-form-urlencoded` or `multipart/form-data` form.
 3. **Query** — the query string, for any string, enum, or `TryParse` scalar.
 
+`Uuid` and `TenantId` are such scalars. A request declares `TenantId Tenant` and a route token
+`{tenant}`, a query value, or a body member binds it; text that is not a realm segment is a 400 at
+the boundary rather than an exception from the stream address inside the handler.
+
 Body and query names are the JSON wire names. A value the body supplies — including an explicit
 JSON null — wins over the query, so `POST /orders/{id}?dry_run=true` with a JSON or form body
 works without changing the request type. Complex members bind only from a JSON body. Missing
@@ -579,12 +590,14 @@ explicitly on the endpoint:
 ```csharp
 app.MapPortiaPost<DepositAccount>("/accounts/{id}")
     .WithPortiaRouteValues(context => new RequestRouteValues(
+        Realm: context.User.FindFirstValue("tenant_id"),
         Resource: context.Request.RouteValues["id"]!.ToString()));
 ```
 
-The request's configured concrete route segments remain authoritative. For a
-wildcard realm, derive `Realm` from the application's authenticated tenant context
-in this resolver. One well-formed, nonempty Bearer credential may be carried to the queue
+The request's configured concrete route segments remain authoritative. For a wildcard realm, derive
+`Realm` from the authenticated principal in this resolver, as above, never from the request body: the
+queue route decides which tenant's worker runs the request. A `null` realm fails the mapping. One
+well-formed, nonempty Bearer credential may be carried to the queue
 and is validated again when the work executes. Authentication schemes and token validation
 remain application-owned.
 
@@ -782,6 +795,32 @@ every unprotected request type in stable order before serving work, and dispatch
 unprotected request with an exception that names the fix, so a missing allowance is never mistaken
 for a real denial. A principal-stage `IRequestAuthorizer<IRequestBase>` protects every request.
 Request types stay free of authorization attributes.
+
+A request that acts within one tenant implements `ITenantRequest`, directly or through a request-family
+interface, and the application selects `TenantRequestAuthorizer` once. Every such request is then
+denied unless the actor's own tenant, resolved by the application's `IActorTenantResolver`, is the
+tenant the request names; `ClaimTenantResolver` covers the common case of one tenant claim. A system
+actor is exempt, so reactions and schedules act in any tenant. Hosted startup fails when the
+authorizer is selected without a resolver.
+
+```csharp
+public interface IAccountRequest : ITenantRequest { Uuid AccountId { get; } }
+
+[Discriminator("accounts.deposit")]
+[RequestRoute("accounts", "account", "*", "deposit")]
+public sealed record DepositFunds(TenantId Tenant, Uuid AccountId, long AmountCents)
+    : IRequest, ICallable, IAccountRequest;
+
+services.AddSingleton<IActorTenantResolver>(new ClaimTenantResolver("tenant_id"));
+services.AddPortia()
+    .RequireAuthorization()
+    .AddRequestHandler<DepositFundsHandler>()
+    .AddRequestAuthorizer<TenantRequestAuthorizer>()
+    .AddRequestAuthorizer<AccountRequestAuthorizer>();
+```
+
+`TenantRequestAuthorizer` decides tenant membership only. Object-level access within the tenant,
+such as whether the actor may touch this account, stays with the application's own authorizer.
 
 `MapPortiaGetStream<TRequest, TOut>` writes an incremental JSON array;
 `MapPortiaGetSse<TRequest, TOut>` writes SSE. Both enumerate once and check the first
