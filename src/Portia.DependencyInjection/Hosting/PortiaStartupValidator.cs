@@ -33,6 +33,12 @@ sealed class PortiaStartupValidator(
                 $"IPermissionEvaluator is required by permission-protected request types: {string.Join(", ", permissionProtected)}.");
         }
 
+        if (available.IsService(typeof(TenantRequestAuthorizer)) && !available.IsService(typeof(IActorTenantResolver)))
+        {
+            throw new InvalidOperationException(
+                "IActorTenantResolver is required by TenantRequestAuthorizer. Register the application's resolver, such as new ClaimTenantResolver(\"tenant_id\"), so the authorizer can compare each request's tenant with the actor's.");
+        }
+
         if (builder.AuthorizationRequired && !requests.RequiresAuthorization)
         {
             throw new InvalidOperationException(

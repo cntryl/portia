@@ -1,5 +1,11 @@
 #nullable enable
+Cntryl.Portia.ClaimTenantResolver
+Cntryl.Portia.ClaimTenantResolver.ClaimTenantResolver(string! claimType) -> void
+Cntryl.Portia.ClaimTenantResolver.ResolveAsync(System.Security.Claims.ClaimsPrincipal! actor, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.TenantId?>
 Cntryl.Portia.FixedTenantDirectory
 Cntryl.Portia.FixedTenantDirectory.FixedTenantDirectory(params System.Collections.Generic.IEnumerable<Cntryl.Portia.TenantId>! tenants) -> void
 Cntryl.Portia.FixedTenantDirectory.GetActiveTenantsAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.TenantId>!
 Cntryl.Portia.FixedTenantDirectory.WatchAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.TenantLifecycleChange>!
+Cntryl.Portia.TenantRequestAuthorizer
+Cntryl.Portia.TenantRequestAuthorizer.AuthorizeAsync(Cntryl.Portia.IRequestContext<Cntryl.Portia.ITenantRequest!>! context, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
+Cntryl.Portia.TenantRequestAuthorizer.TenantRequestAuthorizer(Cntryl.Portia.IActorTenantResolver! tenants) -> void

@@ -63,6 +63,7 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(ConformanceEvent))]
 [JsonSerializable(typeof(TenantDeregistered))]
 [JsonSerializable(typeof(TenantRegistered))]
+[JsonSerializable(typeof(TenantScopedCommand))]
 [JsonSerializable(typeof(FitzHostedRequest))]
 [JsonSerializable(typeof(FitzOutboundCallableRequest))]
 [JsonSerializable(typeof(FitzOutboundOnlyRequest))]

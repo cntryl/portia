@@ -19,3 +19,7 @@ static Cntryl.Portia.TenantId.Parse(string! s, System.IFormatProvider? provider)
 static Cntryl.Portia.TenantId.Parse(System.ReadOnlySpan<char> s, System.IFormatProvider? provider) -> Cntryl.Portia.TenantId
 static Cntryl.Portia.TenantId.TryParse(string? s, System.IFormatProvider? provider, out Cntryl.Portia.TenantId result) -> bool
 static Cntryl.Portia.TenantId.TryParse(System.ReadOnlySpan<char> s, System.IFormatProvider? provider, out Cntryl.Portia.TenantId result) -> bool
+Cntryl.Portia.IActorTenantResolver
+Cntryl.Portia.IActorTenantResolver.ResolveAsync(System.Security.Claims.ClaimsPrincipal! actor, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.TenantId?>
+Cntryl.Portia.ITenantRequest
+Cntryl.Portia.ITenantRequest.Tenant.get -> Cntryl.Portia.TenantId
