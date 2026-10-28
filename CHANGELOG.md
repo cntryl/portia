@@ -4,6 +4,21 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.9.2 - 2026-10-28
+
+### Added
+
+- Add `TenantId` request binding, tenant-aware request authorization, tenant directories and typed
+  tenant projection reads.
+- Add `RequestError` factories and implicit conversions for concise `Result` handling.
+- Add feature-local registration guidance and update the Accounts example and onboarding guides.
+
+### Fixed
+
+- Preserve JSON metadata diagnostics for body members of converted request roots used by mutating
+  HTTP endpoints.
+- Include tenant identifiers as string items and values in OpenAPI collection schemas.
+
 ## 0.9.0 - 2026-10-22
 
 ### Added
