@@ -65,6 +65,11 @@ public readonly struct Result
         ArgumentNullException.ThrowIfNull(error);
         return new Result(ResultState.Failed, error);
     }
+
+    /// <summary>Converts an expected failure to a failed result, so a rejection reads as one expression.</summary>
+    /// <param name="error">The failure.</param>
+    /// <returns>A result carrying <paramref name="error" />.</returns>
+    public static implicit operator Result(RequestError error) => Failure(error);
 }
 
 /// <summary>
@@ -150,4 +155,14 @@ public readonly struct Result<T>
         return new Result<T>(ResultState.Failed, default, error);
     }
 #pragma warning restore CA1000
+
+    /// <summary>Converts a value to a successful result, so a handler can return the value itself.</summary>
+    /// <param name="value">The value.</param>
+    /// <returns>A successful result carrying <paramref name="value" />.</returns>
+    public static implicit operator Result<T>(T value) => Success(value);
+
+    /// <summary>Converts an expected failure to a failed result, so a rejection reads as one expression.</summary>
+    /// <param name="error">The failure.</param>
+    /// <returns>A result carrying <paramref name="error" />.</returns>
+    public static implicit operator Result<T>(RequestError error) => Failure(error);
 }

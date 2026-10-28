@@ -1,1 +1,9 @@
 #nullable enable
+static Cntryl.Portia.RequestError.Conflict(string! message, bool isTransient = false) -> Cntryl.Portia.RequestError!
+static Cntryl.Portia.RequestError.Forbidden(string! message, bool isTransient = false) -> Cntryl.Portia.RequestError!
+static Cntryl.Portia.RequestError.NotFound(string! message, bool isTransient = false) -> Cntryl.Portia.RequestError!
+static Cntryl.Portia.RequestError.Unauthorized(string! message, bool isTransient = false) -> Cntryl.Portia.RequestError!
+static Cntryl.Portia.RequestError.Validation(string! message, bool isTransient = false) -> Cntryl.Portia.RequestError!
+static Cntryl.Portia.Result.implicit operator Cntryl.Portia.Result(Cntryl.Portia.RequestError! error) -> Cntryl.Portia.Result
+static Cntryl.Portia.Result<T>.implicit operator Cntryl.Portia.Result<T>(Cntryl.Portia.RequestError! error) -> Cntryl.Portia.Result<T>
+static Cntryl.Portia.Result<T>.implicit operator Cntryl.Portia.Result<T>(T value) -> Cntryl.Portia.Result<T>
