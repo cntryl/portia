@@ -157,9 +157,30 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                 Add(argument);
         }
 
-        // A mutating endpoint binds each body member through the member type's own metadata, but
-        // System.Text.Json generates that metadata for every type reachable from a declared root, and
-        // the request is itself a root here. Listing its members separately would only be ceremony.
+        // A request-level converter makes the JSON root opaque: System.Text.Json does not walk its
+        // members, but default HTTP binding still reads each body member through its own metadata.
+        // Ordinary request roots already generate member metadata and need no separate declarations.
+        if (endpointMapping && name is "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch"
+                            && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol request
+                            && request.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString()
+                                == "System.Text.Json.Serialization.JsonConverterAttribute"))
+        {
+            var operation = model.GetOperation(invocation, ct) as IInvocationOperation;
+            var pattern = operation?.Arguments.FirstOrDefault(argument => argument.Parameter?.Name == "pattern")
+                ?.Value.ConstantValue is { HasValue: true, Value: string route }
+                ? route
+                : string.Empty;
+            var constructor = HttpBindingShape.SinglePublicConstructor(request);
+            if (constructor is not null && constructor.Parameters.All(parameter =>
+                    HttpBindingShape.IsSupportedParameter(parameter,
+                        HttpBindingShape.IsRouteParameter(pattern, parameter.Name))))
+            {
+                foreach (var parameter in constructor.Parameters)
+                    if (!HttpBindingShape.IsRouteParameter(pattern, parameter.Name))
+                        Add(UnwrapNullable(parameter.Type));
+            }
+        }
+
         if (name is "Accepts" or "Parameter" or "Produces" &&
             method.ContainingType.OriginalDefinition.ToDisplayString() ==
             "Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>")

@@ -70,7 +70,8 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
                 : (mapped = Map(normalized, elementType, childPath, null, elementNullable)) ??
                   ApplyAnnotations(normalized, child, elementNullable);
             if (original is not null || mapped is not null || declaredElementNullable.HasValue || elementNullable ||
-                elementType == typeof(Uuid) || elementType == typeof(Uuid?))
+                elementType == typeof(Uuid) || elementType == typeof(Uuid?) ||
+                elementType == typeof(TenantId) || elementType == typeof(TenantId?))
             {
                 obj[keyword] = completed;
                 _ = _processed.Add(completed);

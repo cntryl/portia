@@ -8,6 +8,8 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(OpenApiContractRequest))]
 [JsonSerializable(typeof(OpenApiContractStream))]
 [JsonSerializable(typeof(OpenApiContractNode))]
+[JsonSerializable(typeof(OpenApiTenantCollectionRequest))]
+[JsonSerializable(typeof(OpenApiTenantCollections))]
 [JsonSerializable(typeof(OpenApiConvertedRequest))]
 [JsonSerializable(typeof(OpenApiRootSelectionRequest))]
 [JsonSerializable(typeof(OpenApiSelectionSchema))]

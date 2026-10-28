@@ -296,6 +296,44 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Theory]
+    [InlineData("MapPortiaPost", false)]
+    [InlineData("MapPortiaPut", false)]
+    [InlineData("MapPortiaPatch", false)]
+    [InlineData("MapPortiaPost", true)]
+    [InlineData("MapPortiaGet", false)]
+    [InlineData("MapPortiaDelete", false)]
+    public void ConvertedRequestsRequireIndependentBodyMetadata(string mapping, bool bodyRoot)
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics($$"""
+                                                            using System;
+                                                            using System.Text.Json;
+                                                            using System.Text.Json.Serialization;
+                                                            using Cntryl.Portia;
+                                                            using Microsoft.AspNetCore.Routing;
+                                                            public readonly record struct Body(int Value);
+                                                            [JsonConverter(typeof(ChangeConverter))]
+                                                            public sealed record Change(Uuid Id, Body? Value) : IRequest, ICallable;
+                                                            public sealed class ChangeConverter : JsonConverter<Change>
+                                                            {
+                                                                public override Change Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => throw new NotSupportedException();
+                                                                public override void Write(Utf8JsonWriter writer, Change value, JsonSerializerOptions options) => throw new NotSupportedException();
+                                                            }
+                                                            public static class Scenario
+                                                            {
+                                                                public static void Map(IEndpointRouteBuilder app) => app.{{mapping}}<Change>("/changes/{id}");
+                                                            }
+                                                            [PortiaJsonContext]
+                                                            [JsonSerializable(typeof(Change))]
+                                                            {{(bodyRoot ? "[JsonSerializable(typeof(Body))]" : string.Empty)}}
+                                                            internal sealed partial class AppJsonContext : JsonSerializerContext;
+                                                            """, new JsonMetadataDiagnosticGenerator());
+
+        var required = !bodyRoot && mapping is "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch";
+        Assert.Equal(required ? ["Body"] : Array.Empty<string>(), diagnostics.Where(d => d.Id == "PORTIA025")
+            .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
     [InlineData("/files/{*path}")]
     [InlineData("/files/{**path}")]
     [InlineData("/files/{path=default}")]
@@ -304,6 +342,7 @@ public sealed class JsonMetadataGeneratorTests
     {
         var diagnostics = GeneratorCompilation.Diagnostics($$""""
                                                              using System;
+                                                             using System.Text.Json;
                                                              using System.Text.Json.Serialization;
                                                              using Cntryl.Portia;
                                                              using Microsoft.AspNetCore.Routing;
@@ -311,7 +350,13 @@ public sealed class JsonMetadataGeneratorTests
                                                              {
                                                                  public static bool TryParse(string value, out FilePath result) { result = new(value); return true; }
                                                              }
+                                                             [JsonConverter(typeof(UploadConverter))]
                                                              public sealed record Upload(FilePath Path, string Name) : IRequest, ICallable;
+                                                             public sealed class UploadConverter : JsonConverter<Upload>
+                                                             {
+                                                                 public override Upload Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => throw new NotSupportedException();
+                                                                 public override void Write(Utf8JsonWriter writer, Upload value, JsonSerializerOptions options) => throw new NotSupportedException();
+                                                             }
                                                              public static class Scenario
                                                              {
                                                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Upload>("{{route}}");
