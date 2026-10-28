@@ -4,6 +4,20 @@ using System.Text.Json.Serialization.Metadata;
 
 namespace Cntryl.Portia;
 
+sealed record OpenApiTenantCollections(TenantId[] Items, Dictionary<string, TenantId> Values,
+    TenantId?[] NullableItems, Dictionary<string, TenantId?> NullableValues);
+
+[Discriminator("test.openapi.tenant-collections")]
+[RequestRoute("test", "openapi", "tenant-collections", "echo")]
+sealed record OpenApiTenantCollectionRequest(OpenApiTenantCollections Payload) : IRequest<OpenApiTenantCollections>, ICallable;
+
+sealed class OpenApiTenantCollectionHandler : IRequestHandler<OpenApiTenantCollectionRequest, OpenApiTenantCollections>
+{
+    public ValueTask<Result<OpenApiTenantCollections>> HandleAsync(
+        IRequestContext<OpenApiTenantCollectionRequest> context, CancellationToken ct) =>
+        ValueTask.FromResult<Result<OpenApiTenantCollections>>(context.Request.Payload);
+}
+
 [JsonConverter(typeof(OpenApiTraversalCollectionConverter))]
 sealed record OpenApiTraversalCollection(OpenApiTraversalItem[] Values);
 

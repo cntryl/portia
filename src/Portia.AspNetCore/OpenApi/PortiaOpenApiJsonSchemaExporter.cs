@@ -70,7 +70,8 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
                 : (mapped = Map(normalized, elementType, childPath, null, elementNullable)) ??
                   ApplyAnnotations(normalized, child, elementNullable);
             if (original is not null || mapped is not null || declaredElementNullable.HasValue || elementNullable ||
-                elementType == typeof(Uuid) || elementType == typeof(Uuid?))
+                elementType == typeof(Uuid) || elementType == typeof(Uuid?) ||
+                elementType == typeof(TenantId) || elementType == typeof(TenantId?))
             {
                 obj[keyword] = completed;
                 _ = _processed.Add(completed);
@@ -141,6 +142,15 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
                 : JsonValue.Create("string");
             uuid["format"] = "uuid";
             return uuid;
+        }
+
+        if (type == typeof(TenantId) || type == typeof(TenantId?))
+        {
+            var tenant = schema as JsonObject ?? [];
+            tenant["type"] = type == typeof(TenantId?)
+                ? new JsonArray(JsonValue.Create("string"), JsonValue.Create("null"))
+                : JsonValue.Create("string");
+            return tenant;
         }
         // The OpenAPI reader expects object nodes for entries in a properties map.
         return schema.GetValueKind() switch

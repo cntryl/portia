@@ -1,1 +1,25 @@
 #nullable enable
+static Cntryl.Portia.RequestError.Conflict(string! message, bool isTransient = false) -> Cntryl.Portia.RequestError!
+static Cntryl.Portia.RequestError.Forbidden(string! message, bool isTransient = false) -> Cntryl.Portia.RequestError!
+static Cntryl.Portia.RequestError.NotFound(string! message, bool isTransient = false) -> Cntryl.Portia.RequestError!
+static Cntryl.Portia.RequestError.Unauthorized(string! message, bool isTransient = false) -> Cntryl.Portia.RequestError!
+static Cntryl.Portia.RequestError.Validation(string! message, bool isTransient = false) -> Cntryl.Portia.RequestError!
+static Cntryl.Portia.Result.implicit operator Cntryl.Portia.Result(Cntryl.Portia.RequestError! error) -> Cntryl.Portia.Result
+static Cntryl.Portia.Result<T>.implicit operator Cntryl.Portia.Result<T>(Cntryl.Portia.RequestError! error) -> Cntryl.Portia.Result<T>
+static Cntryl.Portia.Result<T>.implicit operator Cntryl.Portia.Result<T>(T value) -> Cntryl.Portia.Result<T>
+Cntryl.Portia.TenantId.ToString(string? format, System.IFormatProvider? formatProvider) -> string!
+Cntryl.Portia.TenantId.TryFormat(System.Span<char> destination, out int charsWritten, System.ReadOnlySpan<char> format, System.IFormatProvider? provider) -> bool
+Cntryl.Portia.TenantIdJsonConverter
+Cntryl.Portia.TenantIdJsonConverter.TenantIdJsonConverter() -> void
+override Cntryl.Portia.TenantIdJsonConverter.Read(ref System.Text.Json.Utf8JsonReader reader, System.Type! typeToConvert, System.Text.Json.JsonSerializerOptions! options) -> Cntryl.Portia.TenantId
+override Cntryl.Portia.TenantIdJsonConverter.ReadAsPropertyName(ref System.Text.Json.Utf8JsonReader reader, System.Type! typeToConvert, System.Text.Json.JsonSerializerOptions! options) -> Cntryl.Portia.TenantId
+override Cntryl.Portia.TenantIdJsonConverter.Write(System.Text.Json.Utf8JsonWriter! writer, Cntryl.Portia.TenantId value, System.Text.Json.JsonSerializerOptions! options) -> void
+override Cntryl.Portia.TenantIdJsonConverter.WriteAsPropertyName(System.Text.Json.Utf8JsonWriter! writer, Cntryl.Portia.TenantId value, System.Text.Json.JsonSerializerOptions! options) -> void
+static Cntryl.Portia.TenantId.Parse(string! s, System.IFormatProvider? provider) -> Cntryl.Portia.TenantId
+static Cntryl.Portia.TenantId.Parse(System.ReadOnlySpan<char> s, System.IFormatProvider? provider) -> Cntryl.Portia.TenantId
+static Cntryl.Portia.TenantId.TryParse(string? s, System.IFormatProvider? provider, out Cntryl.Portia.TenantId result) -> bool
+static Cntryl.Portia.TenantId.TryParse(System.ReadOnlySpan<char> s, System.IFormatProvider? provider, out Cntryl.Portia.TenantId result) -> bool
+Cntryl.Portia.IActorTenantResolver
+Cntryl.Portia.IActorTenantResolver.ResolveAsync(System.Security.Claims.ClaimsPrincipal! actor, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.TenantId?>
+Cntryl.Portia.ITenantRequest
+Cntryl.Portia.ITenantRequest.Tenant.get -> Cntryl.Portia.TenantId

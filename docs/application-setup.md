@@ -291,7 +291,26 @@ Reactors derive from `Reactor` or `BatchReactor` and pass a constructor dependen
 implementing `IProjectionCheckpointStore`. This can be the same application repository
 they use for reactions; Portia does not require a separate global store registration.
 Register `ITenantDirectory` when any workload is per tenant. Registration and infrastructure
-setup can occur in either order, before building the host.
+setup can occur in either order, before building the host. `FixedTenantDirectory` serves a
+membership fixed at startup, for a single-tenant or configured-tenant deployment. A deployment whose
+tenants change at runtime names its lifecycle events once, and Portia reads them through the
+registered event reader, wakes on the registered notifier, and resumes from a Fitz KV snapshot when
+one is selected:
+
+```csharp
+services.AddSingleton<ITenantDirectory>(new FixedTenantDirectory(new TenantId("demo")));
+
+// Or, read from the application's own tenant lifecycle events:
+services.AddPortia()
+    .AddEventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(
+        EventStreamPattern.ForPattern("global", "tenants", "registry"),
+        ev => new TenantId(((ITenantLifecycleEvent)ev).TenantId))
+    .AddFitz(configuration, fitz => fitz.UseKvTenantSnapshots("kv://global/tenants/snapshots"));
+```
+
+A directory the application registers itself is kept. Without a snapshot store the event-sourced
+directory replays its lifecycle history on every start, which is correct but slow for a long
+history; see [performance and scaling](performance-and-scaling.md#runtime-scaling-model).
 
 Scoped repositories and dependencies can inject infrastructure-neutral `WorkloadContext` for
 the current `Identity` and `Tenant`. Fitz holds and renews the workload lease around the complete

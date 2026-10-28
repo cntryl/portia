@@ -1,1 +1,4 @@
 #nullable enable
+Cntryl.Portia.FitzKvProjectionStore.BeginTenantReadAsync(Cntryl.Portia.TenantId tenant, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Fitz.IKvTransaction!>
+Cntryl.Portia.PortiaFitzBuilder.UseKvTenantSnapshots(string! route) -> Cntryl.Portia.PortiaFitzBuilder!
+Cntryl.Portia.PortiaFitzBuilder.UseKvTenantSnapshots(string! route, Cntryl.Fitz.KvDurability durability) -> Cntryl.Portia.PortiaFitzBuilder!

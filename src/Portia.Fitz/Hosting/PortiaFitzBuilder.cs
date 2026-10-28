@@ -18,6 +18,8 @@ public sealed class PortiaFitzBuilder
     readonly Lazy<IReadOnlyList<FitzWorkerDefinition>> _workers;
     string? _checkpointRoute;
     KvDurability _checkpointDurability;
+    string? _tenantSnapshotRoute;
+    KvDurability _tenantSnapshotDurability;
     bool _workerSelectionExplicit;
 
     internal PortiaFitzBuilder(PortiaBuilder application)
@@ -198,6 +200,46 @@ public sealed class PortiaFitzBuilder
         _ = AddKvClient();
         _application.Services.TryAddSingleton<IProjectionCheckpointStore>(provider =>
             new FitzKvCheckpointStore(provider.GetRequiredService<IKvClient>(), validated, durability));
+        return this;
+    }
+
+    /// <summary>
+    ///     Persists the event-sourced tenant directory's roster and cursor in Fitz KV under
+    ///     <paramref name="route" /> with buffered commits, so a restarted worker resumes tenant discovery
+    ///     from the snapshot instead of replaying the whole lifecycle history.
+    /// </summary>
+    /// <param name="route">The exact three-segment <c>kv://</c> base route for the snapshot.</param>
+    /// <returns>This builder, for chaining.</returns>
+    public PortiaFitzBuilder UseKvTenantSnapshots(string route) => UseKvTenantSnapshots(route, KvDurability.Buffered);
+
+    /// <summary>
+    ///     Persists the event-sourced tenant directory's roster and cursor in Fitz KV under
+    ///     <paramref name="route" /> with the given commit durability.
+    /// </summary>
+    /// <param name="route">The exact three-segment <c>kv://</c> base route for the snapshot.</param>
+    /// <param name="durability">How snapshot commits are persisted.</param>
+    /// <returns>This builder, for chaining.</returns>
+    /// <exception cref="InvalidOperationException">A different route or durability was already selected.</exception>
+    public PortiaFitzBuilder UseKvTenantSnapshots(string route, KvDurability durability)
+    {
+        var validated = FitzKvCheckpoints.Route(route, nameof(route));
+        _ = FitzKvCheckpoints.RequireDurability(durability);
+        if (_tenantSnapshotRoute is not null)
+        {
+            if (!string.Equals(_tenantSnapshotRoute, validated, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    $"This application has conflicting Fitz KV tenant snapshot routes ('{_tenantSnapshotRoute}' and '{validated}').");
+            if (_tenantSnapshotDurability != durability)
+                throw new InvalidOperationException(
+                    $"This application has conflicting Fitz KV tenant snapshot durability settings ('{_tenantSnapshotDurability}' and '{durability}').");
+            return this;
+        }
+
+        _tenantSnapshotRoute = validated;
+        _tenantSnapshotDurability = durability;
+        _ = AddKvClient();
+        _application.Services.TryAddSingleton<ITenantDirectorySnapshotStore>(provider =>
+            new FitzKvTenantDirectorySnapshotStore(provider.GetRequiredService<IKvClient>(), validated, durability));
         return this;
     }
 

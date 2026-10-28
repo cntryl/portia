@@ -28,7 +28,7 @@ public sealed class AccountRepository(IAggregateExecutor aggregates) : IAccountR
 public interface IAccountReadRepository
 {
     /// <summary>Gets one tenant's projected account, or null when no projection exists.</summary>
-    ValueTask<AccountReadModel?> GetAsync(string tenant, Uuid accountId, CancellationToken ct);
+    ValueTask<AccountReadModel?> GetAsync(TenantId tenant, Uuid accountId, CancellationToken ct);
 }
 
 /// <summary>Repository writes performed by the pure account projector.</summary>
@@ -55,9 +55,9 @@ public sealed class AccountProjectionRepository : FitzKvProjectionStore, IAccoun
     }
 
     /// <inheritdoc />
-    public async ValueTask<AccountReadModel?> GetAsync(string tenant, Uuid accountId, CancellationToken ct)
+    public async ValueTask<AccountReadModel?> GetAsync(TenantId tenant, Uuid accountId, CancellationToken ct)
     {
-        await using var transaction = await BeginReadAsync(tenant, ct).ConfigureAwait(false);
+        await using var transaction = await BeginTenantReadAsync(tenant, ct).ConfigureAwait(false);
         return await ReadAsync(transaction, accountId, ct).ConfigureAwait(false);
     }
 

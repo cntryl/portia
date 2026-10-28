@@ -60,6 +60,34 @@ public sealed class FitzKvRegistrationTests
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(IProjectionCheckpointStore));
     }
 
+    /// <summary>
+    ///     Tenant directory snapshots are an explicit selection like reactor checkpoints: without one the
+    ///     event-sourced directory replays its lifecycle history on every start, which is correct but slow.
+    /// </summary>
+    [Fact]
+    public void SelectingKvTenantSnapshotsRegistersTheDurableStore()
+    {
+        var services = new ServiceCollection();
+
+        _ = services.AddPortia().AddFitz(Configuration(),
+            builder => builder.UseKvTenantSnapshots("kv://accounts/tenants/snapshots"));
+
+        var descriptor = Assert.Single(services, item => item.ServiceType == typeof(ITenantDirectorySnapshotStore));
+        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(IProjectionCheckpointStore));
+    }
+
+    /// <summary>Two different snapshot routes cannot both be the one a restart resumes from.</summary>
+    [Fact]
+    public void ConflictingTenantSnapshotRoutesAreRejected()
+    {
+        var services = new ServiceCollection();
+
+        _ = Assert.Throws<InvalidOperationException>(() => services.AddPortia().AddFitz(Configuration(), builder =>
+            builder.UseKvTenantSnapshots("kv://accounts/tenants/snapshots")
+                .UseKvTenantSnapshots("kv://accounts/tenants/other")));
+    }
+
     [Fact]
     public void SelectingKvCheckpointsRegistersTheDurableStore()
     {

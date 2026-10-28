@@ -21,6 +21,50 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
         }
     }
 
+    /// <summary>Tenant collection schemas identify their string elements and nullable counterparts.</summary>
+    [Theory]
+    [InlineData("json", false)]
+    [InlineData("yml", false)]
+    [InlineData("json", true)]
+    [InlineData("yml", true)]
+    public async Task ShouldDescribeTenantCollectionElementsAsStrings(string format, bool dictionary)
+    {
+        var builder = CreateBuilder();
+        _ = builder.Services.AddPortia().AddHttp()
+            .AddRequestHandler<OpenApiTenantCollectionHandler>();
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+        _ = _app.MapPortiaPost<OpenApiTenantCollectionRequest, OpenApiTenantCollections>("/tenant-collections");
+        await _app.StartAsync();
+        using var client = _app.GetTestClient();
+
+        using var response = await client.PostAsync("/tenant-collections", new StringContent(
+            """{"payload":{"items":["acme"],"values":{"first":"globex"},"nullable_items":["acme",null],"nullable_values":{"first":"globex","second":null}}}""",
+            Encoding.UTF8, "application/json"));
+        response.EnsureSuccessStatusCode();
+        using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("acme", actual.RootElement.GetProperty("items")[0].GetString());
+        Assert.Equal("globex", actual.RootElement.GetProperty("values").GetProperty("first").GetString());
+        Assert.Equal(JsonValueKind.Null, actual.RootElement.GetProperty("nullable_items")[1].ValueKind);
+        Assert.Equal(JsonValueKind.Null, actual.RootElement.GetProperty("nullable_values").GetProperty("second").ValueKind);
+
+        var operation = (await ReadDocumentAsync(client, format)).Paths!["/tenant-collections"].Operations![HttpMethod.Post];
+        var request = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
+        var result = operation.Responses!["200"].Content!["application/json"].Schema!;
+        foreach (var envelope in new[] { request, result })
+        {
+            var collection = envelope.Properties![dictionary ? "values" : "items"];
+            var nullableCollection = envelope.Properties[dictionary ? "nullable_values" : "nullable_items"];
+            Assert.Equal(dictionary ? JsonSchemaType.Object : JsonSchemaType.Array, collection.Type);
+            var element = dictionary ? collection.AdditionalProperties : collection.Items;
+            Assert.NotNull(element);
+            Assert.Equal(JsonSchemaType.String, element.Type);
+            var nullableElement = dictionary ? nullableCollection.AdditionalProperties : nullableCollection.Items;
+            Assert.NotNull(nullableElement);
+            Assert.Equal(JsonSchemaType.String | JsonSchemaType.Null, nullableElement.Type);
+        }
+    }
+
     /// <summary>Dictionary values describe the array actually read and written by their converter.</summary>
     [Theory]
     [InlineData("json")]
