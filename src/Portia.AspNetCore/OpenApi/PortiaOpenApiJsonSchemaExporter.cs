@@ -142,6 +142,15 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
             uuid["format"] = "uuid";
             return uuid;
         }
+
+        if (type == typeof(TenantId) || type == typeof(TenantId?))
+        {
+            var tenant = schema as JsonObject ?? [];
+            tenant["type"] = type == typeof(TenantId?)
+                ? new JsonArray(JsonValue.Create("string"), JsonValue.Create("null"))
+                : JsonValue.Create("string");
+            return tenant;
+        }
         // The OpenAPI reader expects object nodes for entries in a properties map.
         return schema.GetValueKind() switch
         {
