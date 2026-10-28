@@ -1,1 +1,2 @@
 #nullable enable
+Cntryl.Portia.PortiaBuilder.AddEventSourcedTenantDirectory<TStartEvent, TStopEvent>(Cntryl.Portia.EventStreamPattern! pattern, System.Func<Cntryl.Portia.DomainEvent!, Cntryl.Portia.TenantId>! getTenantId) -> Cntryl.Portia.PortiaBuilder!

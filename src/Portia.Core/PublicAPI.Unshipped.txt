@@ -1,1 +1,5 @@
 #nullable enable
+Cntryl.Portia.FixedTenantDirectory
+Cntryl.Portia.FixedTenantDirectory.FixedTenantDirectory(params System.Collections.Generic.IEnumerable<Cntryl.Portia.TenantId>! tenants) -> void
+Cntryl.Portia.FixedTenantDirectory.GetActiveTenantsAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.TenantId>!
+Cntryl.Portia.FixedTenantDirectory.WatchAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.TenantLifecycleChange>!

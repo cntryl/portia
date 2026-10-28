@@ -15,7 +15,7 @@ namespace Cntryl.Portia;
 ///     projector in one realm, and so each tenant of a per-tenant projector — gets its own derived
 ///     resource; two workloads can never contend for one lock however the routes are configured.
 ///     A repository serves the one projector it names at construction, so its query-side reads
-///     derive that resource from the realm alone through <see cref="BeginReadAsync" />, and a
+///     derive that resource from the realm alone through <see cref="BeginReadAsync(string, CancellationToken)" />, and a
 ///     projector registered under any other name is rejected rather than writing where no read looks.
 ///     Commits default to <see cref="KvDurability.Buffered" />. Data and checkpoint remain atomic,
 ///     but a crash can lose recent batches and cause replay. Derived repositories can explicitly
@@ -79,6 +79,19 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
                 KvMode.ReadOnly, ct)
             .ConfigureAwait(false);
     }
+
+    /// <summary>
+    ///     Opens a read-only transaction on the resource this repository's projector writes for one tenant:
+    ///     the typed form of <see cref="BeginReadAsync(string, CancellationToken)" /> for a <c>PerTenant</c>
+    ///     projector, so a query that already carries a <see cref="TenantId" /> never reduces it to a string.
+    /// </summary>
+    /// <param name="tenant">The tenant whose resource to read.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>A transaction the caller disposes when the read is finished.</returns>
+    /// <exception cref="ArgumentException">The tenant is <c>default</c>.</exception>
+    /// <exception cref="InvalidOperationException">A batch is open on this store.</exception>
+    protected ValueTask<IKvTransaction> BeginTenantReadAsync(TenantId tenant, CancellationToken ct = default) =>
+        BeginReadAsync(tenant.Value, ct);
 
     /// <summary>
     ///     Gets the transaction the current unit of work writes through. Only valid between
