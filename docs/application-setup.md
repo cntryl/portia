@@ -247,7 +247,10 @@ portia.AddReactor<AccountReactor>("AccountReactor", WorkloadScope.PerTenant);
 entry. Its component must declare `EventStreamPattern.ForTenant(...)`; Portia binds that template
 to the tenant ID before constructing a checkpoint or reading, retaining its area and resource
 filters. `WorkloadScope.Global` requires `EventStreamPattern.ForPattern(...)` and retains that exact
-realm. Either mismatch fails startup, and an unbound template cannot be driven manually.
+realm. Either mismatch fails startup, and an unbound template cannot be driven manually. `PORTIA031`
+reports the mismatch at compile time when the component passes `EventStreamPattern.ForTenant(...)` or
+`ForPattern(...)` straight to its base and the registration is in the same compilation; a pattern
+chosen at runtime is still checked only at startup.
 
 An omitted ID or scope, an invalid scope, a conflicting registration, or duplicate workload ID
 fails during configuration. Repeating an identical registration is idempotent. The

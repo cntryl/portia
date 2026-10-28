@@ -1,1 +1,6 @@
 #nullable enable
+Cntryl.Portia.DiscriminatorCodeFixProvider
+Cntryl.Portia.DiscriminatorCodeFixProvider.DiscriminatorCodeFixProvider() -> void
+override Cntryl.Portia.DiscriminatorCodeFixProvider.FixableDiagnosticIds.get -> System.Collections.Immutable.ImmutableArray<string!>
+override Cntryl.Portia.DiscriminatorCodeFixProvider.GetFixAllProvider() -> Microsoft.CodeAnalysis.CodeFixes.FixAllProvider!
+override Cntryl.Portia.DiscriminatorCodeFixProvider.RegisterCodeFixesAsync(Microsoft.CodeAnalysis.CodeFixes.CodeFixContext context) -> System.Threading.Tasks.Task!

@@ -512,7 +512,8 @@ Cancellation and exceptions propagate. Returning `default(Result)` is a framewor
 that names the offending guard. `AuthorizeAsync` does not run guards. An outer behavior that returns
 without invoking its continuation also skips the guards, because neither the innermost preflight nor
 the handler executes. One type cannot be registered as both a request authorizer and a request
-guard; composition rejects it, because authorization and preflight run at different phases.
+guard; composition rejects it, because authorization and preflight run at different phases, and
+`PORTIA018` reports the guard registration when both calls are in the same compilation.
 
 Each guard records `portia.guard.duration` with its component name and outcome.
 

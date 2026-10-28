@@ -167,6 +167,66 @@ public sealed class RequestGuardGeneratorTests
             diagnostic.GetMessage(CultureInfo.InvariantCulture));
     }
 
+    // Composition rejects the same type in both roles at startup; the generator sees both calls here.
+    [Theory]
+    [InlineData(".AddRequestAuthorizer<Preflight>().AddRequestGuard<Preflight>()")]
+    [InlineData(".AddRequestGuard<Preflight>().AddRequestAuthorizer<Preflight>()")]
+    public void DualRoleRegistrationReportsPortia018AtTheGuardCall(string registrations)
+    {
+        var source = $$"""
+                       using Cntryl.Portia;
+                       using Microsoft.Extensions.DependencyInjection;
+                       using System.Threading;
+                       using System.Threading.Tasks;
+                       public sealed record Open : IRequest;
+                       public sealed class Preflight : IRequestGuard<Open>, IRequestAuthorizer<Open>
+                       {
+                           public ValueTask<Result> GuardAsync(IRequestContext<Open> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                           public ValueTask<Result> AuthorizeAsync(IRequestContext<Open> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                       }
+                       public static class Scenario
+                       {
+                           public static void Register() => new ServiceCollection().AddPortia(){{registrations}};
+                       }
+                       """;
+
+        var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics(source,
+            new RegistrationCallInterceptorGenerator()), item => item.Id == "PORTIA018");
+
+        Assert.Equal(
+            "Cannot register 'Preflight' as a Portia guard: the type is also registered as a request authorizer; authorization and preflight run at different lifecycle phases, so split it into two types",
+            diagnostic.GetMessage(CultureInfo.InvariantCulture));
+        Assert.EndsWith("AddRequestGuard<Preflight>()",
+            source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SeparateGuardAndAuthorizerTypesAreNotReported()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using Cntryl.Portia;
+                                                           using Microsoft.Extensions.DependencyInjection;
+                                                           using System.Threading;
+                                                           using System.Threading.Tasks;
+                                                           public sealed record Open : IRequest;
+                                                           public sealed class Guard : IRequestGuard<Open>
+                                                           {
+                                                               public ValueTask<Result> GuardAsync(IRequestContext<Open> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                                                           }
+                                                           public sealed class Authorizer : IRequestAuthorizer<Open>
+                                                           {
+                                                               public ValueTask<Result> AuthorizeAsync(IRequestContext<Open> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                                                           }
+                                                           public static class Scenario
+                                                           {
+                                                               public static void Register() => new ServiceCollection().AddPortia().AddRequestAuthorizer<Authorizer>().AddRequestGuard<Guard>();
+                                                           }
+                                                           """, new RegistrationCallInterceptorGenerator());
+
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA018");
+    }
+
     [Fact]
     public void GenericGuardRegistrationReportsPortia018()
     {

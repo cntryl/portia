@@ -592,6 +592,20 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             }
         }
 
+        // Authorization and preflight are different lifecycle phases, so one type cannot serve both. Composition
+        // rejects the pair at startup; this reports it at the guard call when both registrations are visible.
+        var authorizers = new HashSet<string>(
+            calls.Where(call => call.Role == "authorizer" && call.Body is not null).Select(call => call.Subject),
+            StringComparer.Ordinal);
+        foreach (var guard in calls
+                     .Where(call => call.Role == "guard" && call.Body is not null && authorizers.Contains(call.Subject))
+                     .GroupBy(call => call.Subject, StringComparer.Ordinal).Select(group => group.First()))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InvalidRegistration, guard.DiagnosticLocation.ToLocation(),
+                guard.Subject, guard.Role,
+                "the type is also registered as a request authorizer; authorization and preflight run at different lifecycle phases, so split it into two types"));
+        }
+
         var inferred = new StringBuilder();
         foreach (var request in dispatchedRequests.GroupBy(request => request.TypeName, StringComparer.Ordinal)
                      .Select(group => group.First()))

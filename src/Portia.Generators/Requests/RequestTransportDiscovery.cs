@@ -28,7 +28,10 @@ static class RequestTransportDiscovery
     public static string RuntimeType(ITypeSymbol symbol) =>
         symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-    public static bool IsCandidate(SyntaxNode node) => node is TypeDeclarationSyntax;
+    // Every discovery here needs a transport-marker interface the type can only acquire through a base list.
+    // Admitting every type declaration bound each one on every keystroke in its file; the part of a partial
+    // type that carries the base list still names the whole symbol.
+    public static bool IsCandidate(SyntaxNode node) => node is TypeDeclarationSyntax { BaseList: not null };
 
     public static RequestTransportComponent? GetRequestTransportComponent(GeneratorSyntaxContext context)
     {

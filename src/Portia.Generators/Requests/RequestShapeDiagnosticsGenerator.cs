@@ -10,8 +10,9 @@ public sealed class RequestShapeDiagnosticsGenerator : IIncrementalGenerator
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        // A component implements a Portia interface, which only a declaration with a base list can give it.
         var types = context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => node is ClassDeclarationSyntax,
+                static (node, _) => node is ClassDeclarationSyntax { BaseList: not null },
                 static (syntaxContext, ct) => Analyze(syntaxContext, ct))
             .Where(static model => model is not null)
             .Select(static (model, _) => model!);

@@ -103,7 +103,7 @@ public sealed class GeneratorStabilityTests
     [Fact]
     public void EveryGeneratorAndAnalyzerIsCovered()
     {
-        Assert.Equal(8, AllGenerators().Length);
+        Assert.Equal(9, AllGenerators().Length);
         Assert.Equal(2, AllAnalyzers().Length);
     }
 

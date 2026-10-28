@@ -1,1 +1,4 @@
 #nullable enable
+Cntryl.Portia.WorkloadScopeDiagnosticsGenerator
+Cntryl.Portia.WorkloadScopeDiagnosticsGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Cntryl.Portia.WorkloadScopeDiagnosticsGenerator.WorkloadScopeDiagnosticsGenerator() -> void
