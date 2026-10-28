@@ -273,6 +273,28 @@ public sealed class JsonMetadataGeneratorTests
             .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
     }
 
+    [Fact]
+    public void BodyMembersAreCoveredByTheirRequestRoot()
+    {
+        var diagnostics = GeneratorCompilation.Diagnostics("""
+                                                           using System;
+                                                           using System.Text.Json.Serialization;
+                                                           using Cntryl.Portia;
+                                                           using Microsoft.AspNetCore.Routing;
+                                                           public readonly record struct Money(long Cents);
+                                                           public sealed record Deposit(Uuid AccountId, long AmountCents, string Memo, Money? Fee, DateTimeOffset? At) : IRequest, ICallable;
+                                                           public static class Scenario
+                                                           {
+                                                               public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Deposit>("/accounts/{account_id}/deposits");
+                                                           }
+                                                           [PortiaJsonContext]
+                                                           [JsonSerializable(typeof(Deposit))]
+                                                           internal sealed partial class AppJsonContext : JsonSerializerContext;
+                                                           """, new JsonMetadataDiagnosticGenerator());
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
+    }
+
     [Theory]
     [InlineData("/files/{*path}")]
     [InlineData("/files/{**path}")]

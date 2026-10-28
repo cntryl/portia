@@ -157,25 +157,9 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                 Add(argument);
         }
 
-        if (endpointMapping && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol request)
-        {
-            var mutating = name is "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch";
-            var operation = model.GetOperation(invocation, ct) as IInvocationOperation;
-            var pattern = operation?.Arguments.FirstOrDefault(argument => argument.Parameter?.Name == "pattern")
-                ?.Value.ConstantValue is { HasValue: true, Value: string route }
-                ? route
-                : string.Empty;
-            var constructor = HttpBindingShape.SinglePublicConstructor(request);
-            if (mutating && constructor is not null && SupportsDefaultBinding(constructor, pattern))
-            {
-                foreach (var parameter in constructor.Parameters)
-                {
-                    if (!HttpBindingShape.IsRouteParameter(pattern, parameter.Name))
-                        Add(UnwrapNullable(parameter.Type));
-                }
-            }
-        }
-
+        // A mutating endpoint binds each body member through the member type's own metadata, but
+        // System.Text.Json generates that metadata for every type reachable from a declared root, and
+        // the request is itself a root here. Listing its members separately would only be ceremony.
         if (name is "Accepts" or "Parameter" or "Produces" &&
             method.ContainingType.OriginalDefinition.ToDisplayString() ==
             "Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>")
@@ -246,18 +230,6 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
     }
 
     sealed record RootUse(string Key, string Display, string Namespace, DiagnosticLocation Location);
-
-    static bool SupportsDefaultBinding(IMethodSymbol constructor, string pattern)
-    {
-        foreach (var parameter in constructor.Parameters)
-        {
-            if (!HttpBindingShape.IsSupportedParameter(parameter,
-                    HttpBindingShape.IsRouteParameter(pattern, parameter.Name)))
-                return false;
-        }
-
-        return true;
-    }
 
     static bool IsOrDerivesFrom(ITypeSymbol type, INamedTypeSymbol? baseType)
     {
