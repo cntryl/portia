@@ -212,6 +212,7 @@ public sealed class WorkloadScopeDiagnosticsGenerator : IIncrementalGenerator
             {
                 if (named.Name.Identifier.ValueText == parameters[index].Name)
                     return argument;
+                positional++;
             }
             else if (positional++ == index)
             {

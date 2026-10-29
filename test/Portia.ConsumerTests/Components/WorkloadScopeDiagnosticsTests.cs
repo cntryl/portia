@@ -70,6 +70,20 @@ public sealed class WorkloadScopeDiagnosticsTests
     }
 
     [Fact]
+    public void ReportsMismatchWithNamedThenPositionalRegistrationArguments()
+    {
+        var source = Usings + """
+                              public sealed class Ledger(IProjectionStore store) : Projector(store, EventStreamPattern.ForPattern("accounts"));
+                              public static class Scenario
+                              {
+                                  public static void Register() => new ServiceCollection().AddPortia().AddProjector<Ledger>(name: "ledger", WorkloadScope.PerTenant);
+                              }
+                              """;
+
+        _ = Assert.Single(Diagnostics(source), item => item.Id == "PORTIA031");
+    }
+
+    [Fact]
     public void ReadsThePatternThroughAnAbstractBaseDeclaredInTheSameCompilation()
     {
         var source = Usings + """

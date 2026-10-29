@@ -116,7 +116,8 @@ public sealed class DiscriminatorCodeFixProvider : CodeFixProvider
         {
             if (argument.NameEquals is not null)
                 continue;
-            var parameter = argument.NameColon?.Name.Identifier.ValueText ?? (positional++ == 0 ? "name" : "version");
+            var parameter = argument.NameColon?.Name.Identifier.ValueText ?? (positional == 0 ? "name" : "version");
+            positional++;
             var value = model.GetConstantValue(argument.Expression, ct);
             switch (parameter)
             {
@@ -145,8 +146,9 @@ public sealed class DiscriminatorCodeFixProvider : CodeFixProvider
     static NameSyntax AttributeName(TypeDeclarationSyntax declaration, SemanticModel model)
     {
         var position = declaration.SpanStart;
-        var portia = model.LookupNamespacesAndTypes(position, name: "DiscriminatorAttribute")
-            .Any(candidate => candidate is INamedTypeSymbol type && type.ToDisplayString() == AttributeMetadataName);
+        var candidates = model.LookupNamespacesAndTypes(position, name: "DiscriminatorAttribute");
+        var portia = candidates.Length == 1 && candidates[0] is INamedTypeSymbol type
+                                             && type.ToDisplayString() == AttributeMetadataName;
         var shadowed = model.LookupNamespacesAndTypes(position, name: "Discriminator").Length > 0;
         return portia && !shadowed
             ? SyntaxFactory.IdentifierName("Discriminator")

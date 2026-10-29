@@ -66,6 +66,7 @@ public sealed class DiscriminatorCodeFixTests
     [Theory]
     [InlineData("[Discriminator(\"\")]", "[Discriminator(\"Opened\")]")]
     [InlineData("[Discriminator(\"orders.opened\", 0)]", "[Discriminator(\"orders.opened\", 1)]")]
+    [InlineData("[Discriminator(name: \"orders.opened\", 0)]", "[Discriminator(name: \"orders.opened\", 1)]")]
     [InlineData("[Discriminator(\" \", -3)]", "[Discriminator(\"Opened\", 1)]")]
     public async Task RepairsOnlyTheInvalidArgumentsOfAnExistingAttribute(string attribute, string expected)
     {
@@ -81,6 +82,26 @@ public sealed class DiscriminatorCodeFixTests
     public async Task QualifiesTheAttributeWhenPortiaIsNotImported()
     {
         const string source = "public sealed record Opened : Cntryl.Portia.DomainEvent;";
+
+        var corrected = await ApplyAllAsync(source, "PORTIA021");
+
+        AssertContains("[global::Cntryl.Portia.Discriminator(\"Opened\")]\npublic sealed record Opened", corrected,
+            StringComparison.Ordinal);
+        AssertRepaired(corrected);
+    }
+
+    [Fact]
+    public async Task QualifiesTheAttributeWhenAnotherImportedAttributeHasTheSameName()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              using Other;
+                              namespace Other
+                              {
+                                  public sealed class DiscriminatorAttribute : System.Attribute { }
+                              }
+                              public sealed record Opened : DomainEvent;
+                              """;
 
         var corrected = await ApplyAllAsync(source, "PORTIA021");
 

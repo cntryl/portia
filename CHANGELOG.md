@@ -4,6 +4,18 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## Unreleased
+
+### Added
+
+- Add a code fix for missing or invalid request and event discriminators.
+- Report workload scope and declared stream-pattern mismatches at compile time when both are visible.
+
+### Changed
+
+- Report a type registered as both a request guard and authorizer during compilation when both
+  registrations are visible, instead of waiting for startup.
+
 ## 0.9.2 - 2026-10-28
 
 ### Added
