@@ -65,3 +65,4 @@ static Cntryl.Portia.WorkloadRegistration.operator !=(Cntryl.Portia.WorkloadRegi
 static Cntryl.Portia.WorkloadRegistration.operator ==(Cntryl.Portia.WorkloadRegistration? left, Cntryl.Portia.WorkloadRegistration? right) -> bool
 Cntryl.Portia.PortiaAuthorizationOptions
 Cntryl.Portia.PortiaAuthorizationOptions.AllowAnonymous<TRequest>() -> Cntryl.Portia.PortiaAuthorizationOptions!
+Cntryl.Portia.PortiaBuilder.UseSingleProcessWorkloads() -> Cntryl.Portia.PortiaBuilder!

@@ -1,0 +1,29 @@
+{
+  "model": "jev-1.14.0",
+  "answers": {
+    "contract": {
+      "type": "choice",
+      "choice": "typed_contract",
+      "confidence": 1.0,
+      "probabilities": {
+        "typed_contract": 1.0,
+        "property_convention": 0.0,
+        "attempt_identity": 0.0
+      }
+    },
+    "propagated": {
+      "type": "choice",
+      "choice": "reject",
+      "confidence": 1.0,
+      "probabilities": {
+        "reject": 1.0,
+        "overwrite": 0.0,
+        "regenerate": 0.0
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 885,
+    "output_tokens": 83
+  }
+}

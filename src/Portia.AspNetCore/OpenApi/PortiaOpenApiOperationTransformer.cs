@@ -1,14 +1,18 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 
 namespace Cntryl.Portia;
 
 sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 {
+    static readonly ConditionalWeakTable<OpenApiDocument, DefaultErrorResponses> DefaultErrorResponsesByDocument = [];
+
     public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context,
         CancellationToken cancellationToken)
     {
@@ -54,6 +58,9 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
         operation.OperationId = metadata.OperationId;
         operation.Parameters = [];
+        var httpOptions = context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value;
+        var schemaType = httpOptions.OpenApiSchemaType;
+        var schemaCollectionElementIsNullable = httpOptions.OpenApiSchemaCollectionElementIsNullable;
         var jsonOptions = context.ApplicationServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
         foreach (var responseMetadata in explicitResponses)
         {
@@ -71,7 +78,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                         _ => new OpenApiMediaType
                         {
                             Schema = PortiaOpenApiSchemaGenerator.Create(responseMetadata.Type, jsonOptions,
-                                context.Document!)
+                                context.Document!, schemaType,
+                                schemaCollectionElementIsNullable: schemaCollectionElementIsNullable)
                         }, StringComparer.Ordinal);
             }
 
@@ -94,7 +102,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     _ => throw new InvalidOperationException("Unknown Portia HTTP parameter location.")
                 },
                 Required = parameter.Location == PortiaHttpParameterLocation.Route || parameter.Required,
-                Schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!)
+                Schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!, schemaType,
+                    schemaCollectionElementIsNullable: schemaCollectionElementIsNullable)
             });
         }
 
@@ -109,7 +118,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
         foreach (var parameter in custom is null ? metadata.Parameters.Where(parameter => !IsBody(parameter)) : [])
         {
-            var schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!);
+            var schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!, schemaType,
+                parameter.IsNullable, schemaCollectionElementIsNullable);
             if (parameter.HasDefault && parameter.DefaultValue is not null && schema is OpenApiSchema concreteSchema)
             {
                 concreteSchema.Default =
@@ -142,7 +152,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     _ => new OpenApiMediaType
                     {
                         Schema = PortiaOpenApiSchemaGenerator.Create(accepts.RequestType, jsonOptions,
-                            context.Document!)
+                            context.Document!, schemaType,
+                            schemaCollectionElementIsNullable: schemaCollectionElementIsNullable)
                     }, StringComparer.Ordinal)
             };
         }
@@ -156,7 +167,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             {
                 var name = parameter.WireName ?? jsonOptions.PropertyNamingPolicy?.ConvertName(parameter.ClrName) ??
                     parameter.ClrName;
-                properties[name] = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!);
+                properties[name] = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!,
+                    schemaType, parameter.IsNullable, schemaCollectionElementIsNullable);
                 if (parameter.Required)
                 {
                     _ = jsonRequired.Add(name);
@@ -199,7 +211,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         }
         else if (metadata.JsonStream || metadata.ServerSentEvents)
         {
-            var item = PortiaOpenApiSchemaGenerator.Create(metadata.ResultType!, jsonOptions, context.Document!);
+            var item = PortiaOpenApiSchemaGenerator.Create(metadata.ResultType!, jsonOptions, context.Document!, schemaType,
+                metadata.ResultIsNullable, schemaCollectionElementIsNullable);
             var schema = metadata.JsonStream
                 ? new OpenApiSchema { Type = JsonSchemaType.Array, Items = item }
                 : item;
@@ -212,7 +225,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         }
         else
         {
-            var schema = PortiaOpenApiSchemaGenerator.Create(metadata.ResultType!, jsonOptions, context.Document!);
+            var schema = PortiaOpenApiSchemaGenerator.Create(metadata.ResultType!, jsonOptions, context.Document!, schemaType,
+                metadata.ResultIsNullable, schemaCollectionElementIsNullable);
             SetDefaultResponse("200", Response("OK", "application/json", schema));
         }
 
@@ -238,47 +252,15 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             }));
         }
 
+        var defaultErrorResponses = DefaultErrorResponsesByDocument.GetValue(context.Document!,
+            static document => new DefaultErrorResponses(document));
         foreach (var status in new[] { "400", "401", "403", "404", "409", "413", "415", "500" })
         {
-            var response = status == "401"
-                ? new OpenApiResponse
-                {
-                    Description = "Unauthorized",
-                    Headers = new Dictionary<string, IOpenApiHeader>
-                    {
-                        ["WWW-Authenticate"] = new OpenApiHeader
-                        {
-                            Required = true,
-                            Schema = new OpenApiSchema { Type = JsonSchemaType.String }
-                        },
-                        [ResultHttpExtensions.TransientHeaderName] = new OpenApiHeader
-                        {
-                            Required = true,
-                            Schema = new OpenApiSchema { Type = JsonSchemaType.Boolean }
-                        }
-                    }
-                }
-                : Response("Error", "application/problem+json", new OpenApiSchema
-                {
-                    Type = JsonSchemaType.Object,
-                    Properties = new Dictionary<string, IOpenApiSchema>
-                    {
-                        ["type"] = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri-reference" },
-                        ["title"] = new OpenApiSchema { Type = JsonSchemaType.String },
-                        ["status"] = new OpenApiSchema { Type = JsonSchemaType.Integer },
-                        ["detail"] = new OpenApiSchema { Type = JsonSchemaType.String },
-                        ["instance"] = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri-reference" },
-                        ["transient"] = new OpenApiSchema { Type = JsonSchemaType.Boolean }
-                    },
-                    Required = new HashSet<string> { "type", "title", "status", "detail", "instance" }
-                });
-            response.Headers ??= new Dictionary<string, IOpenApiHeader>();
-            _ = response.Headers.TryAdd(ResultHttpExtensions.TransientHeaderName, new OpenApiHeader
-            {
-                Required = status == "401",
-                Schema = new OpenApiSchema { Type = JsonSchemaType.Boolean }
-            });
-            SetDefaultResponse(status, response);
+            if (explicitStatuses.Contains(status))
+                continue;
+
+            SetDefaultResponse(status,
+                status == "401" ? defaultErrorResponses.Unauthorized : defaultErrorResponses.Problem);
         }
 
         return Task.CompletedTask;
@@ -289,6 +271,86 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         Description = description,
         Content = new Dictionary<string, OpenApiMediaType> { [mediaType] = new() { Schema = schema } }
     };
+
+    sealed class DefaultErrorResponses(OpenApiDocument document)
+    {
+        const string ProblemName = "CntrylPortiaHttpProblemResponse";
+        const string UnauthorizedName = "CntrylPortiaHttpUnauthorizedResponse";
+
+        readonly object _gate = new();
+        string? _problemName;
+        string? _unauthorizedName;
+
+        public IOpenApiResponse Problem => GetReference(ref _problemName, ProblemName, CreateProblemResponse);
+
+        public IOpenApiResponse Unauthorized =>
+            GetReference(ref _unauthorizedName, UnauthorizedName, CreateUnauthorizedResponse);
+
+        OpenApiResponseReference GetReference(ref string? cachedName, string preferredName,
+            Func<OpenApiResponse> createResponse)
+        {
+            lock (_gate)
+            {
+                if (cachedName is null)
+                {
+                    var components = document.Components ??= new OpenApiComponents();
+                    var responses = components.Responses ??= new Dictionary<string, IOpenApiResponse>(StringComparer.Ordinal);
+                    var name = preferredName;
+                    for (var suffix = 2; responses.ContainsKey(name); suffix++)
+                        name = $"{preferredName}_{suffix.ToString(CultureInfo.InvariantCulture)}";
+                    responses.Add(name, createResponse());
+                    cachedName = name;
+                }
+
+                return new OpenApiResponseReference(cachedName, document);
+            }
+        }
+
+        static OpenApiResponse CreateProblemResponse()
+        {
+            var response = Response("Error", "application/problem+json", new OpenApiSchema
+            {
+                Type = JsonSchemaType.Object,
+                Properties = new Dictionary<string, IOpenApiSchema>
+                {
+                    ["type"] = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri-reference" },
+                    ["title"] = new OpenApiSchema { Type = JsonSchemaType.String },
+                    ["status"] = new OpenApiSchema { Type = JsonSchemaType.Integer },
+                    ["detail"] = new OpenApiSchema { Type = JsonSchemaType.String },
+                    ["instance"] = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri-reference" },
+                    ["transient"] = new OpenApiSchema { Type = JsonSchemaType.Boolean }
+                },
+                Required = new HashSet<string> { "type", "title", "status", "detail", "instance" }
+            });
+            response.Headers = new Dictionary<string, IOpenApiHeader>
+            {
+                [ResultHttpExtensions.TransientHeaderName] = new OpenApiHeader
+                {
+                    Required = false,
+                    Schema = new OpenApiSchema { Type = JsonSchemaType.Boolean }
+                }
+            };
+            return response;
+        }
+
+        static OpenApiResponse CreateUnauthorizedResponse() => new()
+        {
+            Description = "Unauthorized",
+            Headers = new Dictionary<string, IOpenApiHeader>
+            {
+                ["WWW-Authenticate"] = new OpenApiHeader
+                {
+                    Required = true,
+                    Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+                },
+                [ResultHttpExtensions.TransientHeaderName] = new OpenApiHeader
+                {
+                    Required = true,
+                    Schema = new OpenApiSchema { Type = JsonSchemaType.Boolean }
+                }
+            }
+        };
+    }
 
     sealed record DeclaredAccepts(Type? RequestType, bool IsOptional, IReadOnlyList<string> ContentTypes);
 

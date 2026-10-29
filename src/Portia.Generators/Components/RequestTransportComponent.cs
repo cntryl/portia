@@ -3,7 +3,8 @@ namespace Cntryl.Portia;
 sealed class RequestTransportComponent : IEquatable<RequestTransportComponent>
 {
     public RequestTransportComponent(string typeName, IReadOnlyList<string> transports, string realm, string area,
-        string resource, string operation, int discriminatorVersion, string discriminatorName, string? resultType)
+        string resource, string operation, int discriminatorVersion, string discriminatorName, string? resultType,
+        string? resultRuntimeType)
     {
         TypeName = typeName;
         Transports = transports.ToArray();
@@ -14,6 +15,7 @@ sealed class RequestTransportComponent : IEquatable<RequestTransportComponent>
         DiscriminatorVersion = discriminatorVersion;
         DiscriminatorName = discriminatorName;
         ResultType = resultType;
+        ResultRuntimeType = resultRuntimeType;
     }
 
     public string TypeName { get; }
@@ -25,6 +27,7 @@ sealed class RequestTransportComponent : IEquatable<RequestTransportComponent>
     public int DiscriminatorVersion { get; }
     public string DiscriminatorName { get; }
     public string? ResultType { get; }
+    public string? ResultRuntimeType { get; }
     public DiagnosticLocation Location { get; private init; }
 
     public bool Equals(RequestTransportComponent? other) => other is not null
@@ -36,10 +39,11 @@ sealed class RequestTransportComponent : IEquatable<RequestTransportComponent>
                                                             && DiscriminatorVersion == other.DiscriminatorVersion &&
                                                             DiscriminatorName == other.DiscriminatorName
                                                             && ResultType == other.ResultType &&
+                                                            ResultRuntimeType == other.ResultRuntimeType &&
                                                             Location == other.Location;
 
     public RequestTransportComponent WithLocation(DiagnosticLocation location) => new(TypeName, Transports, Realm,
-            Area, Resource, Operation, DiscriminatorVersion, DiscriminatorName, ResultType)
+            Area, Resource, Operation, DiscriminatorVersion, DiscriminatorName, ResultType, ResultRuntimeType)
     { Location = location };
 
     public override bool Equals(object? obj) => Equals(obj as RequestTransportComponent);
@@ -56,6 +60,9 @@ sealed class RequestTransportComponent : IEquatable<RequestTransportComponent>
         hash = unchecked((hash * 397) ^ DiscriminatorVersion);
         hash = unchecked((hash * 397) ^ StringComparer.Ordinal.GetHashCode(DiscriminatorName));
         hash = unchecked((hash * 397) ^ (ResultType is null ? 0 : StringComparer.Ordinal.GetHashCode(ResultType)));
+        hash = unchecked((hash * 397) ^ (ResultRuntimeType is null
+            ? 0
+            : StringComparer.Ordinal.GetHashCode(ResultRuntimeType)));
         return unchecked((hash * 397) ^ Location.GetHashCode());
     }
 }

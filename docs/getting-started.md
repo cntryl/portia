@@ -7,6 +7,10 @@ Portia users to depend on it for tooling. `Cntryl.Portia.AspNetCore` includes it
 generator and depends on the runtime DI package. Add `Cntryl.Portia.Fitz` for Fitz storage/transports
 and `Cntryl.Portia.Jwt` when inbound work carries JWT actor identities. Packages use the
 cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
+Portia 0.8.0 uses the .NET 2.0.0 client and requires a
+compatible Fitz 0.2.0 broker. For an existing deployment, follow the
+[Portia 0.8 migration notes](migration-0.8.md#fitz-20-client-and-020-broker) before reconnecting
+an upgraded application. Portia 0.7.0 used Fitz .NET 1.4.2.
 Add the optional `Cntryl.Portia.Telemetry` package and call `AddOpenTelemetry().WithPortia()` when the
 application wants Portia's traces, metrics, and structured logs registered with OpenTelemetry.
 Portia does not select an exporter, resource, sampling policy, filter, endpoint, or credential.
@@ -67,9 +71,11 @@ chooses a different convention or adds converters. Portia registers its options 
 changes Portia's wire format; resolve Portia's with
 `GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json)`.
 
-`PORTIA025` catches JSON roots that the generator can discover at compile time. Startup validation
-remains the defensive fallback for roots and resolver combinations that cross compilation
-boundaries or otherwise cannot be proven statically.
+`PORTIA025` catches JSON roots that the generator can discover at compile time, and its code fix
+adds the missing `[JsonSerializable]` entries, for one file or the whole project. A root's members
+need no entries of their own: `System.Text.Json` generates metadata for every type reachable from a
+declared root. Startup validation remains the defensive fallback for roots and resolver combinations
+that cross compilation boundaries or otherwise cannot be proven statically.
 
 Reference `Cntryl.Portia.DependencyInjection` in each assembly that registers handlers, authorizers,
 request guards, pipeline behaviors, or routed requests. Add `Cntryl.Portia.Analyzers` to each project
@@ -79,12 +85,13 @@ Because libraries and applications can compose components across assemblies, Por
 that every declared handler has been registered; the application composition root owns that
 selection.
 
-Registration calls are rewritten at the call site, so each one must appear literally where you
-compose the application. They cannot be wrapped in a helper that takes the component as a type
-parameter, passed as a delegate, or invoked through reflection — the generator has no call site
-to intercept in those forms, and the call throws at startup (`PORTIA019` catches the shapes it
-can see at compile time). Grouping registrations in an ordinary extension method is fine; it is
-only forwarding the *generic argument* that does not work.
+Registration calls are rewritten at the call site, so each one must keep its component type concrete.
+Group registrations in ordinary, feature-local extension methods when that keeps application setup
+clear. Inside the method, make each call explicitly, such as
+`builder.AddRequestHandler<DepositAccountHandler>()`. Do not forward the type through a generic helper,
+method group, or delegate; the generator cannot emit a typed descriptor for those forms. `PORTIA019`
+reports unsupported call-site shapes that it can see at compile time. Calls hidden behind reflection
+cannot be diagnosed at their call site.
 
 Select handlers, authorizers, guards, and pipeline behaviors through the stable generic methods
 `AddRequestHandler<T>()`, `AddRequestAuthorizer<T>()`, `AddRequestGuard<T>()`, and
@@ -250,7 +257,7 @@ public sealed class Account : Aggregate
     public Result Deposit(int amount)
     {
         if (amount <= 0)
-            return Result.Failure(new RequestError(RequestErrorKind.Validation, "Deposit a positive amount."));
+            return RequestError.Validation("Deposit a positive amount.");
         RaiseEvent(new Deposited(amount));
         return Result.Success;
     }
@@ -259,6 +266,11 @@ public sealed class Account : Aggregate
     public void Decline(string reason) => AuditEvent(new Declined(reason));
 }
 ```
+
+A rejection is one expression: `RequestError.Validation`, `NotFound`, `Conflict`, `Forbidden`, and
+`Unauthorized` build an error of that kind, and a `RequestError` converts implicitly to `Result` and
+`Result<T>`. A value converts implicitly to `Result<T>`, so a query handler returns the value itself
+on success and the error on failure.
 
 Configure persistence once in the shared application setup:
 
@@ -400,6 +412,39 @@ builder.Services.Configure<PortiaHttpOptions>(options => options.ServerSentEvent
 Portia does not emit `id:` or `retry:`, so a client reconnecting after a drop resumes from wherever
 the request's own parameters place it, not from a `Last-Event-ID`.
 
+### Describing converter-backed JSON types
+
+A JSON converter owns its wire representation. Portia cannot infer that an application collection
+serializes as an array, or that a value object serializes as a string. Declare that representation
+through `PortiaHttpOptions.OpenApiSchemaType` before the first OpenAPI document request:
+
+```csharp
+builder.Services.AddPortia().AddHttp(options =>
+    options.OpenApiSchemaType = type =>
+        type == typeof(ValueList<ItemSelection>) ? typeof(ItemSelection[]) :
+        type == typeof(Money) ? typeof(string) : null);
+```
+
+Return `null` for ordinary serializer schemas. Register both the converter-backed contract and its
+representation (here `ItemSelection[]`) in the application's `[PortiaJsonContext]` with explicit
+`[JsonSerializable]` attributes. The representation is exported through Portia's configured JSON
+metadata, so item property names, converters and recursive references use the same serializer policy.
+Dictionary values, polymorphic derived properties, nested collections and response types receive
+the mapping in both JSON and YAML documents. A nullable value type reuses its underlying type
+mapping unless the application supplies a separate mapping for the nullable type. The
+original property's requiredness, nullability and constructor default remain authoritative. Mapping
+is only a documentation declaration; it does not change the converter or validate its behavior.
+Compare actual runtime JSON with the schema in application tests. Missing representation metadata
+fails document generation; a cyclic chain of type mappings is rejected. Documents are cached after
+successful generation, so configure deterministic mappings at startup.
+
+CLR `Type` values do not retain nullable-reference annotations on collection elements or dictionary
+values. When a mapped converter represents nullable elements or values and the JSON metadata cannot
+describe that, set `PortiaHttpOptions.OpenApiSchemaCollectionElementIsNullable` for that mapped
+contract. Return `true` or `false` for the representation type; return `null` for contracts whose
+serializer metadata already describes their value nullability. Unspecified collection elements are
+non-nullable by default, so absent property metadata does not silently add `null` to a schema.
+
 ### Choosing where the document is served
 
 The routes are served only when the application explicitly calls `MapPortiaOpenApi()`.
@@ -446,6 +491,10 @@ turn and uses the first place that supplies it:
 2. **Body** (POST/PUT/PATCH) — an object JSON body, or, when every body member is a string, enum,
    or `TryParse` scalar, an `application/x-www-form-urlencoded` or `multipart/form-data` form.
 3. **Query** — the query string, for any string, enum, or `TryParse` scalar.
+
+`Uuid` and `TenantId` are such scalars. A request declares `TenantId Tenant` and a route token
+`{tenant}`, a query value, or a body member binds it; text that is not a realm segment is a 400 at
+the boundary rather than an exception from the stream address inside the handler.
 
 Body and query names are the JSON wire names. A value the body supplies — including an explicit
 JSON null — wins over the query, so `POST /orders/{id}?dry_run=true` with a JSON or form body
@@ -541,12 +590,14 @@ explicitly on the endpoint:
 ```csharp
 app.MapPortiaPost<DepositAccount>("/accounts/{id}")
     .WithPortiaRouteValues(context => new RequestRouteValues(
+        Realm: context.User.FindFirstValue("tenant_id"),
         Resource: context.Request.RouteValues["id"]!.ToString()));
 ```
 
-The request's configured concrete route segments remain authoritative. For a
-wildcard realm, derive `Realm` from the application's authenticated tenant context
-in this resolver. One well-formed, nonempty Bearer credential may be carried to the queue
+The request's configured concrete route segments remain authoritative. For a wildcard realm, derive
+`Realm` from the authenticated principal in this resolver, as above, never from the request body: the
+queue route decides which tenant's worker runs the request. A `null` realm fails the mapping. One
+well-formed, nonempty Bearer credential may be carried to the queue
 and is validated again when the work executes. Authentication schemes and token validation
 remain application-owned.
 
@@ -592,8 +643,10 @@ the schedule and cancellation identity. Reapplying an identical definition keeps
 changing it at the same route uses Fitz's native last-write-wins upsert. Removing a declaration does
 not cancel it: explicitly call `IScheduleClient.CancelAsync` with the concrete route. The native
 client is available from DI for listing and administration over Portia's shared Fitz connection.
-A durable schedule definition produces live, non-backlogged Fitz firing deliveries; use a queue
-when every missed delivery must remain pending.
+A durable schedule definition produces live, non-backlogged Fitz firing deliveries. Fitz queues
+add reservations, acknowledgment and redelivery, with best-effort persistence in Fitz 0.2.0.
+Applications that require crash-safe work admission need durable intent and recovery independent
+of queue acceptance; see [queue acceptance and crash recovery](migration-0.8.md#fitz-queue-acceptance-and-crash-recovery).
 
 Keep Fitz connections long-lived and register an `IRequestActorValidator` for inbound work.
 Fitz supplies the request serializers and creates a fresh dependency-injection scope for each
@@ -627,6 +680,13 @@ renews its Fitz reservation. Terminally failed requests stop renewal and remain
 unacknowledged; Fitz controls expiration, redelivery, and configured dead-letter
 policy. Hosted stream failures reconnect after backoff. This does not
 republish failed messages or add application retry counters.
+
+Fitz 0.2.0 currently constructs its queue actors with no `max_attempts` limit, so expired
+reservations redeliver indefinitely. The Rust actor's `max_attempts` option is internal; neither
+the broker configuration nor .NET client exposes it, and `QueueRunnerOptions.TerminalAttempt`
+cannot set it. Fitz deployments that expose their own limit make that a broker policy; Fitz 0.2.0
+does not report attempt counts to Portia, so Portia rejects a positive `TerminalAttempt` at startup.
+See [shared application setup](application-setup.md#worker-deployment) for the full boundary.
 
 Projector and reactor passes use a separate bounded policy: failures leave the checkpoint
 unchanged, retry with exponential backoff, and fault the worker with `WorkloadFailureException`
@@ -735,6 +795,32 @@ every unprotected request type in stable order before serving work, and dispatch
 unprotected request with an exception that names the fix, so a missing allowance is never mistaken
 for a real denial. A principal-stage `IRequestAuthorizer<IRequestBase>` protects every request.
 Request types stay free of authorization attributes.
+
+A request that acts within one tenant implements `ITenantRequest`, directly or through a request-family
+interface, and the application selects `TenantRequestAuthorizer` once. Every such request is then
+denied unless the actor's own tenant, resolved by the application's `IActorTenantResolver`, is the
+tenant the request names; `ClaimTenantResolver` covers the common case of one tenant claim. A system
+actor is exempt, so reactions and schedules act in any tenant. Hosted startup fails when the
+authorizer is selected without a resolver.
+
+```csharp
+public interface IAccountRequest : ITenantRequest { Uuid AccountId { get; } }
+
+[Discriminator("accounts.deposit")]
+[RequestRoute("accounts", "account", "*", "deposit")]
+public sealed record DepositFunds(TenantId Tenant, Uuid AccountId, long AmountCents)
+    : IRequest, ICallable, IAccountRequest;
+
+services.AddSingleton<IActorTenantResolver>(new ClaimTenantResolver("tenant_id"));
+services.AddPortia()
+    .RequireAuthorization()
+    .AddRequestHandler<DepositFundsHandler>()
+    .AddRequestAuthorizer<TenantRequestAuthorizer>()
+    .AddRequestAuthorizer<AccountRequestAuthorizer>();
+```
+
+`TenantRequestAuthorizer` decides tenant membership only. Object-level access within the tenant,
+such as whether the actor may touch this account, stays with the application's own authorizer.
 
 `MapPortiaGetStream<TRequest, TOut>` writes an incremental JSON array;
 `MapPortiaGetSse<TRequest, TOut>` writes SSE. Both enumerate once and check the first

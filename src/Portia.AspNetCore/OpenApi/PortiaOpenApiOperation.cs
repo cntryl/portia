@@ -21,4 +21,8 @@ public sealed record PortiaOpenApiOperation(
     bool JsonStream,
     bool ServerSentEvents,
     bool QueueCapable,
-    IReadOnlyList<PortiaOpenApiParameter> Parameters);
+    IReadOnlyList<PortiaOpenApiParameter> Parameters)
+{
+    /// <summary>Gets whether the declared response payload can be null.</summary>
+    public bool ResultIsNullable { get; init; }
+}

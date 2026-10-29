@@ -21,7 +21,7 @@ public sealed class FitzRequestQueuePublisher(
     public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
         CancellationToken ct = default)
         where TRequest : IRequest, IQueuable
-        => EnqueueAsync(request, routeValues, actorToken, RequestMetadata.Create(), ct);
+        => EnqueueAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <inheritdoc />
     public async ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,

@@ -13,6 +13,56 @@ namespace Cntryl.Portia;
 [Collection(TelemetryTestGroup.Name)]
 public sealed class FitzNotificationFaultTests
 {
+    /// <summary>An ensured schedule definition uses the typed key rather than its route hash.</summary>
+    [Fact]
+    public async Task ShouldBindTypedOperationGivenEnsuredSchedule()
+    {
+        // Arrange
+        var request = new RequestIdentityTests.IdentifiedCommand(Uuid.CreateVersion4());
+        var serializer = TestJson.Serializer(typeof(RequestIdentityTests.IdentifiedCommand));
+        var client = new TwoPayloadScheduleClient(ReadOnlyMemory<byte>.Empty);
+        var scheduler = new FitzRequestScheduler(client, serializer);
+
+        // Act
+        _ = await scheduler.EnsureAsync(request, new RequestScheduleSpec("* * * * *"),
+            new RequestRouteValues(), RequestActor.System);
+        var first = client.CreatedBody.ToArray();
+        _ = await scheduler.EnsureAsync(request, new RequestScheduleSpec("* * * * *"),
+            new RequestRouteValues(), RequestActor.System);
+        var scheduled = JsonSerializer.Deserialize(client.CreatedBody.Span,
+            FitzJsonContext.Default.FitzScheduledRequestEnvelope)!;
+
+        // Assert
+        Assert.Equal(first, client.CreatedBody.ToArray());
+        Assert.Equal(request.CommandId, serializer.DeserializeEnvelope(scheduled.RequestEnvelope).Metadata.RequestId);
+    }
+
+    /// <summary>Repeated firings of a fixed typed operation preserve its key and original lineage.</summary>
+    [Fact]
+    public async Task ShouldPreserveTypedOperationGivenScheduledFirings()
+    {
+        // Arrange
+        var request = new RequestIdentityTests.IdentifiedCommand(Uuid.CreateVersion4());
+        var serializer = TestJson.Serializer(typeof(RequestIdentityTests.IdentifiedCommand));
+        var envelope = serializer.Serialize(request, null, RequestMetadata.FromRequest(request), null);
+        var payload = JsonSerializer.SerializeToUtf8Bytes(
+            new FitzScheduledRequestEnvelope(1, "portia:system", "Portia",
+                envelope.ToArray()), FitzJsonContext.Default.FitzScheduledRequestEnvelope);
+        var consumer = new FitzScheduledRequestConsumer(new TwoPayloadScheduleClient(payload), serializer,
+            "schedule://test/identity/command/apply",
+            TestJson.Catalog(RequestTransportId.Schedule, typeof(RequestIdentityTests.IdentifiedCommand)),
+            new AllowScheduledRequestActorValidator());
+
+        // Act
+        var deliveries = new List<RequestNotification>();
+        await foreach (var delivery in consumer.ReadAsync())
+            deliveries.Add(delivery);
+
+        // Assert
+        Assert.Equal(2, deliveries.Count);
+        Assert.All(deliveries, delivery => Assert.Equal(RequestMetadata.FromRequest(request), delivery.Metadata));
+    }
+
     /// <summary>Transient validator results and exceptions retry the same firing in fresh scopes.</summary>
     [Theory]
     [InlineData(false)]
@@ -327,6 +377,12 @@ public sealed class FitzNotificationFaultTests
 
         public Task CancelAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
 
+        public Task CreateBatchAsync(IReadOnlyList<ScheduleEntry> entries, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<ScheduleCursorPage> ListV2Async(string? cursor, ulong? limit, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
         public Task<ScheduleListPage> ListAsync(ulong? offset, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
@@ -344,14 +400,26 @@ public sealed class FitzNotificationFaultTests
 
     sealed class TwoPayloadScheduleClient(ReadOnlyMemory<byte> payload) : IScheduleClient
     {
+        public ReadOnlyMemory<byte> CreatedBody { get; private set; }
+
         public Task<ScheduleSubscription> SubscribeAsync(string selector, CancellationToken ct = default) =>
             Task.FromResult(new ScheduleSubscription(selector, Notifications(selector, ct),
                 _ => ValueTask.CompletedTask, Task.CompletedTask));
 
         public Task<string?> CreateAsync(string route, string cron, ScheduleDeliveryMode mode,
-            ReadOnlyMemory<byte> body, CancellationToken ct = default) => throw new NotSupportedException();
+            ReadOnlyMemory<byte> body, CancellationToken ct = default)
+        {
+            CreatedBody = body;
+            return Task.FromResult<string?>(route);
+        }
 
         public Task CancelAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public Task CreateBatchAsync(IReadOnlyList<ScheduleEntry> entries, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<ScheduleCursorPage> ListV2Async(string? cursor, ulong? limit, CancellationToken ct = default) =>
+            throw new NotSupportedException();
 
         public Task<ScheduleListPage> ListAsync(ulong? offset, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();

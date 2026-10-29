@@ -39,7 +39,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     static readonly DiagnosticDescriptor UnsupportedRegistrationCallSite = new(
         "PORTIA019",
         "Unsupported registration call site",
-        "Portia cannot generate the '{0}' registration at this call site; call it directly from ordinary executable code",
+        "Portia cannot generate the '{0}' registration here. Keep the type concrete in an ordinary call or feature-local extension method; do not forward it through a generic helper, method group, or delegate.",
         "Portia",
         DiagnosticSeverity.Error,
         true);
@@ -59,7 +59,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 {
                     Expression: MemberAccessExpressionSyntax
                     {
-                        Name.Identifier.ValueText: "SendAsync" or "StreamAsync" or "DispatchAsync"
+                        Name.Identifier.ValueText: "SendAsync" or "SendWithOutcomeAsync" or "StreamAsync" or "DispatchAsync"
                         or "DispatchStreamAsync"
                         or "EnqueueAsync" or "PublishAsync" or "ScheduleAsync" or "EnsureAsync"
                         or "AddRequestSchedule"
@@ -576,7 +576,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         return literal.Substring(1, literal.Length - 2).Replace("{", "{{").Replace("}", "}}");
     }
 
-    static string Type(ITypeSymbol symbol) => symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+    static string Type(ITypeSymbol symbol) => RequestTransportDiscovery.Type(symbol);
 
     static void Generate(SourceProductionContext context, ImmutableArray<Call> calls,
         ImmutableArray<RequestTransportComponent> dispatchedRequests, SharedRegistrationsModel shared)

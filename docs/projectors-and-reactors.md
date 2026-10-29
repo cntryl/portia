@@ -246,7 +246,7 @@ public sealed class AccountRepository(IKvClient kv)
     // resource the projector writes for this tenant.
     public async ValueTask<long> GetBalanceAsync(TenantId tenant, Uuid accountId, CancellationToken ct)
     {
-        await using var tx = await BeginReadAsync(tenant.Value, ct);
+        await using var tx = await BeginTenantReadAsync(tenant, ct);
         var current = await tx.GetAsync(Encoding.UTF8.GetBytes($"balance\0{accountId}"), ct);
         return current.Found ? BinaryPrimitives.ReadInt64BigEndian(current.Value!.Value.Span) : 0;
     }
@@ -276,8 +276,9 @@ Portia derives one resource per workload — one projector in one realm, and so 
 configured.
 
 A repository serves exactly one projector, named when it is constructed. Reads outside a batch open
-`BeginReadAsync(realm)` — the tenant ID for a `PerTenant` projector, otherwise the realm of its
-pattern — which is always read-only, so a query never holds the lock the projector writes under.
+`BeginTenantReadAsync(tenant)` for a `PerTenant` projector, or `BeginReadAsync(realm)` with the realm
+of a global projector's pattern — always read-only, so a query never holds the lock the projector
+writes under.
 It is refused while a batch is open on the same repository instance: that read would see only
 committed data, never the batch's staged writes, so a write method reads through `Transaction`, as
 `IncrementBalanceAsync` does above.
@@ -291,11 +292,17 @@ A view across tenants is a different query with its own projector: register a gl
 builds that read model, rather than opening every tenant's resource in turn.
 
 `UseKvCheckpoints` covers reactors instead. Their effects can never join a transaction, so their
-progress is an independent durable write. Its route is a base as well: one checkpoint store serves
+progress is an independent KV write. Its route is a base as well: one checkpoint store serves
 every reactor, and each reactor in each tenant gets its own derived resource, so one tenant's save
 never waits on another's. It is an explicit selection rather than a default: a reactor that silently
 fell back to an in-memory checkpoint would reissue its entire backlog of external effects after
 every restart.
+
+Fitz KV commits default to `KvDurability.Buffered`; stream appends remain synchronous. Projection
+data and checkpoint advance atomically, but a crash can rewind recent KV progress and trigger
+replay. Reactor effects must tolerate replay regardless of persistence mode. Select synchronous
+KV commits explicitly with `UseKvCheckpoints(route, KvDurability.Sync)`, the four-argument
+`FitzKvProjectionStore` base constructor, or the three-argument tenant snapshot store constructor.
 
 Checkpoint values use a fixed format prefix followed by the backend-owned cursor as UTF-8. Readers
 also accept the Portia 0.1.x representation—exactly eight bytes containing an unsigned big-endian
@@ -314,7 +321,7 @@ A read model that callers list, sort, and page — teams, members, documents —
 `Cntryl.Fitz.Extensions`' `KvDirectory<T, TKey>`: its declared covering indexes make each page one
 bounded range scan with a keyset cursor. Every directory operation takes an open `IKvTransaction`,
 so it composes with both halves of the repository: the projector writes through `Transaction`, and
-queries read through `BeginReadAsync`.
+queries read through `BeginTenantReadAsync`.
 
 ```csharp
 // Like every domain event, both are also [JsonSerializable] roots on the application's [PortiaJsonContext].
@@ -361,13 +368,13 @@ public sealed class TeamRepository(IKvClient kv)
     // Query side: one read-only transaction per call, on the resource the projector writes for this tenant.
     public async ValueTask<Team?> GetAsync(TenantId tenant, Uuid id, CancellationToken ct)
     {
-        await using var tx = await BeginReadAsync(tenant.Value, ct);
+        await using var tx = await BeginTenantReadAsync(tenant, ct);
         return await Teams.GetAsync(tx, id, ct);
     }
 
     public async ValueTask<Page<Team>> ListAsync(TenantId tenant, int take, string? cursor, CancellationToken ct)
     {
-        await using var tx = await BeginReadAsync(tenant.Value, ct);
+        await using var tx = await BeginTenantReadAsync(tenant, ct);
         return await Teams.QueryAsync(tx, ByName.Query().Take(take).After(cursor), ct);
     }
 }

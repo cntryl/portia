@@ -148,6 +148,7 @@ public abstract class McpToolRegistration
         Func<TResult, RequestError?> failure,
         Func<TResult, JsonSerializerOptions, CallToolResult> success,
         CancellationToken ct)
+        where TRequest : IRequestBase
     {
         var services = call.Services ?? throw new InvalidOperationException("The MCP request has no service scope.");
         var request = Bind<TRequest>(call.Params, json);
@@ -155,7 +156,10 @@ public abstract class McpToolRegistration
         var bus = services.GetRequiredService<IRequestBus>();
         var context = new RequestDispatchContext(actor, Invocation,
             timeProvider: services.GetService<TimeProvider>());
-        var result = await dispatch(bus, request, context, ct).ConfigureAwait(false);
+        var binding = context.BindRequest(request);
+        if (!binding.IsSuccess)
+            return new McpToolInvocationResult(Failure(binding.Error), binding.Error);
+        var result = await dispatch(bus, request, binding.Value, ct).ConfigureAwait(false);
         return failure(result) is { } error
             ? new McpToolInvocationResult(Failure(error), error)
             : new McpToolInvocationResult(success(result, json), null);

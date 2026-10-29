@@ -155,7 +155,7 @@ sealed class FitzWireCounts
         Interlocked.Read(ref _commit), Interlocked.Read(ref _rollback));
     internal void Observe(ReadOnlySpan<byte> bytes)
     {
-        // Verified against the pinned 1.4.2 FrameCodec: a CORRELATE label and a request share a frame.
+        // Verified against the pinned 2.0.0 FrameCodec: a CORRELATE label and a request share a frame.
         while (!bytes.IsEmpty)
         {
             var extended = bytes[0] == 0xFF;

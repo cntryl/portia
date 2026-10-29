@@ -11,6 +11,52 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class RequestTransportMarkerTests
 {
+    /// <summary>A child send cannot silently become a new root operation when its parent is missing.</summary>
+    [Fact]
+    public async Task ShouldRejectMissingParentGivenChildTransportSend()
+    {
+        // Arrange
+        var implementation = new FakeRemoteRequestSender();
+        IRemoteRequestSender sender = implementation;
+        var request = new RequestIdentityTests.IdentifiedCommand(Uuid.CreateVersion4());
+
+        // Act and Assert
+        _ = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+            await sender.SendAsync(request, new RequestRouteValues(), null, (IExecutionContext)null!));
+        Assert.Null(implementation.LastMetadata);
+    }
+
+    /// <summary>Default transport helpers carry the caller's typed operation identity.</summary>
+    [Fact]
+    public async Task ShouldPreserveTypedIdentityGivenDefaultTransportHelpers()
+    {
+        // Arrange
+        var remote = new FakeRemoteRequestSender();
+        var queue = new FakeRequestQueuePublisher();
+        var notice = new FakeNoticeRequestSender();
+        var scheduler = new FakeRequestScheduler();
+        var request = new RequestIdentityTests.IdentifiedCommand(Uuid.CreateVersion4());
+        var route = new RequestRouteValues();
+
+        // Act and Assert
+        _ = await ((IRemoteRequestSender)remote).SendAsync(request, route, null);
+        Assert.Equal(request.CommandId, remote.LastMetadata!.RequestId);
+        _ = await ((IRemoteRequestSender)remote).SendWithOutcomeAsync(request, route, null);
+        Assert.Equal(request.CommandId, remote.LastMetadata!.RequestId);
+        var query = new RequestIdentityTests.IdentifiedQuery(Uuid.CreateVersion4());
+        _ = await ((IRemoteRequestSender)remote).SendAsync<RequestIdentityTests.IdentifiedQuery, Uuid>(query, route, null);
+        Assert.Equal(query.CommandId, remote.LastMetadata!.RequestId);
+        _ = await ((IRemoteRequestSender)remote).SendWithOutcomeAsync<RequestIdentityTests.IdentifiedQuery, Uuid>(query, route, null);
+        Assert.Equal(query.CommandId, remote.LastMetadata!.RequestId);
+        await ((IRequestQueuePublisher)queue).EnqueueAsync(request, route, null);
+        Assert.Equal(request.CommandId, queue.LastMetadata!.RequestId);
+        await ((INoticeRequestSender)notice).PublishAsync(request, route, null);
+        _ = await ((IRequestScheduler)scheduler).ScheduleAsync(request, new RequestScheduleSpec("* * * * *"),
+            route, RequestActor.System);
+        Assert.Equal(request.CommandId, notice.LastMetadata!.RequestId);
+        Assert.Equal(request.CommandId, scheduler.LastMetadata!.RequestId);
+    }
+
     /// <summary>
     ///     Verifies that a result-bearing request is accepted by the RPC sender.
     /// </summary>
@@ -55,33 +101,163 @@ public sealed class RequestTransportMarkerTests
         Assert.NotNull(scheduleId);
     }
 
+    /// <summary>A legacy sender implementation reports completed results through the default outcome API.</summary>
+    [Fact]
+    public async Task ShouldReportCompletedOutcomeForLegacySenderImplementation()
+    {
+        IRemoteRequestSender sender = new FakeRemoteRequestSender();
+
+        var outcome = await sender.SendWithOutcomeAsync<CreateUser, Uuid>(
+            new CreateUser("ada@example.com", "Ada Lovelace"), new RequestRouteValues("tenant-123"), null);
+
+        var completed = Assert.IsType<RemoteRequestOutcome<Uuid>.Completed>(outcome);
+        Assert.True(completed.Result.IsSuccess);
+    }
+
+    /// <summary>A legacy sender returns not-dispatched without invoking the implementation for prior cancellation.</summary>
+    [Fact]
+    public async Task ShouldReportNotDispatchedOutcomeForPreCancelledLegacySender()
+    {
+        var implementation = new FakeRemoteRequestSender();
+        IRemoteRequestSender sender = implementation;
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var outcome = await sender.SendWithOutcomeAsync<CreateUser, Uuid>(
+            new CreateUser("ada@example.com", "Ada Lovelace"), new RequestRouteValues("tenant-123"), null,
+            cancellation.Token);
+
+        _ = Assert.IsType<RemoteRequestOutcome<Uuid>.NotDispatched>(outcome);
+        Assert.Equal(0, implementation.CallCount);
+    }
+
+    /// <summary>A legacy sender reports an unknown outcome when cancellation interrupts an active send.</summary>
+    [Fact]
+    public async Task ShouldReportUnknownOutcomeWhenLegacySenderIsCancelledAfterDispatch()
+    {
+        var implementation = new WaitingRemoteRequestSender();
+        IRemoteRequestSender sender = implementation;
+        using var cancellation = new CancellationTokenSource();
+        var sending = sender.SendWithOutcomeAsync<CreateUser, Uuid>(
+            new CreateUser("ada@example.com", "Ada Lovelace"), new RequestRouteValues("tenant-123"), null,
+            cancellation.Token).AsTask();
+
+        await implementation.Dispatched.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+        var outcome = await sending.WaitAsync(TimeSpan.FromSeconds(5));
+
+        _ = Assert.IsType<RemoteRequestOutcome<Uuid>.OutcomeUnknown>(outcome);
+    }
+
+    /// <summary>Outcome-aware child sends inherit their parent's correlation and causation identities.</summary>
+    [Fact]
+    public async Task ShouldPreserveParentContextWhenSendingOutcomeAwareRequests()
+    {
+        var parentMetadata = new RequestMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), Uuid.CreateVersion4());
+        var parent = new RequestContext<ClockProbe>(new ClockProbe(),
+            new RequestDispatchContext(RequestActor.System, metadata: parentMetadata));
+        var implementation = new FakeRemoteRequestSender();
+        IRemoteRequestSender sender = implementation;
+        var routeValues = new RequestRouteValues("tenant-123");
+
+        var noResultOutcome = await sender.SendWithOutcomeAsync(
+            new SendWelcomeEmail(Uuid.CreateVersion4()), routeValues, null, parent);
+        var noResultMetadata = Assert.IsType<RequestMetadata>(implementation.LastMetadata);
+        _ = Assert.IsType<RemoteRequestOutcome.Completed>(noResultOutcome);
+        Assert.NotEqual(parent.RequestId, noResultMetadata.RequestId);
+        Assert.Equal(parent.CorrelationId, noResultMetadata.CorrelationId);
+        Assert.Equal(parent.RequestId, noResultMetadata.CausationId);
+
+        var resultOutcome = await sender.SendWithOutcomeAsync<CreateUser, Uuid>(
+            new CreateUser("ada@example.com", "Ada Lovelace"), routeValues, null, parent);
+        var resultMetadata = Assert.IsType<RequestMetadata>(implementation.LastMetadata);
+        _ = Assert.IsType<RemoteRequestOutcome<Uuid>.Completed>(resultOutcome);
+        Assert.NotEqual(parent.RequestId, resultMetadata.RequestId);
+        Assert.Equal(parent.CorrelationId, resultMetadata.CorrelationId);
+        Assert.Equal(parent.RequestId, resultMetadata.CausationId);
+    }
+
     sealed class FakeRemoteRequestSender : IRemoteRequestSender
     {
+        public int CallCount { get; private set; }
+
+        public RequestMetadata? LastMetadata { get; private set; }
+
         public ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues,
             string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
-            where TRequest : IRequest, ICallable => ValueTask.FromResult(Result.Success);
+            where TRequest : IRequest, ICallable
+        {
+            LastMetadata = metadata;
+            return ValueTask.FromResult(Result.Success);
+        }
 
         public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues,
             string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
-            where TRequest : IRequest<TOut>, ICallable => ValueTask.FromResult(Result<TOut>.Success(default!));
+            where TRequest : IRequest<TOut>, ICallable
+        {
+            CallCount++;
+            LastMetadata = metadata;
+            return ValueTask.FromResult(Result<TOut>.Success(default!));
+        }
+    }
+
+    sealed class WaitingRemoteRequestSender : IRemoteRequestSender
+    {
+        public TaskCompletionSource Dispatched { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues,
+            string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+            where TRequest : IRequest, ICallable => new(WaitAsync(ct));
+
+        public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues,
+            string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+            where TRequest : IRequest<TOut>, ICallable => new(WaitAsync<TOut>(ct));
+
+        async Task<Result> WaitAsync(CancellationToken ct)
+        {
+            Dispatched.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return Result.Success;
+        }
+
+        async Task<Result<TOut>> WaitAsync<TOut>(CancellationToken ct)
+        {
+            Dispatched.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return Result<TOut>.Success(default!);
+        }
     }
 
     sealed class FakeRequestQueuePublisher : IRequestQueuePublisher
     {
+        public RequestMetadata? LastMetadata { get; private set; }
+
         public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
             RequestMetadata metadata, CancellationToken ct = default)
-            where TRequest : IRequest, IQueuable => ValueTask.CompletedTask;
+            where TRequest : IRequest, IQueuable
+        {
+            LastMetadata = metadata;
+            return ValueTask.CompletedTask;
+        }
     }
 
     sealed class FakeNoticeRequestSender : INoticeRequestSender
     {
+        public RequestMetadata? LastMetadata { get; private set; }
+
         public ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
             RequestMetadata metadata, CancellationToken ct = default)
-            where TRequest : IRequest, INotifiable => ValueTask.CompletedTask;
+            where TRequest : IRequest, INotifiable
+        {
+            LastMetadata = metadata;
+            return ValueTask.CompletedTask;
+        }
     }
 
     sealed class FakeRequestScheduler : IRequestScheduler
     {
+        public RequestMetadata? LastMetadata { get; private set; }
+
         public ValueTask<string> ScheduleAsync<TRequest>(
             TRequest request,
             RequestScheduleSpec spec,
@@ -89,7 +265,11 @@ public sealed class RequestTransportMarkerTests
             ClaimsPrincipal actor,
             RequestMetadata metadata,
             CancellationToken ct = default)
-            where TRequest : IRequest, ISchedulable => ValueTask.FromResult("schedule-id");
+            where TRequest : IRequest, ISchedulable
+        {
+            LastMetadata = metadata;
+            return ValueTask.FromResult("schedule-id");
+        }
 
         public ValueTask CancelAsync(string scheduleId, CancellationToken ct = default) => ValueTask.CompletedTask;
     }

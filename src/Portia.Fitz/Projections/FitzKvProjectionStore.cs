@@ -15,8 +15,11 @@ namespace Cntryl.Portia;
 ///     projector in one realm, and so each tenant of a per-tenant projector — gets its own derived
 ///     resource; two workloads can never contend for one lock however the routes are configured.
 ///     A repository serves the one projector it names at construction, so its query-side reads
-///     derive that resource from the realm alone through <see cref="BeginReadAsync" />, and a
+///     derive that resource from the realm alone through <see cref="BeginReadAsync(string, CancellationToken)" />, and a
 ///     projector registered under any other name is rejected rather than writing where no read looks.
+///     Commits default to <see cref="KvDurability.Buffered" />. Data and checkpoint remain atomic,
+///     but a crash can lose recent batches and cause replay. Derived repositories can explicitly
+///     select <see cref="KvDurability.Sync" /> through the durability constructor.
 /// </remarks>
 /// <param name="client">The Fitz KV client to open transactions against.</param>
 /// <param name="route">The Fitz KV base route this repository's per-workload resources derive from.</param>
@@ -32,8 +35,17 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
     readonly string _route = FitzKvCheckpoints.Route(route, nameof(route));
 
     readonly string _componentName = RequireName(componentName);
+    readonly KvDurability _durability = KvDurability.Buffered;
 
     IKvTransaction? _open;
+
+    /// <summary>Creates a projection repository with an explicit KV persistence choice.</summary>
+    /// <param name="client">The Fitz KV client.</param>
+    /// <param name="route">The projection base route.</param>
+    /// <param name="componentName">The projector workload name.</param>
+    /// <param name="durability">The persistence requested when committing a batch.</param>
+    protected FitzKvProjectionStore(IKvClient client, string route, string componentName, KvDurability durability)
+        : this(client, route, componentName) => _durability = FitzKvCheckpoints.RequireDurability(durability);
 
     /// <summary>
     ///     Opens a read-only transaction on the resource this repository's projector writes for one
@@ -63,10 +75,23 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
         }
 
         return await _client
-            .BeginAsync(FitzKvCheckpoints.WorkloadRoute(_route, _componentName, realm), KvDurability.Sync,
+            .BeginAsync(FitzKvCheckpoints.WorkloadRoute(_route, _componentName, realm),
                 KvMode.ReadOnly, ct)
             .ConfigureAwait(false);
     }
+
+    /// <summary>
+    ///     Opens a read-only transaction on the resource this repository's projector writes for one tenant:
+    ///     the typed form of <see cref="BeginReadAsync(string, CancellationToken)" /> for a <c>PerTenant</c>
+    ///     projector, so a query that already carries a <see cref="TenantId" /> never reduces it to a string.
+    /// </summary>
+    /// <param name="tenant">The tenant whose resource to read.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>A transaction the caller disposes when the read is finished.</returns>
+    /// <exception cref="ArgumentException">The tenant is <c>default</c>.</exception>
+    /// <exception cref="InvalidOperationException">A batch is open on this store.</exception>
+    protected ValueTask<IKvTransaction> BeginTenantReadAsync(TenantId tenant, CancellationToken ct = default) =>
+        BeginReadAsync(tenant.Value, ct);
 
     /// <summary>
     ///     Gets the transaction the current unit of work writes through. Only valid between
@@ -182,7 +207,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
             {
                 await tx.PutAsync(FitzKvCheckpoints.Key(identity), FitzKvCheckpoints.Encode(checkpoint.Cursor), ct)
                     .ConfigureAwait(false);
-                await tx.CommitAsync(ct).ConfigureAwait(false);
+                await tx.CommitAsync(store._durability, ct).ConfigureAwait(false);
                 _done = true;
             }
             catch (Exception ex)

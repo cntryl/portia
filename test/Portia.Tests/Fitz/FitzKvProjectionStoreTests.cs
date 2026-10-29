@@ -158,6 +158,7 @@ public sealed class FitzKvProjectionStoreTests
         }
 
         Assert.Equal(1, client.LastTransaction.Commits);
+        Assert.Equal(KvDurability.Buffered, client.LastTransaction.Durability);
         Assert.Equal("12", Encoding.UTF8.GetString(client.Read(TotalsRepository.DataKey("total"))!));
         Assert.Equal(new ProjectionCheckpoint(new EventCursor("9")), await store.LoadCheckpointAsync(Identity));
     }

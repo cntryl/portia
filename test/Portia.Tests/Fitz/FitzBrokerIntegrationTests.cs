@@ -134,20 +134,20 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var key = FitzKvCheckpoints.Key(identity);
         var resource = FitzKvCheckpoints.WorkloadRoute(route, identity);
 
-        await using (var seed = await originalClient.Kv.BeginAsync(resource, KvDurability.Sync))
+        await using (var seed = await originalClient.Kv.BeginAsync(resource))
         {
             await seed.PutAsync(key, new byte[] { 1, 2, 3 });
-            await seed.CommitAsync();
+            await seed.CommitAsync(KvDurability.Sync);
         }
 
         var store = new FitzKvValueRepository(originalClient.Kv, route, identity.ComponentName);
         _ = await Assert.ThrowsAsync<InvalidDataException>(async () =>
             await store.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)));
 
-        await using (var repair = await repairClient.Kv.BeginAsync(resource, KvDurability.Sync))
+        await using (var repair = await repairClient.Kv.BeginAsync(resource))
         {
             await repair.PutAsync(key, FitzKvCheckpoints.Encode(EventCursor.Start));
-            await repair.CommitAsync();
+            await repair.CommitAsync(KvDurability.Sync);
         }
 
         await using (var batch = await store.BeginAsync(
@@ -205,7 +205,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var tenantA = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-a", "reactions"));
         var tenantB = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-b", "reactions"));
         await using var inFlight = await client.Kv.BeginAsync(
-            FitzKvCheckpoints.WorkloadRoute(route, tenantA), KvDurability.Sync);
+            FitzKvCheckpoints.WorkloadRoute(route, tenantA));
 
         await store.SaveAsync(tenantB, new ProjectionCheckpoint(new EventCursor("7")));
 
@@ -654,6 +654,8 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public Task Ready => _ready.Task;
+
+        public Task UnsubscribeAllAsync(CancellationToken ct = default) => inner.UnsubscribeAllAsync(ct);
 
         public Task PublishAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
             inner.PublishAsync(route, body, ct);

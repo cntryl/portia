@@ -9,6 +9,32 @@ public sealed class PortiaHttpOptions
     /// <summary>Gets the default interval between server-sent-event keep-alive comments (15 seconds).</summary>
     public static readonly TimeSpan DefaultServerSentEventKeepAlive = TimeSpan.FromSeconds(15);
 
+    /// <summary>
+    ///     Gets or sets an application-owned mapping from a JSON contract type to its wire representation
+    ///     type for Portia OpenAPI export. Return null to keep the ordinary serializer schema.
+    /// </summary>
+    /// <remarks>
+    ///     Use this for converter-backed types whose JSON shape the serializer cannot infer. Both types
+    ///     must have metadata in Portia's configured JSON resolver. The mapping changes documentation
+    ///     only; converters still own runtime JSON. Nullable value types reuse their underlying type's
+    ///     mapping unless explicitly overridden. Property nullability, defaults and requiredness are
+    ///     retained. Configure the mapping before the first document request; documents are cached.
+    /// </remarks>
+    public Func<Type, Type?>? OpenApiSchemaType { get; set; }
+
+    /// <summary>
+    ///     Gets or sets application-owned nullability for array elements or dictionary values when
+    ///     <see cref="OpenApiSchemaType" /> maps a contract to a collection representation.
+    /// </summary>
+    /// <remarks>
+    ///     C# reference nullability is erased from <see cref="Type" />. Return <see langword="true" />
+    ///     or <see langword="false" /> when the representation's element or value nullability is
+    ///     declared by a converter but absent from serializer type metadata; return <see langword="null" />
+    ///     to use the serializer metadata. The callback receives the mapped contract type and the
+    ///     representation's element or value type.
+    /// </remarks>
+    public Func<Type, Type, bool?>? OpenApiSchemaCollectionElementIsNullable { get; set; }
+
     /// <summary>Gets or sets the maximum JSON request-body size.</summary>
     public long MaxJsonBodyBytes { get; set; } = DefaultMaxJsonBodyBytes;
 

@@ -4,7 +4,75 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
-## Unreleased
+## 0.9.2 - 2026-10-28
+
+### Added
+
+- Add `TenantId` request binding, tenant-aware request authorization, tenant directories and typed
+  tenant projection reads.
+- Add `RequestError` factories and implicit conversions for concise `Result` handling.
+- Add feature-local registration guidance and update the Accounts example and onboarding guides.
+
+### Fixed
+
+- Preserve JSON metadata diagnostics for body members of converted request roots used by mutating
+  HTTP endpoints.
+- Include tenant identifiers as string items and values in OpenAPI collection schemas.
+
+## 0.9.0 - 2026-10-22
+
+### Added
+
+- Add `IIdentifiedRequest` and immutable logical identity binding across direct, HTTP, MCP and
+  worker transports, preserving execution attempts and rejecting empty or conflicting identities.
+
+### Fixed
+
+- Reject conflicting JSON/form duplicates of mutation route parameters while allowing omission.
+- Preserve fixed typed operation identity through scheduling and sender default overloads.
+- Drain the example telemetry collector before asserting its asynchronously batched output.
+
+## 0.8.1 - 2026-10-19
+
+### Changed
+
+- The repository requires the .NET 10 SDK family, with a 10.0.400 minimum and latest-feature-band
+  roll-forward. It no longer pins one SDK patch release.
+
+### Added
+
+- Add typed remote RPC outcomes that distinguish completed results, calls not dispatched, a
+  cancellation signal forwarded by the transport, and unknown results after dispatch.
+- Add a packed Account CQRS example and OpenTelemetry recipe for API and worker hosts.
+
+### Fixed
+
+- Preserve declared OpenAPI root and value nullability for mapped JSON schemas.
+- Reuse OpenAPI response components for Portia's default problem and unauthorized responses.
+- Keep nullable HTTP result types in generated signatures while using runtime-compatible types for
+  serialization and OpenAPI metadata.
+
+## 0.8.0 - 2026-10-17
+
+### Changed
+
+- Upgrade to Fitz .NET 2.0.0 and the compatible 0.2.0 broker. Existing deployments require a
+  coordinated broker migration; see [the migration guide](docs/migration-0.8.md).
+- Terminal queue failures now use an optional observer and remain unacknowledged after observation.
+  The transport controls redelivery and dead-letter policy, so observer effects must tolerate replay.
+- The `terminal` value of `portia.request.delivery.count` now describes an unacknowledged terminal
+  delivery; warning event 1005 says the transport retains it.
+- KV checkpoint, projection, and tenant-directory writes default to `Buffered`, with explicit
+  `Sync` overloads. Authoritative event-stream commits remain synchronous.
+- `InMemoryRpcClient.CallAsync` returns `RpcCall`, validates timeout budgets, enforces deadlines
+  independently of worker cooperation, and reports cancellation outcomes consistently.
+- Refresh stable dependencies and pin the .NET SDK to 10.0.402. Retain package locks for tests and
+  executable hosts; reusable libraries resolve through central package versions.
+
+### Added
+
+- Application-owned OpenAPI schema type mappings support converter-backed JSON contracts,
+  including nested collections, dictionaries, nullable values, and recursive schemas.
 
 ### Fixed
 

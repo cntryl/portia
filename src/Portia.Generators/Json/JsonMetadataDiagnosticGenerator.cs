@@ -11,7 +11,8 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 {
     static readonly HashSet<string> CandidateMethods = new(StringComparer.Ordinal)
     {
-        "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "AddMcpTool", "AddMcpResource", "AddMcpPrompt", "SendAsync", "StreamAsync",
+        "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "AddMcpTool", "AddMcpResource", "AddMcpPrompt", "SendAsync",
+        "SendWithOutcomeAsync", "StreamAsync",
         "DispatchAsync",
         "DispatchStreamAsync", "EnqueueAsync", "PublishAsync", "ScheduleAsync", "EnsureAsync", "AddRequestSchedule",
         "MapPortiaGet", "MapPortiaPost", "MapPortiaPut", "MapPortiaPatch", "MapPortiaDelete", "MapPortiaGetStream",
@@ -156,22 +157,27 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                 Add(argument);
         }
 
-        if (endpointMapping && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol request)
+        // A request-level converter makes the JSON root opaque: System.Text.Json does not walk its
+        // members, but default HTTP binding still reads each body member through its own metadata.
+        // Ordinary request roots already generate member metadata and need no separate declarations.
+        if (endpointMapping && name is "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch"
+                            && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol request
+                            && request.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString()
+                                == "System.Text.Json.Serialization.JsonConverterAttribute"))
         {
-            var mutating = name is "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch";
             var operation = model.GetOperation(invocation, ct) as IInvocationOperation;
             var pattern = operation?.Arguments.FirstOrDefault(argument => argument.Parameter?.Name == "pattern")
                 ?.Value.ConstantValue is { HasValue: true, Value: string route }
                 ? route
                 : string.Empty;
             var constructor = HttpBindingShape.SinglePublicConstructor(request);
-            if (mutating && constructor is not null && SupportsDefaultBinding(constructor, pattern))
+            if (constructor is not null && constructor.Parameters.All(parameter =>
+                    HttpBindingShape.IsSupportedParameter(parameter,
+                        HttpBindingShape.IsRouteParameter(pattern, parameter.Name))))
             {
                 foreach (var parameter in constructor.Parameters)
-                {
                     if (!HttpBindingShape.IsRouteParameter(pattern, parameter.Name))
                         Add(UnwrapNullable(parameter.Type));
-                }
             }
         }
 
@@ -246,18 +252,6 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 
     sealed record RootUse(string Key, string Display, string Namespace, DiagnosticLocation Location);
 
-    static bool SupportsDefaultBinding(IMethodSymbol constructor, string pattern)
-    {
-        foreach (var parameter in constructor.Parameters)
-        {
-            if (!HttpBindingShape.IsSupportedParameter(parameter,
-                    HttpBindingShape.IsRouteParameter(pattern, parameter.Name)))
-                return false;
-        }
-
-        return true;
-    }
-
     static bool IsOrDerivesFrom(ITypeSymbol type, INamedTypeSymbol? baseType)
     {
         if (baseType is null || type is not INamedTypeSymbol current)
@@ -281,7 +275,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 
     static bool IsPortiaDispatch(IMethodSymbol method)
     {
-        if (method.Name is not ("SendAsync" or "StreamAsync" or "DispatchAsync" or "DispatchStreamAsync"
+        if (method.Name is not ("SendAsync" or "SendWithOutcomeAsync" or "StreamAsync" or "DispatchAsync" or "DispatchStreamAsync"
             or "EnqueueAsync" or "PublishAsync" or "ScheduleAsync" or "EnsureAsync" or "AddRequestSchedule"))
         {
             return false;

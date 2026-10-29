@@ -1,3 +1,4 @@
+using Cntryl.Fitz;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -30,6 +31,22 @@ public sealed class FitzKvRegistrationTests
     }
 
     /// <summary>
+    ///     An application adapter that needs realm or global broker positions (a source-fact resolver, a
+    ///     fixed-cut reader) reads through the same connection the event store uses, so it never opens a
+    ///     second connection to learn what the first one already knows.
+    /// </summary>
+    [Fact]
+    public void FitzPublishesItsStreamClientForApplicationReaders()
+    {
+        var services = new ServiceCollection();
+
+        _ = services.AddPortia().AddFitz(Configuration());
+
+        var descriptor = Assert.Single(services, item => item.ServiceType == typeof(IStreamClient));
+        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+    }
+
+    /// <summary>
     ///     Reactor checkpoints stay unregistered until the application asks for them, so the absence of
     ///     durable progress is a resolution failure at startup rather than silent replay after a restart.
     /// </summary>
@@ -41,6 +58,34 @@ public sealed class FitzKvRegistrationTests
         _ = services.AddPortia().AddFitz(Configuration());
 
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(IProjectionCheckpointStore));
+    }
+
+    /// <summary>
+    ///     Tenant directory snapshots are an explicit selection like reactor checkpoints: without one the
+    ///     event-sourced directory replays its lifecycle history on every start, which is correct but slow.
+    /// </summary>
+    [Fact]
+    public void SelectingKvTenantSnapshotsRegistersTheDurableStore()
+    {
+        var services = new ServiceCollection();
+
+        _ = services.AddPortia().AddFitz(Configuration(),
+            builder => builder.UseKvTenantSnapshots("kv://accounts/tenants/snapshots"));
+
+        var descriptor = Assert.Single(services, item => item.ServiceType == typeof(ITenantDirectorySnapshotStore));
+        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(IProjectionCheckpointStore));
+    }
+
+    /// <summary>Two different snapshot routes cannot both be the one a restart resumes from.</summary>
+    [Fact]
+    public void ConflictingTenantSnapshotRoutesAreRejected()
+    {
+        var services = new ServiceCollection();
+
+        _ = Assert.Throws<InvalidOperationException>(() => services.AddPortia().AddFitz(Configuration(), builder =>
+            builder.UseKvTenantSnapshots("kv://accounts/tenants/snapshots")
+                .UseKvTenantSnapshots("kv://accounts/tenants/other")));
     }
 
     [Fact]

@@ -17,6 +17,9 @@ public sealed class PortiaFitzBuilder
     readonly HashSet<RequestTransportId> _workerTransports = [.. AllBuiltInTransports];
     readonly Lazy<IReadOnlyList<FitzWorkerDefinition>> _workers;
     string? _checkpointRoute;
+    KvDurability _checkpointDurability;
+    string? _tenantSnapshotRoute;
+    KvDurability _tenantSnapshotDurability;
     bool _workerSelectionExplicit;
 
     internal PortiaFitzBuilder(PortiaBuilder application)
@@ -61,6 +64,21 @@ public sealed class PortiaFitzBuilder
             return this;
         _application.Services.TryAddSingleton<IKvClient>(provider =>
             provider.GetRequiredService<FitzApplicationConnection>().Client.Kv);
+        return this;
+    }
+
+    /// <summary>
+    ///     Publishes the shared connection's stream client, so an application adapter that needs broker
+    ///     positions the event store does not expose (realm and global offsets, captured watermarks) takes
+    ///     <see cref="IStreamClient" /> as an ordinary constructor dependency instead of owning a second
+    ///     connection to the same broker.
+    /// </summary>
+    internal PortiaFitzBuilder AddStreamClient()
+    {
+        if (!_capabilities.Add("stream"))
+            return this;
+        _application.Services.TryAddSingleton<IStreamClient>(provider =>
+            provider.GetRequiredService<FitzApplicationConnection>().Client.Stream);
         return this;
     }
 
@@ -145,28 +163,83 @@ public sealed class PortiaFitzBuilder
     ///     progress is not registered here — a projector commits its checkpoint inside its own
     ///     repository's transaction, which is what <see cref="FitzKvProjectionStore" /> exists to
     ///     share, and that store derives its own per-workload resources the same way.
+    ///     Progress commits default to <see cref="KvDurability.Buffered" />.
     /// </summary>
     /// <param name="route">The <c>kv://{realm}/{area}/{resource}</c> base route checkpoints are written under.</param>
     /// <returns>This builder, for chaining.</returns>
     /// <exception cref="ArgumentException">The route is not an exact three-segment Fitz KV route.</exception>
     /// <exception cref="InvalidOperationException">The application already selected a different route.</exception>
-    public PortiaFitzBuilder UseKvCheckpoints(string route)
+    public PortiaFitzBuilder UseKvCheckpoints(string route) => UseKvCheckpoints(route, KvDurability.Buffered);
+
+    /// <summary>Selects reactor checkpoint storage with an explicit KV persistence choice.</summary>
+    /// <param name="route">The checkpoint base route.</param>
+    /// <param name="durability">The persistence requested when committing progress.</param>
+    /// <returns>This builder, for chaining.</returns>
+    /// <exception cref="ArgumentException">The route is not an exact three-segment Fitz KV route.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The durability is undefined.</exception>
+    /// <exception cref="InvalidOperationException">The application selected conflicting checkpoint settings.</exception>
+    public PortiaFitzBuilder UseKvCheckpoints(string route, KvDurability durability)
     {
         var validated = FitzKvCheckpoints.Route(route, nameof(route));
+        _ = FitzKvCheckpoints.RequireDurability(durability);
         if (_checkpointRoute is not null)
         {
-            return string.Equals(_checkpointRoute, validated, StringComparison.Ordinal)
-                ? this
-                : throw new InvalidOperationException(
+            if (!string.Equals(_checkpointRoute, validated, StringComparison.Ordinal))
+                throw new InvalidOperationException(
                     $"This application has conflicting Fitz KV checkpoint routes ('{_checkpointRoute}' and "
                     + $"'{validated}'). Reactor progress must resolve to one route, or a restart reads its "
                     + "checkpoints from a route that never received them and every reaction replays from zero.");
+            if (_checkpointDurability != durability)
+                throw new InvalidOperationException(
+                    $"This application has conflicting Fitz KV checkpoint durability settings ('{_checkpointDurability}' and '{durability}').");
+            return this;
         }
 
         _checkpointRoute = validated;
+        _checkpointDurability = durability;
         _ = AddKvClient();
         _application.Services.TryAddSingleton<IProjectionCheckpointStore>(provider =>
-            new FitzKvCheckpointStore(provider.GetRequiredService<IKvClient>(), validated));
+            new FitzKvCheckpointStore(provider.GetRequiredService<IKvClient>(), validated, durability));
+        return this;
+    }
+
+    /// <summary>
+    ///     Persists the event-sourced tenant directory's roster and cursor in Fitz KV under
+    ///     <paramref name="route" /> with buffered commits, so a restarted worker resumes tenant discovery
+    ///     from the snapshot instead of replaying the whole lifecycle history.
+    /// </summary>
+    /// <param name="route">The exact three-segment <c>kv://</c> base route for the snapshot.</param>
+    /// <returns>This builder, for chaining.</returns>
+    public PortiaFitzBuilder UseKvTenantSnapshots(string route) => UseKvTenantSnapshots(route, KvDurability.Buffered);
+
+    /// <summary>
+    ///     Persists the event-sourced tenant directory's roster and cursor in Fitz KV under
+    ///     <paramref name="route" /> with the given commit durability.
+    /// </summary>
+    /// <param name="route">The exact three-segment <c>kv://</c> base route for the snapshot.</param>
+    /// <param name="durability">How snapshot commits are persisted.</param>
+    /// <returns>This builder, for chaining.</returns>
+    /// <exception cref="InvalidOperationException">A different route or durability was already selected.</exception>
+    public PortiaFitzBuilder UseKvTenantSnapshots(string route, KvDurability durability)
+    {
+        var validated = FitzKvCheckpoints.Route(route, nameof(route));
+        _ = FitzKvCheckpoints.RequireDurability(durability);
+        if (_tenantSnapshotRoute is not null)
+        {
+            if (!string.Equals(_tenantSnapshotRoute, validated, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    $"This application has conflicting Fitz KV tenant snapshot routes ('{_tenantSnapshotRoute}' and '{validated}').");
+            if (_tenantSnapshotDurability != durability)
+                throw new InvalidOperationException(
+                    $"This application has conflicting Fitz KV tenant snapshot durability settings ('{_tenantSnapshotDurability}' and '{durability}').");
+            return this;
+        }
+
+        _tenantSnapshotRoute = validated;
+        _tenantSnapshotDurability = durability;
+        _ = AddKvClient();
+        _application.Services.TryAddSingleton<ITenantDirectorySnapshotStore>(provider =>
+            new FitzKvTenantDirectorySnapshotStore(provider.GetRequiredService<IKvClient>(), validated, durability));
         return this;
     }
 

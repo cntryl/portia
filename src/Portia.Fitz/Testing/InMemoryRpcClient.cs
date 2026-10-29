@@ -1,9 +1,12 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 
 namespace Cntryl.Portia.Testing;
 
 /// <summary>
-///     Stands in for a real Fitz RPC broker for tests: routes a caller's <see cref="CallAsync" />
+///     Stands in for a real Fitz RPC broker for tests: routes a caller's
+///     <see cref="CallAsync(string, ReadOnlyMemory{byte}, CancellationToken)" />
 ///     directly to a worker whose registration pattern matches the concrete route, in-process, with no
 ///     network hop. Patterns match as the broker matches them — <c>*</c> stands for exactly one whole
 ///     segment and <c>**</c> for zero or more — so a per-tenant request registered under
@@ -18,25 +21,66 @@ public sealed class InMemoryRpcClient : IRpcClient
     readonly Lock _gate = new();
     readonly List<Worker> _workers = [];
 
+    // Match IRpcClient's two overloads, including their optional cancellation tokens.
+#pragma warning disable RS0026
     /// <inheritdoc />
-    public async IAsyncEnumerable<RpcResponseFrame> CallAsync(
+    public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
+        CallAsync(route, body, null, ct);
+
+    /// <inheritdoc />
+    public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout, CancellationToken ct = default)
+    {
+        if (timeout < TimeSpan.Zero || timeout > TimeSpan.FromDays(1))
+            throw new ArgumentOutOfRangeException(nameof(timeout), "RPC timeout must be between zero and one day.");
+
+        var cancellation = new TaskCompletionSource<RpcCancellationOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
+        return new RpcCall(CallCoreAsync(route, body, timeout, cancellation, ct), cancellation.Task);
+    }
+#pragma warning restore RS0026
+
+    async IAsyncEnumerable<RpcResponseFrame> CallCoreAsync(
         string route,
         ReadOnlyMemory<byte> body,
-        [EnumeratorCancellation] CancellationToken ct = default)
+        TimeSpan? timeout,
+        TaskCompletionSource<RpcCancellationOutcome> cancellation,
+        [EnumeratorCancellation] CancellationToken ct)
     {
-        Worker? worker;
-        lock (_gate)
-            worker = _workers.LastOrDefault(candidate => Matches(route, candidate.Pattern));
-        if (worker is null)
+        var budgetStartedAt = Stopwatch.GetTimestamp();
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (timeout is { } budget)
         {
-            throw new InvalidOperationException($"No worker is registered for route '{route}'.");
+            if (budget == TimeSpan.Zero)
+                deadline.Cancel();
+            else
+                deadline.CancelAfter(budget);
         }
+        var callToken = deadline.Token;
 
-        var writer = new CapturingResponseWriter();
-        await worker.Handler(new RpcRequest(route, body), writer, ct).ConfigureAwait(false);
+        try
+        {
+            callToken.ThrowIfCancellationRequested();
+            Worker? worker;
+            lock (_gate)
+                worker = _workers.LastOrDefault(candidate => Matches(route, candidate.Pattern));
+            if (worker is null)
+            {
+                cancellation.TrySetResult(RpcCancellationOutcome.NotRequested);
+                throw new InvalidOperationException($"No worker is registered for route '{route}'.");
+            }
 
-        foreach (var frame in writer.Frames)
-            yield return frame;
+            callToken.ThrowIfCancellationRequested();
+            using var invocation = new WorkerInvocation(worker, route, body.ToArray(), timeout,
+                budgetStartedAt, cancellation, callToken);
+            await foreach (var frame in invocation.ReadAsync(callToken).ConfigureAwait(false))
+            {
+                callToken.ThrowIfCancellationRequested();
+                yield return frame;
+            }
+        }
+        finally
+        {
+            cancellation.TrySetResult(RpcCancellationOutcome.RequestNotSent);
+        }
     }
 
     /// <inheritdoc />
@@ -114,14 +158,125 @@ public sealed class InMemoryRpcClient : IRpcClient
         public Func<RpcRequest, IRpcResponseWriter, CancellationToken, ValueTask> Handler => handler;
     }
 
-    sealed class CapturingResponseWriter : IRpcResponseWriter
+    // Owns the worker and response stream together. Stopping the caller forwards cancellation,
+    // while worker resources stay alive until both the handler and its callbacks have finished.
+    sealed class WorkerInvocation : IRpcResponseWriter, IDisposable
     {
-        public List<RpcResponseFrame> Frames { get; } = [];
+        readonly Lock _gate = new();
+        readonly Channel<RpcResponseFrame> _frames = Channel.CreateUnbounded<RpcResponseFrame>();
+        readonly CancellationTokenSource _workerCancellation = new();
+        readonly TaskCompletionSource<RpcCancellationOutcome> _cancellation;
+        readonly CancellationTokenRegistration _callerRegistration;
+        readonly Task _worker;
+        Task _forwarding = Task.CompletedTask;
+        ulong _sequence;
+        bool _terminal;
+        int _disposed;
+
+        public WorkerInvocation(Worker worker, string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
+            long budgetStartedAt, TaskCompletionSource<RpcCancellationOutcome> cancellation, CancellationToken ct)
+        {
+            _cancellation = cancellation;
+            _callerRegistration = ct.Register(Cancel);
+            // Independent dispatch also bounds callers of synchronously blocking handlers.
+            _worker = Task.Run(() => RunAsync(worker, route, body, timeout, budgetStartedAt, ct), CancellationToken.None);
+        }
+
+        public IAsyncEnumerable<RpcResponseFrame> ReadAsync(CancellationToken ct) => _frames.Reader.ReadAllAsync(ct);
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return;
+            // Registration disposal waits for Cancel to publish its forwarding task.
+            _callerRegistration.Dispose();
+            Cancel();
+            _ = DisposeWorkerAsync();
+        }
 
         public ValueTask SendAsync(ReadOnlyMemory<byte> body, bool isFinal, CancellationToken ct = default)
         {
-            Frames.Add(new RpcResponseFrame(body, (ulong)Frames.Count));
+            ct.ThrowIfCancellationRequested();
+            lock (_gate)
+            {
+                if (_terminal)
+                    throw new InvalidOperationException("The RPC call has already completed.");
+                var sequence = _sequence++;
+                if (!isFinal || !body.IsEmpty)
+                    _ = _frames.Writer.TryWrite(new RpcResponseFrame(body.ToArray(), sequence));
+                if (isFinal)
+                    Complete();
+            }
+
             return ValueTask.CompletedTask;
+        }
+
+        async Task RunAsync(Worker worker, string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
+            long budgetStartedAt, CancellationToken ct)
+        {
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                var remaining = timeout is { } duration
+                    ? TimeSpan.FromTicks(Math.Max(0, (duration - Stopwatch.GetElapsedTime(budgetStartedAt)).Ticks))
+                    : (TimeSpan?)null;
+                await worker.Handler(new RpcRequest(route, body, remaining), this, _workerCancellation.Token)
+                    .ConfigureAwait(false);
+                Complete();
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // The token can become cancelled before its registered callback runs.
+                Cancel();
+            }
+            catch (Exception exception)
+            {
+                Complete(exception);
+            }
+        }
+
+        void Complete(Exception? exception = null)
+        {
+            lock (_gate)
+            {
+                if (_terminal)
+                    return;
+                _terminal = true;
+                _cancellation.TrySetResult(RpcCancellationOutcome.NotRequested);
+                _ = _frames.Writer.TryComplete(exception);
+            }
+        }
+
+        void Cancel()
+        {
+            lock (_gate)
+            {
+                if (_terminal)
+                    return;
+                _terminal = true;
+                _forwarding = CancelWorkerAsync();
+                _cancellation.TrySetResult(RpcCancellationOutcome.Forwarded);
+                _ = _frames.Writer.TryComplete(new OperationCanceledException());
+            }
+        }
+
+        async Task CancelWorkerAsync()
+        {
+            try
+            {
+                await _workerCancellation.CancelAsync().ConfigureAwait(false);
+            }
+            catch (AggregateException)
+            {
+                // Worker callbacks cannot fault the caller's cancellation path.
+            }
+        }
+
+        async Task DisposeWorkerAsync()
+        {
+            await _worker.ConfigureAwait(false);
+            await _forwarding.ConfigureAwait(false);
+            _workerCancellation.Dispose();
         }
     }
 }

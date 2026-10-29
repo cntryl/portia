@@ -3,18 +3,27 @@ using System.Text.Json;
 namespace Cntryl.Portia;
 
 /// <summary>Stores tenant rosters and their event cursors atomically in Fitz KV.</summary>
+/// <remarks>Commits default to <see cref="KvDurability.Buffered" />; lost snapshots are rebuilt by replay.</remarks>
 public sealed class FitzKvTenantDirectorySnapshotStore(IKvClient client, string route) : ITenantDirectorySnapshotStore
 {
     static readonly ReadOnlyMemory<byte> Key = "tenant-directory-snapshot-v1"u8.ToArray();
     readonly IKvClient _client = client ?? throw new ArgumentNullException(nameof(client));
     readonly string _route = FitzKvCheckpoints.Route(route, nameof(route));
+    readonly KvDurability _durability = KvDurability.Buffered;
+
+    /// <summary>Creates a tenant snapshot store with an explicit KV persistence choice.</summary>
+    /// <param name="client">The Fitz KV client.</param>
+    /// <param name="route">The snapshot base route.</param>
+    /// <param name="durability">The persistence requested when committing a snapshot.</param>
+    public FitzKvTenantDirectorySnapshotStore(IKvClient client, string route, KvDurability durability) : this(client, route)
+        => _durability = FitzKvCheckpoints.RequireDurability(durability);
 
     /// <inheritdoc />
     public async ValueTask<TenantDirectorySnapshot?> LoadAsync(EventStreamPattern pattern,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(pattern);
-        await using var tx = await _client.BeginAsync(Route(pattern), KvDurability.Sync, KvMode.ReadOnly, ct)
+        await using var tx = await _client.BeginAsync(Route(pattern), KvMode.ReadOnly, ct)
             .ConfigureAwait(false);
         var stored = await tx.GetAsync(Key, ct).ConfigureAwait(false);
         return stored.Found ? Decode(stored.Value!.Value.Span) : null;
@@ -29,7 +38,7 @@ public sealed class FitzKvTenantDirectorySnapshotStore(IKvClient client, string 
         IKvTransaction tx;
         try
         {
-            tx = await _client.BeginAsync(Route(pattern), KvDurability.Sync, KvMode.ReadWrite, ct)
+            tx = await _client.BeginAsync(Route(pattern), KvMode.ReadWrite, ct)
                 .ConfigureAwait(false);
         }
         catch (KvException ex) when (ex.DomainCode == FitzErrorCodes.KvIsolationConflict)
@@ -53,7 +62,7 @@ public sealed class FitzKvTenantDirectorySnapshotStore(IKvClient client, string 
                         snapshot.ActiveTenants.Select(tenant => tenant.Value).ToArray()),
                     FitzJsonContext.Default.FitzTenantDirectorySnapshot);
                 await tx.PutAsync(Key, value, ct).ConfigureAwait(false);
-                await tx.CommitAsync(ct).ConfigureAwait(false);
+                await tx.CommitAsync(_durability, ct).ConfigureAwait(false);
                 committed = true;
                 return true;
             }

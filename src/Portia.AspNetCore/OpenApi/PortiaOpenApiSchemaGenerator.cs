@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Schema;
 using Microsoft.OpenApi;
 using Microsoft.OpenApi.Reader;
 
@@ -12,27 +11,14 @@ namespace Cntryl.Portia;
 // Export the actual Portia contract, independently of application-owned ASP.NET JSON options.
 static class PortiaOpenApiSchemaGenerator
 {
-    public static IOpenApiSchema Create(Type type, JsonSerializerOptions options, OpenApiDocument document)
+    public static IOpenApiSchema Create(Type type, JsonSerializerOptions options, OpenApiDocument document,
+        Func<Type, Type?>? schemaType = null, bool rootIsNullable = false,
+        Func<Type, Type, bool?>? schemaCollectionElementIsNullable = null)
     {
         if (typeof(Stream).IsAssignableFrom(type))
             return new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" };
-        var node = options.GetTypeInfo(type).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
-        {
-            // The OpenAPI reader expects object nodes for entries in a properties map.
-            TransformSchemaNode = (context, schema) =>
-                (context.PropertyInfo?.PropertyType ?? context.TypeInfo.Type) switch
-            {
-                var uuid when uuid == typeof(Uuid) => UuidSchema(schema, false),
-                var nullableUuid when nullableUuid == typeof(Uuid?) => UuidSchema(schema, true),
-                _ => schema.GetValueKind() switch
-                {
-                    JsonValueKind.True => new JsonObject(),
-                    JsonValueKind.False => new JsonObject { ["not"] = new JsonObject() },
-                    _ => schema
-                }
-            }
-        });
-        node = ApplyUuidSchemas(node, type);
+        var node = new PortiaOpenApiJsonSchemaExporter(options, schemaType, schemaCollectionElementIsNullable)
+            .Export(type, rootIsNullable);
         var nodes = new Dictionary<string, JsonNode>(StringComparer.Ordinal);
         var references = new List<(JsonObject Node, string Target)>();
         Visit(node, "#");
@@ -98,51 +84,6 @@ static class PortiaOpenApiSchemaGenerator
                         Visit(child, path + "/" + index.ToString(CultureInfo.InvariantCulture));
                 }
             }
-        }
-
-        static JsonObject UuidSchema(JsonNode schema, bool nullable)
-        {
-            // Preserve exporter-owned keywords such as a constructor parameter's default. The
-            // property context is also authoritative for nullable value types: TypeInfo can be the
-            // underlying Uuid when an optional record parameter defaults to null.
-            var result = schema as JsonObject ?? [];
-            result["type"] = nullable
-                ? new JsonArray(JsonValue.Create("string"), JsonValue.Create("null"))
-                : JsonValue.Create("string");
-            result["format"] = "uuid";
-            return result;
-        }
-
-        JsonNode ApplyUuidSchemas(JsonNode schema, Type schemaType)
-        {
-            if (schema is not JsonObject schemaObject)
-            {
-                return schemaType == typeof(Uuid) || schemaType == typeof(Uuid?)
-                    ? UuidSchema(schema, schemaType == typeof(Uuid?))
-                    : schema;
-            }
-
-            if (schemaType == typeof(Uuid) || schemaType == typeof(Uuid?))
-                return UuidSchema(schemaObject, schemaType == typeof(Uuid?));
-
-            if (options.GetTypeInfo(schemaType).ElementType is { } elementType)
-            {
-                schemaObject["items"] = ApplyUuidSchemas(
-                    schemaObject["items"] ?? new JsonObject(), elementType);
-                return schemaObject;
-            }
-
-            if (schemaObject["properties"] is not JsonObject properties)
-                return schemaObject;
-
-            var typeInfo = options.GetTypeInfo(schemaType);
-            foreach (var property in typeInfo.Properties)
-            {
-                if (properties[property.Name] is not { } propertySchema)
-                    continue;
-                properties[property.Name] = ApplyUuidSchemas(propertySchema, property.PropertyType);
-            }
-            return schemaObject;
         }
 
     }

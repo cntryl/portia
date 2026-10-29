@@ -379,6 +379,42 @@ public sealed class PortiaBuilder
         return this;
     }
 
+    /// <summary>
+    ///     Registers the <see cref="ITenantDirectory" /> per-tenant workloads need, read from the
+    ///     application's own tenant lifecycle events: a <typeparamref name="TStartEvent" /> activates the
+    ///     tenant <paramref name="getTenantId" /> names and a <typeparamref name="TStopEvent" /> removes it.
+    ///     The directory reads through the registered <see cref="IDomainEventReader" />, wakes on the
+    ///     registered <see cref="IDomainEventNotifier" /> when there is one, and resumes from a registered
+    ///     <see cref="ITenantDirectorySnapshotStore" /> when there is one, such as Fitz's
+    ///     <c>UseKvTenantSnapshots</c>.
+    /// </summary>
+    /// <typeparam name="TStartEvent">The event that activates a tenant.</typeparam>
+    /// <typeparam name="TStopEvent">The event that removes a tenant.</typeparam>
+    /// <param name="pattern">The exact stream pattern the lifecycle events are read from.</param>
+    /// <param name="getTenantId">Names the tenant a lifecycle event is about.</param>
+    /// <returns>This builder, for chaining.</returns>
+    /// <remarks>An <see cref="ITenantDirectory" /> the application registered itself is kept.</remarks>
+    public PortiaBuilder AddEventSourcedTenantDirectory<TStartEvent, TStopEvent>(EventStreamPattern pattern,
+        Func<DomainEvent, TenantId> getTenantId)
+        where TStartEvent : DomainEvent
+        where TStopEvent : DomainEvent
+    {
+        ArgumentNullException.ThrowIfNull(pattern);
+        ArgumentNullException.ThrowIfNull(getTenantId);
+        Services.TryAddSingleton<ITenantDirectory>(provider =>
+        {
+            var reader = provider.GetRequiredService<IDomainEventReader>();
+            var notifier = provider.GetService<IDomainEventNotifier>();
+            var time = provider.GetService<TimeProvider>();
+            return provider.GetService<ITenantDirectorySnapshotStore>() is { } snapshots
+                ? TenantDirectorySnapshots.Create<TStartEvent, TStopEvent>(reader, pattern, getTenantId, snapshots,
+                    timeProvider: time, notifier: notifier)
+                : new EventSourcedTenantDirectory<TStartEvent, TStopEvent>(reader, pattern, getTenantId,
+                    timeProvider: time, notifier: notifier);
+        });
+        return this;
+    }
+
     /// <summary>Activates the shared application's worker registrations once in this host.</summary>
     /// <returns>This builder, for chaining.</returns>
     public PortiaBuilder AddWorkers()

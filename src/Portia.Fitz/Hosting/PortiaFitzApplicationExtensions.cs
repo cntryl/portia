@@ -155,7 +155,7 @@ public static class PortiaFitzApplicationExtensions
                 provider.GetRequiredService<FitzApplicationConnection>(), builder,
                 provider.GetService<ILogger<FleetPartitionRunner>>(),
                 provider.GetService<TimeProvider>()));
-            _ = builder.AddEventStore().AddKvClient().AddRequestClients();
+            _ = builder.AddEventStore().AddKvClient().AddStreamClient().AddRequestClients();
             configure(builder);
             return application;
         }

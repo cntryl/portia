@@ -12,8 +12,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <PackageVersion>0.7.0</PackageVersion>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <PackageVersion>0.9.2</PackageVersion>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 </Project>

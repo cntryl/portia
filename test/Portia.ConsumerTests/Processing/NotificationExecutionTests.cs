@@ -259,6 +259,8 @@ public sealed class NotificationExecutionTests
         public List<string> Cancellations { get; } = [];
         public bool ReturnNoIdentity { get; init; }
 
+        public Task UnsubscribeAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
+
         public Task PublishAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default)
         {
             Route = route;
@@ -287,6 +289,12 @@ public sealed class NotificationExecutionTests
             Cancellations.Add(id);
             return Task.CompletedTask;
         }
+
+        public Task CreateBatchAsync(IReadOnlyList<ScheduleEntry> entries, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<ScheduleCursorPage> ListV2Async(string? cursor, ulong? limit, CancellationToken ct = default) =>
+            throw new NotSupportedException();
 
         public Task<ScheduleListPage> ListAsync(ulong? offset, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();

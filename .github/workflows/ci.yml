@@ -34,9 +34,15 @@ jobs:
         with:
           global-json-file: global.json
           cache: true
-          cache-dependency-path: '**/packages.lock.json'
+          cache-dependency-path: |
+            **/packages.lock.json
+            **/*.csproj
+            **/Directory.Build.props
+            **/Directory.Build.targets
+            Directory.Packages.props
+            nuget.config
 
-      - name: Restore locked packages
+      - name: Restore packages with locked test and executable graphs
         run: dotnet restore Portia.slnx --locked-mode
 
       - name: Verify stable external dependencies
@@ -145,6 +151,7 @@ jobs:
             --output artifacts/fitz-lexkey-native-aot \
             -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
           artifacts/fitz-lexkey-native-aot/Portia.Fitz.LexKey.PackageConsumer
+          scripts/qualify-account-example.sh "$RUNNER_TEMP/portia-account-otel-evidence"
 
       - name: Test S3 storage integration
         env:

@@ -20,7 +20,7 @@ public readonly record struct RequestTransportId
     /// <summary>Gets the built-in callable capability.</summary>
     public static RequestTransportId Callable => new("callable");
 
-    /// <summary>Gets the built-in durable queue capability.</summary>
+    /// <summary>Gets the built-in queue capability.</summary>
     public static RequestTransportId Queue => new("queue");
 
     /// <summary>Gets the built-in notification capability.</summary>

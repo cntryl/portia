@@ -1,0 +1,33 @@
+{
+  "model": "jev-latest",
+  "state": {
+    "consumer": "bdgrz/compliance-core#1032 / #1022; upstream cntryl/portia#167",
+    "evidence": {
+      "routeDuplicateRed": "Generated consumer route7 accepted body commandId8, null and bad; expected400 actual200.",
+      "logicalIdentityRed": "Request has required Uuid CommandId implementing new IIdentifiedRequest. HTTP handler context RequestId was a different generated UUID.",
+      "current": "RequestDispatchContext.Metadata is immutable; copy constructor already preserves ExecutionId/StartedAt. Direct and parent helpers, HTTP/MCP and Fitz producer helpers currently generate logical IDs. Serialized wire metadata is explicit."
+    },
+    "design": "Add opt-in IIdentifiedRequest getter mapping required typed input to stable RequestId. Add explicit metadata factory for source requests/children. Bind a receiver-created context immutably, preserving ExecutionId/StartedAt, and reject empty typed identity or mismatched explicit propagated metadata as Validation before handler work. Root auto metadata can be replaced from typed value; incoming carried metadata cannot be silently overwritten. Direct/HTTP/MCP/queue/RPC/reaction producers/receivers use this shared contract; requests without it retain existing semantics. JSON route/body duplicates must agree by the same typed serializer/converters, allowing omitted body fields. No domain deduplication/receipts are provided by Portia.",
+    "scope": "No security host profile, defaults, existing PR166, domain behavior, deployment or environment reset. New APIs in Unshipped. Proof through consumer/dispatch/transport tests plus full suite/CI."
+  },
+  "questions": {
+    "contract": {
+      "type": "choice",
+      "instructions": "Which approach best meets explicit client operation identity across this framework boundary?",
+      "criteria": {
+        "typed_contract": "An opt-in typed identity interface, shared context/metadata binding and exact propagated identity validation; domain owners still resolve retries.",
+        "property_convention": "Guess a property named CommandId or Id through reflection at each transport.",
+        "attempt_identity": "Continue creating a fresh logical request ID for every delivery attempt."
+      }
+    },
+    "propagated": {
+      "type": "choice",
+      "instructions": "When a typed request identity differs from its carried queue/RPC metadata RequestId, what behavior follows the required contract?",
+      "criteria": {
+        "reject": "Return/classify validation before handler work, preserving correlation/causation and never silently accepting a different carried key.",
+        "overwrite": "Silently rewrite carried metadata to match the payload.",
+        "regenerate": "Choose another server UUID and run the command under it."
+      }
+    }
+  }
+}

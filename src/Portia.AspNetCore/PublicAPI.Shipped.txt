@@ -25,6 +25,8 @@ Cntryl.Portia.PortiaOpenApiOperation.QueueCapable.get -> bool
 Cntryl.Portia.PortiaOpenApiOperation.QueueCapable.init -> void
 Cntryl.Portia.PortiaOpenApiOperation.ResultType.get -> System.Type?
 Cntryl.Portia.PortiaOpenApiOperation.ResultType.init -> void
+Cntryl.Portia.PortiaOpenApiOperation.ResultIsNullable.get -> bool
+Cntryl.Portia.PortiaOpenApiOperation.ResultIsNullable.init -> void
 Cntryl.Portia.PortiaOpenApiOperation.ServerSentEvents.get -> bool
 Cntryl.Portia.PortiaOpenApiOperation.ServerSentEvents.init -> void
 Cntryl.Portia.PortiaOpenApiParameter
@@ -37,6 +39,8 @@ Cntryl.Portia.PortiaOpenApiParameter.DefaultValue.init -> void
 Cntryl.Portia.PortiaOpenApiParameter.Equals(Cntryl.Portia.PortiaOpenApiParameter? other) -> bool
 Cntryl.Portia.PortiaOpenApiParameter.HasDefault.get -> bool
 Cntryl.Portia.PortiaOpenApiParameter.HasDefault.init -> void
+Cntryl.Portia.PortiaOpenApiParameter.IsNullable.get -> bool
+Cntryl.Portia.PortiaOpenApiParameter.IsNullable.init -> void
 Cntryl.Portia.PortiaOpenApiParameter.PortiaOpenApiParameter(string! ClrName, System.Type! Type, string! Source, bool Required, bool HasDefault, object? DefaultValue, string? WireName) -> void
 Cntryl.Portia.PortiaOpenApiParameter.Required.get -> bool
 Cntryl.Portia.PortiaOpenApiParameter.Required.init -> void
@@ -156,3 +160,9 @@ Cntryl.Portia.HttpUnsupportedMediaTypeException
 Cntryl.Portia.HttpUnsupportedMediaTypeException.HttpUnsupportedMediaTypeException(string! message) -> void
 static Cntryl.Portia.PortiaHttpBinding.RejectCrossOrigin(Microsoft.AspNetCore.Http.HttpContext! context) -> Microsoft.AspNetCore.Http.IResult?
 static Cntryl.Portia.PortiaHttpBinding.RequireHttpServices(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app) -> void
+static Cntryl.Portia.PortiaHttpBinding.HasCredentials(Microsoft.AspNetCore.Http.HttpContext! context) -> bool
+Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaType.get -> System.Func<System.Type!, System.Type?>?
+Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaType.set -> void
+Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaCollectionElementIsNullable.get -> System.Func<System.Type!, System.Type!, bool?>?
+Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaCollectionElementIsNullable.set -> void
+static Cntryl.Portia.PortiaHttpBinding.ValidateRoutedBody<TRequest, TValue>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, int memberIndex, string! fallbackName, TValue expected) -> void

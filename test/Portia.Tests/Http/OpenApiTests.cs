@@ -6,6 +6,8 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Json;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -28,6 +30,191 @@ public sealed class OpenApiTests : IAsyncDisposable
         }
     }
 
+    /// <summary>Converter-backed collections retain their application-declared wire shape in both documents.</summary>
+    [Fact]
+    public async Task ShouldDescribeConvertedCollectionsAtEveryContractPosition()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia().AddHttp(options =>
+            options.OpenApiSchemaType = type => type switch
+            {
+                var value when value == typeof(OpenApiSelectionList) => typeof(OpenApiSelection[]),
+                var value when value == typeof(OpenApiRootSelectionRequest) => typeof(OpenApiSelection[]),
+                var value when value == typeof(OpenApiSelection) => typeof(OpenApiSelectionSchema),
+                _ => null
+            })
+            .AddRequestHandler<OpenApiConvertedHandler>();
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+        _ = _app.MapPortiaPost<OpenApiConvertedRequest, OpenApiSelectionList>("/converted");
+        await _app.StartAsync();
+        using var client = _app.GetTestClient();
+        using var response = await client.PostAsync("/converted", new StringContent(
+            """{"payload":{"items":[{"item_id":"item-1","revision":2,"next":{"item_id":"child","revision":3}}],"optional_items":null}}""",
+            Encoding.UTF8, "application/json"));
+        response.EnsureSuccessStatusCode();
+        using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("item-1", actual.RootElement[0].GetProperty("item_id").GetString());
+        Assert.Equal(3, actual.RootElement[0].GetProperty("next").GetProperty("revision").GetInt64());
+
+        foreach (var format in new[] { "json", "yml" })
+        {
+            var settings = new OpenApiReaderSettings();
+            settings.AddYamlReader();
+            var rawDocument = await client.GetStringAsync("/openapi/v1." + format);
+            var parsed = OpenApiDocument.Parse(rawDocument,
+                format == "yml" ? "yaml" : "json", settings);
+            Assert.Empty(parsed.Diagnostic!.Errors);
+            var operation = parsed.Document!.Paths!["/converted"].Operations![HttpMethod.Post];
+            var envelope = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
+            Assert.Contains("items", envelope.Required!);
+            Assert.DoesNotContain("optional_items", envelope.Required!);
+            var required = envelope.Properties!["items"];
+            Assert.Equal(JsonSchemaType.Array, required.Type);
+            var optional = envelope.Properties["optional_items"];
+            Assert.Equal(JsonSchemaType.Array | JsonSchemaType.Null, optional.Type);
+            var result = operation.Responses!["200"].Content!["application/json"].Schema!;
+            Assert.Equal(JsonSchemaType.Array, result.Type);
+            foreach (var collection in new[] { required, optional, result })
+            {
+                Assert.True(collection.Type!.Value.HasFlag(JsonSchemaType.Array));
+                var item = collection.Items!;
+                Assert.False(item.Type?.HasFlag(JsonSchemaType.Null) ?? false,
+                    $"type={item.Type}, anyOf={item.AnyOf?.Count ?? 0}, allOf={item.AllOf?.Count ?? 0}");
+                Assert.DoesNotContain(item.AnyOf ?? [], schema => schema.Type == JsonSchemaType.Null);
+                Assert.Equal(JsonSchemaType.String, item.Properties!["item_id"].Type);
+                Assert.True(item.Properties["revision"].Type!.Value.HasFlag(JsonSchemaType.Integer));
+                var next = item.Properties["next"];
+                Assert.Contains(next.AnyOf!, schema => schema.Type == JsonSchemaType.Null);
+                Assert.Contains(next.AnyOf!, schema => schema is OpenApiSchemaReference);
+            }
+
+        }
+    }
+
+    /// <summary>Collection nullability metadata applies to mapped and ordinary collection elements.</summary>
+    [Theory]
+    [InlineData("json")]
+    [InlineData("yml")]
+    public async Task ShouldPreserveNullableMappedAndDeclaredCollectionElements(string format)
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia().AddHttp(options =>
+            {
+                options.OpenApiSchemaType = type => type == typeof(OpenApiSelection)
+                    ? typeof(OpenApiSelectionSchema)
+                    : null;
+                options.OpenApiSchemaCollectionElementIsNullable = (contractType, elementType) =>
+                    elementType == typeof(OpenApiSelection) &&
+                    (contractType == typeof(List<OpenApiSelection>) ||
+                     contractType == typeof(Dictionary<string, OpenApiSelection>)) ||
+                    contractType == typeof(List<string>) && elementType == typeof(string)
+                        ? true
+                        : null;
+            })
+            .AddRequestHandler<OpenApiCollectionNullabilityHandler>();
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+        _ = _app.MapPortiaPost<OpenApiCollectionNullabilityRequest, OpenApiMappedCollectionNullability>(
+            "/collection-nullability");
+        await _app.StartAsync();
+        using var client = _app.GetTestClient();
+
+        var settings = new OpenApiReaderSettings();
+        settings.AddYamlReader();
+        var serialized = await client.GetStringAsync("/openapi/v1." + format);
+        var parsed = OpenApiDocument.Parse(serialized, format == "yml" ? "yaml" : "json", settings);
+        Assert.Empty(parsed.Diagnostic!.Errors);
+        var operation = parsed.Document!.Paths!["/collection-nullability"].Operations![HttpMethod.Post];
+        var request = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
+        var result = operation.Responses!["200"].Content!["application/json"].Schema!;
+        foreach (var envelope in new[] { request, result })
+        {
+            Assert.True(envelope.Properties!["items"].Items!.Type!.Value.HasFlag(JsonSchemaType.Null));
+            Assert.True(envelope.Properties["values"].AdditionalProperties!.Type!.Value.HasFlag(JsonSchemaType.Null));
+            Assert.True(envelope.Properties["labels"].Items!.Type!.Value.HasFlag(JsonSchemaType.Null));
+        }
+    }
+
+    /// <summary>Mapped request and nullable response roots retain their runtime array contract.</summary>
+    [Fact]
+    public async Task ShouldSerializeAndDescribeMappedRequestAndResponseRoots()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia().AddHttp(options => options.OpenApiSchemaType = type => type switch
+        {
+            var value when value == typeof(OpenApiSelectionList) => typeof(OpenApiSelection[]),
+            var value when value == typeof(OpenApiRootSelectionRequest) => typeof(OpenApiSelection[]),
+            var value when value == typeof(OpenApiSelection) => typeof(OpenApiSelectionSchema),
+            _ => null
+        }).AddRequestHandler<OpenApiRootSelectionHandler>();
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+        _ = _app.MapPortiaPost<OpenApiRootSelectionRequest, OpenApiSelectionList?>("/converted-root", configure =>
+            configure.Accepts<OpenApiRootSelectionRequest>("application/json").OnBind(async (context, ct) =>
+            {
+                var json = context.RequestServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
+                var request = await JsonSerializer.DeserializeAsync(context.Request.Body,
+                    (System.Text.Json.Serialization.Metadata.JsonTypeInfo<OpenApiRootSelectionRequest>)json.GetTypeInfo(
+                        typeof(OpenApiRootSelectionRequest)), ct);
+                return request ?? throw new JsonException("The test request body was null.");
+            }));
+        await _app.StartAsync();
+        using var client = _app.GetTestClient();
+        using var response = await client.PostAsync("/converted-root", new StringContent(
+            """[{"item_id":"item-1","revision":2,"next":null}]""", Encoding.UTF8, "application/json"));
+        response.EnsureSuccessStatusCode();
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("item-1", payload.RootElement[0].GetProperty("item_id").GetString());
+
+        foreach (var format in new[] { "json", "yml" })
+        {
+            var settings = new OpenApiReaderSettings();
+            settings.AddYamlReader();
+            var raw = await client.GetStringAsync("/openapi/v1." + format);
+            var parsed = OpenApiDocument.Parse(raw, format == "yml" ? "yaml" : "json", settings);
+            Assert.Empty(parsed.Diagnostic!.Errors);
+            var operation = parsed.Document!.Paths!["/converted-root"].Operations![HttpMethod.Post];
+            Assert.Equal(JsonSchemaType.Array,
+                operation.RequestBody!.Content!["application/json"].Schema!.Type);
+            Assert.Equal(JsonSchemaType.Array | JsonSchemaType.Null,
+                operation.Responses!["200"].Content!["application/json"].Schema!.Type);
+        }
+    }
+
+    /// <summary>Invalid mappings fail document generation clearly and do not poison its cache.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldRejectInvalidSchemaMappings(bool missingMetadata)
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia().AddHttp(options => options.OpenApiSchemaType = type =>
+            type == typeof(OpenApiSelectionList)
+                ? missingMetadata ? typeof(OpenApiMissingRepresentation) : typeof(OpenApiSelection[])
+                : !missingMetadata && type == typeof(OpenApiSelection[]) ? typeof(OpenApiSelectionList) : null)
+            .AddRequestHandler<OpenApiConvertedHandler>();
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+        _ = _app.MapPortiaPost<OpenApiConvertedRequest, OpenApiSelectionList>("/converted");
+        await _app.StartAsync();
+        using var client = _app.GetTestClient();
+        foreach (var format in new[] { "json", "yml" })
+        {
+            if (missingMetadata)
+                _ = await Assert.ThrowsAsync<NotSupportedException>(() => client.GetStringAsync("/openapi/v1." + format));
+            else
+            {
+                var error = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetStringAsync("/openapi/v1." + format));
+                Assert.Contains("Cyclic OpenAPI schema type mapping", error.Message, StringComparison.Ordinal);
+            }
+        }
+    }
+
     /// <summary>HTTP activation never replaces the application's global ASP.NET JSON policy.</summary>
     [Fact]
     public void ShouldLeaveAspNetCoreJsonOptionsOwnedByTheApplication()
@@ -42,14 +229,17 @@ public sealed class OpenApiTests : IAsyncDisposable
     }
 
     /// <summary>Portia schemas describe its payloads while ordinary endpoints retain their own contract.</summary>
-    [Fact]
-    public async Task ShouldDescribePortiaSerializerContractsSeparately()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldDescribePortiaSerializerContractsSeparately(bool customizeMoney)
     {
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.Configure<JsonOptions>(options =>
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
-        _ = builder.Services.AddPortia().AddHttp()
+        _ = builder.Services.AddPortia().AddHttp(options => options.OpenApiSchemaType = type =>
+                customizeMoney && type == typeof(HttpMoney) ? typeof(string) : null)
             .AddRequestHandler<OpenApiContractHandler>()
             .AddRequestHandler<OpenApiContractStreamHandler>()
             .ConfigureJson(options =>
@@ -102,7 +292,7 @@ public sealed class OpenApiTests : IAsyncDisposable
                 Assert.Contains("wire-name", schema.Properties.Keys);
                 Assert.Contains("display_name", schema.Required!);
                 Assert.Contains(schema.Properties["day_value"].Enum!, value => value!.GetValue<string>() == "Monday");
-                Assert.Null(schema.Properties["custom_value"].Type);
+                Assert.Equal(customizeMoney ? JsonSchemaType.String : (JsonSchemaType?)null, schema.Properties["custom_value"].Type);
                 Assert.Equal(JsonSchemaType.String, schema.Properties["team_id"].Type);
                 Assert.Equal("uuid", schema.Properties["team_id"].Format);
                 var candidateApplicationIds = schema.Properties["candidate_application_ids"];
@@ -174,6 +364,7 @@ public sealed class OpenApiTests : IAsyncDisposable
             .Accepts<Stream>("application/octet-stream")
             .OnBind(_ => new HttpOptionalBody())
             .Produces<Stream>(StatusCodes.Status200OK, "application/octet-stream")
+            .Produces(StatusCodes.Status400BadRequest)
             .OnResult((_, result) => result.IsSuccess ? Results.Stream(Stream.Null) : null));
         _ = group.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}/update", endpoint => endpoint
             .FromQuery(x => x.DryRun));
@@ -207,6 +398,15 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.Equal(OpenApiSpecVersion.OpenApi3_1, jsonDiagnostic.SpecificationVersion);
         Assert.Equal(OpenApiSpecVersion.OpenApi3_1, yamlDiagnostic.SpecificationVersion);
         Assert.Equal(jsonDocument.Paths.Keys.Order(), yamlDocument.Paths.Keys.Order());
+        var yamlCreate = yamlDocument.Paths["/api/orders"].Operations![HttpMethod.Post];
+        var yamlResponses = yamlCreate.Responses!;
+        foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
+            Assert.IsType<OpenApiResponseReference>(yamlResponses[status]);
+        Assert.IsType<OpenApiResponseReference>(yamlResponses["401"]);
+        Assert.Equal(2, yamlDocument.Components!.Responses!.Count);
+        var yamlUpload = yamlDocument.Paths["/api/upload"].Operations![HttpMethod.Post];
+        Assert.IsType<OpenApiResponse>(yamlUpload.Responses!["400"]);
+        Assert.Null(yamlUpload.Responses["400"].Content);
 
         using var raw = JsonDocument.Parse(json);
         Assert.Equal("3.1.1", raw.RootElement.GetProperty("openapi").GetString());
@@ -262,6 +462,9 @@ public sealed class OpenApiTests : IAsyncDisposable
         var binary = upload.GetProperty("content").GetProperty("application/octet-stream").GetProperty("schema");
         Assert.Equal("string", binary.GetProperty("type").GetString());
         Assert.Equal("binary", binary.GetProperty("format").GetString());
+        var explicitBadRequest = uploadOperation.GetProperty("responses").GetProperty("400");
+        Assert.False(explicitBadRequest.TryGetProperty("$ref", out _));
+        Assert.False(explicitBadRequest.TryGetProperty("content", out _));
         var binaryResponse = uploadOperation.GetProperty("responses").GetProperty("200").GetProperty("content")
             .GetProperty("application/octet-stream").GetProperty("schema");
         Assert.Equal("string", binaryResponse.GetProperty("type").GetString());
@@ -279,16 +482,55 @@ public sealed class OpenApiTests : IAsyncDisposable
             .GetProperty("application/json").GetProperty("schema");
         Assert.Equal("string", createdId.GetProperty("type").GetString());
         Assert.Equal("uuid", createdId.GetProperty("format").GetString());
-        var problemSchema = responses.GetProperty("400").GetProperty("content")
-            .GetProperty("application/problem+json").GetProperty("schema");
+        const string problemRef = "#/components/responses/CntrylPortiaHttpProblemResponse";
+        const string unauthorizedRef = "#/components/responses/CntrylPortiaHttpUnauthorizedResponse";
+        foreach (var path in paths.EnumerateObject()
+                     .Where(path => path.Name.StartsWith("/api/", StringComparison.Ordinal)))
+        {
+            foreach (var operation in path.Value.EnumerateObject())
+            {
+                var operationResponses = operation.Value.GetProperty("responses");
+                foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
+                {
+                    if (path.Name == "/api/upload" && status == "400")
+                        continue;
+
+                    Assert.Equal(
+                        problemRef,
+                        operationResponses.GetProperty(status).GetProperty("$ref").GetString());
+                }
+
+                Assert.Equal(
+                    unauthorizedRef,
+                    operationResponses.GetProperty("401").GetProperty("$ref").GetString());
+            }
+        }
+
+        foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
+            Assert.Equal(problemRef, responses.GetProperty(status).GetProperty("$ref").GetString());
+        Assert.Equal(unauthorizedRef, responses.GetProperty("401").GetProperty("$ref").GetString());
+        var componentResponses = raw.RootElement.GetProperty("components").GetProperty("responses");
+        Assert.Equal(2, componentResponses.EnumerateObject().Count());
+        var problem = componentResponses.GetProperty("CntrylPortiaHttpProblemResponse");
+        Assert.Equal("Error", problem.GetProperty("description").GetString());
+        var problemSchema = problem.GetProperty("content").GetProperty("application/problem+json").GetProperty("schema");
         Assert.True(problemSchema.GetProperty("properties").TryGetProperty("status", out _));
         Assert.True(problemSchema.GetProperty("properties").TryGetProperty("detail", out _));
         Assert.False(problemSchema.GetProperty("properties").TryGetProperty("message", out _));
-        Assert.True(responses.GetProperty("400").GetProperty("headers")
-            .TryGetProperty(ResultHttpExtensions.TransientHeaderName, out _));
-        Assert.True(responses.GetProperty("415").GetProperty("content")
+        var problemHeaders = problem.GetProperty("headers");
+        Assert.True(problemHeaders.TryGetProperty(ResultHttpExtensions.TransientHeaderName, out var problemTransient));
+        Assert.False(problemTransient.TryGetProperty("required", out var problemHeaderRequired) &&
+                     problemHeaderRequired.GetBoolean());
+        Assert.True(problem.GetProperty("content")
             .TryGetProperty("application/problem+json", out _));
-        Assert.True(responses.GetProperty("401").GetProperty("headers").TryGetProperty("WWW-Authenticate", out _));
+        var unauthorized = componentResponses.GetProperty("CntrylPortiaHttpUnauthorizedResponse");
+        Assert.Equal("Unauthorized", unauthorized.GetProperty("description").GetString());
+        Assert.False(unauthorized.TryGetProperty("content", out _));
+        var unauthorizedHeaders = unauthorized.GetProperty("headers");
+        Assert.True(unauthorizedHeaders.GetProperty("WWW-Authenticate").GetProperty("required").GetBoolean());
+        Assert.True(unauthorizedHeaders.GetProperty(ResultHttpExtensions.TransientHeaderName)
+            .GetProperty("required").GetBoolean());
+        Assert.Contains("#/components/responses/CntrylPortiaHttpProblemResponse", yaml, StringComparison.Ordinal);
         Assert.True(paths.TryGetProperty("/health", out _));
         Assert.False(paths.TryGetProperty("/api/widget-events", out _));
     }
@@ -317,6 +559,96 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.NotFound, yaml.StatusCode);
         // Publishing the document is independent from whether the application runs.
         Assert.Equal(HttpStatusCode.OK, widget.StatusCode);
+    }
+
+    /// <summary>Application-owned components with similar names do not replace Portia error references.</summary>
+    [Fact]
+    public async Task ShouldAvoidApplicationResponseComponentNameCollision()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddFrameworkTests();
+        builder.Services.Configure<OpenApiOptions>("v1", options => options.AddOperationTransformer((_, context, _) =>
+        {
+            var components = context.Document!.Components ??= new OpenApiComponents();
+            var responses = components.Responses ??= new Dictionary<string, IOpenApiResponse>();
+            responses["CntrylPortiaProblem"] = new OpenApiResponse { Description = "Application-owned response." };
+            return Task.CompletedTask;
+        }));
+        _ = builder.Services.AddPortia().AddHttp();
+        _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+        _ = _app.MapPortiaPost<HttpSendPing>("/ping");
+        await _app.StartAsync();
+
+        using var client = _app.GetTestClient();
+        var raw = await client.GetStringAsync("/openapi/v1.json");
+        var parsed = OpenApiDocument.Parse(raw, "json", new OpenApiReaderSettings());
+        Assert.Empty(parsed.Diagnostic!.Errors);
+        using var document = JsonDocument.Parse(raw);
+        var responses = document.RootElement.GetProperty("components").GetProperty("responses");
+        Assert.Equal("Application-owned response.", responses.GetProperty("CntrylPortiaProblem")
+            .GetProperty("description").GetString());
+        Assert.True(responses.TryGetProperty("CntrylPortiaHttpProblemResponse", out _));
+        var operationResponses = document.RootElement.GetProperty("paths").GetProperty("/ping")
+            .GetProperty("post").GetProperty("responses");
+        Assert.Equal("#/components/responses/CntrylPortiaHttpProblemResponse",
+            operationResponses.GetProperty("400").GetProperty("$ref").GetString());
+    }
+
+    /// <summary>A thousand generated operation contracts keep default response output compact.</summary>
+    [Fact]
+    public async Task ShouldKeepThousandOperationOpenApiDocumentCompact()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddFrameworkTests();
+        _ = builder.Services.AddPortia().AddHttp();
+        _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
+        _app = builder.Build();
+        _ = _app.MapPortiaOpenApi();
+
+        for (var index = 0; index < 1_000; index++)
+        {
+            var operationId = $"GeneratedOperation{index:D4}";
+            _ = _app.MapGet($"/api/operation-{index:D4}", static () => "ok")
+                .WithMetadata(new PortiaOpenApiOperation(
+                    operationId,
+                    typeof(string),
+                    NoContent: false,
+                    JsonStream: false,
+                    ServerSentEvents: false,
+                    QueueCapable: false,
+                    Parameters: []));
+        }
+
+        await _app.StartAsync();
+        using var client = _app.GetTestClient();
+        var response = await client.GetAsync("/openapi/v1.json");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var json = await response.Content.ReadAsStringAsync();
+        var jsonSize = System.Text.Encoding.UTF8.GetByteCount(json);
+        Assert.True(jsonSize < 1_500_000, $"The 1,000-operation document was {jsonSize:N0} bytes.");
+        var parsed = OpenApiDocument.Parse(json, "json", new OpenApiReaderSettings());
+        Assert.Empty(Assert.IsType<OpenApiDiagnostic>(parsed.Diagnostic).Errors);
+        var document = Assert.IsType<OpenApiDocument>(parsed.Document);
+        Assert.Equal(1_000, document.Paths.Count);
+        Assert.Equal(2, document.Components!.Responses!.Count);
+
+        using var raw = JsonDocument.Parse(json);
+        var components = raw.RootElement.GetProperty("components").GetProperty("responses");
+        Assert.Equal(2, components.EnumerateObject().Count());
+        foreach (var path in raw.RootElement.GetProperty("paths").EnumerateObject())
+        {
+            var responses = path.Value.GetProperty("get").GetProperty("responses");
+            foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
+                Assert.Equal("#/components/responses/CntrylPortiaHttpProblemResponse",
+                    responses.GetProperty(status).GetProperty("$ref").GetString());
+            Assert.Equal("#/components/responses/CntrylPortiaHttpUnauthorizedResponse",
+                responses.GetProperty("401").GetProperty("$ref").GetString());
+        }
     }
 
     /// <summary>

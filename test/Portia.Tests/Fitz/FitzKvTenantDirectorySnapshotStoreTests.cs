@@ -15,7 +15,9 @@ public sealed class FitzKvTenantDirectorySnapshotStoreTests
         var second = new TenantDirectorySnapshot(new EventCursor("2"), [new TenantId("beta")]);
 
         Assert.True(await store.TrySaveAsync(pattern, null, first));
+        Assert.Equal(KvDurability.Buffered, kv.LastTransaction.Durability);
         Assert.True(await store.TrySaveAsync(pattern, first.Cursor, second));
+        Assert.Equal(KvDurability.Buffered, kv.LastTransaction.Durability);
         Assert.False(await store.TrySaveAsync(pattern, first.Cursor, first));
         Assert.Equal(second.Cursor, (await store.LoadAsync(pattern))!.Cursor);
         Assert.Equal([new TenantId("beta")], (await store.LoadAsync(pattern))!.ActiveTenants);
@@ -23,7 +25,7 @@ public sealed class FitzKvTenantDirectorySnapshotStoreTests
         Assert.NotEqual(kv.Transactions[^2].Route, kv.Transactions[^1].Route);
 
         _ = await store.LoadAsync(pattern);
-        await using var held = await kv.BeginAsync(kv.LastTransaction.Route, KvDurability.Sync);
+        await using var held = await kv.BeginAsync(kv.LastTransaction.Route);
         Assert.False(await store.TrySaveAsync(pattern, second.Cursor,
             new TenantDirectorySnapshot(new EventCursor("3"), [new TenantId("gamma")])));
     }

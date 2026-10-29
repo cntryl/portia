@@ -8,6 +8,54 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class InMemoryRpcClientTests
 {
+    /// <summary>Fitz 2 calls carry their budget and complete their cancellation result.</summary>
+    [Fact]
+    public async Task ShouldExposeCompletionAndBudgetThroughTheFitzInterface()
+    {
+#pragma warning disable CA1859 // Exercise the shipped Fitz interface as a consumer would.
+        IRpcClient rpc = new InMemoryRpcClient();
+#pragma warning restore CA1859
+        TimeSpan? receivedBudget = null;
+        await using var worker = await rpc.RegisterWorkerAsync("rpc://test", (request, _, _) =>
+        {
+            receivedBudget = request.RemainingTime;
+            return ValueTask.CompletedTask;
+        });
+        var call = rpc.CallAsync("rpc://test", ReadOnlyMemory<byte>.Empty, TimeSpan.FromMinutes(1));
+        Assert.False(call.Cancellation.IsCompleted);
+        await foreach (var _ in call)
+        {
+        }
+        Assert.NotNull(receivedBudget);
+        Assert.InRange(receivedBudget.Value, TimeSpan.Zero, TimeSpan.FromMinutes(1) - TimeSpan.FromTicks(1));
+        Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation);
+    }
+
+    /// <summary>The timeout overload cancels work that exceeds its budget.</summary>
+    [Fact]
+    public async Task ShouldCancelWorkerWhenTheCallBudgetExpires()
+    {
+#pragma warning disable CA1859 // Exercise the shipped Fitz interface as a consumer would.
+        IRpcClient rpc = new InMemoryRpcClient();
+#pragma warning restore CA1859
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var worker = await rpc.RegisterWorkerAsync("rpc://test", async (_, _, ct) =>
+        {
+            started.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+        });
+        var call = rpc.CallAsync("rpc://test", ReadOnlyMemory<byte>.Empty, TimeSpan.FromSeconds(1));
+        var failure = Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in call)
+            {
+            }
+        });
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        _ = await failure.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
     /// <summary>
     ///     Verifies a concrete call reaches a worker registered under a whole-segment wildcard pattern —
     ///     the pattern <see cref="FitzRpcRequestServer" /> registers for a per-tenant request while
