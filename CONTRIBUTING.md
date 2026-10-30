@@ -1,7 +1,7 @@
 # Contributing
 
 Portia builds with warnings treated as errors. Install a stable .NET 10 SDK at or above the
-`global.json` floor (10.0.100); the SDK resolver rolls forward within .NET 10 to the latest
+`global.json` floor (10.0.403); the SDK resolver rolls forward within .NET 10 to the latest
 installed feature band. Run the fast, broker-free suite first, then run the
 separately classified integration suite against Fitz:
 

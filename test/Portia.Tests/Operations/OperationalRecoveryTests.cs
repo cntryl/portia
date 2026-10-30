@@ -8,6 +8,54 @@ public sealed class OperationalRecoveryTests
     static readonly OperationalTarget Target = new("reactor", "stream://operations/orders/*", OperationalScope.Global);
     static readonly OperationalProcessingSettings Settings = new(512, 4096, 3, TimeSpan.TicksPerSecond, TimeSpan.TicksPerMinute);
 
+    /// <summary>A resource-lock conflict rebuilds the plan from the winning writer's durable state.</summary>
+    [Fact]
+    public async Task ShouldRebuildRepairPlanGivenConcurrentOperationalWrite()
+    {
+        var store = new MemoryOperationalStore();
+        var session = await BlockAsync(store);
+        var current = session.State;
+        var revisedSettings = Settings with { MaxBatchSize = 128 };
+        store.BeforeExchange = async () =>
+        {
+            store.BeforeExchange = null;
+            Assert.True(await store.CompareExchangeAsync(current with
+            {
+                Revision = current.Revision + 1,
+                Settings = revisedSettings
+            }, current.Revision, current.OwnerSession));
+            throw new ProjectionConcurrencyException("A concurrent worker holds the resource lock.");
+        };
+
+        var plan = await Api(store).PreviewRepairAsync(TestOperationalAuthorizer.Actor(), Target);
+
+        Assert.Equal(revisedSettings, plan.Settings);
+        var saved = (await store.ReadAsync(Target))!;
+        Assert.Equal(current.Revision + 2, saved.Revision);
+        Assert.Equal(plan.Id, Assert.Single(saved.Plans).Id);
+        Assert.Equal(current.OwnerSession, saved.OwnerSession);
+        Assert.Equal(current.Block, saved.Block);
+    }
+
+    /// <summary>Cancellation ends lock-conflict recovery without persisting a plan.</summary>
+    [Fact]
+    public async Task ShouldStopOperationalConflictRecoveryGivenCancellation()
+    {
+        var store = new MemoryOperationalStore();
+        _ = await BlockAsync(store);
+        using var cancellation = new CancellationTokenSource();
+        store.BeforeExchange = () =>
+        {
+            cancellation.Cancel();
+            throw new ProjectionConcurrencyException("A concurrent worker holds the resource lock.");
+        };
+
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Api(store)
+            .PreviewRepairAsync(TestOperationalAuthorizer.Actor(), Target, cancellation.Token).AsTask());
+
+        Assert.Empty((await store.ReadAsync(Target))!.Plans);
+    }
+
     /// <summary>Operations never grants access without a host policy.</summary>
     [Fact]
     public async Task ShouldDenyUnconfiguredOperationalAccess()

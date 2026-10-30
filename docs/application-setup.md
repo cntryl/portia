@@ -140,13 +140,13 @@ to use `Result.Failure(new RequestError(RequestErrorKind.Validation, ...))` (and
 `RequestErrorKind` values); validation policy belongs to the application rather than a separate
 framework validation pipeline.
 
-Fitz 0.2.0 currently constructs its queue actors with `max_attempts: None`, which means expired
+Fitz 0.3.0 currently constructs its queue actors with `max_attempts: None`, which means expired
 reservations redeliver indefinitely and the standard broker does not move messages to a DLQ. The
 Fitz Rust `QueueActor` has an internal `max_attempts` constructor option, but neither the broker
 configuration nor its .NET client exposes it. It cannot be set through `QueueRunnerOptions` or
 Portia configuration. A Fitz deployment that exposes an attempt limit must configure it at the
 broker; that policy remains provider-owned, and Fitz queue persistence is best-effort as described
-in the [migration guide](migration-0.8.md#fitz-queue-acceptance-and-crash-recovery).
+in the [upgrade guide](fitz-3-upgrade.md#queue-acceptance-and-crash-recovery).
 
 Use the standard .NET worker host, referencing the shared project:
 
@@ -192,8 +192,8 @@ finishes. Hosted retries use the registered `TimeProvider`, record every failed 
 fresh disposed scope each time. Caller cancellation propagates. Fitz schedule notifications have no
 acknowledgment or redelivery handle, so process loss can still lose a firing that has already been
 received. Work that requires crash recovery needs a queue provider with that guarantee or durable
-application intent and a recovery mechanism. Fitz 0.2.0 queue acceptance has best-effort persistence;
-see [queue acceptance and crash recovery](migration-0.8.md#fitz-queue-acceptance-and-crash-recovery).
+application intent and a recovery mechanism. Fitz 0.3.0 queue acceptance has best-effort persistence;
+see [queue acceptance and crash recovery](fitz-3-upgrade.md#queue-acceptance-and-crash-recovery).
 
 ## Construct and hydrate aggregates directly
 

@@ -29,10 +29,10 @@ current, deliberate boundary.
 - Each queue runner reserves and dispatches one delivery at a time, acknowledging successful work
   and leaving failed work unacknowledged for its transport. Portia scales queue throughput through
   additional processes and routes; it does not provide in-process prefetch or parallel-delivery
-  controls. Persistence is provider-owned: Fitz 0.2.0 queues persist in the background, and enqueue
+  controls. Persistence is provider-owned: Fitz 0.3.0 queues persist in the background, and enqueue
   or acknowledgment responses do not guarantee crash recovery. Required work needs durable
   application intent and recovery; consumers must tolerate duplicates. See the upstream
-  [Fitz queue persistence contract](https://github.com/cntryl/fitz/blob/v0.2.0/docs/operations/migration-guide.md#queue-persistence-is-always-best-effort).
+  [Fitz queue persistence contract](https://github.com/cntryl/fitz/blob/v0.3.0/docs/operations/migration-guide.md#queue-persistence-is-always-best-effort).
 - HTTP request bodies are fully buffered and bounded to 10 MiB by default. Default binding accepts
   object JSON or, for scalar-only bodies, a URL-encoded or multipart form (when antiforgery is
   registered or disabled for the endpoint), and binds no file parts. Binary bodies need an `OnBind`

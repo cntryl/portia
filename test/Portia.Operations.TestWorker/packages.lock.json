@@ -21,24 +21,24 @@
       "Cntryl.Portia.Fitz": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Fitz.Core": "[2.0.0, )",
+          "Cntryl.Fitz.Core": "[3.0.0, )",
           "Cntryl.Portia.Abstractions": "[0.9.2, )",
           "Cntryl.Portia.DependencyInjection": "[0.9.2, )"
         }
       },
       "Cntryl.Fitz.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[2.0.0, )",
-        "resolved": "2.0.0",
-        "contentHash": "RZH+mSXCrgLC6ISyVBMnNEWlRZFbWWb07ul/NgFXfoF1pwWEqDRB5IxblUuFW+F45b2KpurHpvsGIZTqJ2CKNg=="
+        "requested": "[3.0.0, )",
+        "resolved": "3.0.0",
+        "contentHash": "RHM41t0Gb85DOC9kyeOyvyEFboKH8ounap6l0HcKLz5y4RMjrQxEtutubAaPfoHTmuKDKH+BoyEmEzq4UJgWnw=="
       },
       "Cntryl.Fitz.Core": {
         "type": "CentralTransitive",
-        "requested": "[2.0.0, )",
-        "resolved": "2.0.0",
-        "contentHash": "ykMQ7hbE/8h5Foj6ozozukczR8r4Byj2NpWx8OomYf1TaxUHs+WvB+F+H65+kKq00EiB6YsBvxfx92GrkF1TVQ==",
+        "requested": "[3.0.0, )",
+        "resolved": "3.0.0",
+        "contentHash": "x0ERHpkFhQ0O07cIEn61ziuU7hklUD5e6kshVEh90gwT4NQQBfH8ZQIcUM6CnicCq9BeM/iivkJWhMzWFKkIEg==",
         "dependencies": {
-          "Cntryl.Fitz.Abstractions": "2.0.0"
+          "Cntryl.Fitz.Abstractions": "3.0.0"
         }
       }
     }

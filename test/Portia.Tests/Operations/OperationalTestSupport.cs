@@ -13,6 +13,7 @@ sealed class MemoryOperationalStore : IOperationalStore, IOperationalReactionChe
     readonly Dictionary<OperationalTarget, byte[]> _documents = [];
     readonly Dictionary<CheckpointIdentity, ProjectionCheckpoint> _checkpoints = [];
     internal bool Unavailable { get; set; }
+    internal Func<ValueTask>? BeforeExchange { get; set; }
 
     public ValueTask<OperationalProcessorState?> ReadAsync(OperationalTarget target, CancellationToken ct = default)
     {
@@ -37,11 +38,13 @@ sealed class MemoryOperationalStore : IOperationalStore, IOperationalReactionChe
         return list;
     }
 
-    public ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
+    public async ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
         Guid expectedOwner, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(Exchange(replacement, expectedRevision, expectedOwner));
+        if (BeforeExchange is { } beforeExchange)
+            await beforeExchange().ConfigureAwait(false);
+        return Exchange(replacement, expectedRevision, expectedOwner);
     }
 
     OperationalProcessorState? Read(OperationalTarget target) => _documents.TryGetValue(target, out var bytes)

@@ -267,6 +267,9 @@ public sealed class FitzNotificationPoisonMessageTests
         public Task PublishAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
+        public Task PublishWithAckAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
         public Task<NoticeSubscription> SubscribeAsync(string selector, CancellationToken ct = default) =>
             Task.FromResult(new NoticeSubscription(selector,
                 Messages(selector, ct), _ => ValueTask.CompletedTask, Task.CompletedTask));

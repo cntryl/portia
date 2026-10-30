@@ -102,7 +102,7 @@ static class PrometheusQualification
         RequireValue(await QueryAsync(http, queries["workload_active"]), 0);
         RequireValue(await QueryAsync(http, queries["worker_failure"]), 2);
         RequireValue(await QueryAsync(http, queries["worker_restart"]), 2);
-        Console.WriteLine("Prometheus 3.15.0 / OTLP 1.19.1: 321 actual requests, outcome counts, active gauges, worker counters and dashboard expressions verified.");
+        Console.WriteLine("Prometheus / OTLP: 321 actual requests, outcome counts, active gauges, worker counters and dashboard expressions verified.");
     }
 
     static Task<string> QueryAsync(HttpClient http, string expression) =>

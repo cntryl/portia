@@ -216,8 +216,17 @@ public sealed class PortiaOperations : IPortiaOperations
             if (ReferenceEquals(next, current))
                 return current;
             next = next with { Revision = checked(current.Revision + 1) };
-            if (await _store.CompareExchangeAsync(next, current.Revision, current.OwnerSession, ct).ConfigureAwait(false))
-                return next;
+            try
+            {
+                if (await _store.CompareExchangeAsync(next, current.Revision, current.OwnerSession, ct).ConfigureAwait(false))
+                    return next;
+            }
+            catch (ProjectionConcurrencyException)
+            {
+                // Fitz can reject a concurrent writer at BEGIN. Reload before rebuilding the
+                // transition, including its plan and approval checks, after the lock is released.
+                await Task.Delay(_options.JournalRetryDelay, _clock, ct).ConfigureAwait(false);
+            }
         }
     }
 }

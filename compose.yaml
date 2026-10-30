@@ -15,7 +15,7 @@ services:
       - no-new-privileges:true
 
   fitz:
-    image: ${FITZ_TEST_IMAGE:-ghcr.io/cntryl/fitz@sha256:6d62d9ed9d9fd32186391e6f5944a05a5894e7bd2c7e117288c5ce87acb3035c}
+    image: ${FITZ_TEST_IMAGE:-ghcr.io/cntryl/fitz@sha256:c2743cd5a3b680c8f77bc6b88762d676b805cad59f93de6c37a73144a872e077}
     environment:
       FITZ_ADMIN_AUTH_MODE: open
       FITZ_AUTH_REQUIRED: "false"
@@ -33,7 +33,7 @@ services:
       - /tmp/fitz:rw,noexec,nosuid,size=64m,mode=1777
 
   sqrzl:
-    image: ghcr.io/sqrzl/sqrzl-emulator@sha256:bb5bf54895fcb3b9730665b48e0f7b602791c61c3d18e5e7a060a4dce5c90964
+    image: ghcr.io/sqrzl/sqrzl-emulator@sha256:da1a2a731fe6de71ce8241e3d9fda9ae48dec6015f8b531f4f3129e4ca9969a8
     environment:
       SQRZL_BLOBS_PATH: /app/blobs
       SQRZL_LOG_FORMAT: text

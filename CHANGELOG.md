@@ -8,6 +8,9 @@ alerts are as breaking to change as an API.
 
 ### Fixed
 
+- Reload operational state after a competing Fitz transaction rejects an operator write, preserving
+  current plan and approval checks while allowing cancellation during conflict recovery.
+- Count Fitz Wire 2 frames in the append benchmark and record the client package version.
 - Emit shared event, JSON-context, and inferred request registrations once per compilation instead
   of copying them into each interceptor, keeping generated source growth additive. Apply shared
   registration once per builder and compilation, with retry after failed initialization.
@@ -25,6 +28,8 @@ alerts are as breaking to change as an API.
 
 ### Changed
 
+- Upgrade Fitz client packages to 3.0.0 and pin the compatible 0.3.0 broker image. Refresh stable
+  dependencies across source, examples, and smoke consumers, and update the .NET SDK to 10.0.403.
 - Projector handlers receive `IProjectorContext<TEvent>` with `Trigger`, `Source`, and shared `Batch`
   metadata. Batch handlers receive ordered lists of typed contexts.
 - Projector and reactor handlers, including manual overrides, return `ValueTask<Result>`.

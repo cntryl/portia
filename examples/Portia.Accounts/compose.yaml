@@ -2,7 +2,7 @@ name: portia-accounts-example
 
 services:
   fitz:
-    image: ghcr.io/cntryl/fitz@sha256:6d62d9ed9d9fd32186391e6f5944a05a5894e7bd2c7e117288c5ce87acb3035c
+    image: ghcr.io/cntryl/fitz@sha256:c2743cd5a3b680c8f77bc6b88762d676b805cad59f93de6c37a73144a872e077
     environment:
       FITZ_ADMIN_AUTH_MODE: open
       FITZ_AUTH_REQUIRED: "false"
@@ -20,7 +20,7 @@ services:
       - /tmp/fitz:rw,noexec,nosuid,size=64m,mode=1777
 
   otel-collector:
-    image: otel/opentelemetry-collector:0.162.0@sha256:310a800ad69ee430e7c541796852a242c9c7db97aaad4daa5ccf843c525fbdb2
+    image: otel/opentelemetry-collector:0.164.0@sha256:28b6d41ac51bff6b41ba5e8fe503569ffb9d6a1ea90f7a78419e86f34e44f750
     command: ["--config=/etc/otelcol/config.yaml"]
     ports:
       - "127.0.0.1:4317:4317"

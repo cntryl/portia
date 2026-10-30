@@ -1,6 +1,6 @@
 services:
   fitz:
-    image: ghcr.io/cntryl/fitz@sha256:6d62d9ed9d9fd32186391e6f5944a05a5894e7bd2c7e117288c5ce87acb3035c
+    image: ghcr.io/cntryl/fitz@sha256:c2743cd5a3b680c8f77bc6b88762d676b805cad59f93de6c37a73144a872e077
     environment:
       FITZ_ADMIN_AUTH_MODE: open
       FITZ_AUTH_REQUIRED: "false"

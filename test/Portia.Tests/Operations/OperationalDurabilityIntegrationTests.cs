@@ -7,7 +7,7 @@ namespace Cntryl.Portia;
 [Trait("Category", "DurabilityIntegration")]
 public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
 {
-    const string Image = "ghcr.io/cntryl/fitz@sha256:6d62d9ed9d9fd32186391e6f5944a05a5894e7bd2c7e117288c5ce87acb3035c";
+    const string Image = "ghcr.io/cntryl/fitz@sha256:c2743cd5a3b680c8f77bc6b88762d676b805cad59f93de6c37a73144a872e077";
     const string Route = "kv://qualification/portia/checkpoints";
     const int StorageLeaseSeconds = 30;
     static readonly OperationalTarget Target = new("durability-reactor", "stream://portia-durability/source/*", OperationalScope.Global);

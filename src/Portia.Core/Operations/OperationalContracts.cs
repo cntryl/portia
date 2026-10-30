@@ -99,6 +99,7 @@ public interface IOperationalStore
     /// Replaces a document only when revision and owner match. Revision zero and an empty owner
     /// require absence. The replacement revision must be exactly one greater.
     /// </summary>
+    /// <exception cref="ProjectionConcurrencyException">A competing transaction prevented the write; reload before retrying.</exception>
     ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
         Guid expectedOwner, CancellationToken ct = default);
 }
