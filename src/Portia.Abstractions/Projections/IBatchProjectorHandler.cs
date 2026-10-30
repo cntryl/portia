@@ -6,9 +6,8 @@ public interface IBatchProjectorHandler<in TEvent>
     where TEvent : DomainEvent
 {
     /// <summary>Applies events in source order through constructor-injected dependencies.</summary>
-    /// <param name="events">The contiguous events to apply, in source order.</param>
-    /// <param name="context">The projector context for this batch.</param>
+    /// <param name="contexts">One context per contiguous source event, in order, sharing batch metadata.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>A task that completes once every event has been applied.</returns>
-    ValueTask HandleAsync(IReadOnlyList<TEvent> events, IProjectorContext context, CancellationToken ct);
+    /// <returns>The application outcome; only success permits the batch to commit.</returns>
+    ValueTask<Result> HandleAsync(IReadOnlyList<IProjectorContext<TEvent>> contexts, CancellationToken ct);
 }

@@ -53,6 +53,7 @@ static class PackedCompilerVerifier
 
             foreach (var fixture in CreateFixtures(generalAnalyzer))
             {
+                WriteProbeProject(projectPath, version, generalAnalyzer, fixture.ApplicationStructure);
                 await File.WriteAllTextAsync(Path.Combine(temporary, "Probe.cs"), fixture.Source)
                     .ConfigureAwait(false);
                 var result = await ProcessRunner.RunAsync("dotnet",
@@ -117,11 +118,11 @@ static class PackedCompilerVerifier
         throw new DirectoryNotFoundException("Could not locate Portia.slnx above the repository-tools assembly.");
     }
 
-    static void WriteProbeProject(string path, string version, bool generalAnalyzer) =>
-        CreateProbeProject(version, generalAnalyzer).Save(path);
+    static void WriteProbeProject(string path, string version, bool generalAnalyzer, bool applicationStructure = false) =>
+        CreateProbeProject(version, generalAnalyzer, applicationStructure: applicationStructure).Save(path);
 
     static XDocument CreateProbeProject(string version, bool generalAnalyzer, bool executable = false,
-        bool excludeHttpAnalyzer = false)
+        bool excludeHttpAnalyzer = false, bool applicationStructure = false)
     {
         var propertyGroup = new XElement("PropertyGroup",
             new XElement("TargetFramework", "net10.0"),
@@ -129,6 +130,11 @@ static class PackedCompilerVerifier
             new XElement("Nullable", "enable"),
             new XElement("TreatWarningsAsErrors", "true"),
             new XElement("JsonSerializerIsReflectionEnabledByDefault", "false"));
+        if (applicationStructure)
+        {
+            propertyGroup.Add(new XElement("PortiaProjectStructure", "true"),
+                new XElement("IsTestProject", "true"));
+        }
         var references = new List<XElement>
         {
             PackageReference("Cntryl.Portia.AspNetCore", version,
@@ -198,6 +204,9 @@ static class PackedCompilerVerifier
             }
 
             fixtures.Add(new ProbeFixture(Prefix + "[PortiaJsonContext] public class InvalidContext { }", "PORTIA030"));
+            const string multipleTypes = "namespace Probe; public class Probe; public record Extra;";
+            fixtures.Add(new ProbeFixture(multipleTypes, null));
+            fixtures.Add(new ProbeFixture(multipleTypes, "PORTIA200", ApplicationStructure: true));
         }
 
         return fixtures;
@@ -243,5 +252,5 @@ static class PackedCompilerVerifier
         public sealed record Command : IRequest, ICallable;
         """;
 
-    sealed record ProbeFixture(string Source, string? ExpectedDiagnostic);
+    sealed record ProbeFixture(string Source, string? ExpectedDiagnostic, bool ApplicationStructure = false);
 }

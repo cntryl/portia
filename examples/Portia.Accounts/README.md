@@ -7,6 +7,25 @@ repository, and serves a read query from that projection. The request pipeline a
 and the feature's account authorization, a behavior, a configured-tenant guard, an operational guard,
 and then the handler.
 
+The names describe distinct roles:
+
+- `AccountReadModel` is the simple account ID and balance data returned to callers.
+- `AccountRepository` reads and writes those values and owns the projection transaction and checkpoint.
+- `AccountProjector` applies events through that repository using typed contexts and `Result` outcomes.
+- `AccountCommandRepository` delegates authoritative account commands to the aggregate executor.
+
+Query handlers depend on `IAccountReadRepository`; the projector depends on
+`IAccountProjectionRepository`, which also supplies `IProjectionStore`. Both resolve to the same
+scoped `AccountRepository`. The projector receives one repository dependency and passes it to
+`BatchProjector`. Its handlers use `context.Trigger` and return `Result.Success` after applying
+the event. Portia owns the batch commit and failure recovery.
+
+The account's balance rules are local aggregate invariants. Features that add cross-aggregate
+checks, such as credit eligibility or a reservation in another aggregate, may use repository reads
+advisorially. They must still obtain authoritative participant outcomes through choreography and
+explicitly reject, compensate, or flag failed operations. A successful read alone cannot complete
+that business requirement; see [validation authority](../../docs/validation-authority.md).
+
 The API enables its demo header authentication only in Development. Send both `X-Demo-Tenant` and
 `X-Demo-Account`; the account grant is scoped to that tenant. Configure real authentication and
 account authorization for other environments. The `Accounts:Tenant` setting defaults to `demo` only

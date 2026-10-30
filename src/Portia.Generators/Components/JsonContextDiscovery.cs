@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -7,6 +8,8 @@ namespace Cntryl.Portia;
 /// <summary>Discovers the Portia JSON serializer contexts declared in, or exported to, a compilation.</summary>
 static class JsonContextDiscovery
 {
+    static readonly ConditionalWeakTable<IAssemblySymbol, DiscoveredJsonContext[]> ReferencedByAssembly = new();
+
     public static IncrementalValueProvider<ImmutableArray<DiscoveredJsonContext>> DeclaredContexts(
         IncrementalGeneratorInitializationContext context) =>
         context.SyntaxProvider.ForAttributeWithMetadataName("Cntryl.Portia.PortiaJsonContextAttribute",
@@ -27,19 +30,27 @@ static class JsonContextDiscovery
     {
         var contexts = ImmutableArray.CreateBuilder<DiscoveredJsonContext>();
         foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
+            contexts.AddRange(ReferencedByAssembly.GetValue(assembly, AssemblyContexts));
+        return contexts.ToImmutable();
+    }
+
+    static DiscoveredJsonContext[] AssemblyContexts(IAssemblySymbol assembly)
+    {
+        var contexts = new List<DiscoveredJsonContext>();
+        var factories = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        foreach (var attribute in assembly.GetAttributes())
         {
-            foreach (var attribute in assembly.GetAttributes().Where(candidate =>
-                         candidate.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonRootAttribute"))
+            if (attribute.AttributeClass is { } attributeType
+                && SymbolNames.Is(attributeType, "Cntryl.Portia.PortiaJsonRootAttribute")
+                && attribute.ConstructorArguments.Length > 2
+                && attribute.ConstructorArguments[2].Value is INamedTypeSymbol factory
+                && factories.Add(factory))
             {
-                if (attribute.ConstructorArguments.Length > 2
-                    && attribute.ConstructorArguments[2].Value is INamedTypeSymbol factory)
-                {
-                    contexts.Add(new DiscoveredJsonContext(factory.ToDisplayString(), Type(factory) + ".Create"));
-                }
+                contexts.Add(new DiscoveredJsonContext(factory.ToDisplayString(), Type(factory) + ".Create"));
             }
         }
 
-        return contexts.ToImmutable();
+        return [.. contexts];
     }
 
     static string Type(ITypeSymbol symbol) => symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);

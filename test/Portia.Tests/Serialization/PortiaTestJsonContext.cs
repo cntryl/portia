@@ -127,4 +127,10 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(int))]
 [JsonSerializable(typeof(bool))]
 [JsonSerializable(typeof(Uuid))]
+[JsonSerializable(typeof(OperationalValidationAuthorityTests.StockAdded))]
+[JsonSerializable(typeof(OperationalValidationAuthorityTests.ReservationAccepted))]
+[JsonSerializable(typeof(OperationalValidationAuthorityTests.ReservationRefused))]
+[JsonSerializable(typeof(OperationalValidationAuthorityTests.OrderPlaced))]
+[JsonSerializable(typeof(OperationalValidationAuthorityTests.OrderRejected))]
+[JsonSerializable(typeof(OperationalValidationAuthorityTests.OrderConfirmed))]
 sealed partial class PortiaTestJsonContext : JsonSerializerContext;

@@ -13,7 +13,7 @@ public sealed class ReactorEffectPatternsTests
         var bus = new OutcomeBus(Result.Failure(new RequestError(RequestErrorKind.Conflict, "closed")));
         var reactor = new CommandReaction(checkpoints, bus, aggregateId);
 
-        _ = await Assert.ThrowsAsync<ReactionCommandFailedException>(() =>
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
             new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start).AsTask());
 
         Assert.Equal(ProjectionCheckpoint.Start,
@@ -92,10 +92,12 @@ public sealed class ReactorEffectPatternsTests
         : Reactor(checkpoints, EventStreamPattern.ForPattern("testing", "reactions", aggregateId.ToString()),
             "command-reaction")
     {
-        protected override ValueTask ReactToEventAsync(
-            DomainEventRecord record, IExecutionContext context, CancellationToken ct) =>
-            bus.SendReactionAsync(
-                new SendReceipt(record.Event.Metadata.AggregateId), (IReactorContext)context, ct);
+        protected override async ValueTask<Result> ReactToEventAsync(
+            DomainEventRecord record, IExecutionContext context, CancellationToken ct)
+        {
+            return await bus.SendReactionAsync(
+                new SendReceipt(record.Event.Metadata.AggregateId), (IReactorContext)context, ct).ConfigureAwait(false);
+        }
     }
 
     sealed class DirectEffectReaction(
@@ -105,8 +107,8 @@ public sealed class ReactorEffectPatternsTests
         : Reactor(checkpoints, EventStreamPattern.ForPattern("testing", "reactions", aggregateId.ToString()),
             "direct-effect-reaction")
     {
-        protected override ValueTask ReactToEventAsync(
-            DomainEventRecord record, IExecutionContext context, CancellationToken ct) =>
-            effects.SendReceiptAsync((Deposited)record.Event, (IReactorContext)context, ct);
+        protected override async ValueTask<Result> ReactToEventAsync(
+            DomainEventRecord record, IExecutionContext context, CancellationToken ct)
+        { await effects.SendReceiptAsync((Deposited)record.Event, (IReactorContext)context, ct).ConfigureAwait(false); return Result.Success; }
     }
 }

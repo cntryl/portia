@@ -102,16 +102,16 @@ static class RuntimeTestingQualification
         : BatchProjector(store, pattern ?? EventStreamPattern.ForPattern("package", "scenario"))
     {
         public int Count { get; private set; }
-        protected override ValueTask ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records, IProjectorContext context, CancellationToken ct)
-        { Count += records.Count; return ValueTask.CompletedTask; }
+        protected override ValueTask<Result> ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records, IProjectorContext context, CancellationToken ct)
+        { Count += records.Count; return ValueTask.FromResult(Result.Success); }
     }
 
     sealed class ProbeReactor(IProjectionCheckpointStore store)
         : BatchReactor(store, EventStreamPattern.ForPattern("package", "scenario"))
     {
         public int Count { get; private set; }
-        protected override ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
-        { Count += contexts.Count; return ValueTask.CompletedTask; }
+        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
+        { Count += contexts.Count; return ValueTask.FromResult(Result.Success); }
     }
 
     sealed class StoreProbe : IEventStoreConformanceProbe

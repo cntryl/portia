@@ -104,8 +104,7 @@ public sealed class GeneratorInvalidShapeTests
                                                                  file sealed partial class View(IProjectionStore store)
                                                                      : Projector(store, EventStreamPattern.ForPattern("test")), IProjectorHandler<Ev>
                                                                  {
-                                                                     public ValueTask HandleAsync(Ev ev, IProjectorContext context, CancellationToken ct) =>
-                                                                         ValueTask.CompletedTask;
+                                                                     public ValueTask<Result> HandleAsync(IProjectorContext<Ev> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                                                  }
                                                                  """, new ProjectorReactorEventDispatcherGenerator());
 

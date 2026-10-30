@@ -60,21 +60,21 @@ static class ProcessorPassAllocationProbe
     sealed class ProbeProjector(IProjectionStore store, EventStreamPattern pattern) : BatchProjector(store, pattern)
     {
         public int Processed { get; private set; }
-        protected override ValueTask ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records,
+        protected override ValueTask<Result> ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records,
             IProjectorContext context, CancellationToken ct)
         {
             Processed += records.Count;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 
     sealed class ProbeReactor(IProjectionCheckpointStore store, EventStreamPattern pattern) : BatchReactor(store, pattern)
     {
         public int Processed { get; private set; }
-        protected override ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
+        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
         {
             Processed += contexts.Count;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 }

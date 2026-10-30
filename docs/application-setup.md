@@ -28,7 +28,7 @@ public static class ApplicationSetup
         // ActorValidator implements IRequestActorValidator using the application's identity policy.
         services.AddScoped<IRequestActorValidator, ActorValidator>();
 
-        services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<IAccountCommandRepository, AccountCommandRepository>();
         services.AddScoped<IPlatformSummaryRepository, PlatformSummaryRepository>();
         services.AddSingleton<ITenantDirectory, AccountTenantDirectory>();
 
@@ -285,11 +285,19 @@ cancelled workload and its stop callback. Host shutdown retains its separate sha
 Projectors derive from `Projector` or `BatchProjector` and pass their ordinary
 repository into the base constructor. That repository implements `IProjectionStore`:
 loading progress and opening an atomic unit of work. There is no separate target
-registration and no repository lookup through projector context.
+registration and no repository lookup through projector context. The repository owns queries and
+updates; a read model is the simple data contract those queries return. Typed projector handlers
+receive `IProjectorContext<TEvent>` and return `ValueTask<Result>`. The same result contract applies
+to reactors, with `IReactorContext<TEvent>`. Return failures to Portia so the hosted worker can
+classify them and apply its bounded retry policy.
 
 Reactors derive from `Reactor` or `BatchReactor` and pass a constructor dependency
 implementing `IProjectionCheckpointStore`. This can be the same application repository
 they use for reactions; Portia does not require a separate global store registration.
+Cross-aggregate reads are allowed as advisory validation. Successful checks still require
+[authoritative outcome validation](validation-authority.md) through the owning participants;
+failed validation needs rejection, compensation, or explicit intervention.
+
 Register `ITenantDirectory` when any workload is per tenant. Registration and infrastructure
 setup can occur in either order, before building the host. `FixedTenantDirectory` serves a
 membership fixed at startup, for a single-tenant or configured-tenant deployment. A deployment whose

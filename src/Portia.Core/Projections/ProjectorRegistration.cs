@@ -51,16 +51,25 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
             store.EnsureServes(componentName);
     }
 
+    ValueTask<ProjectionCheckpoint> IWorkloadDescriptor.LoadCheckpoint(IServiceProvider services,
+        ProjectionRunOptions options, CancellationToken ct)
+    {
+        var component = _resolve(services);
+        return ProcessorCheckpoints.LoadAsync(component.Store,
+            new CheckpointIdentity(component.Name, component.Pattern, options.RebuildId), ct);
+    }
+
     async ValueTask<ProjectionPassResult> IWorkloadDescriptor.RunPass(IServiceProvider services,
         ProjectionRunOptions options, CancellationToken ct)
     {
         options.Validate();
         var projector = _resolve(services);
         WorkloadBinding.Apply(services, projector.BindWorkload);
-        var checkpoint = await projector.Store.LoadCheckpointAsync(
+        var checkpoint = await ProcessorCheckpoints.LoadAsync(projector.Store,
             new CheckpointIdentity(projector.Name, projector.Pattern, options.RebuildId), ct).ConfigureAwait(false);
-        return await services.GetRequiredService<ProjectorRunner>()
-            .RunPassAsync(projector, checkpoint, options, ct).ConfigureAwait(false);
+        var runner = services.GetRequiredService<ProjectorRunner>();
+        runner.Operations = services.GetService<OperationalExecution>()?.Session;
+        return await runner.RunPassAsync(projector, checkpoint, options, ct).ConfigureAwait(false);
     }
 
     /// <summary>Resolves the projector in the supplied application scope.</summary>
@@ -87,8 +96,7 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
             (options ?? ProjectionRunOptions.Default).Validate();
             var projector = services.GetRequiredService<TProjector>();
             WorkloadBinding.Apply(services, projector.BindWorkload);
-            var checkpoint = await projector.Store
-                .LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern, options?.RebuildId), ct)
+            var checkpoint = await ProcessorCheckpoints.LoadAsync(projector.Store, new CheckpointIdentity(projector.Name, projector.Pattern, options?.RebuildId), ct)
                 .ConfigureAwait(false);
             _ = await services.GetRequiredService<ProjectorRunner>()
                 .RunAsync(projector, checkpoint, options, ct).ConfigureAwait(false);

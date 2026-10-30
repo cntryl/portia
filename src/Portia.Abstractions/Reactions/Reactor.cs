@@ -109,13 +109,13 @@ public abstract class Reactor
     static string FormatPersistedTenant(TenantId? tenant)
         => tenant is { } value ? $"TenantId {{ Value = {value.Value} }}" : string.Empty;
 
-    internal ValueTask ReactAsync(DomainEventRecord record, CancellationToken ct)
+    internal ValueTask<Result> ReactAsync(DomainEventRecord record, CancellationToken ct)
         => ReactToEventAsync(record, new ReactionExecutionContext(record, RequestActor.System), ct);
 
-    internal ValueTask ReactAsync(DomainEventRecord record, IExecutionContext context, CancellationToken ct)
+    internal ValueTask<Result> ReactAsync(DomainEventRecord record, IExecutionContext context, CancellationToken ct)
         => ReactToEventAsync(record, context, ct);
 
-    internal ValueTask ReactAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct) =>
+    internal ValueTask<Result> ReactAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct) =>
         ReactBatchAsync(contexts, ct);
 
     /// <summary>Dispatches a triggering event with its own system execution context.</summary>
@@ -123,17 +123,23 @@ public abstract class Reactor
     /// <param name="context">The execution the reaction's effects are attributed to.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task that completes once the reaction has run.</returns>
-    protected virtual ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+    protected virtual ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
         CancellationToken ct)
-        => ValueTask.CompletedTask;
+        => ValueTask.FromResult(Result.Success);
 
     /// <summary>Handles reactions in source order, preserving each event's causal context.</summary>
     /// <param name="contexts">One context per triggering event, in source order.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task that completes once every reaction has run.</returns>
-    protected virtual async ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
+    protected virtual async ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
     {
         foreach (var context in contexts)
-            await ReactToEventAsync(context.Source, context, ct).ConfigureAwait(false);
+        {
+            var result = await ReactToEventAsync(context.Source, context, ct).ConfigureAwait(false);
+            if (!result.IsSuccess)
+                return result;
+        }
+
+        return Result.Success;
     }
 }

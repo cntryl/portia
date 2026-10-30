@@ -360,6 +360,18 @@ public static class TenantPermissionFeature
 concrete record. Each request's code fixes its permission, while one authorizer owns lookup and
 denial behavior.
 
+## Advisory checks and authoritative outcomes
+
+Cross-aggregate reads are permitted for proactive validation. A guard may query Inventory and reject
+an order with obviously insufficient stock. Passing that check does not reserve stock or establish
+a cross-aggregate invariant. The choreography must still ask Inventory to reserve it and handle
+`InventoryReserved` or `InventoryReservationRejected` through explicit Order behavior.
+
+Local validation is authoritative within the aggregate's atomic boundary. Advisory validation
+improves the initial response. Outcome validation confirms the business requirement through the
+owning participant's committed decision. Failure must lead to rejection, compensation, or an
+explicit intervention state. See [validation authority](validation-authority.md).
+
 ## Guard versus authoritative invariant
 
 A read model can reject obviously occupied slugs cheaply, but a successful read is only a hint. In
@@ -371,18 +383,18 @@ using Cntryl.Portia;
 
 public sealed record ClaimTenantSlug(Uuid SlugId, Uuid TenantId, string Slug) : IRequest;
 
-public interface ITenantSlugReadModel
+public interface ITenantSlugRepository
 {
     ValueTask<bool> AppearsOccupiedAsync(string slug, CancellationToken ct);
 }
 
-public sealed class TenantSlugReadGuard(ITenantSlugReadModel readModel)
+public sealed class TenantSlugReadGuard(ITenantSlugRepository slugs)
     : IRequestGuard<ClaimTenantSlug>
 {
     public async ValueTask<Result> GuardAsync(
         IRequestContext<ClaimTenantSlug> context,
         CancellationToken ct) =>
-        await readModel.AppearsOccupiedAsync(context.Request.Slug, ct)
+        await slugs.AppearsOccupiedAsync(context.Request.Slug, ct)
             ? Result.Failure(new RequestError(RequestErrorKind.Conflict,
                 "That slug appears to be occupied."))
             : Result.Success;

@@ -23,59 +23,65 @@ can still cause an effect without a known marker. `PORTIA101` likewise warns abo
 service-location dependencies and semantic `ActivatorUtilities` calls. Architecture review
 remains responsible for arbitrary application behavior.
 
-That is also why `IProjectorContext` carries checkpoint identity and rebuild metadata and nothing
-else, and why application dependencies arrive through the constructor.
+All typed handlers receive a context and an explicit cancellation token. Request handlers receive
+`IRequestContext<TRequest>`, projector handlers receive `IProjectorContext<TEvent>`, and reactor
+handlers receive `IReactorContext<TEvent>`. Each returns `ValueTask<Result>` (requests may also
+return `Result<T>`). Application dependencies arrive through constructors.
 
-Projector handlers receive the current event separately from `IProjectorContext` because one
-projection context describes the transaction or bounded batch shared by several events; binding
-an event to it would give that shared context conflicting identities. Reactor contexts have the
-opposite shape: each `IReactorContext<TEvent>` binds one triggering event to its own causal system
-execution, so child commands and direct effects retain the right cause even inside a batch.
+A projector context carries its typed `Trigger`, the actual `Source` record, and `Batch` metadata
+shared by every event in that atomic unit of work. `Identity` and `IsRebuild` forward to `Batch`.
+Each event gets its own context, including in batch handlers. The shared non-generic
+`IProjectorContext` describes the batch and contains no event or execution authority.
+Reactor contexts carry independent system execution authority for each triggering event.
 
 ## Constructor-injected repository
 
-The projector receives its repository. Keep the framework contract off the application interface
-and put both on the class, so a caller that only wants `GetBalanceAsync` does not also depend on
-`LoadCheckpointAsync` and `BeginAsync`:
+A read model is a simple data contract. A repository owns persistence and queries for that data;
+a projector applies committed events through the repository. For example, `AccountReadModel` is the
+returned data, `AccountRepository` stores and retrieves it, and `AccountProjector` updates it.
+
+Keep query interfaces focused on application reads. The concrete repository also implements
+`IProjectionStore`, which lets the projector pass that same instance into its base constructor:
 
 ```csharp
-public interface IAccountRepository
+public sealed record AccountReadModel(Uuid AccountId, long Balance);
+
+public interface IAccountQueries
 {
-    ValueTask IncrementBalanceAsync(Uuid accountId, int amount, CancellationToken ct);
-    ValueTask<long> GetBalanceAsync(TenantId tenant, Uuid accountId, CancellationToken ct);
+    ValueTask<AccountReadModel?> GetAsync(TenantId tenant, Uuid accountId, CancellationToken ct);
 }
 
-public sealed class AccountRepository : IAccountRepository, IProjectionStore
+public sealed class AccountRepository : IAccountQueries, IProjectionStore
 {
-    // One class, one connection, one unit of work; two interfaces, two audiences.
+    // Application queries and updates use the same repository-managed transaction.
+    // IProjectionStore supplies Portia's checkpoint and transaction lifecycle.
 }
 
-public sealed partial class AccountProjector(IAccountRepository accounts, IProjectionStore store)
-    : BatchProjector(store, EventStreamPattern.ForTenant("balances")),
+public sealed partial class AccountProjector(AccountRepository accounts)
+    : BatchProjector(accounts, EventStreamPattern.ForTenant("balances")),
       IProjectorHandler<MoneyDeposited>
 {
-    public ValueTask HandleAsync(
-        MoneyDeposited ev, IProjectorContext context, CancellationToken ct)
-        => accounts.IncrementBalanceAsync(ev.Metadata.AggregateId, ev.Amount, ct);
+    public async ValueTask<Result> HandleAsync(
+        IProjectorContext<MoneyDeposited> context, CancellationToken ct)
+    {
+        var ev = context.Trigger;
+        await accounts.IncrementBalanceAsync(ev.Metadata.AggregateId, ev.Amount, ct);
+        return Result.Success;
+    }
 }
 ```
 
 ```csharp
 services.AddScoped<AccountRepository>();
-services.AddScoped<IAccountRepository>(sp => sp.GetRequiredService<AccountRepository>());
-services.AddScoped<IProjectionStore>(sp => sp.GetRequiredService<AccountRepository>());
+services.AddScoped<IAccountQueries>(sp => sp.GetRequiredService<AccountRepository>());
 services.AddPortia()
     .AddProjector<AccountProjector>("AccountProjector", WorkloadScope.PerTenant);
 ```
 
-Both interfaces must resolve to the *same scoped instance*, which is what makes the projector's
-writes and its checkpoint share one unit of work — hence the two forwarding registrations rather
-than two independent ones.
-
-For a small projection with no other reader, `interface IAccountRepository : IProjectionStore`
-and a single registration is a reasonable shortcut. It stops being one as soon as anything else
-consumes the repository: every such caller then depends on the checkpoint API, and every test
-double for it has to implement `BeginAsync`.
+The projector receives one repository instance for data writes and progress. Query callers receive
+the application-facing interface. A projector-only write interface may inherit `IProjectionStore`
+when the application wants to inject a test double; the runnable Accounts example uses that shape.
+The query interface remains independent of checkpoint lifecycle.
 
 `Cntryl.Portia.Analyzers` supplies the generator for typed dispatch independently of the runtime
 package used to compose the application.
@@ -109,16 +115,17 @@ A batch base accepts ordinary per-event handlers, applying them in source order 
 one unit of work. To issue bulk application operations, implement a batch handler:
 
 ```csharp
-public sealed partial class AccountProjector(IAccountRepository accounts, IProjectionStore store)
-    : BatchProjector(store, EventStreamPattern.ForTenant("balances")),
+public sealed partial class AccountProjector(AccountRepository accounts)
+    : BatchProjector(accounts, EventStreamPattern.ForTenant("balances")),
       IBatchProjectorHandler<MoneyDeposited>
 {
-    public async ValueTask HandleAsync(
-        IReadOnlyList<MoneyDeposited> events, IProjectorContext context, CancellationToken ct)
+    public async ValueTask<Result> HandleAsync(
+        IReadOnlyList<IProjectorContext<MoneyDeposited>> contexts, CancellationToken ct)
     {
-        foreach (var ev in events)
-            await accounts.IncrementBalanceAsync(ev.Metadata.AggregateId, ev.Amount, ct);
+        foreach (var context in contexts)
+            await accounts.IncrementBalanceAsync(context.Trigger.Metadata.AggregateId, context.Trigger.Amount, ct);
         // A repository-specific bulk operation can replace this loop.
+        return Result.Success;
     }
 }
 ```
@@ -138,6 +145,55 @@ atomic boundary.
 
 Manual implementations can override `ProjectEventAsync` / `ProjectBatchAsync`, or
 `ReactToEventAsync` / `ReactBatchAsync`, instead of using generated typed handlers.
+
+## Results and failure recovery
+
+Return `Result.Success` only after the handler's work succeeds. Return a failed `Result` with
+`RequestError.IsTransient = true` when retrying may succeed. A permanent result faults the hosted
+worker immediately. Transient results and unclassified exceptions use the workload's bounded
+exponential backoff, capped by `MaximumFailureDelay`, and fault at `FailureAttemptLimit`.
+Database exceptions use the provider's `IsTransient` classification. Invalid arguments, disposed
+objects, and unsupported operations stop immediately. Other unexpected exceptions receive bounded
+retries rather than an unlimited retry loop.
+Every retry creates a fresh DI scope and reloads authoritative progress. A successful pass resets
+the consecutive-failure count. Cancellation requested by the worker stops processing normally;
+an unrelated cancellation exception is a failed operation and receives bounded retries.
+
+Dispatch stops at the first failed result. A projector disposes its uncommitted transaction;
+a reactor leaves its checkpoint unchanged, although effects already performed may be repeated.
+A successful batch is the unit of progress, so earlier committed batches remain committed.
+`default(Result)` is invalid and faults rather than silently advancing progress.
+
+Manual `ProjectEventAsync`, `ProjectBatchAsync`, `ReactToEventAsync`, and `ReactBatchAsync` overrides
+also return `ValueTask<Result>`. Unhandled events return success and advance source progress.
+
+Manual runners surface `ProcessorFailureException`. Its `Identity`, `Stage`, `Checkpoint`,
+`FirstSource`, and `LastSource` identify the failing operation and source range. `Checkpoint` is
+null when loading progress failed. `Error` retains a
+returned failure; `InnerException` retains a thrown exception. A secondary transaction or source-enumerator cleanup
+failure is retained in `CleanupException` rather than replacing the original failure. Source and
+tenant values stay in diagnostic properties rather than framework-generated exception messages.
+
+A commit exception can have an uncertain outcome. The diagnostic checkpoint is the last progress
+confirmed by this attempt; reloading the store determines what actually committed. Never retry
+using the diagnostic alone. Hosted workers perform that reload automatically.
+
+Hosted failures produce structured logs with the component, stage, attempt, retry or stop decision,
+and planned delay, alongside the existing worker-failure telemetry. A terminal
+`WorkloadFailureException` retains the pass diagnostic and faults the worker; no event is skipped.
+
+## Business outcome validation
+
+A successful cross-aggregate read is advisory. When an operation relies on that assumption,
+reactors and commands must obtain authoritative participant outcomes through choreography and
+resolve failures by rejection, compensation, or intervention. For example, a positive stock lookup
+still requires `InventoryReserved` or `InventoryReservationRejected` before the Order resolves.
+
+A business rejection can be successfully processed: after durably recording the required Order
+rejection or compensation request, return `Result.Success`. A failed processing `Result` means
+required work remains incomplete and must prevent checkpoint advancement. Framework retries and
+worker faults do not replace business outcome validation. See
+[validation authority](validation-authority.md).
 
 ## Reactions
 
@@ -160,17 +216,17 @@ public sealed partial class AccountReactor(
     : Reactor(checkpoints, EventStreamPattern.ForTenant("balances")),
       IReactorHandler<MoneyDeposited>
 {
-    public ValueTask HandleAsync(IReactorContext<MoneyDeposited> context, CancellationToken ct) =>
+    public ValueTask<Result> HandleAsync(IReactorContext<MoneyDeposited> context, CancellationToken ct) =>
         bus.SendReactionAsync(
             new SendDepositReceipt(context.Trigger.Metadata.AggregateId), context, ct);
 }
 ```
 
 `SendReactionAsync` creates a child request from that event's reaction context, preserving its
-system actor, correlation, and causation. A failed command result throws
-`ReactionCommandFailedException`, so the reactor does not silently checkpoint a failed effect.
-Result-bearing requests use `SendAsync<T>` directly because the reactor must decide what the
-returned value and expected failures mean.
+system actor, correlation, and causation. It returns the command's `Result`; returning that outcome
+from the reactor lets Portia enforce its retry policy and prevents checkpointing a failed effect.
+Result-bearing requests use `SendAsync<T>` directly because the reactor decides how their value
+maps to its own outcome.
 
 `CreateEffectId(context, effectName)` derives a stable UUID from the reactor/checkpoint identity,
 source event ID, and effect name for use with an idempotent target. This does not make arbitrary
@@ -192,11 +248,12 @@ public sealed partial class AccountReactor(IAccountReactions accounts, IProjecti
     : BatchReactor(checkpoints, EventStreamPattern.ForTenant("balances")),
       IBatchReactorHandler<MoneyDeposited>
 {
-    public async ValueTask HandleAsync(
+    public async ValueTask<Result> HandleAsync(
         IReadOnlyList<IReactorContext<MoneyDeposited>> contexts, CancellationToken ct)
     {
         foreach (var context in contexts)
             await accounts.SendReceiptAsync(context.Trigger, context, ct);
+        return Result.Success;
     }
 }
 ```
@@ -212,6 +269,13 @@ write fails. Both command handlers reached from reactors and direct effects must
 batching is not an external transaction or an exactly-once guarantee. Use the triggering
 `DomainEventMetadata.EventId` as the deduplication key when the target supports one.
 
+## Cassie persistence
+
+Use `CassieProjectionRepository` for native Cassie SQL updates and queries with an atomic Portia
+checkpoint. `AddCassie(...).AddCassieProjection<TProjector, TRepository>(...)` supplies shared
+connections, metadata initialization, scoped repositories, and the standard runner. The
+[Cassie guide](cassie-projections.md) shows the data contract, repository, projector, and registration.
+
 ## Fitz KV persistence
 
 An application already running on `Cntryl.Portia.Fitz` has a durable store it is connected to, and
@@ -225,7 +289,7 @@ property is the open unit of work the repository's own operations write through:
 
 ```csharp
 public sealed class AccountRepository(IKvClient kv)
-    : FitzKvProjectionStore(kv, "kv://accounts/balances/projection", Projector), IAccountRepository
+    : FitzKvProjectionStore(kv, "kv://accounts/balances/projection", Projector), IAccountQueries
 {
     // The projector this repository serves, and so the name it must be registered under.
     public const string Projector = "AccountProjector";
@@ -244,28 +308,28 @@ public sealed class AccountRepository(IKvClient kv)
 
     // Query-side reads run outside any batch, so they open their own read-only transaction on the
     // resource the projector writes for this tenant.
-    public async ValueTask<long> GetBalanceAsync(TenantId tenant, Uuid accountId, CancellationToken ct)
+    public async ValueTask<AccountReadModel?> GetAsync(TenantId tenant, Uuid accountId, CancellationToken ct)
     {
         await using var tx = await BeginTenantReadAsync(tenant, ct);
         var current = await tx.GetAsync(Encoding.UTF8.GetBytes($"balance\0{accountId}"), ct);
-        return current.Found ? BinaryPrimitives.ReadInt64BigEndian(current.Value!.Value.Span) : 0;
+        return current.Found
+            ? new AccountReadModel(accountId, BinaryPrimitives.ReadInt64BigEndian(current.Value!.Value.Span))
+            : null;
     }
 }
 ```
 
 ```csharp
 services.AddScoped<AccountRepository>();
-services.AddScoped<IAccountRepository>(sp => sp.GetRequiredService<AccountRepository>());
-services.AddScoped<IProjectionStore>(sp => sp.GetRequiredService<AccountRepository>());
+services.AddScoped<IAccountQueries>(sp => sp.GetRequiredService<AccountRepository>());
 services.AddPortia()
     .AddFitz(configuration, fitz => fitz.UseKvCheckpoints("kv://accounts/progress/checkpoints"))
     .AddProjector<AccountProjector>(AccountRepository.Projector, WorkloadScope.PerTenant)
     .AddReactor<WelcomeMailer>("WelcomeMailer", WorkloadScope.PerTenant);
 ```
 
-The two forwarding registrations are the same requirement stated above: `IAccountRepository` and
-`IProjectionStore` must resolve to one scoped instance, because that instance owns the transaction
-both the projection write and the checkpoint commit belong to. One store instance owns one open
+The query interface forwards to the scoped repository; the projector receives that same concrete
+repository for its data and checkpoint transaction. One repository instance owns one open
 transaction, so a second `BeginAsync` before the first batch commits or disposes is rejected rather
 than silently retargeting the first one's writes.
 
@@ -383,11 +447,17 @@ public sealed partial class TeamProjector(TeamRepository teams)
     : BatchProjector(teams, EventStreamPattern.ForTenant("teams")),
       IProjectorHandler<TeamCreated>, IProjectorHandler<TeamRenamed>
 {
-    public ValueTask HandleAsync(TeamCreated ev, IProjectorContext context, CancellationToken ct)
-        => teams.AddAsync(new Team(ev.Metadata.AggregateId, ev.Name), ct);
+    public async ValueTask<Result> HandleAsync(IProjectorContext<TeamCreated> context, CancellationToken ct)
+    {
+        await teams.AddAsync(new Team(context.Trigger.Metadata.AggregateId, context.Trigger.Name), ct);
+        return Result.Success;
+    }
 
-    public ValueTask HandleAsync(TeamRenamed ev, IProjectorContext context, CancellationToken ct)
-        => teams.RenameAsync(ev.Metadata.AggregateId, ev.Name, ct);
+    public async ValueTask<Result> HandleAsync(IProjectorContext<TeamRenamed> context, CancellationToken ct)
+    {
+        await teams.RenameAsync(context.Trigger.Metadata.AggregateId, context.Trigger.Name, ct);
+        return Result.Success;
+    }
 }
 ```
 

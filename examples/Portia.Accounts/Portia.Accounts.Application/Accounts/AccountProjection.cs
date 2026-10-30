@@ -20,22 +20,23 @@ public static class AccountProjection
 }
 
 /// <summary>Projects account events into the ordinary account read repository.</summary>
-public sealed partial class AccountProjector(IAccountProjectionRepository accounts, IProjectionStore store)
-    : BatchProjector(store, EventStreamPattern.ForTenant("accounts"), AccountProjectionRepository.ProjectorName),
+public sealed partial class AccountProjector(IAccountProjectionRepository accounts)
+    : BatchProjector(accounts, EventStreamPattern.ForTenant("accounts"), AccountRepository.ProjectorName),
         IProjectorHandler<AccountOpened>, IProjectorHandler<FundsDeposited>
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(AccountOpened ev, IProjectorContext context, CancellationToken ct) =>
-        ApplyAsync(ev, context, ct);
+    public ValueTask<Result> HandleAsync(IProjectorContext<AccountOpened> context, CancellationToken ct) =>
+        ApplyAsync(context.Trigger, ct);
 
     /// <inheritdoc />
-    public ValueTask HandleAsync(FundsDeposited ev, IProjectorContext context, CancellationToken ct) =>
-        ApplyAsync(ev, context, ct);
+    public ValueTask<Result> HandleAsync(IProjectorContext<FundsDeposited> context, CancellationToken ct) =>
+        ApplyAsync(context.Trigger, ct);
 
-    async ValueTask ApplyAsync(DomainEvent ev, IProjectorContext context, CancellationToken ct)
+    async ValueTask<Result> ApplyAsync(DomainEvent ev, CancellationToken ct)
     {
         var accountId = ev.Metadata.AggregateId;
         var current = await accounts.GetForUpdateAsync(accountId, ct).ConfigureAwait(false);
         await accounts.SaveAsync(AccountProjection.Apply(current, ev), ct).ConfigureAwait(false);
+        return Result.Success;
     }
 }

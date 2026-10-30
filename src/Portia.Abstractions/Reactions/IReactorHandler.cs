@@ -14,6 +14,6 @@ public interface IReactorHandler<in TEvent>
     /// </summary>
     /// <param name="context">The reactor context.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>A task representing asynchronous event handling.</returns>
-    ValueTask HandleAsync(IReactorContext<TEvent> context, CancellationToken ct);
+    /// <returns>The application outcome; only success permits checkpoint advancement.</returns>
+    ValueTask<Result> HandleAsync(IReactorContext<TEvent> context, CancellationToken ct);
 }

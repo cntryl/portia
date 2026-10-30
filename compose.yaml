@@ -1,6 +1,19 @@
 name: portia-integration
 
 services:
+  cassie:
+    image: ${CASSIE_TEST_IMAGE:-ghcr.io/cntryl/cassie@sha256:c179afabb7051e19629cfd1ecc6b83fa88bfb4deb6a391060aa1f472f7a0d1de}
+    environment:
+      CASSIE_STORAGE_MODE: memory
+      CASSIE_ROOT_PASSWORD: portia-cassie-test
+      CASSIE_ALLOW_INSECURE_NON_LOOPBACK_LISTEN: "1"
+    init: true
+    ports:
+      - "127.0.0.1:${CASSIE_TEST_PORT:-5432}:5432"
+      - "127.0.0.1:${CASSIE_TEST_HTTP_PORT:-8080}:8080"
+    security_opt:
+      - no-new-privileges:true
+
   fitz:
     image: ${FITZ_TEST_IMAGE:-ghcr.io/cntryl/fitz@sha256:6d62d9ed9d9fd32186391e6f5944a05a5894e7bd2c7e117288c5ce87acb3035c}
     environment:

@@ -1,7 +1,7 @@
 namespace Portia.Accounts;
 
 /// <summary>Application repository for account commands.</summary>
-public interface IAccountRepository
+public interface IAccountCommandRepository
 {
     /// <summary>Opens an account and commits its event on success.</summary>
     ValueTask<Result> OpenAsync(OpenAccount request, IRequestContext context, CancellationToken ct);
@@ -11,7 +11,7 @@ public interface IAccountRepository
 }
 
 /// <summary>Ordinary application repository that delegates event persistence to the aggregate executor.</summary>
-public sealed class AccountRepository(IAggregateExecutor aggregates) : IAccountRepository
+public sealed class AccountCommandRepository(IAggregateExecutor aggregates) : IAccountCommandRepository
 {
     /// <inheritdoc />
     public ValueTask<Result> OpenAsync(OpenAccount request, IRequestContext context, CancellationToken ct) =>
@@ -32,7 +32,7 @@ public interface IAccountReadRepository
 }
 
 /// <summary>Repository writes performed by the pure account projector.</summary>
-public interface IAccountProjectionRepository
+public interface IAccountProjectionRepository : IProjectionStore
 {
     /// <summary>Reads the account value from the currently open projection transaction.</summary>
     ValueTask<AccountReadModel?> GetForUpdateAsync(Uuid accountId, CancellationToken ct);
@@ -41,15 +41,15 @@ public interface IAccountProjectionRepository
     ValueTask SaveAsync(AccountReadModel account, CancellationToken ct);
 }
 
-/// <summary>Fitz KV read model that commits account data and projector checkpoints in one transaction.</summary>
-public sealed class AccountProjectionRepository : FitzKvProjectionStore, IAccountReadRepository,
+/// <summary>Fitz KV repository that commits account data and projector checkpoints in one transaction.</summary>
+public sealed class AccountRepository : FitzKvProjectionStore, IAccountReadRepository,
     IAccountProjectionRepository
 {
     /// <summary>The stable workload and checkpoint identity for this projector.</summary>
     public const string ProjectorName = "AccountProjector";
 
     /// <summary>Creates the projection repository for one configured Fitz KV base route.</summary>
-    public AccountProjectionRepository(IKvClient client, string route)
+    public AccountRepository(IKvClient client, string route)
         : base(client, route, ProjectorName)
     {
     }

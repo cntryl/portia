@@ -140,6 +140,38 @@ public sealed class RegistrationInterceptorIncrementalTests
         return string.Join(Environment.NewLine, result.GeneratedTrees.Select(tree => tree.GetText().ToString()));
     }
 
+    [Theory]
+    [InlineData("Imported.Changed", "new Alias()")]
+    [InlineData("object", "new Imported.Changed()")]
+    [InlineData("Imported", "new Alias.Changed()")]
+    public void ShouldDiscoverReferencedEventsGivenTypeOrNamespaceAliases(string aliasTarget, string creation)
+    {
+        // Arrange
+        var reference = GeneratorCompilation.ReferenceNamed("AliasFeature", """
+            using Cntryl.Portia;
+            namespace Imported;
+            [Discriminator("alias.changed", 1)] public sealed record Changed : DomainEvent;
+            """);
+        var source = $$"""
+            using Cntryl.Portia;
+            using Microsoft.Extensions.DependencyInjection;
+            using Alias = {{aliasTarget}};
+            public static class Composition
+            {
+                public static PortiaBuilder Compose(IServiceCollection services) => services.AddPortia();
+                public static DomainEvent Fact() => {{creation}};
+            }
+            """;
+
+        // Act
+        var generated = GeneratorCompilation.GeneratedSource(source, [reference], new RegistrationCallInterceptorGenerator());
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, [reference], new RegistrationCallInterceptorGenerator());
+
+        // Assert
+        Assert.Contains("AddGeneratedEvent<global::Imported.Changed>", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+    }
+
     static IEnumerable<MetadataReference> References() =>
         ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
         .Append(typeof(Aggregate).Assembly.Location)

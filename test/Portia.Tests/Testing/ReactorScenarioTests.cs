@@ -62,10 +62,10 @@ public sealed class ReactorScenarioTests
             .Given(new UserCreated(Uuid.CreateVersion4()))
             .RespondTo<SendWelcomeEmail>(Result.Failure(new RequestError(RequestErrorKind.Conflict, "already welcomed")));
 
-        var error = await Assert.ThrowsAsync<ReactionCommandFailedException>(async () =>
+        var error = await Assert.ThrowsAsync<ProcessorFailureException>(async () =>
             await scenario.RunAsync(new WelcomeReactor(scenario.Requests)));
 
-        Assert.Equal(RequestErrorKind.Conflict, error.Error.Kind);
+        Assert.Equal(RequestErrorKind.Conflict, error.Error!.Kind);
         _ = Assert.Single(scenario.SentRequests);
     }
 

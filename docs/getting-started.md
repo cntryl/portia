@@ -5,7 +5,9 @@ Portia targets .NET 10. Applications choose the runtime packages they need and c
 generation. `Cntryl.Portia.DependencyInjection` supplies registration APIs but does not require DI-free
 Portia users to depend on it for tooling. `Cntryl.Portia.AspNetCore` includes its HTTP-specific
 generator and depends on the runtime DI package. Add `Cntryl.Portia.Fitz` for Fitz storage/transports
-and `Cntryl.Portia.Jwt` when inbound work carries JWT actor identities. Packages use the
+and `Cntryl.Portia.Jwt` when inbound work carries JWT actor identities. `Cntryl.Portia.Cassie`
+adds native SQL projection repositories through `AddCassie` and `AddCassieProjection`; see the
+[Cassie repository guide](cassie-projections.md). Packages use the
 cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
 Portia 0.8.0 uses the .NET 2.0.0 client and requires a
 compatible Fitz 0.2.0 broker. For an existing deployment, follow the
@@ -714,7 +716,14 @@ See [shared application setup](application-setup.md) for application identity an
 Inject ordinary application repositories into your processors. Projectors pass a repository
 implementing `IProjectionStore` into `Projector` or `BatchProjector`; reactors pass
 a dependency implementing `IProjectionCheckpointStore` into `Reactor` or `BatchReactor`.
-The same repository can implement framework persistence and application operations.
+The same repository implements framework persistence and application operations. Name the data
+contract `AccountReadModel`, the persistence/query object `AccountRepository`, and the event consumer
+`AccountProjector`; the data contract carries values while the repository owns behavior.
+Typed projector and reactor handlers receive `IProjectorContext<TEvent>` and
+`IReactorContext<TEvent>` respectively, and return `ValueTask<Result>`. Projectors use
+`context.Trigger` for the event and `context.Batch` for shared identity and rebuild metadata.
+Permanent results fault the worker immediately; transient results and exceptions receive bounded
+framework retries with fresh scopes and authoritative checkpoint reload.
 
 Each worker pass uses a fresh scope. Projection changes and progress commit atomically
 through `IProjectionBatch`. Single-event bases advance progress per event; batch bases

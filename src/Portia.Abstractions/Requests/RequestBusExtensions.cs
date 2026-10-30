@@ -19,19 +19,14 @@ public static class RequestBusExtensions
     /// <param name="command">The command caused by the triggering event.</param>
     /// <param name="reaction">The triggering reaction execution.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>A task that completes once the command has succeeded.</returns>
-    /// <exception cref="ReactionCommandFailedException">The command returned an expected failure.</exception>
-    public static async ValueTask SendReactionAsync(this IRequestBus bus, IRequest command,
+    /// <returns>The command outcome, returned by the reactor handler so Portia can apply its retry policy.</returns>
+    public static ValueTask<Result> SendReactionAsync(this IRequestBus bus, IRequest command,
         IReactorContext reaction, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(bus);
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(reaction);
-        var result = await bus.SendAsync(command, reaction, ct).ConfigureAwait(false);
-        if (!result.IsSuccess)
-        {
-            throw new ReactionCommandFailedException(result.Error);
-        }
+        return bus.SendAsync(command, reaction, ct);
     }
 
     /// <summary>Dispatches a request that produces no result to its handler.</summary>

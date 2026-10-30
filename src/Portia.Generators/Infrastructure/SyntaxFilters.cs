@@ -37,6 +37,11 @@ static class SyntaxFilters
     // A class or record that could derive from a Portia base type or implement one of its interfaces.
     public static bool HasBaseList(SyntaxNode node) =>
         node is ClassDeclarationSyntax { BaseList: not null } or RecordDeclarationSyntax { BaseList: not null };
+
+    // A declaration without bases can acquire a role only from another part. Plain DTO/value
+    // classes cannot implement Portia contracts, and binding thousands of them on each edit is waste.
+    public static bool HasBaseListOrPartial(SyntaxNode node) => node is TypeDeclarationSyntax type
+        && (type.BaseList is not null || type.Modifiers.Any(SyntaxKind.PartialKeyword));
 }
 
 // The simple names of every public domain event a referenced Portia assembly declares. A type reference whose
@@ -62,22 +67,30 @@ static class ReferencedEventNames
 
     static Func<string, bool> Create(Compilation compilation)
     {
-        // An alias can give an event any name, so a compilation that declares one binds every reference.
-        if (compilation.SyntaxTrees.Any(tree => tree.GetRoot() is CompilationUnitSyntax root
-                                                && (root.Usings.Any(HasAlias)
-                                                    || root.DescendantNodes(node => node is CompilationUnitSyntax
-                                                            or BaseNamespaceDeclarationSyntax)
-                                                        .OfType<UsingDirectiveSyntax>().Any(HasAlias))))
-        {
-            return static _ => true;
-        }
-
         var names = new HashSet<string>(StringComparer.Ordinal);
         foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
             names.UnionWith(ByAssembly.GetValue(assembly, EventNames));
-        return names.Contains;
 
-        static bool HasAlias(UsingDirectiveSyntax directive) => directive.Alias is not null;
+        // A handler/value alias must not disable event-name filtering for the entire project.
+        // Resolve aliases once, add names that actually alias events, and keep the conservative
+        // fallback for namespaces or unresolved targets whose members cannot be narrowed here.
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            var aliases = tree.GetRoot().DescendantNodes(node => node is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax)
+                .OfType<UsingDirectiveSyntax>().Where(directive => directive.Alias is not null).ToArray();
+            if (aliases.Length == 0)
+                continue;
+            var model = compilation.GetSemanticModel(tree);
+            foreach (var directive in aliases)
+            {
+                if (model.GetDeclaredSymbol(directive)?.Target is not INamedTypeSymbol { TypeKind: not TypeKind.Error } target)
+                    return static _ => true;
+                if (DerivesFromDomainEvent(target))
+                    _ = names.Add(directive.Alias!.Name.Identifier.ValueText);
+            }
+        }
+
+        return names.Contains;
     }
 
     static HashSet<string> EventNames(IAssemblySymbol assembly)

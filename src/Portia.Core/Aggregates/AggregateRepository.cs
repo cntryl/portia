@@ -89,6 +89,10 @@ sealed class AggregateRepository(IEventStore store) : IAggregateReader, IAggrega
             var stream = isAudit ? aggregate.GetAuditSessionStream() : aggregate.Stream;
             var expectedPosition = isAudit ? 0 : aggregate.CommittedStreamPosition;
             await store.AppendAsync(stream, expectedPosition, pending, ct).ConfigureAwait(false);
+            foreach (var ev in pending)
+                if (ProcessingObservation.IsEnabled)
+                    ProcessingObservation.Record("event", stream.ToString(), ev.Metadata.EventId.ToString(),
+                        ev.Metadata.ExecutionId?.ToString(), "committed");
             aggregate.Save();
             outcome = "success";
         }

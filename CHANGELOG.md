@@ -4,6 +4,37 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## Unreleased
+
+### Fixed
+
+- Emit shared event, JSON-context, and inferred request registrations once per compilation instead
+  of copying them into each interceptor, keeping generated source growth additive. Apply shared
+  registration once per builder and compilation, with retry after failed initialization.
+- Keep non-event type aliases from disabling event-name filtering, and use exact-sized generated
+  batch buffers instead of repeatedly growing lists.
+
+### Added
+
+- Add opt-in application structure diagnostics (`PORTIA200`–`PORTIA213`) for the Common/Core/Api/Worker
+  layout, with code actions for splitting files, filenames, namespaces, and explicit schema versions.
+- Add `Cntryl.Portia.Cassie` with `CassieProjectionRepository`, shared metadata initialization,
+  native transaction commands, stable scope keys, and `AddCassie`/`AddCassieProjection` composition.
+- Add a pinned Cassie Compose service and required CI integration tests for public projection-store
+  conformance and the complete Fitz-to-Portia-to-Cassie account projection and query flow.
+
+### Changed
+
+- Projector handlers receive `IProjectorContext<TEvent>` with `Trigger`, `Source`, and shared `Batch`
+  metadata. Batch handlers receive ordered lists of typed contexts.
+- Projector and reactor handlers, including manual overrides, return `ValueTask<Result>`.
+  `SendReactionAsync` returns the command result for direct propagation by reactor handlers.
+- Permanent handler results stop hosted workloads immediately. Transient results and exceptions
+  use bounded backoff with authoritative checkpoint reload and fresh DI scopes.
+- Runner failures expose `ProcessorFailureException` with the source range, checkpoint, stage,
+  declared error or original exception, and any secondary projection cleanup failure. Hosted logs
+  report retry and stop decisions.
+
 ## 0.9.2 - 2026-10-28
 
 ### Added

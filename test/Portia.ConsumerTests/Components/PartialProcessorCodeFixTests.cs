@@ -60,12 +60,12 @@ public sealed class PartialProcessorCodeFixTests
                               public sealed class Projection()
                                   : Projector(null!, EventStreamPattern.ForPattern("events")), IProjectorHandler<Changed>
                               {
-                                  public ValueTask HandleAsync(Changed ev, IProjectorContext context, CancellationToken ct) => ValueTask.CompletedTask;
+                                  public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                               }
                               internal class Reaction()
                                   : Reactor(null!, EventStreamPattern.ForPattern("events")), IReactorHandler<Changed>
                               {
-                                  public ValueTask HandleAsync(IReactorContext<Changed> context, CancellationToken ct) => ValueTask.CompletedTask;
+                                  public ValueTask<Result> HandleAsync(IReactorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                               }
                               """;
 
@@ -96,7 +96,7 @@ public sealed class PartialProcessorCodeFixTests
                                       internal sealed partial class Projection()
                                           : Projector(null!, EventStreamPattern.ForPattern("events")), IProjectorHandler<Changed>
                                       {
-                                          public ValueTask HandleAsync(Changed ev, IProjectorContext context, CancellationToken ct) => ValueTask.CompletedTask;
+                                          public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                       }
                                   }
                               }
@@ -124,7 +124,7 @@ public sealed class PartialProcessorCodeFixTests
                                   private sealed partial class Projection()
                                       : Projector(null!, EventStreamPattern.ForPattern("events")), IProjectorHandler<Changed>
                                   {
-                                      public ValueTask HandleAsync(Changed ev, IProjectorContext context, CancellationToken ct) => ValueTask.CompletedTask;
+                                      public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                   }
                               }
                               """;
@@ -150,11 +150,11 @@ public sealed class PartialProcessorCodeFixTests
                                   {
                                       internal partial class Projection() : Projector(null!, EventStreamPattern.ForPattern("events")), IProjectorHandler<Changed>
                                       {
-                                          public ValueTask HandleAsync(Changed ev, IProjectorContext context, CancellationToken ct) => ValueTask.CompletedTask;
+                                          public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                       }
                                       internal partial class Reaction() : Reactor(null!, EventStreamPattern.ForPattern("events")), IReactorHandler<Changed>
                                       {
-                                          public ValueTask HandleAsync(IReactorContext<Changed> context, CancellationToken ct) => ValueTask.CompletedTask;
+                                          public ValueTask<Result> HandleAsync(IReactorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                       }
                                   }
                               }

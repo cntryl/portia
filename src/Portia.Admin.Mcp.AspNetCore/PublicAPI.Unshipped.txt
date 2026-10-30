@@ -1,0 +1,5 @@
+#nullable enable
+Cntryl.Portia.PortiaAdminMcpExtensions
+static Cntryl.Portia.PortiaAdminMcpExtensions.AddAdminMcpHttp(this Cntryl.Portia.PortiaBuilder! application) -> Cntryl.Portia.PortiaBuilder!
+static Cntryl.Portia.PortiaAdminMcpExtensions.MapPortiaAdminMcp(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, string! pattern = "/admin/mcp") -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Cntryl.Portia.PortiaAdminMcpExtensions.MapPortiaRepairApprovals(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, string! pattern = "/admin/repairs") -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!

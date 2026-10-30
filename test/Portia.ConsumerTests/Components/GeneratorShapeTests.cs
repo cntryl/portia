@@ -257,10 +257,9 @@ public sealed class GeneratorShapeTests
                                                              using Microsoft.Extensions.DependencyInjection;
                                                              public sealed class Projection : IProjectorHandler<UsedEvent>
                                                              {
-                                                                 public System.Threading.Tasks.ValueTask HandleAsync(
-                                                                     UsedEvent ev,
-                                                                     IProjectorContext context,
-                                                                     System.Threading.CancellationToken ct) => System.Threading.Tasks.ValueTask.CompletedTask;
+                                                                 public async System.Threading.Tasks.ValueTask<Result> HandleAsync(
+                                                                     IProjectorContext<UsedEvent> context,
+                                                                     System.Threading.CancellationToken ct) { await System.Threading.Tasks.ValueTask.CompletedTask.ConfigureAwait(false); return Result.Success; }
                                                              }
                                                              public static class Scenario
                                                              {

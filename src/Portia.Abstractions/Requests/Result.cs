@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace Cntryl.Portia;
 
 /// <summary>
-///     The outcome of handling a no-result request: success, or an expected failure. An
+///     The outcome of handling a no-result request or processing an event: success, or an expected failure. An
 ///     unrecognized (unexpected, infrastructure-level) failure is a plain exception, not a
 ///     <see cref="Result" /> — this type exists for failures a handler anticipates as part of its
 ///     normal contract.
@@ -33,7 +33,7 @@ public readonly struct Result
     public static Result Success { get; } = new(ResultState.Succeeded, null);
 
     /// <summary>
-    ///     Gets whether the request succeeded. When <see langword="false" />,
+    ///     Gets whether the operation succeeded. When <see langword="false" />,
     ///     <see cref="Error" /> is non-null, so a failure branch needs no null check.
     /// </summary>
     [MemberNotNullWhen(false, nameof(Error))]
@@ -98,7 +98,7 @@ public readonly struct Result<T>
     }
 
     /// <summary>
-    ///     Gets whether the request succeeded. When <see langword="false" />,
+    ///     Gets whether the operation succeeded. When <see langword="false" />,
     ///     <see cref="Error" /> is non-null, so a failure branch needs no null check. On success,
     ///     <see cref="Value" /> has exactly the nullability declared by <typeparamref name="T" />:
     ///     <c>Result&lt;string&gt;</c> exposes <c>string</c>, while

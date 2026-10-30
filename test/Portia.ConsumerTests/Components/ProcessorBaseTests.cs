@@ -27,8 +27,10 @@ public sealed class ProcessorBaseTests
         var events = await Seed();
         var repository = new Repository { Fail = true };
         var runner = new ProjectorRunner(events);
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
             runner.RunAsync(new BatchAccounts(repository), ProjectionCheckpoint.Start).AsTask());
+        Assert.IsType<InvalidOperationException>(failure.InnerException);
+        Assert.Equal(ProcessorFailureStage.Committing, failure.Stage);
         Assert.Equal(0, repository.Value);
         Assert.Equal(ProjectionCheckpoint.Start, repository.Checkpoint);
         Assert.Equal(1, repository.Disposals);
@@ -78,8 +80,10 @@ public sealed class ProcessorBaseTests
         var repository = new ReactionRepository { FailSave = true };
         Reactor reactor = batch ? new BatchReaction(repository) : new Reaction(repository);
         var runner = new ReactorRunner(events);
-        _ = await Assert.ThrowsAsync<IOException>(() =>
+        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
             runner.RunAsync(reactor, ProjectionCheckpoint.Start, 2).AsTask());
+        Assert.IsType<IOException>(failure.InnerException);
+        Assert.Equal(ProcessorFailureStage.Committing, failure.Stage);
         Assert.Equal(ProjectionCheckpoint.Start, repository.Checkpoint);
         Assert.Equal(batch ? 2 : 1, repository.Contexts.Count);
         repository.FailSave = false;
@@ -118,21 +122,21 @@ public sealed class ProcessorBaseTests
     sealed class Reaction(ReactionRepository repository)
         : Reactor(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
-        protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
             CancellationToken ct)
         {
             repository.Contexts.Add((IReactorContext)context);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 
     sealed class BatchReaction(ReactionRepository repository)
         : BatchReactor(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
-        protected override ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
+        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
         {
             repository.Contexts.AddRange(contexts);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 
@@ -163,23 +167,23 @@ public sealed class ProcessorBaseTests
     sealed class Accounts(Repository repository)
         : Projector(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
-        protected override ValueTask ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
+        protected override ValueTask<Result> ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
             CancellationToken ct)
         {
             repository.Add(((Deposited)record.Event).Amount);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 
     sealed class BatchAccounts(Repository repository)
         : BatchProjector(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
-        protected override ValueTask ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records,
+        protected override ValueTask<Result> ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records,
             IProjectorContext context, CancellationToken ct)
         {
             foreach (var record in records)
                 repository.Add(((Deposited)record.Event).Amount);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 

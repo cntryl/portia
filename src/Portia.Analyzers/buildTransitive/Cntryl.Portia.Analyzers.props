@@ -2,4 +2,11 @@
   <PropertyGroup>
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
   </PropertyGroup>
+  <ItemGroup>
+    <CompilerVisibleProperty Include="PortiaProjectStructure"/>
+    <CompilerVisibleProperty Include="MSBuildProjectDirectory"/>
+    <CompilerVisibleProperty Include="MSBuildProjectName"/>
+    <CompilerVisibleProperty Include="RootNamespace"/>
+    <CompilerVisibleProperty Include="IsTestProject"/>
+  </ItemGroup>
 </Project>

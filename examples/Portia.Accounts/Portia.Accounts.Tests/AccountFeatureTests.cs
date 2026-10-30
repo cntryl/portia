@@ -176,12 +176,12 @@ public sealed class AccountFeatureTests
     [Fact]
     public async Task ShouldProjectOpeningAndDepositIntoReadModel()
     {
-        var repository = new InMemoryAccountProjectionRepository();
         var scenario = new ProjectorScenario(Tenant).Given(
             DomainEventSeed.Attach(new AccountOpened(500), AccountId, 1),
             DomainEventSeed.Attach(new FundsDeposited(125), AccountId, 2));
 
-        await scenario.RunAsync(new AccountProjector(repository, scenario.Store));
+        var repository = new InMemoryAccountRepository(scenario.Store);
+        await scenario.RunAsync(new AccountProjector(repository));
 
         Assert.Equal(new AccountReadModel(AccountId, 625),
             await repository.GetAsync(Tenant, AccountId, default));
@@ -197,8 +197,8 @@ public sealed class AccountFeatureTests
         _ = services.AddSingleton<IAccountTenantScope>(new FixedAccountTenantScope(Tenant));
         _ = services.AddSingleton<IAccountOperations>(new FixedAccountOperations(available));
         _ = services.AddSingleton<IAccountLifecycleObserver>(trace);
-        _ = services.AddSingleton<IAccountReadRepository>(new InMemoryAccountProjectionRepository(readModel));
-        _ = services.AddScoped<IAccountRepository, AccountRepository>();
+        _ = services.AddSingleton<IAccountReadRepository>(new InMemoryAccountRepository(initial: readModel));
+        _ = services.AddScoped<IAccountCommandRepository, AccountCommandRepository>();
         _ = services.AddPortia().RequireAuthorization().AddAccountsFeature();
         return services.BuildServiceProvider(validateScopes: true);
     }
@@ -245,12 +245,20 @@ public sealed class AccountFeatureTests
         public void Record(string stage) => _stages.Enqueue(stage);
     }
 
-    sealed class InMemoryAccountProjectionRepository(AccountReadModel? initial = null)
+    sealed class InMemoryAccountRepository(IProjectionStore? store = null, AccountReadModel? initial = null)
         : IAccountReadRepository, IAccountProjectionRepository
     {
         readonly Dictionary<Uuid, AccountReadModel> _accounts = initial is null
             ? []
             : new Dictionary<Uuid, AccountReadModel> { [initial.AccountId] = initial };
+
+        readonly IProjectionStore _store = store ?? new ProjectorScenario().Store;
+
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default) =>
+            _store.LoadCheckpointAsync(identity, ct);
+
+        public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default) =>
+            _store.BeginAsync(context, ct);
 
         public ValueTask<AccountReadModel?> GetAsync(TenantId tenant, Uuid accountId, CancellationToken ct) =>
             ValueTask.FromResult(_accounts.GetValueOrDefault(accountId));

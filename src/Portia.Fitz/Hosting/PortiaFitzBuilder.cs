@@ -12,6 +12,7 @@ public sealed class PortiaFitzBuilder
         [RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice, RequestTransportId.Schedule];
 
     readonly PortiaBuilder _application;
+    readonly Client? _borrowedClient;
     readonly HashSet<string> _capabilities = new(StringComparer.Ordinal);
     readonly HashSet<RequestTransportId> _requiredWorkerTransports = [];
     readonly HashSet<RequestTransportId> _workerTransports = [.. AllBuiltInTransports];
@@ -21,10 +22,45 @@ public sealed class PortiaFitzBuilder
     string? _tenantSnapshotRoute;
     KvDurability _tenantSnapshotDurability;
     bool _workerSelectionExplicit;
+    bool _operations;
 
-    internal PortiaFitzBuilder(PortiaBuilder application)
+    /// <summary>
+    /// Enables durable diagnosis and worker-owned recovery after a quiesced cutover. Reuses the
+    /// legacy checkpoint resource derivation and keys with synchronous completion receipts.
+    /// </summary>
+    public PortiaFitzBuilder UseOperations(string checkpointBaseRoute, Action<OperationalOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        var route = FitzKvCheckpoints.Route(checkpointBaseRoute, nameof(checkpointBaseRoute));
+        if (_checkpointRoute is not null || _operations
+            || _application.Services.Any(s => s.ServiceType == typeof(IProjectionCheckpointStore)
+                || s.ServiceType == typeof(IOperationalStore)))
+            throw new InvalidOperationException("Operations conflicts with an existing checkpoint or operational registration. Quiesce legacy owners before cutover.");
+        var options = new OperationalOptions();
+        configure(options);
+        options.Validate();
+        if (!options.QuiescedWorkerCutover)
+            throw new InvalidOperationException("UseOperations requires an explicitly acknowledged quiesced worker cutover.");
+        _operations = true;
+        _checkpointRoute = route;
+        _checkpointDurability = KvDurability.Sync;
+        _ = AddKvClient();
+        var services = _application.Services;
+        _ = services.AddSingleton(options);
+        _ = services.AddSingleton(provider => new FitzOperationalStore(provider.GetRequiredService<IKvClient>(), route));
+        _ = services.AddSingleton<IOperationalStore>(p => p.GetRequiredService<FitzOperationalStore>());
+        _ = services.AddSingleton<IOperationalReactionCheckpointStore>(p => p.GetRequiredService<FitzOperationalStore>());
+        _ = services.AddSingleton<IProjectionCheckpointStore>(p => p.GetRequiredService<FitzOperationalStore>());
+        services.TryAddSingleton<IApplicationTopology, GeneratedApplicationTopology>();
+        services.TryAddSingleton<IPortiaOperations, PortiaOperations>();
+        services.TryAddScoped<OperationalExecution>();
+        return this;
+    }
+
+    internal PortiaFitzBuilder(PortiaBuilder application, Client? borrowedClient = null)
     {
         _application = application;
+        _borrowedClient = borrowedClient;
         _workers = new Lazy<IReadOnlyList<FitzWorkerDefinition>>(() => [.. BuildWorkers()],
             LazyThreadSafetyMode.ExecutionAndPublication);
         _ = application.ConfigureWorker("Portia.Fitz", services =>
@@ -62,8 +98,11 @@ public sealed class PortiaFitzBuilder
     {
         if (!_capabilities.Add("kv"))
             return this;
-        _application.Services.TryAddSingleton<IKvClient>(provider =>
-            provider.GetRequiredService<FitzApplicationConnection>().Client.Kv);
+        if (_borrowedClient is { } borrowed)
+            _application.Services.TryAddSingleton<IKvClient>(borrowed.Kv);
+        else
+            _application.Services.TryAddSingleton<IKvClient>(provider =>
+                provider.GetRequiredService<FitzApplicationConnection>().Client.Kv);
         return this;
     }
 
@@ -77,8 +116,11 @@ public sealed class PortiaFitzBuilder
     {
         if (!_capabilities.Add("stream"))
             return this;
-        _application.Services.TryAddSingleton<IStreamClient>(provider =>
-            provider.GetRequiredService<FitzApplicationConnection>().Client.Stream);
+        if (_borrowedClient is { } borrowed)
+            _application.Services.TryAddSingleton<IStreamClient>(borrowed.Stream);
+        else
+            _application.Services.TryAddSingleton<IStreamClient>(provider =>
+                provider.GetRequiredService<FitzApplicationConnection>().Client.Stream);
         return this;
     }
 
@@ -89,8 +131,11 @@ public sealed class PortiaFitzBuilder
             return this;
         var services = _application.Services;
         AddSerializers(services);
-        services.TryAddSingleton<IScheduleClient>(provider =>
-            provider.GetRequiredService<FitzApplicationConnection>().Client.Schedule);
+        if (_borrowedClient is { } borrowed)
+            services.TryAddSingleton<IScheduleClient>(borrowed.Schedule);
+        else
+            services.TryAddSingleton<IScheduleClient>(provider =>
+                provider.GetRequiredService<FitzApplicationConnection>().Client.Schedule);
         services.TryAddSingleton<IRemoteRequestSender>(provider => new FitzRemoteRequestSender(
             provider.GetRequiredService<FitzApplicationConnection>().Client.Rpc,
             provider.GetRequiredService<IRequestSerializer>(),
@@ -180,6 +225,8 @@ public sealed class PortiaFitzBuilder
     /// <exception cref="InvalidOperationException">The application selected conflicting checkpoint settings.</exception>
     public PortiaFitzBuilder UseKvCheckpoints(string route, KvDurability durability)
     {
+        if (_operations)
+            throw new InvalidOperationException("Legacy checkpoint registrations cannot coexist with operations.");
         var validated = FitzKvCheckpoints.Route(route, nameof(route));
         _ = FitzKvCheckpoints.RequireDurability(durability);
         if (_checkpointRoute is not null)

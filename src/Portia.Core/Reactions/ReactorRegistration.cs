@@ -34,6 +34,17 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
     // A reactor's checkpoint store serves every reactor, so there is no per-component binding to check.
     void IWorkloadDescriptor.Validate(IServiceProvider services, string componentName)
     {
+        if (services.GetService<IOperationalStore>() is not null
+            && !ReferenceEquals(_resolve(services).Checkpoints, services.GetService<IOperationalReactionCheckpointStore>()))
+            throw new InvalidOperationException("Operational reactors must use the registered operational checkpoint store.");
+    }
+
+    ValueTask<ProjectionCheckpoint> IWorkloadDescriptor.LoadCheckpoint(IServiceProvider services,
+        ProjectionRunOptions options, CancellationToken ct)
+    {
+        var component = _resolve(services);
+        return ProcessorCheckpoints.LoadAsync(component.Checkpoints,
+            new CheckpointIdentity(component.Name, component.Pattern), ct);
     }
 
     async ValueTask<ProjectionPassResult> IWorkloadDescriptor.RunPass(IServiceProvider services,
@@ -42,10 +53,11 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
         options.Validate();
         var reactor = _resolve(services);
         WorkloadBinding.Apply(services, reactor.BindWorkload);
-        var checkpoint = await reactor.Checkpoints.LoadAsync(
+        var checkpoint = await ProcessorCheckpoints.LoadAsync(reactor.Checkpoints,
             new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
-        return await services.GetRequiredService<ReactorRunner>()
-            .ExecutePassAsync(reactor, checkpoint, options, ct).ConfigureAwait(false);
+        var runner = services.GetRequiredService<ReactorRunner>();
+        runner.Operations = services.GetService<OperationalExecution>()?.Session;
+        return await runner.ExecutePassAsync(reactor, checkpoint, options, ct).ConfigureAwait(false);
     }
 
     /// <summary>Resolves the reactor in the supplied application scope.</summary>
@@ -68,7 +80,7 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
             options.Validate();
             var reactor = services.GetRequiredService<TReactor>();
             WorkloadBinding.Apply(services, reactor.BindWorkload);
-            var checkpoint = await reactor.Checkpoints.LoadAsync(
+            var checkpoint = await ProcessorCheckpoints.LoadAsync(reactor.Checkpoints,
                 new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
             _ = await services.GetRequiredService<ReactorRunner>().RunPassAsync(
                 reactor, checkpoint, options, ct).ConfigureAwait(false);

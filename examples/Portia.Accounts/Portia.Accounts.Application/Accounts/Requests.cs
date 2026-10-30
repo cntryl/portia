@@ -33,7 +33,7 @@ public sealed record DepositFunds(TenantId Tenant, Uuid AccountId, long AmountCe
 public sealed record GetAccount(TenantId Tenant, Uuid AccountId)
     : IRequest<AccountReadModel>, ICallable, IAccountRequest;
 
-/// <summary>The account data returned by the read model.</summary>
+/// <summary>The simple account data contract returned by repository queries.</summary>
 /// <param name="AccountId">The account identity.</param>
 /// <param name="BalanceCents">The projected balance in cents.</param>
 public sealed record AccountReadModel(Uuid AccountId, long BalanceCents);

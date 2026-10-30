@@ -9,4 +9,6 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(FitzScheduledRequestEnvelope))]
 [JsonSerializable(typeof(FitzTenantDirectorySnapshot))]
+[JsonSerializable(typeof(OperationalProcessorState))]
+[JsonSerializable(typeof(OperationalTarget[]))]
 sealed partial class FitzJsonContext : JsonSerializerContext;

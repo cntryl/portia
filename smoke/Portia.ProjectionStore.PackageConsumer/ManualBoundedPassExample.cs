@@ -61,22 +61,22 @@ static class ManualBoundedPassExample
     sealed class CountingProjector() : BatchProjector(new UserlandSession(new UserlandTarget()), EventStreamPattern.ForPattern("manual", "events"))
     {
         public int Last { get; private set; }
-        protected override ValueTask ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records, IProjectorContext context, CancellationToken ct)
+        protected override ValueTask<Result> ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records, IProjectorContext context, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
             Last = ((Observed)records[^1].Event).Value;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 
     sealed class CountingReactor() : BatchReactor(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("manual", "events"))
     {
         public int Last { get; private set; }
-        protected override ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
+        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
             Last = ((Observed)contexts[^1].Source.Event).Value;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 }

@@ -99,7 +99,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         });
         var components = context.SyntaxProvider
             .CreateSyntaxProvider(
-                static (node, _) => node is ClassDeclarationSyntax,
+                static (node, _) => node is ClassDeclarationSyntax && SyntaxFilters.HasBaseListOrPartial(node),
                 static (syntaxContext, _) => RegistrationComponentDiscovery.GetComponentTypeName(syntaxContext))
             .Where(static component => component is not null)
             .Select(static (component, _) => component!)

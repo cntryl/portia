@@ -61,7 +61,7 @@ public sealed class AccountRequestBehavior(IAccountLifecycleObserver lifecycle)
 }
 
 /// <summary>Opens an account through the ordinary account repository.</summary>
-public sealed class OpenAccountHandler(IAccountRepository accounts, IAccountLifecycleObserver lifecycle)
+public sealed class OpenAccountHandler(IAccountCommandRepository accounts, IAccountLifecycleObserver lifecycle)
     : IRequestHandler<OpenAccount>
 {
     /// <inheritdoc />
@@ -73,7 +73,7 @@ public sealed class OpenAccountHandler(IAccountRepository accounts, IAccountLife
 }
 
 /// <summary>Deposits money through the ordinary account repository.</summary>
-public sealed class DepositFundsHandler(IAccountRepository accounts, IAccountLifecycleObserver lifecycle)
+public sealed class DepositFundsHandler(IAccountCommandRepository accounts, IAccountLifecycleObserver lifecycle)
     : IRequestHandler<DepositFunds>
 {
     /// <inheritdoc />

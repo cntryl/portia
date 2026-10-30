@@ -773,7 +773,7 @@ public sealed class GeneratorDiagnosticsTests
                                                   public sealed record Changed : DomainEvent;
                                                   public sealed partial class View : IProjectorHandler<Changed>
                                                   {
-                                                      public ValueTask HandleAsync(Changed ev, IProjectorContext context, CancellationToken ct) => default;
+                                                      public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) => default;
                                                   }
                                                   """, parseOptions, "View.Handlers.cs");
         const string state = """

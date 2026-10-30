@@ -169,8 +169,10 @@ public sealed class ReactorRunnerTests
         var runner = new ReactorRunner(store);
 
         // First pass fails on the second event — no checkpoint is returned at all.
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
             runner.RunAsync(reactor, ProjectionCheckpoint.Start).AsTask());
+        Assert.IsType<InvalidOperationException>(failure.InnerException);
+        Assert.Equal(ProcessorFailureStage.Handling, failure.Stage);
         Assert.Equal([1], reactor.HandledValues);
 
         // A caller has nothing but the original (unchanged) checkpoint to retry from — the only
@@ -207,8 +209,10 @@ public sealed class ReactorRunnerTests
         var checkpointStore = new InMemoryProjectionCheckpointStore();
         var reactor = new FlakyOnThirdEventReactor(checkpointStore);
 
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
             runner.RunAsync(reactor, ProjectionCheckpoint.Start, 2).AsTask());
+        Assert.IsType<InvalidOperationException>(failure.InnerException);
+        Assert.Equal(ProcessorFailureStage.Handling, failure.Stage);
 
         // The first batch (events 1-2) must already be durably saved — not just held in memory —
         // by the time the second batch's failure propagates.
@@ -270,12 +274,12 @@ public sealed class ReactorRunnerTests
         public List<ulong> AggregateVersions { get; } = [];
         public List<int> BatchSizes { get; } = [];
 
-        protected override ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
+        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
             BatchSizes.Add(contexts.Count);
             AggregateVersions.AddRange(contexts.Select(context => context.Source.Event.Metadata.AggregateVersion));
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 
@@ -284,13 +288,13 @@ public sealed class ReactorRunnerTests
     {
         public List<bool> SawMutation { get; } = [];
 
-        protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
             CancellationToken ct)
         {
             var actor = context.Actor;
             SawMutation.Add(actor.HasClaim("mutation", "first"));
             ((ClaimsIdentity)actor.Identity!).AddClaim(new Claim("mutation", "first"));
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 }

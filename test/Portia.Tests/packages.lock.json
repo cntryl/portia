@@ -224,67 +224,74 @@
       "Cntryl.Portia.AspNetCore": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.7.0, )",
-          "Cntryl.Portia.DependencyInjection": "[0.7.0, )",
+          "Cntryl.Portia.Abstractions": "[0.9.2, )",
+          "Cntryl.Portia.DependencyInjection": "[0.9.2, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.13, )",
           "Microsoft.OpenApi": "[2.12.2, )"
+        }
+      },
+      "Cntryl.Portia.Cassie": {
+        "type": "Project",
+        "dependencies": {
+          "Cntryl.Cassie": "[0.1.0, )",
+          "Cntryl.Portia.DependencyInjection": "[0.9.2, )"
         }
       },
       "Cntryl.Portia.Core": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.7.0, )"
+          "Cntryl.Portia.Abstractions": "[0.9.2, )"
         }
       },
       "Cntryl.Portia.DependencyInjection": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.7.0, )",
-          "Cntryl.Portia.Core": "[0.7.0, )"
+          "Cntryl.Portia.Abstractions": "[0.9.2, )",
+          "Cntryl.Portia.Core": "[0.9.2, )"
         }
       },
       "Cntryl.Portia.Fitz": {
         "type": "Project",
         "dependencies": {
           "Cntryl.Fitz.Core": "[2.0.0, )",
-          "Cntryl.Portia.Abstractions": "[0.7.0, )",
-          "Cntryl.Portia.DependencyInjection": "[0.7.0, )"
+          "Cntryl.Portia.Abstractions": "[0.9.2, )",
+          "Cntryl.Portia.DependencyInjection": "[0.9.2, )"
         }
       },
       "Cntryl.Portia.Jwt": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.7.0, )",
+          "Cntryl.Portia.Abstractions": "[0.9.2, )",
           "Microsoft.IdentityModel.JsonWebTokens": "[8.23.0, )"
         }
       },
       "Cntryl.Portia.Storage.Abstractions": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.7.0, )"
+          "Cntryl.Portia.Abstractions": "[0.9.2, )"
         }
       },
       "Cntryl.Portia.Storage.Aws": {
         "type": "Project",
         "dependencies": {
           "AWSSDK.S3": "[4.0.104.4, )",
-          "Cntryl.Portia.Storage.Abstractions": "[0.7.0, )"
+          "Cntryl.Portia.Storage.Abstractions": "[0.9.2, )"
         }
       },
       "Cntryl.Portia.Telemetry": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.7.0, )",
+          "Cntryl.Portia.Abstractions": "[0.9.2, )",
           "OpenTelemetry.Extensions.Hosting": "[1.20.0, )"
         }
       },
       "Cntryl.Portia.Testing": {
         "type": "Project",
         "dependencies": {
-          "Cntryl.Portia.Abstractions": "[0.7.0, )",
-          "Cntryl.Portia.Core": "[0.7.0, )",
-          "Cntryl.Portia.DependencyInjection": "[0.7.0, )",
-          "Cntryl.Portia.Storage.Abstractions": "[0.7.0, )"
+          "Cntryl.Portia.Abstractions": "[0.9.2, )",
+          "Cntryl.Portia.Core": "[0.9.2, )",
+          "Cntryl.Portia.DependencyInjection": "[0.9.2, )",
+          "Cntryl.Portia.Storage.Abstractions": "[0.9.2, )"
         }
       },
       "AWSSDK.S3": {
@@ -295,6 +302,12 @@
         "dependencies": {
           "AWSSDK.Core": "[4.0.102.11, 5.0.0)"
         }
+      },
+      "Cntryl.Cassie": {
+        "type": "CentralTransitive",
+        "requested": "[0.1.0, )",
+        "resolved": "0.1.0",
+        "contentHash": "mPCuCdFDH3jETOQPbkLqbd7HdiViJqNS5oGw5hZM2jVYu58l/Nf8qF9Co/uppbrb2DQMp+sGh6OImuE946JZlA=="
       },
       "Cntryl.Fitz.Abstractions": {
         "type": "CentralTransitive",

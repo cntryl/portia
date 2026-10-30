@@ -26,16 +26,15 @@ public sealed class RequestBusExtensionsTests
 
     /// <summary>A failed command faults the reaction instead of allowing its checkpoint to advance.</summary>
     [Fact]
-    public async Task ShouldThrowReactionCommandFailureGivenFailedCommandResult()
+    public async Task ShouldReturnReactionCommandFailureGivenFailedCommandResult()
     {
         var error = new RequestError(RequestErrorKind.Conflict, "account is closed");
         var bus = new RecordingRequestBus(Result.Failure(error));
 
-        var exception = await Assert.ThrowsAsync<ReactionCommandFailedException>(() =>
-            bus.SendReactionAsync(new ClockProbe(), CreateReactionContext()).AsTask());
+        var result = await bus.SendReactionAsync(new ClockProbe(), CreateReactionContext());
 
-        Assert.Same(error, exception.Error);
-        Assert.DoesNotContain(error.Message, exception.Message, StringComparison.Ordinal);
+        Assert.False(result.IsSuccess);
+        Assert.Same(error, result.Error);
     }
 
     /// <summary>

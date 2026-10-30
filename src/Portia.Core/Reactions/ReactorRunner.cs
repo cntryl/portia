@@ -15,6 +15,8 @@ public sealed class ReactorRunner(
     IReactorPrincipalProvider? principals = null,
     TimeProvider? timeProvider = null)
 {
+    internal OperationalSession? Operations { get; set; }
+
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly IReactorPrincipalProvider _principals = principals ?? new SystemReactorPrincipalProvider();
     readonly IDomainEventReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
@@ -66,29 +68,54 @@ public sealed class ReactorRunner(
         var contexts = new List<IReactorContext>(Math.Min(batchSize, options.MaxEventsPerPass));
         var processed = 0;
         var budgetExhausted = false;
-        await foreach (var record in _reader.ReadAsync(reactor.Pattern, checkpoint.Cursor, ct).WithCancellation(ct)
-                           .ConfigureAwait(false))
+        await using var source = new ProcessorEventStream(_reader, identity, checkpoint, ct);
+        try
         {
-            contexts.Add(ReactionExecutionContext.FromSystemSnapshot(record, actor, _clock));
-            processed++;
-            if (contexts.Count == batchSize)
+            while (await source.MoveNextAsync().ConfigureAwait(false))
+            {
+                var record = source.Current;
+                contexts.Add(ReactionExecutionContext.FromSystemSnapshot(record, actor, _clock));
+                processed++;
+                if (contexts.Count == batchSize)
+                {
+                    checkpoint = await CommitAsync().ConfigureAwait(false);
+                    source.Checkpoint = checkpoint;
+                }
+
+                if (processed >= options.MaxEventsPerPass)
+                {
+                    budgetExhausted = true;
+                    break;
+                }
+            }
+
+            if (contexts.Count != 0)
             {
                 checkpoint = await CommitAsync().ConfigureAwait(false);
             }
 
-            if (processed >= options.MaxEventsPerPass)
-            {
-                budgetExhausted = true;
-                break;
-            }
+            source.Checkpoint = checkpoint;
+            Operations?.EnsureRecoveryCompleted(checkpoint);
+            return new ProjectionPassResult(checkpoint, budgetExhausted && checkpoint != startingCheckpoint);
         }
-
-        if (contexts.Count != 0)
+        catch (OperationCanceledException ex) when (ct.IsCancellationRequested)
         {
-            checkpoint = await CommitAsync().ConfigureAwait(false);
+            source.Failure = ex;
+            throw;
+        }
+        catch (ProcessorFailureException ex)
+        {
+            source.Failure = ex;
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var failure = new ProcessorFailureException(identity, checkpoint, ProcessorFailureStage.Reading,
+                innerException: ex);
+            source.Failure = failure;
+            throw failure;
         }
 
-        return new ProjectionPassResult(checkpoint, budgetExhausted && checkpoint != startingCheckpoint);
 
         async ValueTask<ProjectionCheckpoint> CommitAsync()
         {
@@ -96,12 +123,33 @@ public sealed class ReactorRunner(
             var count = contexts.Count;
             var lastOccurrence = contexts[^1].Source.Event.Metadata.OccurredOn;
             var outcome = "success";
+            var stage = ProcessorFailureStage.Handling;
             try
             {
-                await reactor.ReactAsync(contexts, ct).ConfigureAwait(false);
+                if (Operations is not null && reactor.Checkpoints is not IOperationalReactionCheckpointStore)
+                    throw new InvalidOperationException("Operations requires the registered operational reactor checkpoint store.");
+                if (Operations is { } operations)
+                    _ = await operations.BeginAsync(contexts.Select(c => c.Source).ToArray(), checkpoint, ct).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
+                using var observation = Operations?.Observe();
+                if (Operations is not null)
+                    foreach (var context in contexts)
+                        ProcessingObservation.Record("execution", reactor.Name, context.Source.Event.Metadata.EventId.ToString(),
+                        context.ExecutionId.ToString(), "started");
+                var result = await reactor.ReactAsync(contexts, ct).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+                if (!result.IsSuccess)
+                    throw new ProcessorFailureException(identity, checkpoint, stage,
+                        contexts[0].Source, contexts[^1].Source, error: result.Error);
+                stage = ProcessorFailureStage.Committing;
                 var next = new ProjectionCheckpoint(contexts[^1].Source.NextCursor);
-                if (reactor.Checkpoints is IConditionalProjectionCheckpointStore conditional)
+                if (Operations is { } operational)
+                {
+                    if (reactor.Checkpoints is not IOperationalReactionCheckpointStore journal)
+                        throw new InvalidOperationException("Operations requires the registered operational reactor checkpoint store.");
+                    await operational.CommitReactionAsync(journal, checkpoint, next, ct).ConfigureAwait(false);
+                }
+                else if (reactor.Checkpoints is IConditionalProjectionCheckpointStore conditional)
                     await conditional.SaveAsync(identity, checkpoint, next, ct).ConfigureAwait(false);
                 else
                     await reactor.Checkpoints.SaveAsync(identity, next, ct).ConfigureAwait(false);
@@ -111,7 +159,14 @@ public sealed class ReactorRunner(
             catch (Exception exception)
             {
                 outcome = PortiaTelemetry.ExceptionOutcome(exception, ct);
-                throw;
+                if (exception is OperationCanceledException && ct.IsCancellationRequested)
+                    throw;
+                var failure = exception as ProcessorFailureException
+                    ?? new ProcessorFailureException(identity, checkpoint, stage,
+                        contexts[0].Source, contexts[^1].Source, exception);
+                if (Operations is { } operations)
+                    await operations.RecordFailureAsync(failure, null, ct).ConfigureAwait(false);
+                throw failure;
             }
             finally
             {

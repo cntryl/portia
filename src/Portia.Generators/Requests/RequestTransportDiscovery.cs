@@ -28,7 +28,7 @@ static class RequestTransportDiscovery
     public static string RuntimeType(ITypeSymbol symbol) =>
         symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-    public static bool IsCandidate(SyntaxNode node) => node is TypeDeclarationSyntax;
+    public static bool IsCandidate(SyntaxNode node) => SyntaxFilters.HasBaseListOrPartial(node);
 
     public static RequestTransportComponent? GetRequestTransportComponent(GeneratorSyntaxContext context)
     {

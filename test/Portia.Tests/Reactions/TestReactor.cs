@@ -12,17 +12,19 @@ sealed partial class TestReactor(
 {
     public int? LastIncrementAmount { get; private set; }
 
-    public async ValueTask HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
+    public async ValueTask<Result> HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
     {
         var target = await repository.HydrateAsync(new TestAggregate(Uuid.CreateVersion4()), ct);
         target.ChangeValue(context.Trigger.Value);
         await repository.SaveAsync(target, context, ct);
+
+        return Result.Success;
     }
 
-    public ValueTask HandleAsync(IReactorContext<ValueIncremented> context, CancellationToken ct)
+    public ValueTask<Result> HandleAsync(IReactorContext<ValueIncremented> context, CancellationToken ct)
     {
         LastIncrementAmount = context.Trigger.Amount;
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(Result.Success);
     }
 
     public Uuid EffectId(IReactorContext context, string name) => CreateEffectId(context, name);

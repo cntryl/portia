@@ -68,7 +68,7 @@ jobs:
           dotnet test Portia.slnx
           --configuration Release
           --no-build
-          --filter "Category!=BrokerIntegration&Category!=StorageIntegration"
+          --filter "Category!=BrokerIntegration&Category!=StorageIntegration&Category!=CassieIntegration&Category!=DurabilityIntegration"
 
       - name: Confirm packed consumers
         run: |
@@ -178,6 +178,27 @@ jobs:
             --configuration Release \
             --no-build \
             --filter "Category=BrokerIntegration"
+
+      - name: Test operational crash durability with isolated persistent Fitz
+        run: >-
+          dotnet test test/Portia.Tests/Portia.Tests.csproj
+          --configuration Release
+          --no-build
+          --filter "Category=DurabilityIntegration"
+
+      - name: Test Fitz Portia Cassie integration
+        env:
+          FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
+          PORTIA_CASSIE_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Database=postgres;Username=root;Password=portia-cassie-test;SSL Mode=Disable;Timeout=15
+        run: |
+          docker compose up -d --wait fitz cassie
+          curl --fail --silent --show-error --retry 30 --retry-delay 1 \
+            --retry-connrefused --max-time 2 --output /dev/null \
+            http://127.0.0.1:8080/readyz
+          dotnet test Portia.slnx \
+            --configuration Release \
+            --no-build \
+            --filter "Category=CassieIntegration"
 
       - name: Stop integration services
         if: ${{ always() }}

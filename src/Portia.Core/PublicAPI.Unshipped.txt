@@ -9,3 +9,392 @@ Cntryl.Portia.FixedTenantDirectory.WatchAsync(System.Threading.CancellationToken
 Cntryl.Portia.TenantRequestAuthorizer
 Cntryl.Portia.TenantRequestAuthorizer.AuthorizeAsync(Cntryl.Portia.IRequestContext<Cntryl.Portia.ITenantRequest!>! context, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result>
 Cntryl.Portia.TenantRequestAuthorizer.TenantRequestAuthorizer(Cntryl.Portia.IActorTenantResolver! tenants) -> void
+Cntryl.Portia.ProcessorFailureStage
+Cntryl.Portia.ProcessorFailureStage.Reading = 0 -> Cntryl.Portia.ProcessorFailureStage
+Cntryl.Portia.ProcessorFailureStage.Beginning = 1 -> Cntryl.Portia.ProcessorFailureStage
+Cntryl.Portia.ProcessorFailureStage.Handling = 2 -> Cntryl.Portia.ProcessorFailureStage
+Cntryl.Portia.ProcessorFailureStage.Committing = 3 -> Cntryl.Portia.ProcessorFailureStage
+Cntryl.Portia.ProcessorFailureStage.Disposing = 4 -> Cntryl.Portia.ProcessorFailureStage
+Cntryl.Portia.ProcessorFailureException
+Cntryl.Portia.ProcessorFailureException.ProcessorFailureException(Cntryl.Portia.CheckpointIdentity! identity, Cntryl.Portia.ProjectionCheckpoint? checkpoint, Cntryl.Portia.ProcessorFailureStage stage, Cntryl.Portia.DomainEventRecord? firstSource = null, Cntryl.Portia.DomainEventRecord? lastSource = null, System.Exception? innerException = null, Cntryl.Portia.RequestError? error = null) -> void
+Cntryl.Portia.ProcessorFailureException.Checkpoint.get -> Cntryl.Portia.ProjectionCheckpoint?
+Cntryl.Portia.ProcessorFailureException.Identity.get -> Cntryl.Portia.CheckpointIdentity!
+Cntryl.Portia.ProcessorFailureException.Stage.get -> Cntryl.Portia.ProcessorFailureStage
+Cntryl.Portia.ProcessorFailureException.LastSource.get -> Cntryl.Portia.DomainEventRecord?
+Cntryl.Portia.ProcessorFailureException.FirstSource.get -> Cntryl.Portia.DomainEventRecord?
+Cntryl.Portia.ProcessorFailureException.Error.get -> Cntryl.Portia.RequestError?
+Cntryl.Portia.ProcessorFailureException.IsTransient.get -> bool
+Cntryl.Portia.ProcessorFailureException.CleanupException.get -> System.Exception?
+Cntryl.Portia.ProcessorFailureStage.Loading = 5 -> Cntryl.Portia.ProcessorFailureStage
+Cntryl.Portia.ApplicationTopology
+Cntryl.Portia.ApplicationTopology.<Clone>$() -> Cntryl.Portia.ApplicationTopology!
+Cntryl.Portia.ApplicationTopology.ApplicationTopology(System.Collections.Generic.IReadOnlyList<Cntryl.Portia.RequestTopology!>! Requests, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.ProcessorTopology!>! Processors, string! Coverage) -> void
+Cntryl.Portia.ApplicationTopology.Coverage.get -> string!
+Cntryl.Portia.ApplicationTopology.Coverage.init -> void
+Cntryl.Portia.ApplicationTopology.Deconstruct(out System.Collections.Generic.IReadOnlyList<Cntryl.Portia.RequestTopology!>! Requests, out System.Collections.Generic.IReadOnlyList<Cntryl.Portia.ProcessorTopology!>! Processors, out string! Coverage) -> void
+Cntryl.Portia.ApplicationTopology.Equals(Cntryl.Portia.ApplicationTopology? other) -> bool
+Cntryl.Portia.ApplicationTopology.Processors.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.ProcessorTopology!>!
+Cntryl.Portia.ApplicationTopology.Processors.init -> void
+Cntryl.Portia.ApplicationTopology.Requests.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.RequestTopology!>!
+Cntryl.Portia.ApplicationTopology.Requests.init -> void
+Cntryl.Portia.IApplicationTopology
+Cntryl.Portia.IApplicationTopology.Describe() -> Cntryl.Portia.ApplicationTopology!
+Cntryl.Portia.IOperationalAuthorizer
+Cntryl.Portia.IOperationalAuthorizer.AuthorizeAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalScope! scope, Cntryl.Portia.OperationalAccess permission, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.IOperationalReactionCheckpointStore
+Cntryl.Portia.IOperationalReactionCheckpointStore.CommitAsync(Cntryl.Portia.OperationalProcessorState! replacement, long expectedRevision, System.Guid ownerSession, System.Guid attemptId, string? expectedCheckpoint, string? nextCheckpoint, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.IOperationalStore
+Cntryl.Portia.IOperationalStore.CompareExchangeAsync(Cntryl.Portia.OperationalProcessorState! replacement, long expectedRevision, System.Guid expectedOwner, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.IOperationalStore.ListAsync(Cntryl.Portia.OperationalScope! scope, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalProcessorState!>!>
+Cntryl.Portia.IOperationalStore.ReadAsync(Cntryl.Portia.OperationalTarget! target, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalProcessorState?>
+Cntryl.Portia.IPortiaOperations
+Cntryl.Portia.IPortiaOperations.DescribeApplicationAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalScope! scope, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ApplicationTopology!>
+Cntryl.Portia.IPortiaOperations.GetSystemHealthAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalScope! scope, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalHealth!>
+Cntryl.Portia.IPortiaOperations.InspectProcessorAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalProcessorState?>
+Cntryl.Portia.IPortiaOperations.ListIssuesAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalScope! scope, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalProcessorState!>!>
+Cntryl.Portia.IPortiaOperations.PreviewRepairAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.RepairPlan!>
+Cntryl.Portia.IPortiaOperations.RevokeRepairAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Guid planId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.IPortiaOperations.TraceCausalityAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Guid attemptId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalAttempt!>
+Cntryl.Portia.OperationalAccess
+Cntryl.Portia.OperationalAccess.Approve = 2 -> Cntryl.Portia.OperationalAccess
+Cntryl.Portia.OperationalAccess.Execute = 3 -> Cntryl.Portia.OperationalAccess
+Cntryl.Portia.OperationalAccess.Preview = 1 -> Cntryl.Portia.OperationalAccess
+Cntryl.Portia.OperationalAccess.Read = 0 -> Cntryl.Portia.OperationalAccess
+Cntryl.Portia.OperationalAttempt
+Cntryl.Portia.OperationalAttempt.<Clone>$() -> Cntryl.Portia.OperationalAttempt!
+Cntryl.Portia.OperationalAttempt.CompletedAt.get -> System.DateTimeOffset?
+Cntryl.Portia.OperationalAttempt.CompletedAt.init -> void
+Cntryl.Portia.OperationalAttempt.Coverage.get -> string!
+Cntryl.Portia.OperationalAttempt.Coverage.init -> void
+Cntryl.Portia.OperationalAttempt.Deconstruct(out System.Guid Id, out System.Guid OwnerSession, out System.DateTimeOffset StartedAt, out System.DateTimeOffset? CompletedAt, out string! Outcome, out string? ExpectedCheckpoint, out string? NextCheckpoint, out System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalSource!>! Sources, out System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalTraceEntry!>! Trace, out string! Coverage, out Cntryl.Portia.ApplicationTopology! Topology, out string? FailureStage, out string? FailureKind, out bool? IsTransient) -> void
+Cntryl.Portia.OperationalAttempt.Equals(Cntryl.Portia.OperationalAttempt? other) -> bool
+Cntryl.Portia.OperationalAttempt.ExpectedCheckpoint.get -> string?
+Cntryl.Portia.OperationalAttempt.ExpectedCheckpoint.init -> void
+Cntryl.Portia.OperationalAttempt.FailureKind.get -> string?
+Cntryl.Portia.OperationalAttempt.FailureKind.init -> void
+Cntryl.Portia.OperationalAttempt.FailureStage.get -> string?
+Cntryl.Portia.OperationalAttempt.FailureStage.init -> void
+Cntryl.Portia.OperationalAttempt.Id.get -> System.Guid
+Cntryl.Portia.OperationalAttempt.Id.init -> void
+Cntryl.Portia.OperationalAttempt.IsTransient.get -> bool?
+Cntryl.Portia.OperationalAttempt.IsTransient.init -> void
+Cntryl.Portia.OperationalAttempt.NextCheckpoint.get -> string?
+Cntryl.Portia.OperationalAttempt.NextCheckpoint.init -> void
+Cntryl.Portia.OperationalAttempt.OperationalAttempt(System.Guid Id, System.Guid OwnerSession, System.DateTimeOffset StartedAt, System.DateTimeOffset? CompletedAt, string! Outcome, string? ExpectedCheckpoint, string? NextCheckpoint, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalSource!>! Sources, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalTraceEntry!>! Trace, string! Coverage, Cntryl.Portia.ApplicationTopology! Topology, string? FailureStage = null, string? FailureKind = null, bool? IsTransient = null) -> void
+Cntryl.Portia.OperationalAttempt.Outcome.get -> string!
+Cntryl.Portia.OperationalAttempt.Outcome.init -> void
+Cntryl.Portia.OperationalAttempt.OwnerSession.get -> System.Guid
+Cntryl.Portia.OperationalAttempt.OwnerSession.init -> void
+Cntryl.Portia.OperationalAttempt.Sources.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalSource!>!
+Cntryl.Portia.OperationalAttempt.Sources.init -> void
+Cntryl.Portia.OperationalAttempt.StartedAt.get -> System.DateTimeOffset
+Cntryl.Portia.OperationalAttempt.StartedAt.init -> void
+Cntryl.Portia.OperationalAttempt.Topology.get -> Cntryl.Portia.ApplicationTopology!
+Cntryl.Portia.OperationalAttempt.Topology.init -> void
+Cntryl.Portia.OperationalAttempt.Trace.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalTraceEntry!>!
+Cntryl.Portia.OperationalAttempt.Trace.init -> void
+Cntryl.Portia.OperationalBlock
+Cntryl.Portia.OperationalBlock.<Clone>$() -> Cntryl.Portia.OperationalBlock!
+Cntryl.Portia.OperationalBlock.AttemptId.get -> System.Guid
+Cntryl.Portia.OperationalBlock.AttemptId.init -> void
+Cntryl.Portia.OperationalBlock.Deconstruct(out System.Guid AttemptId, out long FailureRevision) -> void
+Cntryl.Portia.OperationalBlock.Equals(Cntryl.Portia.OperationalBlock? other) -> bool
+Cntryl.Portia.OperationalBlock.FailureRevision.get -> long
+Cntryl.Portia.OperationalBlock.FailureRevision.init -> void
+Cntryl.Portia.OperationalBlock.OperationalBlock(System.Guid AttemptId, long FailureRevision) -> void
+Cntryl.Portia.OperationalHealth
+Cntryl.Portia.OperationalHealth.<Clone>$() -> Cntryl.Portia.OperationalHealth!
+Cntryl.Portia.OperationalHealth.Blocked.get -> int
+Cntryl.Portia.OperationalHealth.Blocked.init -> void
+Cntryl.Portia.OperationalHealth.Deconstruct(out int Processors, out int Blocked, out int Running, out System.DateTimeOffset? RetainedSince) -> void
+Cntryl.Portia.OperationalHealth.Equals(Cntryl.Portia.OperationalHealth? other) -> bool
+Cntryl.Portia.OperationalHealth.OperationalHealth(int Processors, int Blocked, int Running, System.DateTimeOffset? RetainedSince) -> void
+Cntryl.Portia.OperationalHealth.Processors.get -> int
+Cntryl.Portia.OperationalHealth.Processors.init -> void
+Cntryl.Portia.OperationalHealth.RetainedSince.get -> System.DateTimeOffset?
+Cntryl.Portia.OperationalHealth.RetainedSince.init -> void
+Cntryl.Portia.OperationalHealth.Running.get -> int
+Cntryl.Portia.OperationalHealth.Running.init -> void
+Cntryl.Portia.OperationalOptions
+Cntryl.Portia.OperationalOptions.CompletedRecordRetention.get -> System.TimeSpan
+Cntryl.Portia.OperationalOptions.CompletedRecordRetention.set -> void
+Cntryl.Portia.OperationalOptions.JournalRetryDelay.get -> System.TimeSpan
+Cntryl.Portia.OperationalOptions.JournalRetryDelay.set -> void
+Cntryl.Portia.OperationalOptions.MaxTraceEntries.get -> int
+Cntryl.Portia.OperationalOptions.MaxTraceEntries.set -> void
+Cntryl.Portia.OperationalOptions.OperationalOptions() -> void
+Cntryl.Portia.OperationalOptions.QuiescedWorkerCutover.get -> bool
+Cntryl.Portia.OperationalOptions.QuiescedWorkerCutover.set -> void
+Cntryl.Portia.OperationalOptions.RepairPlanLifetime.get -> System.TimeSpan
+Cntryl.Portia.OperationalOptions.RepairPlanLifetime.set -> void
+Cntryl.Portia.OperationalProcessingSettings
+Cntryl.Portia.OperationalProcessingSettings.<Clone>$() -> Cntryl.Portia.OperationalProcessingSettings!
+Cntryl.Portia.OperationalProcessingSettings.Deconstruct(out int MaxBatchSize, out int MaxEventsPerPass, out int FailureAttemptLimit, out long PollIntervalTicks, out long MaximumFailureDelayTicks) -> void
+Cntryl.Portia.OperationalProcessingSettings.Equals(Cntryl.Portia.OperationalProcessingSettings? other) -> bool
+Cntryl.Portia.OperationalProcessingSettings.FailureAttemptLimit.get -> int
+Cntryl.Portia.OperationalProcessingSettings.FailureAttemptLimit.init -> void
+Cntryl.Portia.OperationalProcessingSettings.MaxBatchSize.get -> int
+Cntryl.Portia.OperationalProcessingSettings.MaxBatchSize.init -> void
+Cntryl.Portia.OperationalProcessingSettings.MaxEventsPerPass.get -> int
+Cntryl.Portia.OperationalProcessingSettings.MaxEventsPerPass.init -> void
+Cntryl.Portia.OperationalProcessingSettings.MaximumFailureDelayTicks.get -> long
+Cntryl.Portia.OperationalProcessingSettings.MaximumFailureDelayTicks.init -> void
+Cntryl.Portia.OperationalProcessingSettings.OperationalProcessingSettings(int MaxBatchSize, int MaxEventsPerPass, int FailureAttemptLimit, long PollIntervalTicks, long MaximumFailureDelayTicks) -> void
+Cntryl.Portia.OperationalProcessingSettings.PollIntervalTicks.get -> long
+Cntryl.Portia.OperationalProcessingSettings.PollIntervalTicks.init -> void
+Cntryl.Portia.OperationalProcessorState
+Cntryl.Portia.OperationalProcessorState.<Clone>$() -> Cntryl.Portia.OperationalProcessorState!
+Cntryl.Portia.OperationalProcessorState.Approvals.init -> void
+Cntryl.Portia.OperationalProcessorState.Attempts.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalAttempt!>!
+Cntryl.Portia.OperationalProcessorState.Attempts.init -> void
+Cntryl.Portia.OperationalProcessorState.Block.get -> Cntryl.Portia.OperationalBlock?
+Cntryl.Portia.OperationalProcessorState.Block.init -> void
+Cntryl.Portia.OperationalProcessorState.Checkpoint.get -> string?
+Cntryl.Portia.OperationalProcessorState.Checkpoint.init -> void
+Cntryl.Portia.OperationalProcessorState.ConsecutiveFailures.get -> int
+Cntryl.Portia.OperationalProcessorState.ConsecutiveFailures.init -> void
+Cntryl.Portia.OperationalProcessorState.Equals(Cntryl.Portia.OperationalProcessorState? other) -> bool
+Cntryl.Portia.OperationalProcessorState.Kind.get -> string!
+Cntryl.Portia.OperationalProcessorState.Kind.init -> void
+Cntryl.Portia.OperationalProcessorState.OwnerSession.get -> System.Guid
+Cntryl.Portia.OperationalProcessorState.OwnerSession.init -> void
+Cntryl.Portia.OperationalProcessorState.Plans.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.RepairPlan!>!
+Cntryl.Portia.OperationalProcessorState.Plans.init -> void
+Cntryl.Portia.OperationalProcessorState.Repairs.init -> void
+Cntryl.Portia.OperationalProcessorState.RetainedSince.get -> System.DateTimeOffset
+Cntryl.Portia.OperationalProcessorState.RetainedSince.init -> void
+Cntryl.Portia.OperationalProcessorState.Revision.get -> long
+Cntryl.Portia.OperationalProcessorState.Revision.init -> void
+Cntryl.Portia.OperationalProcessorState.Settings.get -> Cntryl.Portia.OperationalProcessingSettings!
+Cntryl.Portia.OperationalProcessorState.Settings.init -> void
+Cntryl.Portia.OperationalProcessorState.Target.get -> Cntryl.Portia.OperationalTarget!
+Cntryl.Portia.OperationalProcessorState.Target.init -> void
+Cntryl.Portia.OperationalScope
+Cntryl.Portia.OperationalScope.<Clone>$() -> Cntryl.Portia.OperationalScope!
+Cntryl.Portia.OperationalScope.Deconstruct(out string? Tenant) -> void
+Cntryl.Portia.OperationalScope.Equals(Cntryl.Portia.OperationalScope? other) -> bool
+Cntryl.Portia.OperationalScope.OperationalScope(string? Tenant) -> void
+Cntryl.Portia.OperationalScope.Tenant.get -> string?
+Cntryl.Portia.OperationalScope.Tenant.init -> void
+Cntryl.Portia.OperationalSource
+Cntryl.Portia.OperationalSource.<Clone>$() -> Cntryl.Portia.OperationalSource!
+Cntryl.Portia.OperationalSource.Deconstruct(out string! Stream, out string! EventId, out ulong ResourceOffset, out string? NextCursor) -> void
+Cntryl.Portia.OperationalSource.Equals(Cntryl.Portia.OperationalSource? other) -> bool
+Cntryl.Portia.OperationalSource.EventId.get -> string!
+Cntryl.Portia.OperationalSource.EventId.init -> void
+Cntryl.Portia.OperationalSource.NextCursor.get -> string?
+Cntryl.Portia.OperationalSource.NextCursor.init -> void
+Cntryl.Portia.OperationalSource.OperationalSource(string! Stream, string! EventId, ulong ResourceOffset, string? NextCursor) -> void
+Cntryl.Portia.OperationalSource.ResourceOffset.get -> ulong
+Cntryl.Portia.OperationalSource.ResourceOffset.init -> void
+Cntryl.Portia.OperationalSource.Stream.get -> string!
+Cntryl.Portia.OperationalSource.Stream.init -> void
+Cntryl.Portia.OperationalTarget
+Cntryl.Portia.OperationalTarget.<Clone>$() -> Cntryl.Portia.OperationalTarget!
+Cntryl.Portia.OperationalTarget.Deconstruct(out string! Processor, out string! Pattern, out Cntryl.Portia.OperationalScope! Scope, out string? RebuildId) -> void
+Cntryl.Portia.OperationalTarget.Equals(Cntryl.Portia.OperationalTarget? other) -> bool
+Cntryl.Portia.OperationalTarget.OperationalTarget(string! Processor, string! Pattern, Cntryl.Portia.OperationalScope! Scope, string? RebuildId = null) -> void
+Cntryl.Portia.OperationalTarget.Pattern.get -> string!
+Cntryl.Portia.OperationalTarget.Pattern.init -> void
+Cntryl.Portia.OperationalTarget.Processor.get -> string!
+Cntryl.Portia.OperationalTarget.Processor.init -> void
+Cntryl.Portia.OperationalTarget.RebuildId.get -> string?
+Cntryl.Portia.OperationalTarget.RebuildId.init -> void
+Cntryl.Portia.OperationalTarget.Scope.get -> Cntryl.Portia.OperationalScope!
+Cntryl.Portia.OperationalTarget.Scope.init -> void
+Cntryl.Portia.OperationalTraceEntry
+Cntryl.Portia.OperationalTraceEntry.<Clone>$() -> Cntryl.Portia.OperationalTraceEntry!
+Cntryl.Portia.OperationalTraceEntry.Component.get -> string!
+Cntryl.Portia.OperationalTraceEntry.Component.init -> void
+Cntryl.Portia.OperationalTraceEntry.Deconstruct(out string! Kind, out string! Component, out string? Identity, out string? ExecutionId, out string! Outcome) -> void
+Cntryl.Portia.OperationalTraceEntry.Equals(Cntryl.Portia.OperationalTraceEntry? other) -> bool
+Cntryl.Portia.OperationalTraceEntry.ExecutionId.get -> string?
+Cntryl.Portia.OperationalTraceEntry.ExecutionId.init -> void
+Cntryl.Portia.OperationalTraceEntry.Identity.get -> string?
+Cntryl.Portia.OperationalTraceEntry.Identity.init -> void
+Cntryl.Portia.OperationalTraceEntry.Kind.get -> string!
+Cntryl.Portia.OperationalTraceEntry.Kind.init -> void
+Cntryl.Portia.OperationalTraceEntry.OperationalTraceEntry(string! Kind, string! Component, string? Identity, string? ExecutionId, string! Outcome) -> void
+Cntryl.Portia.OperationalTraceEntry.Outcome.get -> string!
+Cntryl.Portia.OperationalTraceEntry.Outcome.init -> void
+Cntryl.Portia.PortiaOperations
+Cntryl.Portia.PortiaOperations.DescribeApplicationAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalScope! scope, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ApplicationTopology!>
+Cntryl.Portia.PortiaOperations.GetSystemHealthAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalScope! scope, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalHealth!>
+Cntryl.Portia.PortiaOperations.InspectProcessorAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalProcessorState?>
+Cntryl.Portia.PortiaOperations.ListIssuesAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalScope! scope, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalProcessorState!>!>
+Cntryl.Portia.PortiaOperations.PortiaOperations(Cntryl.Portia.IOperationalStore! store, Cntryl.Portia.OperationalOptions! options, Cntryl.Portia.IApplicationTopology! topology, Cntryl.Portia.IOperationalAuthorizer? authorizer = null, System.TimeProvider? timeProvider = null) -> void
+Cntryl.Portia.PortiaOperations.PreviewRepairAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.RepairPlan!>
+Cntryl.Portia.PortiaOperations.RevokeRepairAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Guid planId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.PortiaOperations.TraceCausalityAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Guid attemptId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalAttempt!>
+Cntryl.Portia.ProcessorTopology
+Cntryl.Portia.ProcessorTopology.<Clone>$() -> Cntryl.Portia.ProcessorTopology!
+Cntryl.Portia.ProcessorTopology.Component.get -> string!
+Cntryl.Portia.ProcessorTopology.Component.init -> void
+Cntryl.Portia.ProcessorTopology.Coverage.get -> string!
+Cntryl.Portia.ProcessorTopology.Coverage.init -> void
+Cntryl.Portia.ProcessorTopology.Deconstruct(out string! Name, out string! Component, out string! Kind, out string! Scope, out System.Collections.Generic.IReadOnlyList<string!>! Subscriptions, out string! Coverage) -> void
+Cntryl.Portia.ProcessorTopology.Equals(Cntryl.Portia.ProcessorTopology? other) -> bool
+Cntryl.Portia.ProcessorTopology.Kind.get -> string!
+Cntryl.Portia.ProcessorTopology.Kind.init -> void
+Cntryl.Portia.ProcessorTopology.Name.get -> string!
+Cntryl.Portia.ProcessorTopology.Name.init -> void
+Cntryl.Portia.ProcessorTopology.ProcessorTopology(string! Name, string! Component, string! Kind, string! Scope, System.Collections.Generic.IReadOnlyList<string!>! Subscriptions, string! Coverage) -> void
+Cntryl.Portia.ProcessorTopology.Scope.get -> string!
+Cntryl.Portia.ProcessorTopology.Scope.init -> void
+Cntryl.Portia.ProcessorTopology.Subscriptions.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Cntryl.Portia.ProcessorTopology.Subscriptions.init -> void
+Cntryl.Portia.RepairPlan
+Cntryl.Portia.RepairPlan.<Clone>$() -> Cntryl.Portia.RepairPlan!
+Cntryl.Portia.RepairPlan.Action.get -> string!
+Cntryl.Portia.RepairPlan.Action.init -> void
+Cntryl.Portia.RepairPlan.Deconstruct(out System.Guid Id, out Cntryl.Portia.OperationalTarget! Target, out System.Guid OwnerSession, out System.Guid FailedAttemptId, out long FailureRevision, out string! Action, out string? ExpectedCheckpoint, out System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalSource!>! Sources, out Cntryl.Portia.OperationalProcessingSettings! Settings, out System.DateTimeOffset ExpiresAt) -> void
+Cntryl.Portia.RepairPlan.Equals(Cntryl.Portia.RepairPlan? other) -> bool
+Cntryl.Portia.RepairPlan.ExpectedCheckpoint.get -> string?
+Cntryl.Portia.RepairPlan.ExpectedCheckpoint.init -> void
+Cntryl.Portia.RepairPlan.ExpiresAt.get -> System.DateTimeOffset
+Cntryl.Portia.RepairPlan.ExpiresAt.init -> void
+Cntryl.Portia.RepairPlan.FailedAttemptId.get -> System.Guid
+Cntryl.Portia.RepairPlan.FailedAttemptId.init -> void
+Cntryl.Portia.RepairPlan.FailureRevision.get -> long
+Cntryl.Portia.RepairPlan.FailureRevision.init -> void
+Cntryl.Portia.RepairPlan.Id.get -> System.Guid
+Cntryl.Portia.RepairPlan.Id.init -> void
+Cntryl.Portia.RepairPlan.OwnerSession.get -> System.Guid
+Cntryl.Portia.RepairPlan.OwnerSession.init -> void
+Cntryl.Portia.RepairPlan.RepairPlan(System.Guid Id, Cntryl.Portia.OperationalTarget! Target, System.Guid OwnerSession, System.Guid FailedAttemptId, long FailureRevision, string! Action, string? ExpectedCheckpoint, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalSource!>! Sources, Cntryl.Portia.OperationalProcessingSettings! Settings, System.DateTimeOffset ExpiresAt) -> void
+Cntryl.Portia.RepairPlan.Settings.get -> Cntryl.Portia.OperationalProcessingSettings!
+Cntryl.Portia.RepairPlan.Settings.init -> void
+Cntryl.Portia.RepairPlan.Sources.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalSource!>!
+Cntryl.Portia.RepairPlan.Sources.init -> void
+Cntryl.Portia.RepairPlan.Target.get -> Cntryl.Portia.OperationalTarget!
+Cntryl.Portia.RepairPlan.Target.init -> void
+Cntryl.Portia.RequestTopology
+Cntryl.Portia.RequestTopology.<Clone>$() -> Cntryl.Portia.RequestTopology!
+Cntryl.Portia.RequestTopology.Deconstruct(out string! Request, out string! Handler) -> void
+Cntryl.Portia.RequestTopology.Equals(Cntryl.Portia.RequestTopology? other) -> bool
+Cntryl.Portia.RequestTopology.Handler.get -> string!
+Cntryl.Portia.RequestTopology.Handler.init -> void
+Cntryl.Portia.RequestTopology.Request.get -> string!
+Cntryl.Portia.RequestTopology.Request.init -> void
+Cntryl.Portia.RequestTopology.RequestTopology(string! Request, string! Handler) -> void
+override Cntryl.Portia.ApplicationTopology.Equals(object? obj) -> bool
+override Cntryl.Portia.ApplicationTopology.GetHashCode() -> int
+override Cntryl.Portia.ApplicationTopology.ToString() -> string!
+override Cntryl.Portia.OperationalAttempt.Equals(object? obj) -> bool
+override Cntryl.Portia.OperationalAttempt.GetHashCode() -> int
+override Cntryl.Portia.OperationalAttempt.ToString() -> string!
+override Cntryl.Portia.OperationalBlock.Equals(object? obj) -> bool
+override Cntryl.Portia.OperationalBlock.GetHashCode() -> int
+override Cntryl.Portia.OperationalBlock.ToString() -> string!
+override Cntryl.Portia.OperationalHealth.Equals(object? obj) -> bool
+override Cntryl.Portia.OperationalHealth.GetHashCode() -> int
+override Cntryl.Portia.OperationalHealth.ToString() -> string!
+override Cntryl.Portia.OperationalProcessingSettings.Equals(object? obj) -> bool
+override Cntryl.Portia.OperationalProcessingSettings.GetHashCode() -> int
+override Cntryl.Portia.OperationalProcessingSettings.ToString() -> string!
+override Cntryl.Portia.OperationalProcessorState.Equals(object? obj) -> bool
+override Cntryl.Portia.OperationalProcessorState.GetHashCode() -> int
+override Cntryl.Portia.OperationalProcessorState.ToString() -> string!
+override Cntryl.Portia.OperationalScope.Equals(object? obj) -> bool
+override Cntryl.Portia.OperationalScope.GetHashCode() -> int
+override Cntryl.Portia.OperationalScope.ToString() -> string!
+override Cntryl.Portia.OperationalSource.Equals(object? obj) -> bool
+override Cntryl.Portia.OperationalSource.GetHashCode() -> int
+override Cntryl.Portia.OperationalSource.ToString() -> string!
+override Cntryl.Portia.OperationalTarget.Equals(object? obj) -> bool
+override Cntryl.Portia.OperationalTarget.GetHashCode() -> int
+override Cntryl.Portia.OperationalTarget.ToString() -> string!
+override Cntryl.Portia.OperationalTraceEntry.Equals(object? obj) -> bool
+override Cntryl.Portia.OperationalTraceEntry.GetHashCode() -> int
+override Cntryl.Portia.OperationalTraceEntry.ToString() -> string!
+override Cntryl.Portia.ProcessorTopology.Equals(object? obj) -> bool
+override Cntryl.Portia.ProcessorTopology.GetHashCode() -> int
+override Cntryl.Portia.ProcessorTopology.ToString() -> string!
+override Cntryl.Portia.RepairPlan.Equals(object? obj) -> bool
+override Cntryl.Portia.RepairPlan.GetHashCode() -> int
+override Cntryl.Portia.RepairPlan.ToString() -> string!
+override Cntryl.Portia.RequestTopology.Equals(object? obj) -> bool
+override Cntryl.Portia.RequestTopology.GetHashCode() -> int
+override Cntryl.Portia.RequestTopology.ToString() -> string!
+static Cntryl.Portia.ApplicationTopology.operator !=(Cntryl.Portia.ApplicationTopology? left, Cntryl.Portia.ApplicationTopology? right) -> bool
+static Cntryl.Portia.ApplicationTopology.operator ==(Cntryl.Portia.ApplicationTopology? left, Cntryl.Portia.ApplicationTopology? right) -> bool
+static Cntryl.Portia.OperationalAttempt.operator !=(Cntryl.Portia.OperationalAttempt? left, Cntryl.Portia.OperationalAttempt? right) -> bool
+static Cntryl.Portia.OperationalAttempt.operator ==(Cntryl.Portia.OperationalAttempt? left, Cntryl.Portia.OperationalAttempt? right) -> bool
+static Cntryl.Portia.OperationalBlock.operator !=(Cntryl.Portia.OperationalBlock? left, Cntryl.Portia.OperationalBlock? right) -> bool
+static Cntryl.Portia.OperationalBlock.operator ==(Cntryl.Portia.OperationalBlock? left, Cntryl.Portia.OperationalBlock? right) -> bool
+static Cntryl.Portia.OperationalHealth.operator !=(Cntryl.Portia.OperationalHealth? left, Cntryl.Portia.OperationalHealth? right) -> bool
+static Cntryl.Portia.OperationalHealth.operator ==(Cntryl.Portia.OperationalHealth? left, Cntryl.Portia.OperationalHealth? right) -> bool
+static Cntryl.Portia.OperationalProcessingSettings.operator !=(Cntryl.Portia.OperationalProcessingSettings? left, Cntryl.Portia.OperationalProcessingSettings? right) -> bool
+static Cntryl.Portia.OperationalProcessingSettings.operator ==(Cntryl.Portia.OperationalProcessingSettings? left, Cntryl.Portia.OperationalProcessingSettings? right) -> bool
+static Cntryl.Portia.OperationalProcessorState.operator !=(Cntryl.Portia.OperationalProcessorState? left, Cntryl.Portia.OperationalProcessorState? right) -> bool
+static Cntryl.Portia.OperationalProcessorState.operator ==(Cntryl.Portia.OperationalProcessorState? left, Cntryl.Portia.OperationalProcessorState? right) -> bool
+static Cntryl.Portia.OperationalScope.ForTenant(Cntryl.Portia.TenantId tenant) -> Cntryl.Portia.OperationalScope!
+static Cntryl.Portia.OperationalScope.Global.get -> Cntryl.Portia.OperationalScope!
+static Cntryl.Portia.OperationalScope.operator !=(Cntryl.Portia.OperationalScope? left, Cntryl.Portia.OperationalScope? right) -> bool
+static Cntryl.Portia.OperationalScope.operator ==(Cntryl.Portia.OperationalScope? left, Cntryl.Portia.OperationalScope? right) -> bool
+static Cntryl.Portia.OperationalSource.operator !=(Cntryl.Portia.OperationalSource? left, Cntryl.Portia.OperationalSource? right) -> bool
+static Cntryl.Portia.OperationalSource.operator ==(Cntryl.Portia.OperationalSource? left, Cntryl.Portia.OperationalSource? right) -> bool
+static Cntryl.Portia.OperationalTarget.operator !=(Cntryl.Portia.OperationalTarget? left, Cntryl.Portia.OperationalTarget? right) -> bool
+static Cntryl.Portia.OperationalTarget.operator ==(Cntryl.Portia.OperationalTarget? left, Cntryl.Portia.OperationalTarget? right) -> bool
+static Cntryl.Portia.OperationalTraceEntry.operator !=(Cntryl.Portia.OperationalTraceEntry? left, Cntryl.Portia.OperationalTraceEntry? right) -> bool
+static Cntryl.Portia.OperationalTraceEntry.operator ==(Cntryl.Portia.OperationalTraceEntry? left, Cntryl.Portia.OperationalTraceEntry? right) -> bool
+static Cntryl.Portia.ProcessorTopology.operator !=(Cntryl.Portia.ProcessorTopology? left, Cntryl.Portia.ProcessorTopology? right) -> bool
+static Cntryl.Portia.ProcessorTopology.operator ==(Cntryl.Portia.ProcessorTopology? left, Cntryl.Portia.ProcessorTopology? right) -> bool
+static Cntryl.Portia.RepairPlan.operator !=(Cntryl.Portia.RepairPlan? left, Cntryl.Portia.RepairPlan? right) -> bool
+static Cntryl.Portia.RepairPlan.operator ==(Cntryl.Portia.RepairPlan? left, Cntryl.Portia.RepairPlan? right) -> bool
+static Cntryl.Portia.RequestTopology.operator !=(Cntryl.Portia.RequestTopology? left, Cntryl.Portia.RequestTopology? right) -> bool
+static Cntryl.Portia.RequestTopology.operator ==(Cntryl.Portia.RequestTopology? left, Cntryl.Portia.RequestTopology? right) -> bool
+Cntryl.Portia.OperationalProcessorState.Deconstruct(out Cntryl.Portia.OperationalTarget! Target, out string! Kind, out System.Guid OwnerSession, out long Revision, out string? Checkpoint, out Cntryl.Portia.OperationalProcessingSettings! Settings, out System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalAttempt!>! Attempts, out Cntryl.Portia.OperationalBlock? Block, out System.Collections.Generic.IReadOnlyList<Cntryl.Portia.RepairPlan!>! Plans, out System.Collections.Generic.IReadOnlyList<Cntryl.Portia.RepairApproval!>! Approvals, out System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalRepair!>! Repairs, out int ConsecutiveFailures, out System.DateTimeOffset RetainedSince) -> void
+Cntryl.Portia.OperationalProcessorState.Approvals.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.RepairApproval!>!
+Cntryl.Portia.OperationalProcessorState.Repairs.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalRepair!>!
+Cntryl.Portia.RepairApproval.PlanId.get -> System.Guid
+Cntryl.Portia.RepairApproval.PlanId.init -> void
+Cntryl.Portia.RepairApproval.Actor.get -> Cntryl.Portia.ActorAttribution!
+Cntryl.Portia.RepairApproval.Actor.init -> void
+Cntryl.Portia.RepairApproval.ApprovedAt.get -> System.DateTimeOffset
+Cntryl.Portia.RepairApproval.ApprovedAt.init -> void
+Cntryl.Portia.RepairApproval.ExpiresAt.get -> System.DateTimeOffset
+Cntryl.Portia.RepairApproval.ExpiresAt.init -> void
+Cntryl.Portia.RepairApproval.Revoked.get -> bool
+Cntryl.Portia.RepairApproval.Revoked.init -> void
+Cntryl.Portia.RepairApproval
+override Cntryl.Portia.RepairApproval.ToString() -> string!
+static Cntryl.Portia.RepairApproval.operator !=(Cntryl.Portia.RepairApproval? left, Cntryl.Portia.RepairApproval? right) -> bool
+static Cntryl.Portia.RepairApproval.operator ==(Cntryl.Portia.RepairApproval? left, Cntryl.Portia.RepairApproval? right) -> bool
+override Cntryl.Portia.RepairApproval.GetHashCode() -> int
+override Cntryl.Portia.RepairApproval.Equals(object? obj) -> bool
+Cntryl.Portia.RepairApproval.Equals(Cntryl.Portia.RepairApproval? other) -> bool
+Cntryl.Portia.RepairApproval.<Clone>$() -> Cntryl.Portia.RepairApproval!
+Cntryl.Portia.RepairApproval.Deconstruct(out System.Guid PlanId, out Cntryl.Portia.ActorAttribution! Actor, out System.DateTimeOffset ApprovedAt, out System.DateTimeOffset ExpiresAt, out bool Revoked) -> void
+Cntryl.Portia.OperationalRepair.Id.get -> System.Guid
+Cntryl.Portia.OperationalRepair.Id.init -> void
+Cntryl.Portia.OperationalRepair.PlanId.get -> System.Guid
+Cntryl.Portia.OperationalRepair.PlanId.init -> void
+Cntryl.Portia.OperationalRepair.Status.get -> string!
+Cntryl.Portia.OperationalRepair.RequestedAt.get -> System.DateTimeOffset
+Cntryl.Portia.OperationalRepair.RequestedBy.get -> Cntryl.Portia.ActorAttribution!
+Cntryl.Portia.OperationalRepair.Status.init -> void
+Cntryl.Portia.OperationalRepair
+Cntryl.Portia.OperationalRepair.RequestedAt.init -> void
+Cntryl.Portia.OperationalRepair.RequestedBy.init -> void
+override Cntryl.Portia.OperationalRepair.ToString() -> string!
+static Cntryl.Portia.OperationalRepair.operator !=(Cntryl.Portia.OperationalRepair? left, Cntryl.Portia.OperationalRepair? right) -> bool
+Cntryl.Portia.OperationalRepair.AttemptId.get -> System.Guid?
+static Cntryl.Portia.OperationalRepair.operator ==(Cntryl.Portia.OperationalRepair? left, Cntryl.Portia.OperationalRepair? right) -> bool
+override Cntryl.Portia.OperationalRepair.GetHashCode() -> int
+Cntryl.Portia.OperationalRepair.AttemptId.init -> void
+override Cntryl.Portia.OperationalRepair.Equals(object? obj) -> bool
+Cntryl.Portia.OperationalRepair.Equals(Cntryl.Portia.OperationalRepair? other) -> bool
+Cntryl.Portia.OperationalRepair.<Clone>$() -> Cntryl.Portia.OperationalRepair!
+Cntryl.Portia.OperationalRepair.Checkpoint.get -> string?
+Cntryl.Portia.OperationalRepair.Checkpoint.init -> void
+Cntryl.Portia.OperationalRepair.Deconstruct(out System.Guid Id, out System.Guid PlanId, out Cntryl.Portia.ActorAttribution! RequestedBy, out string! Status, out System.DateTimeOffset RequestedAt, out System.Guid? AttemptId, out string? Checkpoint) -> void
+Cntryl.Portia.IPortiaOperations.ApproveRepairAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Guid planId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.RepairApproval!>
+Cntryl.Portia.IPortiaOperations.ExecuteRepairAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Guid planId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalRepair!>
+Cntryl.Portia.IPortiaOperations.VerifyRepairAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Guid planId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalRepair!>
+Cntryl.Portia.RepairApproval.RepairApproval(System.Guid PlanId, Cntryl.Portia.ActorAttribution! Actor, System.DateTimeOffset ApprovedAt, System.DateTimeOffset ExpiresAt, bool Revoked = false) -> void
+Cntryl.Portia.OperationalRepair.OperationalRepair(System.Guid Id, System.Guid PlanId, Cntryl.Portia.ActorAttribution! RequestedBy, string! Status, System.DateTimeOffset RequestedAt, System.Guid? AttemptId = null, string? Checkpoint = null) -> void
+Cntryl.Portia.OperationalProcessorState.OperationalProcessorState(Cntryl.Portia.OperationalTarget! Target, string! Kind, System.Guid OwnerSession, long Revision, string? Checkpoint, Cntryl.Portia.OperationalProcessingSettings! Settings, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalAttempt!>! Attempts, Cntryl.Portia.OperationalBlock? Block, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.RepairPlan!>! Plans, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.RepairApproval!>! Approvals, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalRepair!>! Repairs, int ConsecutiveFailures, System.DateTimeOffset RetainedSince) -> void
+Cntryl.Portia.PortiaOperations.ApproveRepairAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Guid planId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.RepairApproval!>
+Cntryl.Portia.PortiaOperations.ExecuteRepairAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Guid planId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalRepair!>
+Cntryl.Portia.PortiaOperations.VerifyRepairAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.OperationalTarget! target, System.Guid planId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalRepair!>

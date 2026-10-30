@@ -10,8 +10,10 @@
     <InterceptorsNamespaces Condition="'$(PortiaSmokePackageVersion)' == ''">$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Cntryl.Portia.Admin.Mcp.AspNetCore" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
     <PackageReference Include="Cntryl.Portia.Mcp.AspNetCore" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
     <PackageReference Include="Cntryl.Portia.Analyzers" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <ProjectReference Include="../../src/Portia.Admin.Mcp.AspNetCore/Portia.Admin.Mcp.AspNetCore.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
     <ProjectReference Include="../../src/Portia.Mcp.AspNetCore/Portia.Mcp.AspNetCore.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
     <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" Condition="'$(PortiaSmokePackageVersion)' == ''" />
   </ItemGroup>

@@ -50,6 +50,16 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         using var activity = PortiaTelemetry.StartExecute(policies.Name, transport);
         var started = PortiaTelemetry.StartTimestamp();
         PortiaTelemetry.RequestStarted(policies.Name, transport);
+        if (ProcessingObservation.IsEnabled)
+            ProcessingObservation.Record("request", registration.RequestType.FullName ?? registration.RequestType.Name,
+                context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), "started");
+        if (ProcessingObservation.IsEnabled)
+        {
+            ProcessingObservation.Record("correlation", registration.RequestType.FullName ?? registration.RequestType.Name,
+                context.CorrelationId.ToString(), context.ExecutionId.ToString(), "inherited");
+            ProcessingObservation.Record("causation", registration.RequestType.FullName ?? registration.RequestType.Name,
+                context.CausationId?.ToString(), context.ExecutionId.ToString(), "inherited");
+        }
         var outcome = "fault";
         try
         {
@@ -78,6 +88,9 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         finally
         {
+            if (ProcessingObservation.IsEnabled)
+                ProcessingObservation.Record("request", registration.RequestType.FullName ?? registration.RequestType.Name,
+                    context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), outcome);
             PortiaTelemetry.RequestFinished(started, policies.Name, transport, outcome);
         }
     }
@@ -98,6 +111,16 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         using var activity = PortiaTelemetry.StartExecute(policies.Name, transport);
         var started = PortiaTelemetry.StartTimestamp();
         PortiaTelemetry.RequestStarted(policies.Name, transport);
+        if (ProcessingObservation.IsEnabled)
+            ProcessingObservation.Record("request", registration.RequestType.FullName ?? registration.RequestType.Name,
+                context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), "started");
+        if (ProcessingObservation.IsEnabled)
+        {
+            ProcessingObservation.Record("correlation", registration.RequestType.FullName ?? registration.RequestType.Name,
+                context.CorrelationId.ToString(), context.ExecutionId.ToString(), "inherited");
+            ProcessingObservation.Record("causation", registration.RequestType.FullName ?? registration.RequestType.Name,
+                context.CausationId?.ToString(), context.ExecutionId.ToString(), "inherited");
+        }
         var outcome = "fault";
         try
         {
@@ -126,6 +149,9 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
         finally
         {
+            if (ProcessingObservation.IsEnabled)
+                ProcessingObservation.Record("request", registration.RequestType.FullName ?? registration.RequestType.Name,
+                    context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), outcome);
             PortiaTelemetry.RequestFinished(started, policies.Name, transport, outcome);
         }
     }
@@ -148,6 +174,16 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         using var activity = PortiaTelemetry.StartExecute(policies.Name, transport);
         var started = PortiaTelemetry.StartTimestamp();
         PortiaTelemetry.RequestStarted(policies.Name, transport);
+        if (ProcessingObservation.IsEnabled)
+            ProcessingObservation.Record("request", registration.RequestType.FullName ?? registration.RequestType.Name,
+                context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), "started");
+        if (ProcessingObservation.IsEnabled)
+        {
+            ProcessingObservation.Record("correlation", registration.RequestType.FullName ?? registration.RequestType.Name,
+                context.CorrelationId.ToString(), context.ExecutionId.ToString(), "inherited");
+            ProcessingObservation.Record("causation", registration.RequestType.FullName ?? registration.RequestType.Name,
+                context.CausationId?.ToString(), context.ExecutionId.ToString(), "inherited");
+        }
         var outcome = "fault";
         var completed = false;
         var observed = new StreamObservation();
@@ -206,6 +242,9 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             if (!completed)
                 PortiaTelemetry.RecordFault(activity);
 
+            if (ProcessingObservation.IsEnabled)
+                ProcessingObservation.Record("request", registration.RequestType.FullName ?? registration.RequestType.Name,
+                    context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), outcome);
             PortiaTelemetry.RequestFinished(started, policies.Name, transport, outcome);
         }
     }

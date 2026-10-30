@@ -14,8 +14,8 @@ public sealed class ComponentCompilationTests
                          {
                              public Watcher() : base(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("test"), "watcher") { }
                              public int Count { get; private set; }
-                             public ValueTask HandleAsync(IReactorContext<Ev> context, CancellationToken ct) { Count++; return ValueTask.CompletedTask; }
-                             public ValueTask Process()
+                             public ValueTask<Result> HandleAsync(IReactorContext<Ev> context, CancellationToken ct) { Count++; return ValueTask.FromResult(Result.Success); }
+                             public ValueTask<Result> Process()
                              {
                                  var id = Uuid.CreateVersion4();
                                  var ev = new Ev();
@@ -28,8 +28,8 @@ public sealed class ComponentCompilationTests
                          {
                              public View() : base(new Target(), EventStreamPattern.ForPattern("test"), "view") { }
                              public int Count { get; private set; }
-                             public ValueTask HandleAsync(Ev ev, IProjectorContext context, CancellationToken ct) { Count++; return ValueTask.CompletedTask; }
-                             public ValueTask Process() => ProjectEventAsync(new DomainEventRecord(new EventStreamAddress("test", "area", "id"), new Ev(), 0, new EventCursor("1")), new Context(), default);
+                             public ValueTask<Result> HandleAsync(IProjectorContext<Ev> context, CancellationToken ct) { Count++; return ValueTask.FromResult(Result.Success); }
+                             public ValueTask<Result> Process() => ProjectEventAsync(new DomainEventRecord(new EventStreamAddress("test", "area", "id"), new Ev(), 0, new EventCursor("1")), new Context(), default);
                          }
                          """;
         if (partial)

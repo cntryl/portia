@@ -9,7 +9,7 @@ public sealed class WorkloadOptions
     /// <summary>Gets or sets projection/reaction batch limits and rebuild settings.</summary>
     public ProjectionRunOptions Processing { get; set; } = ProjectionRunOptions.Default;
 
-    /// <summary>Gets or sets the consecutive failed-pass limit before the hosted worker faults.</summary>
+    /// <summary>Gets or sets the consecutive failed-pass limit; permanent handler results fault immediately.</summary>
     public int FailureAttemptLimit { get; set; } = 10;
 
     /// <summary>Gets or sets the maximum delay between failed-pass attempts.</summary>

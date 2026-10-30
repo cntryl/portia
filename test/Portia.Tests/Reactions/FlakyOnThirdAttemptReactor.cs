@@ -10,7 +10,7 @@ sealed partial class FlakyOnThirdAttemptReactor(IProjectionCheckpointStore? chec
 
     public List<int> HandledValues { get; } = [];
 
-    public ValueTask HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
+    public ValueTask<Result> HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
     {
         if (context.Trigger.Value == 3 && !_hasFailedOnce)
         {
@@ -19,6 +19,6 @@ sealed partial class FlakyOnThirdAttemptReactor(IProjectionCheckpointStore? chec
         }
 
         HandledValues.Add(context.Trigger.Value);
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(Result.Success);
     }
 }
