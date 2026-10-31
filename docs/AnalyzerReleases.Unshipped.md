@@ -12,17 +12,17 @@
 
 Rule ID | Category | Severity | Notes
 --------|----------|----------|------
-PORTIA200 | Portia | Warning | Application files declare one type
-PORTIA201 | Portia | Warning | Application filenames identify their type, using OfT for generics
-PORTIA202 | Portia | Warning | Application namespaces follow folders
-PORTIA203 | Portia | Warning | Common and Core use closed feature folders
-PORTIA204 | Portia | Warning | Known component roles belong in their feature role folders
-PORTIA205 | Portia | Warning | Each request handler handles one command or query
-PORTIA206 | Portia | Warning | Common and Core respect application and infrastructure dependency boundaries
-PORTIA207 | Portia | Warning | Core component registrations belong in one feature registration file
-PORTIA208 | Portia | Warning | Aggregate files over 400 lines should use composition to stay reviewable
-PORTIA209 | Portia | Warning | Common contracts do not declare executable behavior
-PORTIA210 | Portia | Warning | Contracts use feature.name snake_case discriminators with explicit positive versions
-PORTIA211 | Portia | Warning | Command handlers must not be NotImplementedException stubs
-PORTIA212 | Portia | Warning | Queries and reactors must not hydrate aggregates
-PORTIA213 | Portia | Warning | Application projects use Common, Core, Api, or Worker roles
+PORTIA200 | PortiaStructure | Warning | Application files declare one type
+PORTIA201 | PortiaStructure | Warning | Application filenames identify their type, using OfT for generics
+PORTIA202 | PortiaStructure | Warning | Application namespaces follow folders
+PORTIA203 | PortiaStructure | Warning | Common and Core use closed feature folders
+PORTIA204 | PortiaStructure | Warning | Known component roles belong in their feature role folders
+PORTIA205 | PortiaStructure | Warning | Each request handler handles one command or query
+PORTIA206 | PortiaStructure | Warning | Common and Core respect application and infrastructure dependency boundaries
+PORTIA207 | PortiaStructure | Warning | Core component registrations belong in one feature registration file
+PORTIA208 | PortiaStructure | Warning | Aggregate files over 400 lines should use composition to stay reviewable
+PORTIA209 | PortiaStructure | Warning | Common contracts do not declare executable behavior
+PORTIA210 | PortiaStructure | Warning | Contracts use feature.name snake_case discriminators with explicit positive versions
+PORTIA211 | PortiaStructure | Warning | Command handlers must not be NotImplementedException stubs
+PORTIA212 | PortiaStructure | Warning | Queries and reactors must not hydrate aggregates
+PORTIA213 | PortiaStructure | Warning | Application projects use Common, Core, Api, or Worker roles

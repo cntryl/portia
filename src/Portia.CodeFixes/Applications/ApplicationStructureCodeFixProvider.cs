@@ -24,7 +24,7 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
     public override ImmutableArray<string> FixableDiagnosticIds => ["PORTIA200", "PORTIA201", "PORTIA202", "PORTIA210"];
 
     /// <inheritdoc />
-    public override FixAllProvider? GetFixAllProvider() => null;
+    public override FixAllProvider? GetFixAllProvider() => StructureFixAllProvider.Instance;
 
     /// <inheritdoc />
     public override async Task RegisterCodeFixesAsync(CodeFixContext context)
@@ -35,22 +35,27 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
         {
             if (diagnostic.Id is "PORTIA200" or "PORTIA201"
                 && diagnostic.Properties.TryGetValue("ExpectedFileName", out var filename) && filename is not null
+                && SupportsFileChanges(context.Document.Project.Solution.Workspace)
                 && AvailableFile(context.Document, filename))
             {
                 var declaration = root.FindNode(diagnostic.Location.SourceSpan).AncestorsAndSelf()
                     .OfType<MemberDeclarationSyntax>().FirstOrDefault(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax);
                 if (declaration is null)
                     continue;
+                var model = await context.Document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
+                if (model?.GetDeclaredSymbol(declaration, context.CancellationToken) is INamedTypeSymbol declared
+                    && declared.DeclaringSyntaxReferences.Length > 1)
+                    continue;
                 if (diagnostic.Id == "PORTIA201")
                 {
                     context.RegisterCodeFix(CodeAction.Create($"Rename file to '{filename}'",
-                        _ => Task.FromResult(RenameFile(context.Document, filename)), "Portia.RenameApplicationFile"), diagnostic);
+                        ct => RenameFileAsync(context.Document, filename, ct), "Portia.RenameApplicationFile"), diagnostic);
                 }
                 else if (declaration.Parent is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax
                     && !string.Equals(context.Document.Name, filename, StringComparison.OrdinalIgnoreCase)
-                    && !root.ContainsDirectives && !root.DescendantTokens().Any(token => token.IsKind(SyntaxKind.FileKeyword)))
+                    && SafeToSplit(root) && !declaration.Modifiers.Any(SyntaxKind.PartialKeyword)
+                    && !declaration.GetLeadingTrivia().Any(trivia => trivia.IsDirective))
                 {
-                    var model = await context.Document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
                     var name = model?.GetDeclaredSymbol(declaration, context.CancellationToken)?.Name;
                     context.RegisterCodeFix(CodeAction.Create($"Move '{name}' to '{filename}'",
                         ct => MoveTypeAsync(context.Document, root, declaration, filename, ct), "Portia.MoveApplicationType"), diagnostic);
@@ -71,14 +76,181 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
         }
     }
 
+    // MSBuildWorkspace currently persists added documents as explicit Compile items, which
+    // duplicates SDK default globs, and does not reliably apply document replacement renames.
+    static bool SupportsFileChanges(Workspace workspace) =>
+        workspace.GetType().FullName != "Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace";
+
+    static bool SafeToSplit(CompilationUnitSyntax root) =>
+        !root.DescendantTrivia(descendIntoTrivia: true).Any(trivia => trivia.IsDirective
+            && (trivia.SpanStart >= root.GetFirstToken().SpanStart
+                || !trivia.IsKind(SyntaxKind.NullableDirectiveTrivia)
+                && !trivia.IsKind(SyntaxKind.PragmaWarningDirectiveTrivia)))
+        && !root.DescendantTokens().Any(token => token.IsKind(SyntaxKind.FileKeyword));
+
+    static CompilationUnitSyntax MovedRoot(CompilationUnitSyntax root, MemberDeclarationSyntax declaration)
+    {
+        var member = declaration;
+        foreach (var space in declaration.Ancestors().OfType<BaseNamespaceDeclarationSyntax>())
+            member = space.WithMembers(SyntaxFactory.SingletonList(member));
+        var moved = root.WithAttributeLists(default).WithMembers(SyntaxFactory.SingletonList(member));
+        if (!moved.GetLeadingTrivia().Any(trivia => trivia.IsDirective))
+        {
+            var directives = string.Concat(root.GetLeadingTrivia().Where(trivia => trivia.IsDirective).Select(trivia => trivia.ToFullString()));
+            if (directives.Length > 0)
+                moved = moved.WithLeadingTrivia(SyntaxFactory.ParseLeadingTrivia(directives).AddRange(moved.GetLeadingTrivia()));
+        }
+        return moved.WithAdditionalAnnotations(Formatter.Annotation);
+    }
+
+    sealed class StructureFixAllProvider : FixAllProvider
+    {
+        public static readonly StructureFixAllProvider Instance = new();
+
+        public override async Task<CodeAction?> GetFixAsync(FixAllContext context)
+        {
+            var id = context.CodeActionEquivalenceKey switch
+            {
+                "Portia.MoveApplicationType" => "PORTIA200",
+                "Portia.RenameApplicationFile" => "PORTIA201",
+                "Portia.SyncApplicationNamespace" => "PORTIA202",
+                _ => null
+            };
+            if (id is null || context.Scope is not (FixAllScope.Document or FixAllScope.Project or FixAllScope.Solution))
+                return null;
+            if (id is "PORTIA200" or "PORTIA201" && !SupportsFileChanges(context.Solution.Workspace))
+                return null;
+            var documents = context.Scope switch
+            {
+                FixAllScope.Document when context.Document is { } document => new[] { document },
+                FixAllScope.Project => context.Project.Documents.ToArray(),
+                FixAllScope.Solution => context.Solution.Projects.SelectMany(project => project.Documents).ToArray(),
+                _ => []
+            };
+            var changes = new Dictionary<DocumentId, ImmutableArray<Diagnostic>>();
+            foreach (var document in documents)
+            {
+                context.CancellationToken.ThrowIfCancellationRequested();
+                var diagnostics = await context.GetDocumentDiagnosticsAsync(document).ConfigureAwait(false);
+                var selected = diagnostics.Where(diagnostic => diagnostic.Id == id && !diagnostic.IsSuppressed).ToImmutableArray();
+                if (!selected.IsEmpty)
+                    changes.Add(document.Id, selected);
+            }
+            if (changes.Count == 0)
+                return null;
+            return CodeAction.Create("Fix all application structure violations",
+                ct => ApplyAsync(context.Solution, changes, id, ct), context.CodeActionEquivalenceKey);
+        }
+
+        static async Task<Solution> ApplyAsync(Solution solution,
+            Dictionary<DocumentId, ImmutableArray<Diagnostic>> changes, string id, CancellationToken ct)
+        {
+            foreach (var pair in changes)
+            {
+                ct.ThrowIfCancellationRequested();
+                var document = solution.GetDocument(pair.Key);
+                if (document is null || await document.GetSyntaxRootAsync(ct).ConfigureAwait(false) is not CompilationUnitSyntax root)
+                    continue;
+                if (id == "PORTIA200")
+                {
+                    solution = await SplitAsync(document, root, pair.Value, ct).ConfigureAwait(false);
+                    continue;
+                }
+                if (id == "PORTIA201")
+                {
+                    if (pair.Value[0].Properties.TryGetValue("ExpectedFileName", out var name) && name is not null
+                        && AvailableFile(document, name))
+                        solution = await RenameFileAsync(document, name, ct).ConfigureAwait(false);
+                    continue;
+                }
+
+                // The namespace refactoring updates references across projects. Apply one document
+                // at a time to the evolving solution so those edits are retained.
+                var original = pair.Value[0];
+                var oldRoot = await original.Location.SourceTree!.GetRootAsync(ct).ConfigureAwait(false);
+                var oldDeclaration = oldRoot.FindNode(original.Location.SourceSpan).AncestorsAndSelf()
+                    .OfType<MemberDeclarationSyntax>().FirstOrDefault(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax);
+                var identifier = oldDeclaration switch
+                {
+                    BaseTypeDeclarationSyntax type => type.Identifier.ValueText,
+                    DelegateDeclarationSyntax declaration => declaration.Identifier.ValueText,
+                    _ => null
+                };
+                var current = root.DescendantNodes().OfType<MemberDeclarationSyntax>().FirstOrDefault(node => node switch
+                {
+                    BaseTypeDeclarationSyntax type => type.Identifier.ValueText == identifier,
+                    DelegateDeclarationSyntax declaration => declaration.Identifier.ValueText == identifier,
+                    _ => false
+                });
+                if (current is null)
+                    continue;
+                var token = current is BaseTypeDeclarationSyntax typeDeclaration ? typeDeclaration.Identifier
+                    : ((DelegateDeclarationSyntax)current).Identifier;
+                var diagnostic = Diagnostic.Create(original.Descriptor, token.GetLocation(), original.Properties,
+                    identifier, original.Properties["ExpectedNamespace"]);
+                var actions = new List<CodeAction>();
+                var codeContext = new CodeFixContext(document, diagnostic, (action, _) => actions.Add(action), ct);
+                await new ApplicationStructureCodeFixProvider().RegisterCodeFixesAsync(codeContext).ConfigureAwait(false);
+                if (actions.FirstOrDefault() is { } action)
+                {
+                    var operations = await action.GetOperationsAsync(ct).ConfigureAwait(false);
+                    solution = operations.OfType<ApplyChangesOperation>().FirstOrDefault()?.ChangedSolution ?? solution;
+                }
+            }
+            return solution;
+        }
+
+        static async Task<Solution> SplitAsync(Document document, CompilationUnitSyntax root,
+            ImmutableArray<Diagnostic> diagnostics, CancellationToken ct)
+        {
+            if (!SafeToSplit(root))
+                return document.Project.Solution;
+            var moves = diagnostics.Select(diagnostic =>
+            {
+                _ = diagnostic.Properties.TryGetValue("ExpectedFileName", out var name);
+                var node = root.FindNode(diagnostic.Location.SourceSpan).AncestorsAndSelf()
+                    .OfType<MemberDeclarationSyntax>().FirstOrDefault(item => item is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax);
+                return (Name: name, Node: node);
+            }).Where(move => move.Name is not null && move.Node is not null
+                && move.Node.Parent is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax
+                && !move.Node.Modifiers.Any(SyntaxKind.PartialKeyword)
+                && !move.Node.GetLeadingTrivia().Any(trivia => trivia.IsDirective)).ToArray();
+            var eligible = moves.Where(move => moves.Count(other => string.Equals(other.Name, move.Name, StringComparison.OrdinalIgnoreCase)) == 1
+                && AvailableFile(document, move.Name!) && !string.Equals(document.Name, move.Name, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (eligible.Length == 0)
+                return document.Project.Solution;
+            var text = await document.GetTextAsync(ct).ConfigureAwait(false);
+            var remaining = root.RemoveNodes(eligible.Select(move => move.Node!), SyntaxRemoveOptions.KeepNoTrivia)!;
+            var solution = document.Project.Solution.WithDocumentSyntaxRoot(document.Id, remaining);
+            foreach (var move in eligible)
+            {
+                ct.ThrowIfCancellationRequested();
+                var moved = MovedRoot(root, move.Node!);
+                var newId = DocumentId.CreateNewId(document.Project.Id);
+                solution = solution.AddDocument(newId, move.Name!, SourceText.From(moved.ToFullString(), text.Encoding),
+                    document.Folders, SiblingPath(document.FilePath, move.Name!));
+                solution = (await Formatter.FormatAsync(solution.GetDocument(newId)!, Formatter.Annotation, cancellationToken: ct)
+                    .ConfigureAwait(false)).Project.Solution;
+            }
+            return solution;
+        }
+    }
+
     static bool AvailableFile(Document document, string filename)
     {
         if (document.FilePath is { } path && document.Project.Solution.GetDocumentIdsWithFilePath(path).Length > 1)
             return false;
         var destination = SiblingPath(document.FilePath, filename);
-        return !document.Project.Documents.Any(other => other.Id != document.Id
+#pragma warning disable RS1035 // Code actions preflight files outside the solution before offering a file operation.
+        if (destination is not null && System.IO.File.Exists(destination)
+            && !string.Equals(System.IO.Path.GetFullPath(destination),
+                System.IO.Path.GetFullPath(document.FilePath ?? string.Empty), StringComparison.Ordinal))
+#pragma warning restore RS1035
+            return false;
+        return !document.Project.Solution.Projects.SelectMany(project => project.Documents).Any(other => other.Id != document.Id
             && (destination is not null && string.Equals(other.FilePath, destination, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(other.Name, filename, StringComparison.OrdinalIgnoreCase)
+                || destination is null && other.Project.Id == document.Project.Id
+                && string.Equals(other.Name, filename, StringComparison.OrdinalIgnoreCase)
                 && other.Folders.SequenceEqual(document.Folders)));
     }
 
@@ -88,8 +260,15 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
         return slash >= 0 ? path!.Substring(0, slash + 1) + filename : null;
     }
 
-    static Solution RenameFile(Document document, string filename)
+    static async Task<Solution> RenameFileAsync(Document document, string filename, CancellationToken ct)
     {
+        if (!document.Project.Solution.Workspace.CanApplyChange(ApplyChangesKind.ChangeDocumentInfo))
+        {
+            var text = await document.GetTextAsync(ct).ConfigureAwait(false);
+            var id = DocumentId.CreateNewId(document.Project.Id);
+            return document.Project.Solution.RemoveDocument(document.Id)
+                .AddDocument(id, filename, text, document.Folders, SiblingPath(document.FilePath, filename));
+        }
         var solution = document.Project.Solution.WithDocumentName(document.Id, filename);
         return SiblingPath(document.FilePath, filename) is { } path
             ? solution.WithDocumentFilePath(document.Id, path) : solution;
@@ -98,11 +277,7 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
     static async Task<Solution> MoveTypeAsync(Document document, CompilationUnitSyntax root,
         MemberDeclarationSyntax declaration, string filename, CancellationToken ct)
     {
-        var member = declaration;
-        foreach (var space in declaration.Ancestors().OfType<BaseNamespaceDeclarationSyntax>())
-            member = space.WithMembers(SyntaxFactory.SingletonList(member));
-        var movedRoot = root.WithAttributeLists(default).WithMembers(SyntaxFactory.SingletonList(member))
-            .WithAdditionalAnnotations(Formatter.Annotation);
+        var movedRoot = MovedRoot(root, declaration);
         var remaining = root.RemoveNode(declaration, SyntaxRemoveOptions.KeepNoTrivia)!;
         var id = DocumentId.CreateNewId(document.Project.Id);
         var text = await document.GetTextAsync(ct).ConfigureAwait(false);
@@ -130,31 +305,41 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
         foreach (var declaration in root.DescendantNodes().Where(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax))
         {
             if (model?.GetDeclaredSymbol(declaration, context.CancellationToken) is INamedTypeSymbol symbol
-                && model.Compilation.GetTypeByMetadataName(target + "." + symbol.MetadataName) is { } existing
-                && !SymbolEqualityComparer.Default.Equals(symbol, existing))
+                && (symbol.DeclaringSyntaxReferences.Length > 1
+                    || model.Compilation.GetTypeByMetadataName(target + "." + symbol.MetadataName) is { } existing
+                    && !SymbolEqualityComparer.Default.Equals(symbol, existing)))
             {
                 return;
             }
         }
 
+        context.RegisterCodeFix(CodeAction.Create($"Change namespace to '{target}' and update references",
+            ct => SyncNamespaceAsync(context.Document, target, folders, ct), "Portia.SyncApplicationNamespace"), diagnostic);
+    }
+
+    static async Task<Solution> SyncNamespaceAsync(Document document, string target, string[] folders, CancellationToken ct)
+    {
+        if (await document.GetSyntaxRootAsync(ct).ConfigureAwait(false) is not CompilationUnitSyntax root
+            || await document.GetSemanticModelAsync(ct).ConfigureAwait(false) is not { } model)
+            return document.Project.Solution;
         // Use Roslyn's document namespace refactoring so references across the solution are updated.
         // A temporary logical folder makes the refactoring run even when the physical folders are correct.
-        var prepared = await PrepareConstructorReferencesAsync(context.Document, root, model!, context.CancellationToken).ConfigureAwait(false);
+        var prepared = await PrepareConstructorReferencesAsync(document, root, model!, ct).ConfigureAwait(false);
         prepared = prepared.WithFolders(prepared.Folders.Concat(["PortiaNamespaceFix"]));
         var actions = await Renamer.RenameDocumentAsync(prepared, new DocumentRenameOptions(), prepared.Name,
-            folders, context.CancellationToken).ConfigureAwait(false);
+            folders, ct).ConfigureAwait(false);
         if (actions.ApplicableActions.Length == 0 || actions.ApplicableActions.Any(action => action.GetErrors(CultureInfo.InvariantCulture).Any()))
-            return;
+            return document.Project.Solution;
         Solution corrected;
         try
         {
-            corrected = await actions.UpdateSolutionAsync(prepared.Project.Solution, context.CancellationToken).ConfigureAwait(false);
+            corrected = await actions.UpdateSolutionAsync(prepared.Project.Solution, ct).ConfigureAwait(false);
             // Roslyn's namespace refactoring excludes constructor definitions from its type
             // reference results. Repair the qualified constructor references captured beforehand.
-            foreach (var id in corrected.GetChanges(context.Document.Project.Solution).GetProjectChanges()
+            foreach (var id in corrected.GetChanges(document.Project.Solution).GetProjectChanges()
                          .SelectMany(change => change.GetChangedDocuments()))
             {
-                var referenceRoot = await corrected.GetDocument(id)!.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
+                var referenceRoot = await corrected.GetDocument(id)!.GetSyntaxRootAsync(ct).ConfigureAwait(false);
                 var references = referenceRoot!.GetAnnotatedNodes(ConstructorReference).ToArray();
                 if (references.Length == 0)
                     continue;
@@ -173,21 +358,25 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
         {
             // Minimal/custom hosts may provide syntax services without Roslyn's namespace
             // refactoring service. Do not offer an action that would fail when selected.
-            return;
+            return document.Project.Solution;
         }
 
-        var changed = corrected.GetDocument(context.Document.Id)!;
-        var changedRoot = await changed.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
-        var changedModel = await changed.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
+        var changed = corrected.GetDocument(document.Id)!;
+        var changedRoot = await changed.GetSyntaxRootAsync(ct).ConfigureAwait(false);
+        var changedModel = await changed.GetSemanticModelAsync(ct).ConfigureAwait(false);
         if (changedRoot is null || changedModel is null || changedRoot.DescendantNodes()
             .Where(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax)
-            .Any(node => changedModel.GetDeclaredSymbol(node, context.CancellationToken)?.ContainingNamespace.ToDisplayString() != target))
+            .Any(node => changedModel.GetDeclaredSymbol(node, ct)?.ContainingNamespace.ToDisplayString() != target))
         {
-            return;
+            return document.Project.Solution;
         }
 
-        context.RegisterCodeFix(CodeAction.Create($"Change namespace to '{target}' and update references",
-            _ => Task.FromResult(corrected), "Portia.SyncApplicationNamespace"), diagnostic);
+        // RenameDocument uses temporary logical folders. Copy the resulting text into the
+        // original solution so hosts that cannot change document properties can apply it.
+        var result = document.Project.Solution;
+        foreach (var id in corrected.GetChanges(result).GetProjectChanges().SelectMany(change => change.GetChangedDocuments()))
+            result = result.WithDocumentText(id, await corrected.GetDocument(id)!.GetTextAsync(ct).ConfigureAwait(false));
+        return result;
     }
 
     static async Task<Document> PrepareConstructorReferencesAsync(Document document, CompilationUnitSyntax root,
@@ -203,6 +392,10 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
             {
                 foreach (var location in reference.Locations)
                 {
+                    // Source-generated references are regenerated from their user-authored
+                    // inputs after the move; they are not editable solution documents.
+                    if (document.Project.Solution.GetDocument(location.Document.Id) is null)
+                        continue;
                     if (!locations.TryGetValue(location.Document.Id, out var spans))
                         locations.Add(location.Document.Id, spans = []);
                     _ = spans.Add(location.Location.SourceSpan);
@@ -213,10 +406,12 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
         var solution = document.Project.Solution;
         foreach (var pair in locations)
         {
-            var referenceRoot = await solution.GetDocument(pair.Key)!.GetSyntaxRootAsync(ct).ConfigureAwait(false);
-            var types = pair.Value.Select(span => referenceRoot!.FindNode(span).FirstAncestorOrSelf<ObjectCreationExpressionSyntax>()?.Type)
+            if (solution.GetDocument(pair.Key) is not { } referenceDocument
+                || await referenceDocument.GetSyntaxRootAsync(ct).ConfigureAwait(false) is not { } referenceRoot)
+                continue;
+            var types = pair.Value.Select(span => referenceRoot.FindNode(span).FirstAncestorOrSelf<ObjectCreationExpressionSyntax>()?.Type)
                 .Where(type => type is QualifiedNameSyntax or AliasQualifiedNameSyntax).Distinct().Cast<TypeSyntax>().ToArray();
-            solution = solution.WithDocumentSyntaxRoot(pair.Key, referenceRoot!.ReplaceNodes(types,
+            solution = solution.WithDocumentSyntaxRoot(pair.Key, referenceRoot.ReplaceNodes(types,
                 (_, current) => current.WithAdditionalAnnotations(new SyntaxAnnotation(ConstructorReference))));
         }
 

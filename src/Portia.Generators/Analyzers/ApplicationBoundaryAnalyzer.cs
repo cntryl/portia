@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -13,15 +14,16 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
 {
     static readonly DiagnosticDescriptor Dependency = new("PORTIA206", "Application dependency crosses its project boundary",
         "Project '{0}' references '{1}'; Common owns contracts, Core depends on Common and Portia APIs, and Api/Worker configure concrete infrastructure",
-        "Portia", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+        "PortiaStructure", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
     static readonly DiagnosticDescriptor Registration = new("PORTIA207", "Component registration is outside its feature registration file",
-        "Register feature components in Features/{0}/{0}PortiaExtensions.cs", "Portia", DiagnosticSeverity.Warning, true);
+        "Register {1} feature component(s) in Features/{0}/{0}PortiaExtensions.cs", "PortiaStructure", DiagnosticSeverity.Warning, true,
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
     static readonly DiagnosticDescriptor CommandStub = new("PORTIA211", "Command handler is a stub",
         "Command handler '{0}' only throws NotImplementedException; implement the business operation or remove its surface",
-        "Portia", DiagnosticSeverity.Warning, true);
+        "PortiaStructure", DiagnosticSeverity.Warning, true);
     static readonly DiagnosticDescriptor Hydration = new("PORTIA212", "Query or reactor hydrates an aggregate",
         "'{0}' calls '{1}'; queries read through repositories and reactors send commands from committed facts. Keep aggregate hydration in command handling.",
-        "Portia", DiagnosticSeverity.Warning, true);
+        "PortiaStructure", DiagnosticSeverity.Warning, true);
 
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
@@ -36,8 +38,13 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
         {
             if (ApplicationProject.From(start.Options.AnalyzerConfigOptionsProvider) is not { IsTest: false } project)
                 return;
-            start.RegisterCompilationEndAction(end => AnalyzeDependencies(end, project));
-            start.RegisterOperationAction(operation => AnalyzeInvocation(operation, project), OperationKind.Invocation);
+            var registrations = new ConcurrentBag<(Location Location, string Feature)>();
+            start.RegisterCompilationEndAction(end =>
+            {
+                AnalyzeDependencies(end, project);
+                ReportRegistrations(end, registrations);
+            });
+            start.RegisterOperationAction(operation => AnalyzeInvocation(operation, project, registrations), OperationKind.Invocation);
             if (project.Role is "Common" or "Core")
             {
                 start.RegisterOperationAction(operation => AnalyzeConnectionConstruction(operation, project), OperationKind.ObjectCreation);
@@ -74,7 +81,8 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    static void AnalyzeInvocation(OperationAnalysisContext context, ApplicationProject project)
+    static void AnalyzeInvocation(OperationAnalysisContext context, ApplicationProject project,
+        ConcurrentBag<(Location Location, string Feature)> registrations)
     {
         var invocation = (IInvocationOperation)context.Operation;
         var method = invocation.TargetMethod.ReducedFrom ?? invocation.TargetMethod;
@@ -84,7 +92,7 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
             var feature = FeatureOf(method.TypeArguments.FirstOrDefault())
                 ?? (path.Length >= 2 && path[0] == "Features" ? path[1] : "Feature");
             if (path.Length != 3 || path[0] != "Features" || path[1] != feature || path[2] != feature + "PortiaExtensions.cs")
-                context.ReportDiagnostic(Diagnostic.Create(Registration, invocation.Syntax.GetLocation(), feature));
+                registrations.Add((invocation.Syntax.GetLocation(), feature));
         }
 
         if (project.Role is "Common" or "Core" && method.Name == "AddCassie"
@@ -99,6 +107,22 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
         var query = ApplicationProject.Requests(component).Any(request => ApplicationProject.IsContractIn(request.TypeArguments[0], "Queries"));
         if (query || ApplicationProject.IsReactor(component))
             context.ReportDiagnostic(Diagnostic.Create(Hydration, invocation.Syntax.GetLocation(), component.Name, method.Name));
+    }
+
+    static void ReportRegistrations(CompilationAnalysisContext context, ConcurrentBag<(Location Location, string Feature)> registrations)
+    {
+        foreach (var group in registrations.GroupBy(item => (item.Location.SourceTree, item.Feature)))
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+            var candidates = group.OrderBy(item => item.Location.SourceSpan.Start)
+                .Select(item => Diagnostic.Create(Registration, item.Location, item.Feature, 1)).ToImmutableArray();
+            var effective = CompilationWithAnalyzers.GetEffectiveDiagnostics(candidates, context.Compilation)
+                .Where(diagnostic => !diagnostic.IsSuppressed).ToArray();
+            if (effective.Length == 0)
+                continue;
+            context.ReportDiagnostic(Diagnostic.Create(Registration, effective[0].Location,
+                effective.Skip(1).Select(diagnostic => diagnostic.Location), properties: null, group.Key.Feature, effective.Length));
+        }
     }
 
     static bool IsComponentRegistration(IMethodSymbol method) =>

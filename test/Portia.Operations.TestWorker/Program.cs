@@ -39,12 +39,22 @@ static partial class Program
             .AddReactor<DurabilityReactor>(Target.Processor, WorkloadScope.Global,
                 options => options.PollInterval = TimeSpan.FromMilliseconds(20)).AddWorkers();
         using var host = builder.Build();
-        await host.StartAsync();
         var operations = host.Services.GetRequiredService<IPortiaOperations>();
         var actor = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "qualification-operator")], "qualification"));
+        var previousOwner = mode == "crash" ? Guid.Parse(args[2]) : Guid.Empty;
+        if (mode == "crash")
+        {
+            var prior = await operations.InspectProcessorAsync(actor, Target);
+            Require(prior?.Block is not null && prior.OwnerSession == previousOwner,
+                "Expected the previous owner's durable block before starting replacement workers.");
+        }
+        await host.StartAsync();
         if (mode is "blocked" or "crash")
         {
-            await UntilAsync(async () => (await operations.InspectProcessorAsync(actor, Target))?.Block is not null);
+            // The durable block can be visible before this process acquires the workload. A repair
+            // prepared against the previous session would be invalidated by the ownership handoff.
+            await UntilAsync(async () => (await operations.InspectProcessorAsync(actor, Target)) is { Block: not null } state
+                && (mode != "crash" || state.OwnerSession != previousOwner));
             if (mode == "blocked")
                 await File.WriteAllTextAsync(signal!, "durable block");
             else

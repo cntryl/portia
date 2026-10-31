@@ -54,8 +54,7 @@ The folder list is closed. Keep these folders flat and use the same feature name
 Core. If a concept fits nowhere, reconsider the concept or amend the rule explicitly. There is
 one registration file per Core feature, rather than one per component.
 
-Declare one type per file, including enums and delegates. Match the filename to the type; generic
-filenames use the `OfT` suffix, for example `Page<T>` in `PageOfT.cs`. Namespaces are the project's
+Declare one top-level type per file, including enums and delegates. Nested types stay with their owner. Match the filename to the type; generic filenames use `OfT` for one parameter and `OfT2` for two, for example `Page<T>` in `PageOfT.cs`. A type already ending in the appropriate suffix does not repeat it. Partial declarations may use an aspect name such as `PageOfT.Serialization.cs`. Namespaces are the project's
 `RootNamespace` followed by its folders, including in test projects. Api and Worker can use the
 ordinary top-level `Program.cs` composition root.
 
@@ -70,9 +69,28 @@ ordinary top-level `Program.cs` composition root.
 | Ports | Interfaces to dependencies outside the feature, with a production implementation and a test that need them. |
 | Values | Feature-owned values that are part of Core behavior. |
 
-Composition is the way to keep a large aggregate reviewable. Aggregate partial files have no
-special naming convention or analyzer support. Ownership of composed objects is reviewed;
-analyzers reject known misplaced components without requiring a marker interface for a domain rule.
+Composition is the way to keep a large aggregate reviewable. Aggregate collaborators must be directly referenced by an aggregate in the feature. Models have data-only shapes, values have immutable value shapes, and repository implementations satisfy a persistence contract or an interface declared in the feature. Concept budgets and helper-chain quality remain review responsibilities.
+
+Static rules helpers and error factories belong inside the type that owns their business rule:
+use private methods or nested types in the aggregate for aggregate invariants, or in the handler
+for operation-specific orchestration. A separate aggregate collaborator is appropriate when the
+aggregate directly uses it. Core enums follow that ownership too; reusable contract enums belong
+in the Common feature's `Models/` folder. Common `Values/` holds immutable record values, not enums.
+There is no general-purpose static-helper or global error-catalog role folder.
+
+Prefer one `[PortiaJsonContext]` per serializer-owning assembly. In Common/Core, an assembly-wide
+context belongs in a file at the project root with the project's root namespace, for example
+`Platform.Common/ContractsJsonContext.cs`. This slot requires the existing marker and a valid
+`JsonSerializerContext` shape; it is not a general exception for root-level helpers. Api/Worker
+may organize their context alongside other serialization composition. Additional contexts can
+support genuinely separate serializer configurations; context count is a review choice.
+
+A repository does not always need a feature-local interface: an implementation that satisfies an
+existing persistence contract, such as `IProjectionStore`, `IProjectionCheckpointStore`, or
+`CassieProjectionRepository`, is accepted directly. For an
+application-specific repository, a feature-local interface describes the feature's read/write
+boundary. Registering and calling a concrete helper alone does not establish that it is a repository;
+do not add an empty interface merely to silence PORTIA204.
 
 ## Contracts and business behavior
 
@@ -126,7 +144,15 @@ role, dependency, and business-component checks do not. Generated source is excl
 checks skip linked source outside the project because Roslyn does not expose its logical Link
 path; they do not scan the filesystem or invent a folder.
 
-The diagnostics are enabled warnings. `TreatWarningsAsErrors` makes them build failures. Normal
+The diagnostics are enabled warnings in the `PortiaStructure` category. To stage adoption using [Roslyn severity configuration](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/configuration-options):
+
+```editorconfig
+dotnet_analyzer_diagnostic.category-PortiaStructure.severity = none
+dotnet_diagnostic.PORTIA211.severity = warning
+dotnet_diagnostic.PORTIA212.severity = warning
+```
+
+The diagnostics are enabled warnings by default. `TreatWarningsAsErrors` makes them build failures. Normal
 Roslyn severity configuration and deliberate suppressions apply. Existing Portia diagnostics
 retain their behavior regardless of this opt-in.
 
@@ -141,20 +167,49 @@ retain their behavior regardless of this opt-in.
 | PORTIA206 | Common/Core reference other application layers or known infrastructure adapters; Cassie connection setup occurs outside Api/Worker. | Move composition to a root; Core's Cassie repository API is allowed. |
 | PORTIA207 | Core component registration occurs outside its feature registration file. | Diagnostic names the destination file. |
 | PORTIA208 | An aggregate file exceeds 400 lines. | Compose smaller rule/state objects; choose the boundary deliberately. |
-| PORTIA209 | Common declares method, constructor, operator, or accessor bodies, computed properties, or method/factory initializers. | Move the behavior into Core. |
+| PORTIA209 | Common declares executable members, except construction of sealed record values in Values. | Move other behavior into Core. |
 | PORTIA210 | A request/event lacks a valid feature discriminator or explicit positive version. | Make an omitted default version explicit; never guess or change a wire identity. |
 | PORTIA211 | A command handler's implementation consists solely of throwing `NotImplementedException`. | Implement the operation or remove its surface. |
 | PORTIA212 | A query handler or reactor directly calls Portia aggregate hydration/execution APIs. | Query a repository, or send an authoritative command from the reactor. |
 | PORTIA213 | A production application project has an unsupported role. | Use Common, Core, Api, or Worker. |
 
+Constructors for sealed Common value records may validate, normalize, and initialize state. An analyzer cannot prove that arbitrary constructor callees are pure; known infrastructure dependencies remain subject to dependency diagnostics.
+
+That construction exemption is limited to `Values/`. Executable constructors in `Commands/` or
+`Models/` remain subject to PORTIA209. For contract input requiring normalization or validation,
+represent the validated datum as a sealed record value in `Values/` and compose it into the command
+or model, or perform operation-specific validation in Core. A total warning count alone does not
+establish which construction patterns were reported.
+
 Code actions name the exact change and use the IDE's normal preview. File actions decline existing
-destination files and linked files. Splitting declines nested types, file-local types, and
-preprocessor directives that require a semantic decision. Namespace changes use
+destination files and linked files. Splitting moves nested types with their owner and declines
+file-local types and conditional directives that require a semantic decision. File-leading
+`#nullable` and `#pragma warning` directives are copied to each split file. Namespace changes use
 [Roslyn's document namespace refactoring](https://source.dot.net/Microsoft.CodeAnalysis.Features/src/roslyn/src/Analyzers/Core/CodeFixes/MatchFolderAndNamespace/AbstractChangeNamespaceToMatchFolderCodeFixProvider.cs.html)
-to update references, and decline known destination conflicts. These actions are applied
-individually; no bulk file rearrangement is offered.
+to update references, and decline known destination conflicts and partial types spread across files.
+Fix All supports document, project, and solution scopes for these actions. File operations check
+for collisions among solution documents and existing files on disk.
+In the tested .NET 10 MSBuild workspace, adding documents also adds explicit `Compile` items that
+conflict with SDK default globs, while replacement renames did not take effect. PORTIA200 and
+PORTIA201 file fixes are therefore unavailable in that workspace; PORTIA202 can still be applied by
+`dotnet format`. In a host that supports file operations, the adoption order is:
+
+```sh
+dotnet format App.slnx --diagnostics PORTIA202
+# Reopen the solution.
+dotnet format App.slnx --diagnostics PORTIA200
+# Reopen the solution.
+dotnet format App.slnx --diagnostics PORTIA201
+```
+
+Repeat the sequence to confirm that no further changes are needed. The current MSBuild workspace
+cannot complete the PORTIA200/201 steps safely; resolve those IDs in a host that supports file
+creation and document replacement until the workspace behavior is fixed.
 
 Analyzer tests compile small application samples and exercise the diagnostics and code actions.
+Run `bash scripts/verify-namespace-fix.sh /tmp/portia-namespace-check 64` after a Release build to
+exercise PORTIA202 through the installed SDK's `dotnet format` host, with generated JSON constructor
+references, both namespace styles, compilation, and a second pass for idempotence.
 They are not repository structure tests. They do not establish business semantics, absence of
 indirection, production implementations/tests for every port, or a complete cross-project graph.
 Those remain review requirements, alongside authoritative outcome-validation behavior tests.

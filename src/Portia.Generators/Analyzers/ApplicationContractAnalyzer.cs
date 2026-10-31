@@ -14,10 +14,10 @@ namespace Cntryl.Portia;
 public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
 {
     static readonly DiagnosticDescriptor Behavior = new("PORTIA209", "Common declares executable behavior",
-        "Common member '{0}' declares executable behavior; keep business behavior in Core", "Portia", DiagnosticSeverity.Warning, true);
+        "Common member '{0}' declares executable behavior; keep business behavior in Core", "PortiaStructure", DiagnosticSeverity.Warning, true);
     static readonly DiagnosticDescriptor Discriminator = new("PORTIA210", "Contract requires an explicit feature discriminator",
         "Contract '{0}' needs [Discriminator(\"{1}.name\", version)] with two snake_case parts and an explicit positive schema version",
-        "Portia", DiagnosticSeverity.Warning, true);
+        "PortiaStructure", DiagnosticSeverity.Warning, true);
 
     static readonly Regex WireName = new("\\A[a-z][a-z0-9]*(?:_[a-z0-9]+)*\\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*\\z",
         RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
@@ -34,7 +34,7 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
         {
             if (ApplicationProject.From(start.Options.AnalyzerConfigOptionsProvider) is not { Role: "Common", IsTest: false } project)
                 return;
-            start.RegisterSyntaxNodeAction(AnalyzeBehavior, SyntaxKind.MethodDeclaration, SyntaxKind.ConstructorDeclaration,
+            start.RegisterSyntaxNodeAction(node => AnalyzeBehavior(node, project), SyntaxKind.MethodDeclaration, SyntaxKind.ConstructorDeclaration,
                 SyntaxKind.DestructorDeclaration, SyntaxKind.OperatorDeclaration, SyntaxKind.ConversionOperatorDeclaration,
                 SyntaxKind.PropertyDeclaration, SyntaxKind.IndexerDeclaration, SyntaxKind.EventDeclaration,
                 SyntaxKind.FieldDeclaration, SyntaxKind.EventFieldDeclaration);
@@ -42,8 +42,15 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
         });
     }
 
-    static void AnalyzeBehavior(SyntaxNodeAnalysisContext context)
+    static void AnalyzeBehavior(SyntaxNodeAnalysisContext context, ApplicationProject project)
     {
+        var path = project.RelativePath(context.Node.SyntaxTree);
+        if (context.Node is ConstructorDeclarationSyntax valueConstructor
+            && !valueConstructor.Modifiers.Any(SyntaxKind.StaticKeyword)
+            && valueConstructor.Parent is RecordDeclarationSyntax record
+            && context.SemanticModel.GetDeclaredSymbol(record, context.CancellationToken) is { IsSealed: true, IsRecord: true }
+            && path.Length == 4 && path[0] == "Features" && path[2] == "Values")
+            return;
         var executable = context.Node switch
         {
             BaseMethodDeclarationSyntax method => method.Body is not null || method.ExpressionBody is not null,

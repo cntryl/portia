@@ -6,8 +6,16 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+### Migration
+
+- See the [processor migration guide](docs/migration-unreleased-processors.md) for handler
+  outcomes, typed projector contexts, processor failures, and dependency updates.
+
 ### Fixed
 
+- Fix application structure diagnostics for top-level types, generic filenames, ownership,
+  registration reporting, and value construction. Add scoped Fix All support where the host can
+  safely apply the requested changes.
 - Reload operational state after a competing Fitz transaction rejects an operator write, preserving
   current plan and approval checks while allowing cancellation during conflict recovery.
 - Count Fitz Wire 2 frames in the append benchmark and record the client package version.

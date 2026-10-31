@@ -11,6 +11,199 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ApplicationStructureCodeFixTests
 {
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ShouldRegenerateConstructorReferencesGivenNamespaceFix(bool fixAll, bool blockNamespace)
+    {
+        using var workspace = new AdhocWorkspace();
+        var source = blockNamespace ? "namespace Old { public sealed record Price(string Value); }"
+            : "namespace Old; public sealed record Price(string Value);";
+        var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs", source);
+        Assert.True(workspace.TryApplyChanges(document.Project.AddAnalyzerReference(new GeneratedConstructorReference()).Solution));
+        document = workspace.CurrentSolution.GetDocument(document.Id)!;
+        Assert.Single(await document.Project.GetSourceGeneratedDocumentsAsync());
+        CodeAction action;
+        if (fixAll)
+        {
+            var provider = new ApplicationStructureCodeFixProvider();
+            var context = new FixAllContext(document, provider, FixAllScope.Solution, "Portia.SyncApplicationNamespace",
+                ["PORTIA202"], new StructureDiagnosticProvider(), CancellationToken.None);
+            action = (await provider.GetFixAllProvider()!.GetFixAsync(context))!;
+            Assert.NotNull(action);
+        }
+        else
+        {
+            var (actions, _) = await ActionsAsync(document, "PORTIA202");
+            action = Assert.Single(actions);
+        }
+        var solution = await ApplyAsync(action);
+        var project = solution.GetProject(document.Project.Id)!;
+        await AssertCompilesAsync(project);
+        Assert.Contains("namespace Shop.Core.Features.Orders.Values", (await solution.GetDocument(document.Id)!.GetTextAsync()).ToString(), StringComparison.Ordinal);
+        var generated = Assert.Single(await project.GetSourceGeneratedDocumentsAsync());
+        Assert.Contains("new global::Shop.Core.Features.Orders.Values.Price", (await generated.GetTextAsync()).ToString(), StringComparison.Ordinal);
+    }
+
+    sealed class GeneratedConstructorReference : AnalyzerReference
+    {
+        readonly ImmutableArray<ISourceGenerator> _generators = [new ConstructorGenerator().AsSourceGenerator()];
+        public override string? FullPath => null;
+        public override object Id => this;
+        public override ImmutableArray<DiagnosticAnalyzer> GetAnalyzers(string language) => [];
+        public override ImmutableArray<DiagnosticAnalyzer> GetAnalyzersForAllLanguages() => [];
+        public override ImmutableArray<ISourceGenerator> GetGenerators(string language) => _generators;
+    }
+
+    sealed class ConstructorGenerator : IIncrementalGenerator
+    {
+        public void Initialize(IncrementalGeneratorInitializationContext context)
+        {
+            var type = context.CompilationProvider.Select(static (compilation, ct) => compilation
+                .GetSymbolsWithName("Price", SymbolFilter.Type, ct).OfType<INamedTypeSymbol>().Single()
+                .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+            context.RegisterSourceOutput(type, static (output, name) => output.AddSource("GeneratedUse.g.cs",
+                "internal static class GeneratedUse { public static object Create() => new " + name + "(\"generated\"); }"));
+        }
+    }
+
+    [Fact]
+    public async Task ShouldAllowMatchingDestinationNameInAnotherProject()
+    {
+        using var workspace = new AdhocWorkspace();
+        var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Wrong.cs",
+            "namespace Shop.Core.Features.Orders.Values; public record Price;");
+        _ = AddDocument(workspace, "Other.Core", "Features/Orders/Values/Price.cs",
+            "namespace Other.Core.Features.Orders.Values; public record Price;");
+        document = workspace.CurrentSolution.GetDocument(document.Id)!;
+        var diagnostics = await DiagnosticsAsync(document, new ApplicationStructureAnalyzer());
+        var actions = new List<CodeAction>();
+        await new ApplicationStructureCodeFixProvider().RegisterCodeFixesAsync(new CodeFixContext(document,
+            diagnostics.Single(item => item.Id == "PORTIA201"), (action, _) => actions.Add(action), CancellationToken.None));
+        var solution = await ApplyAsync(Assert.Single(actions));
+        Assert.Equal("Price.cs", solution.GetDocument(document.Id)!.Name);
+    }
+
+    [Theory]
+    [InlineData(FixAllScope.Document)]
+    [InlineData(FixAllScope.Project)]
+    [InlineData(FixAllScope.Solution)]
+    public async Task ShouldSplitEveryTopLevelTypeGivenFixAll(FixAllScope scope)
+    {
+        using var workspace = new AdhocWorkspace();
+        const string source = "namespace Shop.Core.Features.Orders.Values; public record Price { private class Fixture; } public record Currency; public record Tax;";
+        var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs", source);
+        var provider = new ApplicationStructureCodeFixProvider();
+        var context = new FixAllContext(document, provider, scope, "Portia.MoveApplicationType", ["PORTIA200"],
+            new StructureDiagnosticProvider(), CancellationToken.None);
+        var action = await provider.GetFixAllProvider()!.GetFixAsync(context);
+        Assert.NotNull(action);
+        var solution = await ApplyAsync(action);
+        var project = solution.GetProject(document.Project.Id)!;
+        Assert.Equal(["Currency.cs", "Price.cs", "Tax.cs"], project.Documents.Select(item => item.Name).OrderBy(name => name));
+        Assert.Contains("class Fixture", (await solution.GetDocument(document.Id)!.GetTextAsync()).ToString(), StringComparison.Ordinal);
+        await AssertCompilesAsync(project);
+        foreach (var item in project.Documents)
+            Assert.DoesNotContain(await DiagnosticsAsync(item, new ApplicationStructureAnalyzer()), item => item.Id == "PORTIA200");
+    }
+
+    [Theory]
+    [InlineData(FixAllScope.Document)]
+    [InlineData(FixAllScope.Project)]
+    [InlineData(FixAllScope.Solution)]
+    public async Task ShouldRenameEveryMisnamedFileGivenFixAll(FixAllScope scope)
+    {
+        using var workspace = new AdhocWorkspace();
+        var first = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Page.cs",
+            "namespace Shop.Core.Features.Orders.Values; public record Page<T>(T Value);");
+        var second = first.Project.AddDocument("Pair.cs",
+            "namespace Shop.Core.Features.Orders.Values; public record Pair<T, U>(T First, U Second);",
+            first.Folders, "/workspace/Shop.Core/Features/Orders/Values/Pair.cs");
+        Assert.True(workspace.TryApplyChanges(second.Project.Solution));
+        first = workspace.CurrentSolution.GetDocument(first.Id)!;
+        var provider = new ApplicationStructureCodeFixProvider();
+        var context = new FixAllContext(first, provider, scope, "Portia.RenameApplicationFile", ["PORTIA201"],
+            new StructureDiagnosticProvider(), CancellationToken.None);
+
+        var action = await provider.GetFixAllProvider()!.GetFixAsync(context);
+        Assert.NotNull(action);
+        var solution = await ApplyAsync(action);
+
+        var project = solution.GetProject(first.Project.Id)!;
+        string[] expectedNames = scope == FixAllScope.Document ? ["PageOfT.cs", "Pair.cs"]
+            : ["PageOfT.cs", "PairOfT2.cs"];
+        Assert.Equal(expectedNames, project.Documents.Select(document => document.Name)
+            .OrderBy(name => name, StringComparer.Ordinal));
+        var remaining = scope == FixAllScope.Document ? "Pair.cs" : null;
+        foreach (var document in project.Documents)
+        {
+            var diagnostics = await DiagnosticsAsync(document, new ApplicationStructureAnalyzer());
+            if (document.Name == remaining)
+                Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA201");
+            else
+                Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA201");
+        }
+        await AssertCompilesAsync(project);
+    }
+
+    [Theory]
+    [InlineData(FixAllScope.Document)]
+    [InlineData(FixAllScope.Project)]
+    [InlineData(FixAllScope.Solution)]
+    public async Task ShouldSyncNamespacesGivenFixAll(FixAllScope scope)
+    {
+        using var workspace = new AdhocWorkspace();
+        var first = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs", "namespace Old; public record Price;");
+        var second = first.Project.AddDocument("Currency.cs", "namespace Old; public record Currency;", first.Folders,
+            "/workspace/Shop.Core/Features/Orders/Values/Currency.cs");
+        Assert.True(workspace.TryApplyChanges(second.Project.Solution));
+        first = workspace.CurrentSolution.GetDocument(first.Id)!;
+        var provider = new ApplicationStructureCodeFixProvider();
+        var context = new FixAllContext(first, provider, scope, "Portia.SyncApplicationNamespace", ["PORTIA202"],
+            new StructureDiagnosticProvider(), CancellationToken.None);
+
+        var action = await provider.GetFixAllProvider()!.GetFixAsync(context);
+        Assert.NotNull(action);
+        var solution = await ApplyAsync(action);
+
+        var project = solution.GetProject(first.Project.Id)!;
+        foreach (var document in project.Documents)
+        {
+            var text = (await document.GetTextAsync()).ToString();
+            var diagnostics = await DiagnosticsAsync(document, new ApplicationStructureAnalyzer());
+            if (scope == FixAllScope.Document && document.Name == "Currency.cs")
+            {
+                Assert.Contains("namespace Old", text, StringComparison.Ordinal);
+                Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA202");
+            }
+            else
+            {
+                Assert.Contains("namespace Shop.Core.Features.Orders.Values", text, StringComparison.Ordinal);
+                Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA202");
+            }
+        }
+        await AssertCompilesAsync(project);
+    }
+
+    sealed class StructureDiagnosticProvider : FixAllContext.DiagnosticProvider
+    {
+        public override async Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(Document document, CancellationToken cancellationToken) =>
+            await DiagnosticsAsync(document, new ApplicationStructureAnalyzer());
+
+        public override Task<IEnumerable<Diagnostic>> GetProjectDiagnosticsAsync(Project project, CancellationToken cancellationToken) =>
+            Task.FromResult(Enumerable.Empty<Diagnostic>());
+
+        public override async Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(Project project, CancellationToken cancellationToken)
+        {
+            var diagnostics = new List<Diagnostic>();
+            foreach (var document in project.Documents)
+                diagnostics.AddRange(await GetDocumentDiagnosticsAsync(document, cancellationToken));
+            return diagnostics;
+        }
+    }
+
+    [Theory]
     [InlineData("namespace Shop.Core.Features.Orders.Values;\n")]
     [InlineData("namespace Shop.Core.Features.Orders.Values\n{\n")]
     public async Task ShouldMoveTypeAndPreserveReferencesGivenSiblingTypes(string namespaceHeader)
@@ -193,7 +386,6 @@ public sealed class ApplicationStructureCodeFixTests
     }
 
     [Theory]
-    [InlineData("public class Outer { public class Nested; }")]
     [InlineData("file class Local; public class Other;")]
     [InlineData("#if true\npublic class First; public class Second;\n#endif")]
     public async Task ShouldDeclineSplitGivenScopeOrDirectiveDecision(string source)
@@ -207,6 +399,23 @@ public sealed class ApplicationStructureCodeFixTests
 
         // Assert
         Assert.Empty(actions);
+    }
+
+    [Theory]
+    [InlineData("#nullable enable\n")]
+    [InlineData("#pragma warning disable CS1591\n")]
+    public async Task ShouldPreserveSimpleFileDirectiveGivenSplit(string directive)
+    {
+        using var workspace = new AdhocWorkspace();
+        var source = directive + "namespace Shop.Core.Features.Orders.Values; public record Price; public record Currency;";
+        var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs", source);
+
+        var (actions, _) = await ActionsAsync(document, "PORTIA200");
+        var solution = await ApplyAsync(Assert.Single(actions));
+
+        var moved = Assert.Single(solution.GetProject(document.Project.Id)!.Documents, item => item.Name == "Currency.cs");
+        Assert.StartsWith(directive, (await moved.GetTextAsync()).ToString(), StringComparison.Ordinal);
+        await AssertCompilesAsync(solution.GetProject(document.Project.Id)!);
     }
 
     [Theory]
@@ -228,6 +437,63 @@ public sealed class ApplicationStructureCodeFixTests
         // Assert
         Assert.Empty(actions);
         Assert.Equal(2, workspace.CurrentSolution.GetProject(document.Project.Id)!.DocumentIds.Count);
+    }
+
+    [Fact]
+    public async Task ShouldDeclineSplitGivenDestinationFileOutsideSolution()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "portia-codefix-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(directory, "Currency.cs"), "public record Existing;");
+            using var workspace = new AdhocWorkspace();
+            var project = workspace.AddProject(ProjectInfo.Create(ProjectId.CreateNewId(), VersionStamp.Create(),
+                    "Shop.Core", "Shop.Core", LanguageNames.CSharp).WithDefaultNamespace("Shop.Core"))
+                .WithParseOptions(new CSharpParseOptions(LanguageVersion.Preview))
+                .WithCompilationOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
+                .AddMetadataReferences(((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+                    .Select(file => MetadataReference.CreateFromFile(file)));
+            var document = project.AddDocument("Price.cs", SourceText.From(
+                "namespace Shop.Core.Features.Orders.Values; public record Price; public record Currency;"),
+                ["Features", "Orders", "Values"], Path.Combine(directory, "Price.cs"));
+            Assert.True(workspace.TryApplyChanges(document.Project.Solution));
+
+            var (actions, _) = await ActionsAsync(workspace.CurrentSolution.GetDocument(document.Id)!, "PORTIA200");
+
+            Assert.Empty(actions);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ShouldLeaveRenameCycleUnchangedGivenFixAll()
+    {
+        using var workspace = new AdhocWorkspace();
+        var first = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Bar.cs",
+            "namespace Shop.Core.Features.Orders.Values; public record Foo;");
+        var second = first.Project.AddDocument("Foo.cs", "namespace Shop.Core.Features.Orders.Values; public record Bar;",
+            first.Folders, "/workspace/Shop.Core/Features/Orders/Values/Foo.cs");
+        Assert.True(workspace.TryApplyChanges(second.Project.Solution));
+        first = workspace.CurrentSolution.GetDocument(first.Id)!;
+        var provider = new ApplicationStructureCodeFixProvider();
+        var context = new FixAllContext(first, provider, FixAllScope.Project, "Portia.RenameApplicationFile",
+            ["PORTIA201"], new StructureDiagnosticProvider(), CancellationToken.None);
+
+        var action = await provider.GetFixAllProvider()!.GetFixAsync(context);
+        Assert.NotNull(action);
+        var solution = await ApplyAsync(action);
+
+        Assert.Equal(["Bar.cs", "Foo.cs"], solution.GetProject(first.Project.Id)!.Documents
+            .Select(document => document.Name).OrderBy(name => name, StringComparer.Ordinal));
+        Assert.Equal("namespace Shop.Core.Features.Orders.Values; public record Foo;",
+            (await solution.GetDocument(first.Id)!.GetTextAsync()).ToString());
+        foreach (var document in solution.GetProject(first.Project.Id)!.Documents)
+            Assert.Contains(await DiagnosticsAsync(document, new ApplicationStructureAnalyzer()),
+                diagnostic => diagnostic.Id == "PORTIA201");
     }
 
     [Fact]

@@ -39,6 +39,35 @@ public sealed class ApplicationContractAnalyzerTests
         Assert.Empty(diagnostics);
     }
 
+    [Fact]
+    public void ShouldAllowValueConstructionGivenSealedRecordInValues()
+    {
+        const string source = """
+                              namespace Shop.Common.Features.Orders.Values;
+                              public sealed record Price
+                              {
+                                  public decimal Amount { get; }
+                                  public Price(decimal amount) { if (amount < 0) throw new System.ArgumentOutOfRangeException(nameof(amount)); Amount = decimal.Round(amount, 2); }
+                                  public decimal Total() => Amount;
+                              }
+                              """;
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationContractAnalyzer(),
+            [("Features/Orders/Values/Price.cs", source)]);
+        var behavior = Assert.Single(diagnostics, item => item.Id == "PORTIA209");
+        Assert.Contains("Total", behavior.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("public record Price", "Features/Orders/Values/Price.cs")]
+    [InlineData("public sealed record Price", "Features/Orders/Models/Price.cs")]
+    [InlineData("public sealed class Price", "Features/Orders/Values/Price.cs")]
+    public void ShouldReportConstructorOutsideSealedValueRecord(string declaration, string path)
+    {
+        var source = $"{declaration} {{ public Price() {{ }} }}";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationContractAnalyzer(), [(path, source)]);
+        _ = Assert.Single(diagnostics, item => item.Id == "PORTIA209");
+    }
+
     [Theory]
     [InlineData("", "Commands", "IRequest")]
     [InlineData("[Discriminator(\"orders.place\")]", "Commands", "IRequest")]

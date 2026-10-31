@@ -3,6 +3,67 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ApplicationStructureAnalyzerTests
 {
     [Fact]
+    public void ShouldRejectRootHelperGivenJsonMarkerWithoutContextContract()
+    {
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [("Helper.cs", "using Cntryl.Portia; namespace Shop.Core; [PortiaJsonContext] public class Helper;")]);
+        Assert.Contains(diagnostics, item => item.Id == "PORTIA203");
+    }
+
+    [Fact]
+    public void ShouldAcceptProjectionRepositoryGivenExistingPersistenceContract()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Cntryl.Portia;
+            namespace Shop.Core.Features.Orders.Repositories;
+            public sealed class OrderRepository : IProjectionStore
+            {
+                public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default) => default;
+                public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default) => default;
+            }
+            """;
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Repositories/OrderRepository.cs", source)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA204");
+    }
+
+    [Fact]
+    public void ShouldExplainModelsGivenCommonEnumInValues()
+    {
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Values/Status.cs", "namespace Shop.Common.Features.Orders.Values; public enum Status { Pending, Complete }")]);
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
+        Assert.Contains("Models", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Common")]
+    [InlineData("Core")]
+    public void ShouldAcceptAssemblyJsonContextGivenRootCompositionFile(string role)
+    {
+        var source = $$"""
+            #nullable enable
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Cntryl.Portia;
+            namespace Shop.{{role}};
+            [PortiaJsonContext]
+            public sealed class ContractsJsonContext(JsonSerializerOptions options) : JsonSerializerContext(options)
+            {
+                protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """;
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop." + role, new ApplicationStructureAnalyzer(),
+            [("ContractsJsonContext.cs", source)]);
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
     public void ShouldReportAdditionalTypesGivenMultipleDeclarations()
     {
         // Arrange
@@ -18,7 +79,6 @@ public sealed class ApplicationStructureAnalyzerTests
     }
 
     [Theory]
-    [InlineData("class Price { public class Currency; }")]
     [InlineData("class Price; public delegate void Changed();")]
     [InlineData("class Price; public enum Currency { Usd }")]
     public void ShouldCountEveryTypeKindGivenAdditionalDeclaration(string declaration)
@@ -37,6 +97,9 @@ public sealed class ApplicationStructureAnalyzerTests
     [Theory]
     [InlineData("Price", "public record Price;", "")]
     [InlineData("PageOfT", "public record Page<T>;", "")]
+    [InlineData("PageOfT", "public record PageOfT<T>;", "")]
+    [InlineData("PairOfT2", "public record Pair<T, U>;", "")]
+    [InlineData("Page.Details", "public record Page;", "PORTIA201")]
     [InlineData("Page", "public record Page<T>;", "PORTIA201")]
     [InlineData("Prices", "public record Price;", "PORTIA201")]
     public void ShouldMatchFilenameGivenTypeAndArity(string filename, string declaration, string expected)
@@ -50,6 +113,16 @@ public sealed class ApplicationStructureAnalyzerTests
 
         // Assert
         Assert.Equal(expected.Length == 0 ? [] : new[] { expected }, diagnostics.Select(item => item.Id));
+    }
+
+    [Fact]
+    public void ShouldAcceptAspectFilenamesGivenActualPartialDeclarations()
+    {
+        const string declaration = "namespace Shop.Core.Features.Orders.Values; public partial record Page<T>;";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Values/PageOfT.cs", declaration),
+             ("Features/Orders/Values/PageOfT.Serialization.cs", declaration)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA201");
     }
 
     [Theory]
@@ -103,17 +176,102 @@ public sealed class ApplicationStructureAnalyzerTests
     }
 
     [Fact]
-    public void ShouldAllowCompositionGivenAggregateOwnedRule()
+    public void ShouldIgnoreNestedTypesGivenTopLevelOwner()
     {
-        // Arrange
-        const string source = "namespace Shop.Core.Features.Orders.Aggregates; public sealed class CancellationRule { public bool Allows(bool shipped) => !shipped; }";
+        const string source = "namespace Shop.Core.Tests; public class Price { private class Fixture; public enum Kind { One } }";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core.Tests", new ApplicationStructureAnalyzer(),
+            [("Price.cs", source)], isTest: true);
+        Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA200" or "PORTIA201");
+    }
 
-        // Act
+    [Fact]
+    public void ShouldRejectUnownedAggregateCollaborator()
+    {
+        const string source = "namespace Shop.Core.Features.Orders.Aggregates; public sealed class CancellationRule { public bool Allows(bool shipped) => !shipped; }";
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
             [("Features/Orders/Aggregates/CancellationRule.cs", source)]);
+        _ = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
+    }
 
-        // Assert
-        Assert.Empty(diagnostics);
+    [Fact]
+    public void ShouldAllowDirectlyReferencedAggregateCollaborator()
+    {
+        const string rule = "namespace Shop.Core.Features.Orders.Aggregates; public sealed class CancellationRule;";
+        const string aggregate = """
+                                 using Cntryl.Portia;
+                                 namespace Shop.Core.Features.Orders.Aggregates;
+                                 public sealed class Order(Uuid id, CancellationRule rule) : Aggregate(id, new EventStreamAddress("shop", "orders", id.ToString()));
+                                 """;
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Aggregates/CancellationRule.cs", rule), ("Features/Orders/Aggregates/Order.cs", aggregate)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA204");
+    }
+
+    [Fact]
+    public void ShouldAllowDataOnlyModelGivenAutoProperties()
+    {
+        const string source = "namespace Shop.Common.Features.Orders.Models; public sealed record OrderView(string Number);";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Models/OrderView.cs", source)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA204");
+    }
+
+    [Fact]
+    public void ShouldAllowEnumModelGivenConstantDataShape()
+    {
+        const string source = "namespace Shop.Common.Features.Orders.Models; public enum OrderState { New, Paid }";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Models/OrderState.cs", source)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA204");
+    }
+
+    [Theory]
+    [InlineData("public sealed class OrderView;")]
+    [InlineData("public sealed class OrderView { public static string Name { get; } }")]
+    public void ShouldRequireModelDataEvidenceGivenModelFolder(string declaration)
+    {
+        var source = $"namespace Shop.Common.Features.Orders.Models; {declaration}";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Models/OrderView.cs", source)]);
+        _ = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
+    }
+
+    [Theory]
+    [InlineData("public sealed class OrderView { public string Number => \"1\"; }")]
+    [InlineData("public sealed class OrderView { public void Normalize() { } }")]
+    [InlineData("public sealed class OrderView { public event System.Action? Changed; }")]
+    public void ShouldRejectExecutableModelShapeGivenModelFolder(string declaration)
+    {
+        var source = $"namespace Shop.Common.Features.Orders.Models; {declaration}";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Models/OrderView.cs", source)]);
+        _ = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
+    }
+
+    [Fact]
+    public void ShouldKeepOwnershipWithinFeatureGivenReferenceFromAnotherAggregate()
+    {
+        const string rule = "namespace Shop.Core.Features.Orders.Aggregates; public sealed class CancellationRule;";
+        const string aggregate = """
+                                 using Cntryl.Portia;
+                                 using Shop.Core.Features.Orders.Aggregates;
+                                 namespace Shop.Core.Features.Other.Aggregates;
+                                 public sealed class Other(Uuid id, CancellationRule rule) : Aggregate(id, new EventStreamAddress("shop", "other", id.ToString()));
+                                 """;
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Aggregates/CancellationRule.cs", rule), ("Features/Other/Aggregates/Other.cs", aggregate)]);
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
+        Assert.Contains("CancellationRule", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldRequireRepositoryContractInTheSameFeature()
+    {
+        const string contract = "namespace Shop.Core.Features.Orders.Ports; public interface IOrders;";
+        const string repository = "using Shop.Core.Features.Orders.Ports; namespace Shop.Core.Features.Orders.Repositories; public sealed class Orders : IOrders;";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Ports/IOrders.cs", contract), ("Features/Orders/Repositories/Orders.cs", repository)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA204");
     }
 
     [Fact]
@@ -233,9 +391,7 @@ public sealed class ApplicationStructureAnalyzerTests
     }
 
     [Theory]
-    [InlineData("Aggregates", "public class CancellationRule;", "CancellationRule")]
     [InlineData("Repositories", "public interface IOrders;", "IOrders")]
-    [InlineData("Repositories", "public class OrderRepository;", "OrderRepository")]
     [InlineData("Ports", "public interface IPaymentGateway;", "IPaymentGateway")]
     [InlineData("Values", "public readonly record struct Price(decimal Amount);", "Price")]
     public void ShouldAllowOwnedTypeGivenCorrectCoreFolder(string folder, string declaration, string name)

@@ -73,6 +73,36 @@ public sealed class ApplicationBoundaryAnalyzerTests
         Assert.All(diagnostics, item => Assert.Equal("PORTIA207", item.Id));
     }
 
+    [Fact]
+    public void ShouldGroupOnlyUnsuppressedRegistrationsGivenScopedPragma()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              namespace Shop.Core.Features.Orders;
+                              public static class Setup
+                              {
+                                  public static void Add(PortiaBuilder builder)
+                                  {
+                              #pragma warning disable PORTIA207
+                                      builder.AddRequestHandler<Handler>();
+                              #pragma warning restore PORTIA207
+                                      builder.AddRequestHandler<Handler>();
+                                      builder.AddRequestHandler<Handler>();
+                                  }
+                              }
+                              public class Handler : IRequestHandler<IRequest>
+                              {
+                                  public System.Threading.Tasks.ValueTask<Result> HandleAsync(IRequestContext<IRequest> context, System.Threading.CancellationToken ct) => System.Threading.Tasks.ValueTask.FromResult(Result.Success);
+                              }
+                              """;
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationBoundaryAnalyzer(),
+            [("Features/Orders/Handlers/Setup.cs", source)]);
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA207");
+        Assert.Contains("2 feature", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        Assert.Single(diagnostic.AdditionalLocations);
+        Assert.True(diagnostic.Location.SourceSpan.Start < diagnostic.AdditionalLocations[0].SourceSpan.Start);
+    }
+
     [Theory]
     [InlineData("Commands", "throw new System.NotImplementedException();", true)]
     [InlineData("Commands", "throw new System.InvalidOperationException();", false)]

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Cntryl.Portia.Cassie" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <ProjectReference Include="../../src/Portia.Cassie/Portia.Cassie.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
+  </ItemGroup>
+</Project>

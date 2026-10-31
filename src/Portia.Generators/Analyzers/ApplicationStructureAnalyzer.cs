@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 
@@ -10,24 +11,24 @@ namespace Cntryl.Portia;
 public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
 {
     static readonly DiagnosticDescriptor OneType = new("PORTIA200", "File declares multiple types",
-        "File '{0}' declares more than one type; put each type in its own file", "Portia", DiagnosticSeverity.Warning, true);
+        "File '{0}' declares more than one type; put each type in its own file", "PortiaStructure", DiagnosticSeverity.Warning, true);
     static readonly DiagnosticDescriptor FileName = new("PORTIA201", "Filename does not identify its type",
-        "Type '{0}' belongs in '{1}'; generic filenames use the OfT suffix", "Portia", DiagnosticSeverity.Warning, true);
+        "Type '{0}' belongs in '{1}'; generic filenames use the OfT suffix", "PortiaStructure", DiagnosticSeverity.Warning, true);
     static readonly DiagnosticDescriptor Namespace = new("PORTIA202", "Namespace does not follow folders",
-        "Type '{0}' belongs in namespace '{1}'", "Portia", DiagnosticSeverity.Warning, true);
+        "Type '{0}' belongs in namespace '{1}'", "PortiaStructure", DiagnosticSeverity.Warning, true);
     static readonly DiagnosticDescriptor FeaturePath = new("PORTIA203", "File is outside the closed feature layout",
-        "File '{0}' must use Features/{{Feature}}/{{Role}} or the single Core feature registration file; allowed roles: {1}",
-        "Portia", DiagnosticSeverity.Warning, true);
+        "File '{0}' is outside the feature layout; {1}",
+        "PortiaStructure", DiagnosticSeverity.Warning, true);
     static readonly DiagnosticDescriptor FolderRole = new("PORTIA204", "Type does not belong in its folder",
-        "Type '{0}' does not belong in '{1}'; {2}", "Portia", DiagnosticSeverity.Warning, true);
+        "Type '{0}' does not belong in '{1}'; {2}", "PortiaStructure", DiagnosticSeverity.Warning, true);
     static readonly DiagnosticDescriptor HandlerRequests = new("PORTIA205", "Handler handles multiple requests",
-        "Handler '{0}' handles more than one request; use one handler per command or query", "Portia", DiagnosticSeverity.Warning, true);
+        "Handler '{0}' handles more than one request; use one handler per command or query", "PortiaStructure", DiagnosticSeverity.Warning, true);
     static readonly DiagnosticDescriptor AggregateSize = new("PORTIA208", "Aggregate file exceeds the review budget",
         "Aggregate file '{0}' exceeds 400 lines; compose smaller rule or state objects to keep the aggregate reviewable",
-        "Portia", DiagnosticSeverity.Warning, true);
+        "PortiaStructure", DiagnosticSeverity.Warning, true);
     static readonly DiagnosticDescriptor ProjectRole = new("PORTIA213", "Unsupported application project role",
         "Application project '{0}' must end in .Common, .Core, .Api, or .Worker; mark test projects with IsTestProject",
-        "Portia", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+        "PortiaStructure", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     static readonly string[] CommonFolders = ["Commands", "Queries", "Events", "Models", "Values"];
     static readonly string[] CoreFolders =
@@ -52,25 +53,27 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                     Diagnostic.Create(ProjectRole, Location.None, project.Name)));
             }
 
-            start.RegisterSemanticModelAction(model => AnalyzeFile(model, project));
+            var ownership = new AggregateOwnershipIndex(start.Compilation, project);
+            start.RegisterSemanticModelAction(model => AnalyzeFile(model, project, ownership));
         });
     }
 
-    static void AnalyzeFile(SemanticModelAnalysisContext context, ApplicationProject project)
+    static void AnalyzeFile(SemanticModelAnalysisContext context, ApplicationProject project, AggregateOwnershipIndex ownership)
     {
         var tree = context.SemanticModel.SyntaxTree;
         var root = tree.GetRoot(context.CancellationToken);
-        var declarations = root.DescendantNodes().Where(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax).ToArray();
+        var declarations = root.DescendantNodes().Where(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax)
+            .Where(node => node.Parent is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax).ToArray();
         if (declarations.Length == 0)
             return;
         var path = project.RelativePath(tree);
         var filename = tree.FilePath.Replace('\\', '/').Split('/').Last();
-        var keeper = declarations.FirstOrDefault(declaration => DeclaredFilename(declaration) == filename) ?? declarations[0];
+        var keeper = declarations.FirstOrDefault(declaration => MatchesFilename(declaration, filename,
+            context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) as INamedTypeSymbol)) ?? declarations[0];
         foreach (var declaration in declarations.Where(declaration => declaration != keeper))
         {
             var type = context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) as INamedTypeSymbol;
-            var properties = ImmutableDictionary<string, string?>.Empty.Add("ExpectedFileName",
-                type?.Name + (type?.Arity > 0 ? "OfT" : "") + ".cs");
+            var properties = ImmutableDictionary<string, string?>.Empty.Add("ExpectedFileName", Filename(type));
             context.ReportDiagnostic(Diagnostic.Create(OneType, Identifier(declaration).GetLocation(), properties, filename));
         }
 
@@ -79,10 +82,19 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         var featureFile = path.Length == 4 && path[0] == "Features" && Array.IndexOf(folders, path[2]) >= 0;
         var registrationFile = project.Role == "Core" && path.Length == 3 && path[0] == "Features"
             && path[2] == path[1] + "PortiaExtensions.cs";
-        if (featureProject && path.Length != 0 && !featureFile && !registrationFile)
+        var assemblyContextFile = path.Length == 1 && declarations.All(declaration =>
+            context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is INamedTypeSymbol type
+            && type.GetAttributes().Any(attribute => attribute.AttributeClass is { } marker
+                && SymbolNames.Is(marker, "Cntryl.Portia.PortiaJsonContextAttribute"))
+            && JsonContextShape.UnsupportedReason(type) is null);
+        if (featureProject && path.Length != 0 && !featureFile && !registrationFile && !assemblyContextFile)
         {
-            context.ReportDiagnostic(Diagnostic.Create(FeaturePath, Identifier(declarations[0]).GetLocation(),
-                filename, string.Join(", ", folders)));
+            var detail = path.Length > 4 && path[0] == "Features" && Array.IndexOf(folders, path[2]) >= 0
+                ? $"role folder '{path[2]}' must be flat; split the feature instead of nesting it"
+                : path.Length >= 3 && path[0] == "Features"
+                    ? $"'{path[2]}' is not a supported role; allowed roles: {string.Join(", ", folders)}"
+                    : $"use Features/{{Feature}}/{{Role}}; allowed roles: {string.Join(", ", folders)}";
+            context.ReportDiagnostic(Diagnostic.Create(FeaturePath, Identifier(declarations[0]).GetLocation(), filename, detail));
         }
 
         foreach (var declaration in declarations)
@@ -91,8 +103,8 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             if (context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is not INamedTypeSymbol symbol)
                 continue;
             var identifier = Identifier(declaration);
-            var expectedFile = symbol.Name + (symbol.Arity > 0 ? "OfT" : "") + ".cs";
-            if (declarations.Length == 1 && filename != expectedFile)
+            var expectedFile = Filename(symbol);
+            if (declarations.Length == 1 && !MatchesFilename(declaration, filename, symbol))
             {
                 context.ReportDiagnostic(Diagnostic.Create(FileName, identifier.GetLocation(),
                     ImmutableDictionary<string, string?>.Empty.Add("ExpectedFileName", expectedFile), symbol.Name, expectedFile));
@@ -109,10 +121,12 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                 }
             }
 
-            if (featureProject && featureFile && !BelongsIn(symbol, path[2]))
+            if (featureProject && featureFile && !BelongsIn(symbol, path[2], project, path[1], ownership, context.CancellationToken))
             {
                 context.ReportDiagnostic(Diagnostic.Create(FolderRole, identifier.GetLocation(), symbol.Name,
-                    path[2], FolderResponsibility(path[2])));
+                    path[2], project.Role == "Common" && path[2] == "Values" && symbol.TypeKind == TypeKind.Enum
+                        ? "enums are data models; place this enum in the feature's Models folder"
+                        : FolderResponsibility(path[2])));
             }
             if (featureProject && registrationFile && (!symbol.IsStatic || symbol.Name != path[1] + "PortiaExtensions"))
             {
@@ -143,18 +157,34 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         _ => throw new ArgumentException("Expected a type declaration", nameof(declaration))
     };
 
-    static string DeclaredFilename(SyntaxNode declaration)
+    static string Filename(string name, int arity)
     {
-        var parameters = declaration switch
-        {
-            TypeDeclarationSyntax type => type.TypeParameterList,
-            DelegateDeclarationSyntax @delegate => @delegate.TypeParameterList,
-            _ => null
-        };
-        return Identifier(declaration).ValueText + (parameters is not null ? "OfT" : "") + ".cs";
+        var suffix = arity == 1 ? "OfT" : arity > 1 ? $"OfT{arity}" : "";
+        return name + (suffix.Length != 0 && !name.EndsWith(suffix, StringComparison.Ordinal) ? suffix : "") + ".cs";
     }
 
-    static bool BelongsIn(INamedTypeSymbol symbol, string folder)
+    static string Filename(INamedTypeSymbol? symbol) => symbol is null ? ".cs" : Filename(symbol.Name, symbol.Arity);
+
+    static bool MatchesFilename(SyntaxNode declaration, string filename, INamedTypeSymbol? symbol)
+    {
+        var arity = declaration switch
+        {
+            TypeDeclarationSyntax type => type.TypeParameterList?.Parameters.Count ?? 0,
+            DelegateDeclarationSyntax type => type.TypeParameterList?.Parameters.Count ?? 0,
+            _ => 0
+        };
+        var expected = Filename(Identifier(declaration).ValueText, arity);
+        if (filename == expected)
+            return true;
+        return declaration is TypeDeclarationSyntax typeDeclaration && symbol?.DeclaringSyntaxReferences.Length > 1
+            && typeDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword)
+            && filename.StartsWith(expected.Substring(0, expected.Length - 3) + ".", StringComparison.Ordinal)
+            && filename.EndsWith(".cs", StringComparison.Ordinal)
+            && filename.Length > expected.Length + 1;
+    }
+
+    static bool BelongsIn(INamedTypeSymbol symbol, string folder, ApplicationProject project, string feature,
+        AggregateOwnershipIndex ownership, CancellationToken ct)
     {
         var request = ApplicationProject.IsRequest(symbol);
         var domainEvent = ApplicationProject.DerivesFrom(symbol, "DomainEvent");
@@ -173,13 +203,116 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             "Reactors" => reactor && !handler && !projector,
             "Projectors" => projector && !handler && !reactor,
             "Authorization" => authorizer && !handler && !reactor && !projector,
-            // Rule/state collaborators are legitimate aggregate composition. Ownership, as opposed
-            // to a known misplaced framework component, needs review rather than a guessed marker.
-            "Aggregates" => aggregate || plain,
+            "Aggregates" => aggregate || plain && ownership.Contains(feature, symbol, ct),
             "Ports" => symbol.TypeKind == TypeKind.Interface && plain,
-            "Models" or "Repositories" or "Values" => plain,
+            "Models" => plain && IsDataOnly(symbol),
+            "Repositories" => plain && (symbol.TypeKind == TypeKind.Interface || IsRepository(symbol, project, feature)),
+            "Values" => plain && IsImmutableValue(symbol),
             _ => false
         };
+    }
+
+    static bool IsDataOnly(INamedTypeSymbol symbol)
+    {
+        if (symbol.TypeKind == TypeKind.Enum)
+            return symbol.DeclaringSyntaxReferences.Select(reference => reference.GetSyntax())
+                .OfType<EnumDeclarationSyntax>().All(declaration => declaration.Members.Count > 0);
+        if (symbol.TypeKind is not (TypeKind.Class or TypeKind.Struct)
+            || symbol.DeclaringSyntaxReferences.Length == 0)
+            return false;
+
+        var declarations = symbol.DeclaringSyntaxReferences.Select(reference => reference.GetSyntax())
+            .OfType<TypeDeclarationSyntax>().ToArray();
+        return declarations.Length > 0 && declarations.All(declaration => declaration.Members.All(member => member switch
+            {
+                FieldDeclarationSyntax field => field.Modifiers.Any(SyntaxKind.ConstKeyword)
+                    || !field.Modifiers.Any(SyntaxKind.StaticKeyword)
+                    && field.Declaration.Variables.All(variable => variable.Initializer is null),
+                PropertyDeclarationSyntax property => !property.Modifiers.Any(SyntaxKind.StaticKeyword)
+                    && property.ExpressionBody is null
+                    && property.Initializer is null
+                    && property.AccessorList is { Accessors.Count: > 0 } accessors
+                    && accessors.Accessors.All(accessor => accessor.Body is null && accessor.ExpressionBody is null),
+                _ => false
+            })) && declarations.Any(declaration => declaration.Members.Any(member =>
+                member is FieldDeclarationSyntax or PropertyDeclarationSyntax)
+                || declaration is RecordDeclarationSyntax { ParameterList.Parameters.Count: > 0 });
+    }
+
+    static bool IsImmutableValue(INamedTypeSymbol symbol) => symbol.IsRecord
+        && symbol.GetMembers().Where(member => !member.IsImplicitlyDeclared).All(member => member switch
+        {
+            IFieldSymbol field => field.IsConst || field.IsReadOnly,
+            IPropertySymbol property => property.SetMethod is null || property.SetMethod.IsInitOnly,
+            IMethodSymbol method => method.MethodKind is MethodKind.Constructor or MethodKind.StaticConstructor
+                or MethodKind.PropertyGet or MethodKind.PropertySet,
+            _ => true
+        });
+
+    static bool IsRepository(INamedTypeSymbol symbol, ApplicationProject project, string feature) =>
+        ApplicationProject.DerivesFrom(symbol, "CassieProjectionRepository")
+        || symbol.AllInterfaces.Any(iface => SymbolNames.Is(iface, "Cntryl.Portia.IProjectionStore")
+            || SymbolNames.Is(iface, "Cntryl.Portia.IProjectionCheckpointStore"))
+        || symbol.AllInterfaces.Any(iface => iface.DeclaringSyntaxReferences.Any(reference =>
+        {
+            var path = project.RelativePath(reference.SyntaxTree);
+            return path.Length >= 4 && path[0] == "Features" && path[1] == feature;
+        }));
+
+    sealed class AggregateOwnershipIndex(Compilation compilation, ApplicationProject project)
+    {
+        readonly object _gate = new();
+        ImmutableDictionary<string, ImmutableHashSet<INamedTypeSymbol>>? _byFeature;
+
+        public bool Contains(string feature, INamedTypeSymbol target, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            while (!Monitor.TryEnter(_gate, 50))
+                ct.ThrowIfCancellationRequested();
+            try
+            {
+                _byFeature ??= Build(ct);
+                return _byFeature.TryGetValue(feature, out var types) && types.Contains(target);
+            }
+            finally
+            {
+                Monitor.Exit(_gate);
+            }
+        }
+
+        ImmutableDictionary<string, ImmutableHashSet<INamedTypeSymbol>> Build(CancellationToken ct)
+        {
+            var features = new Dictionary<string, HashSet<INamedTypeSymbol>>(StringComparer.Ordinal);
+            foreach (var tree in compilation.SyntaxTrees)
+            {
+                ct.ThrowIfCancellationRequested();
+                var path = project.RelativePath(tree);
+                if (path.Length != 4 || path[0] != "Features" || path[2] != "Aggregates")
+                    continue;
+#pragma warning disable RS1030 // Ownership requires binding aggregate references in other source trees.
+                var model = compilation.GetSemanticModel(tree);
+#pragma warning restore RS1030
+                foreach (var declaration in tree.GetRoot(ct).DescendantNodes().OfType<TypeDeclarationSyntax>())
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (model.GetDeclaredSymbol(declaration, ct) is not INamedTypeSymbol aggregate
+                        || !ApplicationProject.DerivesFrom(aggregate, "Aggregate"))
+                        continue;
+                    if (!features.TryGetValue(path[1], out var types))
+                        features.Add(path[1], types = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default));
+                    foreach (var node in declaration.DescendantNodes().OfType<SimpleNameSyntax>())
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        var referenced = model.GetSymbolInfo(node, ct).Symbol;
+                        var type = referenced as INamedTypeSymbol ?? referenced?.ContainingType;
+                        if (type is not null)
+                            _ = types.Add(type.OriginalDefinition);
+                    }
+                }
+            }
+            return features.ToImmutableDictionary(pair => pair.Key,
+                pair => pair.Value.ToImmutableHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default), StringComparer.Ordinal);
+        }
     }
 
     static string FolderResponsibility(string folder) => folder switch

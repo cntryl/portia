@@ -54,6 +54,9 @@ jobs:
       - name: Build solution
         run: dotnet build Portia.slnx --configuration Release --no-restore
 
+      - name: Qualify namespace Fix All with generated constructor references
+        run: bash scripts/verify-namespace-fix.sh "$RUNNER_TEMP/portia-namespace-fix" 64
+
       - name: Qualify actual Prometheus dashboard queries
         run: scripts/qualify-prometheus.sh "$RUNNER_TEMP/portia-prometheus-evidence"
 
@@ -117,6 +120,14 @@ jobs:
             -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
           NUGET_PACKAGES="$RUNNER_TEMP/portia-projection-packages" dotnet run \
             --project smoke/Portia.ProjectionStore.PackageConsumer/Portia.ProjectionStore.PackageConsumer.csproj \
+            --configuration Release \
+            --no-restore \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-cassie-packages" dotnet restore \
+            smoke/Portia.Cassie.PackageConsumer/Portia.Cassie.PackageConsumer.csproj \
+            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
+          NUGET_PACKAGES="$RUNNER_TEMP/portia-cassie-packages" dotnet run \
+            --project smoke/Portia.Cassie.PackageConsumer/Portia.Cassie.PackageConsumer.csproj \
             --configuration Release \
             --no-restore \
             -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"

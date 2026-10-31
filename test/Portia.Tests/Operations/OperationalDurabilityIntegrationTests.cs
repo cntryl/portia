@@ -54,10 +54,12 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         }
         var failed = await StartWorkerAsync("blocked");
         Guid failedAttempt;
+        Guid failedOwner;
         await using (var client = await ConnectAsync())
         {
             var state = (await new FitzOperationalStore(client.Kv, Route).ReadAsync(Target))!;
             failedAttempt = Assert.Single(state.Attempts).Id;
+            failedOwner = state.OwnerSession;
             Assert.NotNull(state.Block);
             Assert.Equal(2, state.Attempts[0].Sources.Count);
             Assert.Single(await ReadAsync(Events(client), "effects"));
@@ -69,6 +71,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
             var journal = new FitzOperationalStore(client.Kv, Route);
             var persisted = (await journal.ReadAsync(Target))!;
             Assert.NotNull(persisted.Block);
+            Assert.Equal(failedOwner, persisted.OwnerSession);
             Assert.Equal(failedAttempt, Assert.Single(persisted.Attempts).Id);
             Assert.Equal(ProjectionCheckpoint.Start, await journal.LoadAsync(Target.Identity));
             Assert.Single(await ReadAsync(Events(client), "effects"));
@@ -76,7 +79,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
 
         // This process approves and queues the exact persisted plan. It is killed inside the
         // first replayed handler after the durable start and after observing the earlier effect.
-        var interrupted = await StartWorkerAsync("crash");
+        var interrupted = await StartWorkerAsync("crash", failedOwner);
         await KillAsync(interrupted);
         await RecreateBrokerAsync();
         _ = await StartWorkerAsync("recover");
@@ -105,7 +108,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         }
     }
 
-    async Task<Process> StartWorkerAsync(string mode)
+    async Task<Process> StartWorkerAsync(string mode, Guid? previousOwner = null)
     {
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         var assembly = Path.GetFullPath($"../../../../../test/Portia.Operations.TestWorker/bin/{configuration}/net10.0/Portia.Operations.TestWorker.dll", AppContext.BaseDirectory);
@@ -114,6 +117,8 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         start.ArgumentList.Add(assembly);
         start.ArgumentList.Add(mode);
         start.ArgumentList.Add(signal);
+        if (previousOwner is { } owner)
+            start.ArgumentList.Add(owner.ToString());
         start.Environment["FITZ_TEST_ENDPOINT"] = _endpoint.ToString();
         var child = Process.Start(start)!;
         _children.Add(child);
@@ -158,17 +163,26 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(StorageLeaseSeconds + 20));
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
         var ready = new UriBuilder(_endpoint) { Scheme = "http", Port = _endpoint.Port, Path = "/readyz" }.Uri;
-        while (true)
+        try
         {
-            try
+            while (true)
             {
-                using var response = await http.GetAsync(ready, deadline.Token);
-                if (response.IsSuccessStatusCode)
-                    return;
+                try
+                {
+                    using var response = await http.GetAsync(ready, deadline.Token);
+                    if (response.IsSuccessStatusCode)
+                        return;
+                }
+                catch (HttpRequestException) { }
+                catch (TaskCanceledException) when (!deadline.IsCancellationRequested) { }
+                await Task.Delay(100, deadline.Token);
             }
-            catch (HttpRequestException) { }
-            catch (TaskCanceledException) when (!deadline.IsCancellationRequested) { }
-            await Task.Delay(100, deadline.Token);
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+        {
+            throw new InvalidOperationException("Qualification broker did not become ready: "
+                + await DockerAsync("inspect", "--format", "{{json .State}}", _name)
+                + await DockerAsync("logs", _name));
         }
     }
 
