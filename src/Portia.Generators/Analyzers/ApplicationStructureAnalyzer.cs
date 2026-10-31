@@ -238,7 +238,8 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         if (symbol.Name.EndsWith("Action", StringComparison.Ordinal)
             && (symbol.TypeKind == TypeKind.Enum || symbol.IsRecord))
             return true;
-        if (!symbol.IsStatic || !symbol.Name.EndsWith("Actions", StringComparison.Ordinal))
+        if (!symbol.IsStatic || !(symbol.Name.EndsWith("Actions", StringComparison.Ordinal)
+            || symbol.Name.EndsWith("Operations", StringComparison.Ordinal)))
             return false;
         var members = symbol.GetMembers().Where(member => !member.IsImplicitlyDeclared).ToArray();
         return members.Length > 0 && members.All(member => member is IFieldSymbol
@@ -329,7 +330,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         "Values" => "immutable record values belong here",
         "Execution" => "execution coordination and behavior helpers belong here",
         "Sources" => "feature source helpers belong here",
-        "Actions" => "feature action types belong here",
+        "Actions" => "feature action types and operation catalogs belong here",
         "Errors" => "feature error factories belong here",
         "Serialization" => "source-generated JSON contexts belong here",
         _ => "move framework component roles to the folder that owns them"
