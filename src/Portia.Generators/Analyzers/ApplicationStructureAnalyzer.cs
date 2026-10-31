@@ -364,7 +364,8 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                     foreach (var node in declaration.DescendantNodes().OfType<SimpleNameSyntax>())
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        var referenced = model.GetSymbolInfo(node, cancellationToken).Symbol;
+                        var referenced = model.GetAliasInfo(node, cancellationToken)?.Target
+                            ?? model.GetSymbolInfo(node, cancellationToken).Symbol;
                         var type = referenced as INamedTypeSymbol ?? referenced?.ContainingType;
                         if (type is not null)
                             _ = types.Add(type.OriginalDefinition);

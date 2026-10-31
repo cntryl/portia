@@ -283,8 +283,9 @@ public sealed class ApplicationStructureAnalyzerTests
         const string collaborator = "namespace Shop.Core.Features.Orders.Aggregates; public sealed class CancellationRule { public bool Allows(bool shipped) => !shipped; }";
         const string aggregate = """
                                  using Cntryl.Portia;
+                                 using Rule = Shop.Core.Features.Orders.Aggregates.CancellationRule;
                                  namespace Shop.Core.Features.Orders.Aggregates;
-                                 public sealed class Order(Uuid id, CancellationRule rule) : Aggregate(id, new EventStreamAddress("shop", "orders", id.ToString()));
+                                 public sealed class Order(Uuid id, Rule rule) : Aggregate(id, new EventStreamAddress("shop", "orders", id.ToString()));
                                  """;
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
             [("Features/Orders/Aggregates/CancellationRule.cs", collaborator), ("Features/Orders/Aggregates/Order.cs", aggregate)]);
