@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Text;
 
 namespace Cntryl.Portia;
 
@@ -30,62 +29,48 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var requests = context.SyntaxProvider
-            .CreateSyntaxProvider(
+        var analyses = context.SyntaxProvider.CreateSyntaxProvider(
                 static (node, _) => RequestTransportDiscovery.IsCandidate(node),
-                static (syntaxContext, _) => RequestTransportDiscovery.GetRequestTransportComponent(syntaxContext))
-            .Where(static request => request is not null)
-            .Select(static (request, _) => request!)
-            .WithTrackingName("PortiaRequestTransports")
-            .Collect();
-        var invalidDiscriminators = context.SyntaxProvider
-            .CreateSyntaxProvider(
-                static (node, _) => RequestTransportDiscovery.IsCandidate(node),
-                static (syntaxContext, _) => RequestTransportDiscovery.GetInvalidRequestDiscriminator(syntaxContext))
-            .Where(static model => model is not null)
-            .Select(static (model, _) => model!)
-            .WithTrackingName("PortiaInvalidRequestDiscriminators")
-            .Collect();
+                static (syntaxContext, ct) => RequestTransportDiscovery.Analyze(syntaxContext, ct))
+            .Where(static analysis => analysis is not null)
+            .Select(static (analysis, _) => analysis!);
+        var requests = analyses.Select(static (analysis, _) => analysis.Component)
+            .Where(static model => model is not null).Select(static (model, _) => model!)
+            .WithTrackingName("PortiaRequestTransports").Collect();
+        var duplicateCandidates = analyses.Select(static (analysis, _) => analysis.DuplicateCandidate)
+            .Where(static model => model is not null).Select(static (model, _) => model!)
+            .WithTrackingName("PortiaRequestTransportLocations").Collect();
+        context.RegisterSourceOutput(duplicateCandidates, static (sourceContext, candidates) =>
+            ReportDuplicateDiscriminators(sourceContext, candidates));
+        var invalidDiscriminators = analyses.Select(static (analysis, _) => analysis.Discriminator)
+            .Where(static model => model is not null).Select(static (model, _) => model!)
+            .WithTrackingName("PortiaInvalidRequestDiscriminators").Collect();
         context.RegisterSourceOutput(invalidDiscriminators, static (sourceContext, invalid) =>
         {
             foreach (var model in invalid)
                 sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidDiscriminator, model.Location.ToLocation(),
                     model.TypeName));
         });
-        var invalidRoutes = context.SyntaxProvider
-            .CreateSyntaxProvider(
-                static (node, _) => RequestTransportDiscovery.IsCandidate(node),
-                static (syntaxContext, _) => RequestTransportDiscovery.GetInvalidRoute(syntaxContext))
-            .Where(static model => model is not null)
-            .Select(static (model, _) => model!)
-            .WithTrackingName("PortiaInvalidRequestRoutes")
-            .Collect();
+        var invalidRoutes = analyses.Select(static (analysis, _) => analysis.Route)
+            .Where(static model => model is not null).Select(static (model, _) => model!)
+            .WithTrackingName("PortiaInvalidRequestRoutes").Collect();
         context.RegisterSourceOutput(invalidRoutes, static (sourceContext, invalid) =>
         {
             foreach (var model in invalid)
                 sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidRoute, model.Location.ToLocation(),
                     model.TypeName, model.Segment));
         });
-        var invalidTransportIds = context.SyntaxProvider
-            .CreateSyntaxProvider(
-                static (node, _) => RequestTransportDiscovery.IsCandidate(node),
-                static (syntaxContext, _) => RequestTransportDiscovery.GetInvalidTransportId(syntaxContext))
-            .Where(static model => model is not null)
-            .Select(static (model, _) => model!)
-            .WithTrackingName("PortiaInvalidRequestTransportIds")
-            .Collect();
+        var invalidTransportIds = analyses.Select(static (analysis, _) => analysis.TransportId)
+            .Where(static model => model is not null).Select(static (model, _) => model!)
+            .WithTrackingName("PortiaInvalidRequestTransportIds").Collect();
         context.RegisterSourceOutput(invalidTransportIds, static (sourceContext, invalid) =>
         {
             foreach (var model in invalid)
                 sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidTransportId, model.Location.ToLocation(),
                     model.TypeName, model.Id));
         });
-        var inaccessibleRequests = context.SyntaxProvider
-            .CreateSyntaxProvider(
-                static (node, _) => RequestTransportDiscovery.IsCandidate(node),
-                static (syntaxContext, _) => RequestTransportDiscovery.GetInaccessibleRequest(syntaxContext))
-            .Where(static model => model is not null)
-            .Select(static (model, _) => model!)
+        var inaccessibleRequests = analyses.Select(static (analysis, _) => analysis.Inaccessible)
+            .Where(static model => model is not null).Select(static (model, _) => model!)
             .Collect();
         context.RegisterSourceOutput(inaccessibleRequests, static (sourceContext, inaccessible) =>
         {
@@ -123,20 +108,18 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
             .Select(group => group.First())
             .OrderBy(request => request.TypeName, StringComparer.Ordinal)
             .ToArray();
-        foreach (var group in ordered.GroupBy(request => (request.DiscriminatorName, request.DiscriminatorVersion)))
-        {
-            var declarations = group.OrderBy(request => request.Location.Path, StringComparer.Ordinal)
-                .ThenBy(request => request.Location.SpanStart).ToArray();
-            var original = declarations[0];
-            foreach (var duplicate in declarations.Skip(1))
-            {
-                context.ReportDiagnostic(Diagnostic.Create(DuplicateDiscriminator, duplicate.Location.ToLocation(),
-                    Display(original.TypeName), Display(duplicate.TypeName), group.Key.DiscriminatorName,
-                    group.Key.DiscriminatorVersion));
-            }
-        }
-
         var names = GeneratedRegistrationNames.Resolve(ordered.Select(request => request.TypeName).Concat(components));
+
+        foreach (var group in GeneratedSource.Buckets(ordered, request => request.TypeName, context.CancellationToken))
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+            GenerateGroup(context, group.Items, names, group.Key);
+        }
+    }
+
+    static void GenerateGroup(SourceProductionContext context, RequestTransportComponent[] ordered,
+        Dictionary<string, string> names, string bucket)
+    {
 
         var source = new StringBuilder()
             .AppendLine("// <auto-generated />")
@@ -147,6 +130,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
 
         foreach (var request in ordered)
         {
+            context.CancellationToken.ThrowIfCancellationRequested();
             _ = source.Append("    /// <summary>Registers the transports <see cref=\"")
                 .Append(request.TypeName.StartsWith("global::", StringComparison.Ordinal)
                     ? request.TypeName.Substring(8)
@@ -162,8 +146,29 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         }
 
         _ = source.AppendLine("}");
-        context.AddSource("PortiaGeneratedServiceCollectionExtensions.g.cs",
-            SourceText.From(source.ToString(), Encoding.UTF8));
+        GeneratedSource.Add(context, "PortiaGeneratedServiceCollectionExtensions" + (bucket.Length == 0 ? string.Empty : "." + bucket) + ".g.cs",
+            source.ToString());
+    }
+
+    static void ReportDuplicateDiscriminators(SourceProductionContext context,
+        ImmutableArray<RequestTransportDiscovery.DuplicateDiscriminatorCandidate> candidates)
+    {
+        var ordered = candidates.GroupBy(candidate => candidate.TypeName, StringComparer.Ordinal)
+            .Select(group => group.OrderBy(candidate => candidate.Location.Path, StringComparer.Ordinal)
+                .ThenBy(candidate => candidate.Location.SpanStart).First())
+            .OrderBy(candidate => candidate.TypeName, StringComparer.Ordinal).ToArray();
+        foreach (var group in ordered.GroupBy(candidate => (candidate.DiscriminatorName, candidate.DiscriminatorVersion)))
+        {
+            var declarations = group.OrderBy(candidate => candidate.Location.Path, StringComparer.Ordinal)
+                .ThenBy(candidate => candidate.Location.SpanStart).ToArray();
+            var original = declarations[0];
+            foreach (var duplicate in declarations.Skip(1))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(DuplicateDiscriminator, duplicate.Location.ToLocation(),
+                    Display(original.TypeName), Display(duplicate.TypeName), group.Key.DiscriminatorName,
+                    group.Key.DiscriminatorVersion));
+            }
+        }
     }
 
     static string Display(string typeName) => typeName.StartsWith("global::", StringComparison.Ordinal)

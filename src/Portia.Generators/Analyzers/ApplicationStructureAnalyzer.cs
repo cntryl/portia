@@ -198,7 +198,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         return folder switch
         {
             "Commands" or "Queries" => request && !component && !domainEvent,
-            "Events" => domainEvent && !component,
+            "Events" => domainEvent && !component || feature == "Platform" && ApplicationProject.IsDomainEventCatalogAdapter(symbol),
             "Handlers" => handler && !reactor && !projector,
             "Reactors" => reactor && !handler && !projector,
             "Projectors" => projector && !handler && !reactor,
@@ -214,6 +214,18 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
 
     static bool IsDataOnly(INamedTypeSymbol symbol)
     {
+        if (symbol.TypeKind == TypeKind.Interface)
+        {
+            var interfaces = symbol.DeclaringSyntaxReferences.Select(reference => reference.GetSyntax())
+                .OfType<InterfaceDeclarationSyntax>().ToArray();
+            return interfaces.Length > 0 && interfaces.All(declaration => declaration.Members.All(member =>
+                member is PropertyDeclarationSyntax property
+                    && property.ExpressionBody is null
+                    && property.AccessorList is { Accessors.Count: > 0 } accessors
+                    && accessors.Accessors.All(accessor => accessor.Keyword.IsKind(SyntaxKind.GetKeyword)
+                        && accessor.Body is null && accessor.ExpressionBody is null)));
+        }
+
         if (symbol.TypeKind == TypeKind.Enum)
             return symbol.DeclaringSyntaxReferences.Select(reference => reference.GetSyntax())
                 .OfType<EnumDeclarationSyntax>().All(declaration => declaration.Members.Count > 0);
@@ -233,6 +245,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                     && property.Initializer is null
                     && property.AccessorList is { Accessors.Count: > 0 } accessors
                     && accessors.Accessors.All(accessor => accessor.Body is null && accessor.ExpressionBody is null),
+                MethodDeclarationSyntax method => IsToStringOverride(method),
                 _ => false
             })) && declarations.Any(declaration => declaration.Members.Any(member =>
                 member is FieldDeclarationSyntax or PropertyDeclarationSyntax)
@@ -245,10 +258,15 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             IFieldSymbol field => field.IsConst || field.IsReadOnly,
             IPropertySymbol property => property.SetMethod is null || property.SetMethod.IsInitOnly,
             IMethodSymbol method => method.MethodKind is MethodKind.Constructor or MethodKind.StaticConstructor
-                or MethodKind.PropertyGet or MethodKind.PropertySet,
+                or MethodKind.PropertyGet or MethodKind.PropertySet
+                || method.MethodKind == MethodKind.Ordinary && method.DeclaredAccessibility == Accessibility.Private
+                || method.MethodKind == MethodKind.Ordinary && method.IsOverride && method.Name == nameof(ToString)
+                    && method.ReturnType.SpecialType == SpecialType.System_String && method.Parameters.Length == 0,
             _ => true
         });
 
+    static bool IsToStringOverride(MethodDeclarationSyntax method) => method.Modifiers.Any(SyntaxKind.OverrideKeyword)
+        && method.Identifier.ValueText == nameof(ToString) && method.ParameterList.Parameters.Count == 0;
     static bool IsRepository(INamedTypeSymbol symbol, ApplicationProject project, string feature) =>
         ApplicationProject.DerivesFrom(symbol, "CassieProjectionRepository")
         || symbol.AllInterfaces.Any(iface => SymbolNames.Is(iface, "Cntryl.Portia.IProjectionStore")
@@ -318,7 +336,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
     static string FolderResponsibility(string folder) => folder switch
     {
         "Commands" or "Queries" => "only request contracts belong here",
-        "Events" => "only domain event contracts belong here",
+        "Events" => "domain event contracts and their generated catalog adapter belong here",
         "Handlers" => "only request handlers belong here",
         "Reactors" => "only reactors belong here",
         "Projectors" => "only projectors belong here",

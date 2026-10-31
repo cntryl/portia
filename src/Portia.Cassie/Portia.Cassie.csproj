@@ -10,5 +10,8 @@
   <ItemGroup>
     <ProjectReference Include="../Portia.DependencyInjection/Portia.DependencyInjection.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Portia.Tests" />
+  </ItemGroup>
 
 </Project>

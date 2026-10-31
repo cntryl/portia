@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
@@ -9,6 +10,7 @@ namespace Cntryl.Portia;
 [Generator(LanguageNames.CSharp)]
 public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 {
+    static readonly ConditionalWeakTable<IAssemblySymbol, string[]> CoverageByAssembly = new();
     static readonly HashSet<string> CandidateMethods = new(StringComparer.Ordinal)
     {
         "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "AddMcpTool", "AddMcpResource", "AddMcpPrompt", "SendAsync",
@@ -47,10 +49,10 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                 static (ctx, _) => DeclaredCoverage((INamedTypeSymbol)ctx.TargetSymbol))
             .SelectMany(static (keys, _) => keys)
             .Collect();
-        var referencedCoverage = context.CompilationProvider.Select(static (compilation, _) =>
+        var referencedCoverage = context.CompilationProvider.Select(static (compilation, ct) =>
             compilation.GetTypeByMetadataName("Cntryl.Portia.PortiaJsonContextAttribute") is null
                 ? null
-                : string.Join("\n", ReferencedCoverage(compilation)));
+                : string.Join("\n", ReferencedCoverage(compilation, ct)));
 
         context.RegisterSourceOutput(events.Combine(calls).Combine(declaredCoverage).Combine(referencedCoverage),
             static (output, input) => Report(output, input.Left.Left.Left.AddRange(input.Left.Left.Right),
@@ -237,16 +239,25 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
             .Select(Key)
     ];
 
-    static IEnumerable<string> ReferencedCoverage(Compilation compilation)
+    static IEnumerable<string> ReferencedCoverage(Compilation compilation, CancellationToken ct)
     {
         foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
         {
-            foreach (var attribute in assembly.GetAttributes().Where(a =>
-                         a.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonRootAttribute"))
+            ct.ThrowIfCancellationRequested();
+            var keys = CoverageByAssembly.GetValue(assembly, owner =>
             {
-                if (attribute.ConstructorArguments.FirstOrDefault().Value is ITypeSymbol type)
-                    yield return Key(type);
-            }
+                var coverage = new List<string>();
+                foreach (var attribute in owner.GetAttributes())
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (attribute.AttributeClass is { } type && SymbolNames.Is(type, "Cntryl.Portia.PortiaJsonRootAttribute")
+                        && attribute.ConstructorArguments.FirstOrDefault().Value is ITypeSymbol root)
+                        coverage.Add(Key(root));
+                }
+                return coverage.ToArray();
+            });
+            foreach (var key in keys)
+                yield return key;
         }
     }
 

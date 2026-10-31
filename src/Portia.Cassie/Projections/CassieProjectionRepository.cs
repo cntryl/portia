@@ -13,15 +13,16 @@ namespace Cntryl.Portia;
 /// <remarks>
 ///     Derive an application repository from this class. Its updates use <see cref="CreateCommand" />
 ///     and include <see cref="CurrentProjectionKey" /> in their keys or predicates. Query methods return
-///     application data contracts through <see cref="OpenReadAsync" />. Each repository serves one
-///     explicitly named projector, and each batch has an independent tenant, pattern, and generation key.
+///     application data contracts through <see cref="OpenReadAsync" />. A batch waits for query connections
+///     already opened by this repository to close. Each repository serves one explicitly named projector,
+///     and each batch has an independent tenant, pattern, and generation key.
 /// </remarks>
 public abstract class CassieProjectionRepository : IProjectionStore, IAsyncDisposable
 {
     readonly CassieProjectionDatabase _database;
     readonly string _componentName;
+    readonly CassieProjectionActivityGate _activity = new();
     Session? _active;
-    int _busy;
     bool _disposed;
 
     /// <summary>Creates the application repository's projection persistence boundary.</summary>
@@ -55,14 +56,51 @@ public abstract class CassieProjectionRepository : IProjectionStore, IAsyncDispo
 
     /// <summary>Opens a caller-owned connection for committed query-side reads outside an active batch.</summary>
     /// <param name="ct">Cancels opening the connection.</param>
-    /// <returns>The native connection, which the query method must dispose.</returns>
+    /// <returns>The native connection, which the query method must dispose before a batch can begin.</returns>
     protected async ValueTask<CassieConnection> OpenReadAsync(CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (Volatile.Read(ref _busy) != 0)
-            throw new InvalidOperationException("Read through the active transaction while a projection batch is open.");
-        await _database.InitializeAsync(ct).ConfigureAwait(false);
-        return await _database.DataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        var lease = _activity.EnterRead();
+        CassieConnection? connection = null;
+        try
+        {
+            await _database.InitializeAsync(ct).ConfigureAwait(false);
+            connection = await _database.DataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+            ReleaseReadLeaseOnClose(connection, lease);
+            return connection;
+        }
+        catch (Exception original)
+        {
+            try
+            {
+                if (connection is not null)
+                    await connection.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception cleanup)
+            {
+                original.Data["Portia.CleanupException"] = cleanup;
+            }
+            lease.Dispose();
+            throw;
+        }
+    }
+
+    static void ReleaseReadLeaseOnClose(CassieConnection connection, CassieProjectionActivityGate.ReadLease lease)
+    {
+        StateChangeEventHandler onStateChange = null!;
+        onStateChange = (_, args) =>
+        {
+            if (args.CurrentState != ConnectionState.Closed)
+                return;
+            connection.StateChange -= onStateChange;
+            lease.Dispose();
+        };
+        connection.StateChange += onStateChange;
+        if (connection.State == ConnectionState.Closed)
+        {
+            connection.StateChange -= onStateChange;
+            lease.Dispose();
+        }
     }
 
     /// <summary>Builds the same stable scope key used by projection writes, for application query predicates.</summary>
@@ -98,8 +136,7 @@ public abstract class CassieProjectionRepository : IProjectionStore, IAsyncDispo
         ArgumentNullException.ThrowIfNull(context);
         ObjectDisposedException.ThrowIf(_disposed, this);
         var key = GetProjectionKey(context.Identity);
-        if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
-            throw new InvalidOperationException("A projection batch is already open on this repository.");
+        await _activity.EnterBatchAsync(ct).ConfigureAwait(false);
         CassieConnection? connection = null;
         DbTransaction? transaction = null;
         try
@@ -128,7 +165,7 @@ public abstract class CassieProjectionRepository : IProjectionStore, IAsyncDispo
             { await ReleaseAsync(connection, transaction, committed: false).ConfigureAwait(false); }
             catch (Exception cleanup) { original.Data["Portia.CleanupException"] = cleanup; }
             _active = null;
-            Volatile.Write(ref _busy, 0);
+            _activity.ExitBatch();
             throw;
         }
     }
@@ -229,7 +266,7 @@ public abstract class CassieProjectionRepository : IProjectionStore, IAsyncDispo
             finally
             {
                 owner._active = null;
-                Volatile.Write(ref owner._busy, 0);
+                owner._activity.ExitBatch();
             }
         }
     }

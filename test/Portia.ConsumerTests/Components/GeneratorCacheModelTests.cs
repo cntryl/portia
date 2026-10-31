@@ -9,6 +9,97 @@ namespace Cntryl.Portia.Consumer;
 public sealed class GeneratorCacheModelTests
 {
     [Fact]
+    public void HttpBindingShapesIgnoreDiagnosticAndInterceptionLocationMovement() =>
+        AssertCachedAfterUnrelatedPragmaEdit(new RequestHttpBindingGenerator(), "PortiaHttpBindingShapes", """
+            using Cntryl.Portia;
+            using Microsoft.AspNetCore.Routing;
+            public sealed record Query(int Id) : IRequest, ICallable;
+            public static class Endpoints {
+                public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Query>("/query/{id}");
+            }
+            """, moveLocation: true);
+
+    [Fact]
+    public void HttpImplementationsAreSharedByShapeAndUnaffectedByCallSiteMovement()
+    {
+        const string source = """
+            using Cntryl.Portia;
+            using Microsoft.AspNetCore.Routing;
+            using Microsoft.AspNetCore.Builder;
+            using Microsoft.AspNetCore.Http;
+            public sealed record Query(int Id) : IRequest, ICallable;
+            public static class First {
+                public static void Map(IEndpointRouteBuilder app) {
+                    app.MapPortiaGet<Query>("/first/{id}").ExcludeFromDescription();
+                    app.MapPortiaGet<Query>("/query").ExcludeFromDescription();
+                }
+            }
+            public static class Second {
+                public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Query>("/second/{id}");
+            }
+            """;
+        var options = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
+            [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
+        Dictionary<string, string> Generate(string text)
+        {
+            var compilation = CSharpCompilation.Create("HttpSharing", [CSharpSyntaxTree.ParseText(text, options)],
+                References(), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            GeneratorDriver driver = CSharpGeneratorDriver.Create([new RequestHttpBindingGenerator().AsSourceGenerator()], parseOptions: options);
+            driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var generated, out var diagnostics);
+            Assert.DoesNotContain(diagnostics.Concat(generated.GetDiagnostics()), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            return driver.GetRunResult().Results.Single().GeneratedSources.ToDictionary(item => item.HintName,
+                item => item.SourceText.ToString(), StringComparer.Ordinal);
+        }
+
+        var original = Generate(source);
+        var moved = Generate("\n\n" + source);
+        var implementations = original.Where(file => file.Key.StartsWith("PortiaHttpBinding.", StringComparison.Ordinal)).ToArray();
+        Assert.Single(implementations);
+        Assert.Equal(2, implementations.Sum(file => file.Value.Split("internal static class PortiaHttpBinding_").Length - 1));
+        Assert.Equal(2, original.Count(file => file.Key.StartsWith("PortiaHttpInterceptors.", StringComparison.Ordinal)));
+        Assert.All(implementations, file => Assert.Equal(file.Value, moved[file.Key]));
+        Assert.Equal(3, original.Values.Sum(text => text.Split("[global::System.Runtime.CompilerServices.InterceptsLocation(").Length - 1));
+    }
+
+    [Fact]
+    public void ProcessorImplementationIgnoresDiagnosticLocationMovement() =>
+        AssertCachedAfterUnrelatedPragmaEdit(new ProjectorReactorEventDispatcherGenerator(), "PortiaProcessorImplementations", """
+            using Cntryl.Portia;
+            public sealed record Changed : DomainEvent;
+            public sealed partial class Projection : Projector(null!, EventStreamPattern.ForPattern("events")), IProjectorHandler<Changed>;
+            """, moveLocation: true);
+
+    [Fact]
+    public void LargeRequestRegistrationsHaveBoundedDeterministicFiles()
+    {
+        var declarations = Enumerable.Range(0, 1000).Select(index =>
+            $"[RequestRoute(\"*\", \"orders\", \"order\", \"create{index}\")] [Discriminator(\"orders.create{index}\")] public sealed record Create{index} : IRequest, IQueuable;").ToArray();
+        var options = new CSharpParseOptions(LanguageVersion.Preview);
+        Dictionary<string, string> Generate(IEnumerable<string> items)
+        {
+            var tree = CSharpSyntaxTree.ParseText("using Cntryl.Portia;\n" + string.Join("\n", items), options);
+            var compilation = CSharpCompilation.Create("BoundedRegistrations", [tree], References(),
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            GeneratorDriver driver = CSharpGeneratorDriver.Create(
+                [new PortiaServiceRegistrationGenerator().AsSourceGenerator()], parseOptions: options);
+            var result = driver.RunGenerators(compilation).GetRunResult();
+            Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            return result.Results.Single().GeneratedSources.ToDictionary(source => source.HintName,
+                source => source.SourceText.ToString(), StringComparer.Ordinal);
+        }
+
+        var original = Generate(declarations);
+        var reordered = Generate(declarations.Reverse());
+        Assert.True(original.Count > 1);
+        Assert.Equal(1000, original.Values.Sum(source => source.Split("public static global::Cntryl.Portia.PortiaBuilder ").Length - 1));
+        Assert.All(original, file =>
+        {
+            Assert.InRange(file.Value.Split("public static global::Cntryl.Portia.PortiaBuilder ").Length - 1, 1, 128);
+            Assert.Equal(file.Value, reordered[file.Key]);
+        });
+    }
+
+    [Fact]
     public void IncrementalGeneratorCacheModelsDoNotRetainCompilerObjects()
     {
         var assemblies = new[] { typeof(DomainEventCatalogGenerator).Assembly, typeof(RequestHttpBindingGenerator).Assembly };
@@ -73,6 +164,40 @@ public sealed class GeneratorCacheModelTests
     }
 
     [Fact]
+    public void JsonRootEmissionIgnoresDiagnosticLocationChanges()
+    {
+        const string source = """
+                              using Cntryl.Portia;
+                              using System.Text.Json.Serialization;
+                              [PortiaJsonContext]
+                              [JsonSerializable(typeof(string))]
+                              public partial class ExampleContext : JsonSerializerContext;
+                              """;
+        var options = new CSharpParseOptions(LanguageVersion.Preview);
+        var tree = CSharpSyntaxTree.ParseText(source, options, "Example.cs");
+        var compilation = CSharpCompilation.Create("GeneratorCache", [tree], References(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new JsonRootMarkerGenerator().AsSourceGenerator()],
+            parseOptions: options, driverOptions: new GeneratorDriverOptions(default, true));
+        driver = driver.RunGenerators(compilation);
+        var moved = CSharpSyntaxTree.ParseText(Environment.NewLine + source, options, "Example.cs");
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, moved));
+
+        var outputs = driver.GetRunResult().Results.Single().TrackedSteps["PortiaJsonRootEmission"]
+            .SelectMany(step => step.Outputs).ToArray();
+        Assert.NotEmpty(outputs);
+        Assert.All(outputs, output => Assert.True(output.Reason is IncrementalStepRunReason.Unchanged or IncrementalStepRunReason.Cached));
+
+        var changedRoot = CSharpSyntaxTree.ParseText((Environment.NewLine + source).Replace("typeof(string)", "typeof(int)", StringComparison.Ordinal),
+            options, "Example.cs");
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, changedRoot));
+        outputs = driver.GetRunResult().Results.Single().TrackedSteps["PortiaJsonRootEmission"]
+            .SelectMany(step => step.Outputs).ToArray();
+        Assert.Contains(outputs, output => output.Reason == IncrementalStepRunReason.Modified);
+        Assert.Contains("typeof(int)", driver.GetRunResult().GeneratedTrees.Single().ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SuppressionStateDoesNotInvalidatePortableGeneratorModels()
     {
         const string request = """
@@ -105,18 +230,26 @@ public sealed class GeneratorCacheModelTests
             new RegistrationCallInterceptorGenerator(), "PortiaRegistrationCalls", registration);
         AssertModifiedAfterUnrelatedPragmaEdit(
             new RequestHttpBindingGenerator(), "PortiaHttpBindings", httpBinding);
+        AssertCachedAfterUnrelatedPragmaEdit(new JsonRootMarkerGenerator(), "PortiaJsonRootContexts", """
+            using Cntryl.Portia;
+            using System.Text.Json.Serialization;
+            [PortiaJsonContext]
+            [JsonSerializable(typeof(string))]
+            public partial class ExampleContext : JsonSerializerContext;
+            """);
     }
 
     static void AssertCachedAfterUnrelatedPragmaEdit(
         IIncrementalGenerator generator,
         string trackingName,
-        string body)
+        string body,
+        bool moveLocation = false)
     {
         const string pragma = "#pragma warning disable PORTIA020";
         var comment = "//" + new string(' ', pragma.Length - 2);
         Assert.Equal(comment.Length, pragma.Length);
         var original = comment + Environment.NewLine + body;
-        var edited = pragma + Environment.NewLine + body;
+        var edited = moveLocation ? "\n\n" + body : pragma + Environment.NewLine + body;
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var tree = CSharpSyntaxTree.ParseText(original, parseOptions, "CacheScenario.cs");

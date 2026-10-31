@@ -11,7 +11,7 @@ mkdir -p "$output"
 git -C "$root" rev-parse HEAD > "$output/source-commit.txt"
 dotnet --info > "$output/dotnet-info.txt"
 docker info --format '{{json .}}' > "$output/docker-info.json"
-dotnet restore "$root/bench/Portia.Benchmarks/Portia.Benchmarks.csproj" --locked-mode
+dotnet restore "$root/bench/Portia.Benchmarks/Portia.Benchmarks.csproj"
 dotnet build "$root/bench/Portia.Benchmarks/Portia.Benchmarks.csproj" -c Release --no-restore
 cleanup() {
   "${compose[@]}" logs --no-color > "$output/broker.log" 2>&1 || true

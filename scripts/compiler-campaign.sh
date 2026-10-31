@@ -10,9 +10,9 @@ if [[ -e "$portia_compiler_output/source-commit.txt" ]]; then
   exit 1
 fi
 cd "$portia_compiler_root"
-dotnet restore bench/Portia.CompilerBenchmarks --locked-mode
+dotnet restore bench/Portia.CompilerBenchmarks
 dotnet build bench/Portia.CompilerBenchmarks --configuration Release --no-restore
-dotnet restore eng/Portia.RepositoryTools --locked-mode
+dotnet restore eng/Portia.RepositoryTools
 dotnet build eng/Portia.RepositoryTools --configuration Release --no-restore
 mkdir -p "$portia_compiler_output"
 dotnet msbuild bench/Portia.CompilerBenchmarks/Portia.CompilerBenchmarks.csproj \

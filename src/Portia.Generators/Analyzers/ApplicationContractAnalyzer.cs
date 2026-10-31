@@ -45,6 +45,31 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
     static void AnalyzeBehavior(SyntaxNodeAnalysisContext context, ApplicationProject project)
     {
         var path = project.RelativePath(context.Node.SyntaxTree);
+        if (context.Node is MethodDeclarationSyntax toString
+            && context.SemanticModel.GetDeclaredSymbol(toString, context.CancellationToken) is
+            {
+                IsOverride: true,
+                Name: nameof(ToString),
+                ReturnType.SpecialType: SpecialType.System_String,
+                Parameters.Length: 0
+            })
+            return;
+
+        if (context.Node is MethodDeclarationSyntax privateValidation
+            && context.SemanticModel.GetDeclaredSymbol(privateValidation, context.CancellationToken) is { DeclaredAccessibility: Accessibility.Private }
+            && privateValidation.Parent is RecordDeclarationSyntax valueRecord
+            && context.SemanticModel.GetDeclaredSymbol(valueRecord, context.CancellationToken) is { IsSealed: true, IsRecord: true }
+            && path.Length == 4 && path[0] == "Features" && path[2] == "Values")
+            return;
+
+        if (context.Node is MethodDeclarationSyntax catalogAdapter
+            && catalogAdapter.Identifier.ValueText == "AddTo"
+            && context.SemanticModel.GetDeclaredSymbol(catalogAdapter, context.CancellationToken) is { IsStatic: true } catalogMethod
+            && catalogMethod.ContainingType is { } containingType
+            && path.Length == 4 && path[0] == "Features" && path[1] == "Platform" && path[2] == "Events"
+            && ApplicationProject.IsDomainEventCatalogAdapter(containingType))
+            return;
+
         if (context.Node is ConstructorDeclarationSyntax valueConstructor
             && !valueConstructor.Modifiers.Any(SyntaxKind.StaticKeyword)
             && valueConstructor.Parent is RecordDeclarationSyntax record
@@ -88,7 +113,8 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
     static void AnalyzeDiscriminator(SymbolAnalysisContext context, ApplicationProject project)
     {
         var symbol = (INamedTypeSymbol)context.Symbol;
-        if (!ApplicationProject.IsRequest(symbol) && !ApplicationProject.DerivesFrom(symbol, "DomainEvent"))
+        if (symbol.TypeKind != TypeKind.Class
+            || !ApplicationProject.IsRequest(symbol) && !ApplicationProject.DerivesFrom(symbol, "DomainEvent"))
             return;
         var declaration = symbol.DeclaringSyntaxReferences.FirstOrDefault();
         if (declaration is null)

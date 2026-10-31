@@ -49,7 +49,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     {
         var calls = context.SyntaxProvider.CreateSyntaxProvider(
                 static (node, _) => IsRegistrationSyntax(node),
-                static (ctx, _) => Analyze(ctx))
+                static (ctx, ct) => Analyze(ctx, ct))
             .Where(static call => call is not null)
             .Select(static (call, _) => call!)
             .WithTrackingName("PortiaRegistrationCalls")
@@ -81,8 +81,14 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             .Select(static (input, _) => SharedRegistrations(
                 input.Left.Left.Left.AddRange(input.Left.Left.Right), input.Left.Right, input.Right))
             .WithTrackingName("PortiaSharedRegistrations");
-        context.RegisterSourceOutput(calls.Combine(dispatchedRequests).Combine(shared),
-            static (ctx, pair) => Generate(ctx, pair.Left.Left, pair.Left.Right, pair.Right));
+        context.RegisterSourceOutput(calls, static (output, models) => ReportDiagnostics(output, models));
+        var assemblyIdentity = context.CompilationProvider.Select(static (compilation, _) =>
+            compilation.Assembly.Identity.ToString());
+        var files = calls.Combine(dispatchedRequests).Combine(shared).Combine(assemblyIdentity)
+            .SelectMany(static (pair, ct) => GeneratedSource.Capture(
+                output => Generate(output, pair.Left.Left.Left, pair.Left.Left.Right, pair.Left.Right, pair.Right), ct))
+            .WithTrackingName("PortiaRegistrationGeneratedFiles");
+        context.RegisterSourceOutput(files, static (output, file) => GeneratedSource.Add(output, file.HintName, file.Source));
     }
 
     static bool IsRegistrationSyntax(SyntaxNode node) => node switch
@@ -104,10 +110,11 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         or "AddMcpTool"
         or "RegisterDynamicRequest" or "AddEvent";
 
-    static Call? Analyze(GeneratorSyntaxContext context)
+    static Call? Analyze(GeneratorSyntaxContext context, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var syntax = context.Node;
-        if (context.SemanticModel.GetSymbolInfo(syntax).Symbol is not IMethodSymbol method)
+        if (context.SemanticModel.GetSymbolInfo(syntax, ct).Symbol is not IMethodSymbol method)
             return null;
 
         var role = RegistrationRole(method);
@@ -121,22 +128,25 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 new RegistrationDiagnostic(RegistrationDiagnosticKind.UnsupportedCallSite, diagnosticLocation, role));
         }
 
-        if (context.SemanticModel.GetInterceptableLocation(invocation) is not { } location)
+        if (context.SemanticModel.GetInterceptableLocation(invocation, ct) is not { } location)
         {
             var diagnosticLocation = DiagnosticLocation.From(invocation.GetLocation());
             return new Call(null, role, null, null, diagnosticLocation,
                 new RegistrationDiagnostic(RegistrationDiagnosticKind.UnsupportedCallSite, diagnosticLocation, role));
         }
 
+        var callingType = context.SemanticModel.GetEnclosingSymbol(invocation.SpanStart, ct)?.ContainingType?.ToDisplayString() ?? "TopLevel";
         if (role == "application")
         {
             return new Call(InterceptableLocationModel.From(location), "application", string.Empty, null,
-                DiagnosticLocation.From(invocation.GetLocation()));
+                DiagnosticLocation.From(invocation.GetLocation()))
+            { CallingType = callingType };
         }
 
         return TypedCall(method, role, invocation, location, context.SemanticModel.Compilation.Assembly) with
         {
-            Subject = method.TypeArguments[0].ToDisplayString()
+            Subject = method.TypeArguments[0].ToDisplayString(),
+            CallingType = callingType
         };
     }
 
@@ -154,7 +164,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         if (role == "domain event")
         {
             var attribute = type.GetAttributes().FirstOrDefault(candidate =>
-                candidate.AttributeClass?.ToDisplayString() == "Cntryl.Portia.DiscriminatorAttribute");
+                candidate.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, "Cntryl.Portia.DiscriminatorAttribute"));
             return attribute is not null && attribute.ConstructorArguments.Length == 2
                                          && attribute.ConstructorArguments[0].Value is string name
                                          && attribute.ConstructorArguments[1].Value is int version
@@ -172,7 +182,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         }
 
         var interfaces = type.AllInterfaces.Where(i =>
-            i.OriginalDefinition.ContainingNamespace.ToDisplayString() == PortiaComponentRoles.Namespace).ToArray();
+            SymbolNames.IsInNamespace(i, PortiaComponentRoles.Namespace)).ToArray();
         var selected = interfaces.Where(i => role switch
         {
             "handler" => PortiaComponentRoles.Is(i, PortiaComponentRoles.Handler),
@@ -304,7 +314,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     {
         var diagnosticLocation = DiagnosticLocation.From(invocation.GetLocation());
         var callable = type.AllInterfaces.Any(candidate =>
-            candidate.ToDisplayString() == "Cntryl.Portia.ICallable");
+            SymbolNames.Is(candidate, "Cntryl.Portia.ICallable"));
         var request = type.AllInterfaces.FirstOrDefault(candidate =>
             candidate.OriginalDefinition.ToDisplayString() is "Cntryl.Portia.IRequest"
                 or "Cntryl.Portia.IRequest<TOut>");
@@ -315,7 +325,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         }
 
         var discriminator = type.GetAttributes().FirstOrDefault(candidate =>
-            candidate.AttributeClass?.ToDisplayString() == "Cntryl.Portia.DiscriminatorAttribute");
+            candidate.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, "Cntryl.Portia.DiscriminatorAttribute"));
         if (discriminator?.ConstructorArguments.FirstOrDefault().Value is not string name
             || string.IsNullOrWhiteSpace(name))
         {
@@ -483,7 +493,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     {
         if (request.GetAttributes()
                 .FirstOrDefault(attribute =>
-                    attribute.AttributeClass?.ToDisplayString() == "Cntryl.Portia.RequiresPermissionAttribute")
+                    attribute.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, "Cntryl.Portia.RequiresPermissionAttribute"))
                 ?.ConstructorArguments.FirstOrDefault().Value is not string value)
         {
             return "null";
@@ -522,7 +532,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     {
         if (request.GetAttributes()
                 .FirstOrDefault(attribute =>
-                    attribute.AttributeClass?.ToDisplayString() == "Cntryl.Portia.RequiresPermissionAttribute")
+                    attribute.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, "Cntryl.Portia.RequiresPermissionAttribute"))
                 ?.ConstructorArguments.FirstOrDefault().Value is not string value)
         {
             return null;
@@ -578,8 +588,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
     static string Type(ITypeSymbol symbol) => RequestTransportDiscovery.Type(symbol);
 
-    static void Generate(SourceProductionContext context, ImmutableArray<Call> calls,
-        ImmutableArray<RequestTransportComponent> dispatchedRequests, SharedRegistrationsModel shared)
+    static void ReportDiagnostics(SourceProductionContext context, ImmutableArray<Call> calls)
     {
         foreach (var call in calls)
         {
@@ -592,6 +601,12 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             }
         }
 
+    }
+
+    static void Generate(GeneratedOutput context, ImmutableArray<Call> calls,
+        ImmutableArray<RequestTransportComponent> dispatchedRequests, SharedRegistrationsModel shared, string assemblyIdentity)
+    {
+        var sharedType = "PortiaSharedRegistrations_" + GeneratedSource.Identity(assemblyIdentity);
         var inferred = new StringBuilder();
         foreach (var request in dispatchedRequests.GroupBy(request => request.TypeName, StringComparer.Ordinal)
                      .Select(group => group.First()))
@@ -603,9 +618,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         if (valid.Length == 0)
             return;
 
-        var source = InterceptsLocationPolyfill.AppendTo(
-                new StringBuilder().AppendLine("// <auto-generated />").AppendLine("#nullable enable"), false)
-            .AppendLine("namespace Cntryl.Portia.Generated { file static class PortiaRegistrationInterceptors {");
+        var source = new StringBuilder("// <auto-generated />\n#nullable enable\nnamespace Cntryl.Portia.Generated;\n\ninternal static partial class ")
+            .Append(sharedType).AppendLine("\n{");
         // Compilation-wide registrations must not be copied into each interceptor: that produces
         // calls × events source growth (over a million lines in a large application). Keep the
         // existing call order, emit each block once, and apply it once per builder/assembly.
@@ -618,48 +632,71 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         {
             if (body.Length == 0)
                 continue;
-            _ = source.Append("static readonly object ").Append(name).AppendLine("Identity = new();")
-                .Append("static void ").Append(name)
-                .AppendLine("(global::Cntryl.Portia.PortiaBuilder target) {")
-                .Append("_ = target.AddGeneratedRegistrations(").Append(name).AppendLine("Identity, static builder => {")
-                .Append(body).AppendLine("});").AppendLine("}");
+            var rootMethod = GeneratedSource.StatementTree(context, "Cntryl.Portia.Generated",
+                sharedType, name, "global::Cntryl.Portia.PortiaBuilder", "builder",
+                body.Split(new[] { (char)13, (char)10 }, StringSplitOptions.RemoveEmptyEntries), "PortiaShared." + name);
+            _ = source.Append("    private static readonly object ").Append(name).AppendLine("Identity = new();")
+                .Append("    internal static void ").Append(name)
+                .AppendLine("(global::Cntryl.Portia.PortiaBuilder target)\n    {")
+                .Append("        _ = target.AddGeneratedRegistrations(").Append(name).Append("Identity, static builder => ")
+                .Append(rootMethod).AppendLine("(builder));").AppendLine("    }");
         }
 
-        var jsonContextsCall = shared.JsonContexts.Length == 0 ? "" : "RegisterJsonContexts(builder);\n";
-        var eventsCall = shared.Events.Length == 0 ? "" : "RegisterEvents(builder);\n";
-        var dispatchedRequestsCall = inferred.Length == 0 ? "" : "RegisterDispatchedRequests(builder);\n";
-        for (var i = 0; i < valid.Length; i++)
+        source.AppendLine("}");
+        GeneratedSource.Add(context, "PortiaGeneratedRegistrationInterceptors.g.cs", source.ToString());
+
+        var jsonContextsCall = shared.JsonContexts.Length == 0 ? "" : "            " + sharedType + ".RegisterJsonContexts(builder);\n";
+        var eventsCall = shared.Events.Length == 0 ? "" : "            " + sharedType + ".RegisterEvents(builder);\n";
+        var dispatchedRequestsCall = inferred.Length == 0 ? "" : "            " + sharedType + ".RegisterDispatchedRequests(builder);\n";
+        foreach (var group in valid.GroupBy(call => call.CallingType, StringComparer.Ordinal))
         {
-            var call = valid[i];
-            _ = source.Append("[global::System.Runtime.CompilerServices.InterceptsLocation(")
-                .Append(call.Location!.Value.Version).Append(", \"").Append(call.Location.Value.Data)
-                .AppendLine("\")]");
-            _ = call.Role == "application"
-                ? source.Append("public static global::Cntryl.Portia.PortiaBuilder Register").Append(i)
-                    .AppendLine("(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services) {")
-                    .AppendLine("global::System.ArgumentNullException.ThrowIfNull(services);")
-                    .AppendLine(
-                        "var builder = global::Cntryl.Portia.PortiaApplicationServiceCollectionExtensions.AddPortia(services);")
-                    .Append(jsonContextsCall).Append(call.Body).Append(eventsCall).Append(dispatchedRequestsCall)
-                    .AppendLine("return builder;").AppendLine("}")
-                : source.Append("public static global::Cntryl.Portia.PortiaBuilder Register").Append(i)
-                    .Append(call.Role switch
-                    {
-                        "authorizer" =>
-                            "(this global::Cntryl.Portia.PortiaBuilder builder, global::Cntryl.Portia.AuthorizationStage stage) {\n",
-                        "behavior" => "(this global::Cntryl.Portia.PortiaBuilder builder, int order) {\n",
-                        "MCP tool" =>
-                            "(this global::Cntryl.Portia.PortiaBuilder builder, global::System.Action<global::Cntryl.Portia.McpToolOptions>? configure = null) {\n",
-                        _ => "(this global::Cntryl.Portia.PortiaBuilder builder) {\n"
-                    })
-                    .AppendLine("global::System.ArgumentNullException.ThrowIfNull(builder);").Append(call.Body)
-                    .Append(eventsCall).AppendLine("return builder;").AppendLine("}");
-        }
+            context.CancellationToken.ThrowIfCancellationRequested();
+            source = InterceptsLocationPolyfill.AppendTo(
+                    new StringBuilder().AppendLine("// <auto-generated />").AppendLine("#nullable enable"), true)
+                .AppendLine("namespace Cntryl.Portia.Generated").AppendLine("{")
+                .AppendLine("    file static class PortiaRegistrationInterceptors").AppendLine("    {");
+            foreach (var matchingCalls in group.GroupBy(call => (call.Role, call.Body)))
+            {
+                var call = matchingCalls.First();
+                var identity = GeneratedSource.Identity(call.Role + call.Body);
+                foreach (var matching in matchingCalls)
+                {
+                    _ = source.Append("        [global::System.Runtime.CompilerServices.InterceptsLocation(")
+                        .Append(matching.Location!.Value.Version).Append(", ")
+                        .Append(RequestTransportDiscovery.FormatStringLiteral(matching.Location.Value.Data))
+                        .AppendLine(")]");
+                }
+                _ = call.Role == "application"
+                    ? source.Append("        public static global::Cntryl.Portia.PortiaBuilder Register").Append(identity)
+                        .AppendLine("(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)\n        {")
+                        .AppendLine("            global::System.ArgumentNullException.ThrowIfNull(services);")
+                        .AppendLine(
+                            "            var builder = global::Cntryl.Portia.PortiaApplicationServiceCollectionExtensions.AddPortia(services);")
+                        .Append(jsonContextsCall).Append(Indent(call.Body)).Append(eventsCall).Append(dispatchedRequestsCall)
+                        .AppendLine("            return builder;").AppendLine("        }")
+                    : source.Append("        public static global::Cntryl.Portia.PortiaBuilder Register").Append(identity)
+                        .Append(call.Role switch
+                        {
+                            "authorizer" =>
+                                "(this global::Cntryl.Portia.PortiaBuilder builder, global::Cntryl.Portia.AuthorizationStage stage)\n        {\n",
+                            "behavior" => "(this global::Cntryl.Portia.PortiaBuilder builder, int order)\n        {\n",
+                            "MCP tool" =>
+                                "(this global::Cntryl.Portia.PortiaBuilder builder, global::System.Action<global::Cntryl.Portia.McpToolOptions>? configure = null)\n        {\n",
+                            _ => "(this global::Cntryl.Portia.PortiaBuilder builder)\n        {\n"
+                        })
+                        .AppendLine("            global::System.ArgumentNullException.ThrowIfNull(builder);").Append(Indent(call.Body))
+                        .Append(eventsCall).AppendLine("            return builder;").AppendLine("        }");
+            }
 
-        _ = source.AppendLine("} }");
-        context.AddSource("PortiaGeneratedRegistrationInterceptors.g.cs",
-            SourceText.From(source.ToString(), Encoding.UTF8));
+            _ = source.AppendLine("    }").AppendLine("}");
+            GeneratedSource.Add(context, "PortiaRegistrationInterceptors." + GeneratedSource.Label(group.Key) + "." + GeneratedSource.Identity(group.Key) + ".g.cs",
+                source.ToString());
+        }
     }
+
+    static string Indent(string? body) => string.IsNullOrEmpty(body) ? string.Empty
+        : string.Join("\n", body!.Split(new[] { (char)13, (char)10 }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => "            " + line)) + "\n";
 
     sealed record SharedRegistrationsModel(string JsonContexts, string Events);
 
@@ -670,7 +707,10 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         string? Error,
         DiagnosticLocation DiagnosticLocation,
         RegistrationDiagnostic? Diagnostic = null,
-        string Subject = "");
+        string Subject = "")
+    {
+        public string CallingType { get; init; } = "TopLevel";
+    }
 
     enum RegistrationDiagnosticKind
     {

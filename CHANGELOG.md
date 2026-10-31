@@ -10,12 +10,24 @@ alerts are as breaking to change as an API.
 
 - See the [processor migration guide](docs/migration-unreleased-processors.md) for handler
   outcomes, typed projector contexts, processor failures, and dependency updates.
+- Read the [0.9.3 migration notes](docs/migration-0.9.3.md) before upgrading reactor/projector
+  handlers: return `Result` outcomes, propagate failed `SendReactionAsync` calls, and update tests
+  for `ProcessorFailureException`. The notes also list the Microsoft 10.0.14 and OpenApi 2.13.0
+  dependency floors.
 
 ### Fixed
 
 - Fix application structure diagnostics for top-level types, generic filenames, ownership,
   registration reporting, and value construction. Add scoped Fix All support where the host can
   safely apply the requested changes.
+- Give generated registration, HTTP binding, and event catalog helper types assembly-specific
+  identities, preventing CS0436 conflicts when a consumer grants access to a friend assembly.
+- Avoid a PORTIA202 Fix All null dereference when constructor references occur in source-generated
+  files, including System.Text.Json contexts. Generated references are regenerated after the move.
+- Give valid assembly-wide `[PortiaJsonContext]` declarations a home at the Common/Core project
+  root. Recognize existing projection persistence contracts in Repositories, and explain that
+  Common enums belong in Models rather than Values.
+
 - Reload operational state after a competing Fitz transaction rejects an operator write, preserving
   current plan and approval checks while allowing cancellation during conflict recovery.
 - Count Fitz Wire 2 frames in the append benchmark and record the client package version.
