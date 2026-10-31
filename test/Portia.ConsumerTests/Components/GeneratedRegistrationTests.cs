@@ -1,3 +1,4 @@
+using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.Consumer;
@@ -109,12 +110,18 @@ public sealed class GeneratedRegistrationTests
             for (var index = 0; index < count; index++)
                 _ = target.AddGeneratedRegistrations(identity, static _ => { });
         }
-        Repeat(builder, key, 100);
 
-        // Act
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        Repeat(builder, key, 10_000);
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        // The test runner reuses worker threads; isolate the per-thread allocation counter and warm the hot path.
+        long allocated = 0;
+        var measurement = new Thread(() =>
+        {
+            Repeat(builder, key, 10_000);
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            Repeat(builder, key, 10_000);
+            allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        });
+        measurement.Start();
+        measurement.Join();
 
         // Assert
         Assert.Equal(0, allocated);

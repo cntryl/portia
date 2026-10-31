@@ -32,7 +32,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
 
     static readonly string[] CommonFolders = ["Commands", "Queries", "Events", "Models", "Values"];
     static readonly string[] CoreFolders =
-        ["Aggregates", "Handlers", "Capabilities", "Reactors", "Projectors", "Repositories", "Authorization",
+        ["Aggregates", "Handlers", "Capabilities", "Reactors", "Projectors", "Repositories", "Authorization", "Events",
             "Ports", "Values", "Models", "Execution", "Sources", "Actions", "Errors", "Serialization"];
     static readonly string[] CoreSharedFolders = ["Events", "Execution", "Hosting"];
 
@@ -55,12 +55,11 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                     Diagnostic.Create(ProjectRole, Location.None, project.Name)));
             }
 
-            var ownership = new AggregateOwnershipIndex(start.Compilation, project);
-            start.RegisterSemanticModelAction(model => AnalyzeFile(model, project, ownership));
+            start.RegisterSemanticModelAction(model => AnalyzeFile(model, project));
         });
     }
 
-    static void AnalyzeFile(SemanticModelAnalysisContext context, ApplicationProject project, AggregateOwnershipIndex ownership)
+    static void AnalyzeFile(SemanticModelAnalysisContext context, ApplicationProject project)
     {
         var tree = context.SemanticModel.SyntaxTree;
         var root = tree.GetRoot(context.CancellationToken);
@@ -131,7 +130,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                 }
             }
 
-            if (featureProject && featureFile && !BelongsIn(symbol, path[2], project, path[1], ownership, context.CancellationToken))
+            if (featureProject && featureFile && !BelongsIn(symbol, path[2], project, path[1]))
             {
                 context.ReportDiagnostic(Diagnostic.Create(FolderRole, identifier.GetLocation(), symbol.Name,
                     path[2], project.Role == "Common" && path[2] == "Values" && symbol.TypeKind == TypeKind.Enum
@@ -193,8 +192,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             && filename.Length > expected.Length + 1;
     }
 
-    static bool BelongsIn(INamedTypeSymbol symbol, string folder, ApplicationProject project, string feature,
-        AggregateOwnershipIndex ownership, CancellationToken ct)
+    static bool BelongsIn(INamedTypeSymbol symbol, string folder, ApplicationProject project, string feature)
     {
         var request = ApplicationProject.IsRequest(symbol);
         var domainEvent = ApplicationProject.DerivesFrom(symbol, "DomainEvent");
@@ -203,6 +201,8 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         var projector = ApplicationProject.IsProjector(symbol);
         var aggregate = ApplicationProject.DerivesFrom(symbol, "Aggregate");
         var authorizer = symbol.AllInterfaces.Any(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Authorizer));
+        var executionComponent = symbol.AllInterfaces.Any(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Guard)
+            || PortiaComponentRoles.Is(iface, PortiaComponentRoles.Behavior));
         var component = PortiaComponentRoles.IsComponent(symbol);
         var plain = !request && !domainEvent && !component && !reactor && !projector && !aggregate;
         return folder switch
@@ -213,15 +213,15 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             "Reactors" => reactor && !handler && !projector,
             "Projectors" => projector && !handler && !reactor,
             "Authorization" => authorizer && !handler && !reactor && !projector,
-            "Aggregates" => aggregate || plain && ownership.Contains(feature, symbol, ct),
+            "Aggregates" => aggregate,
             "Ports" => symbol.TypeKind == TypeKind.Interface && plain,
             "Models" => plain && IsDataOnly(symbol),
             "Repositories" => plain && (symbol.TypeKind == TypeKind.Interface || IsRepository(symbol, project, feature)),
             "Values" => plain && IsImmutableValue(symbol),
             "Execution" => reactor && !handler && !projector
+                || executionComponent && !handler && !reactor && !projector && !authorizer
                 || plain && symbol.TypeKind == TypeKind.Class && !IsDataOnly(symbol)
-                    && !IsErrorType(symbol) && !IsActionType(symbol) && !IsSourceType(symbol)
-                    && !ownership.Contains(feature, symbol, ct),
+                    && !IsErrorType(symbol) && !IsActionType(symbol) && !IsSourceType(symbol),
             "Sources" => plain && symbol.TypeKind == TypeKind.Class && !symbol.IsRecord && IsSourceType(symbol),
             "Actions" => plain && IsActionType(symbol),
             "Errors" => plain && IsErrorType(symbol),
@@ -233,10 +233,23 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
     static bool IsPortiaJsonContext(INamedTypeSymbol symbol) => symbol.GetAttributes().Any(attribute =>
         attribute.AttributeClass is { } marker && SymbolNames.Is(marker, "Cntryl.Portia.PortiaJsonContextAttribute"));
 
-    static bool IsActionType(INamedTypeSymbol symbol) => symbol.Name.EndsWith("Action", StringComparison.Ordinal)
-        && (symbol.TypeKind == TypeKind.Enum || symbol.IsRecord);
+    static bool IsActionType(INamedTypeSymbol symbol)
+    {
+        if (symbol.Name.EndsWith("Action", StringComparison.Ordinal)
+            && (symbol.TypeKind == TypeKind.Enum || symbol.IsRecord))
+            return true;
+        if (!symbol.IsStatic || !symbol.Name.EndsWith("Actions", StringComparison.Ordinal))
+            return false;
+        var members = symbol.GetMembers().Where(member => !member.IsImplicitlyDeclared).ToArray();
+        return members.Length > 0 && members.All(member => member is IFieldSymbol
+        {
+            IsConst: true,
+            Type.SpecialType: SpecialType.System_String
+        });
+    }
 
-    static bool IsErrorType(INamedTypeSymbol symbol) => symbol.Name.EndsWith("Errors", StringComparison.Ordinal);
+    static bool IsErrorType(INamedTypeSymbol symbol) => symbol.Name.EndsWith("Errors", StringComparison.Ordinal)
+        || symbol.Name.EndsWith("ErrorCodes", StringComparison.Ordinal);
 
     static bool IsSourceType(INamedTypeSymbol symbol) => symbol.Name.EndsWith("Source", StringComparison.Ordinal)
         || symbol.Name.EndsWith("Sources", StringComparison.Ordinal);
@@ -286,11 +299,6 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         {
             IFieldSymbol field => field.IsConst || field.IsReadOnly,
             IPropertySymbol property => property.SetMethod is null || property.SetMethod.IsInitOnly,
-            IMethodSymbol method => method.MethodKind is MethodKind.Constructor or MethodKind.StaticConstructor
-                or MethodKind.PropertyGet or MethodKind.PropertySet
-                || method.MethodKind == MethodKind.Ordinary && method.DeclaredAccessibility == Accessibility.Private
-                || method.MethodKind == MethodKind.Ordinary && method.IsOverride && method.Name == nameof(ToString)
-                    && method.ReturnType.SpecialType == SpecialType.System_String && method.Parameters.Length == 0,
             _ => true
         });
 
@@ -306,62 +314,6 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             return path.Length >= 4 && path[0] == "Features" && path[1] == feature;
         }));
 
-    sealed class AggregateOwnershipIndex(Compilation compilation, ApplicationProject project)
-    {
-        readonly object _gate = new();
-        ImmutableDictionary<string, ImmutableHashSet<INamedTypeSymbol>>? _byFeature;
-
-        public bool Contains(string feature, INamedTypeSymbol target, CancellationToken ct)
-        {
-            ct.ThrowIfCancellationRequested();
-            while (!Monitor.TryEnter(_gate, 50))
-                ct.ThrowIfCancellationRequested();
-            try
-            {
-                _byFeature ??= Build(ct);
-                return _byFeature.TryGetValue(feature, out var types) && types.Contains(target);
-            }
-            finally
-            {
-                Monitor.Exit(_gate);
-            }
-        }
-
-        ImmutableDictionary<string, ImmutableHashSet<INamedTypeSymbol>> Build(CancellationToken ct)
-        {
-            var features = new Dictionary<string, HashSet<INamedTypeSymbol>>(StringComparer.Ordinal);
-            foreach (var tree in compilation.SyntaxTrees)
-            {
-                ct.ThrowIfCancellationRequested();
-                var path = project.RelativePath(tree);
-                if (path.Length != 4 || path[0] != "Features" || path[2] != "Aggregates")
-                    continue;
-#pragma warning disable RS1030 // Ownership requires binding aggregate references in other source trees.
-                var model = compilation.GetSemanticModel(tree);
-#pragma warning restore RS1030
-                foreach (var declaration in tree.GetRoot(ct).DescendantNodes().OfType<TypeDeclarationSyntax>())
-                {
-                    ct.ThrowIfCancellationRequested();
-                    if (model.GetDeclaredSymbol(declaration, ct) is not INamedTypeSymbol aggregate
-                        || !ApplicationProject.DerivesFrom(aggregate, "Aggregate"))
-                        continue;
-                    if (!features.TryGetValue(path[1], out var types))
-                        features.Add(path[1], types = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default));
-                    foreach (var node in declaration.DescendantNodes().OfType<SimpleNameSyntax>())
-                    {
-                        ct.ThrowIfCancellationRequested();
-                        var referenced = model.GetSymbolInfo(node, ct).Symbol;
-                        var type = referenced as INamedTypeSymbol ?? referenced?.ContainingType;
-                        if (type is not null)
-                            _ = types.Add(type.OriginalDefinition);
-                    }
-                }
-            }
-            return features.ToImmutableDictionary(pair => pair.Key,
-                pair => pair.Value.ToImmutableHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default), StringComparer.Ordinal);
-        }
-    }
-
     static string FolderResponsibility(string folder) => folder switch
     {
         "Commands" or "Queries" => "only request contracts belong here",
@@ -371,7 +323,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         "Reactors" => "only reactors belong here",
         "Projectors" => "only projectors belong here",
         "Authorization" => "only request authorizers belong here",
-        "Aggregates" => "aggregate roots and their owned rule/state collaborators belong here",
+        "Aggregates" => "aggregate roots and their partial declarations belong here; move behavior helpers to Execution",
         "Ports" => "a port is an application interface to a production dependency",
         "Models" => "data-only models belong here",
         "Values" => "immutable record values belong here",
