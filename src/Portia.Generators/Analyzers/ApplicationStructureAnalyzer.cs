@@ -32,7 +32,9 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
 
     static readonly string[] CommonFolders = ["Commands", "Queries", "Events", "Models", "Values"];
     static readonly string[] CoreFolders =
-        ["Aggregates", "Handlers", "Reactors", "Projectors", "Repositories", "Authorization", "Ports", "Values"];
+        ["Aggregates", "Handlers", "Capabilities", "Reactors", "Projectors", "Repositories", "Authorization",
+            "Ports", "Values", "Models", "Execution", "Sources", "Actions", "Errors", "Serialization"];
+    static readonly string[] CoreSharedFolders = ["Events", "Execution", "Hosting"];
 
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
@@ -79,19 +81,27 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
 
         var folders = project.Role == "Common" ? CommonFolders : CoreFolders;
         var featureProject = !project.IsTest && project.Role is "Common" or "Core";
-        var featureFile = path.Length == 4 && path[0] == "Features" && Array.IndexOf(folders, path[2]) >= 0;
+        var featureFile = path.Length >= 4 && path[0] == "Features" && Array.IndexOf(folders, path[2]) >= 0;
         var registrationFile = project.Role == "Core" && path.Length == 3 && path[0] == "Features"
             && path[2] == path[1] + "PortiaExtensions.cs";
+        var featureRegistrationFile = project.Role == "Core" && path.Length == 2 && path[0] == "Features"
+            && declarations.All(declaration => context.SemanticModel.GetDeclaredSymbol(declaration,
+                context.CancellationToken) is INamedTypeSymbol type && type.IsStatic
+                && type.Name.EndsWith("PortiaExtensions", StringComparison.Ordinal));
+        var featureJsonContextFile = project.Role == "Core" && path.Length == 3 && path[0] == "Features"
+            && declarations.All(declaration => context.SemanticModel.GetDeclaredSymbol(declaration,
+                context.CancellationToken) is INamedTypeSymbol type && IsPortiaJsonContext(type)
+                && JsonContextShape.UnsupportedReason(type) is null);
+        var sharedCoreFile = project.Role == "Core" && path.Length >= 2
+            && Array.IndexOf(CoreSharedFolders, path[0]) >= 0;
         var assemblyContextFile = path.Length == 1 && declarations.All(declaration =>
             context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is INamedTypeSymbol type
-            && type.GetAttributes().Any(attribute => attribute.AttributeClass is { } marker
-                && SymbolNames.Is(marker, "Cntryl.Portia.PortiaJsonContextAttribute"))
+            && IsPortiaJsonContext(type)
             && JsonContextShape.UnsupportedReason(type) is null);
-        if (featureProject && path.Length != 0 && !featureFile && !registrationFile && !assemblyContextFile)
+        if (featureProject && path.Length != 0 && !featureFile && !registrationFile && !featureRegistrationFile
+            && !featureJsonContextFile && !sharedCoreFile && !assemblyContextFile)
         {
-            var detail = path.Length > 4 && path[0] == "Features" && Array.IndexOf(folders, path[2]) >= 0
-                ? $"role folder '{path[2]}' must be flat; split the feature instead of nesting it"
-                : path.Length >= 3 && path[0] == "Features"
+            var detail = path.Length >= 3 && path[0] == "Features"
                     ? $"'{path[2]}' is not a supported role; allowed roles: {string.Join(", ", folders)}"
                     : $"use Features/{{Feature}}/{{Role}}; allowed roles: {string.Join(", ", folders)}";
             context.ReportDiagnostic(Diagnostic.Create(FeaturePath, Identifier(declarations[0]).GetLocation(), filename, detail));
@@ -199,7 +209,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         {
             "Commands" or "Queries" => request && !component && !domainEvent,
             "Events" => domainEvent && !component || feature == "Platform" && ApplicationProject.IsDomainEventCatalogAdapter(symbol),
-            "Handlers" => handler && !reactor && !projector,
+            "Handlers" or "Capabilities" => handler && !reactor && !projector,
             "Reactors" => reactor && !handler && !projector,
             "Projectors" => projector && !handler && !reactor,
             "Authorization" => authorizer && !handler && !reactor && !projector,
@@ -208,9 +218,28 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             "Models" => plain && IsDataOnly(symbol),
             "Repositories" => plain && (symbol.TypeKind == TypeKind.Interface || IsRepository(symbol, project, feature)),
             "Values" => plain && IsImmutableValue(symbol),
+            "Execution" => reactor && !handler && !projector
+                || plain && symbol.TypeKind == TypeKind.Class && !IsDataOnly(symbol)
+                    && !IsErrorType(symbol) && !IsActionType(symbol) && !IsSourceType(symbol)
+                    && !ownership.Contains(feature, symbol, ct),
+            "Sources" => plain && symbol.TypeKind == TypeKind.Class && !symbol.IsRecord && IsSourceType(symbol),
+            "Actions" => plain && IsActionType(symbol),
+            "Errors" => plain && IsErrorType(symbol),
+            "Serialization" => IsPortiaJsonContext(symbol),
             _ => false
         };
     }
+
+    static bool IsPortiaJsonContext(INamedTypeSymbol symbol) => symbol.GetAttributes().Any(attribute =>
+        attribute.AttributeClass is { } marker && SymbolNames.Is(marker, "Cntryl.Portia.PortiaJsonContextAttribute"));
+
+    static bool IsActionType(INamedTypeSymbol symbol) => symbol.Name.EndsWith("Action", StringComparison.Ordinal)
+        && (symbol.TypeKind == TypeKind.Enum || symbol.IsRecord);
+
+    static bool IsErrorType(INamedTypeSymbol symbol) => symbol.Name.EndsWith("Errors", StringComparison.Ordinal);
+
+    static bool IsSourceType(INamedTypeSymbol symbol) => symbol.Name.EndsWith("Source", StringComparison.Ordinal)
+        || symbol.Name.EndsWith("Sources", StringComparison.Ordinal);
 
     static bool IsDataOnly(INamedTypeSymbol symbol)
     {
@@ -338,11 +367,19 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         "Commands" or "Queries" => "only request contracts belong here",
         "Events" => "domain event contracts and their generated catalog adapter belong here",
         "Handlers" => "only request handlers belong here",
+        "Capabilities" => "only request handlers for feature capabilities belong here",
         "Reactors" => "only reactors belong here",
         "Projectors" => "only projectors belong here",
         "Authorization" => "only request authorizers belong here",
         "Aggregates" => "aggregate roots and their owned rule/state collaborators belong here",
         "Ports" => "a port is an application interface to a production dependency",
+        "Models" => "data-only models belong here",
+        "Values" => "immutable record values belong here",
+        "Execution" => "execution coordination and behavior helpers belong here",
+        "Sources" => "feature source helpers belong here",
+        "Actions" => "feature action types belong here",
+        "Errors" => "feature error factories belong here",
+        "Serialization" => "source-generated JSON contexts belong here",
         _ => "move framework component roles to the folder that owns them"
     };
 }
