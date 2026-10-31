@@ -144,7 +144,7 @@ public sealed class ApplicationStructureAnalyzerTests
 
     [Theory]
     [InlineData("Features/Orders/Helpers/Price.cs")]
-    [InlineData("Features/Orders/Values/Nested/Price.cs")]
+    [InlineData("Features/Orders/Helpers/Nested/Price.cs")]
     [InlineData("Values/Price.cs")]
     public void ShouldRejectUnknownFoldersGivenClosedFeatureLayout(string path)
     {
@@ -175,6 +175,90 @@ public sealed class ApplicationStructureAnalyzerTests
         _ = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
     }
 
+    [Theory]
+    [InlineData("Capabilities", "IAcceptOrderHandler", "public interface IAcceptOrderHandler : Cntryl.Portia.IRequestHandler<Cntryl.Portia.IRequest>;")]
+    [InlineData("Execution", "OrderCoordinator", "public sealed class OrderCoordinator { public void Run() { } }")]
+    [InlineData("Sources", "OrderSource", "public sealed class OrderSource;")]
+    [InlineData("Actions", "OrderAction", "public enum OrderAction { Create, Cancel }")]
+    [InlineData("Actions", "OrderActions", "public static class OrderActions { public const string Create = \"create\"; }")]
+    [InlineData("Errors", "OrderErrors", "public static class OrderErrors;")]
+    [InlineData("Errors", "OrderErrorCodes", "public static class OrderErrorCodes;")]
+    [InlineData("Models", "OrderView", "public sealed record OrderView(string Number);")]
+    [InlineData("Events", "OrderPlaced", "public sealed record OrderPlaced : Cntryl.Portia.DomainEvent;")]
+    public void ShouldAcceptExtendedCoreRoleGivenMatchingTypeShape(string folder, string name, string declaration)
+    {
+        var source = $"namespace Shop.Core.Features.Orders.{folder}; {declaration}";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [($"Features/Orders/{folder}/{name}.cs", source)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA203" or "PORTIA204");
+    }
+
+    [Theory]
+    [InlineData("IOrderGuard", "public interface IOrderGuard : Cntryl.Portia.IRequestGuard<Cntryl.Portia.IRequest>;")]
+    [InlineData("IOrderBehavior", "public interface IOrderBehavior : Cntryl.Portia.IRequestPipelineBehavior<Cntryl.Portia.IRequest>;")]
+    public void ShouldAcceptRequestExecutionComponentGivenExecutionFolder(string name, string declaration)
+    {
+        var source = $"namespace Shop.Core.Features.Orders.Execution; {declaration}";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [($"Features/Orders/Execution/{name}.cs", source)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA203" or "PORTIA204");
+    }
+
+    [Fact]
+    public void ShouldAllowNestedRoleAreasGivenNestedHandler()
+    {
+        const string source = "namespace Shop.Core.Features.Orders.Capabilities.Commands; public interface IAcceptOrderHandler : Cntryl.Portia.IRequestHandler<Cntryl.Portia.IRequest>;";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Capabilities/Commands/AcceptOrderHandler.cs", source)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA203" or "PORTIA204");
+    }
+
+    [Theory]
+    [InlineData("Events", "EventCatalog")]
+    [InlineData("Execution", "HostExecutor")]
+    [InlineData("Hosting", "WorkerHost")]
+    public void ShouldAllowSharedCoreFolderGivenSupportType(string folder, string name)
+    {
+        var source = $"namespace Shop.Core.{folder}; public sealed class {name};";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [($"{folder}/{name}.cs", source)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA203" or "PORTIA204");
+    }
+
+    [Fact]
+    public void ShouldAllowFeatureRegistrationGivenTopLevelFeatureCompositionFile()
+    {
+        const string source = "namespace Shop.Core.Features; public static class OrdersPortiaExtensions;";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [("Features/OrdersPortiaExtensions.cs", source)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA203");
+    }
+
+    [Theory]
+    [InlineData("Features/Orders/OrderJsonContext.cs", "Shop.Core.Features.Orders")]
+    [InlineData("Features/Orders/Serialization/OrderJsonContext.cs", "Shop.Core.Features.Orders.Serialization")]
+    public void ShouldAllowFeatureJsonContextGivenSupportedCompositionLocation(string path, string @namespace)
+    {
+        var source = $$"""
+            #nullable enable
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Cntryl.Portia;
+            namespace {{@namespace}};
+            [PortiaJsonContext]
+            public sealed class OrderJsonContext(JsonSerializerOptions options) : JsonSerializerContext(options)
+            {
+                protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """;
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [(path, source)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA203" or "PORTIA204");
+    }
+
     [Fact]
     public void ShouldIgnoreNestedTypesGivenTopLevelOwner()
     {
@@ -185,7 +269,7 @@ public sealed class ApplicationStructureAnalyzerTests
     }
 
     [Fact]
-    public void ShouldRejectUnownedAggregateCollaborator()
+    public void ShouldRequireAggregateRootGivenAggregateFolder()
     {
         const string source = "namespace Shop.Core.Features.Orders.Aggregates; public sealed class CancellationRule { public bool Allows(bool shipped) => !shipped; }";
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
@@ -193,17 +277,18 @@ public sealed class ApplicationStructureAnalyzerTests
         _ = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
     }
     [Fact]
-    public void ShouldAllowDirectlyReferencedAggregateCollaborator()
+    public void ShouldAllowAggregateBehaviorHelperGivenExecutionFolder()
     {
-        const string rule = "namespace Shop.Core.Features.Orders.Aggregates; public sealed class CancellationRule;";
+        const string rule = "namespace Shop.Core.Features.Orders.Execution; public sealed class CancellationRule { public bool Allows(bool shipped) => !shipped; }";
         const string aggregate = """
                                  using Cntryl.Portia;
+                                 using Shop.Core.Features.Orders.Execution;
                                  namespace Shop.Core.Features.Orders.Aggregates;
                                  public sealed class Order(Uuid id, CancellationRule rule) : Aggregate(id, new EventStreamAddress("shop", "orders", id.ToString()));
                                  """;
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
-            [("Features/Orders/Aggregates/CancellationRule.cs", rule), ("Features/Orders/Aggregates/Order.cs", aggregate)]);
-        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA204");
+            [("Features/Orders/Execution/CancellationRule.cs", rule), ("Features/Orders/Aggregates/Order.cs", aggregate)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA203" or "PORTIA204");
     }
 
     [Fact]

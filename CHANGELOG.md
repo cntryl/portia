@@ -27,6 +27,11 @@ alerts are as breaking to change as an API.
 - Give valid assembly-wide `[PortiaJsonContext]` declarations a home at the Common/Core project
   root. Recognize existing projection persistence contracts in Repositories, and explain that
   Common enums belong in Models rather than Values.
+- Align Core structure diagnostics with the application layout: recognize shared Events, Execution
+  and Hosting folders, nested role areas, and capability, source, action, error, execution and model
+  roles while retaining type-role checks. Keep aggregate folders for aggregate roots and partials,
+  allow request guards and pipeline behaviors in Execution, and accept behavior methods on immutable
+  record values.
 
 - Reload operational state after a competing Fitz transaction rejects an operator write, preserving
   current plan and approval checks while allowing cancellation during conflict recovery.
