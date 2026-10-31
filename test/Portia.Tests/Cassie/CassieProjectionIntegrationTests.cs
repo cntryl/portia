@@ -144,6 +144,66 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         }
     }
 
+    /// <summary>A checkpoint table that cannot hold Portia's metadata stops the host before any workload starts.</summary>
+    /// <param name="schema">A pre-existing table definition the adapter cannot use.</param>
+    [Theory]
+    [InlineData("(identity TEXT PRIMARY KEY, cursor TEXT NOT NULL)")]
+    [InlineData("(identity TEXT NOT NULL, cursor TEXT NOT NULL, revision BIGINT NOT NULL)")]
+    [InlineData("(identity TEXT PRIMARY KEY, cursor TEXT NOT NULL, revision TEXT NOT NULL)")]
+    public async Task ShouldRejectIncompatibleCheckpointTableAtStartup(string schema)
+    {
+        await using var database = await Database.OpenAsync();
+        var table = "portia_" + Guid.NewGuid().ToString("N") + "_legacy";
+        await using (var connection = await database.Source.OpenConnectionAsync())
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = $"CREATE TABLE {table} {schema}";
+            _ = await command.ExecuteNonQueryAsync();
+        }
+        try
+        {
+            var services = new ServiceCollection();
+            _ = services.AddPortia().AddCassie(database.Source.ConnectionString, table);
+            await using var provider = services.BuildServiceProvider();
+
+            var error = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+            {
+                foreach (var hosted in provider.GetServices<IHostedService>())
+                {
+                    if (hosted is IHostedLifecycleService lifecycle)
+                        await lifecycle.StartingAsync(default);
+                    await hosted.StartAsync(default);
+                }
+            });
+
+            Assert.Contains(table, error.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await using var connection = await database.Source.OpenConnectionAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"DROP TABLE {table}";
+            _ = await command.ExecuteNonQueryAsync();
+        }
+    }
+
+    /// <summary>A query read holds off batches until the read itself is disposed, even if its connection is reopened.</summary>
+    [Fact]
+    public async Task ShouldHoldBatchesUntilTheReadIsDisposedWhenItsConnectionIsReopened()
+    {
+        await using var database = await Database.OpenAsync();
+        await using var repository = new AccountRepository(database);
+        var identity = Identity("cassie-reopen-" + Uuid.CreateVersion4());
+        var read = await repository.OpenReopenedReadAsync();
+
+        var begin = repository.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)).AsTask();
+        var startedEarly = await Task.WhenAny(begin, Task.Delay(TimeSpan.FromMilliseconds(500))) == begin;
+        await read.DisposeAsync();
+        await using var batch = await begin.WaitAsync(TimeSpan.FromSeconds(15));
+
+        Assert.False(startedEarly, "A batch began while a query read was still open.");
+    }
+
     internal sealed class FailurePlan(RequestError error)
     {
         int _attempts;
@@ -231,9 +291,8 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         }
         public async ValueTask<AccountReadModel?> GetAsync(CheckpointIdentity identity, string accountId, CancellationToken ct = default)
         {
-            await using var connection = await OpenReadAsync(ct);
-            await using var command = connection.CreateCommand();
-            command.CommandText = $"SELECT balance FROM {accountsTable} WHERE identity = @identity";
+            await using var read = await OpenReadAsync(ct);
+            await using var command = read.CreateCommand($"SELECT balance FROM {accountsTable} WHERE identity = @identity");
             Bind(command, ("identity", GetProjectionKey(identity) + accountId));
             var value = await command.ExecuteScalarAsync(ct);
             return value is null or DBNull ? null : new AccountReadModel(accountId, Convert.ToInt64(value, CultureInfo.InvariantCulture));
@@ -246,11 +305,18 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         }
         public async ValueTask<string?> ReadValueAsync(CheckpointIdentity identity, CancellationToken ct = default)
         {
-            await using var connection = await OpenReadAsync(ct);
-            await using var command = connection.CreateCommand();
-            command.CommandText = $"SELECT label FROM {accountsTable} WHERE identity = @identity";
+            await using var read = await OpenReadAsync(ct);
+            await using var command = read.CreateCommand($"SELECT label FROM {accountsTable} WHERE identity = @identity");
             Bind(command, ("identity", GetProjectionKey(identity) + "probe"));
             return await command.ExecuteScalarAsync(ct) as string;
+        }
+        public async ValueTask<IAsyncDisposable> OpenReopenedReadAsync()
+        {
+            var read = await OpenReadAsync();
+            await using var command = read.CreateCommand("SELECT 1");
+            await command.Connection!.CloseAsync();
+            await command.Connection.OpenAsync();
+            return read;
         }
         public ValueTask FailNextCommitAsync(CancellationToken ct = default) { _failCommit = true; return ValueTask.CompletedTask; }
         static void Bind(System.Data.Common.DbCommand command, params (string Name, object Value)[] parameters)

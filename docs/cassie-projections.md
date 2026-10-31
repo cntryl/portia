@@ -21,7 +21,10 @@ services.AddPortia()
 Queries can inject `AccountRepository` directly. Forward a query interface to that scoped instance
 when the application needs one; query interfaces need no checkpoint or transaction methods.
 
-The library initializes its checkpoint table automatically before use. Application migrations own
+The library creates its checkpoint table if it is missing, and a hosted application verifies the table
+while the host starts. An existing table with a different schema stops the host with a
+`NotSupportedException` naming the table, and an unreachable Cassie server also fails startup. Hosting stops when a
+projector is registered under a name other than the one its repository passes to the base constructor. Application migrations own
 application tables and indexes. For the example below, create this native Cassie table before
 starting workers:
 
@@ -75,9 +78,8 @@ public sealed class AccountRepository(CassieProjectionDatabase database)
     public async ValueTask<AccountReadModel?> GetAsync(TenantId tenant, Uuid accountId, CancellationToken ct)
     {
         var identity = new CheckpointIdentity(ProjectorName, EventStreamPattern.ForPattern(tenant.Value, "accounts"));
-        await using var connection = await OpenReadAsync(ct);
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT balance_cents FROM account_balances WHERE account_key = @key";
+        await using var read = await OpenReadAsync(ct);
+        await using var command = read.CreateCommand("SELECT balance_cents FROM account_balances WHERE account_key = @key");
         command.Parameters.Add(new CassieParameter { ParameterName = "key", Value = GetProjectionKey(identity) + accountId });
         var balance = await command.ExecuteScalarAsync(ct);
         return balance is null or DBNull ? null : new AccountReadModel(accountId, Convert.ToInt64(balance));
@@ -87,8 +89,11 @@ public sealed class AccountRepository(CassieProjectionDatabase database)
 
 Import `Cntryl.Cassie.Commands` for `CassieParameter`, alongside the ordinary Portia, System,
 threading, and task namespaces. A repository read inside an active batch uses `CreateCommand` so
-it sees its own staged writes. `OpenReadAsync` is for committed query-side reads and refuses use
-while that repository has a batch open.
+it sees its own staged writes. `OpenReadAsync` starts a committed query-side read; a batch on that
+repository waits until the read is disposed, and opening a read while a batch is open is refused.
+Misuse of this kind (reading through `OpenReadAsync` or writing through `CreateCommand` outside the
+batch's lifetime, or overlapping batches on one repository) throws `NotSupportedException`, which stops
+the hosted worker without retries.
 
 ## Typed projector
 

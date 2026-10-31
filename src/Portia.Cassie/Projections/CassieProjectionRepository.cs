@@ -13,11 +13,11 @@ namespace Cntryl.Portia;
 /// <remarks>
 ///     Derive an application repository from this class. Its updates use <see cref="CreateCommand" />
 ///     and include <see cref="CurrentProjectionKey" /> in their keys or predicates. Query methods return
-///     application data contracts through <see cref="OpenReadAsync" />. A batch waits for query connections
-///     already opened by this repository to close. Each repository serves one explicitly named projector,
+///     application data contracts through <see cref="OpenReadAsync" />. A batch waits for reads already
+///     opened by this repository to be disposed. Each repository serves one explicitly named projector,
 ///     and each batch has an independent tenant, pattern, and generation key.
 /// </remarks>
-public abstract class CassieProjectionRepository : IProjectionStore, IAsyncDisposable
+public abstract class CassieProjectionRepository : IProjectionStore, IProjectorBoundStore, IAsyncDisposable
 {
     readonly CassieProjectionDatabase _database;
     readonly string _componentName;
@@ -54,52 +54,24 @@ public abstract class CassieProjectionRepository : IProjectionStore, IAsyncDispo
         return command;
     }
 
-    /// <summary>Opens a caller-owned connection for committed query-side reads outside an active batch.</summary>
-    /// <param name="ct">Cancels opening the connection.</param>
-    /// <returns>The native connection, which the query method must dispose before a batch can begin.</returns>
-    protected async ValueTask<CassieConnection> OpenReadAsync(CancellationToken ct = default)
+    /// <summary>Starts a committed query-side read outside an active batch.</summary>
+    /// <param name="ct">Cancels opening the read's connection.</param>
+    /// <returns>The read, which the query method must dispose before a batch can begin.</returns>
+    /// <exception cref="NotSupportedException">This repository has a projection batch open; read through <see cref="CreateCommand" />.</exception>
+    protected async ValueTask<CassieProjectionReadSession> OpenReadAsync(CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var lease = _activity.EnterRead();
-        CassieConnection? connection = null;
         try
         {
             await _database.InitializeAsync(ct).ConfigureAwait(false);
-            connection = await _database.DataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
-            ReleaseReadLeaseOnClose(connection, lease);
-            return connection;
+            var connection = await _database.DataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+            return new CassieProjectionReadSession(connection, lease);
         }
-        catch (Exception original)
+        catch
         {
-            try
-            {
-                if (connection is not null)
-                    await connection.DisposeAsync().ConfigureAwait(false);
-            }
-            catch (Exception cleanup)
-            {
-                original.Data["Portia.CleanupException"] = cleanup;
-            }
             lease.Dispose();
             throw;
-        }
-    }
-
-    static void ReleaseReadLeaseOnClose(CassieConnection connection, CassieProjectionActivityGate.ReadLease lease)
-    {
-        StateChangeEventHandler onStateChange = null!;
-        onStateChange = (_, args) =>
-        {
-            if (args.CurrentState != ConnectionState.Closed)
-                return;
-            connection.StateChange -= onStateChange;
-            lease.Dispose();
-        };
-        connection.StateChange += onStateChange;
-        if (connection.State == ConnectionState.Closed)
-        {
-            connection.StateChange -= onStateChange;
-            lease.Dispose();
         }
     }
 
@@ -119,14 +91,14 @@ public abstract class CassieProjectionRepository : IProjectionStore, IAsyncDispo
     public async ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default)
     {
         var key = GetProjectionKey(identity);
-        await using var connection = await OpenReadAsync(ct).ConfigureAwait(false);
-        await using var command = Command(connection, null,
-            $"SELECT cursor FROM {_database.CheckpointTable} WHERE identity = @identity", ("identity", key));
+        await using var read = await OpenReadAsync(ct).ConfigureAwait(false);
+        await using var command = read.CreateCommand($"SELECT cursor FROM {_database.CheckpointTable} WHERE identity = @identity");
+        _ = command.Parameters.Add(new CassieParameter { ParameterName = "identity", Value = key });
         var value = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
         if (value is null)
             return ProjectionCheckpoint.Start;
         if (value is not string cursor)
-            throw new InvalidDataException("Cassie projection checkpoint metadata contains an invalid cursor.");
+            throw new NotSupportedException($"Cassie checkpoint table {_database.CheckpointTable} stores a cursor that is not text.");
         return cursor.Length == 0 ? ProjectionCheckpoint.Start : new ProjectionCheckpoint(new EventCursor(cursor));
     }
 
@@ -182,7 +154,20 @@ public abstract class CassieProjectionRepository : IProjectionStore, IAsyncDispo
     }
 
     Session Active => !_disposed && _active is { Finished: false } session ? session
-        : throw new InvalidOperationException("No writable projection batch is open on this repository.");
+        : throw new NotSupportedException("Write through this repository only while its projection batch is open.");
+
+    // Queries derive their keys from this repository's projector name, so a projector registered under
+    // any other name would write rows no query reads; hosting checks this before workloads start.
+    void IProjectorBoundStore.EnsureServes(string componentName)
+    {
+        if (!string.Equals(componentName, _componentName, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Repository '{GetType().FullName}' serves projector '{_componentName}' but was given workload "
+                + $"'{componentName}'. Register the projector under the name this repository is "
+                + "constructed with, so its query-side reads find the data it writes.");
+        }
+    }
 
     void EnsureServes(CheckpointIdentity identity)
     {

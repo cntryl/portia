@@ -14,13 +14,13 @@ public sealed class CassieProjectionActivityGateTests
         var begin = activity.EnterBatchAsync(default).AsTask();
 
         Assert.False(begin.IsCompleted);
-        Assert.Throws<InvalidOperationException>(() => activity.EnterRead());
+        Assert.Throws<NotSupportedException>(() => activity.EnterRead());
         firstRead.Dispose();
         Assert.False(begin.IsCompleted);
 
         secondRead.Dispose();
         await begin;
-        Assert.Throws<InvalidOperationException>(() => activity.EnterRead());
+        Assert.Throws<NotSupportedException>(() => activity.EnterRead());
 
         activity.ExitBatch();
         using var readAfterBatch = activity.EnterRead();

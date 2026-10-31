@@ -2,13 +2,14 @@ using System.Diagnostics.CodeAnalysis;
 using Cntryl.Cassie.Connection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia;
 
 /// <summary>Connects native Cassie repositories to Portia's existing projector lifecycle.</summary>
 public static class CassiePortiaBuilderExtensions
 {
-    /// <summary>Registers a shared Cassie data source and automatically initialized checkpoint metadata.</summary>
+    /// <summary>Registers a shared Cassie data source and checkpoint metadata that a hosted application verifies at startup.</summary>
     /// <param name="builder">The application's Portia composition.</param>
     /// <param name="connectionString">The native Cassie connection string.</param>
     /// <param name="checkpointTable">The unqualified metadata table in the application's Cassie database.</param>
@@ -23,6 +24,7 @@ public static class CassiePortiaBuilderExtensions
             throw new InvalidOperationException("Cassie projection services are already configured.");
         builder.Services.AddSingleton(_ => new CassieDataSource(connectionString));
         builder.Services.AddSingleton(sp => new CassieProjectionDatabase(sp.GetRequiredService<CassieDataSource>(), checkpointTable));
+        builder.Services.AddSingleton<IHostedService, CassieProjectionStartup>();
         return builder;
     }
 
