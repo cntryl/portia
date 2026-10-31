@@ -18,6 +18,15 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
 
+if (args.Length > 0 && args[0] == "namespace-code-action")
+{
+    if (args.Length < 2)
+        throw new ArgumentException("Usage: namespace-code-action OUTPUT [REPETITIONS=20] [REFERENCES=1000]");
+    await NamespaceCodeActionCampaign.RunAsync(args[1], args.Length > 2 ? int.Parse(args[2], CultureInfo.InvariantCulture) : 20,
+        args.Length > 3 ? int.Parse(args[3], CultureInfo.InvariantCulture) : 1000);
+    return;
+}
+
 if (args.Length < 2)
     throw new ArgumentException("Usage: OUTPUT JSON_SOURCE_GENERATOR_DLL [REPETITIONS=20] [WORKLOAD_FILTER]");
 await CompilerCampaign.RunAsync(args[0], args[1], args.Length > 2 ? int.Parse(args[2], CultureInfo.InvariantCulture) : 20,
@@ -32,7 +41,8 @@ static class CompilerCampaign
         deterministic: true);
     static readonly MetadataReference[] PlatformReferences = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
         .Split(Path.PathSeparator).Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path)).ToArray();
-    static readonly string[] RuntimeProjects = ["Portia.DependencyInjection", "Portia.AspNetCore"];
+    static readonly string[] RuntimeProjects = ["Portia.Abstractions", "Portia.Core", "Portia.Storage.Abstractions",
+        "Portia.DependencyInjection", "Portia.AspNetCore", "Portia.Testing"];
     static readonly string[] AnalyzerProjects = ["Portia.Generators", "Portia.AspNetCore.Generators"];
     static readonly Assembly[] GeneratorAssemblies = [typeof(RegistrationCallInterceptorGenerator).Assembly,
         typeof(RequestHttpBindingGenerator).Assembly];
@@ -46,7 +56,7 @@ static class CompilerCampaign
     [
         new("plain", 10, 1, 1, 1, 0, false, false), new("small", 10, 1, 1, 1, 0), new("medium", 100, 1, 1, 1, 0),
         new("large", 1000, 1, 1, 1, 0), new("features", 100, 10, 1, 1, 0),
-        new("json", 100, 1, 10, 1, 0), new("http", 100, 1, 1, 100, 0),
+        new("json", 100, 1, 10, 1, 0), new("http-repeated", 10, 1, 1, 100, 0), new("http", 100, 1, 1, 100, 0),
         new("unrelated-1000", 100, 1, 1, 1, 1000), new("unrelated-10000", 100, 1, 1, 1, 10000),
         new("combined", 1000, 10, 10, 100, 10000)
     ];
@@ -71,6 +81,29 @@ static class CompilerCampaign
             controlDriver = controlDriver.RunGeneratorsAndUpdateCompilation(
                 CreateCompilation("CompilerConsumer", trees, features), out var generated, out var diagnostics);
             Validate(generated, diagnostics);
+            var generatorResults = controlDriver.GetRunResult().Results;
+            var generatedHints = generatorResults.SelectMany(result => result.GeneratedSources)
+                .Select(source => source.HintName).ToArray();
+            var expectedOutputs = new[]
+            {
+                "DomainEventTypeCatalogGeneratedExtensions.g.cs",
+                "PortiaJsonRoots.g.cs",
+                "PortiaGeneratedRegistrationInterceptors.g.cs",
+            };
+            if (expectedOutputs.Any(expected => !generatedHints.Contains(expected, StringComparer.Ordinal))
+                || !generatedHints.Any(hint => hint.StartsWith("PortiaHttpBinding.", StringComparison.Ordinal) || hint == "PortiaGeneratedHttpBinding.g.cs")
+                || !generatedHints.Any(hint => hint.StartsWith("PortiaGeneratedServiceCollectionExtensions", StringComparison.Ordinal))
+                || !generatedHints.Any(hint => hint.Contains("BenchmarkProjector", StringComparison.Ordinal))
+                || !generatedHints.Any(hint => hint.Contains("BenchmarkReactor", StringComparison.Ordinal))
+            )
+                throw new InvalidOperationException("Every source generator must emit its expected benchmark output.");
+            var diagnosticControl = Driver(jsonGenerator).RunGenerators(compilation
+                .ReplaceSyntaxTree(trees[2], Tree("using System.Text.Json.Serialization; namespace CompilerFixtures; public sealed partial class JsonContext0 : JsonSerializerContext;", "JsonContexts.cs"))
+                .AddSyntaxTrees(Tree("namespace CompilerFixtures; public sealed class InvalidHandler<T> : Cntryl.Portia.IRequestHandler<Command0>;", "InvalidShape.cs")));
+            var targetedGeneratorDiagnostics = diagnosticControl.GetRunResult().Diagnostics;
+            if (!targetedGeneratorDiagnostics.Any(diagnostic => diagnostic.Id == "PORTIA015")
+                || !targetedGeneratorDiagnostics.Any(diagnostic => diagnostic.Id == "PORTIA025"))
+                throw new InvalidOperationException("Diagnostic generators did not report their benchmark controls.");
             var generatedText = string.Join("\n", controlDriver.GetRunResult().GeneratedTrees.Select(tree => tree.GetText().ToString()));
             controls.Add(new
             {
@@ -78,6 +111,10 @@ static class CompilerCampaign
                 sourceHash = Hash(string.Join("\n", trees.Select(tree => tree.GetText().ToString()))),
                 generatedHash = Hash(generatedText),
                 generatedBytes = Encoding.UTF8.GetByteCount(generatedText),
+                generatedHints,
+                generatorDiagnostics = generatorResults.SelectMany(result => result.Diagnostics)
+                    .Concat(targetedGeneratorDiagnostics)
+                    .Select(diagnostic => diagnostic.Id).ToArray(),
                 featureHashes = features.Select(feature => feature.Hash).ToArray(),
                 outputCompiled = true
             });
@@ -191,7 +228,8 @@ static class CompilerCampaign
         foreach (var analyzer in Analyzers)
         {
             var driver = compilation.WithAnalyzers([analyzer], new CompilationWithAnalyzersOptions(
-                new AnalyzerOptions([]), null, concurrentAnalysis: false, logAnalyzerExecutionTime: true, reportSuppressedDiagnostics: false));
+                new AnalyzerOptions([], new BenchmarkAnalyzerConfigProvider(analyzer is ApplicationContractAnalyzer ? "Common" : "Core")),
+                null, concurrentAnalysis: false, logAnalyzerExecutionTime: true, reportSuppressedDiagnostics: false));
             var allocated = GC.GetTotalAllocatedBytes(true);
             var started = Stopwatch.GetTimestamp();
             var diagnostics = await driver.GetAnalyzerDiagnosticsAsync();
@@ -199,7 +237,19 @@ static class CompilerCampaign
             var bytes = GC.GetTotalAllocatedBytes(true) - allocated;
             if (diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
                 throw new InvalidOperationException(string.Join("\n", diagnostics));
-            rows?.Add(new Row(workload, edit, analyzer.GetType().FullName!, repetition, elapsed, bytes, 0, []));
+            var expected = analyzer switch
+            {
+                ApplicationStructureAnalyzer => "PORTIA200",
+                ApplicationBoundaryAnalyzer => "PORTIA207",
+                ApplicationContractAnalyzer => "PORTIA209",
+                ComponentPracticeAnalyzer => "PORTIA102",
+                ScenarioObservationAnalyzer => "PORTIA107",
+                _ => null
+            };
+            if (expected is not null && !diagnostics.Any(diagnostic => diagnostic.Id == expected))
+                throw new InvalidOperationException($"{analyzer.GetType().Name} did not produce the {expected} benchmark control.");
+            rows?.Add(new Row(workload, edit, analyzer.GetType().FullName!, repetition, elapsed, bytes, 0,
+                new Dictionary<string, int>(StringComparer.Ordinal) { ["diagnostics"] = diagnostics.Length }));
         }
     }
 
@@ -273,11 +323,16 @@ static class CompilerCampaign
         var events = new StringBuilder(header).AppendLine("namespace CompilerFixtures;");
         for (var index = 0; index < workload.Commands; index++)
         {
-            contracts.Append(CultureInfo.InvariantCulture, $"[Discriminator(\"compiler.command{index}\", 1)] public sealed record Command{index}(int Id = 1) : IRequest, ICallable;\n")
+            var requestRoute = index == 0 ? "[RequestRoute(\"app\", \"compiler\", \"commands\", \"run\")]" : "";
+            contracts.Append(CultureInfo.InvariantCulture, $"{requestRoute}[Discriminator(\"compiler.command{index}\", 1)] public sealed record Command{index}(int Id = 1) : IRequest, ICallable;\n")
                 .Append(CultureInfo.InvariantCulture, $"public sealed class Handler{index} : IRequestHandler<Command{index}> {{ public ValueTask<Result> HandleAsync(IRequestContext<Command{index}> context, CancellationToken ct) => ValueTask.FromResult(Result.Success); }}\n");
             events.Append(CultureInfo.InvariantCulture, $"[Discriminator(\"compiler.event{index}\", 1)] public sealed record Event{index}(int Value) : DomainEvent;\n");
         }
+        events.AppendLine("[Discriminator(\"compiler.processor_event\", 1)] public sealed record ProcessorEvent : DomainEvent;");
         contracts.AppendLine("public sealed record Query(int Id = 1) : IRequest<int>; public sealed class QueryHandler : IRequestHandler<Query, int> { public ValueTask<Result<int>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => ValueTask.FromResult(Result<int>.Success(context.Request.Id)); }");
+        contracts.AppendLine("public sealed class ContractBehavior { public void Validate() { } }");
+        contracts.AppendLine("public sealed class BenchmarkAggregate(Uuid id, IServiceProvider services) : Aggregate(id, new EventStreamAddress(\"compiler\", \"aggregate\", id.ToString()));");
+        contracts.AppendLine("public static class ScenarioControl { public static void Run(IServiceProvider services) { Cntryl.Portia.Testing.RequestScenario.For(services).When(new Command0()); } }");
         if (workload.Authorizers)
             contracts.AppendLine("public sealed class Authorizer : IRequestAuthorizer<Command0> { public ValueTask<Result> AuthorizeAsync(IRequestContext<Command0> context, CancellationToken ct) => ValueTask.FromResult(Result.Success); }");
         if (workload.Guards)
@@ -285,12 +340,12 @@ static class CompilerCampaign
         var contexts = new StringBuilder("using Cntryl.Portia; using System.Text.Json.Serialization; namespace CompilerFixtures;\n");
         for (var context = 0; context < workload.Contexts; context++)
         {
-            contexts.AppendLine("[PortiaJsonContext][JsonSerializable(typeof(int))][JsonSerializable(typeof(Query))]");
+            contexts.AppendLine("[PortiaJsonContext][JsonSerializable(typeof(int))][JsonSerializable(typeof(Query))][JsonSerializable(typeof(ProcessorEvent))]");
             for (var index = context; index < workload.Commands; index += workload.Contexts)
                 contexts.Append(CultureInfo.InvariantCulture, $"[JsonSerializable(typeof(Command{index}))][JsonSerializable(typeof(Event{index}))]\n");
             contexts.Append(CultureInfo.InvariantCulture, $"public sealed partial class JsonContext{context} : JsonSerializerContext;\n");
         }
-        var composition = new StringBuilder("using Cntryl.Portia; using Microsoft.Extensions.DependencyInjection; using Microsoft.AspNetCore.Routing; using FirstHandler = CompilerFixtures.Handler0; namespace CompilerFixtures;\n")
+        var composition = new StringBuilder("using Cntryl.Portia; using Microsoft.Extensions.DependencyInjection; using Microsoft.AspNetCore.Routing; using Microsoft.AspNetCore.Builder; using Microsoft.AspNetCore.Http; using FirstHandler = CompilerFixtures.Handler0; namespace CompilerFixtures;\n")
             .AppendLine("public static class Composition { public static PortiaBuilder Add(IServiceCollection services) { var builder = services.AddPortia(); builder.AddRequestHandler<FirstHandler>().AddRequestHandler<QueryHandler>();");
         if (workload.Authorizers)
             composition.AppendLine("builder.AddRequestAuthorizer<Authorizer>();");
@@ -300,13 +355,19 @@ static class CompilerCampaign
             composition.Append(CultureInfo.InvariantCulture, $"builder.AddRequestHandler<Handler{index}>();\n");
         composition.AppendLine("return builder; } public static void Map(IEndpointRouteBuilder app) {");
         for (var index = 0; index < workload.Mappings; index++)
-            composition.Append(CultureInfo.InvariantCulture, $"app.MapPortiaPost<Command{index % workload.Commands}>(\"/command{index}\");\n");
+            composition.Append(CultureInfo.InvariantCulture, $"app.MapPortiaPost<Command{index % workload.Commands}>(\"/command{index}\"){(workload.Mappings > workload.Commands ? ".ExcludeFromDescription()" : "")};\n");
         composition.AppendLine("} }");
         var unrelated = new StringBuilder("namespace Unrelated; public static class Editing { public static int Value() => 1; }\n");
         for (var index = 0; index < workload.UnrelatedTypes; index++)
             unrelated.Append(CultureInfo.InvariantCulture, $"public sealed class Type{index} {{ public int Value {{ get; init; }} }}\n");
+        var processors = new StringBuilder(header).AppendLine("namespace CompilerFixtures;")
+            .AppendLine("public sealed partial class BenchmarkProjector : Projector, IProjectorHandler<ProcessorEvent>")
+            .AppendLine("{ public BenchmarkProjector() : base(null!, EventStreamPattern.ForPattern(\"events\")) { } public ValueTask<Result> HandleAsync(IProjectorContext<ProcessorEvent> context, CancellationToken ct) => ValueTask.FromResult(Result.Success); }")
+            .AppendLine("public sealed partial class BenchmarkReactor : Reactor, IReactorHandler<ProcessorEvent>")
+            .AppendLine("{ public BenchmarkReactor() : base(null!, EventStreamPattern.ForPattern(\"events\")) { } public ValueTask<Result> HandleAsync(IReactorContext<ProcessorEvent> context, CancellationToken ct) => ValueTask.FromResult(Result.Success); }");
         return [Tree(contracts.ToString(), "Contracts.cs"), Tree(events.ToString(), "Events.cs"),
-            Tree(contexts.ToString(), "JsonContexts.cs"), Tree(composition.ToString(), "Composition.cs"), Tree(unrelated.ToString(), "Unrelated.cs")];
+            Tree(contexts.ToString(), "JsonContexts.cs"), Tree(composition.ToString(), "Composition.cs"),
+            Tree(processors.ToString(), "Processors.cs"), Tree(unrelated.ToString(), "Unrelated.cs")];
     }
 
     static Dictionary<string, CSharpCompilation> Variants(CSharpCompilation compilation, SyntaxTree[] trees,
@@ -320,7 +381,7 @@ static class CompilerCampaign
         return new Dictionary<string, CSharpCompilation>(StringComparer.Ordinal)
         {
             ["unchanged"] = compilation,
-            ["unrelated-body-edit"] = compilation.ReplaceSyntaxTree(trees[4], Tree(trees[4].GetText().ToString().Replace("=> 1;", "=> 2;", StringComparison.Ordinal), "Unrelated.cs")),
+            ["unrelated-body-edit"] = compilation.ReplaceSyntaxTree(trees[5], Tree(trees[5].GetText().ToString().Replace("=> 1;", "=> 2;", StringComparison.Ordinal), "Unrelated.cs")),
             ["call-site-whitespace"] = compilation.ReplaceSyntaxTree(trees[3], Tree(trees[3].GetText().ToString().Replace("services.AddPortia()", "services. AddPortia( )", StringComparison.Ordinal), "Composition.cs")),
             ["event-add"] = compilation.AddSyntaxTrees(extraEvent).ReplaceSyntaxTree(trees[2],
                 Tree(jsonText.Replace("[PortiaJsonContext]", "[PortiaJsonContext][JsonSerializable(typeof(ExtraEvent))]", StringComparison.Ordinal), "JsonContexts.cs")),
@@ -383,6 +444,30 @@ static class CompilerCampaign
     static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
     static string HashFile(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
     static SyntaxTree Tree(string source, string path) => CSharpSyntaxTree.ParseText(source, ParseOptions, path, Encoding.UTF8);
+    sealed class BenchmarkAnalyzerConfigProvider : AnalyzerConfigOptionsProvider
+    {
+        readonly AnalyzerConfigOptions _global;
+        static readonly AnalyzerConfigOptions Empty = new BenchmarkAnalyzerConfigOptions(new Dictionary<string, string>());
+
+        public BenchmarkAnalyzerConfigProvider(string role) => _global = new BenchmarkAnalyzerConfigOptions(new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["build_property.PortiaProjectStructure"] = "true",
+            ["build_property.MSBuildProjectDirectory"] = "/benchmark/CompilerConsumer",
+            ["build_property.MSBuildProjectName"] = "CompilerConsumer." + role,
+            ["build_property.RootNamespace"] = "CompilerConsumer." + role,
+            ["build_property.IsTestProject"] = "false"
+        });
+
+        public override AnalyzerConfigOptions GlobalOptions => _global;
+        public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => Empty;
+        public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => Empty;
+    }
+
+    sealed class BenchmarkAnalyzerConfigOptions(IReadOnlyDictionary<string, string> options) : AnalyzerConfigOptions
+    {
+        public override bool TryGetValue(string key, out string value) => options.TryGetValue(key, out value!);
+    }
+
     sealed record Workload(string Name, int Commands, int Features, int Contexts, int Mappings, int UnrelatedTypes, bool Authorizers = true, bool Guards = true);
     sealed record FeatureReference(MetadataReference Reference, string Hash, byte[] Image);
     sealed record Row(string Workload, string Edit, string Component, int Repetition, double Milliseconds,

@@ -6,7 +6,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
-using Microsoft.CodeAnalysis.Text;
 
 namespace Cntryl.Portia;
 
@@ -52,7 +51,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         var calls = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => node is GenericNameSyntax name && MappingMethodNames.Contains(name.Identifier.ValueText),
-                static (syntaxContext, _) => AnalyzeCall(syntaxContext))
+                static (syntaxContext, ct) => AnalyzeCall(syntaxContext, ct))
             .Where(static call => call is not null)
             .Select(static (call, _) => call!)
             .WithTrackingName("PortiaHttpBindings")
@@ -82,25 +81,38 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 }
             }
 
-            Generate(sourceContext, [.. calls.Where(call => call.Model is not null).Select(call => call.Model!)]);
         });
+        var assemblyIdentity = context.CompilationProvider.Select(static (compilation, _) =>
+            compilation.Assembly.Identity.ToString());
+        var files = calls.Combine(assemblyIdentity).SelectMany(static (input, ct) => GeneratedSource.Capture(
+            output => Generate(output, [.. input.Left.Where(call => call.Model is not null).Select(call => call.Model!)], false, input.Right), ct))
+            .WithTrackingName("PortiaHttpGeneratedFiles");
+        context.RegisterSourceOutput(files, static (output, file) => GeneratedSource.Add(output, file.HintName, file.Source));
+        var shapes = calls.Select(static (models, _) => models.Where(call => call.Model is not null)
+                .Select(call => call.Model!).Distinct(BindingComparer.Instance).ToImmutableArray())
+            .WithComparer(BindingArrayComparer.Instance)
+            .WithTrackingName("PortiaHttpBindingShapes");
+        var implementations = shapes.Combine(assemblyIdentity).SelectMany(static (input, ct) => GeneratedSource.Capture(
+            output => Generate(output, input.Left, true, input.Right), ct));
+        context.RegisterSourceOutput(implementations, static (output, file) => GeneratedSource.Add(output, file.HintName, file.Source));
     }
 
-    static CallAnalysis? AnalyzeCall(GeneratorSyntaxContext context)
+    static CallAnalysis? AnalyzeCall(GeneratorSyntaxContext context, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var name = (GenericNameSyntax)context.Node;
         if (name.Ancestors().OfType<CrefSyntax>().Any())
             return null;
         ExpressionSyntax expression = name.Parent is MemberAccessExpressionSyntax access && access.Name == name
             ? access : name;
-        if (context.SemanticModel.GetSymbolInfo(expression).Symbol is not IMethodSymbol method
-            || method.ContainingType.ToDisplayString() != "Cntryl.Portia.PortiaEndpointRouteBuilderExtensions"
+        if (context.SemanticModel.GetSymbolInfo(expression, ct).Symbol is not IMethodSymbol method
+            || !SymbolNames.Is(method.ContainingType, "Cntryl.Portia.PortiaEndpointRouteBuilderExtensions")
             || method.TypeArguments.Length is not (1 or 2))
             return null;
         if (expression.Parent is not InvocationExpressionSyntax invocation || invocation.Expression != expression)
             return Invalid(expression, "mapping method groups are unsupported; use a concrete direct mapping call");
         foreach (var lambda in invocation.Ancestors().OfType<LambdaExpressionSyntax>())
-            if (context.SemanticModel.GetTypeInfo(lambda).ConvertedType is INamedTypeSymbol
+            if (context.SemanticModel.GetTypeInfo(lambda, ct).ConvertedType is INamedTypeSymbol
                 { Name: "Expression", Arity: 1 } converted
                 && converted.ContainingNamespace.ToDisplayString() == "System.Linq.Expressions")
                 return Invalid(invocation, "expression-tree mappings are unsupported; use a concrete direct mapping call");
@@ -108,7 +120,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         if (method.TypeArguments[0] is not INamedTypeSymbol requestType || !GeneratedTypeShape.IsSupported(requestType))
             return Invalid(invocation, "use an accessible, concrete, non-generic request type");
 
-        var operation = context.SemanticModel.GetOperation(invocation) as IInvocationOperation;
+        var operation = context.SemanticModel.GetOperation(invocation, ct) as IInvocationOperation;
         var configured = operation?.Arguments.Any(argument => argument.Parameter?.Name == "configure") == true;
         var constant = operation?.Arguments.FirstOrDefault(a => a.Parameter?.Name == "pattern")?.Value.ConstantValue;
         if (constant is not { HasValue: true, Value: string pattern })
@@ -140,7 +152,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         // Prefer-header enqueue pivot — there's no separate "Async"-suffixed method to remember;
         // the same MapPortiaPost/Put/Patch/Delete call just behaves differently based on what the
         // request itself declared, exactly like every other transport marker in this framework.
-        var isQueuable = requestType.AllInterfaces.Any(iface => iface.ToDisplayString() == "Cntryl.Portia.IQueuable");
+        var isQueuable = requestType.AllInterfaces.Any(iface => SymbolNames.Is(iface, "Cntryl.Portia.IQueuable"));
 
         var kind = method.Name switch
         {
@@ -165,7 +177,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
         CallAnalysis? Mapping(ParameterModel[] parameters, bool hasDefaultBinder)
         {
-            var location = context.SemanticModel.GetInterceptableLocation(invocation);
+            var location = context.SemanticModel.GetInterceptableLocation(invocation, ct);
             return location is null
                 ? Invalid(invocation, "this call cannot be intercepted; use a concrete direct mapping call")
                 : new CallAnalysis(new CallModel(
@@ -173,6 +185,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     resultType, resultRuntimeType, resultIsNullable, kind, verb, parameters,
                     InterceptableLocationModel.From(location),
                     DiagnosticLocation.From(invocation.GetLocation()), ContainingScope(invocation),
+                    context.SemanticModel.GetEnclosingSymbol(invocation.SpanStart, ct)?.ContainingType?.ToDisplayString() ?? "TopLevel",
                     IsExcludedFromDescription(invocation), configured, hasDefaultBinder), null);
         }
 
@@ -214,8 +227,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 var property = requestType.GetMembers().OfType<IPropertySymbol>()
                     .FirstOrDefault(p => string.Equals(p.Name, parameter.Name, StringComparison.OrdinalIgnoreCase));
                 var jsonName = property?.GetAttributes().FirstOrDefault(a =>
-                        a.AttributeClass?.ToDisplayString() ==
-                        "System.Text.Json.Serialization.JsonPropertyNameAttribute")
+                        a.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, "System.Text.Json.Serialization.JsonPropertyNameAttribute"))
                     ?.ConstructorArguments.FirstOrDefault().Value as string;
                 var typeName = parameter.Type.ToDisplayString(NullableTypeDisplayFormat);
                 var runtimeTypeName = parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -346,34 +358,107 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         return new string(chars);
     }
 
-    static void Generate(SourceProductionContext context, ImmutableArray<CallModel> calls)
+    static void Generate(GeneratedOutput context, ImmutableArray<CallModel> calls, bool implementationsOnly, string assemblyIdentity)
     {
         if (calls.IsDefaultOrEmpty)
             return;
 
-        var source = new StringBuilder()
-            .AppendLine("// <auto-generated />")
-            .AppendLine("#nullable enable")
-            .AppendLine("using Microsoft.AspNetCore.Builder;")
-            .AppendLine("using Microsoft.AspNetCore.Http;")
-            .AppendLine("using Microsoft.AspNetCore.Routing;")
-            .AppendLine();
-        _ = InterceptsLocationPolyfill.AppendTo(source, true)
-            .AppendLine()
-            .AppendLine("namespace Cntryl.Portia.Generated")
-            .AppendLine("{");
+        var implementations = new Dictionary<CallModel, string>(BindingComparer.Instance);
+        foreach (var call in calls)
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+            if (implementations.ContainsKey(call))
+                continue;
+            implementations.Add(call, GeneratedSource.Label(call.RequestTypeName) + "_" + GeneratedSource.Identity(assemblyIdentity + "\n" + BindingIdentity(call)));
+        }
 
-        _ = source.AppendLine("file static class PortiaHttpInterceptors").AppendLine("{");
+        if (implementationsOnly)
+        {
+            foreach (var bucket in GeneratedSource.Buckets(implementations, entry => entry.Value, context.CancellationToken))
+            {
+                var source = Header().AppendLine("namespace Cntryl.Portia.Generated;").AppendLine();
+                foreach (var implementation in bucket.Items)
+                {
+                    context.CancellationToken.ThrowIfCancellationRequested();
+                    source.Append("internal static class PortiaHttpBinding_").Append(implementation.Value).AppendLine()
+                        .AppendLine("{");
+                    AppendImplementation(source, implementation.Key);
+                    source.AppendLine("}").AppendLine();
+                }
+                GeneratedSource.Add(context, "PortiaHttpBinding." + (bucket.Key.Length == 0 ? "Root" : bucket.Key) + ".g.cs", source.ToString());
+            }
+            return;
+        }
 
-        for (var i = 0; i < calls.Length; i++)
-            AppendInterceptor(source, calls[i], i);
-
-        _ = source.AppendLine("}").AppendLine("}");
-
-        context.AddSource("PortiaGeneratedHttpBinding.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        foreach (var group in calls.GroupBy(call => call.CallingType, StringComparer.Ordinal))
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+            var identity = GeneratedSource.Identity(group.Key);
+            var source = InterceptsLocationPolyfill.AppendTo(Header(), true)
+                .AppendLine("namespace Cntryl.Portia.Generated").AppendLine("{")
+                .AppendLine("    file static class PortiaHttpInterceptors").AppendLine("    {");
+            foreach (var binding in group.GroupBy(call => call, BindingComparer.Instance))
+            {
+                foreach (var call in binding)
+                    source.Append("        [global::System.Runtime.CompilerServices.InterceptsLocation(")
+                        .Append(call.Location.Version).Append(", ").Append(Literal(call.Location.Data)).AppendLine(")]");
+                var callModel = binding.Key;
+                var implementation = implementations[callModel];
+                source.Append("        public static global::Microsoft.AspNetCore.Builder.IEndpointConventionBuilder Call_")
+                    .Append(implementation)
+                    .Append("(this global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder app, string pattern")
+                    .Append(callModel.Configured ? ", global::System.Action<" + ConfigurationType(callModel) + "> configure" : string.Empty)
+                    .Append(") => PortiaHttpBinding_").Append(implementation).Append(".Map(app, pattern")
+                    .Append(callModel.Configured ? ", configure" : string.Empty).AppendLine(");");
+            }
+            source.AppendLine("    }").AppendLine("}");
+            GeneratedSource.Add(context, "PortiaHttpInterceptors." + GeneratedSource.Label(group.Key) + "." + identity + ".g.cs", source.ToString());
+        }
     }
 
-    static void AppendInterceptor(StringBuilder source, CallModel call, int index)
+    static StringBuilder Header() => new StringBuilder()
+        .AppendLine("// <auto-generated />")
+        .AppendLine("#nullable enable")
+        .AppendLine("using Microsoft.AspNetCore.Builder;")
+        .AppendLine("using Microsoft.AspNetCore.Http;")
+        .AppendLine("using Microsoft.AspNetCore.Routing;");
+
+    static string BindingIdentity(CallModel call)
+    {
+        var key = new StringBuilder();
+        void Add(string? value) => key.Append((value?.Length ?? -1).ToString(CultureInfo.InvariantCulture)).Append(':').Append(value);
+        Add(call.RequestTypeFullName);
+        Add(call.RequestTypeName);
+        Add(call.ResultType);
+        Add(call.ResultRuntimeType);
+        Add(call.ResultIsNullable.ToString());
+        Add(call.Kind.ToString());
+        Add(call.Verb);
+        Add(call.Configured.ToString());
+        Add(call.HasDefaultBinder.ToString());
+        foreach (var parameter in call.Parameters)
+        {
+            Add(parameter.Name);
+            Add(parameter.Type);
+            Add(parameter.RuntimeType);
+            Add(parameter.UnderlyingType);
+            Add(parameter.Source.ToString());
+            Add(parameter.RouteToken);
+            Add(parameter.Nullable.ToString());
+            Add(parameter.Default);
+            Add(parameter.JsonName);
+            Add(parameter.IsEnum.ToString());
+            Add(parameter.ParseKind.ToString());
+            Add(parameter.FormBindable.ToString());
+        }
+        return GeneratedSource.Identity(key.ToString());
+    }
+
+    static string ConfigurationType(CallModel call) => call.Kind is CallKind.Stream or CallKind.Sse
+        ? $"global::Cntryl.Portia.PortiaStreamingEndpointConfiguration<{call.RequestTypeFullName}>"
+        : $"global::Cntryl.Portia.PortiaEndpointConfiguration<{call.RequestTypeFullName}{(call.ResultType is not null ? ", " + call.ResultType : string.Empty)}>";
+
+    static void AppendImplementation(StringBuilder source, CallModel call)
     {
         var bodyParameters = call.Parameters.Where(p => p.Source == ParameterSource.Body).ToArray();
         var hasBody = bodyParameters.Length > 0;
@@ -381,18 +466,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             call.Parameters.Any(parameter => parameter.Source == ParameterSource.Route);
         var formBindable = hasBody && bodyParameters.All(p => p.FormBindable);
         var readsForm = formBindable || checksRoutedBody && !hasBody;
-        var configurationType = call.Kind is CallKind.Stream or CallKind.Sse
-            ? $"global::Cntryl.Portia.PortiaStreamingEndpointConfiguration<{call.RequestTypeFullName}>"
-            : $"global::Cntryl.Portia.PortiaEndpointConfiguration<{call.RequestTypeFullName}{(call.ResultType is not null ? ", " + call.ResultType : string.Empty)}>";
+        var configurationType = ConfigurationType(call);
 
         _ = source
-            .Append("    [global::System.Runtime.CompilerServices.InterceptsLocation(")
-            .Append(call.Location.Version)
-            .Append(", \"")
-            .Append(call.Location.Data)
-            .AppendLine("\")]")
-            .Append("    public static global::Microsoft.AspNetCore.Builder.IEndpointConventionBuilder Call")
-            .Append(index)
+            .Append("    public static global::Microsoft.AspNetCore.Builder.IEndpointConventionBuilder Map")
             .Append("(this global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder app, string pattern")
             .Append(call.Configured
                 ? $", global::System.Action<{configurationType}> configure"
@@ -971,6 +1048,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         InterceptableLocationModel location,
         DiagnosticLocation diagnosticLocation,
         string containingSymbol,
+        string callingType,
         bool excludedFromDescription,
         bool configured,
         bool hasDefaultBinder)
@@ -998,6 +1076,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         public DiagnosticLocation DiagnosticLocation { get; } = diagnosticLocation;
 
         public string ContainingSymbol { get; } = containingSymbol;
+        public string CallingType { get; } = callingType;
 
         public bool ExcludedFromDescription { get; } = excludedFromDescription;
         public bool Configured { get; } = configured;
@@ -1017,6 +1096,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             && Location == other.Location
             && DiagnosticLocation == other.DiagnosticLocation
             && string.Equals(ContainingSymbol, other.ContainingSymbol, StringComparison.Ordinal)
+            && CallingType == other.CallingType
             && ExcludedFromDescription == other.ExcludedFromDescription
             && Configured == other.Configured
             && HasDefaultBinder == other.HasDefaultBinder;
@@ -1042,6 +1122,30 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 return (hash * 397) ^ HasDefaultBinder.GetHashCode();
             }
         }
+    }
+
+    sealed class BindingComparer : IEqualityComparer<CallModel>
+    {
+        public static readonly BindingComparer Instance = new();
+
+        public bool Equals(CallModel? left, CallModel? right) => ReferenceEquals(left, right)
+            || left is not null && right is not null
+            && left.RequestTypeFullName == right.RequestTypeFullName
+            && left.RequestTypeName == right.RequestTypeName
+            && left.ResultType == right.ResultType && left.ResultRuntimeType == right.ResultRuntimeType
+            && left.ResultIsNullable == right.ResultIsNullable && left.Kind == right.Kind
+            && left.Verb == right.Verb && left.Configured == right.Configured
+            && left.HasDefaultBinder == right.HasDefaultBinder && left.Parameters.SequenceEqual(right.Parameters);
+
+        public int GetHashCode(CallModel model) => StringComparer.Ordinal.GetHashCode(model.RequestTypeFullName);
+    }
+
+    sealed class BindingArrayComparer : IEqualityComparer<ImmutableArray<CallModel>>
+    {
+        public static readonly BindingArrayComparer Instance = new();
+        public bool Equals(ImmutableArray<CallModel> left, ImmutableArray<CallModel> right) =>
+            left.Length == right.Length && left.SequenceEqual(right, BindingComparer.Instance);
+        public int GetHashCode(ImmutableArray<CallModel> value) => value.Length;
     }
 
     sealed class StringTupleComparer : IEqualityComparer<(string RequestTypeFullName, string ContainingSymbol)>

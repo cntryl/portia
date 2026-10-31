@@ -16,7 +16,7 @@ static class SymbolNames
         {
             if (end <= 0)
                 return false;
-            var separator = metadataName.LastIndexOfAny(['.', '+'], end - 1);
+            var separator = Math.Max(metadataName.LastIndexOf('.', end - 1), metadataName.LastIndexOf('+', end - 1));
             if (!Segment(metadataName, separator + 1, end, current.MetadataName))
                 return false;
             var nested = separator >= 0 && metadataName[separator] == '+';

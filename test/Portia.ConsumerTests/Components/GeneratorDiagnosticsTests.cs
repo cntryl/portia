@@ -397,7 +397,8 @@ public sealed class GeneratorDiagnosticsTests
             references, new CSharpCompilationOptions(
                 OutputKind.DynamicallyLinkedLibrary));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
-            [new PortiaServiceRegistrationGenerator().AsSourceGenerator()], parseOptions: parseOptions);
+            [new PortiaServiceRegistrationGenerator().AsSourceGenerator()], parseOptions: parseOptions,
+            driverOptions: new GeneratorDriverOptions(default, trackIncrementalGeneratorSteps: true));
         driver = driver.RunGenerators(compilation);
 
         var movedSource = Environment.NewLine + source;
@@ -405,7 +406,15 @@ public sealed class GeneratorDiagnosticsTests
             "Requests.cs");
         driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, movedTree));
 
-        var diagnostic = Assert.Single(driver.GetRunResult().Diagnostics, item => item.Id == "PORTIA022");
+        var result = driver.GetRunResult().Results.Single();
+        var semanticOutputs = result.TrackedSteps["PortiaRequestTransports"].SelectMany(step => step.Outputs).ToArray();
+        Assert.NotEmpty(semanticOutputs);
+        Assert.All(semanticOutputs, output => Assert.Equal(IncrementalStepRunReason.Cached, output.Reason));
+        var diagnosticOutputs = result.TrackedSteps["PortiaRequestTransportLocations"]
+            .SelectMany(step => step.Outputs).ToArray();
+        Assert.Contains(diagnosticOutputs, output => output.Reason == IncrementalStepRunReason.Modified);
+
+        var diagnostic = Assert.Single(result.Diagnostics, item => item.Id == "PORTIA022");
         Assert.Equal("Duplicate", movedSource.Substring(diagnostic.Location.SourceSpan.Start,
             diagnostic.Location.SourceSpan.Length));
         Assert.Equal(7, diagnostic.Location.GetLineSpan().StartLinePosition.Line);

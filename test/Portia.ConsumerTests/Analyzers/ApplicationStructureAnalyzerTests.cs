@@ -192,7 +192,6 @@ public sealed class ApplicationStructureAnalyzerTests
             [("Features/Orders/Aggregates/CancellationRule.cs", source)]);
         _ = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
     }
-
     [Fact]
     public void ShouldAllowDirectlyReferencedAggregateCollaborator()
     {
@@ -213,6 +212,26 @@ public sealed class ApplicationStructureAnalyzerTests
         const string source = "namespace Shop.Common.Features.Orders.Models; public sealed record OrderView(string Number);";
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationStructureAnalyzer(),
             [("Features/Orders/Models/OrderView.cs", source)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA204");
+    }
+
+    [Fact]
+    public void ShouldAllowSafeStringRepresentationGivenValueRecord()
+    {
+        // Arrange
+        const string source = """
+                              namespace Shop.Common.Features.Orders.Values;
+                              public sealed record Secret
+                              {
+                                  public override string ToString() => "Secret { [REDACTED] }";
+                              }
+                              """;
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Values/Secret.cs", source)]);
+
+        // Assert
         Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA204");
     }
 

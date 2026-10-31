@@ -124,6 +124,7 @@ is modeled honestly as an at-least-once reactor effect instead.
 - [NativeAOT](docs/native-aot.md): trimming and source-generated JSON setup
 - [Model Context Protocol](docs/mcp.md): request-backed tools, resources, and prompts over stdio and Streamable HTTP
 - [Migrating to Portia 0.4](docs/migration-0.4.md): JSON ownership, tenant templates, and MCP tests
+- [Portia 0.9.3 migration notes](docs/migration-0.9.3.md): processor results, typed contexts, exception wrappers, and dependency floors
 - [Portia 0.8 migration notes](docs/migration-0.8.md): Fitz 2.0 compatibility and queue persistence
 - [Fitz 3 upgrade](docs/fitz-3-upgrade.md): coordinated client, broker, and stored-data migration
 

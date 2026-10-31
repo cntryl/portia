@@ -33,17 +33,9 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-          cache: true
-          cache-dependency-path: |
-            **/packages.lock.json
-            **/*.csproj
-            **/Directory.Build.props
-            **/Directory.Build.targets
-            Directory.Packages.props
-            nuget.config
 
-      - name: Restore packages with locked test and executable graphs
-        run: dotnet restore Portia.slnx --locked-mode
+      - name: Restore packages
+        run: dotnet restore Portia.slnx
 
       - name: Verify stable external dependencies
         run: dotnet run --project eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj --configuration Release -- verify-stable-dependencies --root .

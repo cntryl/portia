@@ -18,14 +18,17 @@ public sealed class JsonRootMarkerGenerator : IIncrementalGenerator
     {
         var contexts = context.SyntaxProvider.ForAttributeWithMetadataName("Cntryl.Portia.PortiaJsonContextAttribute",
             static (node, _) => node is TypeDeclarationSyntax,
-            static (syntax, _) => Model((INamedTypeSymbol)syntax.TargetSymbol)).Collect();
+            static (syntax, _) => Model((INamedTypeSymbol)syntax.TargetSymbol))
+            .WithTrackingName("PortiaJsonRootContexts").Collect();
         context.RegisterSourceOutput(contexts, static (output, models) =>
         {
             foreach (var model in models)
                 if (model.Reason is { } reason)
                     output.ReportDiagnostic(Diagnostic.Create(UnsupportedContext, model.Location.ToLocation(), model.Name, reason));
-            Generate(output, models.SelectMany(model => model.Roots).ToArray());
         });
+        var roots = contexts.Select(static (models, _) => new RootSet(models.SelectMany(model => model.Roots).ToArray()))
+            .WithTrackingName("PortiaJsonRootEmission");
+        context.RegisterSourceOutput(roots, static (output, model) => Generate(output, model.Roots));
     }
 
     static ContextModel Model(INamedTypeSymbol type)
@@ -84,7 +87,38 @@ public sealed class JsonRootMarkerGenerator : IIncrementalGenerator
             ((int)character).ToString("X4", CultureInfo.InvariantCulture)));
     }
 
-    sealed record ContextModel(string Name, DiagnosticLocation Location, string? Reason, RootModel[] Roots);
+    sealed record ContextModel(string Name, DiagnosticLocation Location, string? Reason, RootModel[] Roots)
+    {
+        public bool Equals(ContextModel? other) => other is not null && Name == other.Name
+            && Location == other.Location && Reason == other.Reason && Roots.SequenceEqual(other.Roots);
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var hash = ((Name.GetHashCode() * 397) ^ Location.GetHashCode()) * 397 ^ (Reason?.GetHashCode() ?? 0);
+                foreach (var root in Roots)
+                    hash = hash * 397 ^ root.GetHashCode();
+                return hash;
+            }
+        }
+    }
 
     sealed record RootModel(string RootType, string ContextType, string FactoryName);
+
+    sealed record RootSet(RootModel[] Roots)
+    {
+        public bool Equals(RootSet? other) => other is not null && Roots.SequenceEqual(other.Roots);
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var hash = 17;
+                foreach (var root in Roots)
+                    hash = hash * 397 ^ root.GetHashCode();
+                return hash;
+            }
+        }
+    }
 }

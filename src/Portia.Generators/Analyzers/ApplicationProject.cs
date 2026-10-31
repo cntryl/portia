@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 
@@ -58,6 +59,15 @@ sealed class ApplicationProject(string directory, string name, string rootNamesp
 
     public static bool IsRequest(INamedTypeSymbol symbol) =>
         symbol.AllInterfaces.Any(iface => SymbolNames.Is(iface, "Cntryl.Portia.IRequestBase"));
+
+    public static bool IsDomainEventCatalogAdapter(INamedTypeSymbol symbol) => symbol.IsStatic
+        && symbol.Name.EndsWith("DomainEventCatalog", StringComparison.Ordinal)
+        && symbol.GetMembers().OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Name == "AddTo"
+            && method.Parameters.Length == 1
+            && method.Parameters[0].Type is INamedTypeSymbol parameterType
+            && SymbolNames.Is(parameterType, "Cntryl.Portia.DomainEventTypeCatalog")
+            && method.ReturnType is INamedTypeSymbol returnType
+            && SymbolNames.Is(returnType, "Cntryl.Portia.DomainEventTypeCatalog"));
 
     public static bool IsReactor(INamedTypeSymbol symbol) => DerivesFrom(symbol, "Reactor")
         || symbol.AllInterfaces.Any(iface => SymbolNames.Is(iface, "Cntryl.Portia.IReactorHandler`1")

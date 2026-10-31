@@ -30,31 +30,41 @@ static class RequestTransportDiscovery
 
     public static bool IsCandidate(SyntaxNode node) => SyntaxFilters.HasBaseListOrPartial(node);
 
-    public static RequestTransportComponent? GetRequestTransportComponent(GeneratorSyntaxContext context)
+    public static Analysis? Analyze(GeneratorSyntaxContext context, CancellationToken ct)
     {
         var declaration = (TypeDeclarationSyntax)context.Node;
-        return context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol symbol
-               && GetRequestTransportComponent(symbol) is { } component
-            ? component.WithLocation(DiagnosticLocation.From(declaration.Identifier.GetLocation()))
-            : null;
+        if (context.SemanticModel.GetDeclaredSymbol(declaration, ct) is not INamedTypeSymbol symbol)
+            return null;
+        var component = GetRequestTransportComponent(symbol);
+        var location = DiagnosticLocation.From(declaration.Identifier.GetLocation());
+        var duplicateCandidate = component is null ? null : new DuplicateDiscriminatorCandidate(component.TypeName,
+            component.DiscriminatorName, component.DiscriminatorVersion, location);
+        return new Analysis(component, duplicateCandidate,
+            GetInvalidRequestDiscriminator(context, declaration, symbol), GetInvalidRoute(context, declaration, symbol),
+            GetInvalidTransportId(context, declaration, symbol), GetInaccessibleRequest(declaration, symbol));
     }
 
-    public static InvalidDiscriminator? GetInvalidRequestDiscriminator(GeneratorSyntaxContext context)
+    internal sealed record Analysis(RequestTransportComponent? Component, DuplicateDiscriminatorCandidate? DuplicateCandidate,
+        InvalidDiscriminator? Discriminator, InvalidRoute? Route, InvalidTransportId? TransportId,
+        InaccessibleRequest? Inaccessible);
+
+    internal sealed record DuplicateDiscriminatorCandidate(string TypeName, string DiscriminatorName,
+        int DiscriminatorVersion, DiagnosticLocation Location);
+
+    static InvalidDiscriminator? GetInvalidRequestDiscriminator(GeneratorSyntaxContext context, TypeDeclarationSyntax declaration, INamedTypeSymbol symbol)
     {
-        var declaration = (TypeDeclarationSyntax)context.Node;
-        if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol
-            || symbol.IsAbstract
+        if (symbol.IsAbstract
             || IsStream(symbol)
             || !HasTransportMarker(symbol)
             || !symbol.GetAttributes().Any(attribute =>
-                attribute.AttributeClass?.ToDisplayString() == RequestRouteAttributeMetadataName))
+                attribute.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, RequestRouteAttributeMetadataName)))
         {
             return null;
         }
 
         var attribute = symbol.GetAttributes()
             .FirstOrDefault(candidate =>
-                candidate.AttributeClass?.ToDisplayString() == DiscriminatorAttributeMetadataName);
+                candidate.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, DiscriminatorAttributeMetadataName));
         var name = attribute?.ConstructorArguments.ElementAtOrDefault(0).Value as string;
         var version = attribute?.ConstructorArguments.ElementAtOrDefault(1).Value as int? ?? 0;
         return (attribute is not null && !string.IsNullOrWhiteSpace(name) && version > 0)
@@ -64,11 +74,9 @@ static class RequestTransportDiscovery
                 DiagnosticLocation.From(declaration.Identifier.GetLocation()));
     }
 
-    public static InvalidRoute? GetInvalidRoute(GeneratorSyntaxContext context)
+    static InvalidRoute? GetInvalidRoute(GeneratorSyntaxContext context, TypeDeclarationSyntax declaration, INamedTypeSymbol symbol)
     {
-        var declaration = (TypeDeclarationSyntax)context.Node;
-        if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol
-            || symbol.IsAbstract
+        if (symbol.IsAbstract
             || IsStream(symbol)
             || !HasTransportMarker(symbol))
         {
@@ -77,7 +85,7 @@ static class RequestTransportDiscovery
 
         var attribute = symbol.GetAttributes()
             .FirstOrDefault(candidate =>
-                candidate.AttributeClass?.ToDisplayString() == RequestRouteAttributeMetadataName);
+                candidate.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, RequestRouteAttributeMetadataName));
         if (attribute is null || attribute.ConstructorArguments.Length != 4)
         {
             return null;
@@ -98,11 +106,9 @@ static class RequestTransportDiscovery
         return null;
     }
 
-    public static InaccessibleRequest? GetInaccessibleRequest(GeneratorSyntaxContext context)
+    static InaccessibleRequest? GetInaccessibleRequest(TypeDeclarationSyntax declaration, INamedTypeSymbol symbol)
     {
-        var declaration = (TypeDeclarationSyntax)context.Node;
-        return context.SemanticModel.GetDeclaredSymbol(declaration) is INamedTypeSymbol { IsAbstract: false } symbol
-               && !IsStream(symbol)
+        return !symbol.IsAbstract && !IsStream(symbol)
                && HasTransportMarker(symbol)
                && GeneratedTypeShape.InaccessibleReason(symbol) is { } reason
             ? new InaccessibleRequest(symbol.ToDisplayString(), reason,
@@ -110,15 +116,14 @@ static class RequestTransportDiscovery
             : null;
     }
 
-    public static InvalidTransportId? GetInvalidTransportId(GeneratorSyntaxContext context)
+    static InvalidTransportId? GetInvalidTransportId(GeneratorSyntaxContext context, TypeDeclarationSyntax declaration, INamedTypeSymbol symbol)
     {
-        var declaration = (TypeDeclarationSyntax)context.Node;
-        if (context.SemanticModel.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol || symbol.IsAbstract)
+        if (symbol.IsAbstract)
             return null;
 
         foreach (var attribute in symbol.AllInterfaces.SelectMany(iface => iface.GetAttributes())
                      .Where(attribute =>
-                         attribute.AttributeClass?.ToDisplayString() == RequestTransportAttributeMetadataName))
+                         attribute.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, RequestTransportAttributeMetadataName)))
         {
             var id = attribute.ConstructorArguments.ElementAtOrDefault(0).Value as string ?? string.Empty;
             if (string.IsNullOrWhiteSpace(id) || id.Any(character =>
@@ -156,10 +161,10 @@ static class RequestTransportDiscovery
 
         var routeAttribute = symbol.GetAttributes()
             .FirstOrDefault(attribute =>
-                attribute.AttributeClass?.ToDisplayString() == RequestRouteAttributeMetadataName);
+                attribute.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, RequestRouteAttributeMetadataName));
         var discriminatorAttribute = symbol.GetAttributes()
             .FirstOrDefault(attribute =>
-                attribute.AttributeClass?.ToDisplayString() == DiscriminatorAttributeMetadataName);
+                attribute.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, DiscriminatorAttributeMetadataName));
 
         if (routeAttribute is null || routeAttribute.ConstructorArguments.Length != 4
                                    || discriminatorAttribute is null ||
@@ -177,7 +182,7 @@ static class RequestTransportDiscovery
         const string wildcard = "*";
 
         var resultTypeInterface = symbol.AllInterfaces.FirstOrDefault(iface =>
-            iface.OriginalDefinition.ContainingNamespace.ToDisplayString() == "Cntryl.Portia"
+            SymbolNames.IsInNamespace(iface, "Cntryl.Portia")
             && iface.OriginalDefinition.MetadataName == RequestWithResultMetadataName);
 
         var resultType = resultTypeInterface?.TypeArguments[0];
@@ -201,17 +206,17 @@ static class RequestTransportDiscovery
     public static string FormatStringLiteral(string value) => SymbolDisplay.FormatLiteral(value, true);
 
     static bool ImplementsInterface(INamedTypeSymbol symbol, string metadataName) =>
-        symbol.AllInterfaces.Any(iface => iface.ToDisplayString() == metadataName);
+        symbol.AllInterfaces.Any(iface => SymbolNames.Is(iface, metadataName));
 
     static bool IsStream(INamedTypeSymbol symbol) => symbol.AllInterfaces.Any(iface =>
-        iface.OriginalDefinition.ContainingNamespace.ToDisplayString() == "Cntryl.Portia"
+        SymbolNames.IsInNamespace(iface, "Cntryl.Portia")
         && iface.OriginalDefinition.MetadataName == StreamRequestMetadataName);
 
     static bool HasTransportMarker(INamedTypeSymbol symbol) => GetTransportIds(symbol).Length != 0;
 
     static string[] GetTransportIds(INamedTypeSymbol symbol) => symbol.AllInterfaces
         .SelectMany(iface => iface.GetAttributes())
-        .Where(attribute => attribute.AttributeClass?.ToDisplayString() == RequestTransportAttributeMetadataName)
+        .Where(attribute => attribute.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, RequestTransportAttributeMetadataName))
         .Select(attribute => attribute.ConstructorArguments.ElementAtOrDefault(0).Value as string)
         .Where(static id => !string.IsNullOrWhiteSpace(id))
         .Select(static id => id!)

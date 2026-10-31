@@ -57,6 +57,26 @@ public sealed class ApplicationContractAnalyzerTests
         Assert.Contains("Total", behavior.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ShouldAllowSafeStringRepresentationGivenCommonValueRecord()
+    {
+        // Arrange
+        const string source = """
+                              namespace Shop.Common.Features.Orders.Values;
+                              public sealed record Secret
+                              {
+                                  public override string ToString() => "Secret { [REDACTED] }";
+                              }
+                              """;
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationContractAnalyzer(),
+            [("Features/Orders/Values/Secret.cs", source)]);
+
+        // Assert
+        Assert.Empty(diagnostics);
+    }
+
     [Theory]
     [InlineData("public record Price", "Features/Orders/Values/Price.cs")]
     [InlineData("public sealed record Price", "Features/Orders/Models/Price.cs")]
@@ -105,6 +125,24 @@ public sealed class ApplicationContractAnalyzerTests
         // Act
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationContractAnalyzer(),
             [($"Features/{feature}/Commands/PlaceOrder.cs", source)]);
+
+        // Assert
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void ShouldIgnoreRequestFamilyGivenInterfaceContract()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              namespace Shop.Common.Features.Orders.Commands;
+                              public interface IOrderRequest : IRequestBase;
+                              """;
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationContractAnalyzer(),
+            [("Features/Orders/Commands/IOrderRequest.cs", source)]);
 
         // Assert
         Assert.Empty(diagnostics);

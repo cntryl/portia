@@ -8,6 +8,8 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../Portia.Generators/Infrastructure/GeneratedSource.cs" Link="Infrastructure/GeneratedSource.cs"/>
+    <Compile Include="../Portia.Generators/Infrastructure/SymbolNames.cs" Link="Infrastructure/SymbolNames.cs"/>
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all"/>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all"/>
   </ItemGroup>

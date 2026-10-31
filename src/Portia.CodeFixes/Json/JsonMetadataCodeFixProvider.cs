@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Composition;
+using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
@@ -14,6 +15,7 @@ namespace Cntryl.Portia;
 public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
 {
     const string CreateContextKey = "Portia.CreateJsonContext";
+    static readonly ConditionalWeakTable<Project, ContextCache> ContextsByProject = new();
 
     /// <inheritdoc />
     public override ImmutableArray<string> FixableDiagnosticIds => ["PORTIA025"];
@@ -64,6 +66,9 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
     static async Task<ImmutableArray<ContextInfo>> FindContextsAsync(Project project,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (ContextsByProject.TryGetValue(project, out var cached))
+            return cached.Contexts;
         var chosen = new Dictionary<INamedTypeSymbol, (ContextInfo Info, bool Marker)>(SymbolEqualityComparer.Default);
         var order = new List<INamedTypeSymbol>();
         foreach (var document in project.Documents)
@@ -74,8 +79,13 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
                 continue;
             }
 
+            var declarations = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+                .Where(declaration => declaration.BaseList is not null || declaration.AttributeLists.Count != 0
+                    || declaration.Modifiers.Any(SyntaxKind.PartialKeyword)).ToArray();
+            if (declarations.Length == 0)
+                continue;
             var model = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
-            foreach (var declaration in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            foreach (var declaration in declarations)
             {
                 if (model?.GetDeclaredSymbol(declaration, cancellationToken) is not INamedTypeSymbol symbol
                     || JsonContextShape.UnsupportedReason(symbol, allowUnrootedGeneratedContext: true) is not null
@@ -103,7 +113,14 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
             }
         }
 
-        return [.. order.Select(symbol => chosen[symbol].Info)];
+        var contexts = order.Select(symbol => chosen[symbol].Info).ToImmutableArray();
+        cancellationToken.ThrowIfCancellationRequested();
+        return ContextsByProject.GetValue(project, _ => new ContextCache(contexts)).Contexts;
+    }
+
+    sealed class ContextCache(ImmutableArray<ContextInfo> contexts)
+    {
+        public ImmutableArray<ContextInfo> Contexts { get; } = contexts;
     }
 
     static bool IsGenerated(Document document, CompilationUnitSyntax root)

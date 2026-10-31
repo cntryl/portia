@@ -16,5 +16,6 @@
     <PackageReference Include="Cntryl.Portia.Analyzers" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
     <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
     <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" Condition="'$(PortiaSmokePackageVersion)' == ''" />
+    <ProjectReference Include="../../src/Portia.AspNetCore.Generators/Portia.AspNetCore.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" Condition="'$(PortiaSmokePackageVersion)' == ''" />
   </ItemGroup>
 </Project>

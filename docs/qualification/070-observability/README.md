@@ -23,7 +23,7 @@ A central stable Microsoft.CodeAnalysis.Analyzers 5.9.0 pin replaces the prerele
 ## Reproduction
 
 ```sh
-dotnet restore Portia.slnx --locked-mode
+dotnet restore Portia.slnx
 dotnet run --project eng/Portia.RepositoryTools --configuration Release -- verify-stable-dependencies --root .
 dotnet format Portia.slnx --verify-no-changes --no-restore
 dotnet build Portia.slnx -c Release --no-restore

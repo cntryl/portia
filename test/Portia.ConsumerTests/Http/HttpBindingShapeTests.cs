@@ -1,4 +1,7 @@
 using System.Globalization;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Cntryl.Portia.Consumer;
 
@@ -59,8 +62,13 @@ public sealed class HttpBindingShapeTests
         var generated = GeneratorCompilation.GeneratedSource(source, new RequestHttpBindingGenerator());
 
         _ = GeneratorCompilation.Compile(source, new RequestHttpBindingGenerator());
-        Assert.Contains("new global::Cntryl.Portia.PortiaOpenApiOperation(\"nullableValueRequest\", typeof(int?), false",
-            generated, StringComparison.Ordinal);
+        var metadata = CSharpSyntaxTree.ParseText(generated).GetRoot().DescendantNodes()
+            .OfType<ObjectCreationExpressionSyntax>().Single(node => node.Type.ToString().EndsWith("PortiaOpenApiOperation", StringComparison.Ordinal)
+                && node.ArgumentList?.Arguments[0].Expression is LiteralExpressionSyntax literal
+                && literal.Token.ValueText == "nullableValueRequest");
+        var resultType = Assert.IsType<TypeOfExpressionSyntax>(metadata.ArgumentList!.Arguments[1].Expression);
+        Assert.Equal(["int", "?"], resultType.Type.DescendantTokens().Select(token => token.Text));
+        Assert.True(metadata.ArgumentList.Arguments[2].Expression.IsKind(SyntaxKind.FalseLiteralExpression));
         Assert.Contains("ResultIsNullable = true", generated, StringComparison.Ordinal);
     }
 

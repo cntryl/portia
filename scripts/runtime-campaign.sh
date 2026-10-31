@@ -7,7 +7,7 @@ test -z "$(git -C "$root" status --porcelain)"
 mkdir -p "$output"
 git -C "$root" rev-parse HEAD > "$output/source-commit.txt"
 dotnet --info > "$output/dotnet-info.txt"
-dotnet restore "$root/bench/Portia.Benchmarks/Portia.Benchmarks.csproj" --locked-mode
+dotnet restore "$root/bench/Portia.Benchmarks/Portia.Benchmarks.csproj"
 dotnet build "$root/bench/Portia.Benchmarks/Portia.Benchmarks.csproj" -c Release --no-restore
 dotnet run --project "$root/bench/Portia.Benchmarks/Portia.Benchmarks.csproj" -c Release --no-build -- \
   --runtime-qualification > "$output/controls.log" 2>&1
