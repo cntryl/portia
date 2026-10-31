@@ -278,9 +278,24 @@ public sealed class ApplicationStructureAnalyzerTests
         _ = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
     }
     [Fact]
-    public void ShouldAllowAggregateBehaviorHelperGivenExecutionFolder()
+    public void ShouldAllowDirectlyReferencedCollaboratorGivenAggregateFolder()
     {
-        const string rule = "namespace Shop.Core.Features.Orders.Execution; public sealed class CancellationRule { public bool Allows(bool shipped) => !shipped; }";
+        const string collaborator = "namespace Shop.Core.Features.Orders.Aggregates; public sealed class CancellationRule { public bool Allows(bool shipped) => !shipped; }";
+        const string aggregate = """
+                                 using Cntryl.Portia;
+                                 using Rule = Shop.Core.Features.Orders.Aggregates.CancellationRule;
+                                 namespace Shop.Core.Features.Orders.Aggregates;
+                                 public sealed class Order(Uuid id, Rule rule) : Aggregate(id, new EventStreamAddress("shop", "orders", id.ToString()));
+                                 """;
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Aggregates/CancellationRule.cs", collaborator), ("Features/Orders/Aggregates/Order.cs", aggregate)]);
+        Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA203" or "PORTIA204");
+    }
+
+    [Fact]
+    public void ShouldRequireDirectlyReferencedCollaboratorGivenAggregateFolder()
+    {
+        const string collaborator = "namespace Shop.Core.Features.Orders.Execution; public sealed class CancellationRule { public bool Allows(bool shipped) => !shipped; }";
         const string aggregate = """
                                  using Cntryl.Portia;
                                  using Shop.Core.Features.Orders.Execution;
@@ -288,7 +303,18 @@ public sealed class ApplicationStructureAnalyzerTests
                                  public sealed class Order(Uuid id, CancellationRule rule) : Aggregate(id, new EventStreamAddress("shop", "orders", id.ToString()));
                                  """;
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
-            [("Features/Orders/Execution/CancellationRule.cs", rule), ("Features/Orders/Aggregates/Order.cs", aggregate)]);
+            [("Features/Orders/Execution/CancellationRule.cs", collaborator), ("Features/Orders/Aggregates/Order.cs", aggregate)]);
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
+        Assert.Contains("directly owned aggregate helpers belong with their root",
+            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldAllowUnownedBehaviorHelperGivenExecutionFolder()
+    {
+        const string source = "namespace Shop.Core.Features.Orders.Execution; public sealed class OrderCoordinator { public void Run() { } }";
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Execution/OrderCoordinator.cs", source)]);
         Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA203" or "PORTIA204");
     }
 
