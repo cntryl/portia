@@ -105,7 +105,7 @@ var scenario = new ReactorScenario()
     .Given(new UserCreated(userId))
     .RespondTo<SendWelcomeEmail>(Result.Failure(new RequestError(RequestErrorKind.Conflict, "bounced")));
 
-await Assert.ThrowsAsync<ReactionCommandFailedException>(() =>
+await Assert.ThrowsAsync<ProcessorFailureException>(() =>
     scenario.RunAsync(new WelcomeReactor(scenario.Requests)));
 
 Assert.Equal<IRequestBase>([new SendWelcomeEmail(userId)], scenario.SentRequests);
@@ -133,7 +133,7 @@ Projector and reactor scenarios drain finite histories through bounded productio
 histories larger than 4,096 events. A projector resumes its committed checkpoint across calls;
 a reactor starts at the beginning on each separate run, while continuing its checkpoint between
 passes within that run. Cancellation and suffix failures propagate and preserve the last successful
-checkpoint. A fake application read model does not gain rollback semantics from the scenario helper.
+checkpoint. A fake application repository does not gain rollback semantics from the scenario helper.
 
 Event-store conformance compares the original appended concrete payload and complete metadata
 against stream reads, stream-offset resumes, pattern reads, and every issued cursor resume. Seeds
@@ -168,3 +168,19 @@ an empty pass, and exercises cancellation. Run it with
 `dotnet run -c Release --project smoke/Portia.ProjectionStore.PackageConsumer`.
 CI also runs this example against freshly packed packages. Returned checkpoints are sufficient
 for this catch-up loop; no public pass-result API is needed.
+
+## Fitz Portia and Cassie integration
+
+Run the `CassieIntegration` category with both Compose services available, following
+[the integration setup](../CONTRIBUTING.md). The tests use the published `Cntryl.Cassie` 0.1.0 client
+against the pinned server image. An application-owned `AccountRepository` derives from the library's
+`CassieProjectionRepository`, implements the public `IProjectionStore` contract, and returns simple
+`AccountReadModel` data. Hosted cases use `AddCassie` and `AddCassieProjection`.
+
+The shared `ProjectionStoreConformance` suite checks disposal rollback, atomic model/checkpoint
+commit, failed-commit rollback, stale writers, and generation/pattern isolation. The complete path
+appends real events to Fitz, projects them into Cassie, and queries through a new repository scope.
+It proves failed-handler rollback, resume without double increments, tenant and rebuild isolation,
+automatic hosted retry of transient results, and immediate terminal failure for permanent results.
+These are single-server SQL integration checks; crash durability, generation promotion, and graph,
+time-series, or vector index visibility require their own qualification.

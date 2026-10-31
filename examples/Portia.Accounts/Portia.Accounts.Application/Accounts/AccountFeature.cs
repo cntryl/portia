@@ -15,7 +15,7 @@ public static class AccountFeature
         .AddRequestPipelineBehavior<AccountRequestBehavior>(order: 100)
         .AddRequestGuard<AccountTenantGuard>()
         .AddRequestGuard<AccountOperationsGuard>()
-        .AddProjector<AccountProjector>(AccountProjectionRepository.ProjectorName, WorkloadScope.PerTenant);
+        .AddProjector<AccountProjector>(AccountRepository.ProjectorName, WorkloadScope.PerTenant);
 }
 
 /// <summary>Central application setup reused by the API and worker hosts.</summary>
@@ -45,13 +45,12 @@ public static class AccountsApplication
 
         var tenant = new TenantId(configured);
         services.TryAddSingleton<IAccountTenantScope>(_ => new ConfiguredAccountTenantScope(tenant));
-        services.TryAddScoped<IAccountRepository, AccountRepository>();
-        services.TryAddScoped<AccountProjectionRepository>(provider => new AccountProjectionRepository(
+        services.TryAddScoped<IAccountCommandRepository, AccountCommandRepository>();
+        services.TryAddScoped<AccountRepository>(provider => new AccountRepository(
             provider.GetRequiredService<IKvClient>(), projectionRoute));
-        services.TryAddScoped<IProjectionStore>(provider => provider.GetRequiredService<AccountProjectionRepository>());
         services.TryAddScoped<IAccountProjectionRepository>(provider =>
-            provider.GetRequiredService<AccountProjectionRepository>());
-        services.TryAddScoped<IAccountReadRepository>(provider => provider.GetRequiredService<AccountProjectionRepository>());
+            provider.GetRequiredService<AccountRepository>());
+        services.TryAddScoped<IAccountReadRepository>(provider => provider.GetRequiredService<AccountRepository>());
         services.TryAddSingleton<IActorTenantResolver>(_ => new ClaimTenantResolver("tenant_id"));
         services.TryAddSingleton<IAccountAccess, ClaimAccountAccess>();
         services.TryAddSingleton<IAccountOperations, ConfiguredAccountOperations>();

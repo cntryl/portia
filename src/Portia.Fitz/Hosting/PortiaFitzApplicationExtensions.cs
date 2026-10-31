@@ -149,7 +149,7 @@ public static class PortiaFitzApplicationExtensions
             _ = services.AddSingleton(connection);
             _ = services.AddSingleton<IHostedService>(provider =>
                 provider.GetRequiredService<FitzApplicationConnection>());
-            var builder = new PortiaFitzBuilder(application);
+            var builder = new PortiaFitzBuilder(application, identity as Client);
             Setups.Add(application, new FitzSetup(identity, builder));
             services.TryAddSingleton<IWorkloadCoordinator>(provider => new FitzWorkloadCoordinator(
                 provider.GetRequiredService<FitzApplicationConnection>(), builder,

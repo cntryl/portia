@@ -18,7 +18,7 @@
   <ItemGroup>
     <PackageReference Include="Cntryl.Portia.Fitz" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
     <ProjectReference Include="../../src/Portia.Fitz/Portia.Fitz.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
-    <PackageReference Include="Cntryl.Fitz.Testing" Version="2.0.0" />
+    <PackageReference Include="Cntryl.Fitz.Testing" Version="3.0.0" />
     <PackageReference Include="Cntryl.LexKey" Version="0.1.2" />
   </ItemGroup>
 </Project>

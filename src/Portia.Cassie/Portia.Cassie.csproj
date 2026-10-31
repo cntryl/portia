@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Cassie integration for Portia read-model projections.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Cntryl.Cassie" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Portia.DependencyInjection/Portia.DependencyInjection.csproj" />
+  </ItemGroup>
+
+</Project>

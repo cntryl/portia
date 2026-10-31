@@ -235,3 +235,56 @@ dependency-injection scope (4,096 by default). A budget-exhausted backlog contin
 fresh scope only when the durable checkpoint advanced; a non-progressing pass falls back to the
 normal notification or polling wait. Caught-up workloads retain notification and polling waits.
 `MaxBatchSize` continues to control transactional batch size independently.
+
+## Generated registration and dispatch
+
+Shared event, JSON-context, and inferred-request registrations are emitted once per compilation.
+Each generated block has a private reference identity; `PortiaBuilder.AddGeneratedRegistrations`
+applies it once per builder. Another producing assembly or another service collection gets its
+own initialization. Failed initialization removes the completion marker so a later call can retry.
+Repeated completed blocks allocate no managed memory.
+
+The previous registration emitter repeated the event catalog inside every interceptor. A
+Platform.Core source probe with 2,874 files, 1,452 registration sites, and 874 events produced
+1,278,252 interceptor lines and 206,939,136 bytes. The shared emitter produced 11,583 lines and
+1,263,483 bytes with the same interceptor and event counts and no generator diagnostics. This
+is generated-output evidence against that input snapshot, rather than a full Platform application
+build or deployment qualification.
+
+Generated typed batches use one exact-sized array for each contiguous handler group. The
+contexts and batch storage remain owned by that delivery; they are not pooled or overwritten
+after a handler returns. Single-event dispatch remains a direct typed switch. Ordinary aliases
+for handlers or values no longer disable referenced-event name filtering across the compilation;
+event aliases are resolved once, with conservative handling of namespace and unresolved aliases.
+
+Use `bench/Portia.CompilerBenchmarks` for all generators, unchanged inputs, unrelated edits,
+contract changes, and referenced-assembly changes. Use `ProcessorDispatchBenchmarks`,
+`ReactorDispatchBenchmarks`, `HttpBindingBenchmarks`, and `RequestDispatchBenchmarks` for the
+runtime paths, alongside the reflection-disabled runtime qualification matrix. Source size and
+allocation counts are separate from timing distributions; a short local benchmark is not a
+release performance guarantee.
+
+A local compiler campaign used identical source, generated-output, and referenced-feature hashes
+before and after narrowing the candidate filters. Its combined workload had 1,000 commands,
+10 feature assemblies, 10 contexts, 100 mappings, and 10,000 unrelated types. All eight edit
+variants compiled successfully across all eight Portia generators plus System.Text.Json.
+Three samples per case measured these medians:
+
+| Combined compiler case | Before filtering | After filtering |
+| --- | ---: | ---: |
+| Cold driver | 384.9 ms | 330.2 ms |
+| Unchanged compilation | 176.4 ms | 61.7 ms |
+| Unrelated body edit | 529.9 ms | 323.4 ms |
+| Unchanged managed allocation | 109,747,592 bytes | 56,396,984 bytes |
+
+These are local profiling results with a short sample count, rather than timing guarantees.
+
+The local `ProcessorDispatchBenchmarks` ShortRun measured the following allocation changes for
+generated typed batches. The single-event controls retained their original allocation counts.
+Timing distributions were noisy, so no dispatch latency improvement is claimed from this run.
+
+| Events per typed batch | Growing list | Exact-sized array |
+| --- | ---: | ---: |
+| 1 | 504 bytes | 448 bytes |
+| 32 | 2,512 bytes | 2,184 bytes |
+| 512 | 33,328 bytes | 29,064 bytes |

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -74,7 +75,8 @@ static class FitzAppendCampaign
         await File.WriteAllBytesAsync(Path.Combine(output, "environment.json"),
             JsonSerializer.SerializeToUtf8Bytes(new FitzCampaignEnvironment(RuntimeInformation.FrameworkDescription,
                 RuntimeInformation.OSDescription, RuntimeInformation.ProcessArchitecture.ToString(), Environment.ProcessorCount,
-                typeof(Client).Assembly.GetName().Version!.ToString(), endpoint.ToString(), repetitions, 10,
+                typeof(Client).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion,
+                endpoint.ToString(), repetitions, 10,
                 "10 excluded warmup appends; 10 operations/repetition; single persistent stream/cohort; payload/event creation excluded; PayloadBytes is exact source-generated business JSON byte length; actual durable envelope size reported separately; process-total allocations include client receive workers; single-node local broker durability; no exporter waiting"),
                 FitzCampaignJsonContext.Default.FitzCampaignEnvironment));
     }
@@ -155,16 +157,15 @@ sealed class FitzWireCounts
         Interlocked.Read(ref _commit), Interlocked.Read(ref _rollback));
     internal void Observe(ReadOnlySpan<byte> bytes)
     {
-        // Verified against the pinned 2.0.0 FrameCodec: a CORRELATE label and a request share a frame.
+        // Wire 2 uses a fixed opcode/flags/correlation/payload-length header.
+        const int header = 15;
         while (!bytes.IsEmpty)
         {
-            var extended = bytes[0] == 0xFF;
-            var header = extended ? 5 : 3;
             if (bytes.Length < header)
                 throw new InvalidOperationException("Truncated counted Fitz frame.");
-            var opcode = extended ? BinaryPrimitives.ReadUInt16BigEndian(bytes[1..]) : bytes[0];
-            var length = BinaryPrimitives.ReadUInt16BigEndian(bytes[(extended ? 3 : 1)..]);
-            if (bytes.Length < header + length)
+            var opcode = BinaryPrimitives.ReadUInt16BigEndian(bytes);
+            var length = BinaryPrimitives.ReadUInt32BigEndian(bytes[11..]);
+            if (length > bytes.Length - header)
                 throw new InvalidOperationException("Truncated counted Fitz payload.");
             switch (opcode)
             {
@@ -181,7 +182,7 @@ sealed class FitzWireCounts
                     Interlocked.Increment(ref _rollback);
                     break;
             }
-            bytes = bytes[(header + length)..];
+            bytes = bytes[(header + (int)length)..];
         }
     }
 }

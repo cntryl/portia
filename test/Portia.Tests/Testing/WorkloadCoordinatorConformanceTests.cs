@@ -99,6 +99,8 @@ public sealed class WorkloadCoordinatorConformanceTests
         : IWorkloadCoordinatorConformanceProbe
     {
         readonly ConcurrentDictionary<WorkloadIdentity, object> _owners = new();
+        readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        readonly TaskCompletionSource _reacquired = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TimeSpan ConvergenceTimeout => TimeSpan.FromSeconds(2);
         public TimeSpan StabilityWindow => TimeSpan.FromMilliseconds(50);
 
@@ -110,13 +112,16 @@ public sealed class WorkloadCoordinatorConformanceTests
 
         public ValueTask<IWorkloadCoordinatorConformanceWorker> OpenWorkerAsync(CancellationToken ct = default) =>
             ValueTask.FromResult<IWorkloadCoordinatorConformanceWorker>(
-                new CoordinatorWorker(new SharedCoordinator(_owners, duplicateOwners, releaseBeforeStop)));
+                new CoordinatorWorker(new SharedCoordinator(_owners, duplicateOwners, releaseBeforeStop,
+                    _released, _reacquired)));
     }
 
     sealed class SharedCoordinator(
         ConcurrentDictionary<WorkloadIdentity, object> owners,
         bool duplicateOwners,
-        bool releaseBeforeStop = false)
+        bool releaseBeforeStop = false,
+        TaskCompletionSource? released = null,
+        TaskCompletionSource? reacquired = null)
         : IWorkloadCoordinator
     {
         readonly object _owner = new();
@@ -141,6 +146,8 @@ public sealed class WorkloadCoordinatorConformanceTests
                             ? new CancellationTokenSource()
                             : CancellationTokenSource.CreateLinkedTokenSource(ct);
                         active.Add(identity, (cancellation, run(identity, cancellation.Token)));
+                        if (releaseBeforeStop && released!.Task.IsCompleted)
+                            reacquired!.TrySetResult();
                     }
 
                     await Task.Delay(TimeSpan.FromMilliseconds(5), ct).ConfigureAwait(false);
@@ -159,7 +166,10 @@ public sealed class WorkloadCoordinatorConformanceTests
                 if (releaseBeforeStop && !duplicateOwners)
                 {
                     _ = owners.TryRemove(new KeyValuePair<WorkloadIdentity, object>(identity, _owner));
-                    await Task.Delay(TimeSpan.FromMilliseconds(50), CancellationToken.None).ConfigureAwait(false);
+                    // Keep the old callback alive until the survivor actually enters its callback.
+                    // A timed delay could expire before a loaded scheduler runs the survivor.
+                    released!.TrySetResult();
+                    await reacquired!.Task.ConfigureAwait(false);
                 }
 
                 await owned.Cancellation.CancelAsync().ConfigureAwait(false);

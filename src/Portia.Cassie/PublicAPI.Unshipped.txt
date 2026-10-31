@@ -1,0 +1,19 @@
+#nullable enable
+Cntryl.Portia.CassieProjectionDatabase
+Cntryl.Portia.CassieProjectionRepository
+Cntryl.Portia.CassieProjectionRepository.Identity.get -> Cntryl.Portia.CheckpointIdentity!
+Cntryl.Portia.CassieProjectionRepository.CassieProjectionRepository(Cntryl.Portia.CassieProjectionDatabase! database, string! componentName) -> void
+Cntryl.Portia.CassieProjectionRepository.CurrentProjectionKey.get -> string!
+Cntryl.Portia.CassieProjectionRepository.CreateCommand(string! sql) -> Cntryl.Cassie.Commands.CassieCommand!
+Cntryl.Portia.CassieProjectionRepository.OpenReadAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Cassie.Connection.CassieConnection!>
+Cntryl.Portia.CassieProjectionDatabase.CassieProjectionDatabase(Cntryl.Cassie.Connection.CassieDataSource! dataSource, string! checkpointTable = "portia_projection_checkpoints") -> void
+Cntryl.Portia.CassieProjectionDatabase.DataSource.get -> Cntryl.Cassie.Connection.CassieDataSource!
+Cntryl.Portia.CassieProjectionDatabase.InitializeAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.CassieProjectionDatabase.Dispose() -> void
+Cntryl.Portia.CassieProjectionRepository.GetProjectionKey(Cntryl.Portia.CheckpointIdentity! identity) -> string!
+Cntryl.Portia.CassieProjectionRepository.LoadCheckpointAsync(Cntryl.Portia.CheckpointIdentity! identity, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>
+Cntryl.Portia.CassieProjectionRepository.BeginAsync(Cntryl.Portia.ProjectionBatchContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.IProjectionBatch!>
+virtual Cntryl.Portia.CassieProjectionRepository.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.CassiePortiaBuilderExtensions
+static Cntryl.Portia.CassiePortiaBuilderExtensions.AddCassie(this Cntryl.Portia.PortiaBuilder! builder, string! connectionString, string! checkpointTable = "portia_projection_checkpoints") -> Cntryl.Portia.PortiaBuilder!
+static Cntryl.Portia.CassiePortiaBuilderExtensions.AddCassieProjection<TProjector, TRepository>(this Cntryl.Portia.PortiaBuilder! builder, string! name, Cntryl.Portia.WorkloadScope scope, System.Action<Cntryl.Portia.WorkloadOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!

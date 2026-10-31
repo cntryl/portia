@@ -77,6 +77,5 @@ sealed class OrdersRepository(IKvClient kv, string projector)
 sealed partial class OrdersProjector(OrdersRepository orders, EventStreamPattern pattern)
     : Projector(orders, pattern), IProjectorHandler<ValueChanged>
 {
-    public ValueTask HandleAsync(ValueChanged ev, IProjectorContext context, CancellationToken ct) =>
-        ValueTask.CompletedTask;
+    public ValueTask<Result> HandleAsync(IProjectorContext<ValueChanged> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
 }

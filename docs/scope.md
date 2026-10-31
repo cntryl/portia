@@ -29,10 +29,10 @@ current, deliberate boundary.
 - Each queue runner reserves and dispatches one delivery at a time, acknowledging successful work
   and leaving failed work unacknowledged for its transport. Portia scales queue throughput through
   additional processes and routes; it does not provide in-process prefetch or parallel-delivery
-  controls. Persistence is provider-owned: Fitz 0.2.0 queues persist in the background, and enqueue
+  controls. Persistence is provider-owned: Fitz 0.3.0 queues persist in the background, and enqueue
   or acknowledgment responses do not guarantee crash recovery. Required work needs durable
   application intent and recovery; consumers must tolerate duplicates. See the upstream
-  [Fitz queue persistence contract](https://github.com/cntryl/fitz/blob/v0.2.0/docs/operations/migration-guide.md#queue-persistence-is-always-best-effort).
+  [Fitz queue persistence contract](https://github.com/cntryl/fitz/blob/v0.3.0/docs/operations/migration-guide.md#queue-persistence-is-always-best-effort).
 - HTTP request bodies are fully buffered and bounded to 10 MiB by default. Default binding accepts
   object JSON or, for scalar-only bodies, a URL-encoded or multipart form (when antiforgery is
   registered or disabled for the endpoint), and binds no file parts. Binary bodies need an `OnBind`
@@ -40,6 +40,12 @@ current, deliberate boundary.
   Portia reads, declared custom bodies included, is buffered before binding.
 - Portia never skips a poison projection or reaction event. Hosted passes retry with bounded
   exponential backoff and then fault the worker, leaving the last successful checkpoint intact.
+- `Cntryl.Portia.Cassie` supplies `CassieProjectionRepository` over `Cntryl.Cassie` 0.1.0 for native
+  SQL model/checkpoint transactions, conditional checkpoint updates, isolated rebuild identities,
+  and shared DI registration. Real Fitz/Cassie integration tests exercise the public projection
+  conformance suite and hosted retries. Automatic promotion, freshness fences, crash/restart
+  durability, and graph/time-series/vector visibility are separate gates; see the
+  [Cassie guide](cassie-projections.md).
 - Durable event persistence is bundled for Fitz only. `Cntryl.Portia.Fitz` supplies `FitzEventStore`,
   `FitzKvProjectionStore` — an abstract base the application's own repository derives from, so its
   projection writes share the transaction Portia commits the checkpoint in — and

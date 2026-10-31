@@ -391,8 +391,9 @@ public sealed class TelemetryCompletionTests
         var source = await SourceWithOneEventAsync();
         var runner = new ProjectorRunner(source);
 
-        _ = await Assert.ThrowsAsync<OperationCanceledException>(() => runner.RunAsync(
+        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => runner.RunAsync(
             new CancelingProjector(), ProjectionCheckpoint.Start).AsTask());
+        Assert.IsType<OperationCanceledException>(failure.InnerException);
 
         Assert.Equal("fault", measurements.SingleOutcome("portia.processor.batch.duration", "projector"));
     }
@@ -405,8 +406,9 @@ public sealed class TelemetryCompletionTests
         var source = await SourceWithOneEventAsync();
         var runner = new ReactorRunner(source);
 
-        _ = await Assert.ThrowsAsync<OperationCanceledException>(() => runner.RunAsync(
+        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => runner.RunAsync(
             new CancelingReactor(), ProjectionCheckpoint.Start).AsTask());
+        Assert.IsType<OperationCanceledException>(failure.InnerException);
 
         Assert.Equal("fault", measurements.SingleOutcome("portia.processor.batch.duration", "reactor"));
     }
@@ -430,7 +432,8 @@ public sealed class TelemetryCompletionTests
             ? () => new ProjectorRunner(source).RunAsync(projector, ProjectionCheckpoint.Start).AsTask()
             : () => new ReactorRunner(source).RunAsync(reactor, ProjectionCheckpoint.Start).AsTask();
 
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(pass);
+        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(pass);
+        Assert.IsType<InvalidOperationException>(failure.InnerException);
 
         Assert.Equal(0, measurements.Count("portia.processor.lag", "portia.component.name", component));
         Assert.Equal(0, measurements.Sum("portia.processor.event.count", "portia.component.name", component));
@@ -660,15 +663,15 @@ public sealed class TelemetryCompletionTests
     sealed class CancelingProjector() : Projector(new RecordingProjectionTarget(),
         EventStreamPattern.ForPattern("test", "telemetry"))
     {
-        protected override ValueTask ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
-            CancellationToken ct) => ValueTask.FromException(new OperationCanceledException());
+        protected override ValueTask<Result> ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
+            CancellationToken ct) => ValueTask.FromException<Result>(new OperationCanceledException());
     }
 
     sealed class CancelingReactor() : Reactor(new InMemoryProjectionCheckpointStore(),
         EventStreamPattern.ForPattern("test", "telemetry"))
     {
-        protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
-            CancellationToken ct) => ValueTask.FromException(new OperationCanceledException());
+        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+            CancellationToken ct) => ValueTask.FromException<Result>(new OperationCanceledException());
     }
 
     // Fails its first batch and succeeds on every retry, like a transient fault on a poison-free batch.
@@ -677,10 +680,10 @@ public sealed class TelemetryCompletionTests
     {
         int _attempts;
 
-        protected override ValueTask ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
+        protected override ValueTask<Result> ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
             CancellationToken ct) => ++_attempts == 1
-            ? ValueTask.FromException(new InvalidOperationException("transient"))
-            : ValueTask.CompletedTask;
+            ? ValueTask.FromException<Result>(new InvalidOperationException("transient"))
+            : ValueTask.FromResult(Result.Success);
     }
 
     sealed class FlakyReactor(string name) : Reactor(new InMemoryProjectionCheckpointStore(),
@@ -688,10 +691,10 @@ public sealed class TelemetryCompletionTests
     {
         int _attempts;
 
-        protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
             CancellationToken ct) => ++_attempts == 1
-            ? ValueTask.FromException(new InvalidOperationException("transient"))
-            : ValueTask.CompletedTask;
+            ? ValueTask.FromException<Result>(new InvalidOperationException("transient"))
+            : ValueTask.FromResult(Result.Success);
     }
 
     internal sealed record EarlyStopTelemetryStream : IStreamRequest<int>;

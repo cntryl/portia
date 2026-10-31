@@ -98,13 +98,12 @@ sealed record ProcessorBenchmarkEvent(int Value) : DomainEvent;
 sealed partial class SingleBenchmarkProjector(IProjectionStore store)
     : Projector(store, EventStreamPattern.ForPattern("bench")), IProjectorHandler<ProcessorBenchmarkEvent>
 {
-    public ValueTask HandleAsync(ProcessorBenchmarkEvent ev, IProjectorContext context, CancellationToken ct) =>
-        ValueTask.CompletedTask;
+    public ValueTask<Result> HandleAsync(IProjectorContext<ProcessorBenchmarkEvent> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
 }
 
 sealed partial class BatchBenchmarkProjector(IProjectionStore store)
     : BatchProjector(store, EventStreamPattern.ForPattern("bench")), IBatchProjectorHandler<ProcessorBenchmarkEvent>
 {
-    public ValueTask HandleAsync(IReadOnlyList<ProcessorBenchmarkEvent> events, IProjectorContext context,
-        CancellationToken ct) => ValueTask.CompletedTask;
+    public ValueTask<Result> HandleAsync(IReadOnlyList<IProjectorContext<ProcessorBenchmarkEvent>> contexts,
+        CancellationToken ct) => ValueTask.FromResult(Result.Success);
 }

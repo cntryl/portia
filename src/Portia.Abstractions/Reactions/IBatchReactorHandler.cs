@@ -8,6 +8,6 @@ public interface IBatchReactorHandler<in TEvent>
     /// <summary>Reacts in source order. Each context must be used for effects caused by its event.</summary>
     /// <param name="contexts">One context per triggering event, in source order.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>A task that completes once every event has been reacted to.</returns>
-    ValueTask HandleAsync(IReadOnlyList<IReactorContext<TEvent>> contexts, CancellationToken ct);
+    /// <returns>The application outcome; only success permits checkpoint advancement.</returns>
+    ValueTask<Result> HandleAsync(IReadOnlyList<IReactorContext<TEvent>> contexts, CancellationToken ct);
 }

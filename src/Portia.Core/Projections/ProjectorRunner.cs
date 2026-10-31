@@ -1,3 +1,5 @@
+using System.Runtime.ExceptionServices;
+
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -6,6 +8,8 @@ namespace Cntryl.Portia;
 /// <param name="reader">The domain-event reader.</param>
 public sealed class ProjectorRunner(IDomainEventReader reader)
 {
+    internal OperationalSession? Operations { get; set; }
+
     readonly IDomainEventReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
 
     /// <summary>
@@ -42,76 +46,141 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         var startingCheckpoint = checkpoint;
         var batchSize = projector.IsBatch ? options.MaxBatchSize : 1;
         var identity = new CheckpointIdentity(projector.Name, projector.Pattern, options.RebuildId);
-        var context = new ProjectorContext(identity);
         var records = new List<DomainEventRecord>(Math.Min(batchSize, options.MaxEventsPerPass));
         var processed = 0;
         var budgetExhausted = false;
-        await foreach (var record in _reader
-                           .ReadAsync(projector.Pattern, checkpoint.Cursor, ct)
-                           .WithCancellation(ct)
-                           .ConfigureAwait(false))
+        await using var source = new ProcessorEventStream(_reader, identity, checkpoint, ct);
+        try
         {
-            records.Add(record);
-            processed++;
-
-            if (records.Count == batchSize)
+            while (await source.MoveNextAsync().ConfigureAwait(false))
             {
-                checkpoint = await CommitAsync(projector, records, checkpoint, identity, context, ct)
+                var record = source.Current;
+                records.Add(record);
+                processed++;
+
+                if (records.Count == batchSize)
+                {
+                    checkpoint = await CommitAsync(projector, records, checkpoint, identity, ct)
+                        .ConfigureAwait(false);
+                    source.Checkpoint = checkpoint;
+                }
+
+                if (processed >= options.MaxEventsPerPass)
+                {
+                    budgetExhausted = true;
+                    break;
+                }
+            }
+
+            if (records.Count != 0)
+            {
+                checkpoint = await CommitAsync(projector, records, checkpoint, identity, ct)
                     .ConfigureAwait(false);
             }
 
-            if (processed >= options.MaxEventsPerPass)
-            {
-                budgetExhausted = true;
-                break;
-            }
+            source.Checkpoint = checkpoint;
+            Operations?.EnsureRecoveryCompleted(checkpoint);
+            return new ProjectionPassResult(checkpoint, budgetExhausted && checkpoint != startingCheckpoint);
         }
-
-        if (records.Count != 0)
+        catch (OperationCanceledException ex) when (ct.IsCancellationRequested)
         {
-            checkpoint = await CommitAsync(projector, records, checkpoint, identity, context, ct)
-                .ConfigureAwait(false);
+            source.Failure = ex;
+            throw;
+        }
+        catch (ProcessorFailureException ex)
+        {
+            source.Failure = ex;
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var failure = new ProcessorFailureException(identity, checkpoint, ProcessorFailureStage.Reading,
+                innerException: ex);
+            source.Failure = failure;
+            throw failure;
         }
 
-        return new ProjectionPassResult(checkpoint, budgetExhausted && checkpoint != startingCheckpoint);
     }
 
-    static async ValueTask<ProjectionCheckpoint> CommitAsync(
+    async ValueTask<ProjectionCheckpoint> CommitAsync(
         Projector projector,
         List<DomainEventRecord> records,
         ProjectionCheckpoint checkpoint,
         CheckpointIdentity identity,
-        IProjectorContext projectorContext,
         CancellationToken ct)
     {
         var started = PortiaTelemetry.StartTimestamp();
         var count = records.Count;
-        var lastOccurrence = records[^1].Event.Metadata.OccurredOn;
+        var first = records[0];
+        var last = records[^1];
         var outcome = "success";
+        var stage = ProcessorFailureStage.Beginning;
+        var confirmed = checkpoint;
+        var committed = false;
+        IProjectionBatch? batch = null;
+        Exception? failure = null;
         try
         {
+            if (Operations is { } operations)
+                _ = await operations.BeginAsync(records, checkpoint, ct).ConfigureAwait(false);
             var context = new ProjectionBatchContext(identity, checkpoint);
-            await using var batch = await projector.Store.BeginAsync(context, ct).ConfigureAwait(false);
-
-            await projector.ProjectAsync(records, projectorContext, ct).ConfigureAwait(false);
+            batch = await projector.Store.BeginAsync(context, ct).ConfigureAwait(false);
+            stage = ProcessorFailureStage.Handling;
             ct.ThrowIfCancellationRequested();
+            using var observation = Operations?.Observe();
+            var result = await projector.ProjectAsync(records, new ProjectorContext(identity), ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            if (!result.IsSuccess)
+                throw new ProcessorFailureException(identity, checkpoint, stage, first, last, error: result.Error);
 
-            var nextCheckpoint = new ProjectionCheckpoint(records[^1].NextCursor);
+            stage = ProcessorFailureStage.Committing;
+            var nextCheckpoint = new ProjectionCheckpoint(last.NextCursor);
             await batch.CommitAsync(nextCheckpoint, ct).ConfigureAwait(false);
+            committed = true;
+            confirmed = nextCheckpoint;
             records.Clear();
-            return nextCheckpoint;
         }
-        catch (Exception exception)
+        catch (OperationCanceledException ex) when (ct.IsCancellationRequested)
         {
-            outcome = PortiaTelemetry.ExceptionOutcome(exception, ct);
-            throw;
+            outcome = "canceled";
+            failure = ex;
+        }
+        catch (Exception ex)
+        {
+            outcome = "fault";
+            var diagnostic = ex as ProcessorFailureException
+                ?? new ProcessorFailureException(identity, checkpoint, stage, first, last, ex);
+            failure = diagnostic;
+        }
+        try
+        {
+            if (batch is not null)
+                await batch.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception cleanup) when (failure is not null)
+        {
+            ProcessorFailureException.RecordCleanup(failure, cleanup);
+        }
+        catch (Exception cleanup)
+        {
+            outcome = "fault";
+            failure = new ProcessorFailureException(identity, confirmed, ProcessorFailureStage.Disposing,
+                first, last, cleanup);
         }
         finally
         {
-            // Only a committed batch processed its events and moved the checkpoint the lag measures.
-            var committed = outcome == "success";
             PortiaTelemetry.ProcessorBatchFinished(started, projector.Name, "projector", outcome,
-                committed ? count : 0, committed ? lastOccurrence : null);
+                committed ? count : 0, committed ? last.Event.Metadata.OccurredOn : null);
         }
+
+        if (failure is not null)
+        {
+            if (Operations is { } operations && !(failure is OperationCanceledException && ct.IsCancellationRequested))
+                await operations.RecordFailureAsync(failure, committed ? confirmed : null, ct).ConfigureAwait(false);
+            ExceptionDispatchInfo.Capture(failure).Throw();
+        }
+        if (Operations is { } confirmation)
+            await confirmation.ConfirmProjectionAsync(confirmed, ct).ConfigureAwait(false);
+        return confirmed;
     }
 }

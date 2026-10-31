@@ -52,7 +52,8 @@ public sealed class ScenarioDrainTests
             var scenario = new ReactorScenario().Given(events);
             var checkpoints = new InMemoryProjectionCheckpointStore();
             var reactor = new DrainReactor(checkpoints, seen, failure);
-            Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(() => scenario.RunAsync(reactor)));
+            var diagnostic = await Assert.ThrowsAsync<ProcessorFailureException>(() => scenario.RunAsync(reactor));
+            Assert.Same(failure, diagnostic.InnerException);
             var checkpoint = await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern));
             Assert.Equal("4096", checkpoint.Cursor.ToString());
         }
@@ -60,7 +61,8 @@ public sealed class ScenarioDrainTests
         {
             var scenario = new ProjectorScenario().Given(events);
             var projector = new DrainProjector(scenario.Store, seen, failure);
-            Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(() => scenario.RunAsync(projector)));
+            var diagnostic = await Assert.ThrowsAsync<ProcessorFailureException>(() => scenario.RunAsync(projector));
+            Assert.Same(failure, diagnostic.InnerException);
             var checkpoint = await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern));
             Assert.Equal("4096", checkpoint.Cursor.ToString());
         }
@@ -144,7 +146,7 @@ public sealed class ScenarioDrainTests
     sealed class DrainProjector(IProjectionStore store, List<Uuid> seen, Exception? failure = null, CancellationTokenSource? cancellation = null)
         : BatchProjector(store, EventStreamPattern.ForPattern("test", "users"))
     {
-        protected override ValueTask ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records,
+        protected override ValueTask<Result> ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records,
             IProjectorContext context, CancellationToken ct)
         {
             foreach (var record in records)
@@ -157,14 +159,14 @@ public sealed class ScenarioDrainTests
                 if (seen.Count == 300)
                     cancellation?.Cancel();
             }
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 
     sealed class DrainReactor(IProjectionCheckpointStore store, List<Uuid> seen, Exception? failure = null, CancellationTokenSource? cancellation = null)
         : BatchReactor(store, EventStreamPattern.ForPattern("test", "users"))
     {
-        protected override ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
+        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
         {
             foreach (var context in contexts)
             {
@@ -176,7 +178,7 @@ public sealed class ScenarioDrainTests
                 if (seen.Count == 300)
                     cancellation?.Cancel();
             }
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 

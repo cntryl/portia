@@ -1,1 +1,6 @@
 #nullable enable
+Cntryl.Portia.ApplicationStructureCodeFixProvider
+Cntryl.Portia.ApplicationStructureCodeFixProvider.ApplicationStructureCodeFixProvider() -> void
+override Cntryl.Portia.ApplicationStructureCodeFixProvider.FixableDiagnosticIds.get -> System.Collections.Immutable.ImmutableArray<string!>
+override Cntryl.Portia.ApplicationStructureCodeFixProvider.GetFixAllProvider() -> Microsoft.CodeAnalysis.CodeFixes.FixAllProvider?
+override Cntryl.Portia.ApplicationStructureCodeFixProvider.RegisterCodeFixesAsync(Microsoft.CodeAnalysis.CodeFixes.CodeFixContext context) -> System.Threading.Tasks.Task!

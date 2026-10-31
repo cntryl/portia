@@ -97,7 +97,7 @@ public sealed class ApplicationFleetTests
 
         public void Dispose() => Interlocked.Increment(ref _probe.Disposed);
 
-        protected override async ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+        protected override async ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
             CancellationToken ct)
         {
             lock (_probe)
@@ -119,6 +119,8 @@ public sealed class ApplicationFleetTests
                     _probe.Active--;
                 }
             }
+
+            return Result.Success;
         }
     }
 }

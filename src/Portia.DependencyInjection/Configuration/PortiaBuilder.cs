@@ -13,6 +13,8 @@ namespace Cntryl.Portia;
 public sealed class PortiaBuilder
 {
     readonly ApplicationComponentCatalog _catalog = new();
+    readonly Lock _generatedRegistrationGate = new();
+    readonly HashSet<object> _generatedRegistrations = new(ReferenceEqualityComparer.Instance);
     readonly PortiaJsonComposer _json = new();
 
     internal PortiaBuilder(IServiceCollection services)
@@ -43,6 +45,33 @@ public sealed class PortiaBuilder
     {
         ArgumentNullException.ThrowIfNull(factory);
         _json.AddContext(factory);
+        return this;
+    }
+
+    /// <summary>Applies a generated registration block once to this builder; a failed block may be retried.</summary>
+    /// <param name="identity">The generated block's private, stable identity object.</param>
+    /// <param name="register">Registers the block's typed descriptors.</param>
+    /// <returns>This builder, for chaining.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public PortiaBuilder AddGeneratedRegistrations(object identity, Action<PortiaBuilder> register)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        ArgumentNullException.ThrowIfNull(register);
+        lock (_generatedRegistrationGate)
+        {
+            if (!_generatedRegistrations.Add(identity))
+                return this;
+            try
+            {
+                register(this);
+            }
+            catch
+            {
+                _ = _generatedRegistrations.Remove(identity);
+                throw;
+            }
+        }
+
         return this;
     }
 

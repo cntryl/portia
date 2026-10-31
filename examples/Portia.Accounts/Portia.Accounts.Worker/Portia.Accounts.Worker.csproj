@@ -8,6 +8,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../Portia.Accounts.Application/Portia.Accounts.Application.csproj" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
   </ItemGroup>
 </Project>

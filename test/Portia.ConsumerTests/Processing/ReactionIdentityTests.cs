@@ -56,11 +56,11 @@ public sealed class ReactionIdentityTests
     {
         public IExecutionContext? Context { get; private set; }
 
-        protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
             CancellationToken ct)
         {
             Context = context;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 }

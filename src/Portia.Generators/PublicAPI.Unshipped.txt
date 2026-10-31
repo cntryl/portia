@@ -1,1 +1,13 @@
 #nullable enable
+Cntryl.Portia.ApplicationBoundaryAnalyzer
+Cntryl.Portia.ApplicationBoundaryAnalyzer.ApplicationBoundaryAnalyzer() -> void
+Cntryl.Portia.ApplicationContractAnalyzer
+Cntryl.Portia.ApplicationContractAnalyzer.ApplicationContractAnalyzer() -> void
+Cntryl.Portia.ApplicationStructureAnalyzer
+Cntryl.Portia.ApplicationStructureAnalyzer.ApplicationStructureAnalyzer() -> void
+override Cntryl.Portia.ApplicationBoundaryAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
+override Cntryl.Portia.ApplicationBoundaryAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
+override Cntryl.Portia.ApplicationContractAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
+override Cntryl.Portia.ApplicationContractAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
+override Cntryl.Portia.ApplicationStructureAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
+override Cntryl.Portia.ApplicationStructureAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>

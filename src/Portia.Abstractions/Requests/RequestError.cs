@@ -1,7 +1,7 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-///     Describes an expected request-handling failure.
+///     Describes an expected application-handling failure.
 /// </summary>
 /// <param name="kind">The category of failure.</param>
 /// <param name="message">The error message.</param>

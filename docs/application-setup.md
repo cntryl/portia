@@ -28,7 +28,7 @@ public static class ApplicationSetup
         // ActorValidator implements IRequestActorValidator using the application's identity policy.
         services.AddScoped<IRequestActorValidator, ActorValidator>();
 
-        services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<IAccountCommandRepository, AccountCommandRepository>();
         services.AddScoped<IPlatformSummaryRepository, PlatformSummaryRepository>();
         services.AddSingleton<ITenantDirectory, AccountTenantDirectory>();
 
@@ -140,13 +140,13 @@ to use `Result.Failure(new RequestError(RequestErrorKind.Validation, ...))` (and
 `RequestErrorKind` values); validation policy belongs to the application rather than a separate
 framework validation pipeline.
 
-Fitz 0.2.0 currently constructs its queue actors with `max_attempts: None`, which means expired
+Fitz 0.3.0 currently constructs its queue actors with `max_attempts: None`, which means expired
 reservations redeliver indefinitely and the standard broker does not move messages to a DLQ. The
 Fitz Rust `QueueActor` has an internal `max_attempts` constructor option, but neither the broker
 configuration nor its .NET client exposes it. It cannot be set through `QueueRunnerOptions` or
 Portia configuration. A Fitz deployment that exposes an attempt limit must configure it at the
 broker; that policy remains provider-owned, and Fitz queue persistence is best-effort as described
-in the [migration guide](migration-0.8.md#fitz-queue-acceptance-and-crash-recovery).
+in the [upgrade guide](fitz-3-upgrade.md#queue-acceptance-and-crash-recovery).
 
 Use the standard .NET worker host, referencing the shared project:
 
@@ -192,8 +192,8 @@ finishes. Hosted retries use the registered `TimeProvider`, record every failed 
 fresh disposed scope each time. Caller cancellation propagates. Fitz schedule notifications have no
 acknowledgment or redelivery handle, so process loss can still lose a firing that has already been
 received. Work that requires crash recovery needs a queue provider with that guarantee or durable
-application intent and a recovery mechanism. Fitz 0.2.0 queue acceptance has best-effort persistence;
-see [queue acceptance and crash recovery](migration-0.8.md#fitz-queue-acceptance-and-crash-recovery).
+application intent and a recovery mechanism. Fitz 0.3.0 queue acceptance has best-effort persistence;
+see [queue acceptance and crash recovery](fitz-3-upgrade.md#queue-acceptance-and-crash-recovery).
 
 ## Construct and hydrate aggregates directly
 
@@ -285,11 +285,19 @@ cancelled workload and its stop callback. Host shutdown retains its separate sha
 Projectors derive from `Projector` or `BatchProjector` and pass their ordinary
 repository into the base constructor. That repository implements `IProjectionStore`:
 loading progress and opening an atomic unit of work. There is no separate target
-registration and no repository lookup through projector context.
+registration and no repository lookup through projector context. The repository owns queries and
+updates; a read model is the simple data contract those queries return. Typed projector handlers
+receive `IProjectorContext<TEvent>` and return `ValueTask<Result>`. The same result contract applies
+to reactors, with `IReactorContext<TEvent>`. Return failures to Portia so the hosted worker can
+classify them and apply its bounded retry policy.
 
 Reactors derive from `Reactor` or `BatchReactor` and pass a constructor dependency
 implementing `IProjectionCheckpointStore`. This can be the same application repository
 they use for reactions; Portia does not require a separate global store registration.
+Cross-aggregate reads are allowed as advisory validation. Successful checks still require
+[authoritative outcome validation](validation-authority.md) through the owning participants;
+failed validation needs rejection, compensation, or explicit intervention.
+
 Register `ITenantDirectory` when any workload is per tenant. Registration and infrastructure
 setup can occur in either order, before building the host. `FixedTenantDirectory` serves a
 membership fixed at startup, for a single-tenant or configured-tenant deployment. A deployment whose

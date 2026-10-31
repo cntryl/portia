@@ -23,6 +23,8 @@ public sealed partial class DocumentationContractTests
         "docs/getting-started.md",
         "docs/application-setup.md",
         "docs/projectors-and-reactors.md",
+        "docs/cassie-projections.md",
+        "docs/validation-authority.md",
         "docs/request-context.md",
         "docs/observability.md",
         "docs/native-aot.md",

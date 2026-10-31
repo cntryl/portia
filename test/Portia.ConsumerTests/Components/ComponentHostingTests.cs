@@ -244,7 +244,10 @@ public sealed partial class ComponentHostingTests
             await (worker.ExecuteTask ?? throw new InvalidOperationException("The worker did not start.")));
 
         Assert.Equal(2, failure.Attempts);
-        _ = Assert.IsType<InvalidOperationException>(failure.InnerException);
+        var diagnostic = Assert.IsType<ProcessorFailureException>(failure.InnerException);
+        Assert.Equal(ProcessorFailureStage.Loading, diagnostic.Stage);
+        Assert.Null(diagnostic.Checkpoint);
+        Assert.IsType<InvalidOperationException>(diagnostic.InnerException);
         Assert.Equal(1, changes.SubscriptionCount);
         Assert.Equal(1, changes.DisposalCount);
         (worker as IDisposable)?.Dispose();
@@ -495,7 +498,6 @@ public sealed partial class ComponentHostingTests
     sealed class ChangingPatternProjector(IAccountRepository target, PatternSequence patterns)
         : Projector(target, patterns.Next(), "changing-pattern"), IProjectorHandler<Deposited>
     {
-        public ValueTask HandleAsync(Deposited ev, IProjectorContext context, CancellationToken ct) =>
-            ValueTask.CompletedTask;
+        public ValueTask<Result> HandleAsync(IProjectorContext<Deposited> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
     }
 }

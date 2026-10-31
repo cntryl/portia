@@ -11,7 +11,7 @@ public sealed class RequestShapeDiagnosticsGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var types = context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => node is ClassDeclarationSyntax,
+                static (node, _) => node is ClassDeclarationSyntax && SyntaxFilters.HasBaseListOrPartial(node),
                 static (syntaxContext, ct) => Analyze(syntaxContext, ct))
             .Where(static model => model is not null)
             .Select(static (model, _) => model!);

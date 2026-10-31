@@ -81,14 +81,13 @@ public class ReactorDispatchBenchmarks
     sealed class SingleBenchmarkReactor(IProjectionCheckpointStore checkpoints)
         : Reactor(checkpoints, EventStreamPattern.ForPattern("bench"))
     {
-        protected override ValueTask ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
-            CancellationToken ct) => ValueTask.CompletedTask;
+        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+            CancellationToken ct) => ValueTask.FromResult(Result.Success);
     }
 
     sealed class BatchBenchmarkReactor(IProjectionCheckpointStore checkpoints)
         : BatchReactor(checkpoints, EventStreamPattern.ForPattern("bench"))
     {
-        protected override ValueTask ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct) =>
-            ValueTask.CompletedTask;
+        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct) => ValueTask.FromResult(Result.Success);
     }
 }

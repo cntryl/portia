@@ -155,6 +155,10 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                 }
 
                 await session.CommitAsync(StreamCommitMode.Sync, ct).ConfigureAwait(false);
+                if (ProcessingObservation.IsEnabled)
+                    foreach (var ev in events)
+                        ProcessingObservation.Record("event", stream.ToString(), ev.Metadata.EventId.ToString(),
+                            ev.Metadata.ExecutionId?.ToString(), "committed");
                 telemetryCount = events.Count;
                 telemetryOutcome = "success";
             }

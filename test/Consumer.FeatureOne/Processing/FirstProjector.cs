@@ -4,16 +4,16 @@ public partial class FirstProjector(IAccountRepository target, IConsumerScope sc
     : BatchProjector(target, pattern ?? ConsumerStreams.AccountsPattern, "first-projector"),
         IProjectorHandler<Deposited>, IProjectorHandler<Declined>
 {
-    public ValueTask HandleAsync(Declined ev, IProjectorContext context, CancellationToken ct)
+    public ValueTask<Result> HandleAsync(IProjectorContext<Declined> context, CancellationToken ct)
     {
-        target.Add(ev.Metadata.AggregateId, 0, scope.Id);
-        return ValueTask.CompletedTask;
+        target.Add(context.Trigger.Metadata.AggregateId, 0, scope.Id);
+        return ValueTask.FromResult(Result.Success);
     }
 
-    public ValueTask HandleAsync(Deposited ev, IProjectorContext context, CancellationToken ct)
+    public ValueTask<Result> HandleAsync(IProjectorContext<Deposited> context, CancellationToken ct)
     {
-        target.Add(ev.Metadata.AggregateId, ev.Amount, scope.Id);
-        return ValueTask.CompletedTask;
+        target.Add(context.Trigger.Metadata.AggregateId, context.Trigger.Amount, scope.Id);
+        return ValueTask.FromResult(Result.Success);
     }
 }
 

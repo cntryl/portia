@@ -40,8 +40,9 @@ delivery gates are recorded in [platform vision](platform-vision.md).
 A reaction may dispatch a command or invoke an integration gateway directly. Commands are the
 best fit for reusable application behavior that benefits from Portia's request handler and
 authorization pipeline. Direct calls are the better fit for effects inherently caused by the
-event. `SendReactionAsync` preserves causal context and converts a failed command result into a
-reactor fault. In either form, the application must make the effect safe to replay because effect
+event. `SendReactionAsync` preserves causal context and returns the command outcome for the reactor to
+return. Portia retains failed outcomes, applies bounded retries to transient failures, and faults
+immediately on permanent failures. In either form, the application must make the effect safe to replay because effect
 completion and checkpoint persistence are not atomic.
 
 ## Fitz notifications are wakeups
@@ -70,6 +71,18 @@ Domain policies therefore remain in application aggregates and value objects, an
 concurrency remains authoritative. Portia supplies no domain-policy DSL and does not cache guard
 outcomes across retries. Streamed requests run the same guard stage before their first item; an
 outer behavior that does not invoke its continuation skips both guards and the handler.
+
+## Cross aggregate reads are advisory and outcomes establish authority
+
+Cross-aggregate reads are allowed for proactive validation. Local invariants remain authoritative
+only inside the aggregate's atomic consistency boundary. Choreography must subsequently confirm
+cross-aggregate business assumptions through the participants' authoritative commands and committed
+outcomes. A successful advisory check never removes this obligation.
+
+Failed outcome validation must reject, compensate, or explicitly flag the business operation for
+intervention. Preserve pending and unknown outcomes until they are resolved. The
+[validation authority model](validation-authority.md) defines these roles, the Order/Inventory
+example, and the distinction between a business rejection and an incomplete processing attempt.
 
 ## Audits are a separate durability boundary
 

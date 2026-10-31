@@ -97,8 +97,9 @@ Fitz is Portia's first-party event log, transport, scheduler, and coordination l
 read-model engine for SQL, graph, time-series, and vector workloads.
 
 Neither is hidden behind a generic query language. A projector receives an ordinary application repository built on the
-backend's native client and schema. That repository implements
-`IProjectionStore` and `IProjectionBatch` only to give Portia the lifecycle and atomic read-model-plus-checkpoint
+backend's native client and schema. Read models are simple data contracts returned by repository
+queries; repositories own persistence behavior, and projectors apply events through them. That repository implements
+`IProjectionStore` and returns `IProjectionBatch` handles to give Portia the lifecycle and atomic read-model-plus-checkpoint
 boundary it needs.
 
 PostgreSQL, Snowflake, or another store can therefore be added in userland without changing Portia, writing a custom
@@ -110,10 +111,13 @@ is modeled honestly as an at-least-once reactor effect instead.
 - [Getting started](docs/getting-started.md): packages, contracts, registration, HTTP, and transports
 - [Shared application setup](docs/application-setup.md): API and worker deployments from one composition
 - [Projectors and reactors](docs/projectors-and-reactors.md): native repositories and durable processing
+- [Processor operations](docs/operations.md): durable diagnosis, operator approval, worker-owned recovery, and verification
 - [Request context](docs/request-context.md): actor, correlation, and causation
+- [Validation authority](docs/validation-authority.md): local invariants, advisory reads, and authoritative outcome choreography.
 - [Request guards](docs/request-guards.md): authorization, reusable asynchronous preflight, and authoritative invariants
 - [Testing applications](docs/testing.md): aggregate, request, projector, and reactor scenarios
 - [Object storage](docs/object-storage.md): vendor-neutral contracts and the tenant-scoped AWS adapter
+- [Cassie projections](docs/cassie-projections.md): native SQL repositories, typed projectors, and atomic checkpoints.
 - [Platform vision](docs/platform-vision.md): the fixed Fitz–Portia–Cassie boundary
 - [Scope](docs/scope.md) and [design decisions](docs/design-decisions.md): guarantees and deliberate limits
 - [Performance and scaling](docs/performance-and-scaling.md): measured hot paths and scaling model
@@ -121,6 +125,7 @@ is modeled honestly as an at-least-once reactor effect instead.
 - [Model Context Protocol](docs/mcp.md): request-backed tools, resources, and prompts over stdio and Streamable HTTP
 - [Migrating to Portia 0.4](docs/migration-0.4.md): JSON ownership, tenant templates, and MCP tests
 - [Portia 0.8 migration notes](docs/migration-0.8.md): Fitz 2.0 compatibility and queue persistence
+- [Fitz 3 upgrade](docs/fitz-3-upgrade.md): coordinated client, broker, and stored-data migration
 
 ## Development
 
@@ -128,14 +133,14 @@ Tests, benchmarks, and executable hosts check in `packages.lock.json` for reprod
 Shared libraries resolve dependencies without their own lockfiles; `--locked-mode` applies to
 the projects with locking enabled. Package-consumer smoke projects opt out because their
 package versions and target runtimes vary during qualification. Install a stable .NET 10 SDK;
-`global.json` sets 10.0.400 as the minimum SDK and rolls forward to the latest installed .NET 10
+`global.json` sets 10.0.403 as the minimum SDK and rolls forward to the latest installed .NET 10
 feature band.
 
 ```sh
 dotnet restore Portia.slnx --locked-mode
 dotnet format Portia.slnx --verify-no-changes --no-restore
 dotnet build Portia.slnx --configuration Release --no-restore
-dotnet test Portia.slnx --configuration Release --no-build --filter "Category!=BrokerIntegration&Category!=StorageIntegration"
+dotnet test Portia.slnx --configuration Release --no-build --filter "Category!=BrokerIntegration&Category!=StorageIntegration&Category!=CassieIntegration&Category!=DurabilityIntegration"
 docker compose up --detach --wait fitz
 dotnet test Portia.slnx --configuration Release --no-build --filter "Category=BrokerIntegration"
 docker compose up --detach sqrzl

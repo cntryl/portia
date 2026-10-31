@@ -31,7 +31,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var processors = context.SyntaxProvider.CreateSyntaxProvider(
-            static (node, _) => node is ClassDeclarationSyntax,
+            static (node, _) => node is ClassDeclarationSyntax && SyntaxFilters.HasBaseListOrPartial(node),
             static (ctx, _) => GetProcessor(ctx)).Where(static item => item is not null);
         context.RegisterSourceOutput(processors, static (ctx, item) => Generate(ctx, item!));
     }
@@ -127,21 +127,23 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
 
         var source = OpenShape(processor);
         _ = source.AppendLine(processor.Projector
-                ? "protected override global::System.Threading.Tasks.ValueTask ProjectEventAsync(global::Cntryl.Portia.DomainEventRecord record, global::Cntryl.Portia.IProjectorContext context, global::System.Threading.CancellationToken ct) {"
-                : "protected override global::System.Threading.Tasks.ValueTask ReactToEventAsync(global::Cntryl.Portia.DomainEventRecord record, global::Cntryl.Portia.IExecutionContext execution, global::System.Threading.CancellationToken ct) {")
+                ? "protected override global::System.Threading.Tasks.ValueTask<global::Cntryl.Portia.Result> ProjectEventAsync(global::Cntryl.Portia.DomainEventRecord record, global::Cntryl.Portia.IProjectorContext context, global::System.Threading.CancellationToken ct) {"
+                : "protected override global::System.Threading.Tasks.ValueTask<global::Cntryl.Portia.Result> ReactToEventAsync(global::Cntryl.Portia.DomainEventRecord record, global::Cntryl.Portia.IExecutionContext execution, global::System.Threading.CancellationToken ct) {")
             .AppendLine("switch (record.Event) {");
         foreach (var handler in processor.Handlers.Where(h => !h.Batch))
         {
-            _ = source.Append("case ").Append(handler.Type).Append(" typed: return ((global::Cntryl.Portia.")
+            _ = source.Append("case ").Append(handler.Type).Append(" typed: return global::Cntryl.Portia.ProcessingObservation.InvokeAsync(")
+                .Append(SymbolDisplay.FormatLiteral(handler.InterfaceType, true))
+                .Append(", ((global::Cntryl.Portia.")
                 .Append(processor.Projector ? "IProjectorHandler<" : "IReactorHandler<").Append(handler.Type)
-                .Append(">)this).HandleAsync(")
+                .Append(">)this), ")
                 .Append(processor.Projector
-                    ? "typed, context, ct);"
+                    ? "new global::Cntryl.Portia.ProjectorContext<" + handler.Type + ">(typed, record, context), ct);"
                     : "new global::Cntryl.Portia.ReactorContext<" + handler.Type + ">(typed, record, execution), ct);")
                 .AppendLine();
         }
 
-        _ = source.AppendLine("default: return global::System.Threading.Tasks.ValueTask.CompletedTask; } }");
+        _ = source.AppendLine("default: return global::System.Threading.Tasks.ValueTask.FromResult(global::Cntryl.Portia.Result.Success); } }");
         if (processor.Handlers.Any(h => h.Batch))
             AppendBatch(source, processor);
         _ = source.AppendLine("}");
@@ -159,8 +161,8 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
             _ = source.Append(processor.Handlers[i].Type).Append(" => ").Append(i).AppendLine(",");
         _ = source.AppendLine("_ => -1 };");
         _ = source.AppendLine(processor.Projector
-            ? "protected override async global::System.Threading.Tasks.ValueTask ProjectBatchAsync(global::System.Collections.Generic.IReadOnlyList<global::Cntryl.Portia.DomainEventRecord> records, global::Cntryl.Portia.IProjectorContext context, global::System.Threading.CancellationToken ct) {"
-            : "protected override async global::System.Threading.Tasks.ValueTask ReactBatchAsync(global::System.Collections.Generic.IReadOnlyList<global::Cntryl.Portia.IReactorContext> records, global::System.Threading.CancellationToken ct) {");
+            ? "protected override async global::System.Threading.Tasks.ValueTask<global::Cntryl.Portia.Result> ProjectBatchAsync(global::System.Collections.Generic.IReadOnlyList<global::Cntryl.Portia.DomainEventRecord> records, global::Cntryl.Portia.IProjectorContext context, global::System.Threading.CancellationToken ct) {"
+            : "protected override async global::System.Threading.Tasks.ValueTask<global::Cntryl.Portia.Result> ReactBatchAsync(global::System.Collections.Generic.IReadOnlyList<global::Cntryl.Portia.IReactorContext> records, global::System.Threading.CancellationToken ct) {");
         var ev = processor.Projector ? "records[i].Event" : "records[i].Source.Event";
         _ = source.Append(
                 "for (var i = 0; i < records.Count;) { ct.ThrowIfCancellationRequested(); switch (PortiaHandlerKind(")
@@ -174,29 +176,35 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
             else
             {
                 var type = processor.Projector
-                    ? handler.Type
+                    ? "global::Cntryl.Portia.IProjectorContext<" + handler.Type + ">"
                     : "global::Cntryl.Portia.IReactorContext<" + handler.Type + ">";
+                var itemEvent = processor.Projector ? "records[index].Event" : "records[index].Source.Event";
                 _ = source.Append("case ").Append(i)
-                    .Append(": { var batch = new global::System.Collections.Generic.List<")
-                    .Append(type).AppendLine(">();")
-                    .Append("do { batch.Add(").Append(processor.Projector
-                        ? "(" + handler.Type + ")" + ev
-                        : "new global::Cntryl.Portia.ReactorContext<" + handler.Type + ">((" + handler.Type + ")" + ev +
-                          ", records[i].Source, records[i])")
-                    .Append("); i++; } while (i < records.Count && PortiaHandlerKind(").Append(ev).Append(") == ")
+                    .Append(": { var start = i++; while (i < records.Count && PortiaHandlerKind(")
+                    .Append(ev).Append(") == ")
                     .Append(i)
-                    .AppendLine(");")
-                    .Append("await ((global::Cntryl.Portia.")
+                    .AppendLine(") i++;")
+                    .Append("var batch = new ").Append(type).AppendLine("[i - start];")
+                    .Append("for (var index = start; index < i; index++) batch[index - start] = ")
+                    .Append(processor.Projector
+                        ? "new global::Cntryl.Portia.ProjectorContext<" + handler.Type + ">((" + handler.Type + ")" + itemEvent +
+                          ", records[index], context)"
+                        : "new global::Cntryl.Portia.ReactorContext<" + handler.Type + ">((" + handler.Type + ")" + itemEvent +
+                          ", records[index].Source, records[index])")
+                    .AppendLine(";")
+                    .Append("var result = await global::Cntryl.Portia.ProcessingObservation.InvokeAsync(")
+                    .Append(SymbolDisplay.FormatLiteral(handler.InterfaceType, true))
+                    .Append(", ((global::Cntryl.Portia.")
                     .Append(processor.Projector ? "IBatchProjectorHandler<" : "IBatchReactorHandler<")
-                    .Append(handler.Type).Append(">)this).HandleAsync(batch, ")
-                    .Append(processor.Projector ? "context, " : "").AppendLine("ct).ConfigureAwait(false); break; }");
+                    .Append(handler.Type).Append(">)this), batch, ")
+                    .AppendLine("ct).ConfigureAwait(false); if (!result.IsSuccess) return result; break; }");
             }
         }
 
         _ = source.AppendLine(processor.Projector
-                ? "default: await ProjectEventAsync(records[i++], context, ct).ConfigureAwait(false); break;"
-                : "default: var item = records[i++]; await ReactToEventAsync(item.Source, item, ct).ConfigureAwait(false); break;")
-            .AppendLine("} } }");
+                ? "default: { var result = await ProjectEventAsync(records[i++], context, ct).ConfigureAwait(false); if (!result.IsSuccess) return result; break; }"
+                : "default: { var item = records[i++]; var result = await ReactToEventAsync(item.Source, item, ct).ConfigureAwait(false); if (!result.IsSuccess) return result; break; }")
+            .AppendLine("} } return global::Cntryl.Portia.Result.Success; }");
     }
 
     static bool IsFirstDeclaration(INamedTypeSymbol symbol, ClassDeclarationSyntax declaration) =>
@@ -225,6 +233,10 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         foreach (var parent in processor.Parents)
             _ = source.AppendLine(parent);
 
+        _ = source.Append("[global::Cntryl.Portia.ProcessorTopologyAttribute(");
+        _ = source.Append(string.Join(", ", processor.Handlers.Select(h => SymbolDisplay.FormatLiteral(
+            h.DisplayType + (h.Batch ? " [batch]" : " [single]"), true))));
+        _ = source.AppendLine(")]");
         return source.Append("partial class @").Append(processor.Name).AppendLine(" {");
     }
 

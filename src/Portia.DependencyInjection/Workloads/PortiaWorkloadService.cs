@@ -15,8 +15,15 @@ sealed class PortiaWorkloadService(
     TimeProvider? timeProvider = null,
     ILogger<PortiaWorkloadService>? logger = null,
     ILogger<MultiTenantRunner>? tenantLogger = null,
-    PortiaStartupValidationRegistry? validations = null) : BackgroundService, IHostedLifecycleService
+    PortiaStartupValidationRegistry? validations = null,
+    IOperationalStore? operationalStore = null,
+    OperationalOptions? operationalOptions = null,
+    IApplicationTopology? topology = null) : BackgroundService, IHostedLifecycleService
 {
+    static readonly Action<ILogger, string, string, int, string, TimeSpan, string, Exception?> LogFailureDecision =
+        LoggerMessage.Define<string, string, int, string, TimeSpan, string>(LogLevel.Error, new EventId(2001),
+            "Workload {Component} failed during {Stage} on attempt {Attempt}; decision {Decision}, retry delay {Delay}, failure kind {FailureKind}");
+
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly ILogger<PortiaWorkloadService>? _logger = logger;
     readonly WorkloadRegistration[] _registrations = [.. registrations];
@@ -45,6 +52,18 @@ sealed class PortiaWorkloadService(
         }
 
         _coordinator = coordinators[0];
+
+        if (operationalStore is not null)
+        {
+            if (operationalOptions is null || topology is null || !available.IsService(typeof(OperationalExecution)))
+                throw new InvalidOperationException("Operational workers require the complete operations registration from their infrastructure builder.");
+            operationalOptions.Validate();
+            await using var operationalScope = scopes.CreateAsyncScope();
+            var checkpoints = operationalScope.ServiceProvider.GetServices<IProjectionCheckpointStore>().ToArray();
+            if (checkpoints.Length != 1 || !ReferenceEquals(checkpoints[0],
+                operationalScope.ServiceProvider.GetService<IOperationalReactionCheckpointStore>()))
+                throw new InvalidOperationException("Operational workers require exactly one operational checkpoint registration; legacy checkpoint owners must be quiesced.");
+        }
 
         foreach (var registration in _registrations)
         {
@@ -171,6 +190,7 @@ sealed class PortiaWorkloadService(
         var telemetryScope = identity.Tenant is null ? "global" : "tenant";
         PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, true, _logger);
         var consecutiveFailures = 0;
+        OperationalSession? operationalSession = null;
         var subscribeFailures = 0;
         var resubscribeAt = DateTimeOffset.MinValue;
         IDomainEventSubscription? subscription = null;
@@ -210,8 +230,35 @@ sealed class PortiaWorkloadService(
                             $"Workload '{identity.Name}' ({registration.Scope}) changed its event-stream pattern from area '{subscribedPattern?.Area ?? "*"}' to area '{passPattern.Area ?? "*"}' across dependency-injection scopes.");
                     }
 
-                    var pass = await registration.Descriptor.RunPass(provider, registration.Processing, ct)
+                    var processing = registration.Processing;
+                    if (operationalStore is not null)
+                    {
+                        if (operationalSession is null)
+                        {
+                            operationalSession = new OperationalSession(operationalStore, operationalOptions!, topology!, _clock);
+                            var target = new OperationalTarget(registration.Name, passPattern.ToString(),
+                                new OperationalScope(identity.Tenant?.Value), processing.RebuildId);
+                            await operationalSession.AcquireAsync(target,
+                                registration.Descriptor.SupportsRebuild ? "projector" : "reactor",
+                                new OperationalProcessingSettings(processing.MaxBatchSize, processing.MaxEventsPerPass,
+                                    registration.FailureAttemptLimit, registration.PollInterval.Ticks,
+                                    registration.MaximumFailureDelay.Ticks), null, ct).ConfigureAwait(false);
+                        }
+                        operationalSession.BeginPass();
+                        var checkpoint = await registration.Descriptor.LoadCheckpoint(provider, processing, ct).ConfigureAwait(false);
+                        if (!await operationalSession.PrepareAsync(checkpoint, ct).ConfigureAwait(false))
+                        {
+                            await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
+                            continue;
+                        }
+                        provider.GetRequiredService<OperationalExecution>().Session = operationalSession;
+                        processing = operationalSession.BoundOptions(processing);
+                        consecutiveFailures = operationalSession.State.ConsecutiveFailures;
+                    }
+                    var pass = await registration.Descriptor.RunPass(provider, processing, ct)
                         .ConfigureAwait(false);
+                    if (operationalSession is not null)
+                        await operationalSession.PassSucceededAsync(ct).ConfigureAwait(false);
                     consecutiveFailures = 0;
                     if (pass.ContinueImmediately)
                     {
@@ -225,18 +272,41 @@ sealed class PortiaWorkloadService(
                 catch (Exception ex)
                 {
                     failed = true;
-                    consecutiveFailures++;
+                    if (operationalSession is not null)
+                    {
+                        await operationalSession.RecordFailureAsync(ex, null, ct).ConfigureAwait(false);
+                        consecutiveFailures = operationalSession.State.ConsecutiveFailures;
+                    }
+                    else
+                        consecutiveFailures++;
                     PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Workload, ex,
                         _logger);
-                    if (consecutiveFailures >= registration.FailureAttemptLimit)
+                    if (ex is ProcessorFailureException { IsTransient: false }
+                        || ex is ReactionCommandFailedException { Error.IsTransient: false }
+                        || consecutiveFailures >= registration.FailureAttemptLimit
+                        || operationalSession is { State.Block: { } block } terminal
+                            && terminal.State.Attempts[^1].Id == block.AttemptId)
                     {
                         terminalFailure = new WorkloadFailureException(identity, consecutiveFailures, ex);
+                    }
+
+                    if (_logger is not null)
+                    {
+                        LogFailureDecision(_logger, registration.Name,
+                            ex is ProcessorFailureException diagnostic ? diagnostic.Stage.ToString() : "Pass",
+                            consecutiveFailures, terminalFailure is null ? "retry" : "stop",
+                            terminalFailure is null ? GetFailureDelay(registration, consecutiveFailures) : TimeSpan.Zero,
+                            ex is ProcessorFailureException { Error: { } error } ? error.Kind.ToString() : ex.GetType().Name,
+                            null);
                     }
                 }
 
                 if (terminalFailure is not null)
                 {
-                    throw terminalFailure;
+                    if (operationalSession is null)
+                        throw terminalFailure;
+                    await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
+                    continue;
                 }
 
                 if (failed)

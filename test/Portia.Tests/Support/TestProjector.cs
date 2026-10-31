@@ -5,17 +5,19 @@ sealed partial class TestProjector(ITestProjectionRepository target, EventStream
         IProjectorHandler<ValueChanged>,
         IProjectorHandler<ValueIncremented>
 {
-    public ValueTask HandleAsync(ValueChanged ev, IProjectorContext context, CancellationToken ct)
+    public ValueTask<Result> HandleAsync(IProjectorContext<ValueChanged> context, CancellationToken ct)
     {
-        target.Projection.Value = ev.Value;
+        target.Projection.Value = context.Trigger.Value;
         target.Projection.HandlerCount++;
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(Result.Success);
     }
 
-    public async ValueTask HandleAsync(ValueIncremented ev, IProjectorContext context, CancellationToken ct)
+    public async ValueTask<Result> HandleAsync(IProjectorContext<ValueIncremented> context, CancellationToken ct)
     {
         await target.Projection.LoadAsync(ct);
-        target.Projection.Value += ev.Amount;
+        target.Projection.Value += context.Trigger.Amount;
         target.Projection.HandlerCount++;
+
+        return Result.Success;
     }
 }

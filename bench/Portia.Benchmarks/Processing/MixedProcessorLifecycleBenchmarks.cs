@@ -123,7 +123,7 @@ sealed class MixedProcessorApplication : IDisposable
                 await _runner.RunAsync(_projector, ProjectionCheckpoint.Start, _options);
                 throw new InvalidOperationException("The failure control did not fail.");
             }
-            catch (MixedCommitException) { }
+            catch (ProcessorFailureException error) when (error is { Stage: ProcessorFailureStage.Committing, InnerException: MixedCommitException }) { }
             if (_store.Checkpoint != ProjectionCheckpoint.Start || _store.Commits != 0 || _store.Order.Count != 0)
                 throw new InvalidOperationException("Failed commit leaked checkpoint or projected rows.");
         }
@@ -238,26 +238,26 @@ sealed record MixedUnmatched(int Value) : DomainEvent;
 sealed partial class MixedSingleProjector(MixedProjectionStore store)
     : Projector(store, EventStreamPattern.ForPattern("bench")), IProjectorHandler<MixedMatched>, IProjectorHandler<MixedDerived>
 {
-    public ValueTask HandleAsync(MixedMatched ev, IProjectorContext context, CancellationToken ct)
-    { store.StageBase(ev.Value); return ValueTask.CompletedTask; }
-    public ValueTask HandleAsync(MixedDerived ev, IProjectorContext context, CancellationToken ct)
-    { store.StageDerived(ev.Value); return ValueTask.CompletedTask; }
+    public ValueTask<Result> HandleAsync(IProjectorContext<MixedMatched> context, CancellationToken ct)
+    { store.StageBase(context.Trigger.Value); return ValueTask.FromResult(Result.Success); }
+    public ValueTask<Result> HandleAsync(IProjectorContext<MixedDerived> context, CancellationToken ct)
+    { store.StageDerived(context.Trigger.Value); return ValueTask.FromResult(Result.Success); }
 }
 
 sealed partial class MixedBatchProjector(MixedProjectionStore store)
     : BatchProjector(store, EventStreamPattern.ForPattern("bench")), IBatchProjectorHandler<MixedMatched>, IBatchProjectorHandler<MixedDerived>
 {
-    public ValueTask HandleAsync(IReadOnlyList<MixedMatched> events, IProjectorContext context, CancellationToken ct)
+    public ValueTask<Result> HandleAsync(IReadOnlyList<IProjectorContext<MixedMatched>> contexts, CancellationToken ct)
     {
-        foreach (var ev in events)
-            store.StageBase(ev.Value);
-        return ValueTask.CompletedTask;
+        foreach (var context in contexts)
+            store.StageBase(context.Trigger.Value);
+        return ValueTask.FromResult(Result.Success);
     }
-    public ValueTask HandleAsync(IReadOnlyList<MixedDerived> events, IProjectorContext context, CancellationToken ct)
+    public ValueTask<Result> HandleAsync(IReadOnlyList<IProjectorContext<MixedDerived>> contexts, CancellationToken ct)
     {
-        foreach (var ev in events)
-            store.StageDerived(ev.Value);
-        return ValueTask.CompletedTask;
+        foreach (var context in contexts)
+            store.StageDerived(context.Trigger.Value);
+        return ValueTask.FromResult(Result.Success);
     }
 }
 

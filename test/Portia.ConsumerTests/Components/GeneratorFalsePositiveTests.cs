@@ -190,7 +190,7 @@ public sealed class GeneratorFalsePositiveTests
                                                                  public partial class BaseProjection(IProjectionStore store)
                                                                      : Projector(store, EventStreamPattern.ForPattern("events")), IProjectorHandler<Changed>
                                                                  {
-                                                                     public ValueTask HandleAsync(Changed ev, IProjectorContext context, CancellationToken ct) => ValueTask.CompletedTask;
+                                                                     public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                                                  }
                                                                  public sealed class Projection(IProjectionStore store) : BaseProjection(store);
                                                                  """, new ProjectorReactorEventDispatcherGenerator());

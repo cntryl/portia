@@ -2,3 +2,12 @@
 Cntryl.Portia.FitzKvProjectionStore.BeginTenantReadAsync(Cntryl.Portia.TenantId tenant, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Fitz.IKvTransaction!>
 Cntryl.Portia.PortiaFitzBuilder.UseKvTenantSnapshots(string! route) -> Cntryl.Portia.PortiaFitzBuilder!
 Cntryl.Portia.PortiaFitzBuilder.UseKvTenantSnapshots(string! route, Cntryl.Fitz.KvDurability durability) -> Cntryl.Portia.PortiaFitzBuilder!
+Cntryl.Portia.FitzOperationalStore
+Cntryl.Portia.FitzOperationalStore.CommitAsync(Cntryl.Portia.OperationalProcessorState! replacement, long expectedRevision, System.Guid ownerSession, System.Guid attemptId, string? expectedCheckpoint, string? nextCheckpoint, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.FitzOperationalStore.CompareExchangeAsync(Cntryl.Portia.OperationalProcessorState! replacement, long expectedRevision, System.Guid expectedOwner, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.FitzOperationalStore.FitzOperationalStore(Cntryl.Fitz.IKvClient! client, string! checkpointBaseRoute) -> void
+Cntryl.Portia.FitzOperationalStore.ListAsync(Cntryl.Portia.OperationalScope! scope, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.OperationalProcessorState!>!>
+Cntryl.Portia.FitzOperationalStore.LoadAsync(Cntryl.Portia.CheckpointIdentity! identity, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>
+Cntryl.Portia.FitzOperationalStore.ReadAsync(Cntryl.Portia.OperationalTarget! target, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalProcessorState?>
+Cntryl.Portia.FitzOperationalStore.SaveAsync(Cntryl.Portia.CheckpointIdentity! identity, Cntryl.Portia.ProjectionCheckpoint checkpoint, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.PortiaFitzBuilder.UseOperations(string! checkpointBaseRoute, System.Action<Cntryl.Portia.OperationalOptions!>! configure) -> Cntryl.Portia.PortiaFitzBuilder!

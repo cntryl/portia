@@ -45,13 +45,13 @@ public sealed class GeneratorStabilityTests
                               internal sealed partial class View(IProjectionStore store)
                                   : Projector(store, EventStreamPattern.ForTenant("things")), IProjectorHandler<Changed>
                               {
-                                  public ValueTask HandleAsync(Changed ev, IProjectorContext context, CancellationToken ct) => ValueTask.CompletedTask;
+                                  public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                               }
                           }
                           public sealed partial class Mailer(IRequestBus bus, IProjectionCheckpointStore checkpoints)
                               : BatchReactor(checkpoints, EventStreamPattern.ForPattern("r")), IBatchReactorHandler<Changed>
                           {
-                              public ValueTask HandleAsync(IReadOnlyList<IReactorContext<Changed>> contexts, CancellationToken ct) => ValueTask.CompletedTask;
+                              public ValueTask<Result> HandleAsync(IReadOnlyList<IReactorContext<Changed>> contexts, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                           }
                           public sealed class Upcaster : IJsonDomainEventUpcaster
                           {
@@ -104,7 +104,7 @@ public sealed class GeneratorStabilityTests
     public void EveryGeneratorAndAnalyzerIsCovered()
     {
         Assert.Equal(8, AllGenerators().Length);
-        Assert.Equal(2, AllAnalyzers().Length);
+        Assert.Equal(5, AllAnalyzers().Length);
     }
 
     /// <summary>Every prefix of a realistic file, as it exists while being typed, runs without an exception.</summary>

@@ -149,11 +149,9 @@ sealed partial class TeamProjector(TeamRepository teams)
     : BatchProjector(teams, EventStreamPattern.ForTenant("teams")),
       IProjectorHandler<TeamCreated>, IProjectorHandler<TeamRenamed>
 {
-    public ValueTask HandleAsync(TeamCreated ev, IProjectorContext context, CancellationToken ct)
-        => teams.AddAsync(new Team(ev.Metadata.AggregateId, ev.Name), ct);
+    public async ValueTask<Result> HandleAsync(IProjectorContext<TeamCreated> context, CancellationToken ct) { await teams.AddAsync(new Team(context.Trigger.Metadata.AggregateId, context.Trigger.Name), ct).ConfigureAwait(false); return Result.Success; }
 
-    public ValueTask HandleAsync(TeamRenamed ev, IProjectorContext context, CancellationToken ct)
-        => teams.RenameAsync(ev.Metadata.AggregateId, ev.Name, ct);
+    public async ValueTask<Result> HandleAsync(IProjectorContext<TeamRenamed> context, CancellationToken ct) { await teams.RenameAsync(context.Trigger.Metadata.AggregateId, context.Trigger.Name, ct).ConfigureAwait(false); return Result.Success; }
 }
 
 /// <summary>A team was created with a display name.</summary>

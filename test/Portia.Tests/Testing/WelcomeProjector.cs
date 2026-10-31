@@ -4,9 +4,9 @@ sealed partial class WelcomeProjector(List<Uuid> users, IProjectionStore store, 
     : Projector(store, pattern ?? EventStreamPattern.ForPattern("test", "users")),
         IProjectorHandler<UserCreated>
 {
-    public ValueTask HandleAsync(UserCreated ev, IProjectorContext context, CancellationToken ct)
+    public ValueTask<Result> HandleAsync(IProjectorContext<UserCreated> context, CancellationToken ct)
     {
-        users.Add(ev.UserId);
-        return ValueTask.CompletedTask;
+        users.Add(context.Trigger.UserId);
+        return ValueTask.FromResult(Result.Success);
     }
 }

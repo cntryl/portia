@@ -104,7 +104,9 @@ public sealed class CheckpointIdentityTests
         }
 
         target.FailCommitNumber = 2;
-        _ = await Assert.ThrowsAsync<IOException>(() => Pass(patterns[0]));
+        var diagnostic = await Assert.ThrowsAsync<ProcessorFailureException>(() => Pass(patterns[0]));
+        Assert.IsType<IOException>(diagnostic.InnerException);
+        Assert.Equal(ProcessorFailureStage.Committing, diagnostic.Stage);
         var first = new CheckpointIdentity("same", patterns[0], "interrupted");
         Assert.Equal("1", (await target.LoadCheckpointAsync(first)).Cursor.ToString());
         foreach (var pattern in patterns)
@@ -119,11 +121,11 @@ public sealed class CheckpointIdentityTests
 
     sealed class Projection(Target target, EventStreamPattern pattern) : BatchProjector(target, pattern, "same")
     {
-        protected override ValueTask ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
+        protected override ValueTask<Result> ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
             CancellationToken ct)
         {
             target.Add(context.IsRebuild);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Result.Success);
         }
     }
 

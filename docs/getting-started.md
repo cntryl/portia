@@ -5,12 +5,13 @@ Portia targets .NET 10. Applications choose the runtime packages they need and c
 generation. `Cntryl.Portia.DependencyInjection` supplies registration APIs but does not require DI-free
 Portia users to depend on it for tooling. `Cntryl.Portia.AspNetCore` includes its HTTP-specific
 generator and depends on the runtime DI package. Add `Cntryl.Portia.Fitz` for Fitz storage/transports
-and `Cntryl.Portia.Jwt` when inbound work carries JWT actor identities. Packages use the
+and `Cntryl.Portia.Jwt` when inbound work carries JWT actor identities. `Cntryl.Portia.Cassie`
+adds native SQL projection repositories through `AddCassie` and `AddCassieProjection`; see the
+[Cassie repository guide](cassie-projections.md). Packages use the
 cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
-Portia 0.8.0 uses the .NET 2.0.0 client and requires a
-compatible Fitz 0.2.0 broker. For an existing deployment, follow the
-[Portia 0.8 migration notes](migration-0.8.md#fitz-20-client-and-020-broker) before reconnecting
-an upgraded application. Portia 0.7.0 used Fitz .NET 1.4.2.
+The unreleased packages use Fitz .NET 3.0.0 and require a compatible Fitz 0.3.0 broker.
+Upgrade the broker and clients together; follow the [Fitz 3 upgrade guide](fitz-3-upgrade.md)
+before reconnecting an existing deployment.
 Add the optional `Cntryl.Portia.Telemetry` package and call `AddOpenTelemetry().WithPortia()` when the
 application wants Portia's traces, metrics, and structured logs registered with OpenTelemetry.
 Portia does not select an exporter, resource, sampling policy, filter, endpoint, or credential.
@@ -644,9 +645,9 @@ changing it at the same route uses Fitz's native last-write-wins upsert. Removin
 not cancel it: explicitly call `IScheduleClient.CancelAsync` with the concrete route. The native
 client is available from DI for listing and administration over Portia's shared Fitz connection.
 A durable schedule definition produces live, non-backlogged Fitz firing deliveries. Fitz queues
-add reservations, acknowledgment and redelivery, with best-effort persistence in Fitz 0.2.0.
+add reservations, acknowledgment and redelivery, with best-effort persistence in Fitz 0.3.0.
 Applications that require crash-safe work admission need durable intent and recovery independent
-of queue acceptance; see [queue acceptance and crash recovery](migration-0.8.md#fitz-queue-acceptance-and-crash-recovery).
+of queue acceptance; see [queue acceptance and crash recovery](fitz-3-upgrade.md#queue-acceptance-and-crash-recovery).
 
 Keep Fitz connections long-lived and register an `IRequestActorValidator` for inbound work.
 Fitz supplies the request serializers and creates a fresh dependency-injection scope for each
@@ -681,10 +682,10 @@ unacknowledged; Fitz controls expiration, redelivery, and configured dead-letter
 policy. Hosted stream failures reconnect after backoff. This does not
 republish failed messages or add application retry counters.
 
-Fitz 0.2.0 currently constructs its queue actors with no `max_attempts` limit, so expired
+Fitz 0.3.0 currently constructs its queue actors with no `max_attempts` limit, so expired
 reservations redeliver indefinitely. The Rust actor's `max_attempts` option is internal; neither
 the broker configuration nor .NET client exposes it, and `QueueRunnerOptions.TerminalAttempt`
-cannot set it. Fitz deployments that expose their own limit make that a broker policy; Fitz 0.2.0
+cannot set it. Fitz deployments that expose their own limit make that a broker policy; Fitz 0.3.0
 does not report attempt counts to Portia, so Portia rejects a positive `TerminalAttempt` at startup.
 See [shared application setup](application-setup.md#worker-deployment) for the full boundary.
 
@@ -714,7 +715,14 @@ See [shared application setup](application-setup.md) for application identity an
 Inject ordinary application repositories into your processors. Projectors pass a repository
 implementing `IProjectionStore` into `Projector` or `BatchProjector`; reactors pass
 a dependency implementing `IProjectionCheckpointStore` into `Reactor` or `BatchReactor`.
-The same repository can implement framework persistence and application operations.
+The same repository implements framework persistence and application operations. Name the data
+contract `AccountReadModel`, the persistence/query object `AccountRepository`, and the event consumer
+`AccountProjector`; the data contract carries values while the repository owns behavior.
+Typed projector and reactor handlers receive `IProjectorContext<TEvent>` and
+`IReactorContext<TEvent>` respectively, and return `ValueTask<Result>`. Projectors use
+`context.Trigger` for the event and `context.Batch` for shared identity and rebuild metadata.
+Permanent results fault the worker immediately; transient results and exceptions receive bounded
+framework retries with fresh scopes and authoritative checkpoint reload.
 
 Each worker pass uses a fresh scope. Projection changes and progress commit atomically
 through `IProjectionBatch`. Single-event bases advance progress per event; batch bases

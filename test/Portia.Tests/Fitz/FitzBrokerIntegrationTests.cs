@@ -660,6 +660,9 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         public Task PublishAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
             inner.PublishAsync(route, body, ct);
 
+        public Task PublishWithAckAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
+            inner.PublishWithAckAsync(route, body, ct);
+
         public async Task<NoticeSubscription> SubscribeAsync(string selector, CancellationToken ct = default)
         {
             var subscription = await inner.SubscribeAsync(selector, ct).ConfigureAwait(false);

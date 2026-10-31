@@ -106,7 +106,7 @@ sealed class MixedReactorApplication
             await _runner.RunPassAsync(_reactor, ProjectionCheckpoint.Start, _options);
             throw new InvalidOperationException("Checkpoint failure control did not fail.");
         }
-        catch (MixedCommitException) { }
+        catch (ProcessorFailureException error) when (error is { Stage: ProcessorFailureStage.Committing, InnerException: MixedCommitException }) { }
         if (_store.Checkpoint != ProjectionCheckpoint.Start || _store.Commits != 0 || _store.Effects.Count == 0)
             throw new InvalidOperationException("At-least-once effects/checkpoint failure semantics changed.");
         var failedEffects = _store.Effects.ToArray();
@@ -180,23 +180,25 @@ sealed class MixedReactionStore(bool asyncCheckpoint, bool awaitedEffect) : IPro
 sealed partial class MixedSingleReactor(MixedReactionStore store)
     : Reactor(store, EventStreamPattern.ForPattern("bench")), IReactorHandler<MixedMatched>, IReactorHandler<MixedDerived>
 {
-    public ValueTask HandleAsync(IReactorContext<MixedMatched> context, CancellationToken ct) =>
-        store.EffectAsync(context, CreateEffectId(context, "benchmark-effect"), context.Trigger.Value, false, ct);
-    public ValueTask HandleAsync(IReactorContext<MixedDerived> context, CancellationToken ct) =>
-        store.EffectAsync(context, CreateEffectId(context, "benchmark-effect"), context.Trigger.Value, true, ct);
+    public async ValueTask<Result> HandleAsync(IReactorContext<MixedMatched> context, CancellationToken ct) { await store.EffectAsync(context, CreateEffectId(context, "benchmark-effect"), context.Trigger.Value, false, ct).ConfigureAwait(false); return Result.Success; }
+    public async ValueTask<Result> HandleAsync(IReactorContext<MixedDerived> context, CancellationToken ct) { await store.EffectAsync(context, CreateEffectId(context, "benchmark-effect"), context.Trigger.Value, true, ct).ConfigureAwait(false); return Result.Success; }
 }
 
 sealed partial class MixedBatchReactor(MixedReactionStore store)
     : BatchReactor(store, EventStreamPattern.ForPattern("bench")), IBatchReactorHandler<MixedMatched>, IBatchReactorHandler<MixedDerived>
 {
-    public async ValueTask HandleAsync(IReadOnlyList<IReactorContext<MixedMatched>> contexts, CancellationToken ct)
+    public async ValueTask<Result> HandleAsync(IReadOnlyList<IReactorContext<MixedMatched>> contexts, CancellationToken ct)
     {
         foreach (var context in contexts)
             await store.EffectAsync(context, CreateEffectId(context, "benchmark-effect"), context.Trigger.Value, false, ct);
+
+        return Result.Success;
     }
-    public async ValueTask HandleAsync(IReadOnlyList<IReactorContext<MixedDerived>> contexts, CancellationToken ct)
+    public async ValueTask<Result> HandleAsync(IReadOnlyList<IReactorContext<MixedDerived>> contexts, CancellationToken ct)
     {
         foreach (var context in contexts)
             await store.EffectAsync(context, CreateEffectId(context, "benchmark-effect"), context.Trigger.Value, true, ct);
+
+        return Result.Success;
     }
 }

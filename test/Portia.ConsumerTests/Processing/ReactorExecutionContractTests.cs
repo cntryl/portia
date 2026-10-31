@@ -19,12 +19,14 @@ public sealed class ReactorExecutionContractTests
                                                     public sealed partial class Reaction(IAggregateWriter repository, Account account, Uuid sourceId)
                                                         : Reactor(new InMemoryProjectionCheckpointStore(), EventStreamPattern.ForPattern("reaction", "inputs", sourceId.ToString()), "reaction"), IReactorHandler<Deposited>
                                                     {
-                                                        public async ValueTask HandleAsync(IReactorContext<Deposited> context, CancellationToken ct)
+                                                        public async ValueTask<Result> HandleAsync(IReactorContext<Deposited> context, CancellationToken ct)
                                                         {
                                                             if (!RequestActor.IsSystem(context.Actor) || context.Source.Stream.Area != "inputs")
                                                                 throw new Exception("Reaction context lost system authority or source");
                                                             account.Deposit(context.Trigger.Amount);
                                                             await repository.SaveAsync(account, context, ct);
+
+                                                            return Result.Success;
                                                         }
                                                     }
                                                     public static class Scenario

@@ -268,6 +268,9 @@ public sealed class NotificationExecutionTests
             return Task.CompletedTask;
         }
 
+        public Task PublishWithAckAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
+            PublishAsync(route, body, ct);
+
         Task<NoticeSubscription> INoticeClient.SubscribeAsync(string selector, CancellationToken ct)
             => Task.FromResult(new NoticeSubscription(selector, Repeat(new NoticeMessage(Route, Body), ct),
                 _ => ValueTask.CompletedTask, Task.CompletedTask));
