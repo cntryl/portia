@@ -14,7 +14,7 @@ sealed class CassieProjectionActivityGate
         lock (_sync)
         {
             if (_batchActive)
-                throw new InvalidOperationException("Read through the active transaction while a projection batch is open.");
+                throw new NotSupportedException("Read through the active batch's commands while a projection batch is open.");
             if (_activeReads++ == 0)
                 _readsDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             return new ReadLease(this);
@@ -29,7 +29,7 @@ sealed class CassieProjectionActivityGate
         lock (_sync)
         {
             if (_batchActive)
-                throw new InvalidOperationException("A projection batch is already open on this repository.");
+                throw new NotSupportedException("Open one projection batch at a time on a repository.");
             _batchActive = true;
             waitForReads = _activeReads == 0 ? Task.CompletedTask : _readsDrained.Task;
         }
