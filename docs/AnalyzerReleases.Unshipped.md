@@ -16,7 +16,7 @@ PORTIA200 | PortiaStructure | Warning | Application files declare one type
 PORTIA201 | PortiaStructure | Warning | Application filenames identify their type, using OfT for generics
 PORTIA202 | PortiaStructure | Warning | Application namespaces follow folders
 PORTIA203 | PortiaStructure | Warning | Common and Core use closed feature roles with supported shared Core folders, feature Events, and nested role areas
-PORTIA204 | PortiaStructure | Warning | Components and support types belong in their feature role folders; execution guards, action catalogs, aggregate roots, and immutable record values follow their application roles
+PORTIA204 | PortiaStructure | Warning | Components and support types belong in their feature role folders; execution guards, action and operation catalogs, aggregate roots, and immutable record values follow their application roles
 PORTIA205 | PortiaStructure | Warning | Each request handler handles one command or query
 PORTIA206 | PortiaStructure | Warning | Common and Core respect application and infrastructure dependency boundaries
 PORTIA207 | PortiaStructure | Warning | Core component registrations belong in one feature registration file

@@ -181,6 +181,7 @@ public sealed class ApplicationStructureAnalyzerTests
     [InlineData("Sources", "OrderSource", "public sealed class OrderSource;")]
     [InlineData("Actions", "OrderAction", "public enum OrderAction { Create, Cancel }")]
     [InlineData("Actions", "OrderActions", "public static class OrderActions { public const string Create = \"create\"; }")]
+    [InlineData("Actions", "OrderOperations", "public static class OrderOperations { public const string Create = \"create\"; }")]
     [InlineData("Errors", "OrderErrors", "public static class OrderErrors;")]
     [InlineData("Errors", "OrderErrorCodes", "public static class OrderErrorCodes;")]
     [InlineData("Models", "OrderView", "public sealed record OrderView(string Number);")]
