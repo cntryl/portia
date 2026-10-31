@@ -29,9 +29,9 @@ alerts are as breaking to change as an API.
   Common enums belong in Models rather than Values.
 - Align Core structure diagnostics with the application layout: recognize shared Events, Execution
   and Hosting folders, nested role areas, and capability, source, action, error, execution and model
-  roles while retaining type-role checks. Keep aggregate folders for aggregate roots and partials,
-  allow request guards and pipeline behaviors in Execution, accept action and operation catalogs,
-  and accept behavior methods on immutable record values.
+  roles while retaining type-role checks. Keep aggregate roots and directly referenced rule or state
+  collaborators in Aggregates, allow request guards and pipeline behaviors in Execution, accept
+  action and operation catalogs, and accept behavior methods on immutable record values.
 
 - Reload operational state after a competing Fitz transaction rejects an operator write, preserving
   current plan and approval checks while allowing cancellation during conflict recovery.
