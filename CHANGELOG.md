@@ -6,10 +6,10 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+## 0.9.3 - 2026-11-02
+
 ### Migration
 
-- See the [processor migration guide](docs/migration-unreleased-processors.md) for handler
-  outcomes, typed projector contexts, processor failures, and dependency updates.
 - Read the [0.9.3 migration notes](docs/migration-0.9.3.md) before upgrading reactor/projector
   handlers: return `Result` outcomes, propagate failed `SendReactionAsync` calls, and update tests
   for `ProcessorFailureException`. The notes also list the Microsoft 10.0.14 and OpenApi 2.13.0
@@ -45,11 +45,19 @@ alerts are as breaking to change as an API.
 ### Added
 
 - Add opt-in application structure diagnostics (`PORTIA200`–`PORTIA213`) for the Common/Core/Api/Worker
-  layout, with code actions for splitting files, filenames, namespaces, and explicit schema versions.
+  layout, with code actions for splitting files, filenames, namespaces, and explicit schema versions
+  where the host can safely apply file changes.
 - Add `Cntryl.Portia.Cassie` with `CassieProjectionRepository`, shared metadata initialization,
   native transaction commands, stable scope keys, and `AddCassie`/`AddCassieProjection` composition.
 - Add a pinned Cassie Compose service and required CI integration tests for public projection-store
   conformance and the complete Fitz-to-Portia-to-Cassie account projection and query flow.
+
+### Known limitations
+
+- `PORTIA200` file splits and `PORTIA201` file renames remain unavailable to `dotnet format`'s
+  MSBuildWorkspace host. Added files become explicit `Compile` items that collide with SDK default
+  compile globs, and document renames are not persisted reliably. The provider keeps these actions
+  disabled in that host to protect consumer builds; see [issue #174](https://github.com/cntryl/portia/issues/174).
 
 ### Changed
 
