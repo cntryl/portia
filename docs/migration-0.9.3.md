@@ -81,3 +81,13 @@ dotnet_diagnostic.PORTIA202.severity = warning
 See [application structure](project-structure.md) for folder responsibilities and the bulk adoption
 order. PORTIA202 fixes update user-authored references; source-generated references are regenerated
 from their inputs rather than edited.
+
+## File move and rename fixes
+
+The file-changing `PORTIA200` split and `PORTIA201` rename actions are not offered by the
+`MSBuildWorkspace` host used by `dotnet format`. That host persists added source documents as
+explicit `<Compile Include>` items, which duplicate SDK default compile globs, and it does not
+reliably persist document renames. Keep these diagnostics staged while using `dotnet format`;
+perform file moves or renames in a host that supports them, or move the files manually. Then run
+`dotnet build` and `dotnet format --verify-no-changes` to confirm the result. Text-only fixes such
+as `PORTIA202` remain available through `dotnet format`.

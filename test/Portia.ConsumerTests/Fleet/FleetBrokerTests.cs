@@ -106,7 +106,15 @@ public sealed class FleetBrokerTests
         await using var survivor = await ConsumerBroker.ConnectAsync();
         var realm = "expiry-" + Guid.NewGuid().ToString("N");
         var partition = $"lease://{realm}/parts/one";
-        var ghost = Enumerable.Range(0, 100).Select(i => "ghost" + i).First(id => Owner(partition, "a", id) == id);
+        var rankedWorkers = Enumerable.Range(0, 100)
+            .Select(i => "ghost" + i)
+            .Select(worker => (Worker: worker, Score: Score(partition, worker)))
+            .OrderByDescending(candidate => candidate.Score, StringComparer.Ordinal)
+            .ToArray();
+        var ghost = rankedWorkers[0].Worker;
+        var survivorWorkerId = rankedWorkers.First(candidate =>
+            StringComparer.Ordinal.Compare(candidate.Score, rankedWorkers[0].Score) < 0).Worker;
+        Assert.Equal(ghost, Owner(partition, survivorWorkerId, ghost));
         // Unmanaged leases intentionally receive no renewals. Keep the connection alive to
         // distinguish TTL expiry from a broker's session-disconnect cleanup.
         await using var member = await stalled.Lease.AcquireAsync($"lease://{realm}/members/{ghost}",
@@ -123,7 +131,7 @@ public sealed class FleetBrokerTests
         }, new FleetRunOptions
         {
             MembershipSelector = $"lease://{realm}/members/*",
-            WorkerId = "a",
+            WorkerId = survivorWorkerId,
             LeaseTtl = TimeSpan.FromSeconds(2),
             ReconciliationInterval = TimeSpan.FromMilliseconds(100)
         }, cancellation.Token);
