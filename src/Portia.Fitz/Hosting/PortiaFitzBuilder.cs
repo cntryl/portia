@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
@@ -81,7 +82,8 @@ public sealed class PortiaFitzBuilder
         var services = _application.Services;
         services.TryAddSingleton<IEventStore>(provider => new FitzEventStore(
             provider.GetRequiredService<FitzApplicationConnection>().Client.Stream,
-            provider.GetRequiredService<IDomainEventSerializer>()));
+            provider.GetRequiredService<IDomainEventSerializer>(),
+            provider.GetService<ILogger<FitzEventStore>>()));
         services.TryAddSingleton<IDomainEventReader>(provider => provider.GetRequiredService<IEventStore>());
         services.TryAddSingleton<IDomainEventWriter>(provider => provider.GetRequiredService<IEventStore>());
         services.TryAddSingleton(provider =>

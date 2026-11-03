@@ -676,6 +676,11 @@ successful return does not acknowledge the delivery. Portia stops renewing the r
 leaves expiration, redelivery, and dead-letter policy to Fitz. A callback may run again if Fitz
 redelivers the same message, so make its effects idempotent.
 
+For a business rejection, persist the authoritative rejection outcome and return `Result.Success`
+once the queued request is fully handled. Return a failed result only while required processing is
+incomplete. Fitz 0.3.0 creates queue actors with `max_attempts: None`, so its dead-letter path is
+inactive and an unacknowledged delivery is redelivered indefinitely.
+
 Queue polling defaults to a five-second wait and one reserved item. Active work
 renews its Fitz reservation. Terminally failed requests stop renewal and remain
 unacknowledged; Fitz controls expiration, redelivery, and configured dead-letter

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
@@ -10,6 +11,7 @@ namespace Cntryl.Portia;
 public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
 {
     const ulong ReadPageSize = 1024;
+    readonly ILogger<FitzEventStore>? _logger;
     readonly IDomainEventSerializer _serializer;
 
     readonly IStreamClient _streams;
@@ -20,12 +22,25 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
     /// <param name="streams">The Fitz stream client.</param>
     /// <param name="serializer">The durable domain-event serializer.</param>
     public FitzEventStore(IStreamClient streams, IDomainEventSerializer serializer)
+        : this(streams, serializer, null)
+    {
+    }
+
+    /// <summary>
+    ///     Creates a Fitz-backed event store with an optional logger for nonfatal session cleanup faults.
+    /// </summary>
+    /// <param name="streams">The Fitz stream client.</param>
+    /// <param name="serializer">The durable domain-event serializer.</param>
+    /// <param name="logger">Reports cleanup failures after a confirmed commit.</param>
+    public FitzEventStore(IStreamClient streams, IDomainEventSerializer serializer,
+        ILogger<FitzEventStore>? logger)
     {
         ArgumentNullException.ThrowIfNull(streams);
         ArgumentNullException.ThrowIfNull(serializer);
 
         _streams = streams;
         _serializer = serializer;
+        _logger = logger;
     }
 
     /// <inheritdoc />
@@ -140,6 +155,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                     $"A stream in area '{stream.Area}' already has an active append session.", ex);
             }
             var failed = false;
+            var committed = false;
             try
             {
                 var streamMetadata = Encoding.UTF8.GetBytes(stream.ToString());
@@ -155,12 +171,20 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                 }
 
                 await session.CommitAsync(StreamCommitMode.Sync, ct).ConfigureAwait(false);
+                committed = true;
+                telemetryCount = events.Count;
+                telemetryOutcome = "success";
                 if (ProcessingObservation.IsEnabled)
                     foreach (var ev in events)
                         ProcessingObservation.Record("event", stream.ToString(), ev.Metadata.EventId.ToString(),
                             ev.Metadata.ExecutionId?.ToString(), "committed");
-                telemetryCount = events.Count;
-                telemetryOutcome = "success";
+            }
+            catch (Exception exception) when (committed)
+            {
+                // The durable outcome is already known. A post-commit observation failure must not
+                // make callers retry an append that Fitz has confirmed.
+                PortiaTelemetry.RecordRunnerFault(nameof(FitzEventStore), RunnerFaultStage.Cleanup, exception,
+                    _logger);
             }
             catch (Exception ex)
             {
@@ -185,6 +209,13 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier
                 catch when (failed)
                 {
                     // Cleanup must not replace the append/commit failure seen by the caller.
+                }
+                catch (Exception exception) when (committed)
+                {
+                    // Fitz confirmed the commit. Report cleanup failure separately so callers can
+                    // clear their pending batch instead of retrying an append that already exists.
+                    PortiaTelemetry.RecordRunnerFault(nameof(FitzEventStore), RunnerFaultStage.Cleanup,
+                        exception, _logger);
                 }
             }
         }

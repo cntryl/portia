@@ -63,21 +63,33 @@ public sealed class CassieProjectionDatabase : IDisposable
         Exception? failure = null;
         try
         {
-            await using (var insert = connection.CreateCommand())
+            await using (var schema = connection.CreateCommand())
             {
-                insert.Transaction = transaction;
-                insert.CommandText = $"INSERT INTO {CheckpointTable} (identity, cursor, revision) VALUES ('', '', 0) ON CONFLICT (identity) DO NOTHING";
-                _ = await insert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                schema.Transaction = transaction;
+                schema.CommandText = $"SELECT identity, cursor, revision FROM {CheckpointTable} WHERE 1 = 0";
+                await using var fields = await schema.ExecuteReaderAsync(ct).ConfigureAwait(false);
+                if (fields.GetFieldType(0) != typeof(string) || fields.GetFieldType(1) != typeof(string)
+                    || fields.GetFieldType(2) != typeof(long))
+                    failure = Incompatible(null);
             }
-            await using var select = connection.CreateCommand();
-            select.Transaction = transaction;
-            select.CommandText = $"SELECT identity, cursor, revision FROM {CheckpointTable} WHERE identity = ''";
-            await using var row = await select.ExecuteReaderAsync(ct).ConfigureAwait(false);
-            if (!await row.ReadAsync(ct).ConfigureAwait(false) || row.GetFieldType(0) != typeof(string)
-                || row.GetFieldType(1) != typeof(string) || row.GetFieldType(2) != typeof(long))
-                failure = Incompatible(null);
+
+            if (failure is null)
+            {
+                await using (var insert = connection.CreateCommand())
+                {
+                    insert.Transaction = transaction;
+                    insert.CommandText = $"INSERT INTO {CheckpointTable} (identity, cursor, revision) VALUES ('', '', 0) ON CONFLICT (identity) DO NOTHING";
+                    _ = await insert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                }
+                await using var select = connection.CreateCommand();
+                select.Transaction = transaction;
+                select.CommandText = $"SELECT identity, cursor, revision FROM {CheckpointTable} WHERE identity = ''";
+                await using var row = await select.ExecuteReaderAsync(ct).ConfigureAwait(false);
+                if (!await row.ReadAsync(ct).ConfigureAwait(false))
+                    failure = Incompatible(null);
+            }
         }
-        catch (CassieException ex) when (!ex.IsTransient) { failure = Incompatible(ex); }
+        catch (CassieException ex) when (IsCheckpointSchemaFailure(ex)) { failure = Incompatible(ex); }
         catch (Exception ex) { failure = ex; }
 
         try
@@ -88,9 +100,13 @@ public sealed class CassieProjectionDatabase : IDisposable
     }
 
     NotSupportedException Incompatible(Exception? inner) => new(
-        $"Cassie checkpoint table {CheckpointTable} is incompatible; it must be "
-        + "(identity TEXT PRIMARY KEY, cursor TEXT NOT NULL, revision BIGINT NOT NULL). Rename or drop it, "
-        + "or configure another checkpoint table.", inner);
+        $"Cassie could not verify or use checkpoint table {CheckpointTable}; it must be "
+        + "(identity TEXT PRIMARY KEY, cursor TEXT NOT NULL, revision BIGINT NOT NULL), and the server must "
+        + "support the required statements. Apply a schema migration or configure another checkpoint table.", inner);
+
+    internal static bool IsCheckpointSchemaFailure(CassieException exception) =>
+        !exception.IsTransient && exception.SqlState is
+            "42601" or "22P02" or "23502" or "42703" or "42P10" or "42804" or "42846";
 
     /// <summary>Releases initialization resources after repository scopes have stopped.</summary>
     public void Dispose()
