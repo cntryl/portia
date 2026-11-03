@@ -135,10 +135,11 @@ transport. The callback receives `QueuedRequestTerminalReason` plus the original
 request, metadata, invocation, attempt, error, and exception. Because the transport
 may redeliver a terminal failure, callback effects must tolerate replay. Callback
 failure uses `TerminalHandlerFailureException` and leaves the delivery unacknowledged.
-Expected business rejection continues
-to use `Result.Failure(new RequestError(RequestErrorKind.Validation, ...))` (and the other
-`RequestErrorKind` values); validation policy belongs to the application rather than a separate
-framework validation pipeline.
+Record an expected business rejection as an authoritative business outcome. For queued work, return
+`Result.Success` once that outcome is durably recorded, even when it rejects the requested
+operation. `Result.Failure` means required processing is incomplete and leaves the delivery
+unacknowledged. Validation policy belongs to the application rather than a separate framework
+validation pipeline.
 
 Fitz 0.3.0 currently constructs its queue actors with `max_attempts: None`, which means expired
 reservations redeliver indefinitely and the standard broker does not move messages to a DLQ. The

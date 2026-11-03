@@ -177,6 +177,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
             });
 
             Assert.Contains(table, error.Message, StringComparison.Ordinal);
+            Assert.False(error.Message.Contains("drop", StringComparison.OrdinalIgnoreCase));
         }
         finally
         {

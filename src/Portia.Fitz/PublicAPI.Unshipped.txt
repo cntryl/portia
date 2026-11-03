@@ -11,3 +11,4 @@ Cntryl.Portia.FitzOperationalStore.LoadAsync(Cntryl.Portia.CheckpointIdentity! i
 Cntryl.Portia.FitzOperationalStore.ReadAsync(Cntryl.Portia.OperationalTarget! target, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalProcessorState?>
 Cntryl.Portia.FitzOperationalStore.SaveAsync(Cntryl.Portia.CheckpointIdentity! identity, Cntryl.Portia.ProjectionCheckpoint checkpoint, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Cntryl.Portia.PortiaFitzBuilder.UseOperations(string! checkpointBaseRoute, System.Action<Cntryl.Portia.OperationalOptions!>! configure) -> Cntryl.Portia.PortiaFitzBuilder!
+Cntryl.Portia.FitzEventStore.FitzEventStore(Cntryl.Fitz.IStreamClient! streams, Cntryl.Portia.IDomainEventSerializer! serializer, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.FitzEventStore!>? logger) -> void

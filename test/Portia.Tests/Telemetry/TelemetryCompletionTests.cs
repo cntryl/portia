@@ -444,7 +444,7 @@ public sealed class TelemetryCompletionTests
         Assert.Equal(1, measurements.Sum("portia.processor.event.count", "portia.component.name", component));
     }
 
-    /// <summary>Every Fitz append failure completes one duration with its actual failure outcome.</summary>
+    /// <summary>Fitz append telemetry preserves a confirmed commit when subsequent cleanup fails.</summary>
     /// <param name="failureStage">The append lifecycle stage that fails.</param>
     /// <param name="cancelBeforeFailure">Whether the caller token is canceled immediately before an I/O failure.</param>
     [Theory]
@@ -463,10 +463,16 @@ public sealed class TelemetryCompletionTests
         var ev = new ValueChanged(1);
         ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), id, 1, DateTimeOffset.UtcNow));
 
-        _ = await Assert.ThrowsAsync<IOException>(() => store.AppendAsync(
-            new EventStreamAddress("test", "telemetry", id.ToString()), 0, [ev], cancellation.Token).AsTask());
+        Task Append() => store.AppendAsync(
+            new EventStreamAddress("test", "telemetry", id.ToString()), 0, [ev], cancellation.Token).AsTask();
 
-        Assert.Equal("fault", measurements.SingleOutcome("portia.event_store.operation.duration"));
+        if (failureStage == "dispose")
+            await Append();
+        else
+            _ = await Assert.ThrowsAsync<IOException>(Append);
+
+        Assert.Equal(failureStage == "dispose" ? "success" : "fault",
+            measurements.SingleOutcome("portia.event_store.operation.duration"));
     }
 
     static async ValueTask<InMemoryEventStore> SourceWithOneEventAsync()

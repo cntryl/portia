@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -50,6 +51,27 @@ public sealed class FitzPersistenceFailureTests
         Assert.Equal(4,
             Uuid.Parse(EventStreamAddress.Parse(streams.Route!).Resource, CultureInfo.InvariantCulture).Version);
         Assert.True(session.Disposed);
+    }
+
+    [Fact]
+    public async Task ConfirmedCommitRemainsSuccessfulWhenSessionDisposalFails()
+    {
+        var session = new Session("success", cleanupFails: true);
+        var store = new FitzEventStore(new Streams(session),
+            ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Declined>(1, "Declined")));
+        var account = new Account(Uuid.CreateVersion4());
+        account.Audit(new Declined("committed before cleanup failure"));
+        using var listener = ListenToCleanupFaults(out var faults);
+
+        await new AggregateRepository(store).SaveAsync(account, _saveContext);
+
+        Assert.Empty(new AggregateScenario<Account>(account).PendingAudits);
+        Assert.True(session.Committed);
+        Assert.Equal(0, session.Rollbacks);
+        Assert.True(session.Disposed);
+        var fault = Assert.Single(faults);
+        Assert.Equal(nameof(FitzEventStore), fault.Single(tag => tag.Key == "portia.runner.name").Value);
+        Assert.Equal("cleanup", fault.Single(tag => tag.Key == "portia.stage").Value);
     }
 
     [Theory]
@@ -135,6 +157,35 @@ public sealed class FitzPersistenceFailureTests
         Assert.DoesNotContain(stream.Resource, error.Message, StringComparison.Ordinal);
     }
 
+    static MeterListener ListenToCleanupFaults(out List<KeyValuePair<string, object?>[]> faults)
+    {
+        var captured = new List<KeyValuePair<string, object?>[]>();
+        faults = captured;
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == PortiaTelemetry.SourceName &&
+                    instrument.Name == "portia.worker.failure")
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            var values = tags.ToArray();
+            if (values.Any(tag => tag.Key == "portia.runner.name" &&
+                                  Equals(tag.Value, nameof(FitzEventStore))) &&
+                values.Any(tag => tag.Key == "portia.stage" && Equals(tag.Value, "cleanup")))
+            {
+                captured.Add(values);
+            }
+        });
+        listener.Start();
+        return listener;
+    }
+
     sealed class Session(string failureAt, bool cleanupFails) : IStreamSession
     {
         public Exception Failure { get; init; } = new IOException("Injected session failure");
@@ -143,6 +194,8 @@ public sealed class FitzPersistenceFailureTests
 
         public bool Disposed { get; private set; }
 
+        public bool Committed { get; private set; }
+
         public Task<ulong?> AppendAsync(ulong expectedOffset, ReadOnlyMemory<byte> body,
             ReadOnlyMemory<byte>? metadata = null, string? discriminator = null, CancellationToken ct = default)
             => failureAt == "append" ? throw Failure : Task.FromResult<ulong?>(expectedOffset);
@@ -150,7 +203,11 @@ public sealed class FitzPersistenceFailureTests
         public Task CommitAsync(StreamCommitMode mode, CancellationToken ct = default)
         {
             Assert.Equal(StreamCommitMode.Sync, mode);
-            return failureAt == "commit" ? throw Failure : Task.CompletedTask;
+            if (failureAt == "commit")
+                throw Failure;
+
+            Committed = true;
+            return Task.CompletedTask;
         }
 
         public Task RollbackAsync(CancellationToken ct = default)
