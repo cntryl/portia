@@ -56,6 +56,8 @@ All five focused cases and all 34 broker integration cases passed. The
 [hosted failure](rpc-backpressure-fixture-failure.txt) is retained.
 An audit found no other existing broker tests making consecutive same-worker calls. Runtime code,
 dependencies, and `publish.yml` are unchanged.
+The adjacent native round-trip test also waits for server completion telemetry, which is emitted
+after the terminal response, before asserting its original span topology and delivery measurements.
 
 The [first review](../adversarial-0.10.0/README.md) retains eleven findings and its RED evidence.
 The [second review](../adversarial-0.10.0-pass2/README.md) retains nine more findings, eleven original

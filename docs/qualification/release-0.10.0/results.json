@@ -114,6 +114,7 @@
       "Portia asynchronous scope cleanup retains the native capacity-one boundary."
     ],
     "fresh_exact_commit_ci_required": true,
-    "full_broker_tests_passed": 34
+    "full_broker_tests_passed": 34,
+    "telemetry_observation": "The adjacent native round-trip test now waits up to five seconds for server completion telemetry, emitted after the terminal response, before asserting the original span topology and delivery measurements."
   }
 }

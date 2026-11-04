@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-11-04T03:14:39.044603+00:00",
+  "captured_at": "2026-11-04T03:17:06.030612+00:00",
   "base_commit": "32540c809f42c84c97ef7675c5a64aa5ce0b23ac",
   "branch": "release/0.10.0",
   "scope": "Stable 0.10.0 release inputs after both adversarial reviews; local qualification precedes exact-commit hosted CI and publication.",
@@ -895,7 +895,7 @@
     "test/Portia.Tests/Fitz/FitzBrokerCollectionDefinition.cs": "9f3403b61039232efa436bdb110f0d60bf0efb05cc2e1e0acd2ca2b0286f158b",
     "test/Portia.Tests/Fitz/FitzBrokerFixture.cs": "5611396ea24a3cf319ec89520e296a176e8d719f736085a9eae88baa6ac68363",
     "test/Portia.Tests/Fitz/FitzBrokerFleetIntegrationTests.cs": "33fcff4c852daefa430590ce736161f10346876dca2f8fd19ceb0a0672f457c7",
-    "test/Portia.Tests/Fitz/FitzBrokerIntegrationTests.cs": "3d31dbb443261de21be0ee353fc714b1650071a8f72a226863206fe43715ba9c",
+    "test/Portia.Tests/Fitz/FitzBrokerIntegrationTests.cs": "91275a630be400cb3412f4f56d7cc6082b799ec318d40b846a0a715f4c3ed5a3",
     "test/Portia.Tests/Fitz/FitzCheckpointIdentityCollisionTests.cs": "97c98563d19624ab6ac111c52c246ca5123206e3b4153bcf5eb696f8950dd71c",
     "test/Portia.Tests/Fitz/FitzCombinedWorkerFailureTests.cs": "5325f54897aec6f8b58ac19616345ac15d8fba42b83617be9f87d96f8ff5ac0e",
     "test/Portia.Tests/Fitz/FitzEventStoreProgressIntegrationTests.cs": "6305d1c5fff2cc3f40fae18a9fbcbf4069be5b9bf3a14f42309d2a1518ea1b34",

@@ -369,6 +369,10 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
         Assert.True(result.IsSuccess);
         Assert.Equal(7, result.Value);
+        // The terminal response can arrive before the server records completion telemetry.
+        using var telemetryDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (deliveries.IsEmpty)
+            await Task.Delay(10, telemetryDeadline.Token);
         AssertParentedFitzTopology(activities, "test.rpc.get-value", "rpc");
         AssertCompletedDelivery(deliveries, "test.rpc.get-value", "rpc");
     }
