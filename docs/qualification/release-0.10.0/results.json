@@ -76,5 +76,17 @@
     "/tmp/portia-release-final-*.log",
     "/tmp/portia-010-release-*.log",
     "/tmp/portia-010-release-account-evidence"
-  ]
+  ],
+  "hosted_fixture_followup": {
+    "initial_head": "0baf17c308e8e7e49ad2f9f8dfd545893a4558f4",
+    "failed_runs": [
+      41761171731,
+      41761194505
+    ],
+    "cause": "The test could dispose its cancellation registration before CancelAsync invoked it, making the expected error count unstable.",
+    "fix": "The outer test retains the registration until supervision and assertions complete. Exact three-error assertions remain. Runtime code is unchanged.",
+    "focused_tests_passed": 7,
+    "main_broker_free_tests_passed": 1541,
+    "fresh_exact_commit_ci_required": true
+  }
 }

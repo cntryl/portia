@@ -35,6 +35,12 @@ aliased key. The [migration guide](../../migration-0.10.0.md) explains the affec
 before the release commit; their hashes are not asserted to equal the later registry artifacts.
 Every packed consumer restored with a fresh NuGet cache.
 
+The initial hosted run exposed a race in a new cleanup-fault fixture: the listener could unregister
+its cancellation callback before it ran. The outer test now retains that registration through
+supervision, preserving the exact three-error assertion. Runtime code is unchanged. The seven
+focused cleanup cases and 1,541 broker-free main tests passed afterward; the original
+[hosted failure](initial-ci-fixture-failure.txt) is retained and fresh exact-commit CI is required.
+
 The [first review](../adversarial-0.10.0/README.md) retains eleven findings and its RED evidence.
 The [second review](../adversarial-0.10.0-pass2/README.md) retains nine more findings, eleven original
 failing cases, and three additional effect-identity failures. Both retain their original source and

@@ -52,3 +52,7 @@ NuGet audit: 32 projects; no reported vulnerabilities.
 16 stable 0.10.0 packages; 20 internal dependency declarations aligned.
 All 1136 frozen inputs remain unchanged. All confirmed review findings resolved.
 Exact-commit hosted CI, publication, and registry readback are separate release gates.
+
+Hosted fixture follow-up: deterministic cancellation-registration lifetime; runtime unchanged.
+Focused cleanup tests: 7 passed. Broker-free main suite: 1541 passed.
+Fresh exact-commit CI remains required before publication.

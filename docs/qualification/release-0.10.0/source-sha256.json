@@ -42,7 +42,7 @@
     "bench/Portia.CompilerBenchmarks/Program.cs": "697a639c8d25c73daff1a85cdea328aa540be91f1b1e75bc9efb57e538619ced",
     "bench/fitz-performance.compose.yaml": "3cb6bd42a01aa6b47c397e9a4a247736b32c72376622608e82af00d8f675cb72",
     "compose.yaml": "e52fb853c0523a064593ed39847b2762747a9a2f5ccb26fcfea9d6377bed0535",
-    "docs/migration-0.10.0.md": "ce3c42299aaed92e541be3a4a1b62924d5e45da01f380082d4e06ca7cff23d39",
+    "docs/migration-0.10.0.md": "c52a21d8d7e3d46a223fac1d52a6e921da7dfda2c20692be435b5781cf4d66d7",
     "docs/operations.md": "651b5c889be2c75c662398e0726db98f0f080285bed29fcba886b2a4dd81a3c2",
     "docs/projectors-and-reactors.md": "74e71b4d76ae538c471b0ef490f64d1ad5d0aaeba2da3231cb9610e347052480",
     "eng/Portia.RepositoryTools/CompilerCampaign.cs": "3dab2186bc583b2d579a6445f1eee5ffbcaadaef01f6dbbc04b0cd29de6b52d5",
@@ -929,7 +929,7 @@
     "test/Portia.Tests/Fitz/FitzRoutingTests.cs": "b28a69a5404a81560151e26856ee39ad33e808070fa439b1f072ba9ce247232d",
     "test/Portia.Tests/Fitz/FitzRpcCatalogResolutionTests.cs": "ed7658d245ccbb8df2f9e4a2bbd1ee1c78062bfb2d2c8b2f9574d75ba510ed77",
     "test/Portia.Tests/Fitz/FitzRpcRoundTripTests.cs": "9677b178d86558173b32c8780769b9bfdaa764d935af020cfa25daf5d3a20e96",
-    "test/Portia.Tests/Fitz/FitzWorkerSupervisionTests.cs": "3559d55aa5e5e76e0033692cc804b561641370bb672a19878405f0e8286f3c4c",
+    "test/Portia.Tests/Fitz/FitzWorkerSupervisionTests.cs": "51693d731c5ec9eec2fc7f622348a3ab351a256006901b70c2cfc67f2a27f666",
     "test/Portia.Tests/Fitz/GlobalUsings.Fitz.cs": "1165b1beebbcd914a10976c0f19af6b1bc5d730ffa048c53e5db7300fd4536c0",
     "test/Portia.Tests/Fitz/InMemoryRpcClientTests.cs": "13fb8beaf44e1c87594efbad665c33da3393546cebe8f1172a19861596c483a4",
     "test/Portia.Tests/Fitz/InMemoryRpcDeadlineTests.cs": "d7cac7b2467be264685f55e9e857f5d5b883bad0dcdd935b394b91bda3b7c84f",
@@ -1140,5 +1140,6 @@
     "test/Portia.Tests/Workloads/SingleProcessWorkloadCancellationTests.cs": "88547502143c615d6139061e4dda975211fba2a0b963880e12b72240fff3eb5d",
     "test/Portia.Tests/Workloads/SingleProcessWorkloadCoordinatorTests.cs": "582dc68ee2d00663b540384115a0ad2d45b4d00f090d4305455369c47efd02ef",
     "test/Portia.Tests/Workloads/TenantFreeMessageTests.cs": "173a0435d477ad9e14951299c9291887dda4e7d6b61a374f60aba08b18ddea1d"
-  }
+  },
+  "followup": "After initial hosted CI, retained cancellation registration for deterministic fault injection; runtime code unchanged. Added catalog call-site migration guidance."
 }

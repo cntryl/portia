@@ -67,6 +67,7 @@ public sealed class FitzWorkerSupervisionTests
     {
         var expected = new TerminalHandlerFailureException(new IOException("terminal observer failed"));
         var fail = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationTokenRegistration callback = default;
         var run = FitzApplicationWorkers.SuperviseAsync([
             async _ =>
             {
@@ -75,7 +76,9 @@ public sealed class FitzWorkerSupervisionTests
             },
             async token =>
             {
-                using var callback = token.Register(() =>
+                // Task.Delay can resume this listener before CancelAsync reaches its earlier callback.
+                // The outer test owns registration so listener cleanup cannot unregister that callback.
+                callback = token.Register(() =>
                     throw new InvalidOperationException("listener cancellation callback failed"));
                 try
                 {
@@ -90,14 +93,21 @@ public sealed class FitzWorkerSupervisionTests
             }
         ], default);
 
-        fail.TrySetResult();
+        try
+        {
+            fail.TrySetResult();
 
-        var error = await Assert.ThrowsAsync<AggregateException>(() => run.WaitAsync(TimeSpan.FromSeconds(5)));
-        var faults = error.Flatten().InnerExceptions;
-        Assert.Equal(3, faults.Count);
-        Assert.Contains(expected, faults);
-        Assert.Contains(faults, fault => fault.Message == "listener cancellation callback failed");
-        Assert.Contains(faults, fault => fault.Message == "listener asynchronous cleanup failed");
+            var error = await Assert.ThrowsAsync<AggregateException>(() => run.WaitAsync(TimeSpan.FromSeconds(5)));
+            var faults = error.Flatten().InnerExceptions;
+            Assert.Equal(3, faults.Count);
+            Assert.Contains(expected, faults);
+            Assert.Contains(faults, fault => fault.Message == "listener cancellation callback failed");
+            Assert.Contains(faults, fault => fault.Message == "listener asynchronous cleanup failed");
+        }
+        finally
+        {
+            callback.Dispose();
+        }
     }
 
     /// <summary>Stopping a healthy host awaits every listener without inventing a fatal failure.</summary>

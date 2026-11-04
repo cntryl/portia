@@ -95,6 +95,15 @@ Do not merely rename, reset checkpoints, or replay with new keys: the old IDs ma
 completed effects, and two formerly colliding effects may need separate business resolution.
 Portia performs no automatic migration for these unusual identities.
 
+## Keep generated catalog calls direct
+
+`catalog.AddPortiaGeneratedDomainEvents()` keeps its existing call syntax. Registration now binds
+to the calling compilation, avoiding ambiguous generated extensions across friend assemblies.
+Upgrade `Cntryl.Portia.Analyzers` with the package family and keep the call directly in source.
+If passing registration as a method group, use `() => catalog.AddPortiaGeneratedDomainEvents()`
+instead so the generator can identify the call. Unsupported method groups produce `PORTIA019`.
+Previously compiled generated extension bodies remain compatible.
+
 ## Upgrade dependencies and the broker together
 
 Portia 0.10.0 uses Fitz .NET 4.0.0 and requires Fitz 0.4.0 / Wire 3. Replace the broker and connected
