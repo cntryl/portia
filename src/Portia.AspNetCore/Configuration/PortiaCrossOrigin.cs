@@ -31,7 +31,7 @@ static class PortiaCrossOrigin
             var origin = request.Headers.Origin;
             if (origin.Count == 0)
                 return true;
-            if (origin.Count == 1 && MatchesHost(origin[0], request.Host))
+            if (origin.Count == 1 && MatchesOrigin(origin[0], request))
                 return true;
         }
 
@@ -60,15 +60,16 @@ static class PortiaCrossOrigin
                        ?? descriptor.ImplementationFactory?.Invoke(provider)
                        ?? ActivatorUtilities.CreateInstance(provider, descriptor.ImplementationType!));
 
-    // The Host header carries no scheme, so this compares the host and effective port; browsers that
-    // send fetch metadata never reach this fallback.
-    static bool MatchesHost(string? origin, HostString host) =>
-        host.HasValue &&
+    // A browser origin is its scheme, host and effective port. Explicit default ports and omitted
+    // default ports identify the same origin; a matching host on another scheme does not.
+    static bool MatchesOrigin(string? origin, HttpRequest request) =>
+        request.Host.HasValue &&
         Uri.TryCreate(origin, UriKind.Absolute, out var uri) &&
         (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
-        string.Equals(uri.HostNameType == UriHostNameType.IPv6 ? uri.Host : uri.IdnHost, host.Host,
+        string.Equals(uri.Scheme, request.Scheme, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(uri.HostNameType == UriHostNameType.IPv6 ? uri.Host : uri.IdnHost, request.Host.Host,
             StringComparison.OrdinalIgnoreCase) &&
-        (host.Port is { } port ? uri.Port == port : uri.IsDefaultPort);
+        uri.Port == (request.Host.Port ?? (request.IsHttps ? 443 : 80));
 
     // The CORS middleware chooses the policy for each request (a named middleware policy, an endpoint
     // policy, or the default policy) and exposes nothing about its decision. Recording the result the

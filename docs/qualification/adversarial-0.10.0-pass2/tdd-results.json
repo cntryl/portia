@@ -1,0 +1,8 @@
+{
+  "review_findings_resolved": 9,
+  "additional_effect_red_cases": 3,
+  "local_qualification": "../release-0.10.0/results.json",
+  "source_snapshot": "../release-0.10.0/source-sha256.json",
+  "archive": "Original RED proofs, logs, and hashes retained; normal regressions promoted.",
+  "published_only_after": "All confirmed finding regressions and complete qualification are green."
+}

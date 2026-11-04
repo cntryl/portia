@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-03",
+  "package_version": "0.10.0",
+  "environment": {
+    "rid": "osx-arm64",
+    "sdk": "10.0.403",
+    "runtime": "10.0.14",
+    "fitz_client": "4.0.0",
+    "fitz_broker": "0.4.0 / Wire 3"
+  },
+  "framework_tests": {
+    "Portia.Tests": 1500,
+    "Portia.ConsumerTests": 822,
+    "Portia.McpTests": 93,
+    "Portia.ReflectionDisabledTests": 3,
+    "isolated_crash_durability": 1,
+    "total": 2419,
+    "failed": 0,
+    "skipped": 0
+  },
+  "package_count": 16,
+  "native_consumers": [
+    "AspNetCore.NativeAotConsumer",
+    "Mcp.AspNetCore.NativeAotConsumer",
+    "Fitz.LexKey.PackageConsumer"
+  ],
+  "managed_consumers": [
+    "ProjectionStore",
+    "Cassie",
+    "Mcp.Testing",
+    "Storage"
+  ],
+  "additional_passes": [
+    "packed compiler diagnostics and fallback",
+    "reflection-disabled runtime matrix",
+    "packaged Accounts tests, projected balance and OTLP export"
+  ],
+  "separate_release_gates": [
+    "exact-commit hosted CI, including Linux NativeAOT and remaining CI campaigns",
+    "package publication and tag",
+    "production migration and deployment"
+  ]
+}

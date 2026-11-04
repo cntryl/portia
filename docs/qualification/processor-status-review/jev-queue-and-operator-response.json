@@ -1,0 +1,61 @@
+{
+  "model": "jev-1.14.0",
+  "answers": {
+    "unsupported_publication_cannot_drop_options": {
+      "type": "noul",
+      "noul": 0.7
+    },
+    "native_options_preserve_envelope": {
+      "type": "noul",
+      "noul": 0.9
+    },
+    "legacy_publication_preserved": {
+      "type": "noul",
+      "noul": 0.86
+    },
+    "invalid_queue_options_rejected": {
+      "type": "noul",
+      "noul": 0.9
+    },
+    "native_retry_no_republication": {
+      "type": "noul",
+      "noul": 0.82
+    },
+    "renewal_stopped_before_settlement": {
+      "type": "noul",
+      "noul": 0.84
+    },
+    "lost_reservation_cannot_nack": {
+      "type": "noul",
+      "noul": 0.82
+    },
+    "unknown_ack_cannot_be_nacked": {
+      "type": "noul",
+      "noul": 0.77
+    },
+    "failed_disposition_not_repeated": {
+      "type": "noul",
+      "noul": 0.86
+    },
+    "unsupported_explicit_retry_cannot_degrade": {
+      "type": "noul",
+      "noul": 0.89
+    },
+    "no_fabricated_attempts": {
+      "type": "noul",
+      "noul": 0.96
+    },
+    "unauthenticated_role_cannot_elevate": {
+      "type": "noul",
+      "noul": 0.93
+    },
+    "final_withdrawal_budget_is_shared": {
+      "type": "noul",
+      "noul": 0.72
+    }
+  },
+  "usage": {
+    "input_tokens": 17640,
+    "output_tokens": 309
+  }
+}

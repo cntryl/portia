@@ -109,6 +109,8 @@ static class FitzKvCheckpoints
     /// </summary>
     public static string WorkloadRoute(string route, string componentName, string realm)
     {
+        _ = IdentityText.Require(componentName, nameof(componentName));
+        _ = IdentityText.Require(realm, nameof(realm));
         var segments = route[5..].Split('/');
         var identity = JsonSerializer.SerializeToUtf8Bytes([componentName, realm],
             FitzJsonContext.Default.StringArray);
@@ -118,8 +120,9 @@ static class FitzKvCheckpoints
 
     /// <summary>
     ///     Derives the resource for the workload a checkpoint belongs to. A bound per-tenant pattern's
-    ///     realm is its tenant, so each tenant resolves separately; the rebuild generation is left out
-    ///     so a rebuild writes where query-side reads already look, its checkpoint key kept apart.
+    ///     realm is its tenant, so each tenant resolves separately. Generations share the resource;
+    ///     their checkpoint keys are separate, and application repositories must also namespace their
+    ///     own data keys by generation before enabling rebuilds.
     /// </summary>
     public static string WorkloadRoute(string route, CheckpointIdentity identity) =>
         WorkloadRoute(route, identity.ComponentName, identity.Pattern.Realm);

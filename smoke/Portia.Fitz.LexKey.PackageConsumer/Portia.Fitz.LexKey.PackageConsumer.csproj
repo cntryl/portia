@@ -4,6 +4,7 @@
     <IsPackable>false</IsPackable>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
     <IsAotCompatible>true</IsAotCompatible>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
     <ILLinkTreatWarningsAsErrors>true</ILLinkTreatWarningsAsErrors>
@@ -18,7 +19,8 @@
   <ItemGroup>
     <PackageReference Include="Cntryl.Portia.Fitz" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
     <ProjectReference Include="../../src/Portia.Fitz/Portia.Fitz.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
-    <PackageReference Include="Cntryl.Fitz.Testing" Version="3.0.0" />
+    <PackageReference Include="Cntryl.Fitz.Testing" Version="4.0.0" />
     <PackageReference Include="Cntryl.LexKey" Version="0.1.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />
   </ItemGroup>
 </Project>

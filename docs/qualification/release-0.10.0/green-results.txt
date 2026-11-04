@@ -1,0 +1,54 @@
+Portia 0.10.0 local release qualification, 2026-11-03
+Formatting: 0 of 1068 files formatted; no workspace warnings.
+Release build: 0 warnings, 0 errors.
+
+main: Passed!  - Failed:     0, Passed:  1584, Skipped:     0, Total:  1584, Duration: 51 s - Portia.Tests.dll (net10.0)
+consumer: Passed!  - Failed:     0, Passed:   855, Skipped:     0, Total:   855, Duration: 1 m 10 s - Portia.ConsumerTests.dll (net10.0)
+mcp: Passed!  - Failed:     0, Passed:    93, Skipped:     0, Total:    93, Duration: 5 s - Portia.McpTests.dll (net10.0)
+reflection: Passed!  - Failed:     0, Passed:     5, Skipped:     0, Total:     5, Duration: 232 ms - Portia.ReflectionDisabledTests.dll (net10.0)
+durability: Passed!  - Failed:     0, Passed:     1, Skipped:     0, Total:     1, Duration: 1 m 33 s - Portia.Tests.dll (net10.0)
+Framework total: 2538 passed, 0 failed, 0 skipped.
+Accounts: 10 tests passed; projected balance and actual OTLP export verified.
+
+Qualified PORTIA202 Fix All for 64 files with generated JSON constructor references; build and idempotence passed.
+
+Packed compiler consumer: PORTIA016 verified
+Packed compiler consumer: PORTIA107 verified
+Packed compiler consumer: PORTIA107 verified
+Packed compiler consumer: PORTIA107 verified
+Packed compiler consumer: PORTIA107 verified
+Packed compiler consumer: PORTIA107 verified
+Packed compiler consumer: PORTIA107 verified
+Packed compiler consumer: PORTIA030 verified
+Packed compiler consumer: PORTIA200 verified
+Packed compiler consumer: PORTIA016 verified
+Packed runtime fallback verified with HTTP analyzer assets excluded.
+Packed compiler qualification passed with and without the independent general analyzer package.
+
+ProjectionStore-restore exit=0
+ProjectionStore-consumer exit=0
+Cassie-restore exit=0
+Cassie-consumer exit=0
+Mcp.Testing-restore exit=0
+Mcp.Testing-consumer exit=0
+Storage-restore exit=0
+Storage-consumer exit=0
+
+AspNetCore.NativeAotConsumer-restore exit=0
+AspNetCore.NativeAotConsumer-publish exit=0
+AspNetCore.NativeAotConsumer-native exit=0
+Mcp.AspNetCore.NativeAotConsumer-restore exit=0
+Mcp.AspNetCore.NativeAotConsumer-publish exit=0
+Mcp.AspNetCore.NativeAotConsumer-native exit=0
+Fitz.LexKey.PackageConsumer-restore exit=0
+Fitz.LexKey.PackageConsumer-publish exit=0
+Fitz.LexKey.PackageConsumer-native exit=0
+
+Qualified request, aggregate, envelope, generated HTTP and mixed processor matrices.
+
+All declared and locked external NuGet dependencies are stable.
+
+NuGet audit: 32 projects; no reported vulnerabilities.
+16 stable 0.10.0 packages; 20 internal dependency declarations aligned.
+All 1136 frozen inputs remain unchanged. All confirmed review findings resolved.
+Exact-commit hosted CI, publication, and registry readback are separate release gates.

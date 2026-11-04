@@ -129,9 +129,10 @@ Any readable unsupported integer envelope version is classified as retryable bef
 remaining fields are inspected. Unknown contract/version pairs and unclassified read failures are
 also retryable, becoming `RetryLimitReached` only at a durable threshold. An
 `IQueuedRequestTerminalHandler` is optional and observes a terminal failure; its
-successful return does not acknowledge the delivery. Portia stops renewing the
-reservation and leaves expiration, redelivery, and dead-letter policy to the
-transport. The callback receives `QueuedRequestTerminalReason` plus the original
+successful return does not acknowledge the delivery. Portia abandons the reservation, leaving
+redelivery and dead-letter policy to the transport. The Fitz adapter uses native NACK with retry
+delay, falling back to reservation expiry for the default delay when NACK is unsupported.
+The callback receives `QueuedRequestTerminalReason` plus the original
 request, metadata, invocation, attempt, error, and exception. Because the transport
 may redeliver a terminal failure, callback effects must tolerate replay. Callback
 failure uses `TerminalHandlerFailureException` and leaves the delivery unacknowledged.
@@ -141,13 +142,27 @@ operation. `Result.Failure` means required processing is incomplete and leaves t
 unacknowledged. Validation policy belongs to the application rather than a separate framework
 validation pipeline.
 
-Fitz 0.3.0 currently constructs its queue actors with `max_attempts: None`, which means expired
-reservations redeliver indefinitely and the standard broker does not move messages to a DLQ. The
-Fitz Rust `QueueActor` has an internal `max_attempts` constructor option, but neither the broker
-configuration nor its .NET client exposes it. It cannot be set through `QueueRunnerOptions` or
-Portia configuration. A Fitz deployment that exposes an attempt limit must configure it at the
-broker; that policy remains provider-owned, and Fitz queue persistence is best-effort as described
-in the [upgrade guide](fitz-3-upgrade.md#queue-acceptance-and-crash-recovery).
+Fitz 0.4.0 leaves reservation retries unlimited by default. Set `FITZ_QUEUE_MAX_ATTEMPTS` to a
+positive `u32` value at broker startup to select a finite reservation limit and best-effort
+dead-letter behavior for every queue. Invalid values fail broker startup. This setting is
+independent of `QueueRunnerOptions.TerminalAttempt`; the .NET reserved-item contract still
+exposes no durable attempt count, so Portia rejects a positive `TerminalAttempt` for Fitz workers.
+Retry policy remains provider-owned, and Fitz queue persistence is best effort as described in
+the [upgrade guide](fitz-4-upgrade.md#queue-acceptance-and-crash-recovery).
+
+Configure retry visibility delay with ordinary options registration:
+
+```csharp
+services.Configure<QueueRunnerOptions>(options =>
+    options.RetryDelay = TimeSpan.FromSeconds(10));
+```
+
+The value must be nonnegative whole seconds. Null uses Fitz's configured reservation visibility
+timeout; zero permits immediate redelivery. An explicit delay must be supported by the provider.
+A NACK releases incomplete processing and does not substitute for a recorded business rejection.
+Publication can independently use
+`EnqueueWithOptionsAsync` with `RequestQueueOptions` for initial delay and per-message TTL; that
+TTL starts at publication and includes the delay. See [queue options](fitz-4-upgrade.md#queue-publication-options).
 
 Use the standard .NET worker host, referencing the shared project:
 
@@ -193,8 +208,8 @@ finishes. Hosted retries use the registered `TimeProvider`, record every failed 
 fresh disposed scope each time. Caller cancellation propagates. Fitz schedule notifications have no
 acknowledgment or redelivery handle, so process loss can still lose a firing that has already been
 received. Work that requires crash recovery needs a queue provider with that guarantee or durable
-application intent and a recovery mechanism. Fitz 0.3.0 queue acceptance has best-effort persistence;
-see [queue acceptance and crash recovery](fitz-3-upgrade.md#queue-acceptance-and-crash-recovery).
+application intent and a recovery mechanism. Fitz 0.4.0 queue acceptance has best-effort persistence;
+see [queue acceptance and crash recovery](fitz-4-upgrade.md#queue-acceptance-and-crash-recovery).
 
 ## Construct and hydrate aggregates directly
 

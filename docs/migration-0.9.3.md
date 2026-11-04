@@ -1,7 +1,8 @@
 # Migrating to Portia 0.9.3
 
-These changes apply to the 0.9.3 candidates as well as the release. Update processor
-implementations before enabling the application structure diagnostics on an existing application.
+These source migration notes were prepared under the unpublished 0.9.3 version and are included
+in [0.10.0 release preparation](migration-0.10.0.md). Update processor implementations before
+enabling the application structure diagnostics on an existing application.
 
 ## Reactor outcomes must be returned
 
@@ -63,7 +64,7 @@ The 0.9.3 dependency floor includes Microsoft Extensions and ASP.NET Core packag
 and Microsoft.OpenApi at **2.13.0**. Consumers pinning 10.0.13 or Microsoft.OpenApi 2.12.2 can receive
 `NU1605` downgrade errors. Update matching direct references or central package versions to at least
 the required versions; do not suppress the downgrade diagnostic. Keep the Portia package family on
-the same candidate or release version.
+the same version; [0.10.0](migration-0.10.0.md) includes this unpublished source work.
 
 ## Stage analyzer adoption
 

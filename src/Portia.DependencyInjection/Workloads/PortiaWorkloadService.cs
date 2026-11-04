@@ -18,7 +18,8 @@ sealed class PortiaWorkloadService(
     PortiaStartupValidationRegistry? validations = null,
     IOperationalStore? operationalStore = null,
     OperationalOptions? operationalOptions = null,
-    IApplicationTopology? topology = null) : BackgroundService, IHostedLifecycleService
+    IApplicationTopology? topology = null,
+    IProcessorStatusRpcRegistrar? statusRpc = null) : BackgroundService, IHostedLifecycleService
 {
     static readonly Action<ILogger, string, string, int, string, TimeSpan, string, Exception?> LogFailureDecision =
         LoggerMessage.Define<string, string, int, string, TimeSpan, string>(LogLevel.Error, new EventId(2001),
@@ -194,9 +195,13 @@ sealed class PortiaWorkloadService(
         var subscribeFailures = 0;
         var resubscribeAt = DateTimeOffset.MinValue;
         IDomainEventSubscription? subscription = null;
+        using var statusLifetime = statusRpc is null ? null : CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var statusTask = Task.CompletedTask;
         EventStreamPattern? subscribedPattern = null;
         try
         {
+            if (statusLifetime is not null)
+                statusTask = MaintainStatusRpcAsync(registration, identity, statusLifetime.Token);
             while (!ct.IsCancellationRequested)
             {
                 var failed = false;
@@ -378,12 +383,34 @@ sealed class PortiaWorkloadService(
         }
         finally
         {
-            if (subscription is not null)
+            try
             {
-                await subscription.DisposeAsync().ConfigureAwait(false);
+                if (statusLifetime is not null)
+                {
+                    try
+                    {
+                        await statusLifetime.CancelAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception exception)
+                    {
+                        PortiaTelemetry.RecordRunnerFault(nameof(IProcessorStatusRpcRegistrar), RunnerFaultStage.Cleanup,
+                            exception, _logger);
+                    }
+                    await statusTask.ConfigureAwait(false);
+                }
             }
-
-            PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, false, _logger);
+            finally
+            {
+                try
+                {
+                    if (subscription is not null)
+                        await subscription.DisposeAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, false, _logger);
+                }
+            }
         }
 
         // A notification is only a wakeup, so failing to subscribe is handled like a failed wait:
@@ -404,6 +431,54 @@ sealed class PortiaWorkloadService(
                 PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Notification, ex,
                     logger);
                 return null;
+            }
+        }
+    }
+
+    async Task MaintainStatusRpcAsync(WorkloadRegistration registration, WorkloadIdentity identity, CancellationToken ct)
+    {
+        IAsyncDisposable? endpoint = null;
+        var failures = 0;
+        try
+        {
+            while (endpoint is null)
+            {
+                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    endpoint = await statusRpc!.RegisterAsync(identity, ct).ConfigureAwait(false)
+                        ?? throw new InvalidOperationException("Processor status registration returned no endpoint.");
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    PortiaTelemetry.RecordRunnerFault(nameof(IProcessorStatusRpcRegistrar), RunnerFaultStage.Acquisition,
+                        exception, _logger);
+                    failures = Math.Min(failures, 30) + 1;
+                    await Task.Delay(GetFailureDelay(registration, failures), _clock, ct).ConfigureAwait(false);
+                }
+            }
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            if (endpoint is not null)
+            {
+                try
+                {
+                    await endpoint.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    PortiaTelemetry.RecordRunnerFault(nameof(IProcessorStatusRpcRegistrar), RunnerFaultStage.Cleanup,
+                        exception, _logger);
+                }
             }
         }
     }

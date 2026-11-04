@@ -1,0 +1,21 @@
+{
+  "model": "jev-1.14.0",
+  "answers": {
+    "unknown_start_ack_duplicates_id": {
+      "type": "noul",
+      "noul": 0.17
+    },
+    "duplicate_attempt_breaks_commit_lookup": {
+      "type": "noul",
+      "noul": 0.69
+    },
+    "restart_automatically_clears_running_repair_block": {
+      "type": "noul",
+      "noul": 0.88
+    }
+  },
+  "usage": {
+    "input_tokens": 3936,
+    "output_tokens": 74
+  }
+}

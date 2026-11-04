@@ -36,7 +36,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         DiagnosticSeverity.Error,
         true);
 
-    static readonly DiagnosticDescriptor UnsupportedRegistrationCallSite = new(
+    internal static readonly DiagnosticDescriptor UnsupportedRegistrationCallSite = new(
         "PORTIA019",
         "Unsupported registration call site",
         "Portia cannot generate the '{0}' registration here. Keep the type concrete in an ordinary call or feature-local extension method; do not forward it through a generic helper, method group, or delegate.",
@@ -55,16 +55,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             .WithTrackingName("PortiaRegistrationCalls")
             .Collect();
         var dispatchedRequests = context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => node is InvocationExpressionSyntax
-                {
-                    Expression: MemberAccessExpressionSyntax
-                    {
-                        Name.Identifier.ValueText: "SendAsync" or "SendWithOutcomeAsync" or "StreamAsync" or "DispatchAsync"
-                        or "DispatchStreamAsync"
-                        or "EnqueueAsync" or "PublishAsync" or "ScheduleAsync" or "EnsureAsync"
-                        or "AddRequestSchedule"
-                    }
-                },
+                static (node, _) => IsDispatchSyntax(node),
                 static (ctx, _) => DispatchedRequest(ctx))
             .Where(static request => request is not null)
             .Select(static (request, _) => request!)
@@ -91,11 +82,32 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(files, static (output, file) => GeneratedSource.Add(output, file.HintName, file.Source));
     }
 
+    static bool IsDispatchSyntax(SyntaxNode node)
+    {
+        if (node is not InvocationExpressionSyntax invocation)
+            return false;
+        var name = invocation.Expression switch
+        {
+            MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+            MemberBindingExpressionSyntax binding => binding.Name.Identifier.ValueText,
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            GenericNameSyntax generic => generic.Identifier.ValueText,
+            _ => null
+        };
+        return name is "SendAsync" or "SendWithOutcomeAsync" or "StreamAsync" or "DispatchAsync"
+            or "DispatchStreamAsync" or "EnqueueAsync" or "EnqueueWithOptionsAsync" or "PublishAsync"
+            or "ScheduleAsync" or "EnsureAsync" or "AddRequestSchedule";
+    }
+
     static bool IsRegistrationSyntax(SyntaxNode node) => node switch
     {
         InvocationExpressionSyntax
         {
             Expression: MemberAccessExpressionSyntax { Name: { } name }
+        } => IsRegistrationName(name),
+        InvocationExpressionSyntax
+        {
+            Expression: MemberBindingExpressionSyntax { Name: { } name }
         } => IsRegistrationName(name),
         MemberAccessExpressionSyntax
         {
@@ -520,7 +532,11 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 return "null"; // PermissionDiagnostic reports PORTIA011 before source emission.
             }
 
-            _ = expression.Append("{typed.").Append(property.Name).Append('}');
+            var identifier = SyntaxFacts.GetKeywordKind(property.Name) != SyntaxKind.None
+                             || SyntaxFacts.GetContextualKeywordKind(property.Name) != SyntaxKind.None
+                ? "@" + property.Name
+                : property.Name;
+            _ = expression.Append("{typed.").Append(identifier).Append('}');
             offset = match.Index + match.Length;
         }
 

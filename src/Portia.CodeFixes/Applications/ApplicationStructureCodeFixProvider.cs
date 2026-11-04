@@ -343,14 +343,8 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
                 var references = referenceRoot!.GetAnnotatedNodes(ConstructorReference).ToArray();
                 if (references.Length == 0)
                     continue;
-                var updatedRoot = referenceRoot.ReplaceNodes(references, (_, current) => current switch
-                {
-                    QualifiedNameSyntax qualified => qualified.WithLeft(SyntaxFactory.ParseName("global::" + target)
-                        .WithTriviaFrom(qualified.Left)).WithoutAnnotations(ConstructorReference).WithAdditionalAnnotations(Simplifier.Annotation),
-                    AliasQualifiedNameSyntax alias => SyntaxFactory.QualifiedName(SyntaxFactory.ParseName("global::" + target), alias.Name)
-                        .WithTriviaFrom(alias).WithAdditionalAnnotations(Simplifier.Annotation),
-                    _ => current
-                });
+                var updatedRoot = referenceRoot.ReplaceNodes(references,
+                    (_, current) => QualifyConstructorReference(current, target));
                 corrected = corrected.WithDocumentSyntaxRoot(id, updatedRoot);
             }
         }
@@ -407,15 +401,59 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
         foreach (var pair in locations)
         {
             if (solution.GetDocument(pair.Key) is not { } referenceDocument
-                || await referenceDocument.GetSyntaxRootAsync(ct).ConfigureAwait(false) is not { } referenceRoot)
+                || await referenceDocument.GetSyntaxRootAsync(ct).ConfigureAwait(false) is not { } referenceRoot
+                || await referenceDocument.GetSemanticModelAsync(ct).ConfigureAwait(false) is not { } referenceModel)
                 continue;
             var types = pair.Value.Select(span => referenceRoot.FindNode(span).FirstAncestorOrSelf<ObjectCreationExpressionSyntax>()?.Type)
                 .Where(type => type is QualifiedNameSyntax or AliasQualifiedNameSyntax).Distinct().Cast<TypeSyntax>().ToArray();
-            solution = solution.WithDocumentSyntaxRoot(pair.Key, referenceRoot.ReplaceNodes(types,
-                (_, current) => current.WithAdditionalAnnotations(new SyntaxAnnotation(ConstructorReference))));
+            solution = solution.WithDocumentSyntaxRoot(pair.Key, referenceRoot.ReplaceNodes(types, (original, current) =>
+            {
+                if (referenceModel.GetTypeInfo(original, ct).Type is not INamedTypeSymbol type)
+                    return current;
+                var depth = 1;
+                for (var containing = type.ContainingType; containing is not null; containing = containing.ContainingType)
+                    depth++;
+                return current.WithAdditionalAnnotations(new SyntaxAnnotation(ConstructorReference,
+                    depth.ToString(CultureInfo.InvariantCulture)));
+            }));
         }
 
         return solution.GetDocument(document.Id)!;
+    }
+
+    static SyntaxNode QualifyConstructorReference(SyntaxNode node, string target)
+    {
+        if (node is not NameSyntax name || !int.TryParse(node.GetAnnotations(ConstructorReference).FirstOrDefault()?.Data,
+                NumberStyles.None, CultureInfo.InvariantCulture, out var depth) || depth < 1)
+            return node;
+        // Keep every containing type, with the type arguments Roslyn has already updated. Replacing
+        // the whole qualifier would turn Namespace.Outer<T>.Inner into Namespace.Inner.
+        var types = new Stack<SimpleNameSyntax>();
+        var remaining = (NameSyntax?)name;
+        while (types.Count < depth && remaining is not null)
+        {
+            switch (remaining)
+            {
+                case QualifiedNameSyntax qualified:
+                    types.Push(qualified.Right);
+                    remaining = qualified.Left;
+                    break;
+                case AliasQualifiedNameSyntax alias:
+                    types.Push(alias.Name);
+                    remaining = null;
+                    break;
+                case SimpleNameSyntax simple:
+                    types.Push(simple);
+                    remaining = null;
+                    break;
+            }
+        }
+        if (types.Count != depth)
+            return node;
+        var replacement = SyntaxFactory.ParseName("global::" + target);
+        foreach (var type in types)
+            replacement = SyntaxFactory.QualifiedName(replacement, type);
+        return replacement.WithTriviaFrom(node).WithAdditionalAnnotations(Simplifier.Annotation);
     }
 
     static async Task<Document> MakeVersionExplicitAsync(Document document, CompilationUnitSyntax root,

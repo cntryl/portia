@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -142,17 +143,73 @@ sealed class FitzApplicationWorkers(
         // without an arm to add — and cannot silently fall into another kind's branch.
         var host = new FitzWorkerHost(connection.Client, scopes, serializer, catalog, _clock,
             queueLogger, noticeLogger, scheduleLogger, runnerLogger, notificationLogger);
-        var tasks = new List<Task>();
+        var listeners = new List<Func<CancellationToken, Task>>();
         foreach (var worker in _workers)
         {
             if (worker.CreateRunner(host) is { } run)
             {
-                tasks.Add(RetryAsync(worker.GetType().Name, run, TimeSpan.FromSeconds(1), _clock, _logger,
-                    stoppingToken));
+                listeners.Add(token => RetryAsync(worker.GetType().Name, run, TimeSpan.FromSeconds(1), _clock,
+                    _logger, token));
             }
         }
 
-        return Task.WhenAll(tasks);
+        return SuperviseAsync(listeners, stoppingToken);
+    }
+
+    internal static async Task SuperviseAsync(IEnumerable<Func<CancellationToken, Task>> listeners,
+        CancellationToken stoppingToken)
+    {
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        var tasks = new List<Task>();
+        List<Exception> faults = [];
+        try
+        {
+            foreach (var listener in listeners)
+            {
+                if (lifetime.IsCancellationRequested)
+                    break;
+                tasks.Add(listener(lifetime.Token));
+            }
+
+            if (tasks.Count > 0)
+                _ = await Task.WhenAny(tasks).ConfigureAwait(false);
+        }
+        catch (Exception error)
+        {
+            faults.Add(error);
+        }
+
+        // A terminal listener failure must reach the host even while sibling listeners are healthy.
+        // Cancel and observe all siblings before propagating it, including failures during cleanup.
+        try
+        {
+            await lifetime.CancelAsync().ConfigureAwait(false);
+        }
+        catch (Exception error)
+        {
+            faults.Add(error);
+        }
+
+        var completion = Task.WhenAll(tasks);
+        try
+        {
+            await completion.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception error)
+        {
+            if (completion.Exception is { } failures)
+                faults.AddRange(failures.InnerExceptions);
+            else
+                faults.Add(error);
+        }
+
+        if (faults.Count == 1)
+            ExceptionDispatchInfo.Capture(faults[0]).Throw();
+        if (faults.Count > 1)
+            throw new AggregateException(faults);
     }
 
     internal static async Task RetryAsync(string runnerName, Func<CancellationToken, Task> run, TimeSpan interval,

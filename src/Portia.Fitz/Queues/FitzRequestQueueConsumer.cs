@@ -22,6 +22,10 @@ public sealed class FitzRequestQueueConsumer(
     TimeProvider? timeProvider = null,
     ILogger<FitzRequestQueueConsumer>? logger = null) : IRequestQueueConsumer
 {
+    static readonly Action<ILogger, Exception?> LogNackFallback = LoggerMessage.Define(
+        LogLevel.Warning, new EventId(2002),
+        "Fitz queue NACK is unavailable; the abandoned reservation will return through lease expiry.");
+
     readonly RequestTransportCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly TimeSpan _notificationBackstop = GetNotificationBackstop(waitDuration);
@@ -106,7 +110,10 @@ public sealed class FitzRequestQueueConsumer(
         readonly Task _renewal;
         readonly Lazy<IRequest> _request;
         readonly CancellationTokenSource _stop;
+        readonly ILogger? _logger;
+        readonly TimeSpan _defaultRetryDelay;
         Exception? _renewalError;
+        int _dispositionStarted;
 
         public FitzQueuedRequest(IQueueReservedItem item, IRequestDeserializer serializer,
             RequestTransportCatalog catalog, ulong leaseSeconds,
@@ -114,6 +121,8 @@ public sealed class FitzRequestQueueConsumer(
             TimeProvider clock, ILogger? logger, CancellationToken ct)
         {
             _item = item;
+            _logger = logger;
+            _defaultRetryDelay = TimeSpan.FromSeconds(leaseSeconds);
             _envelope = new Lazy<DeserializedRequest>(() => serializer.DeserializeEnvelope(item.Body));
             _request = new Lazy<IRequest>(() => Validate(_envelope.Value.Request, catalog));
             _stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -163,22 +172,59 @@ public sealed class FitzRequestQueueConsumer(
             // given up: Fitz rejects a COMPLETE whose lease expired, so it must fit inside the lease
             // regardless, and the last renewal left at least half of one.
             await StopRenewalAsync().ConfigureAwait(false);
+            RequireOwned(ct);
+            BeginDisposition();
+            await _item.CompleteAsync(ct).ConfigureAwait(false);
+        }
 
+        public ValueTask AbandonAsync(CancellationToken ct = default) =>
+            RetryCoreAsync(_defaultRetryDelay, allowExpiryFallback: true, ct);
+
+        public ValueTask RetryAsync(TimeSpan delay, CancellationToken ct = default) =>
+            RetryCoreAsync(delay, allowExpiryFallback: false, ct);
+
+        async ValueTask RetryCoreAsync(TimeSpan delay, bool allowExpiryFallback, CancellationToken ct)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(delay, TimeSpan.Zero);
+            if (delay.Ticks % TimeSpan.TicksPerSecond != 0)
+                throw new ArgumentException("Retry delay must be a whole number of seconds.", nameof(delay));
+            await StopRenewalAsync().ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            if (allowExpiryFallback && (Volatile.Read(ref _renewalError) is not null || _lost.IsCancellationRequested))
+                return;
+            RequireOwned(ct);
+            BeginDisposition();
+            try
+            {
+                await _item.NackAsync(delay, ct).ConfigureAwait(false);
+            }
+            catch (NotSupportedException) when (allowExpiryFallback)
+            {
+                if (_logger is not null)
+                    LogNackFallback(_logger, null);
+            }
+        }
+
+        void RequireOwned(CancellationToken ct)
+        {
             // Written by the renewal loop, so the read has to be ordered: acknowledging a
             // reservation whose lease was already lost is exactly the outcome this check exists to
             // prevent. It runs after renewal stopped, so a renewal that failed on its way out counts.
             if (Volatile.Read(ref _renewalError) is { } renewalError)
             {
-                throw new InvalidOperationException("Cannot acknowledge a reservation whose renewal failed.",
+                throw new InvalidOperationException("Cannot settle a reservation whose renewal failed.",
                     renewalError);
             }
 
             _lost.Token.ThrowIfCancellationRequested();
-            await _item.CompleteAsync(ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
         }
 
-        // Fitz owns expiration, redelivery and dead-letter policy. Do not acknowledge or republish.
-        public ValueTask AbandonAsync(CancellationToken ct = default) => StopRenewalAsync();
+        void BeginDisposition()
+        {
+            if (Interlocked.CompareExchange(ref _dispositionStarted, 1, 0) != 0)
+                throw new InvalidOperationException("This reservation already has an acknowledgment or retry outcome in progress.");
+        }
 
         static IRequest Validate(IRequestBase requestBase, RequestTransportCatalog catalog)
         {

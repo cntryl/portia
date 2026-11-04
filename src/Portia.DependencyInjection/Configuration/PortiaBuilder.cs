@@ -344,6 +344,7 @@ public sealed class PortiaBuilder
         _catalog.WorkloadNames[registration.Name] = registration.ComponentType;
         Services.TryAddScoped<ProjectorRunner>();
         Services.TryAddScoped<ReactorRunner>();
+        _ = AddProcessorStatus();
         return this;
 
         static bool Equivalent(WorkloadRegistration left, WorkloadRegistration right)
@@ -354,6 +355,12 @@ public sealed class PortiaBuilder
                    && left.MaximumFailureDelay == right.MaximumFailureDelay
                    && left.Processing == right.Processing;
         }
+    }
+
+    internal PortiaBuilder AddProcessorStatus()
+    {
+        ProcessorStatusRegistration.Add(this);
+        return this;
     }
 
     /// <summary>

@@ -53,7 +53,10 @@ public sealed class FitzRpcRequestServer(
                 .ToHashSet();
             foreach (var descriptor in scope.ServiceProvider.GetServices<RequestTransportRegistration>())
             {
-                if (!handled.Contains(descriptor.RequestType) ||
+                // Processor endpoints belong to their exact workload owner's lifetime rather than
+                // every replica's general callable listener.
+                if (descriptor.RequestType == typeof(GetProcessorStatus) ||
+                    !handled.Contains(descriptor.RequestType) ||
                     !descriptor.Transports.Contains(RequestTransportId.Callable))
                 {
                     continue;
@@ -187,8 +190,12 @@ public sealed class FitzRpcRequestServer(
     /// <returns>A registration that can later unregister the worker.</returns>
     public ValueTask<RpcWorkerRegistration> RegisterAsync<TRequest, TOut>(CancellationToken ct = default)
         where TRequest : IRequest<TOut>, ICallable
+        => RegisterAsync<TRequest, TOut>(FitzRouting.ResolveRpcWorkerPattern<TRequest>(Catalog()), null, ct);
+
+    internal ValueTask<RpcWorkerRegistration> RegisterAsync<TRequest, TOut>(string pattern,
+        Func<TRequest, string, bool>? accepts, CancellationToken ct)
+        where TRequest : IRequest<TOut>, ICallable
     {
-        var pattern = FitzRouting.ResolveRpcWorkerPattern<TRequest>(Catalog());
         var requestName = Catalog().Get(typeof(TRequest)).Discriminator.Name;
 
         return new ValueTask<RpcWorkerRegistration>(_rpc.RegisterWorkerAsync(
@@ -221,7 +228,7 @@ public sealed class FitzRpcRequestServer(
                     throw;
                 }
 
-                if (envelope.Request is not TRequest typed)
+                if (envelope.Request is not TRequest typed || accepts is not null && !accepts(typed, request.Route))
                 {
                     var failure = new RequestError(RequestErrorKind.Validation, "Unexpected request contract.");
                     using var process = PortiaTelemetry.StartProcess(requestName, invocation, envelope.TraceContext);

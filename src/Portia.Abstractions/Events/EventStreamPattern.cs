@@ -92,22 +92,14 @@ public sealed record EventStreamPattern
 
     static string ValidateRequiredSegment(string value, string parameterName)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        _ = IdentityText.Require(value, parameterName);
 
         return value.Contains('/') || value.Contains('*')
             ? throw new ArgumentException("A supplied stream pattern segment cannot contain '/' or '*'.", parameterName)
             : value;
     }
 
-    static string? ValidateOptionalSegment(string? value, string parameterName)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? null
-            : value.Contains('/') || value.Contains('*')
-                ? throw new ArgumentException("A supplied stream pattern segment cannot contain '/' or '*'.",
-                    parameterName)
-                : value;
-    }
+    static string? ValidateOptionalSegment(string? value, string parameterName) => string.IsNullOrWhiteSpace(value) ? null : ValidateRequiredSegment(value, parameterName);
 
     static EventStreamPatternScope GetScope(string? area, string? resource)
     {

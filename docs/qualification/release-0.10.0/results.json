@@ -1,0 +1,80 @@
+{
+  "date": "2026-11-03",
+  "package_version": "0.10.0",
+  "status": "local release qualification passed; exact-commit hosted CI and publication follow",
+  "environment": {
+    "rid": "osx-arm64",
+    "sdk": "10.0.403",
+    "runtime": "10.0.14",
+    "fitz_client": "4.0.0",
+    "fitz_broker": "0.4.0 / Wire 3"
+  },
+  "resolved_review_findings": {
+    "first_pass": 11,
+    "second_pass": 9,
+    "all_confirmed_resolved": true
+  },
+  "formatting": {
+    "formatted_files": 0,
+    "examined_files": 1068,
+    "workspace_warnings": 0
+  },
+  "release_build": {
+    "warnings": 0,
+    "errors": 0
+  },
+  "framework_tests": {
+    "Portia.Tests": 1584,
+    "Portia.ConsumerTests": 855,
+    "Portia.McpTests": 93,
+    "Portia.ReflectionDisabledTests": 5,
+    "isolated_crash_durability": 1,
+    "total": 2538,
+    "failed": 0,
+    "skipped": 0
+  },
+  "account_example": {
+    "tests_passed": 10,
+    "projected_balance_verified": true,
+    "actual_otlp_export_verified": true
+  },
+  "package_family": {
+    "count": 16,
+    "internal_dependency_declarations_verified": 20,
+    "all_internal_versions": "0.10.0",
+    "fresh_consumer_caches": true
+  },
+  "managed_consumers": [
+    "ProjectionStore",
+    "Cassie",
+    "Mcp.Testing",
+    "Storage"
+  ],
+  "native_consumers": [
+    "AspNetCore.NativeAotConsumer",
+    "Mcp.AspNetCore.NativeAotConsumer",
+    "Fitz.LexKey.PackageConsumer"
+  ],
+  "additional_passes": [
+    "packed compiler diagnostics and HTTP fallback, with and without independent analyzers",
+    "actual NativeAOT generated catalog entry point, source-generated resolver-renamed and reordered HTTP binding, and OpenAPI",
+    "reflection-disabled request, aggregate, envelope, HTTP and mixed processor controls",
+    "PORTIA202 Fix All for 64 files, build and idempotence",
+    "stable dependency check",
+    "vulnerability audit including transitives: 32 projects, no reported vulnerabilities",
+    "empty PublicAPI.Unshipped baselines"
+  ],
+  "frozen_input_count": 1136,
+  "evidence_boundaries": [
+    "Framework suites ran separately and serially; the consumer suite was isolated.",
+    "Local package hashes identify uncommitted local builds, not the later registry artifact bytes.",
+    "Exact-commit hosted CI including Linux NativeAOT must pass before publication.",
+    "Published registry versions, tag and consumer evidence must be read back after publication.",
+    "publish.yml remains unchanged; the release operator enforces the pre-publication gates."
+  ],
+  "local_logs": [
+    "/tmp/portia-release-final-*.log",
+    "/tmp/portia-010-release-*.log",
+    "/tmp/portia-010-release-account-evidence"
+  ]
+}

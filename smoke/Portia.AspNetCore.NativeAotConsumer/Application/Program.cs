@@ -1,19 +1,35 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using System.Text;
 using Cntryl.Portia;
+
+var generatedCatalog = new DomainEventTypeCatalog().AddPortiaGeneratedDomainEvents();
+if (!generatedCatalog.TryResolve("smoke.catalog.changed", 1, out var catalogEvent)
+    || catalogEvent != typeof(SmokeCatalogChanged))
+    throw new InvalidOperationException("The packed generated event catalog did not resolve its declared event.");
 
 var builder = WebApplication.CreateSlimBuilder(args);
 builder.WebHost.UseUrls("http://127.0.0.1:0");
 _ = builder.Services.AddSingleton<SmokeGuardProbe>();
 _ = builder.Services.AddSingleton<SmokeContinuationProbe>();
-_ = builder.Services.AddPortia().ConfigureJson(options => options.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower)
+_ = builder.Services.AddPortia().ConfigureJson(options =>
+    {
+        options.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
+        options.TypeInfoResolver = SmokeJsonContext.Default.WithAddedModifier(static info =>
+        {
+            if (info.Type == typeof(SmokeBinding))
+                foreach (var property in info.Properties)
+                    property.Name = "wire_" + property.Name;
+        });
+    })
     .AddHttp(options => options.OpenApiSchemaType = type => type == typeof(SmokeNames)
         ? typeof(string[])
         : type == typeof(SmokeCount) ? typeof(int) : null)
     .AddRequestHandler<SmokeRequestHandler>()
     .AddRequestHandler<SmokeUploadHandler>()
+    .AddRequestHandler<SmokeBindingHandler>()
     .AddRequestPipelineBehavior<SmokeRequestBehavior>()
     .AddRequestGuard<SmokeRequestGuard>();
 _ = builder.Services.AddCors(options => options.AddPolicy("smoke", policy => policy.WithOrigins("https://trusted.example")));
@@ -21,6 +37,7 @@ var app = builder.Build();
 _ = app.UseCors("smoke");
 _ = app.MapPortiaOpenApi();
 _ = app.MapPortiaGet<SmokeRequest, SmokePayload>("/smoke");
+_ = app.MapPortiaPost<SmokeBinding, string>("/smoke-binding");
 _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
     .Accepts<Stream>("application/octet-stream")
     .OnBind(async (http, ct) =>
@@ -46,6 +63,12 @@ if (JsonSerializer.Serialize(new App_A.FirstPayload("contracts"), firstType) != 
 await app.StartAsync();
 using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
 {
+    using var bindingBody = new StringContent("{\"wire_a\":11,\"wire_b\":22}", Encoding.UTF8, "application/json");
+    using var bindingResponse = await client.PostAsync("/smoke-binding", bindingBody);
+    var bindingResult = await bindingResponse.Content.ReadAsStringAsync();
+    if (bindingResponse.StatusCode != HttpStatusCode.OK || bindingResult != "\"11,22\"")
+        throw new InvalidOperationException($"Renamed native JSON members lost constructor identity: {bindingResult}");
+
     var response = await client.GetStringAsync("/smoke?name=native-aot");
     using var payload = JsonDocument.Parse(response);
     if (payload.RootElement.GetProperty("display_name").GetString() != "native-aot" ||
@@ -64,6 +87,11 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     if (!document.Contains("\"operationId\": \"smokeRequest\"", StringComparison.Ordinal))
         throw new InvalidOperationException($"Portia endpoint missing from OpenAPI document: {document}");
     using var openApi = JsonDocument.Parse(document);
+    var bindingProperties = openApi.RootElement.GetProperty("paths").GetProperty("/smoke-binding").GetProperty("post")
+        .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("schema")
+        .GetProperty("properties");
+    if (!bindingProperties.TryGetProperty("wire_a", out _) || !bindingProperties.TryGetProperty("wire_b", out _))
+        throw new InvalidOperationException($"Native OpenAPI lost the resolved JSON member names: {document}");
     var components = openApi.RootElement.GetProperty("components").GetProperty("schemas");
     var schema = openApi.RootElement.GetProperty("paths").GetProperty("/smoke").GetProperty("get")
         .GetProperty("responses").GetProperty("200").GetProperty("content").GetProperty("application/json")
@@ -302,4 +330,23 @@ sealed class SmokeGuardProbe
 [JsonSerializable(typeof(SmokeCount))]
 [JsonSerializable(typeof(SmokeVariant))]
 [JsonSerializable(typeof(SmokeUpload))]
+[JsonSerializable(typeof(SmokeBinding))]
+[JsonSerializable(typeof(SmokeCatalogChanged))]
 sealed partial class SmokeJsonContext : JsonSerializerContext;
+
+[Discriminator("smoke.catalog.changed", 1)]
+sealed record SmokeCatalogChanged : DomainEvent;
+
+[Discriminator("smoke.binding")]
+[RequestRoute("public", "smoke", "binding", "read")]
+sealed class SmokeBinding(int a, int b) : IRequest<string>, ICallable
+{
+    public int B { get; } = b;
+    public int A { get; } = a;
+}
+
+sealed class SmokeBindingHandler : IRequestHandler<SmokeBinding, string>
+{
+    public ValueTask<Result<string>> HandleAsync(IRequestContext<SmokeBinding> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result<string>.Success($"{context.Request.A},{context.Request.B}"));
+}

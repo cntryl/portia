@@ -188,10 +188,20 @@ an explicitly configured retry limit when the transport reports a durable attemp
 wire protocol does not report queue attempts, so its worker rejects a positive
 `QueueRunnerOptions.TerminalAttempt` at startup. An application-selected `IQueuedRequestTerminalHandler` is optional;
 it observes terminal failures but cannot acknowledge them. Portia abandons terminal deliveries and leaves
-expiration, redelivery, and dead-letter policy to the transport. Direct and generic hosted runners validate
+redelivery and dead-letter policy to the transport. Fitz uses native NACK with visibility delay and
+falls back to reservation expiry only for the default delay when NACK is unsupported. An explicit
+retry delay must be supported. Direct and generic hosted runners validate
 a disposable scope before enumerating the transport, and each delivery scope is rechecked. Callback effects
 must tolerate replay. The Fitz adapter retains delivery ownership when terminal callback execution faults;
 Portia does not claim a broker-independent durable dead-letter transaction.
+
+Fitz 0.4.0 exposes the broker-wide `FITZ_QUEUE_MAX_ATTEMPTS` setting as a positive `u32` value;
+leaving it unset keeps reservation retries unlimited. It controls the broker's best-effort
+dead-letter policy and does not supply the durable delivery-attempt count Portia would need for
+its own `TerminalAttempt` threshold. Configure broker policy directly. `QueueRunnerOptions.RetryDelay`
+selects NACK visibility delay: null uses the reservation timeout, zero permits immediate redelivery,
+and a positive whole-second duration defers it. Publication TTL is measured from enqueue and includes
+initial delay; neither NACK nor a later reservation resets that lifetime.
 
 HTTP input is buffered in full and bounded to 10 MiB by default, including unknown-length bodies
 declared for a custom `OnBind` binder. Oversize bodies return 413 before binding or dispatch. The

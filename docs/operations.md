@@ -5,6 +5,21 @@ record an operator's approval, queue execution for the owning worker, and report
 Applications own business invariants, participant outcomes, compensation, and reconciliation.
 A committed processor checkpoint does not establish business consistency or business success.
 
+## Operator access
+
+Processor inspection, failure diagnosis, and recovery are system-operator capabilities. Application
+users do not gain these permissions through access to ordinary commands, queries, or application MCP
+tools. Set `PORTIA_SYSTEM_ADMIN_ROLE` to the role carried by authorized operator principals.
+Missing or blank configuration denies access. The configured role must belong to an authenticated
+identity, honoring that identity's role claim type. The same role check applies to status RPCs, local
+status requests, direct operations API calls, and administrative HTTP/MCP entry points, including
+administrative discovery.
+
+Status inspection needs no application-defined authorizer. An existing `IOperationalAuthorizer`
+can further restrict read access by scope. Durable diagnosis and repair operations require that
+explicit policy, with separate `Read`, `Preview`, `Approve`, and `Execute` permissions. Holding the
+operator role alone does not approve a repair or authorize its execution.
+
 ## Activation and cutover
 
 Stop all legacy owners of the affected workloads before enabling operations. Keep the same checkpoint
@@ -30,7 +45,8 @@ app.MapPortiaRepairApprovals();          // /admin/repairs/{planId}/approve and 
 
 `AddAdminMcpHttp`, `MapPortiaAdminMcp`, and `MapPortiaRepairApprovals` are in the optional
 `Cntryl.Portia.Admin.Mcp.AspNetCore` package. Apply the host's authentication, authorization,
-allowed-host, and endpoint conventions. Both mapped surfaces require authentication. Operational
+allowed-host, and endpoint conventions. Both mapped surfaces require an authenticated principal
+holding the configured operator role. Operational
 authorization defaults to deny until the host supplies `IOperationalAuthorizer`.
 
 `OperationalAccess.Approve` must be absent from the operational agent's delegated credential.
@@ -81,7 +97,9 @@ Completed failures and retry counts survive ownership changes. Pending plans bec
 ownership changes, and interrupted attempts remain visible when automatic crash replay succeeds.
 
 The Fitz journal uses synchronous commits and short resource transactions. Attempt starts precede
-application invocation. Reactor completion, the original checkpoint key, and the repair receipt commit
+application invocation. If a start's commit acknowledgement is lost, the owner reloads and confirms
+that same attempt identity and source set before invoking handlers; it does not append another start.
+Reactor completion, the original checkpoint key, and the repair receipt commit
 atomically. A lost acknowledgement is resolved from that receipt before any replay. No operational
 transaction remains open during application handlers.
 

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
@@ -12,6 +13,115 @@ namespace Cntryl.Portia;
 [Collection(TelemetryTestGroup.Name)]
 public sealed class QueueRunnerTests
 {
+    /// <summary>Applies the configured delay consistently to every incomplete delivery path.</summary>
+    /// <param name="situation">The incomplete processing outcome.</param>
+    [Theory]
+    [InlineData("transient")]
+    [InlineData("permanent")]
+    [InlineData("exception")]
+    [InlineData("read")]
+    [InlineData("actor")]
+    [InlineData("transport")]
+    public async Task ShouldApplyConfiguredRetryDelayToEveryIncompleteDelivery(string situation)
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = situation switch
+        {
+            "transient" => new FakeQueuedRequest(new InvalidChangeValue(1, true)),
+            "permanent" => new FakeQueuedRequest(new InvalidChangeValue(1)),
+            "exception" => new FakeQueuedRequest(new ChangeValue(1), throwOnDispatch: true),
+            "read" => new FakeQueuedRequest(new ChangeValue(1), readException: new JsonException("Invalid envelope.")),
+            "actor" => new FakeQueuedRequest(new ChangeValue(1), actorToken: "expired-token"),
+            _ => new FakeQueuedRequest(new ChangeValue(1), transportMismatch: true)
+        };
+        var options = new QueueRunnerOptions { RetryDelay = TimeSpan.FromSeconds(7) };
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator("expired-token"), options: options));
+
+        await runner.RunAsync();
+
+        Assert.Equal(1, queued.Retries);
+        Assert.Equal(options.RetryDelay, queued.RetryDelay);
+        Assert.Equal(0, queued.AbandonmentCount);
+        Assert.Equal(0, queued.CompletionCount);
+    }
+
+    /// <summary>A failed release cannot enter the processing-failure path and release the same reservation twice.</summary>
+    [Fact]
+    public async Task ShouldNotRetryDispositionWhenNativeRetryFails()
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = new FakeQueuedRequest(new InvalidChangeValue(1, true), throwOnRetry: true);
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), options: new QueueRunnerOptions { RetryDelay = TimeSpan.Zero }));
+
+        _ = await Assert.ThrowsAsync<IOException>(() => runner.RunAsync());
+
+        Assert.Equal(1, queued.Retries);
+        Assert.Equal(0, queued.AbandonmentCount);
+        Assert.Equal(0, queued.CompletionCount);
+    }
+
+    /// <summary>Rejects delays the wire cannot represent before reading any queued request.</summary>
+    /// <param name="milliseconds">The invalid delay.</param>
+    [Theory]
+    [InlineData(-1000)]
+    [InlineData(1500)]
+    public async Task ShouldRejectInvalidRetryDelayBeforeQueueProcessing(int milliseconds)
+    {
+        using var busHost = TestRequestBus.Create();
+        var queued = new FakeQueuedRequest(new ChangeValue(1));
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), options: new QueueRunnerOptions
+            { RetryDelay = TimeSpan.FromMilliseconds(milliseconds) }));
+
+        _ = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync());
+
+        Assert.Equal(0, queued.InvocationReadCount);
+        Assert.Equal(0, queued.CompletionCount);
+        Assert.Equal(0, queued.Retries);
+    }
+
+    /// <summary>Explicit retry configuration cannot release a lost or already acknowledged reservation.</summary>
+    /// <param name="lost">Whether the reservation was lost instead of the acknowledgment failing.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldNotRetryLostReservationsOrFailedAcknowledgments(bool lost)
+    {
+        using var busHost = TestRequestBus.Create();
+        using var reservation = new CancellationTokenSource();
+        if (lost)
+            reservation.Cancel();
+        var queued = new FakeQueuedRequest(new ChangeValue(1), throwOnAcknowledge: !lost,
+            reservation: reservation.Token);
+        var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
+            busHost.Bus, new TestRequestActorValidator(), options: new QueueRunnerOptions { RetryDelay = TimeSpan.Zero }));
+
+        await runner.RunAsync();
+
+        Assert.Equal(0, queued.Retries);
+        Assert.Equal(0, queued.AbandonmentCount);
+        Assert.Equal(lost ? 0 : 1, queued.CompletionCount);
+    }
+
+    /// <summary>An adapter cannot silently ignore an explicitly configured redelivery delay.</summary>
+    [Fact]
+    public async Task ShouldRejectConfiguredRetryDelayWhenAdapterDoesNotSupportIt()
+    {
+        using var busHost = TestRequestBus.Create();
+        var original = new FakeQueuedRequest(new InvalidChangeValue(1, true));
+        var runner = new QueueRunner(new FakeQueueConsumer([new LegacyQueuedRequest(original)]),
+            RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator(),
+                options: new QueueRunnerOptions { RetryDelay = TimeSpan.FromSeconds(7) }));
+
+        _ = await Assert.ThrowsAsync<NotSupportedException>(() => runner.RunAsync());
+
+        Assert.Equal(0, original.Retries);
+        Assert.Equal(0, original.AbandonmentCount);
+        Assert.Equal(0, original.CompletionCount);
+    }
+
     /// <summary>Redelivery preserves the typed logical key while each worker execution is new.</summary>
     [Fact]
     public async Task ShouldPreserveTypedIdentityAcrossAttemptsGivenQueuedRedelivery()
@@ -946,13 +1056,15 @@ public sealed class QueueRunnerTests
         using var deliveries = ListenToDeliveries(out var outcomes);
         using var faults = ListenToRunnerFaults(out var recordedFaults);
         var runner = new QueueRunner(new FakeQueueConsumer([failed, next]), RequestDeliveryScopes.FixedQueue(
-            busHost.Bus, new TestRequestActorValidator("expired-token"), terminalHandler: terminal));
+            busHost.Bus, new TestRequestActorValidator("expired-token"),
+            options: new QueueRunnerOptions { RetryDelay = TimeSpan.Zero }, terminalHandler: terminal));
 
         _ = await Assert.ThrowsAsync<TerminalHandlerFailureException>(() => runner.RunAsync());
 
         Assert.Single(terminal.Failures);
         Assert.False(failed.Completed);
         Assert.False(failed.Abandoned);
+        Assert.Equal(0, failed.Retries);
         Assert.False(next.Completed);
         Assert.False(next.Abandoned);
         Assert.Equal(["fault"], outcomes);
@@ -1106,6 +1218,7 @@ public sealed class QueueRunnerTests
         bool throwOnInvocation = false,
         RequestTraceContext? traceContext = null,
         RequestMetadata? metadata = null,
+        bool throwOnRetry = false,
         CancellationToken reservation = default) : IQueuedRequest
     {
         public CancellationToken ReservationCancellation => reservation;
@@ -1114,6 +1227,8 @@ public sealed class QueueRunnerTests
         public int CompletionCount { get; private set; }
 
         public int AbandonmentCount { get; private set; }
+        public int Retries { get; private set; }
+        public TimeSpan? RetryDelay { get; private set; }
 
         public bool Completed { get; private set; }
 
@@ -1157,6 +1272,16 @@ public sealed class QueueRunnerTests
             operations?.Add("abandon");
             return ValueTask.CompletedTask;
         }
+
+        public ValueTask RetryAsync(TimeSpan delay, CancellationToken ct = default)
+        {
+            Retries++;
+            RetryDelay = delay;
+            operations?.Add("retry");
+            return throwOnRetry
+                ? ValueTask.FromException(new IOException("The broker refused retry."))
+                : ValueTask.CompletedTask;
+        }
     }
 
     sealed class RecordingTerminalHandler(bool throws = false, List<string>? operations = null)
@@ -1172,6 +1297,18 @@ public sealed class QueueRunnerTests
                 ? ValueTask.FromException(new InvalidOperationException("terminal failed"))
                 : ValueTask.CompletedTask;
         }
+    }
+
+    sealed class LegacyQueuedRequest(IQueuedRequest inner) : IQueuedRequest
+    {
+        public IRequest Request => inner.Request;
+        public RequestMetadata Metadata => inner.Metadata;
+        public RequestInvocation Invocation => inner.Invocation;
+        public uint Attempt => inner.Attempt;
+        public string? ActorToken => inner.ActorToken;
+        public CancellationToken ReservationCancellation => inner.ReservationCancellation;
+        public ValueTask CompleteAsync(CancellationToken ct = default) => inner.CompleteAsync(ct);
+        public ValueTask AbandonAsync(CancellationToken ct = default) => inner.AbandonAsync(ct);
     }
 
     sealed record ThrowingChangeValue(int Value) : IRequest;

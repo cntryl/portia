@@ -1,0 +1,7 @@
+{
+  "proof": "e7225c7e90281b1d8186ad5920dea4a6bd664556877733b449a5884da20dab60",
+  "reactor_source_sha256": "29658fd4880a18953b09efbbafc139c28a0a037c1384d38b575ef16e0b8c967f",
+  "failed_expected": 3,
+  "controls": 0,
+  "scope": "Additional R2-06 RED cases against unchanged Reactor.cs, while independent fixes were in progress elsewhere."
+}

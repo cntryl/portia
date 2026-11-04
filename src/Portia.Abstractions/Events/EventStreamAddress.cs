@@ -68,7 +68,7 @@ public sealed record EventStreamAddress
 
     static string ValidateSegment(string value, string parameterName)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        _ = IdentityText.Require(value, parameterName);
 
         return value.Contains('/') || value.Contains('*')
             ? throw new ArgumentException("A stream segment cannot contain '/' or '*'.", parameterName)

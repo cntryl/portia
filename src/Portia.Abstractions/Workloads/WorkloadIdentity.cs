@@ -8,7 +8,7 @@ public sealed record WorkloadIdentity
     /// <param name="tenant">The owning tenant, or <see langword="null" /> for a global workload.</param>
     public WorkloadIdentity(string name, TenantId? tenant = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        _ = IdentityText.Require(name, nameof(name));
         if (tenant is { } value)
         {
             _ = EventStreamPattern.ForPattern(value.Value);

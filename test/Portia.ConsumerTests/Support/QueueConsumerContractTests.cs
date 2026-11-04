@@ -6,8 +6,173 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed class QueueConsumerContractTests
 {
+    [Theory]
+    [InlineData(4)]
+    [InlineData(30)]
+    public async Task AbandonmentUsesNativeNackWithConfiguredVisibilityDelay(int leaseSeconds)
+    {
+        var serializer = ConsumerJson.CreateSerializer();
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 7)
+        { SupportsNack = true };
+        var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
+            "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), (ulong)leaseSeconds,
+            timeProvider: new ManualClock());
+        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        Assert.True(await reader.MoveNextAsync());
+
+        await reader.Current.AbandonAsync();
+
+        Assert.Equal(1, item.Nacks);
+        Assert.Equal(TimeSpan.FromSeconds(leaseSeconds), item.NackDelay);
+        Assert.Equal(0, item.Completions);
+        Assert.Equal(7U, item.Attempt);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(7)]
+    public async Task ExplicitRetryUsesNativeNackWithRequestedDelay(int seconds)
+    {
+        var serializer = ConsumerJson.CreateSerializer();
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 2)
+        { SupportsNack = true };
+        var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
+            "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), timeProvider: new ManualClock());
+        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        Assert.True(await reader.MoveNextAsync());
+
+        await reader.Current.RetryAsync(TimeSpan.FromSeconds(seconds));
+
+        Assert.Equal(1, item.Nacks);
+        Assert.Equal(TimeSpan.FromSeconds(seconds), item.NackDelay);
+        Assert.Equal(0, item.Completions);
+        Assert.Equal(2U, item.Attempt);
+    }
+
+    [Fact]
+    public async Task UnsupportedNativeNackFallsBackToExpiryOnlyForDefaultAbandonment()
+    {
+        var serializer = ConsumerJson.CreateSerializer();
+        var implicitItem = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
+        var explicitItem = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
+        var queue = new QueueClient([implicitItem, explicitItem]);
+        var consumer = new FitzRequestQueueConsumer(queue, serializer,
+            "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), timeProvider: new ManualClock());
+        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        Assert.True(await reader.MoveNextAsync());
+        await reader.Current.AbandonAsync();
+        Assert.Equal(1, implicitItem.NackCalls);
+        Assert.Equal(0, implicitItem.Nacks);
+        Assert.Equal(0, implicitItem.Completions);
+
+        Assert.True(await reader.MoveNextAsync());
+        _ = await Assert.ThrowsAsync<NotSupportedException>(() => reader.Current.RetryAsync(TimeSpan.FromSeconds(7)).AsTask());
+        Assert.Equal(1, explicitItem.NackCalls);
+        Assert.Equal(0, explicitItem.Nacks);
+        Assert.Equal(0, explicitItem.Completions);
+        Assert.Equal(0, queue.Enqueues);
+    }
+
+    [Fact]
+    public async Task RetryStopsRenewalBeforeNackSoNoExtendCanRaceReleasedLease()
+    {
+        var clock = new ManualClock();
+        var serializer = ConsumerJson.CreateSerializer();
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1)
+        { SupportsNack = true, BlockNack = true, CloseOnNack = true };
+        var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
+            "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), 4, timeProvider: clock);
+        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        Assert.True(await reader.MoveNextAsync());
+        _ = await clock.WaitForDelayAsync();
+        var retry = reader.Current.RetryAsync(TimeSpan.FromSeconds(7)).AsTask();
+        await item.NackStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        try
+        {
+            clock.Advance(TimeSpan.FromSeconds(2));
+        }
+        finally
+        {
+            _ = item.ReleaseNack.TrySetResult();
+            await retry;
+        }
+
+        Assert.Equal(0, item.Extensions);
+        Assert.Equal(1, item.Nacks);
+        Assert.False(reader.Current.ReservationCancellation.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task FailedAcknowledgmentCannotBeFollowedByNativeNack()
+    {
+        var serializer = ConsumerJson.CreateSerializer();
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1)
+        { SupportsNack = true, FailCompletion = true };
+        var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
+            "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), timeProvider: new ManualClock());
+        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        Assert.True(await reader.MoveNextAsync());
+        _ = await Assert.ThrowsAsync<IOException>(() => reader.Current.CompleteAsync().AsTask());
+
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => reader.Current.RetryAsync(TimeSpan.Zero).AsTask());
+
+        Assert.Equal(0, item.NackCalls);
+        Assert.Equal(0, item.Completions);
+    }
+
+    [Fact]
+    public async Task LostReservationCannotBeNackedByAnExplicitRetry()
+    {
+        var clock = new ManualClock();
+        var serializer = ConsumerJson.CreateSerializer();
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1)
+        { SupportsNack = true, FailExtension = true };
+        var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
+            "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), 4, timeProvider: clock);
+        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        Assert.True(await reader.MoveNextAsync());
+        var lost = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var observed = reader.Current.ReservationCancellation.Register(lost.SetResult);
+        _ = await clock.WaitForDelayAsync();
+        clock.Advance(TimeSpan.FromSeconds(2));
+        await lost.Task.WaitAsync(TimeSpan.FromSeconds(3));
+
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => reader.Current.RetryAsync(TimeSpan.Zero).AsTask());
+
+        Assert.Equal(0, item.NackCalls);
+        Assert.Equal(0, item.Completions);
+    }
+
     static ReadOnlyMemory<byte> Serialize(JsonRequestSerializer serializer, ScopeRequest request)
         => serializer.Serialize(request, null, RequestMetadata.Create(), null);
+
+    [Fact]
+    public async Task QueuePublicationOptionsPreserveDelayAndRejectUnsupportedLifetime()
+    {
+        var queue = new QueueClient([]);
+        var delay = TimeSpan.FromSeconds(3);
+
+        _ = await queue.EnqueueWithOptionsAsync("queue://consumer/scopes/delivery", ReadOnlyMemory<byte>.Empty,
+            new QueueEnqueueOptions(Delay: delay));
+
+        Assert.Equal(1, queue.Enqueues);
+        Assert.Equal(delay, queue.EnqueueDelay);
+        await Assert.ThrowsAsync<NotSupportedException>(() => queue.EnqueueWithOptionsAsync(
+            "queue://consumer/scopes/delivery", ReadOnlyMemory<byte>.Empty, new QueueEnqueueOptions(TtlHours: 1)));
+        Assert.Equal(1, queue.Enqueues);
+    }
+
+    [Fact]
+    public async Task UnsupportedNativeNackDoesNotAcknowledgeOrDisposeReservation()
+    {
+        var item = new Reserved(ReadOnlyMemory<byte>.Empty, QueueItem.AttemptUnavailable);
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => item.NackAsync());
+
+        Assert.Equal(0, item.Completions);
+        Assert.Equal(0, item.Disposals);
+        Assert.Equal(QueueItem.AttemptUnavailable, item.Attempt);
+    }
 
     [Theory]
     [InlineData(false)]
@@ -190,6 +355,7 @@ public sealed class QueueConsumerContractTests
             clock.Advance(TimeSpan.FromSeconds(2));
             await queue.Idle.Task.WaitAsync(TimeSpan.FromSeconds(3));
             Assert.Equal(0, failed.Completions);
+            Assert.Equal(0, failed.NackCalls);
             Assert.Equal(1, success.Completions);
             Assert.Equal(6U, failed.Attempt);
             Assert.Equal(0, queue.Enqueues);
@@ -230,6 +396,7 @@ public sealed class QueueConsumerContractTests
         clock.Advance(TimeSpan.FromSeconds(2));
         await lost.Task.WaitAsync(TimeSpan.FromSeconds(3));
         await reader.Current.AbandonAsync();
+        Assert.Equal(0, failed.NackCalls);
         Assert.True(await reader.MoveNextAsync());
         await reader.Current.CompleteAsync();
         Assert.Equal(0, failed.Completions);
@@ -379,6 +546,7 @@ public sealed class QueueConsumerContractTests
         public int? WaitSeconds { get; private set; }
         public int BatchSize { get; private set; }
         public int Enqueues { get; private set; }
+        public TimeSpan? EnqueueDelay { get; private set; }
         public bool Subscribed { get; private set; }
         public bool SubscribedBeforeReserve { get; private set; }
         public TaskCompletionSource Idle { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -387,7 +555,18 @@ public sealed class QueueConsumerContractTests
             CancellationToken ct = default)
         {
             Enqueues++;
+            EnqueueDelay = delay;
             return Task.FromResult(0UL);
+        }
+
+        public Task<ulong> EnqueueWithOptionsAsync(string route, ReadOnlyMemory<byte> body,
+            QueueEnqueueOptions options, CancellationToken ct = default)
+        {
+            ArgumentNullException.ThrowIfNull(options);
+            ct.ThrowIfCancellationRequested();
+            return options.TtlHours is not null
+                ? Task.FromException<ulong>(new NotSupportedException("This fixture does not implement message lifetime."))
+                : EnqueueAsync(route, body, options.Delay, ct);
         }
 
         public async Task<IQueueReservedItem[]> ReserveAsync(string route, TimeSpan lease, int batchSize = 1,
@@ -468,6 +647,13 @@ public sealed class QueueConsumerContractTests
         public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? delay = null,
             CancellationToken ct = default) => throw new NotSupportedException();
 
+        public Task<ulong> EnqueueWithOptionsAsync(string route, ReadOnlyMemory<byte> body,
+            QueueEnqueueOptions options, CancellationToken ct = default)
+        {
+            ArgumentNullException.ThrowIfNull(options);
+            return Task.FromException<ulong>(new NotSupportedException("This fixture accepts already reserved items only."));
+        }
+
         public Task<IQueueReservedItem[]> ReserveAsync(string route, TimeSpan lease, int batchSize = 1,
             TimeSpan? wait = null, CancellationToken ct = default)
         {
@@ -503,6 +689,15 @@ public sealed class QueueConsumerContractTests
         public TaskCompletionSource Extended { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool FailExtension { get; init; }
         public bool BlockCompletion { get; init; }
+        public bool FailCompletion { get; init; }
+        public bool SupportsNack { get; init; }
+        public bool BlockNack { get; init; }
+        public bool CloseOnNack { get; init; }
+        public int NackCalls { get; private set; }
+        public int Nacks { get; private set; }
+        public TimeSpan? NackDelay { get; private set; }
+        public TaskCompletionSource NackStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ReleaseNack { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // Mirrors Fitz's QueueReservedItem: once COMPLETE starts, EXTEND fails with ITEM_CLOSED.
         public bool CloseOnCompletion { get; init; }
@@ -517,6 +712,23 @@ public sealed class QueueConsumerContractTests
         public string Route => "queue://consumer/scopes/delivery";
         public ReadOnlyMemory<byte> Body => body;
         public uint Attempt => attempt;
+
+        public async Task NackAsync(TimeSpan visibilityDelay = default, CancellationToken ct = default)
+        {
+            NackCalls++;
+            if (!SupportsNack)
+                throw new NotSupportedException("This fixture does not implement native queue NACK.");
+            if (_closed)
+                throw new QueueException("Queue item is completing or closed", "ITEM_CLOSED");
+            ct.ThrowIfCancellationRequested();
+            if (CloseOnNack)
+                Volatile.Write(ref _closed, true);
+            NackDelay = visibilityDelay;
+            _ = NackStarted.TrySetResult();
+            if (BlockNack)
+                await ReleaseNack.Task.WaitAsync(ct);
+            Nacks++;
+        }
 
         public Task ExtendAsync(TimeSpan lease, CancellationToken ct = default)
         {
@@ -536,6 +748,8 @@ public sealed class QueueConsumerContractTests
             _ = CompletionStarted.TrySetResult();
             if (BlockCompletion)
                 await ReleaseCompletion.Task.WaitAsync(ct);
+            if (FailCompletion)
+                throw new IOException("The acknowledgment outcome is unknown.");
 
             Completions++;
         }

@@ -92,7 +92,12 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
                         Outcome = "indeterminate",
                         CompletedAt = a.CompletedAt ?? now,
                         Coverage = a.Coverage + "; authoritative progress differs from historical confirmation"
-                    } : a).ToArray()
+                    } : a).ToArray(),
+                // Native progress supersedes this retry's source set without proving its outcome.
+                Repairs = state.Repairs.Select(repair => repair.Status == "running"
+                    && state.Plans.Any(plan => plan.Id == repair.PlanId
+                        && plan.ExpectedCheckpoint != checkpoint.Cursor.Value)
+                    ? repair with { Status = "indeterminate" } : repair).ToArray()
             };
         }, ct).ConfigureAwait(false);
         if (_repairPlan is { } active && !_state.Repairs.Any(r => r.PlanId == active && r.Status == "running"))
@@ -186,6 +191,16 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
             }
             else if (state.Block is not null)
                 throw new InvalidOperationException("The processor is durably blocked.");
+            // A durable start whose acknowledgement was lost is this same pending invocation.
+            // Reconfirm it after reloading instead of appending its identity a second time.
+            if (state.Attempts.SingleOrDefault(candidate => candidate.Id == id) is { } existing)
+            {
+                if (existing.OwnerSession != _owner || existing.StartedAt != started
+                    || existing.Outcome != "running" || existing.ExpectedCheckpoint != checkpoint.Cursor.Value
+                    || existing.NextCheckpoint != sources[^1].NextCursor || !existing.Sources.SequenceEqual(sources))
+                    throw new InvalidDataException("The persisted attempt start does not match this invocation.");
+                return state;
+            }
             var attempt = new OperationalAttempt(id, _owner, started, null, "running", checkpoint.Cursor.Value,
                 sources[^1].NextCursor, sources, [], "local awaited generated dispatch; opaque dependencies and detached work unknown",
                 topology.Describe());
@@ -280,7 +295,7 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
     }
 
     OperationalProcessorState Succeed(OperationalProcessorState state, Guid id, string? checkpoint)
-        => CompleteRepair(state with
+        => InvalidateObsoleteQueuedRepairs(CompleteRepair(state with
         {
             Checkpoint = checkpoint,
             ConsecutiveFailures = _repairPlan is null ? state.ConsecutiveFailures : 0,
@@ -293,7 +308,7 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
                 Trace = TraceSnapshot(),
                 Coverage = Coverage(a)
             } : a).ToArray()
-        }, "committed", id, checkpoint);
+        }, "committed", id, checkpoint));
 
     OperationalProcessorState CompleteRepair(OperationalProcessorState state, string status, Guid? attempt, string? checkpoint)
         => _repairPlan is not { } id ? state : state with
@@ -301,6 +316,30 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
             Repairs = state.Repairs.Select(r => r.PlanId == id
                 ? r with { Status = status, AttemptId = attempt, Checkpoint = checkpoint } : r).ToArray()
         };
+
+    OperationalProcessorState InvalidateObsoleteQueuedRepairs(OperationalProcessorState state)
+    {
+        OperationalRepair[]? repairs = null;
+        for (var index = 0; index < state.Repairs.Count; index++)
+        {
+            var repair = state.Repairs[index];
+            if (repair.Status != "queued")
+                continue;
+            try
+            {
+                _ = PortiaOperations.RequireCurrentPlan(state, repair.PlanId, clock.GetUtcNow());
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or KeyNotFoundException)
+            {
+                // Queued work has not started. Its exact plan becoming stale settles it without
+                // changing the outcome of a running or indeterminate repair, or clearing a block.
+                repairs ??= [.. state.Repairs];
+                repairs[index] = repair with { Status = "invalidated" };
+            }
+        }
+
+        return repairs is null ? state : state with { Repairs = repairs };
+    }
 
     OperationalTraceEntry[] TraceSnapshot() => _trace.Snapshot();
     string Coverage(OperationalAttempt attempt) => attempt.Coverage + (_trace.Limited ? "; trace limit reached" : string.Empty);
@@ -318,7 +357,7 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
         await RequiredAsync(async () =>
         {
             var current = await ReadOwnedAsync(ct).ConfigureAwait(false);
-            var next = change(current);
+            var next = InvalidateObsoleteQueuedRepairs(change(current));
             if (ReferenceEquals(next, current))
             {
                 _state = current;

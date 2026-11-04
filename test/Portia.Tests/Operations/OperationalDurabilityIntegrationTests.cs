@@ -7,7 +7,7 @@ namespace Cntryl.Portia;
 [Trait("Category", "DurabilityIntegration")]
 public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
 {
-    const string Image = "ghcr.io/cntryl/fitz@sha256:c2743cd5a3b680c8f77bc6b88762d676b805cad59f93de6c37a73144a872e077";
+    const string Image = "ghcr.io/cntryl/fitz@sha256:5e7d844c52dc24de35f33fb024a3a19b0fa13af7d1fa64edfc8e953371051e1f";
     const string Route = "kv://qualification/portia/checkpoints";
     const int StorageLeaseSeconds = 30;
     static readonly OperationalTarget Target = new("durability-reactor", "stream://portia-durability/source/*", OperationalScope.Global);
@@ -102,9 +102,9 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
             Assert.Equal(2, effects.Select(e => e.Event.Metadata.EventId).Distinct().Count());
             Assert.Equal([1, 2], effects.Select(e => ((ValueChanged)e.Event).Value));
             var repair = Assert.Single(state.Repairs);
-            var api = new PortiaOperations(journal, new OperationalOptions(), new EmptyApplicationTopology(), new TestOperationalAuthorizer());
-            Assert.Equal("indeterminate", (await api.VerifyRepairAsync(TestOperationalAuthorizer.Actor(), Target, repair.PlanId)).Status);
-            Assert.Empty(await api.ListIssuesAsync(TestOperationalAuthorizer.Actor(), OperationalScope.Global));
+            var api = new PortiaOperations(TestOperationalAuthorizer.Configuration(), journal, new OperationalOptions(), new EmptyApplicationTopology(), new TestOperationalAuthorizer(), null);
+            Assert.Equal("indeterminate", (await api.VerifyRepairAsync(TestOperationalAuthorizer.AdministratorActor(), Target, repair.PlanId)).Status);
+            Assert.Empty(await api.ListIssuesAsync(TestOperationalAuthorizer.AdministratorActor(), OperationalScope.Global));
         }
     }
 

@@ -1,0 +1,29 @@
+{
+  "model": "jev-1.14.0",
+  "answers": {
+    "manual_reactor_ignores_rebuild_id": {
+      "type": "noul",
+      "noul": 0.78
+    },
+    "resolved_block_leaves_sibling_repairs_queued": {
+      "type": "noul",
+      "noul": 0.46
+    },
+    "sibling_queued_repair_pins_retention": {
+      "type": "noul",
+      "noul": 0.73
+    },
+    "documented_rebuild_updates_live_keys": {
+      "type": "noul",
+      "noul": 0.85
+    },
+    "base_guarantees_generation_data_isolation": {
+      "type": "noul",
+      "noul": 0.08
+    }
+  },
+  "usage": {
+    "input_tokens": 7429,
+    "output_tokens": 132
+  }
+}

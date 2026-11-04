@@ -56,6 +56,8 @@ public sealed class ReactorRunner(
 
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
+        if (options.RebuildId is not null)
+            throw new ArgumentException("Reactors do not support projection rebuild generations.", nameof(options));
         var actor = PrincipalSnapshot.Copy(_principals.GetPrincipal(reactor));
         if (!RequestActor.IsSystem(actor))
         {

@@ -1,0 +1,16 @@
+44cfae731882d6aaa21e2ded7fb003502ad8e23ee4310d93f48027d5b84d512d  artifacts/packages/Cntryl.Portia.Abstractions.0.10.0.nupkg
+ee7729bc94a8b5d48a9f08feabe94133c68ef348bb70308a5a8ca907ff89cda1  artifacts/packages/Cntryl.Portia.Admin.Mcp.AspNetCore.0.10.0.nupkg
+9b643ee2d931729c6cf25ef0c5ebd2af3bbdf4988936e93d61c0fd94e22dddfe  artifacts/packages/Cntryl.Portia.Analyzers.0.10.0.nupkg
+1fcaf4858ebbc6289dfd22f38bf3157b93af4875124380613b5531c10ac38c27  artifacts/packages/Cntryl.Portia.AspNetCore.0.10.0.nupkg
+78dd7053b0e51220b41dab7613401ee0fcbc1d3cf478fbd90babf3eb3827a29b  artifacts/packages/Cntryl.Portia.Cassie.0.10.0.nupkg
+107c0cb61f64705d22a7256eccb9af1943a5f47e2abd4f61a3cddec642ad4773  artifacts/packages/Cntryl.Portia.Core.0.10.0.nupkg
+83eb255eaddacf37bc339e52b10e08f621ca37a472407c6583915b40a42bc921  artifacts/packages/Cntryl.Portia.DependencyInjection.0.10.0.nupkg
+7d5b8650f5f7ae0bf10ae202cbaf0968fafd4258d1a6d1e88d309aff93421a48  artifacts/packages/Cntryl.Portia.Fitz.0.10.0.nupkg
+46f2991b42f76647676f8f7c20e5f5c6ae4730990446f7574d0da0ba850637d7  artifacts/packages/Cntryl.Portia.Jwt.0.10.0.nupkg
+2e554458f2e330fe5bbc96519d7b60724be616596bf65ea5a283e26a333d130d  artifacts/packages/Cntryl.Portia.Mcp.0.10.0.nupkg
+6be69e3c499f0a5a446b383beb32d06569c34d51bde2b2de67daeff6749feca0  artifacts/packages/Cntryl.Portia.Mcp.AspNetCore.0.10.0.nupkg
+32fc516532f76b1e7b5d27c776adae4fcd214ffdfec4ad2f21effa0bb5d22ee9  artifacts/packages/Cntryl.Portia.Mcp.Testing.0.10.0.nupkg
+7ad9ea1e92cf392d449d2aa36798848c8410ea5ea1d8361bd76d8351e28c6a64  artifacts/packages/Cntryl.Portia.Storage.Abstractions.0.10.0.nupkg
+bd0e09cf021a2637efcb993eafbc2932416e8818b02bf5dacb96f5bbafcb258e  artifacts/packages/Cntryl.Portia.Storage.Aws.0.10.0.nupkg
+83199a41011c1d46a22cc1c0325109bbae3ddaadc2e485ca4fdd741e75142f02  artifacts/packages/Cntryl.Portia.Telemetry.0.10.0.nupkg
+123d4a9c76651d5cb192f049f51fc2d4e596ee71eb39dd8244d1072852e3adfb  artifacts/packages/Cntryl.Portia.Testing.0.10.0.nupkg

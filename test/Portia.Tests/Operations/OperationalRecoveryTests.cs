@@ -27,7 +27,7 @@ public sealed class OperationalRecoveryTests
             throw new ProjectionConcurrencyException("A concurrent worker holds the resource lock.");
         };
 
-        var plan = await Api(store).PreviewRepairAsync(TestOperationalAuthorizer.Actor(), Target);
+        var plan = await Api(store).PreviewRepairAsync(TestOperationalAuthorizer.AdministratorActor(), Target);
 
         Assert.Equal(revisedSettings, plan.Settings);
         var saved = (await store.ReadAsync(Target))!;
@@ -51,7 +51,7 @@ public sealed class OperationalRecoveryTests
         };
 
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Api(store)
-            .PreviewRepairAsync(TestOperationalAuthorizer.Actor(), Target, cancellation.Token).AsTask());
+            .PreviewRepairAsync(TestOperationalAuthorizer.AdministratorActor(), Target, cancellation.Token).AsTask());
 
         Assert.Empty((await store.ReadAsync(Target))!.Plans);
     }
@@ -73,14 +73,14 @@ public sealed class OperationalRecoveryTests
         var store = new MemoryOperationalStore();
         var session = await BlockAsync(store);
         var operations = Api(store);
-        var agent = TestOperationalAuthorizer.Actor();
+        var agent = TestOperationalAuthorizer.AdministratorActor();
         var plan = await operations.PreviewRepairAsync(agent, Target);
         Assert.Equal(session.State.OwnerSession, plan.OwnerSession);
         _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
             await operations.ExecuteRepairAsync(agent, Target, plan.Id));
         _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
             await operations.ApproveRepairAsync(agent, Target, plan.Id));
-        _ = await operations.ApproveRepairAsync(TestOperationalAuthorizer.Actor(true), Target, plan.Id);
+        _ = await operations.ApproveRepairAsync(TestOperationalAuthorizer.AdministratorActor(true), Target, plan.Id);
         var first = await operations.ExecuteRepairAsync(agent, Target, plan.Id);
         Assert.Equal(first, await operations.ExecuteRepairAsync(agent, Target, plan.Id));
         Assert.Equal("queued", first.Status);
@@ -97,7 +97,7 @@ public sealed class OperationalRecoveryTests
         var old = await BlockAsync(store);
         var stale = old.State;
         var operations = Api(store);
-        var actor = TestOperationalAuthorizer.Actor(true);
+        var actor = TestOperationalAuthorizer.AdministratorActor(true);
         var plan = await operations.PreviewRepairAsync(actor, Target);
         var next = new OperationalSession(store, new OperationalOptions(), new EmptyApplicationTopology(), TimeProvider.System);
         await next.AcquireAsync(Target, "reactor", Settings, ProjectionCheckpoint.Start, default);
@@ -116,8 +116,8 @@ public sealed class OperationalRecoveryTests
         _ = await BlockAsync(store);
         var operations = Api(store);
         _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
-            await operations.InspectProcessorAsync(TestOperationalAuthorizer.Actor(scope: "tenant-a"), Target));
-        Assert.Empty(await operations.ListIssuesAsync(TestOperationalAuthorizer.Actor(scope: "tenant-a"),
+            await operations.InspectProcessorAsync(TestOperationalAuthorizer.AdministratorActor(scope: "tenant-a"), Target));
+        Assert.Empty(await operations.ListIssuesAsync(TestOperationalAuthorizer.AdministratorActor(scope: "tenant-a"),
             OperationalScope.ForTenant(new TenantId("tenant-a"))));
     }
 
@@ -131,9 +131,9 @@ public sealed class OperationalRecoveryTests
         var store = new MemoryOperationalStore();
         _ = await BlockAsync(store);
         var clock = new ManualTestClock();
-        var operations = new PortiaOperations(store, new OperationalOptions(), new EmptyApplicationTopology(),
+        var operations = new PortiaOperations(TestOperationalAuthorizer.Configuration(), store, new OperationalOptions(), new EmptyApplicationTopology(),
             new TestOperationalAuthorizer(), clock);
-        var actor = TestOperationalAuthorizer.Actor(true);
+        var actor = TestOperationalAuthorizer.AdministratorActor(true);
         var plan = await operations.PreviewRepairAsync(actor, Target);
         _ = await operations.ApproveRepairAsync(actor, Target, plan.Id);
         if (change == "expired")
@@ -163,7 +163,7 @@ public sealed class OperationalRecoveryTests
         var store = new MemoryOperationalStore();
         var session = await BlockAsync(store);
         var operations = Api(store);
-        var actor = TestOperationalAuthorizer.Actor(true);
+        var actor = TestOperationalAuthorizer.AdministratorActor(true);
         var plan = await operations.PreviewRepairAsync(actor, Target);
         _ = await operations.ApproveRepairAsync(actor, Target, plan.Id);
         _ = await operations.ExecuteRepairAsync(actor, Target, plan.Id);
@@ -185,9 +185,9 @@ public sealed class OperationalRecoveryTests
             error: RequestError.Validation("dependency unavailable"));
         await session.RecordFailureAsync(failure, null, default);
         var original = Assert.Single(session.State.Attempts).Id;
-        var operations = new PortiaOperations(store, new OperationalOptions(), new EmptyApplicationTopology(),
+        var operations = new PortiaOperations(TestOperationalAuthorizer.Configuration(), store, new OperationalOptions(), new EmptyApplicationTopology(),
             new TestOperationalAuthorizer(), clock);
-        var actor = TestOperationalAuthorizer.Actor(true);
+        var actor = TestOperationalAuthorizer.AdministratorActor(true);
         var plan = await operations.PreviewRepairAsync(actor, Target);
         _ = await operations.ApproveRepairAsync(actor, Target, plan.Id);
         _ = await operations.ExecuteRepairAsync(actor, Target, plan.Id);
@@ -200,8 +200,8 @@ public sealed class OperationalRecoveryTests
         Assert.Equal(Assert.Single(session.State.Attempts).Id, session.State.Block!.AttemptId);
     }
 
-    static PortiaOperations Api(MemoryOperationalStore store) => new(store, new OperationalOptions(),
-        new EmptyApplicationTopology(), new TestOperationalAuthorizer());
+    static PortiaOperations Api(MemoryOperationalStore store) => new(TestOperationalAuthorizer.Configuration(), store, new OperationalOptions(),
+        new EmptyApplicationTopology(), new TestOperationalAuthorizer(), null);
 
     static async Task<OperationalSession> BlockAsync(MemoryOperationalStore store)
     {

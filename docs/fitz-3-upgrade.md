@@ -1,7 +1,8 @@
 # Upgrading to Fitz .NET 3
 
-The unreleased Portia packages use `Cntryl.Fitz.*` 3.0.0 and require Fitz server 0.3.0.
-The repository pins that broker in integration, example, benchmark, and crash-durability fixtures.
+This page records the earlier `Cntryl.Fitz.*` 3.0.0 and Fitz server 0.3.0 migration.
+Current Portia packages use [.NET 4 and Fitz 0.4.0](fitz-4-upgrade.md); the storage migration
+requirements below still apply when upgrading from an older stored-data generation.
 The .NET client package [release notes](https://github.com/cntryl/fitz-dotnet/blob/f02e3059b7d7998fb0b2611d546e8e68f33864ae/CHANGELOG.md)
 and broker [migration guide](https://github.com/cntryl/fitz/blob/v0.3.0/docs/operations/migration-guide.md)
 describe the breaking contracts.

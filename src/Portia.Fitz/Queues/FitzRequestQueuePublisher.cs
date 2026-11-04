@@ -24,8 +24,30 @@ public sealed class FitzRequestQueuePublisher(
         => EnqueueAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <inheritdoc />
-    public async ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
+    public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
         RequestMetadata metadata, CancellationToken ct = default)
+        where TRequest : IRequest, IQueuable
+        => EnqueueCoreAsync(request, routeValues, actorToken, metadata, null, ct);
+
+    /// <inheritdoc />
+    public ValueTask EnqueueWithOptionsAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
+        RequestQueueOptions options, CancellationToken ct)
+        where TRequest : IRequest, IQueuable
+        => EnqueueWithOptionsAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), options, ct);
+
+    /// <inheritdoc />
+    public ValueTask EnqueueWithOptionsAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
+        RequestMetadata metadata, RequestQueueOptions options, CancellationToken ct = default)
+        where TRequest : IRequest, IQueuable
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate();
+        ct.ThrowIfCancellationRequested();
+        return EnqueueCoreAsync(request, routeValues, actorToken, metadata, options, ct);
+    }
+
+    async ValueTask EnqueueCoreAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
+        RequestMetadata metadata, RequestQueueOptions? options, CancellationToken ct)
         where TRequest : IRequest, IQueuable
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -39,7 +61,11 @@ public sealed class FitzRequestQueuePublisher(
         {
             var route = FitzRouting.ResolveQueueRoute(_catalog, request, routeValues);
             var body = _serializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
-            _ = await _queue.EnqueueAsync(route, body, null, ct).ConfigureAwait(false);
+            if (options is null)
+                _ = await _queue.EnqueueAsync(route, body, null, ct).ConfigureAwait(false);
+            else
+                _ = await _queue.EnqueueWithOptionsAsync(route, body,
+                    new QueueEnqueueOptions(options.Delay, options.TtlHours), ct).ConfigureAwait(false);
             PortiaTelemetry.RecordOutcome(activity, true, null);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

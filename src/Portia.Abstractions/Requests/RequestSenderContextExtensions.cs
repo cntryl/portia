@@ -5,6 +5,19 @@ namespace Cntryl.Portia;
 /// <summary>Starts child work using explicit causal context and separately supplied transport credentials.</summary>
 public static class RequestSenderContextExtensions
 {
+    /// <summary>Enqueues a request with publication controls and no caller cancellation token.</summary>
+    /// <typeparam name="TRequest">The concrete request type.</typeparam>
+    /// <param name="sender">The publisher that accepts the request.</param>
+    /// <param name="request">The request to enqueue.</param>
+    /// <param name="routeValues">Values for wildcard route segments.</param>
+    /// <param name="actorToken">The actor credential to validate at delivery.</param>
+    /// <param name="options">Publication delay and lifetime.</param>
+    /// <returns>A task representing provider acceptance.</returns>
+    public static ValueTask EnqueueWithOptionsAsync<TRequest>(this IRequestQueuePublisher sender, TRequest request,
+        RequestRouteValues routeValues, string? actorToken, RequestQueueOptions options)
+        where TRequest : IRequest, IQueuable
+        => sender.EnqueueWithOptionsAsync(request, routeValues, actorToken, options, CancellationToken.None);
+
     /// <summary>Enqueues a new child request.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
     /// <param name="sender">The publisher that accepts the request.</param>
@@ -24,6 +37,22 @@ public static class RequestSenderContextExtensions
         RequestRouteValues routeValues, string? actorToken, IExecutionContext parent, CancellationToken ct = default)
         where TRequest : IRequest, IQueuable
         => sender.EnqueueAsync(request, routeValues, actorToken, ChildMetadata(request, parent), ct);
+
+    /// <summary>Enqueues child work with explicit publication delay or lifetime and parent causation.</summary>
+    /// <typeparam name="TRequest">The concrete request type.</typeparam>
+    /// <param name="sender">The publisher that accepts the request.</param>
+    /// <param name="request">The request to enqueue.</param>
+    /// <param name="routeValues">Values for wildcard route segments.</param>
+    /// <param name="actorToken">The actor credential to validate at delivery.</param>
+    /// <param name="parent">The execution this request inherits correlation and causation from.</param>
+    /// <param name="options">Publication delay and lifetime.</param>
+    /// <param name="ct">Cancels publication.</param>
+    /// <returns>A task representing provider acceptance.</returns>
+    public static ValueTask EnqueueWithOptionsAsync<TRequest>(this IRequestQueuePublisher sender, TRequest request,
+        RequestRouteValues routeValues, string? actorToken, IExecutionContext parent, RequestQueueOptions options,
+        CancellationToken ct = default)
+        where TRequest : IRequest, IQueuable
+        => sender.EnqueueWithOptionsAsync(request, routeValues, actorToken, ChildMetadata(request, parent), options, ct);
 
     /// <summary>Calls a new child request remotely.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>

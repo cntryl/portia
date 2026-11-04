@@ -2,6 +2,35 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed class GeneratorShapeTests
 {
+    [Theory]
+    [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, new RequestQueueOptions(TtlHours: 1))")]
+    [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, RequestMetadata.Create(), new RequestQueueOptions(TtlHours: 1), default)")]
+    [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, parent, new RequestQueueOptions(TtlHours: 1))")]
+    public void ShouldRegisterOutboundQueueRequestGivenOptionsPublication(string invocation)
+    {
+        var source = $$"""
+                       using Cntryl.Portia;
+                       using Microsoft.Extensions.DependencyInjection;
+                       [RequestRoute("app", "jobs", "requests", "run")]
+                       [Discriminator("test.queued_options")]
+                       public sealed record Queued : IRequest, IQueuable;
+                       public static class Scenario
+                       {
+                           public static void Run(IServiceCollection services, IRequestQueuePublisher publisher,
+                               IExecutionContext parent)
+                           {
+                               var builder = services.AddPortia();
+                               _ = {{invocation}};
+                           }
+                       }
+                       """;
+
+        var generated = GeneratorCompilation.GeneratedSource(source, new RegistrationCallInterceptorGenerator());
+
+        Assert.Contains("test.queued_options", generated, StringComparison.Ordinal);
+        Assert.Contains("RequestTransportId(\"queue\")", generated, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void ShouldDiscoverAnExternalAnnotatedTransportMarker()
     {

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
@@ -61,8 +62,11 @@ public static class PortiaAdminMcpExtensions
         builder.Finally(endpoint =>
         {
             if (endpoint.RequestDelegate is { } next)
-                endpoint.RequestDelegate = context => RejectOrigin(context)
-                    ? Results.StatusCode(StatusCodes.Status403Forbidden).ExecuteAsync(context) : next(context);
+                endpoint.RequestDelegate = context => OperatorAccessFailure(context) is { } denied
+                    ? denied.ExecuteAsync(context)
+                    : RejectOrigin(context)
+                        ? Results.StatusCode(StatusCodes.Status403Forbidden).ExecuteAsync(context)
+                        : next(context);
         });
         return builder;
     }
@@ -95,6 +99,8 @@ public static class PortiaAdminMcpExtensions
 
     static async Task<IResult> ApproveAsync(HttpContext context, Guid planId, bool revoke)
     {
+        if (OperatorAccessFailure(context) is { } denied)
+            return denied;
         if (RejectOrigin(context))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         try
@@ -118,6 +124,16 @@ public static class PortiaAdminMcpExtensions
         { return Results.Conflict(); }
         catch (Exception) when (!context.RequestAborted.IsCancellationRequested)
         { return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+    }
+
+    static IResult? OperatorAccessFailure(HttpContext context)
+    {
+        if (!context.User.Identities.Any(identity => identity.IsAuthenticated))
+            return Results.StatusCode(StatusCodes.Status401Unauthorized);
+        return SystemOperatorAuthorization.IsAdministrator(context.User,
+            context.RequestServices.GetService<IConfiguration>())
+            ? null
+            : Results.StatusCode(StatusCodes.Status403Forbidden);
     }
 
     static bool RejectOrigin(HttpContext context) => context.Request.Headers.Origin is { Count: > 0 } origins

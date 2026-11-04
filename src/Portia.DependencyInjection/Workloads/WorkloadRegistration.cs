@@ -19,7 +19,7 @@ public sealed record WorkloadRegistration
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(options.MaximumFailureDelay, TimeSpan.Zero);
         ArgumentNullException.ThrowIfNull(options.Processing);
         options.Processing.Validate();
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        _ = IdentityText.Require(name, nameof(name));
         Name = name;
         if (!descriptor.SupportsRebuild &&
             // Asked of the descriptor rather than tested against a known descriptor type, so a

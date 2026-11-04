@@ -4,19 +4,90 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
-## Unreleased
+## 0.10.0
 
-## 0.9.3 - 2026-11-02
+This entry includes source changes previously prepared under the unpublished 0.9.3 version.
+Package publication and deployment are separate release steps.
 
 ### Migration
 
-- Read the [0.9.3 migration notes](docs/migration-0.9.3.md) before upgrading reactor/projector
-  handlers: return `Result` outcomes, propagate failed `SendReactionAsync` calls, and update tests
-  for `ProcessorFailureException`. The notes also list the Microsoft 10.0.14 and OpenApi 2.13.0
-  dependency floors.
+- Read the [0.10.0 migration notes](docs/migration-0.10.0.md) before upgrading operator tooling
+  and projector/reactor handlers. Configure the system-operator role, return processor `Result`
+  outcomes, propagate failed reactions, and update tests for `ProcessorFailureException`.
+- Upgrade Fitz clients and broker together using the [Fitz 4 guide](docs/fitz-4-upgrade.md).
+
+### Added
+
+- Add one status RPC per hosted projector or reactor, with a shared `IProcessorStatusClient`.
+  Status loads the native checkpoint, samples source backlog, and includes available operational
+  failure evidence. Endpoints follow workload ownership and require the role configured through
+  `PORTIA_SYSTEM_ADMIN_ROLE`. Existing operational policies can further restrict tenant or global
+  read access, without requiring application developers to implement a new policy.
+- Add the optional `IDomainEventProgressReader` capability, implemented by Fitz and the in-memory
+  event store. Fitz reports bounded backlog measurements without scanning the complete history;
+  unknown exact counts retain a known lower bound.
+- Add `RequestQueueOptions` and `EnqueueWithOptionsAsync` for initial queue delay and per-message
+  TTL, with explicit-metadata and parent-context variants. Existing `EnqueueAsync` calls retain
+  their behavior; TTL starts at publication and includes initial delay.
+- Add `QueueRunnerOptions.RetryDelay` and native Fitz NACK for abandoned deliveries. Null uses
+  the consumer visibility timeout, zero permits immediate redelivery, and a positive whole-second
+  duration defers it. Only the default delay falls back to reservation expiry when NACK is unsupported;
+  an explicit retry delay must be supported, and other NACK failures propagate.
+- Add opt-in application structure diagnostics (`PORTIA200`–`PORTIA213`) for the Common/Core/Api/Worker
+  layout, with code actions for splitting files, filenames, namespaces, and explicit schema versions
+  where the host can safely apply file changes.
+- Add `Cntryl.Portia.Cassie` with `CassieProjectionRepository`, shared metadata initialization,
+  native transaction commands, stable scope keys, and `AddCassie`/`AddCassieProjection` composition.
+- Add a pinned Cassie Compose service and required CI integration tests for public projection-store
+  conformance and the complete Fitz-to-Portia-to-Cassie account projection and query flow.
+
+### Changed
+
+- Require the authenticated role selected by `PORTIA_SYSTEM_ADMIN_ROLE` for all operator surfaces,
+  including direct operations API calls and administrative MCP discovery and repair endpoints.
+  Existing deployments must configure that role and include it in operator credentials. Recovery
+  permissions and exact operator approvals remain separately required.
+- Add `PortiaOperations.Create` for applications constructing the operational API with an
+  application-configured operator role; normal Fitz composition supplies that configuration.
+- Upgrade Fitz client packages to 4.0.0 and pin the compatible 0.4.0 / Wire 3 broker image.
+  Refresh ModelContextProtocol packages to 2.3.1, JsonSchema.Net to 9.6.0, and the BusyBox utility
+  image to 1.38.0. Other dependency floors include Microsoft packages at 10.0.14, Microsoft.OpenApi
+  at 2.13.0, and the stable .NET 10.0.403 SDK.
+- Document Fitz's broker-wide `FITZ_QUEUE_MAX_ATTEMPTS` setting while retaining unavailable
+  durable delivery attempts and positive `TerminalAttempt` rejection in Portia's Fitz adapter.
+- Projector handlers receive `IProjectorContext<TEvent>` with `Trigger`, `Source`, and shared `Batch`
+  metadata. Batch handlers receive ordered lists of typed contexts.
+- Projector and reactor handlers, including manual overrides, return `ValueTask<Result>`.
+  `SendReactionAsync` returns the command result for direct propagation by reactor handlers.
+- Permanent handler results stop hosted workloads immediately. Transient results and exceptions
+  use bounded backoff with authoritative checkpoint reload and fresh DI scopes.
+- Runner failures expose `ProcessorFailureException` with the source range, checkpoint, stage,
+  declared error or original exception, and any secondary projection cleanup failure. Hosted logs
+  report retry and stop decisions.
 
 ### Fixed
 
+- Make operational attempt starts idempotent after a lost journal acknowledgement. Preserve tenant
+  cursor progress across extraction failures and permit retry after subscription cleanup faults.
+- Await revoked workload cleanup even when cancellation callbacks fail, and surface fatal Fitz
+  listener failures while cancelling and awaiting the remaining listeners.
+- Generate concrete conditional registrations, preserve containing types during namespace repair,
+  and keep explicit generated event catalogs usable across friend assemblies.
+- Preserve existing effect-ID bytes while rejecting ambiguous legacy identity boundaries and
+  malformed UTF-16 effect names, with explicit migration guidance for affected identities.
+- Resolve generated HTTP JSON members by their declared identity, including resolver-renamed and
+  reordered metadata, and describe those same names and member options in OpenAPI.
+- Include the request scheme in same-origin fallback checks when fetch metadata is absent.
+- Reject NUL and malformed UTF-16 in persisted framework identities while preserving existing
+  valid checkpoint key bytes. Reserve a Fitz KV projection batch before asynchronous acquisition
+  so overlapping begins cannot retarget its data transaction.
+- Reject rebuild generations for manually driven reactors. Invalidate queued repair plans when
+  their failure or authoritative progress is no longer current. When native progress supersedes a
+  running projection repair after acknowledgement loss, preserve an indeterminate outcome and
+  require a newly approved resume rather than replaying the old source set.
+- Keep event catalogs unchanged after rejected registrations; infer contracts for conditional
+  sender calls and escape permission property identifiers in generated C#.
+- Isolate rebuild data in the Fitz KV balance example and document generation namespace ownership.
 - Fix application structure diagnostics for top-level types, generic filenames, ownership,
   registration reporting, and value construction. Add scoped Fix All support where the host can
   safely apply the requested changes.
@@ -35,22 +106,12 @@ alerts are as breaking to change as an API.
 
 - Reload operational state after a competing Fitz transaction rejects an operator write, preserving
   current plan and approval checks while allowing cancellation during conflict recovery.
-- Count Fitz Wire 2 frames in the append benchmark and record the client package version.
+- Count Fitz wire frames in the append benchmark and record the client package version.
 - Emit shared event, JSON-context, and inferred request registrations once per compilation instead
   of copying them into each interceptor, keeping generated source growth additive. Apply shared
   registration once per builder and compilation, with retry after failed initialization.
 - Keep non-event type aliases from disabling event-name filtering, and use exact-sized generated
   batch buffers instead of repeatedly growing lists.
-
-### Added
-
-- Add opt-in application structure diagnostics (`PORTIA200`–`PORTIA213`) for the Common/Core/Api/Worker
-  layout, with code actions for splitting files, filenames, namespaces, and explicit schema versions
-  where the host can safely apply file changes.
-- Add `Cntryl.Portia.Cassie` with `CassieProjectionRepository`, shared metadata initialization,
-  native transaction commands, stable scope keys, and `AddCassie`/`AddCassieProjection` composition.
-- Add a pinned Cassie Compose service and required CI integration tests for public projection-store
-  conformance and the complete Fitz-to-Portia-to-Cassie account projection and query flow.
 
 ### Known limitations
 
@@ -58,20 +119,6 @@ alerts are as breaking to change as an API.
   MSBuildWorkspace host. Added files become explicit `Compile` items that collide with SDK default
   compile globs, and document renames are not persisted reliably. The provider keeps these actions
   disabled in that host to protect consumer builds; see [issue #174](https://github.com/cntryl/portia/issues/174).
-
-### Changed
-
-- Upgrade Fitz client packages to 3.0.0 and pin the compatible 0.3.0 broker image. Refresh stable
-  dependencies across source, examples, and smoke consumers, and update the .NET SDK to 10.0.403.
-- Projector handlers receive `IProjectorContext<TEvent>` with `Trigger`, `Source`, and shared `Batch`
-  metadata. Batch handlers receive ordered lists of typed contexts.
-- Projector and reactor handlers, including manual overrides, return `ValueTask<Result>`.
-  `SendReactionAsync` returns the command result for direct propagation by reactor handlers.
-- Permanent handler results stop hosted workloads immediately. Transient results and exceptions
-  use bounded backoff with authoritative checkpoint reload and fresh DI scopes.
-- Runner failures expose `ProcessorFailureException` with the source range, checkpoint, stage,
-  declared error or original exception, and any secondary projection cleanup failure. Hosted logs
-  report retry and stop decisions.
 
 ## 0.9.2 - 2026-10-28
 

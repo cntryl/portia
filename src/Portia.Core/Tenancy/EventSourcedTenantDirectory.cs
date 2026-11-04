@@ -329,10 +329,10 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                                            _initial ? "replay" : "catch_up", ct)
                                        .WithCancellation(ct).ConfigureAwait(false))
                     {
+                        var change = directory.Apply(_active, record.Event);
                         _nextCursor = record.NextCursor;
                         sawAny = true;
                         _unsavedEvents++;
-                        var change = directory.Apply(_active, record.Event);
                         if (!_initial && change is { } delta)
                             yield return delta;
                     }
@@ -367,13 +367,15 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
             }
             finally
             {
-                if (subscription is not null &&
-                    ReferenceEquals(Interlocked.CompareExchange(ref _subscription, null, subscription), subscription))
+                try
                 {
-                    await subscription.DisposeAsync().ConfigureAwait(false);
+                    if (subscription is not null &&
+                        ReferenceEquals(Interlocked.CompareExchange(ref _subscription, null, subscription), subscription))
+                    {
+                        await subscription.DisposeAsync().ConfigureAwait(false);
+                    }
                 }
-
-                Volatile.Write(ref _reading, 0);
+                finally { Volatile.Write(ref _reading, 0); }
             }
         }
 

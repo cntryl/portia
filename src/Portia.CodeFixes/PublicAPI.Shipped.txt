@@ -9,3 +9,8 @@ override Cntryl.Portia.JsonMetadataCodeFixProvider.RegisterCodeFixesAsync(Micros
 override Cntryl.Portia.PartialProcessorCodeFixProvider.FixableDiagnosticIds.get -> System.Collections.Immutable.ImmutableArray<string!>
 override Cntryl.Portia.PartialProcessorCodeFixProvider.GetFixAllProvider() -> Microsoft.CodeAnalysis.CodeFixes.FixAllProvider!
 override Cntryl.Portia.PartialProcessorCodeFixProvider.RegisterCodeFixesAsync(Microsoft.CodeAnalysis.CodeFixes.CodeFixContext context) -> System.Threading.Tasks.Task!
+Cntryl.Portia.ApplicationStructureCodeFixProvider
+Cntryl.Portia.ApplicationStructureCodeFixProvider.ApplicationStructureCodeFixProvider() -> void
+override Cntryl.Portia.ApplicationStructureCodeFixProvider.FixableDiagnosticIds.get -> System.Collections.Immutable.ImmutableArray<string!>
+override Cntryl.Portia.ApplicationStructureCodeFixProvider.GetFixAllProvider() -> Microsoft.CodeAnalysis.CodeFixes.FixAllProvider?
+override Cntryl.Portia.ApplicationStructureCodeFixProvider.RegisterCodeFixesAsync(Microsoft.CodeAnalysis.CodeFixes.CodeFixContext context) -> System.Threading.Tasks.Task!

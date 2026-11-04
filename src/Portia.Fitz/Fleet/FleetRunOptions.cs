@@ -70,6 +70,7 @@ public sealed record FleetRunOptions
     }
 
     internal static bool IsSegment(string value) => !string.IsNullOrWhiteSpace(value)
+                                                    && IdentityText.IsValid(value)
                                                     && !value.Any(char.IsWhiteSpace) && !value.Contains('/') &&
                                                     !value.Contains('*');
 }

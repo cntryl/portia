@@ -1,0 +1,41 @@
+{
+  "review_date": "2026-11-03",
+  "candidate": "0.10.0",
+  "scope": "Second full adversarial review of the fixed first-pass candidate; source held unchanged through all recorded RED runs. Follow-on TDD and publication now authorized separately.",
+  "review_source_files_frozen": 1113,
+  "product_source_files_frozen": 548,
+  "product_source_changed_during_review": false,
+  "validated_findings": 9,
+  "severity": "P2; configuration and failure-specific triggers documented individually",
+  "proof_cases": {
+    "main": {
+      "total": 13,
+      "failed_expected": 8,
+      "passed_controls": 5
+    },
+    "consumer": {
+      "total": 7,
+      "failed_expected": 3,
+      "passed_controls": 4
+    },
+    "total": 20,
+    "reproduced_failures": 11,
+    "passed_controls": 9
+  },
+  "jev": {
+    "model": "jev-1.14.0",
+    "calls": 3,
+    "questions": 10,
+    "input_tokens": 14034,
+    "output_tokens": 238,
+    "role": "advisory triage; source and executable proofs decide acceptance"
+  },
+  "excluded_candidates": [
+    "Claimed-repair restart asymmetry: automatic crash replay is explicitly permitted; not established as an additional defect.",
+    "JsonIgnore semantics for public HTTP constructor parameters are not an explicit omission contract.",
+    "Exact-name-first JSON matching is intentional and covered by current tests.",
+    "ASP.NET Core enforces MCP request-size metadata.",
+    "Mutable aggregate concurrent reuse, invalid backend-issued cursors, nonconforming providers, and arbitrary payload mutation do not establish violations of supported contracts."
+  ],
+  "status": "historical RED evidence; all nine fixes required before publication"
+}

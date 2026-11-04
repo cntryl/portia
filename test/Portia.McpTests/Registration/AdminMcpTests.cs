@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol;
 using ModelContextProtocol.AspNetCore;
@@ -15,21 +16,88 @@ namespace Cntryl.Portia.Tests;
 [Collection("MCP HTTP integration")]
 public sealed class AdminMcpTests
 {
+    const string AdministratorRole = "platform-operators";
+
+    [Theory]
+    [InlineData("initialize")]
+    [InlineData("tools/list")]
+    public async Task ShouldDenyApplicationUsersBeforeAdministrativeDiscovery(string method)
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Configuration["PORTIA_SYSTEM_ADMIN_ROLE"] = AdministratorRole;
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        { ["PORTIA_SYSTEM_ADMIN_ROLE"] = "platform-operators" });
+        builder.Services.AddSingleton<IPortiaOperations>(PortiaOperations.Create(builder.Configuration, new EmptyStore(), new OperationalOptions(),
+            new EmptyTopology(), new AllowAllPolicy(), null));
+        builder.Services.AddPortia().AddAdminMcpHttp();
+        await using var app = builder.Build();
+        app.Use((context, next) =>
+        {
+            context.User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(ClaimTypes.NameIdentifier, "application-user"), new Claim(ClaimTypes.Role, "application-user")], "test"));
+            return next(context);
+        });
+        app.MapPortiaAdminMcp().AllowAnonymous();
+        await app.StartAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/admin/mcp")
+        {
+            Content = new StringContent("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"" + method +
+                "\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1\"}}}",
+                System.Text.Encoding.UTF8, "application/json")
+        };
+        request.Headers.Accept.ParseAdd("application/json, text/event-stream");
+
+        using var response = await app.GetTestClient().SendAsync(request);
+
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ShouldDenyApplicationUsersBeforeReadingRepairApprovalBody()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Configuration["PORTIA_SYSTEM_ADMIN_ROLE"] = AdministratorRole;
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        { ["PORTIA_SYSTEM_ADMIN_ROLE"] = "platform-operators" });
+        var store = new ApprovalStore();
+        builder.Services.AddSingleton<IPortiaOperations>(PortiaOperations.Create(builder.Configuration, store, new OperationalOptions(),
+            new EmptyTopology(), new AllowAllPolicy(), null));
+        builder.Services.AddPortia().AddAdminMcpHttp();
+        await using var app = builder.Build();
+        app.Use((context, next) =>
+        {
+            context.User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(ClaimTypes.NameIdentifier, "application-user"), new Claim(ClaimTypes.Role, "application-user")], "test"));
+            return next(context);
+        });
+        app.MapPortiaRepairApprovals().AllowAnonymous();
+        await app.StartAsync();
+        using var content = new StringContent("invalid-json", System.Text.Encoding.UTF8, "application/json");
+
+        using var response = await app.GetTestClient().PostAsync($"/admin/repairs/{Guid.NewGuid()}/approve", content);
+
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(store.State.Approvals);
+    }
+
     [Fact]
     public async Task ShouldApproveExactPlanOnlyThroughSeparatelyAuthorizedHttpActor()
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
+        builder.Configuration["PORTIA_SYSTEM_ADMIN_ROLE"] = AdministratorRole;
         var store = new ApprovalStore();
-        builder.Services.AddSingleton<IPortiaOperations>(new PortiaOperations(store, new OperationalOptions(),
-            new EmptyTopology(), new ApprovalPolicy()));
+        builder.Services.AddSingleton<IPortiaOperations>(PortiaOperations.Create(builder.Configuration, store, new OperationalOptions(),
+            new EmptyTopology(), new ApprovalPolicy(), null));
         builder.Services.AddPortia().AddAdminMcpHttp();
         await using var app = builder.Build();
         app.Use((context, next) =>
         {
             var actor = context.Request.Headers["X-Test-Actor"] == "operator" ? "operator" : "agent";
             context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, actor),
-                new Claim(ClaimTypes.Role, actor)], "test"));
+                new Claim(ClaimTypes.Role, actor), new Claim(ClaimTypes.Role, AdministratorRole)], "test"));
             return next(context);
         });
         app.MapPortiaAdminMcp().AllowAnonymous();
@@ -63,6 +131,7 @@ public sealed class AdminMcpTests
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
+        builder.Configuration["PORTIA_SYSTEM_ADMIN_ROLE"] = AdministratorRole;
         var application = builder.Services.AddPortia()
             .AddRequestHandler<McpRegistrationTests.ReadGreetingHandler>()
             .AddMcpTool<McpRegistrationTests.ReadGreeting>()
@@ -73,8 +142,8 @@ public sealed class AdminMcpTests
                 values => new McpRegistrationTests.ReadGreeting(values["name"]),
                 value => [new McpPromptMessage("user", value)],
                 options => { options.Authenticated(); options.Required("name"); });
-        builder.Services.AddSingleton<IPortiaOperations>(new PortiaOperations(new EmptyStore(), new OperationalOptions(),
-            new EmptyTopology(), new ReadAuthorizer()));
+        builder.Services.AddSingleton<IPortiaOperations>(PortiaOperations.Create(builder.Configuration, new EmptyStore(), new OperationalOptions(),
+            new EmptyTopology(), new ReadAuthorizer(), null));
         if (adminFirst)
             application.AddAdminMcpHttp().AddMcpHttp();
         else
@@ -82,7 +151,8 @@ public sealed class AdminMcpTests
         await using var app = builder.Build();
         app.Use((context, next) =>
         {
-            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "agent")], "test"));
+            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "agent"),
+                new Claim(ClaimTypes.Role, AdministratorRole)], "test"));
             return next(context);
         });
         app.MapPortiaMcp().AllowAnonymous();
@@ -127,10 +197,11 @@ public sealed class AdminMcpTests
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
+        builder.Configuration["PORTIA_SYSTEM_ADMIN_ROLE"] = AdministratorRole;
         var calls = 0;
         builder.Services.AddPortia().AddAdminMcpHttp();
-        builder.Services.AddSingleton<IPortiaOperations>(new PortiaOperations(new EmptyStore(), new OperationalOptions(),
-            new EmptyTopology(), new ReadAuthorizer()));
+        builder.Services.AddSingleton<IPortiaOperations>(PortiaOperations.Create(builder.Configuration, new EmptyStore(), new OperationalOptions(),
+            new EmptyTopology(), new ReadAuthorizer(), null));
         builder.Services.Configure<McpServerOptions>(options =>
         {
             options.Handlers.CallToolHandler = (context, ct) =>
@@ -152,7 +223,7 @@ public sealed class AdminMcpTests
         await using var app = builder.Build();
         app.Use((context, next) =>
         {
-            context.User = new ClaimsPrincipal(new ClaimsIdentity("test"));
+            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Role, AdministratorRole)], "test"));
             return next(context);
         });
         app.MapPortiaAdminMcp().AllowAnonymous();
@@ -175,6 +246,11 @@ public sealed class AdminMcpTests
     {
         public ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope, OperationalAccess permission,
             CancellationToken ct = default) => ValueTask.FromResult(scope == OperationalScope.Global && permission == OperationalAccess.Read);
+    }
+    sealed class AllowAllPolicy : IOperationalAuthorizer
+    {
+        public ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope, OperationalAccess permission,
+            CancellationToken ct = default) => ValueTask.FromResult(true);
     }
     sealed class EmptyStore : IOperationalStore
     {

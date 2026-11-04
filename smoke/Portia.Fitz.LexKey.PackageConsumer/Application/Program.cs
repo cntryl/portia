@@ -1,7 +1,39 @@
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Cntryl.Fitz;
 using Cntryl.Fitz.Testing;
 using Cntryl.Keys;
 using Cntryl.Portia;
+using Microsoft.Extensions.DependencyInjection;
+
+// Client-only composition supplies the built-in status contracts and JSON metadata. No application
+// JSON context, status handler, analyzer package, worker activation, or broker connection is needed.
+if (JsonSerializer.IsReflectionEnabledByDefault)
+    throw new InvalidOperationException("The packed processor status consumer must disable JSON reflection.");
+var services = new ServiceCollection();
+_ = services.AddPortia().AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
+await using (var provider = services.BuildServiceProvider())
+{
+    _ = provider.GetRequiredService<IProcessorStatusClient>();
+    var options = provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
+    var requestInfo = (JsonTypeInfo<GetProcessorStatus>)options.GetTypeInfo(typeof(GetProcessorStatus));
+    var request = new GetProcessorStatus("AccountBalanceProjector", "tenant-a");
+    if (JsonSerializer.Deserialize(JsonSerializer.Serialize(request, requestInfo), requestInfo) != request)
+        throw new InvalidOperationException("Packed processor status request metadata did not round-trip.");
+
+    var statusInfo = (JsonTypeInfo<ProcessorStatus>)options.GetTypeInfo(typeof(ProcessorStatus));
+    var status = new ProcessorStatus(request.Processor, "projector", request.Tenant,
+        "stream://tenant-a/accounts/*", null,
+        new EventStreamProgress(new EventCursor("opaque:committed"), new EventCursor("opaque:head"),
+            4, false, DateTimeOffset.UnixEpoch),
+        new ProcessorStatusFailure("Handling", "Conflict", true, 2, false, DateTimeOffset.UnixEpoch));
+    var statusJson = JsonSerializer.Serialize(status, statusInfo);
+    if (JsonSerializer.Deserialize(statusJson, statusInfo) != status)
+        throw new InvalidOperationException("Packed processor status response metadata did not round-trip.");
+    using var document = JsonDocument.Parse(statusJson);
+    if (document.RootElement.GetProperty("progress").GetProperty("position").GetString() != "opaque:committed")
+        throw new InvalidOperationException("Packed processor status metadata changed the opaque cursor representation.");
+}
 
 // A projection repository keyed by LexKey: Portia's packed Fitz projection store commits the
 // application's LexKey-keyed write with the projector's checkpoint in one Fitz KV transaction, and a
@@ -29,7 +61,7 @@ if (await teams.LoadCheckpointAsync(identity) != committed)
     throw new InvalidOperationException("The projection checkpoint did not commit with the LexKey-keyed row.");
 }
 
-Console.WriteLine("Fitz LexKey package consumer passed.");
+Console.WriteLine("Fitz LexKey and processor status package consumer passed.");
 
 sealed class TeamRepository(IKvClient kv) : FitzKvProjectionStore(kv, "kv://consumer/package/teams", Projector)
 {
