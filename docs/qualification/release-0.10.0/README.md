@@ -68,6 +68,18 @@ consumer broker and queue-contract cases passed, including default abandonment, 
 renewal, lost ownership, and unsupported NACK behavior. The
 [hosted failure](queue-lease-fixture-failure.txt) is retained. Runtime code is unchanged.
 
+Post-merge CI exposed another fixture assumption: the shared shutdown budget test counted native
+withdrawal attempts instead of observing the deadline. Nested timer ordering and background retry
+handoff can legitimately produce two attempts within the same five-second budget. An internal clock
+seam preserves the system-clock defaults and all timeouts. The replacement test advances the first
+attempt to second four, starts the next endpoint, and requires cancellation at the original second
+five. The neighboring explicit-reacquisition test also freezes background retries before counting
+withdrawal failures. Twelve focused cases and 1,541 main cases passed. An intentional
+[deadline-reset mutation](withdrawal-budget-mutant.patch) failed with a
+[timeout](withdrawal-budget-mutant-red.txt); restored code passed. The original
+[hosted failure](withdrawal-budget-fixture-failure.txt) is retained. Public APIs and application
+registration remain unchanged; fresh exact-commit checks are required before publication.
+
 The [first review](../adversarial-0.10.0/README.md) retains eleven findings and its RED evidence.
 The [second review](../adversarial-0.10.0-pass2/README.md) retains nine more findings, eleven original
 failing cases, and three additional effect-identity failures. Both retain their original source and

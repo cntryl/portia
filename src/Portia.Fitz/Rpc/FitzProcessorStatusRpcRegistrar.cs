@@ -6,9 +6,11 @@ namespace Cntryl.Portia;
 
 sealed class FitzProcessorStatusRpcRegistrar(IRpcClient rpc,
     IServiceScopeFactory scopes, RequestTransportCatalog catalog, Func<string> application,
-    ILogger<FitzProcessorStatusRpcRegistrar>? logger = null) : IProcessorStatusRpcRegistrar, IAsyncDisposable
+    ILogger<FitzProcessorStatusRpcRegistrar>? logger = null,
+    TimeProvider? timeProvider = null) : IProcessorStatusRpcRegistrar, IAsyncDisposable
 {
     readonly Func<CancellationToken, Task> _connect = static _ => Task.CompletedTask;
+    readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly ConcurrentDictionary<string, RpcWorkerRegistration> _withdrawals = new(StringComparer.Ordinal);
     readonly CancellationTokenSource _cleanupLifetime = new();
     readonly SemaphoreSlim _cleanupWake = new(0, 1);
@@ -18,8 +20,9 @@ sealed class FitzProcessorStatusRpcRegistrar(IRpcClient rpc,
 
     internal FitzProcessorStatusRpcRegistrar(FitzApplicationConnection connection,
         IServiceScopeFactory scopes, RequestTransportCatalog catalog, Func<string> application,
-        ILogger<FitzProcessorStatusRpcRegistrar>? logger = null)
-        : this(connection.Client.Rpc, scopes, catalog, application, logger) => _connect = connection.StartAsync;
+        ILogger<FitzProcessorStatusRpcRegistrar>? logger = null,
+        TimeProvider? timeProvider = null)
+        : this(connection.Client.Rpc, scopes, catalog, application, logger, timeProvider) => _connect = connection.StartAsync;
 
     public async ValueTask<IAsyncDisposable> RegisterAsync(WorkloadIdentity workload, CancellationToken ct = default)
     {
@@ -62,7 +65,7 @@ sealed class FitzProcessorStatusRpcRegistrar(IRpcClient rpc,
         }
         await _cleanupLifetime.CancelAsync().ConfigureAwait(false);
         await cleanup.ConfigureAwait(false);
-        using var finalWithdrawalBudget = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var finalWithdrawalBudget = new CancellationTokenSource(TimeSpan.FromSeconds(5), _clock);
         foreach (var pending in _withdrawals.ToArray())
         {
             if (finalWithdrawalBudget.IsCancellationRequested)
@@ -98,7 +101,7 @@ sealed class FitzProcessorStatusRpcRegistrar(IRpcClient rpc,
                 var delay = TimeSpan.FromSeconds(1);
                 while (!_withdrawals.IsEmpty)
                 {
-                    await Task.Delay(delay, ct).ConfigureAwait(false);
+                    await Task.Delay(delay, _clock, ct).ConfigureAwait(false);
                     foreach (var pending in _withdrawals.ToArray())
                     {
                         ct.ThrowIfCancellationRequested();
@@ -117,8 +120,8 @@ sealed class FitzProcessorStatusRpcRegistrar(IRpcClient rpc,
     {
         try
         {
-            using var cleanupDeadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cleanupDeadline.CancelAfter(TimeSpan.FromSeconds(5));
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5), _clock);
+            using var cleanupDeadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
             await registration.UnregisterAsync(cleanupDeadline.Token).ConfigureAwait(false);
             _ = _withdrawals.TryRemove(new KeyValuePair<string, RpcWorkerRegistration>(route, registration));
             return true;

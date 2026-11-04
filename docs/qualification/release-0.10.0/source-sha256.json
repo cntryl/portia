@@ -1,7 +1,7 @@
 {
-  "captured_at": "2026-11-04T03:31:01.431039+00:00",
+  "captured_at": "2026-11-04T03:58:29.478062+00:00",
   "base_commit": "32540c809f42c84c97ef7675c5a64aa5ce0b23ac",
-  "branch": "release/0.10.0",
+  "branch": "fix/status-withdrawal-budget-qualification",
   "scope": "Stable 0.10.0 release inputs after both adversarial reviews; local qualification precedes exact-commit hosted CI and publication.",
   "files": {
     ".editorconfig": "78db859f25d9fa640706f9ea80f88612ffb9bc88da5bc4ba03ebc26511229bec",
@@ -491,7 +491,7 @@
     "src/Portia.Fitz/Routing/FitzRouting.cs": "4f06a7399c38b85c4cdcd549e260fc32a221835a8a9695e178fd761cc1c5441e",
     "src/Portia.Fitz/Rpc/FitzProcessorStatusClient.cs": "57498be8cba21a590390673a7210cf20d0129eb4628717150ecfbe99d7840b1e",
     "src/Portia.Fitz/Rpc/FitzProcessorStatusRoutes.cs": "fd6c764aebb3a5c19e1911697cf6c7c8e95dd11767b4251a4d5f46ece9d87c11",
-    "src/Portia.Fitz/Rpc/FitzProcessorStatusRpcRegistrar.cs": "f563fe1016333f0e37bdd4ffd51f0f70bace2c4496512d91574c77614bffd43e",
+    "src/Portia.Fitz/Rpc/FitzProcessorStatusRpcRegistrar.cs": "23dc0562c7c8b17be736950af091cf5ff19fed4408c654ff9fc750b49e80f9ed",
     "src/Portia.Fitz/Rpc/FitzRemoteRequestSender.cs": "c9d87d86eb41a8008892cae64e10e4021327ec76beed039959d50cff606c7f03",
     "src/Portia.Fitz/Rpc/FitzRpcRequestServer.cs": "22fcc2a08ea0eafa3e091ba0c0e6db497946d580c7ab6575a58b7ef7d3d52295",
     "src/Portia.Fitz/Rpc/FitzRpcWorkerDefinition.cs": "04f7cb615ff8782e9c5501b4bd3e5e6c47a9226eff313e88be5300399e2aa04d",
@@ -936,7 +936,7 @@
     "test/Portia.Tests/Fitz/InMemoryRpcDeadlineTests.cs": "d7cac7b2467be264685f55e9e857f5d5b883bad0dcdd935b394b91bda3b7c84f",
     "test/Portia.Tests/Fitz/PortiaFitzBuilderTests.cs": "a88b016b2b793aaa1eff6de1ab9888a3a147a7746b5e64c27e82205a2b461dd0",
     "test/Portia.Tests/Fitz/ProcessorStatusRpcIntegrationTests.cs": "8bc140e1726fe5ce70e5c10841c397dbc2d9eda41a937aa3d698471dd5dd1b3e",
-    "test/Portia.Tests/Fitz/ProcessorStatusRpcTests.cs": "107982dd7958076d5d6986373d1ab329c07b8896222a662de8a6d72a3b0d1c33",
+    "test/Portia.Tests/Fitz/ProcessorStatusRpcTests.cs": "9f82d74f9d5e4f5303650f9e4a9087fae8bd8cecfc63c41786e77a0cebc738ea",
     "test/Portia.Tests/Fleet/AlwaysFailingLeaseCompetitor.cs": "71bb385890092074bff85596df3bd26c4678d845d3da5cfce59fdc853477ff4b",
     "test/Portia.Tests/Fleet/FleetAssignmentCacheTests.cs": "62b91a823eb247e9a6f6f9034b7a78fcec70376372915356b68c64282f3bb75c",
     "test/Portia.Tests/Fleet/FleetPartitionRunnerTests.cs": "ce53786ba0090b1f0d1d3b8b35599b9ae27a0f9b58f5c92c3e3173970697b5bb",
