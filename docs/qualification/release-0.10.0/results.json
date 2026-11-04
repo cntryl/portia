@@ -88,5 +88,16 @@
     "focused_tests_passed": 7,
     "main_broker_free_tests_passed": 1541,
     "fresh_exact_commit_ci_required": true
+  },
+  "second_fixture_followup": {
+    "head": "c5ab4abf744140754c5600a7e0cf1fea8d89f70d",
+    "failed_run": 41762368634,
+    "cause": "The second coordinator fixture had the same cancellation-registration lifetime race; its cleanup could unregister the asserted throwing callback.",
+    "fix": "Both coordinator fixtures retain their throwing registration until coordination is observed. The revocation theory explicitly confirms callback execution.",
+    "audit": "Reviewed all three new fixture files and all eleven cancellation-registration sites under Portia.Tests; no other matching asserted callback-fault race remained.",
+    "focused_tests_passed": 7,
+    "main_broker_free_tests_passed": 1541,
+    "runtime_changed": false,
+    "fresh_exact_commit_ci_required": true
   }
 }

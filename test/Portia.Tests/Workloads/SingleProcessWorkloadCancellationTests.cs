@@ -14,13 +14,18 @@ public sealed class SingleProcessWorkloadCancellationTests
         var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cleanupFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callbackRan = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationTokenRegistration callback = default;
         WorkloadIdentity[] snapshot = [new("pass2-cancellation-cleanup")];
         using var lifetime = new CancellationTokenSource();
         var coordinator = new SingleProcessWorkloadCoordinator(TimeSpan.FromMilliseconds(1));
         var run = coordinator.RunAsync(() => Volatile.Read(ref snapshot), async (_, token) =>
         {
-            using var callback = token.Register(() =>
+            // Keep registration alive through coordination, even if the cancelled delay resumes
+            // cleanup before CancelAsync reaches this callback.
+            callback = token.Register(() =>
             {
+                callbackRan.TrySetResult();
                 if (throwOnCancellation)
                     throw new InvalidOperationException("application cancellation callback failed");
             });
@@ -42,6 +47,7 @@ public sealed class SingleProcessWorkloadCancellationTests
             await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Volatile.Write(ref snapshot, []);
             await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await callbackRan.Task.WaitAsync(TimeSpan.FromSeconds(5));
             var observationWindow = Task.Delay(TimeSpan.FromMilliseconds(100));
             _ = await Task.WhenAny(run, observationWindow);
 
@@ -51,19 +57,26 @@ public sealed class SingleProcessWorkloadCancellationTests
         }
         finally
         {
-            releaseCleanup.TrySetResult();
-            await cleanupFinished.Task.WaitAsync(TimeSpan.FromSeconds(5));
             try
             {
-                await lifetime.CancelAsync();
-                await run.WaitAsync(TimeSpan.FromSeconds(5));
+                releaseCleanup.TrySetResult();
+                await cleanupFinished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                try
+                {
+                    await lifetime.CancelAsync();
+                    await run.WaitAsync(TimeSpan.FromSeconds(5));
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (AggregateException error) when (throwOnCancellation && error.Flatten().InnerExceptions
+                    .Any(exception => exception.Message == "application cancellation callback failed"))
+                {
+                }
             }
-            catch (OperationCanceledException)
+            finally
             {
-            }
-            catch (AggregateException error) when (throwOnCancellation && error.Flatten().InnerExceptions
-                .Any(exception => exception.Message == "application cancellation callback failed"))
-            {
+                callback.Dispose();
             }
         }
     }
@@ -77,16 +90,17 @@ public sealed class SingleProcessWorkloadCancellationTests
         var releaseCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var siblingStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var starts = 0;
+        CancellationTokenRegistration callback = default;
         WorkloadIdentity[] snapshot = [new("faulting"), new("sibling")];
         using var lifetime = new CancellationTokenSource();
         var coordinator = new SingleProcessWorkloadCoordinator(TimeSpan.FromMilliseconds(1));
         var run = coordinator.RunAsync(() => Volatile.Read(ref snapshot), async (identity, token) =>
         {
-            using var callback = token.Register(() =>
-            {
-                if (identity.Name == "faulting")
-                    throw new InvalidOperationException("cancellation callback failed");
-            });
+            // The test owns the faulting registration until coordination finishes. Disposing it
+            // inside the workload could remove it before CancelAsync invokes it.
+            if (identity.Name == "faulting")
+                callback = token.Register(static () =>
+                    throw new InvalidOperationException("cancellation callback failed"));
             if (Interlocked.Increment(ref starts) == 2)
                 started.TrySetResult();
             try
@@ -121,21 +135,28 @@ public sealed class SingleProcessWorkloadCancellationTests
         }
         finally
         {
-            releaseCleanup.TrySetResult();
             try
             {
-                await lifetime.CancelAsync();
+                releaseCleanup.TrySetResult();
+                try
+                {
+                    await lifetime.CancelAsync();
+                }
+                catch (AggregateException error) when (error.Flatten().InnerExceptions.Any(failure =>
+                    failure.Message == "cancellation callback failed"))
+                {
+                }
+                try
+                {
+                    await run.WaitAsync(TimeSpan.FromSeconds(5));
+                }
+                catch (Exception error) when (error is AggregateException or OperationCanceledException)
+                {
+                }
             }
-            catch (AggregateException error) when (error.Flatten().InnerExceptions.Any(failure =>
-                failure.Message == "cancellation callback failed"))
+            finally
             {
-            }
-            try
-            {
-                await run.WaitAsync(TimeSpan.FromSeconds(5));
-            }
-            catch (Exception error) when (error is AggregateException or OperationCanceledException)
-            {
+                callback.Dispose();
             }
         }
     }

@@ -40,6 +40,11 @@ its cancellation callback before it ran. The outer test now retains that registr
 supervision, preserving the exact three-error assertion. Runtime code is unchanged. The seven
 focused cleanup cases and 1,541 broker-free main tests passed afterward; the original
 [hosted failure](initial-ci-fixture-failure.txt) is retained and fresh exact-commit CI is required.
+The next hosted run exposed the same lifetime issue in the coordinator fixture. Both coordinator
+cases now retain their registrations through coordination, and the revocation test confirms callback
+execution explicitly. An audit of all eleven registration sites found no other matching asserted
+callback-fault race. The [second failure](second-ci-fixture-failure.txt) is retained; publication
+continues to require successful checks on the updated commit.
 
 The [first review](../adversarial-0.10.0/README.md) retains eleven findings and its RED evidence.
 The [second review](../adversarial-0.10.0-pass2/README.md) retains nine more findings, eleven original

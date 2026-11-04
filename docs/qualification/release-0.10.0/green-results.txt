@@ -56,3 +56,6 @@ Exact-commit hosted CI, publication, and registry readback are separate release 
 Hosted fixture follow-up: deterministic cancellation-registration lifetime; runtime unchanged.
 Focused cleanup tests: 7 passed. Broker-free main suite: 1541 passed.
 Fresh exact-commit CI remains required before publication.
+
+Cancellation fixture audit: both coordinator cases retain throwing registrations through coordination.
+All eleven registration sites reviewed; runtime unchanged. Focused cleanup cases: 7 passed.

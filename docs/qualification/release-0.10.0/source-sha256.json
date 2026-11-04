@@ -1137,9 +1137,9 @@
     "test/Portia.Tests/Workloads/ProcessorStatusTests.cs": "6d94cc58d9b54fe25dc9d585f3f065a91dad58f1f037caae2b075a9be98d262c",
     "test/Portia.Tests/Workloads/RunnerClockTests.cs": "137b5b25dc71d461a14a612c099606109559fbe0b719d69047e463f5585e8810",
     "test/Portia.Tests/Workloads/RunnerFaultVisibilityTests.cs": "e2b8196cabb49dc2afdc5d55a63e632f40c6ee06f3befbeedd7ee42e0d5f864d",
-    "test/Portia.Tests/Workloads/SingleProcessWorkloadCancellationTests.cs": "88547502143c615d6139061e4dda975211fba2a0b963880e12b72240fff3eb5d",
+    "test/Portia.Tests/Workloads/SingleProcessWorkloadCancellationTests.cs": "ace12e38102306d8ee402f4618d2f639e9264ee921d5efe8172122cae7fe70d2",
     "test/Portia.Tests/Workloads/SingleProcessWorkloadCoordinatorTests.cs": "582dc68ee2d00663b540384115a0ad2d45b4d00f090d4305455369c47efd02ef",
     "test/Portia.Tests/Workloads/TenantFreeMessageTests.cs": "173a0435d477ad9e14951299c9291887dda4e7d6b61a374f60aba08b18ddea1d"
   },
-  "followup": "After initial hosted CI, retained cancellation registration for deterministic fault injection; runtime code unchanged. Added catalog call-site migration guidance."
+  "followup": "Hosted CI fixture audit: all asserted throwing registrations are test-owned through coordination, with explicit callback execution where needed. Runtime code is unchanged."
 }
