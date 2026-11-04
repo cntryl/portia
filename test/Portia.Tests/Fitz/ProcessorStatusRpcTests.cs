@@ -163,6 +163,7 @@ public sealed class ProcessorStatusRpcTests
     [Fact]
     public async Task ShouldReacquireEndpointAfterFailedNativeWithdrawal()
     {
+        var clock = new ManualTestClock();
         var services = new ServiceCollection();
         var handler = new CountingStatusHandler();
         _ = services.AddSingleton(handler);
@@ -186,7 +187,7 @@ public sealed class ProcessorStatusRpcTests
         var serializer = provider.GetRequiredService<JsonRequestSerializer>();
         var identity = new WorkloadIdentity("balances");
         await using var registrar = new FitzProcessorStatusRpcRegistrar(rpc, provider.GetRequiredService<IServiceScopeFactory>(),
-            catalog, () => "application");
+            catalog, () => "application", timeProvider: clock);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer, catalog);
         var client = new FitzProcessorStatusClient(sender, () => "application");
         var first = await registrar.RegisterAsync(identity);
@@ -235,10 +236,11 @@ public sealed class ProcessorStatusRpcTests
     {
         var (services, _) = CountingStatusServices();
         await using var provider = services.BuildServiceProvider();
+        var clock = new ManualTestClock();
         var rpc = new BlockedWithdrawalRpcClient();
         var catalog = new RequestTransportCatalog(provider.GetServices<RequestTransportRegistration>());
         await using var registrar = new FitzProcessorStatusRpcRegistrar(rpc,
-            provider.GetRequiredService<IServiceScopeFactory>(), catalog, () => "application");
+            provider.GetRequiredService<IServiceScopeFactory>(), catalog, () => "application", timeProvider: clock);
         var first = await registrar.RegisterAsync(new WorkloadIdentity("first"));
         var second = await registrar.RegisterAsync(new WorkloadIdentity("second"));
         await first.DisposeAsync();
@@ -246,9 +248,33 @@ public sealed class ProcessorStatusRpcTests
         Assert.Equal(2, rpc.InitialFailures);
         rpc.BlockWithdrawals = true;
 
-        await registrar.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(15));
+        var shutdown = registrar.DisposeAsync().AsTask();
+        try
+        {
+            await rpc.FirstWithdrawalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            clock.Advance(TimeSpan.FromSeconds(4));
+            Assert.False(shutdown.IsCompleted);
+            _ = rpc.FailFirstWithdrawal.TrySetResult();
+            await rpc.SecondWithdrawalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.Equal(1, rpc.BlockingWithdrawals);
+            // The second endpoint started four seconds into the shared five-second budget.
+            // Its own attempt deadline would allow another five seconds, so shutdown must
+            // instead cancel it when the original budget has only one second left.
+            clock.Advance(TimeSpan.FromSeconds(1));
+            await shutdown.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(2, rpc.BlockingWithdrawals);
+            Assert.True(rpc.SecondWithdrawalCancelled);
+        }
+        finally
+        {
+            // Release every fixture gate even if the deadline assertion fails, including
+            // when checking a mutation that gives the second endpoint a fresh budget.
+            _ = rpc.FailFirstWithdrawal.TrySetResult();
+            _ = rpc.ReleaseSecondWithdrawal.TrySetResult();
+            clock.Advance(TimeSpan.FromDays(1));
+            await shutdown.WaitAsync(TimeSpan.FromSeconds(5));
+        }
     }
 
     static (ServiceCollection Services, CountingStatusHandler Handler) CountingStatusServices()
@@ -291,9 +317,15 @@ public sealed class ProcessorStatusRpcTests
     {
         int _initialFailures;
         int _blockingWithdrawals;
+        int _secondWithdrawalCancelled;
         internal bool BlockWithdrawals { get; set; }
         internal int InitialFailures => Volatile.Read(ref _initialFailures);
         internal int BlockingWithdrawals => Volatile.Read(ref _blockingWithdrawals);
+        internal bool SecondWithdrawalCancelled => Volatile.Read(ref _secondWithdrawalCancelled) != 0;
+        internal TaskCompletionSource FirstWithdrawalStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource FailFirstWithdrawal { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource SecondWithdrawalStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource ReleaseSecondWithdrawal { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
 #pragma warning disable RS0026
         public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
@@ -306,15 +338,29 @@ public sealed class ProcessorStatusRpcTests
         public Task<RpcWorkerRegistration> RegisterWorkerAsync(string pattern,
             Func<RpcRequest, IRpcResponseWriter, CancellationToken, ValueTask> handler,
             RpcWorkerOptions? options = null, CancellationToken ct = default) =>
-            Task.FromResult(new RpcWorkerRegistration(pattern, token =>
+            Task.FromResult(new RpcWorkerRegistration(pattern, async token =>
             {
                 if (!BlockWithdrawals)
                 {
                     _ = Interlocked.Increment(ref _initialFailures);
-                    return ValueTask.FromException(new IOException("Broker unavailable."));
+                    throw new IOException("Broker unavailable.");
                 }
-                _ = Interlocked.Increment(ref _blockingWithdrawals);
-                return new ValueTask(Task.Delay(Timeout.InfiniteTimeSpan, token));
+                if (Interlocked.Increment(ref _blockingWithdrawals) == 1)
+                {
+                    _ = FirstWithdrawalStarted.TrySetResult();
+                    await FailFirstWithdrawal.Task.WaitAsync(token);
+                    throw new IOException("First final withdrawal failed.");
+                }
+                _ = SecondWithdrawalStarted.TrySetResult();
+                try
+                {
+                    await ReleaseSecondWithdrawal.Task.WaitAsync(token);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    Volatile.Write(ref _secondWithdrawalCancelled, 1);
+                    throw;
+                }
             }));
     }
 

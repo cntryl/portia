@@ -126,5 +126,18 @@
     "consumer_broker_and_queue_contract_tests_passed": 59,
     "runtime_changed": false,
     "fresh_exact_commit_ci_required": true
+  },
+  "shutdown_budget_fixture_followup": {
+    "head": "35bfa2194ece9a34a328e48d42c7b00cb39d5172",
+    "failed_main_run": 41769038418,
+    "cause": "An exact call-count assertion confused valid nested-timeout ordering or background retry handoff with exhaustion of the shared shutdown budget. Two calls can still finish within five seconds.",
+    "fix": "An internal TimeProvider seam defaults to System and preserves the five-second budgets and retry delays. A controlled-clock test starts the second endpoint at second four and requires its cancellation by the original second-five deadline.",
+    "public_api_changed": false,
+    "focused_tests_passed": 12,
+    "main_broker_free_tests_passed": 1541,
+    "deadline_reset_mutant": "failed as expected with TimeoutException; source restored and green tests rebuilt",
+    "fresh_exact_commit_ci_required": true,
+    "full_broker_tests_passed": 34,
+    "adjacent_fixture": "Explicit reacquisition freezes background retries so its failure-count assertion observes only the intended operations."
   }
 }

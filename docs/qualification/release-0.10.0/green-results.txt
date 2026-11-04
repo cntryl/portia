@@ -68,3 +68,10 @@ Solution-aware targeted formatting: 0 of 1,069 files changed, no workspace warni
 Queue lease fixture follow-up (runtime unchanged):
 Consumer broker integration and queue contracts: 59 passed, 0 failed, 0 skipped.
 Solution-aware targeted formatting: 0 files changed, no workspace warnings.
+
+Controlled shutdown-budget follow-up:
+Status RPC unit tests: 12 passed, 0 failed, 0 skipped.
+Fresh-per-endpoint deadline mutant: 1 failed with TimeoutException, as expected.
+Restored main suite: 1,541 passed, 0 failed, 0 skipped.
+Solution-aware targeted formatting: 0 of 1,069 files changed, no workspace warnings.
+Broker integration with the internal clock seam: 34 passed, 0 failed, 0 skipped.
