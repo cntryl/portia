@@ -59,6 +59,15 @@ dependencies, and `publish.yml` are unchanged.
 The adjacent native round-trip test also waits for server completion telemetry, which is emitted
 after the terminal response, before asserting its original span topology and delivery measurements.
 
+The next paired run passed in full on push but exposed a one-second queue lease in the consumer
+metadata fixture on the PR run: native NACK reported `NotFound` after the reservation was gone.
+The fixture and its malformed-envelope counterpart now use the normal 30-second reservation and
+request the original one-second retry delay explicitly. Unrelated non-expiry settlement checks
+also use normal leases; the actual three-second renewal experiment remains unchanged. All 59
+consumer broker and queue-contract cases passed, including default abandonment, explicit retry,
+renewal, lost ownership, and unsupported NACK behavior. The
+[hosted failure](queue-lease-fixture-failure.txt) is retained. Runtime code is unchanged.
+
 The [first review](../adversarial-0.10.0/README.md) retains eleven findings and its RED evidence.
 The [second review](../adversarial-0.10.0-pass2/README.md) retains nine more findings, eleven original
 failing cases, and three additional effect-identity failures. Both retain their original source and

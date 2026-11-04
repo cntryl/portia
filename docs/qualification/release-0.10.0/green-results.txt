@@ -64,3 +64,7 @@ Hosted broker fixture follow-up (runtime unchanged):
 Targeted cleanup contract and status integration: 5 passed, 0 failed, 0 skipped.
 Full broker integration: 34 passed, 0 failed, 0 skipped.
 Solution-aware targeted formatting: 0 of 1,069 files changed, no workspace warnings.
+
+Queue lease fixture follow-up (runtime unchanged):
+Consumer broker integration and queue contracts: 59 passed, 0 failed, 0 skipped.
+Solution-aware targeted formatting: 0 files changed, no workspace warnings.

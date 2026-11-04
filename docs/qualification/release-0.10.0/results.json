@@ -116,5 +116,15 @@
     "fresh_exact_commit_ci_required": true,
     "full_broker_tests_passed": 34,
     "telemetry_observation": "The adjacent native round-trip test now waits up to five seconds for server completion telemetry, emitted after the terminal response, before asserting the original span topology and delivery measurements."
+  },
+  "queue_lease_fixture_followup": {
+    "head": "bb6042af488725389601bd714d895c945fbb92c6",
+    "failed_run": 41766196933,
+    "successful_sibling_run": 41766192620,
+    "cause": "The metadata redelivery fixture used a one-second reservation for cold deserialization and settlement. Native NACK returned NotFound after that reservation was gone.",
+    "fix": "Use the normal 30-second lease and explicitly request the original one-second retry delay. The matching malformed-envelope fixture also separates lease duration from retry delay. Non-expiry settlement reservations use 30 seconds; the actual three-second renewal experiment is unchanged.",
+    "consumer_broker_and_queue_contract_tests_passed": 59,
+    "runtime_changed": false,
+    "fresh_exact_commit_ci_required": true
   }
 }

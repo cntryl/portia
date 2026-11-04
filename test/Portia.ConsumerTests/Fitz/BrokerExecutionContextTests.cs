@@ -44,14 +44,15 @@ public sealed class BrokerExecutionContextTests
         var publisher = new FitzRequestQueuePublisher(client.Queue, serializer);
         await publisher.EnqueueAsync(new Command(2), new RequestRouteValues(Resource: resource), "credential",
             metadata);
-        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog(), 1);
+        // Envelope identity is independent of lease duration and redelivery delay.
+        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog());
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         await using var deliveries = consumer.ReadAsync(deadline.Token).GetAsyncEnumerator(deadline.Token);
         Assert.True(await deliveries.MoveNextAsync());
         var first = deliveries.Current;
         Assert.Equal(metadata, first.Metadata);
         var firstExecution = new RequestDispatchContext(RequestActor.System, first.Invocation, first.Metadata);
-        await first.AbandonAsync(deadline.Token);
+        await first.RetryAsync(TimeSpan.FromSeconds(1), deadline.Token);
         Assert.True(await deliveries.MoveNextAsync());
         var second = deliveries.Current;
         Assert.Equal(metadata, second.Metadata);
