@@ -197,6 +197,11 @@ var status = provider.GetRequiredService<IProcessorStatusClient>();
 var result = await status.GetAsync("AccountBalanceProjector", tenant, actorToken, ct);
 ```
 
+Status calls use ordinary Fitz transport semantics. A completed response can precede worker scope
+cleanup, so a subsequent call may receive `RpcException` with `FitzErrorCodes.RpcBackpressure`,
+error class `5`, and effect `0` (not applied). Status polling can retry that response within its
+cancellation deadline. Authentication and authorization failures remain ordinary request results.
+
 Pass `null` for the tenant of a global component. Client and worker use the same Fitz application
 or fleet configuration. Requests pass through the ordinary RPC identity and authorization pipeline.
 Set `PORTIA_SYSTEM_ADMIN_ROLE` to the application role required for inspection. Portia reads the

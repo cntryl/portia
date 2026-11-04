@@ -59,3 +59,8 @@ Fresh exact-commit CI remains required before publication.
 
 Cancellation fixture audit: both coordinator cases retain throwing registrations through coordination.
 All eleven registration sites reviewed; runtime unchanged. Focused cleanup cases: 7 passed.
+
+Hosted broker fixture follow-up (runtime unchanged):
+Targeted cleanup contract and status integration: 5 passed, 0 failed, 0 skipped.
+Full broker integration: 34 passed, 0 failed, 0 skipped.
+Solution-aware targeted formatting: 0 of 1,069 files changed, no workspace warnings.

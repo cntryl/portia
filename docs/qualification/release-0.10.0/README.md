@@ -30,7 +30,7 @@ aliased key. The [migration guide](../../migration-0.10.0.md) explains the affec
 
 [results.json](results.json) records the counts and evidence boundaries;
 [green-results.txt](green-results.txt) retains concise outputs;
-[source-sha256.json](source-sha256.json) identifies the 1,136 frozen inputs;
+[source-sha256.json](source-sha256.json) identifies the 1,137 frozen inputs;
 [artifact-sha256.txt](artifact-sha256.txt) identifies local package bytes. Local packages were built
 before the release commit; their hashes are not asserted to equal the later registry artifacts.
 Every packed consumer restored with a fresh NuGet cache.
@@ -45,6 +45,17 @@ cases now retain their registrations through coordination, and the revocation te
 execution explicitly. An audit of all eleven registration sites found no other matching asserted
 callback-fault race. The [second failure](second-ci-fixture-failure.txt) is retained; publication
 continues to require successful checks on the updated commit.
+
+A subsequent hosted broker run exposed an incorrect test assumption: an ordinary terminal RPC
+response releases broker credit before worker callback cleanup completes. Fitz can then return
+structured backpressure (`6005`, class `5`, effect `0`, not applied). Three gated contract tests
+verify native capacity-one rejection, capacity-two admission, and Portia's asynchronous scope
+cleanup boundary. The two status integration cases now retry only that exact not-applied response
+within their cancellation deadline; authorization results and other failures remain observable.
+All five focused cases and all 34 broker integration cases passed. The
+[hosted failure](rpc-backpressure-fixture-failure.txt) is retained.
+An audit found no other existing broker tests making consecutive same-worker calls. Runtime code,
+dependencies, and `publish.yml` are unchanged.
 
 The [first review](../adversarial-0.10.0/README.md) retains eleven findings and its RED evidence.
 The [second review](../adversarial-0.10.0-pass2/README.md) retains nine more findings, eleven original

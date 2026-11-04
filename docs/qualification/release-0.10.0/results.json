@@ -64,7 +64,7 @@
     "vulnerability audit including transitives: 32 projects, no reported vulnerabilities",
     "empty PublicAPI.Unshipped baselines"
   ],
-  "frozen_input_count": 1136,
+  "frozen_input_count": 1137,
   "evidence_boundaries": [
     "Framework suites ran separately and serially; the consumer suite was isolated.",
     "Local package hashes identify uncommitted local builds, not the later registry artifact bytes.",
@@ -99,5 +99,21 @@
     "main_broker_free_tests_passed": 1541,
     "runtime_changed": false,
     "fresh_exact_commit_ci_required": true
+  },
+  "rpc_backpressure_fixture_followup": {
+    "head": "7de0e40aeaa234297a17d0ee4c903b8a11d3152b",
+    "failed_run": 41763531866,
+    "successful_sibling_run": 41763536701,
+    "cause": "Consecutive status probes assumed that a native terminal response also completed worker cleanup. Fitz explicitly releases ordinary terminal broker credit before local cleanup, so a new call may receive BUSY 6005/class 5/effect 0 without being applied.",
+    "fix": "The integration test retries only exact structured not-applied backpressure within its cancellation deadline. Request authorization results and all other errors remain observable. Runtime code and publish.yml are unchanged.",
+    "contract_tests_passed": 3,
+    "status_integration_tests_passed": 2,
+    "controls": [
+      "Native capacity one rejects while cleanup is held; callback invocation count remains one.",
+      "Native capacity two admits another call while first cleanup is held.",
+      "Portia asynchronous scope cleanup retains the native capacity-one boundary."
+    ],
+    "fresh_exact_commit_ci_required": true,
+    "full_broker_tests_passed": 34
   }
 }

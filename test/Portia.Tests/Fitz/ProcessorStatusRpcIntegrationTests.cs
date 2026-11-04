@@ -57,24 +57,24 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
                 .WaitAsync(TimeSpan.FromSeconds(15));
             foreach (var name in new[] { StatusControl.ProjectorName, StatusControl.ReactorName })
             {
-                var pending = await client.GetAsync(name, actorToken: "global");
+                var pending = await GetStatusWhenReadyAsync(client, name, "global");
                 Assert.True(pending.IsSuccess);
                 Assert.Equal(name, pending.Value.Processor);
                 Assert.Equal(EventCursor.Start, pending.Value.Progress.Position);
                 Assert.Equal(1UL, pending.Value.Progress.PendingEvents);
                 Assert.False(pending.Value.Progress.IsCaughtUp);
             }
-            var denied = await client.GetAsync(StatusControl.ProjectorName);
+            var denied = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName);
             Assert.False(denied.IsSuccess);
             Assert.Equal(RequestErrorKind.Unauthorized, denied.Error.Kind);
-            var outsideScope = await client.GetAsync(StatusControl.ReactorName, actorToken: "tenant-a");
+            var outsideScope = await GetStatusWhenReadyAsync(client, StatusControl.ReactorName, "tenant-a");
             Assert.Equal(!operationalPolicy, outsideScope.IsSuccess);
             if (operationalPolicy)
             {
                 Assert.False(outsideScope.IsSuccess);
                 Assert.Equal(RequestErrorKind.Forbidden, outsideScope.Error.Kind);
             }
-            var member = await client.GetAsync(StatusControl.ProjectorName, actorToken: "member");
+            var member = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "member");
             Assert.False(member.IsSuccess);
             Assert.Equal(RequestErrorKind.Forbidden, member.Error.Kind);
             control.Release.TrySetResult();
@@ -103,11 +103,32 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         while (true)
         {
-            var response = await client.GetAsync(processor, actorToken: "global", ct: deadline.Token);
+            var response = await GetStatusWhenReadyAsync(client, processor, "global", deadline.Token);
             Assert.True(response.IsSuccess);
             if (response.Value.Progress.IsCaughtUp == true)
                 return response.Value;
             await Task.Delay(10, deadline.Token);
+        }
+    }
+
+    static async Task<Result<ProcessorStatus>> GetStatusWhenReadyAsync(IProcessorStatusClient client, string processor,
+        string? actorToken = null, CancellationToken ct = default)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(TimeSpan.FromSeconds(15));
+        while (true)
+        {
+            try
+            {
+                return await client.GetAsync(processor, actorToken: actorToken, ct: deadline.Token);
+            }
+            catch (RpcException ex) when (ex is
+            { DomainCode: FitzErrorCodes.RpcBackpressure, Status: 1, ErrorClass: 5, ErrorEffect: 0 })
+            {
+                // A terminal response can precede worker scope cleanup. Only a native, not-applied
+                // backpressure response is retried; authorization results and all other failures escape.
+                await Task.Delay(10, deadline.Token);
+            }
         }
     }
 
