@@ -1,0 +1,34 @@
+Build and test	Test solution	﻿2026-11-04T02:33:32.0988033Z ##[group]Run dotnet test Portia.slnx --configuration Release --no-build --filter "Category!=BrokerIntegration&Category!=StorageIntegration&Category!=CassieIntegration&Category!=DurabilityIntegration"
+Build and test	Test solution	2026-11-04T02:33:32.0988802Z ^[[36;1mdotnet test Portia.slnx --configuration Release --no-build --filter "Category!=BrokerIntegration&Category!=StorageIntegration&Category!=CassieIntegration&Category!=DurabilityIntegration"^[[0m
+Build and test	Test solution	2026-11-04T02:33:32.1005036Z shell: /usr/bin/bash -e {0}
+Build and test	Test solution	2026-11-04T02:33:32.1005179Z env:
+Build and test	Test solution	2026-11-04T02:33:32.1006686Z   GITHUB_TOKEN: ***
+Build and test	Test solution	2026-11-04T02:33:32.1006839Z   PORTIA_SMOKE_PACKAGE_VERSION: 1.0.0-ci.41761194505.1
+Build and test	Test solution	2026-11-04T02:33:32.1007017Z   DOTNET_ROOT: /usr/share/dotnet
+Build and test	Test solution	2026-11-04T02:33:32.1007154Z ##[endgroup]
+Build and test	Test solution	2026-11-04T02:33:33.0311566Z Test run for /home/runner/work/portia/portia/test/Portia.ConsumerTests/bin/Release/net10.0/Portia.ConsumerTests.dll (.NETCoreApp,Version=v10.0)
+Build and test	Test solution	2026-11-04T02:33:33.0394543Z Test run for /home/runner/work/portia/portia/test/Portia.McpTests/bin/Release/net10.0/Portia.McpTests.dll (.NETCoreApp,Version=v10.0)
+Build and test	Test solution	2026-11-04T02:33:33.0886602Z Test run for /home/runner/work/portia/portia/test/Portia.ReflectionDisabledTests/bin/Release/net10.0/Portia.ReflectionDisabledTests.dll (.NETCoreApp,Version=v10.0)
+Build and test	Test solution	2026-11-04T02:33:33.1372922Z Test run for /home/runner/work/portia/portia/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll (.NETCoreApp,Version=v10.0)
+Build and test	Test solution	2026-11-04T02:33:33.4603970Z A total of 1 test files matched the specified pattern.
+Build and test	Test solution	2026-11-04T02:33:33.4614008Z A total of 1 test files matched the specified pattern.
+Build and test	Test solution	2026-11-04T02:33:33.4622998Z A total of 1 test files matched the specified pattern.A total of 1 test files matched the specified pattern.
+Build and test	Test solution	2026-11-04T02:33:33.4643610Z
+Build and test	Test solution	2026-11-04T02:33:34.9483812Z
+Build and test	Test solution	2026-11-04T02:33:34.9544410Z Passed!  - Failed:     0, Passed:     5, Skipped:     0, Total:     5, Duration: 599 ms - Portia.ReflectionDisabledTests.dll (net10.0)
+Build and test	Test solution	2026-11-04T02:33:36.4082164Z [xUnit.net 00:00:02.54]     Cntryl.Portia.FitzWorkerSupervisionTests.ShouldPreserveFatalAndSiblingCleanupFailures [FAIL]
+Build and test	Test solution	2026-11-04T02:33:36.4083407Z   Failed Cntryl.Portia.FitzWorkerSupervisionTests.ShouldPreserveFatalAndSiblingCleanupFailures [43 ms]
+Build and test	Test solution	2026-11-04T02:33:36.4093867Z   Error Message:
+Build and test	Test solution	2026-11-04T02:33:36.4140138Z    Assert.Equal() Failure: Values differ
+Build and test	Test solution	2026-11-04T02:33:36.4176634Z Expected: 3
+Build and test	Test solution	2026-11-04T02:33:36.4205157Z Actual:   2
+Build and test	Test solution	2026-11-04T02:33:36.4253610Z   Stack Trace:
+Build and test	Test solution	2026-11-04T02:33:36.4314424Z      at Cntryl.Portia.FitzWorkerSupervisionTests.ShouldPreserveFatalAndSiblingCleanupFailures() in /_/test/Portia.Tests/Fitz/FitzWorkerSupervisionTests.cs:line 97
+Build and test	Test solution	2026-11-04T02:33:36.4323796Z --- End of stack trace from previous location ---
+Build and test	Test solution	2026-11-04T02:33:40.9871554Z
+Build and test	Test solution	2026-11-04T02:33:40.9915887Z Passed!  - Failed:     0, Passed:    93, Skipped:     0, Total:    93, Duration: 6 s - Portia.McpTests.dll (net10.0)
+Build and test	Test solution	2026-11-04T02:33:50.0783689Z
+Build and test	Test solution	2026-11-04T02:33:50.0813849Z Failed!  - Failed:     1, Passed:  1540, Skipped:     0, Total:  1541, Duration: 15 s - Portia.Tests.dll (net10.0)
+Build and test	Test solution	2026-11-04T02:35:15.2473640Z
+Build and test	Test solution	2026-11-04T02:35:15.2507348Z Passed!  - Failed:     0, Passed:   818, Skipped:     0, Total:   818, Duration: 1 m 40 s - Portia.ConsumerTests.dll (net10.0)
+Build and test	Test solution	2026-11-04T02:35:15.3156001Z ##[error]Process completed with exit code 1.

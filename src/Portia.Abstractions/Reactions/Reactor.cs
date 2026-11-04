@@ -26,7 +26,7 @@ public abstract class Reactor
         Checkpoints = checkpoints ?? throw new ArgumentNullException(nameof(checkpoints));
         Pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
         Name = name ?? GetType().FullName ?? GetType().Name;
-        ArgumentException.ThrowIfNullOrWhiteSpace(Name);
+        _ = IdentityText.Require(Name, nameof(Name));
     }
 
     /// <summary>
@@ -56,6 +56,8 @@ public abstract class Reactor
     /// </summary>
     internal void BindWorkload(WorkloadIdentity identity, string? componentName)
     {
+        if (componentName is not null)
+            _ = IdentityText.Require(componentName, nameof(componentName));
         if (_boundIdentity is { } bound && bound != identity)
         {
             throw new InvalidOperationException(
@@ -91,14 +93,73 @@ public abstract class Reactor
     ///     The workload portion preserves the text emitted by the original persisted-key algorithm.
     ///     Applications store these IDs, so its field order and formatting are a compatibility
     ///     contract independent of future changes to <see cref="WorkloadIdentity" />.
+    ///     Identity text that makes the legacy field boundaries ambiguous is rejected rather than
+    ///     silently assigning a different ID. Reconcile existing effects before migrating such identities.
     /// </remarks>
+    /// <exception cref="InvalidOperationException">The reactor's identity is ambiguous in the persisted effect-ID format.</exception>
+    /// <exception cref="ArgumentException">The effect name contains malformed UTF-16.</exception>
     protected Uuid CreateEffectId(IReactorContext context, string effectName)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentException.ThrowIfNullOrWhiteSpace(effectName);
+        if (ContainsSourceIdentityDelimiter(Name))
+            throw new InvalidOperationException("The reactor name contains an ambiguous legacy effect-ID delimiter; reconcile existing effects before migrating this identity.");
+        if (_boundIdentity is { } bound)
+        {
+            if (bound.Name.Contains(", Tenant = ", StringComparison.Ordinal))
+                throw new InvalidOperationException("The workload name contains an ambiguous legacy effect-ID delimiter; reconcile existing effects before migrating this identity.");
+            if (bound.Tenant is { } tenant && tenant.Value.Contains(" } }:", StringComparison.Ordinal))
+                throw new InvalidOperationException("The tenant contains an ambiguous legacy effect-ID delimiter; reconcile existing effects before migrating this identity.");
+        }
+        if (HasMalformedUtf16(effectName))
+            throw new ArgumentException("An effect name cannot contain malformed UTF-16 text.", nameof(effectName));
         var identity = FormatPersistedWorkloadIdentity(_boundIdentity);
         return Uuid.CreateVersion5(Uuid.UrlNamespace,
             $"portia:effect:{identity}:{Name}:{context.Source.Event.Metadata.EventId}:{effectName}");
+    }
+
+    // A longer reactor name can consume another tuple's source UUID and part of its effect name.
+    // Match any canonical nonempty UUID, not only this invocation's source, while ordinary colons
+    // and a UUID at the start of the name retain their existing persisted derivation.
+    static bool ContainsSourceIdentityDelimiter(string name)
+    {
+        const int uuidLength = 36;
+        for (var start = 2; start <= name.Length - uuidLength; start++)
+        {
+            if (name[start - 1] != ':' || start + uuidLength < name.Length && name[start + uuidLength] != ':')
+                continue;
+            var candidate = name.AsSpan(start, uuidLength);
+            var canonical = true;
+            var nonempty = false;
+            for (var index = 0; index < candidate.Length; index++)
+            {
+                var character = candidate[index];
+                if (index is 8 or 13 or 18 or 23)
+                    canonical &= character == '-';
+                else
+                {
+                    canonical &= character is >= '0' and <= '9' or >= 'a' and <= 'f';
+                    nonempty |= character != '0';
+                }
+            }
+            if (canonical && nonempty && !name.AsSpan(0, start - 1).IsWhiteSpace())
+                return true;
+        }
+        return false;
+    }
+
+    static bool HasMalformedUtf16(string value)
+    {
+        for (var index = 0; index < value.Length; index++)
+        {
+            var character = value[index];
+            if (char.IsLowSurrogate(character))
+                return true;
+            if (char.IsHighSurrogate(character)
+                && (++index == value.Length || !char.IsLowSurrogate(value[index])))
+                return true;
+        }
+        return false;
     }
 
     static string FormatPersistedWorkloadIdentity(WorkloadIdentity? identity)

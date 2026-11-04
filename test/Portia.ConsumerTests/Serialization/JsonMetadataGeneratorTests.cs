@@ -5,6 +5,32 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed class JsonMetadataGeneratorTests
 {
+    [Theory]
+    [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, new RequestQueueOptions(TtlHours: 1))")]
+    [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, RequestMetadata.Create(), new RequestQueueOptions(TtlHours: 1), default)")]
+    [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, parent, new RequestQueueOptions(TtlHours: 1))")]
+    public void RequiresRequestJsonMetadataForOptionsPublication(string invocation)
+    {
+        var source = $$"""
+                       using Cntryl.Portia;
+                       [RequestRoute("app", "jobs", "requests", "run")]
+                       [Discriminator("test.queued_options")]
+                       public sealed record Queued : IRequest, IQueuable;
+                       public static class Scenario
+                       {
+                           public static void Run(IRequestQueuePublisher publisher, IExecutionContext parent)
+                           {
+                               _ = {{invocation}};
+                           }
+                       }
+                       """;
+
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
+
+        Assert.Equal(["Queued"], diagnostics.Where(diagnostic => diagnostic.Id == "PORTIA025")
+            .Select(diagnostic => diagnostic.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]));
+    }
+
     [Fact]
     public void IgnoresUnregisteredHandlersButStillCatalogsDomainEvents()
     {

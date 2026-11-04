@@ -62,8 +62,8 @@ public interface IQueuedRequest
     ValueTask CompleteAsync(CancellationToken ct = default);
 
     /// <summary>
-    ///     Stops processing without acknowledging the request. The transport owns redelivery: the
-    ///     queue technology waits for the reservation to expire according to its own configuration.
+    ///     Stops processing without acknowledging the request. The transport owns redelivery and
+    ///     may explicitly release the reservation or leave it to expire according to its configuration.
     /// </summary>
     /// <remarks>
     ///     Not every unsettled delivery is abandoned. After a lost reservation, or a refused
@@ -73,4 +73,12 @@ public interface IQueuedRequest
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the abandonment.</returns>
     ValueTask AbandonAsync(CancellationToken ct = default);
+
+    /// <summary>Releases the reservation with an explicitly requested delay before redelivery.</summary>
+    /// <remarks>Adapters without delayed retry support reject the request rather than ignore its delay.</remarks>
+    /// <param name="delay">A nonnegative delay in whole seconds; zero requests immediate redelivery.</param>
+    /// <param name="ct">Cancels releasing the reservation.</param>
+    /// <returns>A task completing when the transport accepts the retry.</returns>
+    ValueTask RetryAsync(TimeSpan delay, CancellationToken ct = default) =>
+        ValueTask.FromException(new NotSupportedException("The queue adapter does not support an explicit retry delay."));
 }

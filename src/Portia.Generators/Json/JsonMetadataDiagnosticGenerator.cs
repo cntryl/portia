@@ -16,7 +16,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "AddMcpTool", "AddMcpResource", "AddMcpPrompt", "SendAsync",
         "SendWithOutcomeAsync", "StreamAsync",
         "DispatchAsync",
-        "DispatchStreamAsync", "EnqueueAsync", "PublishAsync", "ScheduleAsync", "EnsureAsync", "AddRequestSchedule",
+        "DispatchStreamAsync", "EnqueueAsync", "EnqueueWithOptionsAsync", "PublishAsync", "ScheduleAsync", "EnsureAsync", "AddRequestSchedule",
         "MapPortiaGet", "MapPortiaPost", "MapPortiaPut", "MapPortiaPatch", "MapPortiaDelete", "MapPortiaGetStream",
         "MapPortiaGetSse", "Accepts", "Parameter", "Produces"
     };
@@ -287,7 +287,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
     static bool IsPortiaDispatch(IMethodSymbol method)
     {
         if (method.Name is not ("SendAsync" or "SendWithOutcomeAsync" or "StreamAsync" or "DispatchAsync" or "DispatchStreamAsync"
-            or "EnqueueAsync" or "PublishAsync" or "ScheduleAsync" or "EnsureAsync" or "AddRequestSchedule"))
+            or "EnqueueAsync" or "EnqueueWithOptionsAsync" or "PublishAsync" or "ScheduleAsync" or "EnsureAsync" or "AddRequestSchedule"))
         {
             return false;
         }

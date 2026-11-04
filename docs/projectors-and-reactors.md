@@ -65,7 +65,8 @@ public sealed partial class AccountProjector(AccountRepository accounts)
         IProjectorContext<MoneyDeposited> context, CancellationToken ct)
     {
         var ev = context.Trigger;
-        await accounts.IncrementBalanceAsync(ev.Metadata.AggregateId, ev.Amount, ct);
+        await accounts.IncrementBalanceAsync(ev.Metadata.AggregateId, ev.Amount,
+            context.Batch.Identity.RebuildId, ct);
         return Result.Success;
     }
 }
@@ -123,7 +124,8 @@ public sealed partial class AccountProjector(AccountRepository accounts)
         IReadOnlyList<IProjectorContext<MoneyDeposited>> contexts, CancellationToken ct)
     {
         foreach (var context in contexts)
-            await accounts.IncrementBalanceAsync(context.Trigger.Metadata.AggregateId, context.Trigger.Amount, ct);
+            await accounts.IncrementBalanceAsync(context.Trigger.Metadata.AggregateId, context.Trigger.Amount,
+                context.Batch.Identity.RebuildId, ct);
         // A repository-specific bulk operation can replace this loop.
         return Result.Success;
     }
@@ -182,6 +184,61 @@ Hosted failures produce structured logs with the component, stage, attempt, retr
 and planned delay, alongside the existing worker-failure telemetry. A terminal
 `WorkloadFailureException` retains the pass diagnostic and faults the worker; no event is skipped.
 
+## Operator inspection of a projector or reactor
+
+Each hosted projector and reactor exposes one status RPC while its worker owns the workload.
+Shared application setup supplies the client; `AddWorkers()` activates the component endpoints.
+This is an operator capability: ordinary application-user access does not grant inspection access.
+An API, another worker, or an administrative tool can call it with operator credentials using the
+component's registered name:
+
+```csharp
+var status = provider.GetRequiredService<IProcessorStatusClient>();
+var result = await status.GetAsync("AccountBalanceProjector", tenant, actorToken, ct);
+```
+
+Status calls use ordinary Fitz transport semantics. A completed response can precede worker scope
+cleanup, so a subsequent call may receive `RpcException` with `FitzErrorCodes.RpcBackpressure`,
+error class `5`, and effect `0` (not applied). Status polling can retry that response within its
+cancellation deadline. Authentication and authorization failures remain ordinary request results.
+
+Pass `null` for the tenant of a global component. Client and worker use the same Fitz application
+or fleet configuration. Requests pass through the ordinary RPC identity and authorization pipeline.
+Set `PORTIA_SYSTEM_ADMIN_ROLE` to the application role required for inspection. Portia reads the
+configuration key or environment variable and requires that role on an authenticated identity,
+honoring the identity's role claim type. A role on an unauthenticated identity grants no access.
+Missing or blank role configuration denies access. No custom authorizer is required. If the
+application already registers an `IOperationalAuthorizer`, that policy must also permit
+`OperationalAccess.Read` in the requested scope.
+These checks apply to both RPC and local request-bus calls. Durable operations do not have to be
+enabled to inspect progress.
+
+`result.Value.Progress` reports the authoritative committed checkpoint, observed source position,
+pending source-record count, caught-up status, and observation time. Projectors load progress from
+their native repository; reactors load their checkpoint store. Inspection does not refresh the
+tenant directory, run handlers, or advance progress. `Failure` adds available retry or blocked-failure
+evidence when operations is
+enabled and that evidence still applies to the committed checkpoint.
+If the source probe fails, the response preserves that checkpoint, leaves source measurements
+unknown, and reports the failure classification in `SourceError`. Caller cancellation still propagates.
+An unavailable operational journal similarly leaves `Failure` unknown and reports `FailureError`.
+
+Counts describe unread source records, including events without a matching handler. Cursors remain
+opaque. An event-store provider can implement `IDomainEventProgressReader` to measure progress;
+unavailable measurements are null. Fitz uses resource metadata and a bounded probe of at most
+1,024 records, plus one preceding record when validating a caught-up checkpoint. Each diagnostic
+read requests a 256 KiB provider byte budget. When that cannot establish an exact backlog,
+`PendingEventsLowerBound` reports the observed minimum and `PendingEvents` remains null. Expired
+or withheld history is not counted as readable work or treated as evidence of complete history.
+The in-memory store supplies exact measurements.
+An unchanged checkpoint with no pending work means caught up; repeated unchanged checkpoints with
+pending work show that processing is not advancing. A status response is an observation, not a
+guarantee that no new events have arrived since it was sampled.
+
+Status subscription and cleanup retries run independently of event processing. A temporary RPC
+failure does not stop healthy projectors or reactors. Revoked callbacks refuse inspection even
+when broker withdrawal needs a retry.
+
 ## Business outcome validation
 
 A successful cross-aggregate read is advisory. When an operation relies on that assumption,
@@ -233,7 +290,17 @@ source event ID, and effect name for use with an idempotent target. This does no
 effects exactly once: the effect and checkpoint are still not one atomic transaction.
 Its workload-identity text deliberately freezes the exact legacy persisted derivation. The
 explicit formatter prevents a future record-shape change from altering keys; it does not create
-new effect IDs, change any UUID already stored by an application, or require a migration.
+new effect IDs or change any UUID already stored by an application. Ordinary names, including
+names with colons and valid Unicode, retain their exact IDs.
+
+`CreateEffectId` refuses identity text that can consume another field in that legacy format:
+a reactor name containing `:<canonical lowercase nonempty UUID>` after a nonblank prefix, with
+the UUID followed by `:` or the end of the name; a bound workload name containing `, Tenant = `;
+or a bound tenant containing ` } }:`. Effect names must contain well-formed UTF-16. The helper
+fails instead of silently rehashing those values. If an existing workload uses an affected identity,
+quiesce it and reconcile prior effects and target idempotency records before an explicit migration.
+Simply renaming a reactor or replaying under new keys can repeat effects. See the
+[0.10.0 migration notes](migration-0.10.0.md#check-legacy-effect-identities).
 
 Call an injected integration service directly when the action is inherently caused by the event
 and adding a request contract would add no useful application boundary:
@@ -296,9 +363,10 @@ public sealed class AccountRepository(IKvClient kv)
 
     // Key and value encoding belong to the projection, not the framework: Portia stores only its
     // own checkpoint alongside them and never interprets the application's keys.
-    public async ValueTask IncrementBalanceAsync(Uuid accountId, int amount, CancellationToken ct)
+    public async ValueTask IncrementBalanceAsync(
+        Uuid accountId, int amount, string? rebuildId, CancellationToken ct)
     {
-        var key = Encoding.UTF8.GetBytes($"balance\0{accountId}");
+        var key = BalanceKey(accountId, rebuildId);
         var current = await Transaction.GetAsync(key, ct);
         var balance = current.Found ? BinaryPrimitives.ReadInt64BigEndian(current.Value!.Value.Span) : 0;
         var next = new byte[sizeof(long)];
@@ -311,11 +379,16 @@ public sealed class AccountRepository(IKvClient kv)
     public async ValueTask<AccountReadModel?> GetAsync(TenantId tenant, Uuid accountId, CancellationToken ct)
     {
         await using var tx = await BeginTenantReadAsync(tenant, ct);
-        var current = await tx.GetAsync(Encoding.UTF8.GetBytes($"balance\0{accountId}"), ct);
+        var current = await tx.GetAsync(BalanceKey(accountId, rebuildId: null), ct);
         return current.Found
             ? new AccountReadModel(accountId, BinaryPrimitives.ReadInt64BigEndian(current.Value!.Value.Span))
             : null;
     }
+
+    // Keep live keys unchanged; candidate replays own a separate namespace in the same resource.
+    // Rebuild IDs supplied by the framework cannot contain the NUL field separator.
+    static byte[] BalanceKey(Uuid accountId, string? rebuildId) => Encoding.UTF8.GetBytes(
+        rebuildId is null ? $"balance\0{accountId}" : $"balance-rebuild\0{rebuildId}\0{accountId}");
 }
 ```
 
@@ -328,10 +401,16 @@ services.AddPortia()
     .AddReactor<WelcomeMailer>("WelcomeMailer", WorkloadScope.PerTenant);
 ```
 
+The projector passes `context.Batch.Identity.RebuildId` to each repository write, as shown in the
+constructor-injected example above. Portia separates checkpoint generations; application repositories
+must also separate their own data keys before enabling rebuilds. A candidate replay of a deposit of
+10 builds its own balance of 10 while the live query keeps returning 10. Querying or promoting a
+candidate is an explicit application decision; selecting a `RebuildId` does not redirect live reads.
+
 The query interface forwards to the scoped repository; the projector receives that same concrete
 repository for its data and checkpoint transaction. One repository instance owns one open
-transaction, so a second `BeginAsync` before the first batch commits or disposes is rejected rather
-than silently retargeting the first one's writes.
+transaction, so a second `BeginAsync` is rejected while the first acquisition or batch is active.
+Dispose the first batch before opening another; this prevents silently retargeting its writes.
 
 The route a repository is constructed with is a base, not the resource every batch writes. Fitz KV
 locks a whole resource for a read-write transaction's lifetime, not just the keys it touches, so
@@ -385,7 +464,9 @@ A read model that callers list, sort, and page — teams, members, documents —
 `Cntryl.Fitz.Extensions`' `KvDirectory<T, TKey>`: its declared covering indexes make each page one
 bounded range scan with a keyset cursor. Every directory operation takes an open `IKvTransaction`,
 so it composes with both halves of the repository: the projector writes through `Transaction`, and
-queries read through `BeginTenantReadAsync`.
+queries read through `BeginTenantReadAsync`. The following directory uses a fixed live namespace;
+before enabling rebuilds, select separate directory names from `context.Batch.Identity.RebuildId`
+for every write, just as the balance example separates its data keys.
 
 ```csharp
 // Like every domain event, both are also [JsonSerializable] roots on the application's [PortiaJsonContext].

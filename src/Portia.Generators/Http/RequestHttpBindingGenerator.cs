@@ -530,7 +530,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 .Append(") { IsNullable = ").Append(parameter.Nullable ? "true" : "false").AppendLine(" },");
         }
 
-        _ = source.Append("            }) { ResultIsNullable = ")
+        _ = source.Append("            }) { RequestType = typeof(").Append(call.RequestTypeFullName)
+            .Append("), ResultIsNullable = ")
             .Append(call.ResultIsNullable ? "true" : "false")
             .AppendLine(" });");
         if (call.Configured)
@@ -758,7 +759,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                                 .Append(call.Configured ? $"if (!configuration.IsQueryMember({i}) && " : "if (")
                                 .Append("global::Cntryl.Portia.PortiaHttpBinding.HasBodyMember<")
                                 .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
-                                .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ").Append(name)
+                                .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ")
+                                .Append(Literal(parameter.Name)).Append(", ").Append(name)
                                 .AppendLine("))")
                                 .Append(pad).AppendLine("{");
                         }
@@ -842,7 +844,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     if (parameter.Source == ParameterSource.Route && checksRoutedBody && !form)
                         _ = source.Append(pad).Append("global::Cntryl.Portia.PortiaHttpBinding.ValidateRoutedBody<")
                             .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
-                            .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ").Append(name)
+                            .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ")
+                            .Append(Literal(parameter.Name)).Append(", ").Append(name)
                             .Append(", value").Append(i).AppendLine(");");
                     if (parameter.Source == ParameterSource.Route && checksRoutedBody && form)
                     {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -24,6 +25,7 @@ public sealed class PortiaFitzBuilder
     KvDurability _tenantSnapshotDurability;
     bool _workerSelectionExplicit;
     bool _operations;
+    string? _processorStatusNamespace;
 
     /// <summary>
     /// Enables durable diagnosis and worker-owned recovery after a quiesced cutover. Reuses the
@@ -53,7 +55,10 @@ public sealed class PortiaFitzBuilder
         _ = services.AddSingleton<IOperationalReactionCheckpointStore>(p => p.GetRequiredService<FitzOperationalStore>());
         _ = services.AddSingleton<IProjectionCheckpointStore>(p => p.GetRequiredService<FitzOperationalStore>());
         services.TryAddSingleton<IApplicationTopology, GeneratedApplicationTopology>();
-        services.TryAddSingleton<IPortiaOperations, PortiaOperations>();
+        services.TryAddSingleton<IPortiaOperations>(provider => PortiaOperations.Create(
+            provider.GetService<IConfiguration>(), provider.GetRequiredService<IOperationalStore>(),
+            provider.GetRequiredService<OperationalOptions>(), provider.GetRequiredService<IApplicationTopology>(),
+            provider.GetService<IOperationalAuthorizer>(), provider.GetService<TimeProvider>()));
         services.TryAddScoped<OperationalExecution>();
         return this;
     }
@@ -73,6 +78,8 @@ public sealed class PortiaFitzBuilder
 
     internal IReadOnlyList<FitzWorkerDefinition> Workers => _workers.Value;
     internal FleetRunOptions? Fleet { get; private set; }
+    internal string ProcessorStatusNamespace => _processorStatusNamespace ?? Fleet?.MembershipSelector
+        ?? "lease://portia/portia-members/*";
 
     /// <summary>Registers event persistence, its reader/writer aliases, and JSON event serialization.</summary>
     internal PortiaFitzBuilder AddEventStore()
@@ -131,6 +138,7 @@ public sealed class PortiaFitzBuilder
     {
         if (!_capabilities.Add("clients"))
             return this;
+        _ = _application.AddProcessorStatus();
         var services = _application.Services;
         AddSerializers(services);
         if (_borrowedClient is { } borrowed)
@@ -143,6 +151,13 @@ public sealed class PortiaFitzBuilder
             provider.GetRequiredService<IRequestSerializer>(),
             provider.GetRequiredService<IRequestOutcomeDeserializer>(),
             provider.GetRequiredService<RequestTransportCatalog>()));
+        services.TryAddSingleton<IProcessorStatusClient>(provider => new FitzProcessorStatusClient(
+            provider.GetRequiredService<IRemoteRequestSender>(), () => ProcessorStatusNamespace));
+        services.TryAddSingleton<IProcessorStatusRpcRegistrar>(provider => new FitzProcessorStatusRpcRegistrar(
+            provider.GetRequiredService<FitzApplicationConnection>(),
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            provider.GetRequiredService<RequestTransportCatalog>(), () => ProcessorStatusNamespace,
+            provider.GetService<ILogger<FitzProcessorStatusRpcRegistrar>>()));
         services.TryAddSingleton<IRequestQueuePublisher>(provider => new FitzRequestQueuePublisher(
             provider.GetRequiredService<FitzApplicationConnection>().Client.Queue,
             provider.GetRequiredService<IRequestSerializer>(),
@@ -199,6 +214,22 @@ public sealed class PortiaFitzBuilder
         if (Fleet is not null && Fleet != options)
             throw new InvalidOperationException("This application has conflicting Fitz fleet configurations.");
         Fleet = options;
+        return this;
+    }
+
+    /// <summary>Selects an application namespace for processor status RPC when no named fleet is configured.</summary>
+    /// <param name="applicationName">A stable application name shared by callers and workers.</param>
+    /// <returns>This builder, for chaining.</returns>
+    /// <exception cref="ArgumentException">The application name is not an exact route segment.</exception>
+    /// <exception cref="InvalidOperationException">A different status namespace was already selected.</exception>
+    public PortiaFitzBuilder UseProcessorStatusRpc(string applicationName)
+    {
+        if (!FleetRunOptions.IsSegment(applicationName))
+            throw new ArgumentException("A processor status application name must be an exact route segment.", nameof(applicationName));
+        var value = $"lease://{applicationName}/portia-members/*";
+        if (_processorStatusNamespace is not null && _processorStatusNamespace != value)
+            throw new InvalidOperationException("This application has conflicting processor status namespaces.");
+        _processorStatusNamespace = value;
         return this;
     }
 
@@ -313,7 +344,8 @@ public sealed class PortiaFitzBuilder
     }
 
     IEnumerable<RequestTransportRegistration> SelectedRequests(RequestTransportId transport)
-        => _application.SelectedRequests(transport);
+        => _application.SelectedRequests(transport)
+            .Where(static descriptor => descriptor.RequestType != typeof(GetProcessorStatus));
 
     List<FitzWorkerDefinition> BuildWorkers()
     {

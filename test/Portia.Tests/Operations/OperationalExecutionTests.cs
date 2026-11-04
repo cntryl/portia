@@ -25,10 +25,10 @@ public sealed partial class OperationalExecutionTests
         var restarted = await SessionAsync(journal);
         Assert.False(await restarted.PrepareAsync(ProjectionCheckpoint.Start, default));
         var api = Api(journal);
-        var agent = TestOperationalAuthorizer.Actor();
+        var agent = TestOperationalAuthorizer.AdministratorActor();
         var plan = await api.PreviewRepairAsync(agent, Target);
         Assert.Equal("retry", plan.Action);
-        _ = await api.ApproveRepairAsync(TestOperationalAuthorizer.Actor(true), Target, plan.Id);
+        _ = await api.ApproveRepairAsync(TestOperationalAuthorizer.AdministratorActor(true), Target, plan.Id);
         var queued = await api.ExecuteRepairAsync(agent, Target, plan.Id);
         Assert.Equal("queued", queued.Status);
         Assert.Equal(2, effects.Executions.Count);
@@ -75,7 +75,7 @@ public sealed partial class OperationalExecutionTests
         { Operations = first }.RunAsync(Reactor(journal, new Effects { Fail = true }), ProjectionCheckpoint.Start).AsTask());
         var session = await SessionAsync(journal);
         var api = Api(journal);
-        var actor = TestOperationalAuthorizer.Actor(true);
+        var actor = TestOperationalAuthorizer.AdministratorActor(true);
         var plan = await api.PreviewRepairAsync(actor, Target);
         _ = await api.ApproveRepairAsync(actor, Target, plan.Id);
         _ = await api.ExecuteRepairAsync(actor, Target, plan.Id);
@@ -187,8 +187,8 @@ public sealed partial class OperationalExecutionTests
         });
     }
 
-    static PortiaOperations Api(IOperationalStore store) => new(store, new OperationalOptions(),
-        new EmptyApplicationTopology(), new TestOperationalAuthorizer());
+    static PortiaOperations Api(IOperationalStore store) => new(TestOperationalAuthorizer.Configuration(), store, new OperationalOptions(),
+        new EmptyApplicationTopology(), new TestOperationalAuthorizer(), null);
 
     static async Task<OperationalSession> SessionAsync(IOperationalStore store)
     {

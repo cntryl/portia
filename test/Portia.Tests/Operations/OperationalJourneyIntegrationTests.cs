@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using AccountProjector = Cntryl.Portia.CassieProjectionIntegrationTests.AccountProjector;
 using AccountRepository = Cntryl.Portia.CassieProjectionIntegrationTests.AccountRepository;
@@ -39,7 +40,7 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
                 await control.IndependentProgress.Task.WaitAsync(TimeSpan.FromSeconds(15));
                 Assert.False(worker.ExecuteTask!.IsCompleted);
                 var issue = Assert.Single(await provider.GetRequiredService<IPortiaOperations>()
-                    .ListIssuesAsync(TestOperationalAuthorizer.Actor(), OperationalScope.Global));
+                    .ListIssuesAsync(TestOperationalAuthorizer.AdministratorActor(), OperationalScope.Global));
                 previousOwner = issue.OwnerSession;
                 Assert.Null(control.LastException);
                 Assert.Equal(2, Assert.Single(issue.Attempts).Sources.Count);
@@ -56,12 +57,12 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
             try
             {
                 var operations = provider.GetRequiredService<IPortiaOperations>();
-                await WaitAsync(async () => await operations.InspectProcessorAsync(TestOperationalAuthorizer.Actor(), target)
+                await WaitAsync(async () => await operations.InspectProcessorAsync(TestOperationalAuthorizer.AdministratorActor(), target)
                     is { Block: not null } state && state.OwnerSession != previousOwner);
                 Assert.Equal(2, control.Invocations);
-                var agent = TestOperationalAuthorizer.Actor();
+                var agent = TestOperationalAuthorizer.AdministratorActor();
                 var plan = await operations.PreviewRepairAsync(agent, target);
-                _ = await operations.ApproveRepairAsync(TestOperationalAuthorizer.Actor(true), target, plan.Id);
+                _ = await operations.ApproveRepairAsync(TestOperationalAuthorizer.AdministratorActor(true), target, plan.Id);
                 control.Fail = false;
                 _ = await operations.ExecuteRepairAsync(agent, target, plan.Id);
                 await WaitAsync(async () => (await operations.VerifyRepairAsync(agent, target, plan.Id)).Status == "committed");
@@ -95,6 +96,7 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         services.AddSingleton(events);
         services.AddSingleton(control);
         services.AddSingleton<IOperationalAuthorizer, TestOperationalAuthorizer>();
+        services.AddSingleton<IConfiguration>(TestOperationalAuthorizer.Configuration());
         services.AddPortia().UseFitzClient(client, fitz => fitz.DisableRequestWorkers()
                 .UseFleet(new FleetRunOptions { MembershipSelector = $"lease://{control.Pattern.Realm}/portia-members/*" }).UseOperations(route,
                 options => options.QuiescedWorkerCutover = true))

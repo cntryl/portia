@@ -30,6 +30,7 @@ static partial class Program
         var events = new FitzEventStore(client.Stream, new JsonDomainEventSerializer(new DomainEventTypeCatalog()
             .Register<Changed>(1, "portia.durability.changed"), [], DurabilityJsonContext.Default.Options));
         var builder = Host.CreateApplicationBuilder();
+        builder.Configuration["PORTIA_SYSTEM_ADMIN_ROLE"] = "qualification-operators";
         builder.Services.AddSingleton<IEventStore>(events);
         builder.Services.AddSingleton(new Control(mode, signal));
         builder.Services.AddSingleton<IOperationalAuthorizer, Policy>();
@@ -40,7 +41,8 @@ static partial class Program
                 options => options.PollInterval = TimeSpan.FromMilliseconds(20)).AddWorkers();
         using var host = builder.Build();
         var operations = host.Services.GetRequiredService<IPortiaOperations>();
-        var actor = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "qualification-operator")], "qualification"));
+        var actor = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "qualification-operator"),
+            new Claim(ClaimTypes.Role, "qualification-operators")], "qualification"));
         var previousOwner = mode == "crash" ? Guid.Parse(args[2]) : Guid.Empty;
         if (mode == "crash")
         {

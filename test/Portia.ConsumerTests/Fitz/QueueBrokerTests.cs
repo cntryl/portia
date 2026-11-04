@@ -16,18 +16,18 @@ public sealed class QueueBrokerTests
         var id = Uuid.CreateVersion4();
         _ = await client.Queue.EnqueueAsync(route,
             serializer.Serialize(new ScopeRequest(id), null, RequestMetadata.Create(), null));
-        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog(), 1);
+        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog());
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
         Assert.True(await reader.MoveNextAsync());
         var malformed = reader.Current;
         var attempt = malformed.Attempt;
         _ = Assert.ThrowsAny<JsonException>(() => malformed.Request);
-        await malformed.AbandonAsync();
+        await malformed.RetryAsync(TimeSpan.FromSeconds(1));
         Assert.True(await reader.MoveNextAsync());
         Assert.Equal(id, Assert.IsType<ScopeRequest>(reader.Current.Request).Id);
         await reader.Current.CompleteAsync();
         var redelivered = Assert.Single(await client.Queue.ReserveAsync(
-            route, TimeSpan.FromSeconds(1), wait: TimeSpan.FromSeconds(3)));
+            route, TimeSpan.FromSeconds(30), wait: TimeSpan.FromSeconds(3)));
         Assert.Equal("{"u8.ToArray(), redelivered.Body.ToArray());
         // Fitz supplies 1 for RESERVE responses; Portia preserves that SDK value.
         Assert.Equal(attempt, redelivered.Attempt);
@@ -48,7 +48,7 @@ public sealed class QueueBrokerTests
         var serializer = ConsumerJson.CreateSerializer();
         _ = await client.Queue.EnqueueAsync(route,
             serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null, RequestMetadata.Create(), null));
-        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog(), 3);
+        var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog());
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
 
         Assert.True(await reader.MoveNextAsync());
@@ -99,7 +99,7 @@ public sealed class QueueBrokerTests
         }
 
         var redelivered = Assert.Single(await competitor.Queue.ReserveAsync(
-            route, TimeSpan.FromSeconds(1), wait: TimeSpan.FromSeconds(3)));
+            route, TimeSpan.FromSeconds(30), wait: TimeSpan.FromSeconds(3)));
         var request = serializer.DeserializeEnvelope(redelivered.Body).Request;
         Assert.Equal(id, Assert.IsType<ScopeRequest>(request).Id);
         // The pinned SDK does not expose the broker's durable delivery counter.

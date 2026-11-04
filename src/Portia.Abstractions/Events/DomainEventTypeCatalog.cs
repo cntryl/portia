@@ -11,6 +11,16 @@ public sealed class DomainEventTypeCatalog
     readonly Dictionary<Type, (string Name, int Version)> _discriminators = [];
     readonly Dictionary<(string Name, int Version), Type> _types = [];
 
+    /// <summary>Registers the domain events declared by the calling compilation.</summary>
+    /// <returns>This catalog, for chaining.</returns>
+    /// <remarks>Portia's generator supplies the registration at each concrete call site.</remarks>
+#pragma warning disable CA1822 // An instance entry point takes precedence over friend-visible legacy generated extensions.
+    public DomainEventTypeCatalog AddPortiaGeneratedDomainEvents() =>
+        throw new InvalidOperationException(
+            "Portia.Generators did not intercept this event catalog registration. Ensure analyzer assets are enabled "
+            + "and call AddPortiaGeneratedDomainEvents directly rather than through a method group or delegate.");
+#pragma warning restore CA1822
+
     /// <summary>
     ///     Registers <typeparamref name="TEvent" /> under its own logical name and schema version.
     /// </summary>
@@ -27,13 +37,14 @@ public sealed class DomainEventTypeCatalog
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentOutOfRangeException.ThrowIfLessThan(version, 1);
-        _ = _types.TryAdd((name, version), typeof(TEvent))
-            ? true
-            : throw new InvalidOperationException(
-                $"Event '{name}' schema version {version} is already registered to type '{_types[(name, version)]}'.");
-        _ = _discriminators.TryAdd(typeof(TEvent), (name, version))
-            ? true
-            : throw new InvalidOperationException($"Event type '{typeof(TEvent)}' is already registered.");
+        if (_types.TryGetValue((name, version), out var registered))
+            throw new InvalidOperationException(
+                $"Event '{name}' schema version {version} is already registered to type '{registered}'.");
+        if (_discriminators.ContainsKey(typeof(TEvent)))
+            throw new InvalidOperationException($"Event type '{typeof(TEvent)}' is already registered.");
+
+        _types.Add((name, version), typeof(TEvent));
+        _discriminators.Add(typeof(TEvent), (name, version));
         return this;
     }
 

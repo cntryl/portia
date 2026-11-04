@@ -39,15 +39,17 @@ static class FitzEventStreamPatternOffsets
     ///     Returns the next offset to resume reading from out of a page cursor, for whichever scope
     ///     <paramref name="pattern" /> selects.
     /// </summary>
-    public static ulong GetNextOffset(EventStreamPattern pattern, StreamReadCursor cursor) => pattern.Scope switch
+    public static ulong GetNextOffset(EventStreamPattern pattern, StreamReadCursor cursor) =>
+        checked(GetLastOffset(pattern, cursor) + 1);
+
+    /// <summary>Returns the last covered scope offset without assuming that an empty page advanced it.</summary>
+    public static ulong GetLastOffset(EventStreamPattern pattern, StreamReadCursor cursor) => pattern.Scope switch
     {
-        EventStreamPatternScope.Resource => checked(cursor.LastResourceOffset + 1),
-        EventStreamPatternScope.Area => checked((cursor.LastAreaOffset
-                                                 ?? throw new InvalidOperationException(
-                                                     "Fitz did not return an area cursor.")) + 1),
-        EventStreamPatternScope.Realm => checked((cursor.LastRealmOffset
-                                                  ?? throw new InvalidOperationException(
-                                                      "Fitz did not return a realm cursor.")) + 1),
+        EventStreamPatternScope.Resource => cursor.LastResourceOffset,
+        EventStreamPatternScope.Area => cursor.LastAreaOffset ??
+                                        throw new InvalidOperationException("Fitz did not return an area cursor."),
+        EventStreamPatternScope.Realm => cursor.LastRealmOffset ??
+                                         throw new InvalidOperationException("Fitz did not return a realm cursor."),
         _ => throw new ArgumentOutOfRangeException(nameof(pattern))
     };
 }

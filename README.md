@@ -33,6 +33,8 @@ The unit of value is not `command → handler → route`. It is the complete pat
   optimistic concurrency and stable event identities.
 - **Durable consequences.** Projectors atomically commit read-model changes with their checkpoints. Reactors run
   external effects at least once with preserved event causation. Failed work never silently advances progress.
+- **Inspectable processors.** Each hosted projector and reactor exposes one operator-only [status RPC](docs/projectors-and-reactors.md#operator-inspection-of-a-projector-or-reactor)
+  for committed progress, source backlog, and available failure evidence.
 - **One composition, independent deployments.** An API and its workers share application setup but can be deployed and
   scaled separately. Workers support global, per-tenant, and fleet-coordinated ownership.
 - **Compile-time wiring.** Registration, transport descriptors, HTTP binding, and JSON roots are source-generated and
@@ -106,6 +108,18 @@ PostgreSQL, Snowflake, or another store can therefore be added in userland witho
 runner, or translating queries into a framework DSL. If a target cannot atomically commit its changes and checkpoint, it
 is modeled honestly as an at-least-once reactor effect instead.
 
+## Choose the right Fitz primitive
+
+| Use | When |
+| --- | --- |
+| **Event streams** | Record ordered, authoritative aggregate decisions that must be rehydrated or replayed. Each append is atomic for one aggregate stream. |
+| **KV** | Store keyed current or derived state, such as projection data and processor checkpoints. KV is not the aggregate event history. |
+| **Queues** | Send work to one competing consumer, with optional initial delay, message TTL, and retry delay. Consumers must tolerate duplicates. Critical work needs durable intent and recovery because queue acceptance does not guarantee crash recovery. |
+| **Notices** | Fan out notifications to subscribers, such as waking interested workers. Each replica receives the notice; it is not competing queue work. |
+| **Schedules** | Trigger work by time or recurrence. Choose the provider's delivery policy deliberately; a received Fitz firing can be lost on process failure. |
+
+See [application setup](docs/application-setup.md) and [Fitz upgrade notes](docs/fitz-4-upgrade.md) for transport and durability details.
+
 ## Start here
 
 - [Getting started](docs/getting-started.md): packages, contracts, registration, HTTP, and transports
@@ -124,21 +138,20 @@ is modeled honestly as an at-least-once reactor effect instead.
 - [NativeAOT](docs/native-aot.md): trimming and source-generated JSON setup
 - [Model Context Protocol](docs/mcp.md): request-backed tools, resources, and prompts over stdio and Streamable HTTP
 - [Migrating to Portia 0.4](docs/migration-0.4.md): JSON ownership, tenant templates, and MCP tests
-- [Portia 0.9.3 migration notes](docs/migration-0.9.3.md): processor results, typed contexts, exception wrappers, and dependency floors
+- [Portia 0.10.0 migration notes](docs/migration-0.10.0.md): operator access, processor inspection, typed outcomes, and Fitz 4
 - [Portia 0.8 migration notes](docs/migration-0.8.md): Fitz 2.0 compatibility and queue persistence
-- [Fitz 3 upgrade](docs/fitz-3-upgrade.md): coordinated client, broker, and stored-data migration
+- [Fitz 4 upgrade](docs/fitz-4-upgrade.md): Portia 0.10.0's coordinated Wire 3 upgrade, retry policy, and persistence
 
 ## Development
 
-Tests, benchmarks, and executable hosts check in `packages.lock.json` for reproducible restores.
-Shared libraries resolve dependencies without their own lockfiles; `--locked-mode` applies to
-the projects with locking enabled. Package-consumer smoke projects opt out because their
-package versions and target runtimes vary during qualification. Install a stable .NET 10 SDK;
+Package versions are managed in `Directory.Packages.props`; restore the solution normally.
+The standalone examples and package-consumer smoke projects declare their external versions
+explicitly and select the Portia package version during qualification. Install a stable .NET 10 SDK;
 `global.json` sets 10.0.403 as the minimum SDK and rolls forward to the latest installed .NET 10
 feature band.
 
 ```sh
-dotnet restore Portia.slnx --locked-mode
+dotnet restore Portia.slnx
 dotnet format Portia.slnx --verify-no-changes --no-restore
 dotnet build Portia.slnx --configuration Release --no-restore
 dotnet test Portia.slnx --configuration Release --no-build --filter "Category!=BrokerIntegration&Category!=StorageIntegration&Category!=CassieIntegration&Category!=DurabilityIntegration"
@@ -152,9 +165,9 @@ docker compose down --volumes
 
 Broker integration uses `ws://127.0.0.1:4090/ws` by default. Override it with
 `FITZ_TEST_ENDPOINT`. Storage integration requires the Sqrzl S3 endpoint supplied by
-`PORTIA_S3_TEST_ENDPOINT`. CI runs locked restore, formatting, Release build, broker/storage-free
-tests, packed consumers, and both real integration categories. The first test command needs
-neither service.
+`PORTIA_S3_TEST_ENDPOINT`. CI runs restore, formatting, Release build, service-free tests, packed
+consumers, and the broker, object-storage, Cassie, and crash-durability integration categories.
+The first test command needs no external service.
 
 ## License
 

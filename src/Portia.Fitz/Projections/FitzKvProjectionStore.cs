@@ -20,6 +20,9 @@ namespace Cntryl.Portia;
 ///     Commits default to <see cref="KvDurability.Buffered" />. Data and checkpoint remain atomic,
 ///     but a crash can lose recent batches and cause replay. Derived repositories can explicitly
 ///     select <see cref="KvDurability.Sync" /> through the durability constructor.
+///     Rebuild generations share this workload resource. Portia separates their checkpoint keys;
+///     a derived repository must namespace its own data keys using <see cref="CheckpointIdentity.RebuildId" />
+///     to isolate candidate replay from live data before enabling rebuilds.
 /// </remarks>
 /// <param name="client">The Fitz KV client to open transactions against.</param>
 /// <param name="route">The Fitz KV base route this repository's per-workload resources derive from.</param>
@@ -34,10 +37,11 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
 
     readonly string _route = FitzKvCheckpoints.Route(route, nameof(route));
 
-    readonly string _componentName = RequireName(componentName);
+    readonly string _componentName = IdentityText.Require(componentName, nameof(componentName));
     readonly KvDurability _durability = KvDurability.Buffered;
 
     IKvTransaction? _open;
+    int _batchActive;
 
     /// <summary>Creates a projection repository with an explicit KV persistence choice.</summary>
     /// <param name="client">The Fitz KV client.</param>
@@ -58,7 +62,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
     /// </param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A transaction the caller disposes when the read is finished.</returns>
-    /// <exception cref="ArgumentException">The realm is blank.</exception>
+    /// <exception cref="ArgumentException">The realm is blank or contains NUL or malformed UTF-16 text.</exception>
     /// <exception cref="InvalidOperationException">
     ///     A batch is open on this store. This transaction would see only committed data, never the
     ///     batch's staged writes, so a write computed from it would silently lose updates; reads during a
@@ -66,8 +70,8 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
     /// </exception>
     protected async ValueTask<IKvTransaction> BeginReadAsync(string realm, CancellationToken ct = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(realm);
-        if (_open is not null)
+        _ = IdentityText.Require(realm, nameof(realm));
+        if (Volatile.Read(ref _batchActive) != 0)
         {
             throw new InvalidOperationException(
                 "A projection batch is open on this store, and a query-side read cannot see its staged writes. "
@@ -124,20 +128,23 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
     {
         ArgumentNullException.ThrowIfNull(context);
         EnsureOwnProjector(context.Identity);
-        if (_open is not null)
+        // Reserve before the native BEGIN yields: otherwise a second acquisition can retarget
+        // Transaction to another workload while the first batch still owns its checkpoint.
+        if (Interlocked.CompareExchange(ref _batchActive, 1, 0) != 0)
         {
             throw new InvalidOperationException(
-                "A projection batch is already open on this store; commit or dispose it before beginning another. "
+                "A projection batch is already open or is being opened on this store; dispose it before beginning another. "
                 + "One store instance owns one Fitz KV transaction, so a second batch would retarget the first one's writes.");
         }
 
-        var transaction = await FitzKvCheckpoints
-            .BeginAsync(_client, FitzKvCheckpoints.WorkloadRoute(_route, context.Identity), KvMode.ReadWrite,
-                "Projection batch", context.Identity, ct)
-            .ConfigureAwait(false);
-        _open = transaction;
+        IKvTransaction? transaction = null;
         try
         {
+            transaction = await FitzKvCheckpoints
+                .BeginAsync(_client, FitzKvCheckpoints.WorkloadRoute(_route, context.Identity), KvMode.ReadWrite,
+                    "Projection batch", context.Identity, ct)
+                .ConfigureAwait(false);
+            _open = transaction;
             var checkpoint = await transaction.GetAsync(FitzKvCheckpoints.Key(context.Identity), ct)
                 .ConfigureAwait(false);
             var current = checkpoint.Found
@@ -157,24 +164,22 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
             if (ReferenceEquals(_open, transaction))
                 _open = null;
 
-            await FitzKvCheckpoints.RollbackAsync(transaction).ConfigureAwait(false);
-            try
+            if (transaction is not null)
             {
-                await transaction.DisposeAsync().ConfigureAwait(false);
-            }
-            catch
-            {
-                // Preserve the checkpoint read, decode, cancellation, or validation failure.
+                await FitzKvCheckpoints.RollbackAsync(transaction).ConfigureAwait(false);
+                try
+                {
+                    await transaction.DisposeAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Preserve the checkpoint read, decode, cancellation, or validation failure.
+                }
             }
 
+            Volatile.Write(ref _batchActive, 0);
             throw;
         }
-    }
-
-    static string RequireName(string componentName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(componentName);
-        return componentName;
     }
 
     void IProjectorBoundStore.EnsureServes(string componentName) => EnsureServes(componentName);
@@ -186,6 +191,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
     // different name from the one this repository was constructed with.
     void EnsureServes(string componentName)
     {
+        _ = IdentityText.Require(componentName, nameof(componentName));
         if (!string.Equals(componentName, _componentName, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
@@ -199,6 +205,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
         : IProjectionBatch
     {
         bool _done;
+        int _disposed;
 
         public async ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
         {
@@ -226,14 +233,22 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
 
         public async ValueTask DisposeAsync()
         {
-            var tx = transaction;
-            if (!_done)
-                await FitzKvCheckpoints.RollbackAsync(tx).ConfigureAwait(false);
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return;
 
+            var tx = transaction;
             if (ReferenceEquals(store._open, tx))
                 store._open = null;
-
-            await tx.DisposeAsync().ConfigureAwait(false);
+            try
+            {
+                if (!_done)
+                    await FitzKvCheckpoints.RollbackAsync(tx).ConfigureAwait(false);
+                await tx.DisposeAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                Volatile.Write(ref store._batchActive, 0);
+            }
         }
     }
 }

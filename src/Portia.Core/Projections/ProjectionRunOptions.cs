@@ -24,7 +24,7 @@ public sealed record ProjectionRunOptions
     public string? RebuildId { get; init; }
 
     /// <summary>Rejects invalid batching and generation settings before work starts.</summary>
-    /// <exception cref="ArgumentException"><see cref="RebuildId" /> is present but blank.</exception>
+    /// <exception cref="ArgumentException"><see cref="RebuildId" /> is present but blank or contains NUL or malformed UTF-16 text.</exception>
     /// <exception cref="ArgumentOutOfRangeException">
     ///     <see cref="MaxBatchSize" /> or <see cref="MaxEventsPerPass" /> is not positive.
     /// </exception>
@@ -32,7 +32,7 @@ public sealed record ProjectionRunOptions
     {
         if (RebuildId is not null)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(RebuildId);
+            _ = IdentityText.Require(RebuildId, nameof(RebuildId));
         }
 
         if (MaxBatchSize <= 0)

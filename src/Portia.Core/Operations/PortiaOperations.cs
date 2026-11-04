@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.Extensions.Configuration;
 
 namespace Cntryl.Portia;
 
@@ -10,10 +11,24 @@ public sealed class PortiaOperations : IPortiaOperations
     readonly IApplicationTopology _topology;
     readonly IOperationalAuthorizer? _authorizer;
     readonly TimeProvider _clock;
+    readonly IConfiguration? _configuration;
 
     /// <summary>Creates the operational API. An absent authorizer denies every operation.</summary>
     public PortiaOperations(IOperationalStore store, OperationalOptions options, IApplicationTopology topology,
         IOperationalAuthorizer? authorizer = null, TimeProvider? timeProvider = null)
+        : this(null, store, options, topology, authorizer, timeProvider)
+    {
+    }
+
+    /// <summary>Creates the operator API with an application-configured administrator role and scoped policy.</summary>
+    /// <param name="configuration">The administrator role configuration, or null to use the environment.</param>
+    /// <param name="store">The durable operational journal.</param>
+    /// <param name="options">Evidence and recovery settings.</param>
+    /// <param name="topology">Registered application topology.</param>
+    /// <param name="authorizer">The required operational permission policy; absence denies all operations.</param>
+    /// <param name="timeProvider">The clock, or null for system time.</param>
+    internal PortiaOperations(IConfiguration? configuration, IOperationalStore store, OperationalOptions options,
+        IApplicationTopology topology, IOperationalAuthorizer? authorizer, TimeProvider? timeProvider)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -21,7 +36,20 @@ public sealed class PortiaOperations : IPortiaOperations
         _topology = topology ?? throw new ArgumentNullException(nameof(topology));
         _authorizer = authorizer;
         _clock = timeProvider ?? TimeProvider.System;
+        _configuration = configuration;
     }
+
+    /// <summary>Creates the operator API with application configuration and an explicit operational policy.</summary>
+    /// <param name="configuration">The administrator role configuration, or null to use the environment.</param>
+    /// <param name="store">The durable operational journal.</param>
+    /// <param name="options">Evidence and recovery settings.</param>
+    /// <param name="topology">Registered application topology.</param>
+    /// <param name="authorizer">The operational permission policy; absence denies all operations.</param>
+    /// <param name="timeProvider">The clock, or null for system time.</param>
+    /// <returns>The configured operator API.</returns>
+    public static PortiaOperations Create(IConfiguration? configuration, IOperationalStore store,
+        OperationalOptions options, IApplicationTopology topology, IOperationalAuthorizer? authorizer = null,
+        TimeProvider? timeProvider = null) => new(configuration, store, options, topology, authorizer, timeProvider);
 
     /// <inheritdoc />
     public async ValueTask<ApplicationTopology> DescribeApplicationAsync(ClaimsPrincipal actor,
@@ -188,7 +216,7 @@ public sealed class PortiaOperations : IPortiaOperations
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(scope);
         scope.Validate();
-        if (!actor.Identities.Any(identity => identity.IsAuthenticated) || _authorizer is null
+        if (!SystemOperatorAuthorization.IsAdministrator(actor, _configuration) || _authorizer is null
             || !await _authorizer.AuthorizeAsync(actor, scope, permission, ct).ConfigureAwait(false))
             throw new UnauthorizedAccessException("The actor is not authorized for this scoped operational action.");
     }

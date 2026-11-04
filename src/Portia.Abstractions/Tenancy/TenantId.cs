@@ -88,13 +88,14 @@ public readonly record struct TenantId(string Value) : ISpanParsable<TenantId>, 
     // EventStreamPattern.ForPattern — the same rules WorkloadIdentity enforces on its tenant.
     static bool IsValid(string value) =>
         !string.IsNullOrWhiteSpace(value)
+        && IdentityText.IsValid(value)
         && !value.Contains('/')
         && !value.Contains('*')
         && !string.Equals(value, EventStreamPattern.TenantTemplateRealm, StringComparison.Ordinal);
 
     static string Validate(string value, string parameterName)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        _ = IdentityText.Require(value, parameterName);
         if (value.Contains('/') || value.Contains('*'))
         {
             throw new ArgumentException("A tenant ID cannot contain '/' or '*'.", parameterName);
@@ -108,5 +109,5 @@ public readonly record struct TenantId(string Value) : ISpanParsable<TenantId>, 
     }
 
     static string InvalidMessage(string value) =>
-        $"'{value}' is not a valid tenant ID: it must be a nonblank realm segment without '/' or '*', other than '{EventStreamPattern.TenantTemplateRealm}'.";
+        $"'{value}' is not a valid tenant ID: it must be a nonblank realm segment without '/', '*', NUL, or malformed UTF-16 text, other than '{EventStreamPattern.TenantTemplateRealm}'.";
 }

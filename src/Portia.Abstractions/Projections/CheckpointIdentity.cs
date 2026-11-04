@@ -9,13 +9,16 @@ public sealed record CheckpointIdentity
     /// <param name="rebuildId">
     ///     The rebuild generation, or <see langword="null" /> for live processing.
     /// </param>
+    /// <exception cref="ArgumentException">
+    ///     A name or generation is blank or contains NUL or malformed UTF-16 text.
+    /// </exception>
     public CheckpointIdentity(string componentName, EventStreamPattern pattern, string? rebuildId = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(componentName);
+        _ = IdentityText.Require(componentName, nameof(componentName));
         ArgumentNullException.ThrowIfNull(pattern);
         if (rebuildId is not null)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(rebuildId);
+            _ = IdentityText.Require(rebuildId, nameof(rebuildId));
         }
 
         ComponentName = componentName;

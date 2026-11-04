@@ -5,7 +5,7 @@ namespace Cntryl.Portia.Testing;
 /// <summary>
 ///     Stores ordered aggregate event histories in memory for tests.
 /// </summary>
-public sealed class InMemoryEventStore : IEventStore
+public sealed class InMemoryEventStore : IEventStore, IDomainEventProgressReader
 {
     readonly Dictionary<(string Realm, string Area), ulong> _areaOffsets = [];
     readonly Lock _gate = new();
@@ -70,6 +70,31 @@ public sealed class InMemoryEventStore : IEventStore
         }
 
         return new BufferedAsyncEnumerable<DomainEventRecord>(readBuffer, ct);
+    }
+
+    /// <inheritdoc />
+    public ValueTask<EventStreamProgress> GetProgressAsync(EventStreamPattern pattern, EventCursor position,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(pattern);
+        if (pattern.IsTenantTemplate)
+            throw new ArgumentException("Bind the processor's tenant before observing source progress.", nameof(pattern));
+        ct.ThrowIfCancellationRequested();
+        var offset = Decode(position);
+        lock (_gate)
+        {
+            var head = pattern.Scope switch
+            {
+                EventStreamPatternScope.Resource => (ulong)(_streams.GetValueOrDefault(
+                    new EventStreamAddress(pattern.Realm, pattern.Area!, pattern.Resource!))?.Count ?? 0),
+                EventStreamPatternScope.Area => _areaOffsets.GetValueOrDefault((pattern.Realm, pattern.Area!)),
+                EventStreamPatternScope.Realm => _realmOffsets.GetValueOrDefault(pattern.Realm),
+                _ => throw new ArgumentOutOfRangeException(nameof(pattern))
+            };
+            return ValueTask.FromResult(new EventStreamProgress(position, Encode(head),
+                offset <= head ? head - offset : null, offset <= head ? offset == head : null,
+                DateTimeOffset.UtcNow, offset <= head ? head - offset : null));
+        }
     }
 
     /// <inheritdoc />

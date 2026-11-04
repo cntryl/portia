@@ -32,7 +32,7 @@ public abstract class Projector
         Store = store ?? throw new ArgumentNullException(nameof(store));
         Pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
         Name = name ?? GetType().FullName ?? GetType().Name;
-        ArgumentException.ThrowIfNullOrWhiteSpace(Name);
+        _ = IdentityText.Require(Name, nameof(Name));
     }
 
     /// <summary>
@@ -62,6 +62,8 @@ public abstract class Projector
     /// </summary>
     internal void BindWorkload(WorkloadIdentity identity, string? componentName)
     {
+        if (componentName is not null)
+            _ = IdentityText.Require(componentName, nameof(componentName));
         if (_boundIdentity is { } bound && bound != identity)
         {
             throw new InvalidOperationException(

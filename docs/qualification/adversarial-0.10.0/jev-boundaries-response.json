@@ -1,0 +1,33 @@
+{
+  "model": "jev-1.14.0",
+  "answers": {
+    "overlap_begin_retargets_transaction": {
+      "type": "noul",
+      "noul": 0.43
+    },
+    "overlap_check_reserves_before_await": {
+      "type": "noul",
+      "noul": 0.06
+    },
+    "jwt_cancellation_during_validation_can_return_success": {
+      "type": "noul",
+      "noul": 0.52
+    },
+    "unauthenticated_claim_can_supply_tenant": {
+      "type": "noul",
+      "noul": 0.67
+    },
+    "fake_invalid_receipts_destroy_retry_session": {
+      "type": "noul",
+      "noul": 0.65
+    },
+    "dedicated_bucket_is_documented_requirement": {
+      "type": "noul",
+      "noul": 0.88
+    }
+  },
+  "usage": {
+    "input_tokens": 5325,
+    "output_tokens": 147
+  }
+}

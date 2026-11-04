@@ -1,0 +1,25 @@
+{
+  "model": "jev-1.14.0",
+  "answers": {
+    "cursor_extractor_failure_skips_event": {
+      "type": "noul",
+      "noul": 0.28
+    },
+    "cursor_dispose_fault_retains_reading": {
+      "type": "noul",
+      "noul": 0.45
+    },
+    "coordinator_cancel_fault_bypasses_join": {
+      "type": "noul",
+      "noul": 0.37
+    },
+    "combined_workers_terminal_fault_hidden": {
+      "type": "noul",
+      "noul": 0.54
+    }
+  },
+  "usage": {
+    "input_tokens": 4713,
+    "output_tokens": 96
+  }
+}

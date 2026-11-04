@@ -1,0 +1,29 @@
+{
+  "model": "jev-1.14.0",
+  "answers": {
+    "http_renamed_fields_can_swap": {
+      "type": "noul",
+      "noul": 0.61
+    },
+    "cross_scheme_same_host_accepted": {
+      "type": "noul",
+      "noul": 0.82
+    },
+    "cross_origin_gate_has_scheme_data": {
+      "type": "noul",
+      "noul": 0.54
+    },
+    "nul_separators_alias_checkpoint_identity": {
+      "type": "noul",
+      "noul": 0.54
+    },
+    "identity_validators_reject_nul": {
+      "type": "noul",
+      "noul": 0.22
+    }
+  },
+  "usage": {
+    "input_tokens": 5179,
+    "output_tokens": 114
+  }
+}

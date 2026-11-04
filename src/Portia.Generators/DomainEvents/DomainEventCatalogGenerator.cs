@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Cntryl.Portia;
@@ -18,6 +19,7 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
     const string DomainEventMetadataName = "Cntryl.Portia.DomainEvent";
     const string DiscriminatorAttributeMetadataName = "Cntryl.Portia.DiscriminatorAttribute";
     const string JsonDomainEventUpcasterMetadataName = "Cntryl.Portia.IJsonDomainEventUpcaster";
+    const string CatalogMethodName = "AddPortiaGeneratedDomainEvents";
 
     static readonly DiagnosticDescriptor UnknownUpcasterEventName = new(
         "PORTIA012",
@@ -40,6 +42,19 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        var catalogCalls = context.SyntaxProvider.CreateSyntaxProvider(
+                static (node, _) => IsCatalogCallSyntax(node),
+                static (syntaxContext, ct) => GetCatalogCall(syntaxContext, ct))
+            .Where(static call => call is not null)
+            .Select(static (call, _) => call!)
+            .Collect()
+            .WithTrackingName("PortiaEventCatalogCalls");
+        context.RegisterSourceOutput(catalogCalls, static (output, calls) =>
+        {
+            foreach (var call in calls.Where(call => call.Location is null))
+                output.ReportDiagnostic(Diagnostic.Create(RegistrationCallInterceptorGenerator.UnsupportedRegistrationCallSite,
+                    call.DiagnosticLocation.ToLocation(), CatalogMethodName));
+        });
         var events = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => SyntaxFilters.HasBaseList(node),
@@ -89,10 +104,30 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
                 pair.Left.Left.Left.AddRange(pair.Left.Left.Right), pair.Left.Right, pair.Right));
         var assemblyIdentity = context.CompilationProvider.Select(static (compilation, _) =>
             compilation.Assembly.Identity.ToString());
-        var files = eventRegistrations.Combine(assemblyIdentity).SelectMany(static (input, ct) =>
-            GeneratedSource.Capture(output => GenerateCatalog(output, input.Left, input.Right), ct))
+        var files = eventRegistrations.Combine(assemblyIdentity).Combine(catalogCalls).SelectMany(static (input, ct) =>
+            GeneratedSource.Capture(output => GenerateCatalog(output, input.Left.Left, input.Left.Right, input.Right), ct))
             .WithTrackingName("PortiaEventCatalogGeneratedFiles");
         context.RegisterSourceOutput(files, static (output, file) => GeneratedSource.Add(output, file.HintName, file.Source));
+    }
+
+    static bool IsCatalogCallSyntax(SyntaxNode node) => node switch
+    {
+        InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: CatalogMethodName } }
+            or InvocationExpressionSyntax { Expression: MemberBindingExpressionSyntax { Name.Identifier.ValueText: CatalogMethodName } }
+            or MemberAccessExpressionSyntax { Name.Identifier.ValueText: CatalogMethodName, Parent: not InvocationExpressionSyntax } => true,
+        _ => false
+    };
+
+    static CatalogCall? GetCatalogCall(GeneratorSyntaxContext context, CancellationToken ct)
+    {
+        if (context.SemanticModel.GetSymbolInfo(context.Node, ct).Symbol is not IMethodSymbol method
+            || method.IsStatic || method.Parameters.Length != 0
+            || !SymbolNames.Is(method.ContainingType, "Cntryl.Portia.DomainEventTypeCatalog"))
+            return null;
+        var location = context.Node is InvocationExpressionSyntax invocation
+            ? context.SemanticModel.GetInterceptableLocation(invocation, ct) : null;
+        return new CatalogCall(location is null ? null : InterceptableLocationModel.From(location),
+            DiagnosticLocation.From(context.Node.GetLocation()));
     }
 
     static SortedSet<string> ReferencedAssemblyEventNames(Compilation compilation, CancellationToken ct)
@@ -169,27 +204,28 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
 
     static void GenerateCatalog(
         GeneratedOutput context,
-        ImmutableArray<EventRegistration> events, string assemblyIdentity)
+        ImmutableArray<EventRegistration> events, string assemblyIdentity, ImmutableArray<CatalogCall> calls)
     {
-        if (events.IsDefaultOrEmpty)
+        var locations = calls.Where(call => call.Location is not null).Select(call => call.Location!.Value).ToArray();
+        if (events.IsDefaultOrEmpty && locations.Length == 0)
             return;
 
+        var helperType = "PortiaEventCatalogHelpers_" + GeneratedSource.Identity(assemblyIdentity);
         var builder = new StringBuilder();
         _ = builder.AppendLine("// <auto-generated />");
-        _ = builder.AppendLine("namespace Cntryl.Portia;");
+        _ = builder.AppendLine("namespace Cntryl.Portia.Generated;");
         _ = builder.AppendLine();
-        _ = builder.AppendLine("internal static class DomainEventTypeCatalogGeneratedExtensions");
+        _ = builder.Append("internal static partial class ").AppendLine(helperType);
         _ = builder.AppendLine("{");
         _ = builder.AppendLine(
-            "    public static global::Cntryl.Portia.DomainEventTypeCatalog AddPortiaGeneratedDomainEvents(this global::Cntryl.Portia.DomainEventTypeCatalog catalog)");
+            "    public static global::Cntryl.Portia.DomainEventTypeCatalog AddPortiaGeneratedDomainEvents(global::Cntryl.Portia.DomainEventTypeCatalog catalog)");
         _ = builder.AppendLine("    {");
         _ = builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(catalog);");
 
         var statements = events.Distinct().Select(ev =>
             "catalog.Register<global::" + ev.TypeName + ">(" + ev.Version + ", "
             + RequestTransportDiscovery.FormatStringLiteral(ev.Name) + ");").ToArray();
-        var helperType = "PortiaEventCatalogHelpers_" + GeneratedSource.Identity(assemblyIdentity);
-        var rootMethod = GeneratedSource.StatementTree(context, "Cntryl.Portia",
+        var rootMethod = GeneratedSource.StatementTree(context, "Cntryl.Portia.Generated",
             helperType, "RegisterEvents", "global::Cntryl.Portia.DomainEventTypeCatalog",
             "catalog", statements, "PortiaEventCatalog", internalMethods: true);
         builder.Append("        ").Append(helperType).Append('.').Append(rootMethod).AppendLine("(catalog);");
@@ -199,6 +235,21 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         _ = builder.AppendLine("}");
 
         GeneratedSource.Add(context, "DomainEventTypeCatalogGeneratedExtensions.g.cs", builder.ToString());
+        if (locations.Length == 0)
+            return;
+        builder = InterceptsLocationPolyfill.AppendTo(new StringBuilder("// <auto-generated />\n"), true)
+            .AppendLine("namespace Cntryl.Portia.Generated")
+            .AppendLine("{")
+            .AppendLine("    file static class PortiaEventCatalogInterceptors")
+            .AppendLine("    {");
+        foreach (var location in locations)
+            builder.Append("        [global::System.Runtime.CompilerServices.InterceptsLocation(")
+                .Append(location.Version).Append(", ")
+                .Append(RequestTransportDiscovery.FormatStringLiteral(location.Data)).AppendLine(")]");
+        builder.AppendLine("        public static global::Cntryl.Portia.DomainEventTypeCatalog Register(this global::Cntryl.Portia.DomainEventTypeCatalog catalog)")
+            .Append("            => ").Append(helperType).AppendLine(".AddPortiaGeneratedDomainEvents(catalog);")
+            .AppendLine("    }").AppendLine("}");
+        GeneratedSource.Add(context, "PortiaEventCatalogInterceptors.g.cs", builder.ToString());
     }
 
     static EventModel? GetEventModel(GeneratorSyntaxContext context)
@@ -324,6 +375,8 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
     sealed record EventModel(string TypeName, string Name, int Version, DiagnosticLocation Location);
 
     sealed record EventRegistration(string TypeName, string Name, int Version);
+
+    sealed record CatalogCall(InterceptableLocationModel? Location, DiagnosticLocation DiagnosticLocation);
 
     sealed record UpcasterModel(string TypeName, string EventName, DiagnosticLocation Location);
 

@@ -1,0 +1,29 @@
+  Portia.Abstractions -> /Users/jrepanich/Code/cntryl/portia/src/Portia.Abstractions/bin/Release/net10.0/Portia.Abstractions.dll
+  Portia.Core -> /Users/jrepanich/Code/cntryl/portia/src/Portia.Core/bin/Release/net10.0/Portia.Core.dll
+  Portia.DependencyInjection -> /Users/jrepanich/Code/cntryl/portia/src/Portia.DependencyInjection/bin/Release/net10.0/Portia.DependencyInjection.dll
+  Portia.Fitz -> /Users/jrepanich/Code/cntryl/portia/src/Portia.Fitz/bin/Release/net10.0/Portia.Fitz.dll
+  Portia.Generators -> /Users/jrepanich/Code/cntryl/portia/src/Portia.Generators/bin/Release/netstandard2.0/Portia.Generators.dll
+  Portia.Operations.TestWorker -> /Users/jrepanich/Code/cntryl/portia/test/Portia.Operations.TestWorker/bin/Release/net10.0/Portia.Operations.TestWorker.dll
+  Portia.Cassie -> /Users/jrepanich/Code/cntryl/portia/src/Portia.Cassie/bin/Release/net10.0/Portia.Cassie.dll
+  Portia.Storage.Abstractions -> /Users/jrepanich/Code/cntryl/portia/src/Portia.Storage.Abstractions/bin/Release/net10.0/Portia.Storage.Abstractions.dll
+  Portia.Testing -> /Users/jrepanich/Code/cntryl/portia/src/Portia.Testing/bin/Release/net10.0/Portia.Testing.dll
+  Portia.Storage.Aws -> /Users/jrepanich/Code/cntryl/portia/src/Portia.Storage.Aws/bin/Release/net10.0/Portia.Storage.Aws.dll
+  Portia.Telemetry -> /Users/jrepanich/Code/cntryl/portia/src/Portia.Telemetry/bin/Release/net10.0/Portia.Telemetry.dll
+  Portia.AspNetCore.Generators -> /Users/jrepanich/Code/cntryl/portia/src/Portia.AspNetCore.Generators/bin/Release/netstandard2.0/Portia.AspNetCore.Generators.dll
+  Portia.AspNetCore -> /Users/jrepanich/Code/cntryl/portia/src/Portia.AspNetCore/bin/Release/net10.0/Portia.AspNetCore.dll
+  Portia.Jwt -> /Users/jrepanich/Code/cntryl/portia/src/Portia.Jwt/bin/Release/net10.0/Portia.Jwt.dll
+  Portia.Tests -> /Users/jrepanich/Code/cntryl/portia/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll
+Test run for /Users/jrepanich/Code/cntryl/portia/test/Portia.Tests/bin/Release/net10.0/Portia.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.28]     Cntryl.Portia.OperationalProjectionTests.ShouldPreserveIndeterminateRepairWhenCommitAcknowledgementIsLost [FAIL]
+  Failed Cntryl.Portia.OperationalProjectionTests.ShouldPreserveIndeterminateRepairWhenCommitAcknowledgementIsLost [55 ms]
+  Error Message:
+   Assert.False() Failure
+Expected: False
+Actual:   True
+  Stack Trace:
+     at Cntryl.Portia.OperationalProjectionTests.ShouldPreserveIndeterminateRepairWhenCommitAcknowledgementIsLost() in /Users/jrepanich/Code/cntryl/portia/test/Portia.Tests/Operations/OperationalProjectionRepairProgressTests.cs:line 34
+--- End of stack trace from previous location ---
+Results File: /tmp/portia-tdd-repair-progress-red/repair-progress-red.trx
+
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 60 ms - Portia.Tests.dll (net10.0)

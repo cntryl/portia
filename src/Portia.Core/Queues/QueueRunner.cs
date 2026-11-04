@@ -46,6 +46,7 @@ public sealed class QueueRunner(
             var transport = "queue";
             var deliveryOutcome = RequestDeliveryOutcome.Fault;
             Activity? process = null;
+            var dispositionStarted = false;
             try
             {
                 await using var scope = await _scopeFactory.CreateAsync(ct).ConfigureAwait(false);
@@ -58,6 +59,8 @@ public sealed class QueueRunner(
 
                 try
                 {
+                    if (!ct.IsCancellationRequested && queued.ReservationCancellation.IsCancellationRequested)
+                        continue;
                     RequestInvocation invocation;
                     IRequest request;
                     RequestMetadata metadata;
@@ -90,6 +93,7 @@ public sealed class QueueRunner(
                             // The transport mismatch remains the primary terminal reason.
                         }
 
+                        dispositionStarted = true;
                         deliveryOutcome = await HandleTerminalAsync(scope, queued, null, mismatch,
                                 QueuedRequestTerminalReason.InvalidTransport, requestName, ct, mismatch.Request,
                                 safeMetadata, safeInvocation, false)
@@ -101,6 +105,7 @@ public sealed class QueueRunner(
                         var safeInvocation = TryReadInvocation(queued);
                         transport = safeInvocation.TransportName;
                         process = PortiaTelemetry.StartProcess(requestName, safeInvocation, null);
+                        dispositionStarted = true;
                         deliveryOutcome = await HandleReadFailureAsync(scope, queued, ex, requestName, safeInvocation,
                                 ct)
                             .ConfigureAwait(false);
@@ -127,6 +132,7 @@ public sealed class QueueRunner(
 
                     if (!dispatch.WasDispatched)
                     {
+                        dispositionStarted = true;
                         deliveryOutcome = await HandleTerminalAsync(scope, queued, dispatch.Outcome.Error, null,
                                 QueuedRequestTerminalReason.ActorValidationFailure, requestName, ct, request, metadata,
                                 invocation)
@@ -138,6 +144,7 @@ public sealed class QueueRunner(
                         // leaves the delivery with the transport, whose redelivery is the at-least-once path.
                         try
                         {
+                            dispositionStarted = true;
                             await queued.CompleteAsync(ct).ConfigureAwait(false);
                             deliveryOutcome = RequestDeliveryOutcome.Completed;
                         }
@@ -150,6 +157,7 @@ public sealed class QueueRunner(
                     }
                     else if (dispatch.Outcome.Error is { IsTransient: false } permanent)
                     {
+                        dispositionStarted = true;
                         deliveryOutcome = await HandleTerminalAsync(scope, queued, permanent, null,
                                 QueuedRequestTerminalReason.PermanentFailure, requestName, ct, request, metadata,
                                 invocation)
@@ -157,6 +165,7 @@ public sealed class QueueRunner(
                     }
                     else if (IsRetryLimitReached(scope, queued))
                     {
+                        dispositionStarted = true;
                         deliveryOutcome = await HandleTerminalAsync(scope, queued, dispatch.Outcome.Error, null,
                                 QueuedRequestTerminalReason.RetryLimitReached, requestName, ct, request, metadata,
                                 invocation)
@@ -164,7 +173,8 @@ public sealed class QueueRunner(
                     }
                     else
                     {
-                        await queued.AbandonAsync(ct).ConfigureAwait(false);
+                        dispositionStarted = true;
+                        await ReleaseAsync(scope, queued, ct).ConfigureAwait(false);
                         deliveryOutcome = RequestDeliveryOutcome.Abandoned;
                     }
                 }
@@ -174,6 +184,9 @@ public sealed class QueueRunner(
                 {
                     if (ex is InvalidRequestTransportException mismatch)
                     {
+                        if (dispositionStarted)
+                            throw;
+                        dispositionStarted = true;
                         deliveryOutcome = await HandleTerminalAsync(scope, queued, null, mismatch,
                                 QueuedRequestTerminalReason.InvalidTransport, requestName, ct, mismatch.Request)
                             .ConfigureAwait(false);
@@ -192,18 +205,24 @@ public sealed class QueueRunner(
                     }
                     if (reservationLost)
                         continue;
+                    // A failed release or acknowledgment has an unknown transport outcome.
+                    // It must not be mistaken for a processing failure and release the same lease twice.
+                    if (dispositionStarted)
+                        throw;
 
                     // An unrecognized exception's retriability is unknown; abandoning (rather than
                     // silently dropping the request) is the safer default.
                     if (IsRetryLimitReached(scope, queued))
                     {
+                        dispositionStarted = true;
                         deliveryOutcome = await HandleTerminalAsync(scope, queued, null, ex,
                                 QueuedRequestTerminalReason.RetryLimitReached, requestName, ct)
                             .ConfigureAwait(false);
                     }
                     else
                     {
-                        await queued.AbandonAsync(ct).ConfigureAwait(false);
+                        dispositionStarted = true;
+                        await ReleaseAsync(scope, queued, ct).ConfigureAwait(false);
                         deliveryOutcome = RequestDeliveryOutcome.Abandoned;
                     }
                 }
@@ -233,6 +252,15 @@ public sealed class QueueRunner(
 
     static void ValidateScope(IQueueDeliveryScope scope) => scope.Options.Validate();
 
+    static ValueTask ReleaseAsync(IQueueDeliveryScope scope, IQueuedRequest queued, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        queued.ReservationCancellation.ThrowIfCancellationRequested();
+        return scope.Options.RetryDelay is { } delay
+            ? queued.RetryAsync(delay, ct)
+            : queued.AbandonAsync(ct);
+    }
+
     static RequestInvocation TryReadInvocation(IQueuedRequest queued)
     {
         try
@@ -249,6 +277,8 @@ public sealed class QueueRunner(
         IQueuedRequest queued, Exception exception, string requestName, RequestInvocation invocation,
         CancellationToken ct)
     {
+        if (!ct.IsCancellationRequested && queued.ReservationCancellation.IsCancellationRequested)
+            return RequestDeliveryOutcome.Fault;
         var permanent = exception is JsonException ||
                         RequestEnvelopeFailure.GetKind(exception) is RequestEnvelopeFailureKind.Permanent;
         var terminal = permanent
@@ -267,7 +297,7 @@ public sealed class QueueRunner(
         }
 
         PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, exception, _logger);
-        await queued.AbandonAsync(ct).ConfigureAwait(false);
+        await ReleaseAsync(scope, queued, ct).ConfigureAwait(false);
         return RequestDeliveryOutcome.Abandoned;
     }
 
@@ -276,6 +306,8 @@ public sealed class QueueRunner(
         CancellationToken ct, IRequest? request = null, RequestMetadata? metadata = null,
         RequestInvocation? invocation = null, bool readQueuedFields = true)
     {
+        if (!ct.IsCancellationRequested && queued.ReservationCancellation.IsCancellationRequested)
+            return RequestDeliveryOutcome.Fault;
         if (scope.TerminalHandler is { } terminalHandler)
         {
             try
@@ -295,7 +327,11 @@ public sealed class QueueRunner(
 
         try
         {
-            await queued.AbandonAsync(ct).ConfigureAwait(false);
+            await ReleaseAsync(scope, queued, ct).ConfigureAwait(false);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested && queued.ReservationCancellation.IsCancellationRequested)
+        {
+            return RequestDeliveryOutcome.Fault;
         }
         catch (Exception abandonmentException) when (!ct.IsCancellationRequested)
         {

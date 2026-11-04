@@ -6,8 +6,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 
 var builder = WebApplication.CreateSlimBuilder(args);
-builder.Services.AddSingleton<IPortiaOperations>(new PortiaOperations(new EmptyOperationalStore(),
-    new OperationalOptions(), new EmptyOperationalTopology(), new OperationalReadPolicy()));
+builder.Configuration["PORTIA_SYSTEM_ADMIN_ROLE"] = "native-operator";
+builder.Services.AddSingleton<IPortiaOperations>(PortiaOperations.Create(builder.Configuration, new EmptyOperationalStore(),
+    new OperationalOptions(), new EmptyOperationalTopology(), new OperationalReadPolicy(), null));
 builder.WebHost.UseUrls("http://127.0.0.1:0");
 _ = builder.Services.AddPortia()
     .AddRequestHandler<ReadGreetingHandler>()
@@ -24,7 +25,7 @@ var app = builder.Build();
 app.Use((context, next) =>
 {
     context.User = new ClaimsPrincipal(new ClaimsIdentity(
-        [new Claim(ClaimTypes.Name, "native-aot-test-actor")], "smoke"));
+        [new Claim(ClaimTypes.Name, "native-aot-test-actor"), new Claim(ClaimTypes.Role, "native-operator")], "smoke"));
     return next(context);
 });
 _ = app.MapPortiaMcp().AllowAnonymous();

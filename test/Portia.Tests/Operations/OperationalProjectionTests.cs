@@ -21,8 +21,8 @@ public sealed partial class OperationalProjectionTests
         Assert.Equal(1, session.State.ConsecutiveFailures);
         Assert.Equal("2", native.Checkpoint.Cursor.Value);
         Assert.Equal(2, native.Changes);
-        var api = new PortiaOperations(journal, new OperationalOptions(), new EmptyApplicationTopology(), new TestOperationalAuthorizer());
-        var actor = TestOperationalAuthorizer.Actor(true);
+        var api = new PortiaOperations(TestOperationalAuthorizer.Configuration(), journal, new OperationalOptions(), new EmptyApplicationTopology(), new TestOperationalAuthorizer(), null);
+        var actor = TestOperationalAuthorizer.AdministratorActor(true);
         var plan = await api.PreviewRepairAsync(actor, Target);
         Assert.Equal("resume", plan.Action);
         _ = await api.ApproveRepairAsync(actor, Target, plan.Id);

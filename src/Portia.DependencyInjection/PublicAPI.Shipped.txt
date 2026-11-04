@@ -66,3 +66,7 @@ static Cntryl.Portia.WorkloadRegistration.operator ==(Cntryl.Portia.WorkloadRegi
 Cntryl.Portia.PortiaAuthorizationOptions
 Cntryl.Portia.PortiaAuthorizationOptions.AllowAnonymous<TRequest>() -> Cntryl.Portia.PortiaAuthorizationOptions!
 Cntryl.Portia.PortiaBuilder.UseSingleProcessWorkloads() -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.ProcessorStatusJsonContextFactory
+static Cntryl.Portia.ProcessorStatusJsonContextFactory.Create(System.Text.Json.JsonSerializerOptions! options) -> System.Text.Json.Serialization.JsonSerializerContext!
+Cntryl.Portia.PortiaBuilder.AddGeneratedRegistrations(object! identity, System.Action<Cntryl.Portia.PortiaBuilder!>! register) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddEventSourcedTenantDirectory<TStartEvent, TStopEvent>(Cntryl.Portia.EventStreamPattern! pattern, System.Func<Cntryl.Portia.DomainEvent!, Cntryl.Portia.TenantId>! getTenantId) -> Cntryl.Portia.PortiaBuilder!

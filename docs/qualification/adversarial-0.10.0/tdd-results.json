@@ -1,0 +1,97 @@
+{
+  "date": "2026-11-03",
+  "completed_at": "2026-11-03T22:59:08.432921+00:00",
+  "package_version": "0.10.0",
+  "status": "local qualification passed; source uncommitted and packages unpublished",
+  "review_findings_resolved": 11,
+  "original_red_baseline": {
+    "cases": 22,
+    "reproduced_failures": 17,
+    "passing_controls": 5,
+    "results": "results.json",
+    "proof_hashes": "proof-sha256.json"
+  },
+  "follow_up_red": {
+    "failing_cases": 3,
+    "coverage": [
+      "F06 actual claimed projection repair after native commit acknowledgement loss",
+      "F01 legacy unnamed helpers with different HTTP and JSON constructor order"
+    ],
+    "logs": [
+      "tdd-repair-progress-red.txt",
+      "tdd-legacy-binding-red.txt"
+    ]
+  },
+  "environment": {
+    "rid": "osx-arm64",
+    "sdk": "10.0.403",
+    "runtime": "10.0.14",
+    "fitz_client": "4.0.0",
+    "fitz_broker": "0.4.0 / Wire 3"
+  },
+  "formatting": {
+    "formatted_files": 0,
+    "examined_files": 1059,
+    "workspace_warnings": 0
+  },
+  "release_build": {
+    "warnings": 0,
+    "errors": 0
+  },
+  "framework_tests": {
+    "Portia.Tests": 1550,
+    "Portia.ConsumerTests": 836,
+    "Portia.McpTests": 93,
+    "Portia.ReflectionDisabledTests": 5,
+    "isolated_crash_durability": 1,
+    "total": 2485,
+    "failed": 0,
+    "skipped": 0
+  },
+  "account_example": {
+    "tests_passed": 10,
+    "projected_balance_verified": true,
+    "actual_otlp_export_verified": true
+  },
+  "package_family": {
+    "count": 16,
+    "internal_dependency_declarations_verified": 20,
+    "all_internal_versions": "0.10.0",
+    "fresh_consumer_caches": true
+  },
+  "managed_consumers": [
+    "ProjectionStore",
+    "Cassie",
+    "Mcp.Testing",
+    "Storage"
+  ],
+  "native_consumers": [
+    "AspNetCore.NativeAotConsumer",
+    "Mcp.AspNetCore.NativeAotConsumer",
+    "Fitz.LexKey.PackageConsumer"
+  ],
+  "additional_passes": [
+    "packed compiler diagnostics and HTTP fallback, with and without independent analyzers",
+    "reflection-disabled request, aggregate, envelope, generated HTTP and mixed processor runtime controls",
+    "actual NativeAOT resolver-renamed and reordered HTTP binding plus OpenAPI",
+    "stable external dependency verifier",
+    "solution vulnerability audit including transitives: 32 projects, no reported vulnerabilities",
+    "empty PublicAPI.Unshipped baselines",
+    "all test integration services stopped; Accounts qualification stack removed"
+  ],
+  "evidence": {
+    "source": "tdd-source-sha256.json",
+    "packages": "tdd-artifact-sha256.txt",
+    "green": "tdd-green.txt"
+  },
+  "evidence_boundaries": [
+    "Final tests ran separately and serially; the consumer suite ran without other qualification jobs.",
+    "No hosted CI, Linux NativeAOT, commit, tag, package publication, migration or deployment was performed.",
+    "Jev supplied advisory candidates during the original review; source inspection and red-to-green tests established acceptance."
+  ],
+  "local_logs": [
+    "/tmp/portia-tdd-final-*.log",
+    "/tmp/portia-010-tdd-*.log",
+    "/tmp/portia-010-tdd-account-evidence"
+  ]
+}

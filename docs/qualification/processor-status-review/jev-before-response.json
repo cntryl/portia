@@ -1,0 +1,49 @@
+{
+  "model": "jev-1.14.0",
+  "answers": {
+    "configured_role_gate": {
+      "type": "noul",
+      "noul": 0.93
+    },
+    "mandatory_extra_policy": {
+      "type": "noul",
+      "noul": 0.84
+    },
+    "native_checkpoint_replacement": {
+      "type": "noul",
+      "noul": 0.06
+    },
+    "roster_before_checkpoint": {
+      "type": "noul",
+      "noul": 0.77
+    },
+    "noncontiguous_expiry_throws": {
+      "type": "noul",
+      "noul": 0.78
+    },
+    "empty_page_zero_head": {
+      "type": "noul",
+      "noul": 0.6
+    },
+    "concurrent_append_in_lower_bound": {
+      "type": "noul",
+      "noul": 0.29
+    },
+    "status_registration_escapes_retry": {
+      "type": "noul",
+      "noul": 0.87
+    },
+    "failed_withdrawal_recoverable": {
+      "type": "noul",
+      "noul": 0.23
+    },
+    "caller_cancellation_preserved": {
+      "type": "noul",
+      "noul": 0.94
+    }
+  },
+  "usage": {
+    "input_tokens": 6694,
+    "output_tokens": 211
+  }
+}

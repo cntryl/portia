@@ -1,5 +1,9 @@
 # Model Context Protocol
 
+System-operator administration uses a separate [administrative MCP surface](operations.md#operator-access).
+Its discovery and invocation require the role selected by `PORTIA_SYSTEM_ADMIN_ROLE`; ordinary
+application-tool access does not grant administrative access.
+
 Portia exposes deliberately selected application requests as Model Context Protocol tools, resources,
 and prompts. MCP is an ingress adapter over `IRequestBus`: invocations use the same handlers, authorization, pipeline
 behaviors, request context, result contracts, and event production as direct and HTTP dispatch.

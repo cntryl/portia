@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 
 namespace Cntryl.Portia;
 
@@ -99,6 +100,12 @@ sealed class MemoryOperationalStore : IOperationalStore, IOperationalReactionChe
 
 sealed class TestOperationalAuthorizer : IOperationalAuthorizer
 {
+    internal const string AdministratorRole = "platform-operators";
+
+    internal static IConfiguration Configuration() => new ConfigurationBuilder()
+        .AddInMemoryCollection(new Dictionary<string, string?> { ["PORTIA_SYSTEM_ADMIN_ROLE"] = AdministratorRole })
+        .Build();
+
     public ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope,
         OperationalAccess permission, CancellationToken ct = default)
     {
@@ -111,4 +118,11 @@ sealed class TestOperationalAuthorizer : IOperationalAuthorizer
     internal static ClaimsPrincipal Actor(bool approval = false, string scope = "global") => new(new ClaimsIdentity(
         [new Claim(ClaimTypes.NameIdentifier, approval ? "operator" : "agent"), new Claim("scope", scope),
             new Claim(ClaimTypes.Role, approval ? "operator" : "agent")], "test"));
+
+    internal static ClaimsPrincipal AdministratorActor(bool approval = false, string scope = "global")
+    {
+        var actor = Actor(approval, scope);
+        ((ClaimsIdentity)actor.Identity!).AddClaim(new Claim(ClaimTypes.Role, AdministratorRole));
+        return actor;
+    }
 }

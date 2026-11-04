@@ -173,6 +173,8 @@ static class GeneratorCompilation
 
     public static MetadataReference ReferenceNamed(string assemblyName, string source, params IIncrementalGenerator[] generators)
     {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
+            [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
             .Append(typeof(IRemoteRequestSender).Assembly.Location)
@@ -180,13 +182,13 @@ static class GeneratorCompilation
             .Select(path => MetadataReference.CreateFromFile(path));
         var compilation = CSharpCompilation.Create(
             assemblyName,
-            [CSharpSyntaxTree.ParseText(source)],
+            [CSharpSyntaxTree.ParseText(source, parseOptions, "ReferenceScenario.cs")],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         if (generators.Length != 0)
         {
             GeneratorDriver driver = CSharpGeneratorDriver.Create(
-                generators.Select(generator => generator.AsSourceGenerator()));
+                generators.Select(generator => generator.AsSourceGenerator()), parseOptions: parseOptions);
             driver.RunGeneratorsAndUpdateCompilation(compilation, out var generated, out var diagnostics);
             Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
             compilation = (CSharpCompilation)generated;

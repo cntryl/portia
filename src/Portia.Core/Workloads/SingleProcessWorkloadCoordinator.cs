@@ -1,3 +1,5 @@
+using System.Runtime.ExceptionServices;
+
 namespace Cntryl.Portia;
 
 /// <summary>
@@ -106,18 +108,41 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
     {
         var workload = owned[identity];
         _ = owned.Remove(identity);
-        await workload.Cancellation.CancelAsync().ConfigureAwait(false);
+        List<Exception> faults = [];
         try
         {
-            await workload.Run.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (workload.Cancellation.IsCancellationRequested)
-        {
+            try
+            {
+                await workload.Cancellation.CancelAsync().ConfigureAwait(false);
+            }
+            catch (Exception error)
+            {
+                // Cancellation callbacks are application code. Their failure cannot abandon the
+                // workload after it has already been removed from the coordinator's owned set.
+                faults.Add(error);
+            }
+
+            try
+            {
+                await workload.Run.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (workload.Cancellation.IsCancellationRequested)
+            {
+            }
+            catch (Exception error)
+            {
+                faults.Add(error);
+            }
         }
         finally
         {
             workload.Cancellation.Dispose();
         }
+
+        if (faults.Count == 1)
+            ExceptionDispatchInfo.Capture(faults[0]).Throw();
+        if (faults.Count > 1)
+            throw new AggregateException(faults);
     }
 
     sealed record OwnedWorkload(CancellationTokenSource Cancellation, Task Run);

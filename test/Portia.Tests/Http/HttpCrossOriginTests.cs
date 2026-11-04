@@ -109,25 +109,28 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     /// </summary>
     /// <param name="host">The request host.</param>
     /// <param name="origin">The browser-supplied origin.</param>
+    /// <param name="scheme">The target request scheme.</param>
     /// <param name="allowed">Whether the request is same-origin.</param>
     [Theory]
-    [InlineData("localhost:5000", "http://localhost:5000", true)]
-    [InlineData("localhost:5000", "http://localhost:5001", false)]
-    [InlineData("localhost:5000", "http://localhost", false)]
-    [InlineData("example.com", "https://example.com", true)]
-    [InlineData("example.com", "https://example.com:443", true)]
-    [InlineData("example.com:443", "https://example.com", true)]
-    [InlineData("example.com", "https://example.com:8443", false)]
-    [InlineData("EXAMPLE.com", "https://example.com", true)]
-    [InlineData("[::1]:5000", "http://[::1]:5000", true)]
-    [InlineData("example.com", "https://example.com.attacker.example", false)]
-    [InlineData("example.com", "ftp://example.com", false)]
-    [InlineData("example.com", "null", false)]
-    [InlineData("example.com", "", false)]
-    public void ShouldCompareOriginWithRequestHostWithoutFetchMetadata(string host, string origin, bool allowed)
+    [InlineData("localhost:5000", "http://localhost:5000", "http", true)]
+    [InlineData("localhost:5000", "http://localhost:5001", "http", false)]
+    [InlineData("localhost:5000", "http://localhost", "http", false)]
+    [InlineData("example.com", "https://example.com", "https", true)]
+    [InlineData("example.com", "https://example.com:443", "https", true)]
+    [InlineData("example.com:443", "https://example.com", "https", true)]
+    [InlineData("example.com", "https://example.com:8443", "https", false)]
+    [InlineData("EXAMPLE.com", "https://example.com", "https", true)]
+    [InlineData("[::1]:5000", "http://[::1]:5000", "http", true)]
+    [InlineData("example.com", "https://example.com.attacker.example", "https", false)]
+    [InlineData("example.com", "ftp://example.com", "https", false)]
+    [InlineData("example.com", "null", "https", false)]
+    [InlineData("example.com", "", "https", false)]
+    public void ShouldCompareOriginWithRequestHostWithoutFetchMetadata(string host, string origin, string scheme,
+        bool allowed)
     {
         var context = new DefaultHttpContext();
         context.Request.Method = HttpMethods.Post;
+        context.Request.Scheme = scheme;
         context.Request.Host = new HostString(host);
         context.Request.Headers.Origin = origin;
 

@@ -141,7 +141,10 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             .SingleOrDefault() ?? endpointMetadata.OfType<IAcceptsMetadata>()
             .Select(item => new DeclaredAccepts(item.RequestType, item.IsOptional, item.ContentTypes.ToArray()))
             .LastOrDefault();
-        var body = custom is null ? metadata.Parameters.Where(IsBody).ToArray() : [];
+        var body = custom is null
+            ? metadata.Parameters.Select((parameter, index) => (Parameter: parameter, Index: index))
+                .Where(member => IsBody(member.Parameter)).ToArray()
+            : [];
         if (custom is not null && accepts?.RequestType is not null)
         {
             operation.RequestBody = new OpenApiRequestBody
@@ -161,19 +164,30 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         if (body.Length > 0)
         {
             var properties = new Dictionary<string, IOpenApiSchema>();
+            var formProperties = new Dictionary<string, IOpenApiSchema>();
             var jsonRequired = new HashSet<string>();
             var formRequired = new HashSet<string>();
-            foreach (var parameter in body)
+            foreach (var (parameter, index) in body)
             {
-                var name = parameter.WireName ?? jsonOptions.PropertyNamingPolicy?.ConvertName(parameter.ClrName) ??
-                    parameter.ClrName;
-                properties[name] = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!,
+                var fallbackName = parameter.WireName ??
+                                   jsonOptions.PropertyNamingPolicy?.ConvertName(parameter.ClrName) ?? parameter.ClrName;
+                var member = metadata.RequestType is { } requestType
+                    ? PortiaHttpBinding.ResolveBodyMember(jsonOptions, requestType, parameter.Type, index,
+                        parameter.ClrName, fallbackName)
+                    : new PortiaHttpBinding.BindingMetadata(fallbackName, jsonOptions);
+                var memberSchema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, member.Options, context.Document!,
                     schemaType, parameter.IsNullable, schemaCollectionElementIsNullable);
+                properties[member.Name] = memberSchema;
+                // Forms and queries use generated scalar parsing and their declared field names.
+                // JSON member converters and resolver renames apply only to the JSON body.
+                formProperties[fallbackName] = ReferenceEquals(member.Options, jsonOptions) ? memberSchema :
+                    PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!, schemaType,
+                        parameter.IsNullable, schemaCollectionElementIsNullable);
                 if (parameter.Required)
                 {
-                    _ = jsonRequired.Add(name);
+                    _ = jsonRequired.Add(member.Name);
                     if (parameter.Type != typeof(bool))
-                        _ = formRequired.Add(name);
+                        _ = formRequired.Add(fallbackName);
                 }
             }
 
@@ -190,7 +204,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 var formSchema = new OpenApiSchema
                 {
                     Type = JsonSchemaType.Object,
-                    Properties = properties,
+                    Properties = formProperties,
                     Required = formRequired.Count == 0 ? null : formRequired
                 };
                 content["application/x-www-form-urlencoded"] = new OpenApiMediaType { Schema = formSchema };
@@ -199,7 +213,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
             operation.RequestBody = new OpenApiRequestBody
             {
-                Required = body.Any(parameter => parameter.Required),
+                Required = body.Any(member => member.Parameter.Required),
                 Content = content
             };
         }

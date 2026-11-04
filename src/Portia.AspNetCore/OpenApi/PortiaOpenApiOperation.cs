@@ -23,6 +23,9 @@ public sealed record PortiaOpenApiOperation(
     bool QueueCapable,
     IReadOnlyList<PortiaOpenApiParameter> Parameters)
 {
+    /// <summary>Gets the request whose constructor members define generated binding.</summary>
+    public Type? RequestType { get; init; }
+
     /// <summary>Gets whether the declared response payload can be null.</summary>
     public bool ResultIsNullable { get; init; }
 }

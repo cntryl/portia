@@ -166,3 +166,7 @@ Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaType.set -> void
 Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaCollectionElementIsNullable.get -> System.Func<System.Type!, System.Type!, bool?>?
 Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaCollectionElementIsNullable.set -> void
 static Cntryl.Portia.PortiaHttpBinding.ValidateRoutedBody<TRequest, TValue>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, int memberIndex, string! fallbackName, TValue expected) -> void
+Cntryl.Portia.PortiaOpenApiOperation.RequestType.get -> System.Type?
+Cntryl.Portia.PortiaOpenApiOperation.RequestType.init -> void
+static Cntryl.Portia.PortiaHttpBinding.HasBodyMember<TRequest, TValue>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, int memberIndex, string! memberName, string! fallbackName) -> bool
+static Cntryl.Portia.PortiaHttpBinding.ValidateRoutedBody<TRequest, TValue>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, int memberIndex, string! memberName, string! fallbackName, TValue expected) -> void
