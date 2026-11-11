@@ -208,8 +208,9 @@ creation and document replacement until the workspace behavior is fixed.
 
 Analyzer tests compile small application samples and exercise the diagnostics and code actions.
 Run `bash scripts/verify-namespace-fix.sh /tmp/portia-namespace-check 64` after a Release build to
-exercise PORTIA202 through the installed SDK's `dotnet format` host, with generated JSON constructor
-references, both namespace styles, compilation, and a second pass for idempotence.
+exercise PORTIA202 through the installed SDK's solution-level `dotnet format` host. The harness
+uses a Common project and a referencing Core project, generated JSON constructor references, both
+namespace styles, solution compilation, cross-project reference updates, and a second idempotence pass.
 They are not repository structure tests. They do not establish business semantics, absence of
 indirection, production implementations/tests for every port, or a complete cross-project graph.
 Those remain review requirements, alongside authoritative outcome-validation behavior tests.
