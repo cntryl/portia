@@ -1,5 +1,38 @@
+using System.Text.Json;
 using Cntryl.Portia;
 using Microsoft.Extensions.Hosting;
+
+if (Environment.GetEnvironmentVariable("PORTIA_MCP_TEST_PROCESS_ID_FILE") is { Length: > 0 } processIdFile)
+    File.WriteAllText(processIdFile, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+if (args.Contains("--hang-before-mcp", StringComparer.Ordinal))
+{
+    Console.Error.WriteLine(Environment.ProcessId);
+    await Task.Delay(Timeout.InfiniteTimeSpan);
+    return;
+}
+
+if (args.Contains("--fail-initialization", StringComparer.Ordinal))
+{
+    Console.Error.WriteLine(Environment.ProcessId);
+    while (Console.ReadLine() is { } request)
+    {
+        using var message = JsonDocument.Parse(request);
+        if (!message.RootElement.TryGetProperty("id", out var id))
+            continue;
+
+        Console.Out.WriteLine("{\"jsonrpc\":\"2.0\",\"id\":" + id.GetRawText()
+            + ",\"error\":{\"code\":-32601,\"message\":\"Intentional initialization failure.\"}}");
+        Console.Out.Flush();
+    }
+
+    // Keep the child alive after the client closes its input so the test observes transport cleanup.
+    await Task.Delay(Timeout.InfiniteTimeSpan);
+    return;
+}
+
+if (args.Contains("--report-process-id", StringComparer.Ordinal))
+    Console.Error.WriteLine(Environment.ProcessId);
 
 var builder = Host.CreateApplicationBuilder([]);
 var application = builder.Services.AddPortia().AddRequestHandler<StdioGreetingHandler>();

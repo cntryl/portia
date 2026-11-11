@@ -186,16 +186,24 @@ var result = await mcp.When("accounts.get", new Dictionary<string, object?>
 {
     ["account_id"] = accountId
 }).ExpectSuccess();
+var resources = await mcp.ListResources().ExpectExactly("accounts://current")
+    .Inspect(items => Assert.Equal("application/json", Assert.Single(items).MimeType));
 ```
 
 The scenario owns the official MCP client and transport but never disposes `client`. Catalog and
-call snapshots contain detached schemas, hints, metadata, text, structured JSON, and Portia's failure
-details (`Error`) for ordinary assertions. `ExpectFailure(kind)` checks Portia's failure kind. Authentication is not a
-scenario shortcut: configure it on the supplied HTTP client so ASP.NET authorization and Portia
-actor resolution stay inside the test.
+call snapshots contain detached schemas, descriptions, annotations, metadata, text and binary content,
+structured JSON, and Portia's failure details (`Error`) for ordinary assertions. Resource reads retain
+the server's `ttlMs` and `cacheScope` hints. `ExpectFailure(kind)` checks Portia's failure kind;
+`ExpectResult(JsonTypeInfo<T>, callback)` requires success and inspects the typed `result` value.
+Chained expectations and repeated awaits reuse the same protocol operation. Authentication is not a
+scenario shortcut: configure it on the supplied HTTP client so ASP.NET authorization and Portia actor
+resolution stay inside the test.
 
 `McpScenario` also provides `ListResourcesAsync`, `ListResourceTemplatesAsync`, `ReadResourceAsync`,
-`ListPromptsAsync`, and `GetPromptAsync` with detached resource and prompt snapshots.
+`ListPromptsAsync`, and `GetPromptAsync` with detached resource and prompt snapshots. The fluent
+`ListResources`, `ListResourceTemplates`, `ReadResource`, `ListPrompts`, and `GetPrompt` methods add
+exact-catalog assertions and snapshot callbacks without replacing the async methods. For stdio tests,
+`ConnectStdioAsync(StdioClientTransportOptions)` owns the official MCP client and its child process.
 
 ## Ingress limits
 
