@@ -310,11 +310,13 @@ public sealed class McpLifecycleQualificationTests
             var paths = EvidenceFiles.Select(name => Path.Combine(evidence, name)).ToArray();
             if (paths.Any(path => !File.Exists(path)))
                 return false;
-            var spans = File.ReadAllLines(paths[0]);
+            var spans = File.ReadAllLines(paths[0]).Select(line => line.Split('\t')).ToArray();
             var metrics = File.ReadAllLines(paths[1]);
-            return File.ReadAllLines(paths[2]).Length == 1
-                && spans.Any(line => line.Contains("\tfault\t", StringComparison.Ordinal))
-                && spans.Any(line => line.Contains("\tcanceled\t", StringComparison.Ordinal))
+            var logs = File.ReadAllLines(paths[2]).Select(line => line.Split('\t')).ToArray();
+            return logs.Length == 1
+                && spans.Any(span => span[0] == PortiaTelemetry.ProcessActivityName
+                    && span[1] == logs[0][1] && span[2] == logs[0][2] && span[4] == "fault")
+                && spans.Any(span => span[0] == PortiaTelemetry.ExecuteActivityName && span[4] == "canceled")
                 && metrics.Any(line => line.StartsWith("portia.worker.failure\t", StringComparison.Ordinal))
                 && metrics.Any(line => line.Contains("portia.outcome=canceled", StringComparison.Ordinal));
         }
