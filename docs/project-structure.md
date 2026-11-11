@@ -192,25 +192,30 @@ for collisions among solution documents and existing files or directories on dis
 In the tested .NET 10 MSBuild workspace, adding documents also adds explicit `Compile` items that
 conflict with SDK default globs, while replacement renames did not take effect. PORTIA200 and
 PORTIA201 file fixes are therefore unavailable in that workspace; PORTIA202 can still be applied by
-`dotnet format`. In a host that supports file operations, the adoption order is:
+`dotnet format`. The Portia source checkout includes a separate CLI for the file operations:
 
 ```sh
-dotnet format App.slnx --diagnostics PORTIA202
-# Reopen the solution.
-dotnet format App.slnx --diagnostics PORTIA200
-# Reopen the solution.
-dotnet format App.slnx --diagnostics PORTIA201
+dotnet restore App.slnx
+dotnet run --project /path/to/portia/eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj \
+  -- fix-application-structure --solution App.slnx
 ```
 
-Repeat the sequence to confirm that no further changes are needed. The current MSBuild workspace
-cannot complete the PORTIA200/201 steps safely; resolve those IDs in a host that supports file
-creation and document replacement until the workspace behavior is fixed.
+The command applies file writes and moves itself, then reloads the solution and checks that each
+destination is included exactly once. It does not add explicit `Compile` items. If an explicit
+Compile rule excludes a destination, a collision exists, the reloaded solution differs, or the build
+fails, the CLI restores the original files and reports the failure. It builds with `--no-restore`,
+checks that PORTIA200/201 are clear, and repeats the diagnostic pass to confirm idempotence. Projects
+with custom Compile rules must be updated manually before rerunning the command. The normal Roslyn
+code actions remain available in hosts that support safe file operations.
 
 Analyzer tests compile small application samples and exercise the diagnostics and code actions.
 Run `bash scripts/verify-namespace-fix.sh /tmp/portia-namespace-check 64` after a Release build to
 exercise PORTIA202 through the installed SDK's solution-level `dotnet format` host. The harness
 uses a Common project and a referencing Core project, generated JSON constructor references, both
 namespace styles, solution compilation, cross-project reference updates, and a second idempotence pass.
+Run `bash scripts/verify-structure-file-fixes.sh /tmp/portia-structure-fixes` to exercise CLI splits,
+renames, SDK default globs, explicit Compile rollback, collision refusal, build-failure rollback, and
+second-pass idempotence.
 They are not repository structure tests. They do not establish business semantics, absence of
 indirection, production implementations/tests for every port, or a complete cross-project graph.
 Those remain review requirements, alongside authoritative outcome-validation behavior tests.
