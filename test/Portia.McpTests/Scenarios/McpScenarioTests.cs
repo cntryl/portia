@@ -71,12 +71,17 @@ public sealed class McpScenarioTests
     {
         var started = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         var observedProcessId = 0;
+        var processIdFile = Path.Combine(Path.GetTempPath(), $"portia-mcp-{Guid.NewGuid():N}.pid");
         var options = new StdioClientTransportOptions
         {
             Command = "dotnet",
             Arguments = [GetStdioHostPath(), "--fail-initialization"],
             Name = "Portia stdio failed initialization test",
             ShutdownTimeout = TimeSpan.FromMilliseconds(500),
+            EnvironmentVariables = new Dictionary<string, string?>
+            {
+                ["PORTIA_MCP_TEST_PROCESS_ID_FILE"] = processIdFile
+            },
             StandardErrorLines = line =>
             {
                 if (int.TryParse(line, out var processId))
@@ -104,13 +109,23 @@ public sealed class McpScenarioTests
         }
         finally
         {
-            if (childProcessId == 0)
-                childProcessId = Volatile.Read(ref observedProcessId);
-            if (childProcessId > 0)
+            try
             {
-                KillProcessIfRunning(childProcessId);
-                Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(5)),
-                    "Cleanup after a failed MCP initialization left its stdio child process running.");
+                if (childProcessId == 0)
+                    childProcessId = Volatile.Read(ref observedProcessId);
+                if (childProcessId == 0 && File.Exists(processIdFile)
+                    && int.TryParse(await File.ReadAllTextAsync(processIdFile), out var persistedProcessId))
+                    childProcessId = persistedProcessId;
+                if (childProcessId > 0)
+                {
+                    KillProcessIfRunning(childProcessId);
+                    Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(5)),
+                        "Cleanup after a failed MCP initialization left its stdio child process running.");
+                }
+            }
+            finally
+            {
+                File.Delete(processIdFile);
             }
         }
     }

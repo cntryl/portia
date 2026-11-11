@@ -2,6 +2,9 @@ using System.Text.Json;
 using Cntryl.Portia;
 using Microsoft.Extensions.Hosting;
 
+if (Environment.GetEnvironmentVariable("PORTIA_MCP_TEST_PROCESS_ID_FILE") is { Length: > 0 } processIdFile)
+    File.WriteAllText(processIdFile, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
 if (args.Contains("--hang-before-mcp", StringComparer.Ordinal))
 {
     Console.Error.WriteLine(Environment.ProcessId);
