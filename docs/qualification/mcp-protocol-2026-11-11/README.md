@@ -2,7 +2,7 @@
 
 - Captured: 2026-11-11T18:44:06.335061+00:00
 - Source: `d165526d965c9a3bd7528384405cae7ce396bea2` (worktree status: `clean`)
-- Rebased source counterpart: `b84705d`; the `bench/Portia.Benchmarks` tree (`0892f047`) and `src/Portia.Mcp` tree (`c363e765`) are identical to the measured source. The raw campaign remains attributed to the exact measured commit above.
+- Rebased source counterpart: `1581a60`; the `bench/Portia.Benchmarks` tree (`0892f047`) and `src/Portia.Mcp` tree (`c363e765`) are identical to the measured source. Both builds enable the .NET 11 Runtime Async feature by default; the rebase adds only an explicit opt-out. The raw campaign remains attributed to the exact measured commit above.
 - SDK/runtime: .NET SDK 11.0.100, .NET 11.0.0
 - Environment: macOS 27.0.1, Arm64, 10 logical processors, server GC `False`
 - MCP packages: `ModelContextProtocol` 2.4.0, `ModelContextProtocol.AspNetCore` 2.4.0
