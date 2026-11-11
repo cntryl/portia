@@ -119,6 +119,33 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
+    public void ShouldGeneratePropertyDescriptionsUsingJsonContractNames()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddPortia().AddRequestHandler<DocumentedGreetingHandler>().AddMcpTool<DocumentedGreeting>();
+        using var provider = services.BuildServiceProvider();
+        var tool = Assert.Single(provider.GetServices<McpServerTool>());
+
+        Assert.Equal("Reads a greeting by its documented name.", tool.ProtocolTool.Description);
+        Assert.Equal("The person whose greeting should be read.", tool.ProtocolTool.InputSchema
+            .GetProperty("properties").GetProperty("greeting_name").GetProperty("description").GetString());
+    }
+
+    [Fact]
+    public void ShouldGeneratePropertyDescriptionsFromInheritedRequestMembers()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddPortia()
+            .AddRequestHandler<InheritedDocumentedGreetingHandler>()
+            .AddMcpTool<InheritedDocumentedGreeting>();
+        using var provider = services.BuildServiceProvider();
+        var tool = Assert.Single(provider.GetServices<McpServerTool>());
+
+        Assert.Equal("The person whose greeting should be read.", tool.ProtocolTool.InputSchema
+            .GetProperty("properties").GetProperty("name").GetProperty("description").GetString());
+    }
+
+    [Fact]
     public void ShouldRenderXmlReferencesAndResolveInheritedDocumentation()
     {
         var services = new ServiceCollection();
@@ -131,7 +158,7 @@ public sealed class McpRegistrationTests
         using var provider = services.BuildServiceProvider();
         var tools = provider.GetServices<McpServerTool>().ToDictionary(tool => tool.ProtocolTool.Name);
 
-        Assert.Equal("Returns ReadGreeting when the null value is missing.",
+        Assert.Equal("Returns ReadGreeting when the null value is missing; owners use \"Tom & Jerry\".",
             tools["greetings.markup"].ProtocolTool.Description);
         Assert.Equal("Reads a greeting inherited by the concrete MCP request.",
             tools["greetings.inherited"].ProtocolTool.Description);
@@ -187,17 +214,17 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldGenerateDescriptionForRequestFromContractsAssemblyWithoutXmlFile()
+    public void ShouldGenerateFallbackForRequestFromContractsAssemblyWithoutDocumentation()
     {
         var services = new ServiceCollection();
         _ = services.AddPortia()
-            .AddRequestHandler<ExternalGreetingHandler>()
-            .AddMcpTool<ExternalGreeting>(tool => tool.ReadOnly());
+            .AddRequestHandler<UndocumentedGreetingHandler>()
+            .AddMcpTool<UndocumentedGreeting>();
 
         using var provider = services.BuildServiceProvider();
         var tool = Assert.Single(provider.GetServices<McpServerTool>());
 
-        Assert.Equal("Invokes the ExternalGreeting request.", tool.ProtocolTool.Description);
+        Assert.Equal("Invokes the UndocumentedGreeting request.", tool.ProtocolTool.Description);
     }
 
     [Fact]
@@ -355,6 +382,19 @@ public sealed class McpRegistrationTests
             application.AddMcpTool<ReadGreeting>(tool => tool.Named("greetings.other")));
 
         // Assert
+        Assert.Contains("conflicting MCP tool declarations", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldRejectConflictingPropertyDescriptionsInDuplicateDeclarations()
+    {
+        var application = new ServiceCollection().AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .AddMcpTool<ReadGreeting>(tool => tool.DescribeProperty("Name", "The first description."));
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            application.AddMcpTool<ReadGreeting>(tool => tool.DescribeProperty("Name", "The second description.")));
+
         Assert.Contains("conflicting MCP tool declarations", exception.Message, StringComparison.Ordinal);
     }
 
@@ -1134,6 +1174,34 @@ public sealed class McpRegistrationTests
     [RequestRoute("public", "greetings", "message", "read")]
     public sealed record ReadGreeting(string Name) : IRequest<string>, ICallable;
 
+    /// <summary>Reads a greeting by its documented name.</summary>
+    /// <param name="Name">The person whose greeting should be read.</param>
+    [Discriminator("greetings.documented")]
+    public sealed record DocumentedGreeting([property: JsonPropertyName("greeting_name")] string Name)
+        : IRequest<string>, ICallable;
+
+    public sealed class DocumentedGreetingHandler : IRequestHandler<DocumentedGreeting, string>
+    {
+        public ValueTask<Result<string>> HandleAsync(IRequestContext<DocumentedGreeting> context, CancellationToken ct) =>
+            ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+    }
+
+    public record DocumentedGreetingBase
+    {
+        /// <summary>The person whose greeting should be read.</summary>
+        public string Name { get; init; } = string.Empty;
+    }
+
+    /// <summary>Reads a greeting from an inherited request property.</summary>
+    [Discriminator("greetings.inherited-property")]
+    public sealed record InheritedDocumentedGreeting : DocumentedGreetingBase, IRequest<string>, ICallable;
+
+    public sealed class InheritedDocumentedGreetingHandler : IRequestHandler<InheritedDocumentedGreeting, string>
+    {
+        public ValueTask<Result<string>> HandleAsync(IRequestContext<InheritedDocumentedGreeting> context,
+            CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+    }
+
     public sealed class ReadGreetingHandler : IRequestHandler<ReadGreeting, string>
     {
         public ValueTask<Result<string>> HandleAsync(IRequestContext<ReadGreeting> context, CancellationToken ct) =>
@@ -1293,7 +1361,13 @@ public sealed class McpRegistrationTests
             CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
     }
 
-    /// <summary>Returns <see cref="ReadGreeting" /> when the <see langword="null" /> value is missing.</summary>
+    public sealed class UndocumentedGreetingHandler : IRequestHandler<UndocumentedGreeting, string>
+    {
+        public ValueTask<Result<string>> HandleAsync(IRequestContext<UndocumentedGreeting> context,
+            CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+    }
+
+    /// <summary>Returns <see cref="ReadGreeting" /> when the <see langword="null" /> value is missing; owners use &quot;Tom &amp; Jerry&quot;.</summary>
     [Discriminator("greetings.markup")]
     public sealed record MarkupGreeting(string Name) : IRequest<string>, ICallable;
 
@@ -1413,6 +1487,8 @@ public sealed class McpRegistrationTests
 [PortiaJsonContext]
 [JsonSerializable(typeof(McpRegistrationTests.IdentifiedInvocation))]
 [JsonSerializable(typeof(McpRegistrationTests.ReadGreeting))]
+[JsonSerializable(typeof(McpRegistrationTests.DocumentedGreeting))]
+[JsonSerializable(typeof(McpRegistrationTests.InheritedDocumentedGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.RejectGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.InspectNestedInput))]
 [JsonSerializable(typeof(McpRegistrationTests.NestedInput))]
@@ -1423,6 +1499,7 @@ public sealed class McpRegistrationTests
 [JsonSerializable(typeof(McpPrimitiveTests.SlowRead))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(ExternalGreeting))]
+[JsonSerializable(typeof(UndocumentedGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.InheritedGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.MarkupGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.PostDispatchJsonFailure))]

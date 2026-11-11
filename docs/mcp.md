@@ -39,6 +39,24 @@ When a referenced contracts assembly does not publish XML documentation, Portia 
 `Invokes the {RequestType} request.` fallback; use `DescribedAs(...)` when that fallback is not
 specific enough for a model to choose the tool confidently.
 
+For generated tool metadata, enable XML documentation on the application and contracts projects.
+Portia uses request summaries for tool descriptions and property summaries (or matching `<param>`
+documentation when a property summary is absent) for input-field descriptions. For example:
+
+```csharp
+/// <summary>Finds an account by its identifier.</summary>
+public sealed record GetAccount(
+    /// <param name="AccountId">The account identifier to look up.</param>
+    string AccountId) : IRequest<AccountView>, ICallable;
+```
+
+The generated JSON contract remains authoritative for field names and types. Property descriptions
+follow its JSON property names, including `[JsonPropertyName]` and the configured naming policy.
+Undocumented fields remain undocumented. Descriptions and MCP annotations help a client understand
+the interface; they do not define authorization, validation, side effects, or expected business
+failures. Document those on the request and its handler, and keep guards and authorizers responsible
+for enforcing policy. Use `DescribedAs(...)` to override the generated request summary when needed.
+
 Presentation metadata can be refined without changing the domain request:
 
 ```csharp
@@ -74,6 +92,10 @@ and object access. Each declaration must call `Authenticated()`, `Public()`, or
 `AsText(mimeType, project)` and `AsBinary(mimeType, project)` also project resource results.
 Fixed URIs and templates with whole path-segment `{name}` placeholders are supported. Prompts
 declare required or optional string arguments. Missing or unknown arguments fail before binding.
+Resources and prompts accept `Titled(...)` and `DescribedAs(...)`; resources also accept
+`Named(...)` to set the catalog identity while retaining the registered URI or URI template.
+Prompts keep their registered prompt name as identity. Use `Required(name, description)` and
+`Optional(name, description)` to add model-facing argument descriptions.
 Resources and prompts can be the only MCP declarations in an HTTP or stdio host. The catalog is
 static; dynamic enumeration, subscriptions, and list-change notifications are not advertised.
 Declare resources and prompts before calling `AddMcpHttp()` or `AddMcpStdio()`; adding them after

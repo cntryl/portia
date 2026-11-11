@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.ComponentModel;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using System.Text.Json;
@@ -17,12 +18,14 @@ public abstract class McpToolRegistration
 {
     static readonly ConditionalWeakTable<JsonSerializerOptions, JsonSerializerOptions> BindingOptions = [];
     readonly ConditionalWeakTable<JsonSerializerOptions, Tool> _protocolTools = [];
+    readonly IReadOnlyDictionary<string, McpJsonPropertyDescription> _propertyDescriptions;
 
     internal McpToolRegistration(Type requestType, Type? resultType, string name, string description,
         McpToolOptions options)
     {
         RequestType = requestType;
         ResultType = resultType;
+        _propertyDescriptions = options.PropertyDescriptions;
         RequestName = name;
         Name = string.IsNullOrWhiteSpace(options.Name) ? name : options.Name;
         Description = string.IsNullOrWhiteSpace(options.Description) ? description : options.Description;
@@ -42,6 +45,8 @@ public abstract class McpToolRegistration
     }
 
     internal string RequestName { get; }
+
+    internal IReadOnlyDictionary<string, McpJsonPropertyDescription> PropertyDescriptions => _propertyDescriptions;
 
     internal McpInvocation Invocation { get; }
 
@@ -106,6 +111,22 @@ public abstract class McpToolRegistration
         if (input is not JsonObject inputObject)
             throw new InvalidOperationException($"MCP tool '{Name}' did not produce an object input schema.");
         inputObject["type"] = "object";
+        if (inputObject["properties"] is JsonObject properties)
+        {
+            var contractNames = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var property in binding.Properties)
+                if (property.AttributeProvider is MemberInfo member)
+                    contractNames.TryAdd(member.Name, property.Name);
+
+            foreach (var (propertyName, propertyDescription) in _propertyDescriptions)
+            {
+                var jsonName = contractNames.GetValueOrDefault(propertyName)
+                    ?? propertyDescription.JsonName
+                    ?? json.PropertyNamingPolicy?.ConvertName(propertyName) ?? propertyName;
+                if (properties[jsonName] is JsonObject propertySchema)
+                    propertySchema["description"] = propertyDescription.Description;
+            }
+        }
         var result = ResultType is null ? null : json.GetTypeInfo(ResultType).GetJsonSchemaAsNode();
         if (result is not null)
             RewriteResultReferences(result);

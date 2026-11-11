@@ -103,6 +103,127 @@ public sealed class RegistrationInterceptorIncrementalTests
             $"Call-site models were {reason} after an unrelated event was added."));
     }
 
+    [Fact]
+    public void ShouldRefreshGeneratedMcpDescriptionAfterDocumentationOnlyEdit()
+    {
+        const string initialRequest = """
+            using Cntryl.Portia;
+            /// <summary>Finds an account.</summary>
+            /// <param name="AccountId">The stable account key.</param>
+            [Discriminator("account.find", 1)]
+            public sealed record FindAccount(string AccountId) : IRequest<string>, ICallable;
+            """;
+        const string editedRequest = """
+            using Cntryl.Portia;
+            /// <summary>Finds an account by its public identifier.</summary>
+            /// <param name="AccountId">The public account key.</param>
+            [Discriminator("account.find", 1)]
+            public sealed record FindAccount(string AccountId) : IRequest<string>, ICallable;
+            """;
+        const string composition = """
+            using Cntryl.Portia;
+            using Microsoft.Extensions.DependencyInjection;
+            public static class Composition
+            {
+                public static PortiaBuilder Compose(IServiceCollection services) => services.AddPortia().AddMcpTool<FindAccount>();
+            }
+            """;
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
+            [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
+        var requestTree = CSharpSyntaxTree.ParseText(initialRequest, parseOptions, "FindAccount.cs");
+        var callSiteTree = CSharpSyntaxTree.ParseText(composition, parseOptions, "Composition.cs");
+        var compilation = CSharpCompilation.Create("McpDescriptionIncremental", [callSiteTree, requestTree],
+            References().Append(MetadataReference.CreateFromFile(typeof(McpToolOptions).Assembly.Location)),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            [new RegistrationCallInterceptorGenerator().AsSourceGenerator()], parseOptions: parseOptions);
+
+        driver = driver.RunGenerators(compilation);
+        Assert.Contains("Finds an account.", Generated(driver), StringComparison.Ordinal);
+        Assert.Contains("The stable account key.", Generated(driver), StringComparison.Ordinal);
+
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(requestTree,
+            CSharpSyntaxTree.ParseText(editedRequest, parseOptions, "FindAccount.cs")));
+
+        Assert.Contains("Finds an account by its public identifier.", Generated(driver), StringComparison.Ordinal);
+        Assert.Contains("The public account key.", Generated(driver), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldReadMcpDescriptionsFromReferencedAssemblyXmlFile()
+    {
+        const string source = """
+            using Cntryl.Portia;
+            using Cntryl.Portia.McpContracts;
+            using Microsoft.Extensions.DependencyInjection;
+            public static class Composition
+            {
+                public static PortiaBuilder Compose(IServiceCollection services) =>
+                    services.AddPortia().AddMcpTool<ExternalGreeting>();
+            }
+            """;
+        var contractsAssembly = typeof(Cntryl.Portia.McpContracts.ExternalGreeting).Assembly.Location;
+        var documentationFile = Path.ChangeExtension(contractsAssembly, ".xml");
+        Assert.True(File.Exists(documentationFile), $"Expected XML documentation at {documentationFile}.");
+        var references = new MetadataReference[]
+        {
+            MetadataReference.CreateFromFile(typeof(McpToolOptions).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(IRequestBase).Assembly.Location),
+            MetadataReference.CreateFromFile(contractsAssembly, documentation: XmlDocumentationProvider.CreateFromFile(documentationFile))
+        };
+
+        var generated = GeneratorCompilation.GeneratedSource(source, references,
+            new RegistrationCallInterceptorGenerator());
+
+        Assert.Contains("Reads a greeting defined in a separate contracts assembly.", generated,
+            StringComparison.Ordinal);
+        Assert.Contains("The person's name from the separate contracts assembly.", generated,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldGenerateMcpPropertyDescriptionsDeterministically()
+    {
+        const string declarationOrder = """
+            using Cntryl.Portia;
+            using Microsoft.Extensions.DependencyInjection;
+            /// <summary>Looks up a stable code.</summary>
+            /// <param name="Zulu">The high range code.</param>
+            /// <param name="Beta">The low range code.</param>
+            [Discriminator("stable.lookup", 1)]
+            public sealed record StableLookup(string Zulu, string Beta) : IRequest<string>, ICallable;
+            public static class Composition
+            {
+                public static PortiaBuilder Compose(IServiceCollection services) => services.AddPortia().AddMcpTool<StableLookup>();
+            }
+            """;
+        const string reversedDeclarationOrder = """
+            using Cntryl.Portia;
+            using Microsoft.Extensions.DependencyInjection;
+            /// <summary>Looks up a stable code.</summary>
+            /// <param name="Zulu">The high range code.</param>
+            /// <param name="Beta">The low range code.</param>
+            [Discriminator("stable.lookup", 1)]
+            public sealed record StableLookup(string Beta, string Zulu) : IRequest<string>, ICallable;
+            public static class Composition
+            {
+                public static PortiaBuilder Compose(IServiceCollection services) => services.AddPortia().AddMcpTool<StableLookup>();
+            }
+            """;
+
+        var first = GeneratorCompilation.GeneratedSource(declarationOrder, new RegistrationCallInterceptorGenerator());
+        var second = GeneratorCompilation.GeneratedSource(reversedDeclarationOrder, new RegistrationCallInterceptorGenerator());
+
+        var firstDescriptions = string.Join(Environment.NewLine, first.Split(Environment.NewLine)
+            .Where(line => line.Contains("DescribeProperty(", StringComparison.Ordinal)));
+        var secondDescriptions = string.Join(Environment.NewLine, second.Split(Environment.NewLine)
+            .Where(line => line.Contains("DescribeProperty(", StringComparison.Ordinal)));
+
+        Assert.Equal(firstDescriptions, secondDescriptions);
+        Assert.True(firstDescriptions.IndexOf("DescribeProperty(\"Beta\"", StringComparison.Ordinal)
+                    < firstDescriptions.IndexOf("DescribeProperty(\"Zulu\"", StringComparison.Ordinal));
+    }
+
     /// <summary>A request sent only through the outcome-aware API still enters the generated transport catalog.</summary>
     [Fact]
     public void ShouldRegisterRequestDispatchedThroughOutcomeAwareSender()

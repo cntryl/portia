@@ -347,24 +347,61 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
         var description = DocumentationSummary(type) ?? $"Invokes the {type.Name} request.";
 
+        var propertyDescriptions = RequestProperties(type)
+            .Where(property => !property.IsStatic && !property.IsIndexer
+                && property.GetMethod?.DeclaredAccessibility == Accessibility.Public)
+            .OrderBy(property => property.Name, StringComparer.Ordinal)
+            .Select(property => (Property: property,
+                Description: DocumentationSummary(property)
+                              ?? ParameterDescription(property.ContainingType, property.Name)))
+            .Where(item => item.Description is not null)
+            .ToArray();
+        var configure = propertyDescriptions.Length == 0 ? "configure"
+            : "options => { " + string.Join(" ", propertyDescriptions.Select(item =>
+                "options!.DescribeProperty(" + RequestTransportDiscovery.FormatStringLiteral(item.Property.Name) + ", "
+                + RequestTransportDiscovery.FormatStringLiteral(item.Description!) + ", "
+                + (JsonPropertyName(item.Property) is { } jsonName
+                    ? RequestTransportDiscovery.FormatStringLiteral(jsonName)
+                    : "null") + ");"))
+              + " configure?.Invoke(options!); }";
+
         var genericTypes = new StringBuilder().Append('<').Append(Type(type));
         if (request.TypeArguments.Length == 1)
             _ = genericTypes.Append(", ").Append(Type(request.TypeArguments[0]));
         _ = genericTypes.Append('>');
         var body = "_ = global::Cntryl.Portia.PortiaMcpApplicationExtensions.AddGeneratedMcpTool"
                    + genericTypes + "(builder, " + RequestTransportDiscovery.FormatStringLiteral(name!) + ", "
-                   + RequestTransportDiscovery.FormatStringLiteral(description!) + ", configure);\n";
+                   + RequestTransportDiscovery.FormatStringLiteral(description!) + ", " + configure + ");\n";
         return new Call(InterceptableLocationModel.From(location), "MCP tool", body, null, diagnosticLocation);
     }
 
-    static string? DocumentationSummary(INamedTypeSymbol type) =>
-        DocumentationSummary(type, [with(SymbolEqualityComparer.Default)]);
-
-    static string? DocumentationSummary(INamedTypeSymbol type, HashSet<ISymbol> visited)
+    static IEnumerable<IPropertySymbol> RequestProperties(INamedTypeSymbol type)
     {
-        if (!visited.Add(type))
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var current = type; current is not null && current.SpecialType != SpecialType.System_Object;
+             current = current.BaseType)
+        {
+            foreach (var property in current.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (!property.IsStatic && !property.IsIndexer
+                    && property.GetMethod?.DeclaredAccessibility == Accessibility.Public
+                    && seen.Add(property.Name))
+                    yield return property;
+            }
+        }
+    }
+
+    static string? DocumentationSummary(INamedTypeSymbol type) =>
+        DocumentationSummary((ISymbol)type, [with(SymbolEqualityComparer.Default)]);
+
+    static string? DocumentationSummary(ISymbol symbol) =>
+        DocumentationSummary(symbol, [with(SymbolEqualityComparer.Default)]);
+
+    static string? DocumentationSummary(ISymbol symbol, HashSet<ISymbol> visited)
+    {
+        if (!visited.Add(symbol))
             return null;
-        var xml = type.GetDocumentationCommentXml(expandIncludes: true, cancellationToken: default);
+        var xml = symbol.GetDocumentationCommentXml(expandIncludes: true, cancellationToken: default);
         if (string.IsNullOrWhiteSpace(xml))
             return null;
         try
@@ -380,14 +417,26 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
             if (root?.DescendantsAndSelf().Any(element => element.Name.LocalName == "inheritdoc") != true)
                 return null;
-            if (type.BaseType is { SpecialType: not SpecialType.System_Object } baseType
+            if (symbol is INamedTypeSymbol type
+                && type.BaseType is { SpecialType: not SpecialType.System_Object } baseType
                 && DocumentationSummary(baseType, visited) is { } inherited)
                 return inherited;
-            foreach (var implemented in type.Interfaces)
+            if (symbol is IPropertySymbol property)
             {
-                if (DocumentationSummary(implemented, visited) is { } inheritedInterface)
-                    return inheritedInterface;
+                if (property.OverriddenProperty is { } overridden
+                    && DocumentationSummary(overridden, visited) is { } inheritedProperty)
+                    return inheritedProperty;
+                foreach (var implemented in property.ContainingType.AllInterfaces)
+                    foreach (var candidate in implemented.GetMembers().OfType<IPropertySymbol>())
+                        if (SymbolEqualityComparer.Default.Equals(
+                                property.ContainingType.FindImplementationForInterfaceMember(candidate), property)
+                            && DocumentationSummary(candidate, visited) is { } inheritedInterfaceProperty)
+                            return inheritedInterfaceProperty;
             }
+            if (symbol is INamedTypeSymbol { } namedType)
+                foreach (var implemented in namedType.Interfaces)
+                    if (DocumentationSummary(implemented, visited) is { } inheritedInterface)
+                        return inheritedInterface;
 
             return null;
         }
@@ -396,6 +445,29 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             return null;
         }
     }
+
+    static string? ParameterDescription(INamedTypeSymbol type, string propertyName)
+    {
+        var xml = type.GetDocumentationCommentXml(expandIncludes: true, cancellationToken: default);
+        if (string.IsNullOrWhiteSpace(xml))
+            return null;
+        try
+        {
+            var parameter = XDocument.Parse(xml).Root?.Elements("param")
+                .FirstOrDefault(element => string.Equals((string?)element.Attribute("name"), propertyName, StringComparison.Ordinal));
+            var rendered = parameter is null ? null : string.Concat(parameter.Nodes().Select(RenderDocumentationNode));
+            return string.IsNullOrWhiteSpace(rendered) ? null : Regex.Replace(rendered, @"\s+", " ").Trim();
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
+    static string? JsonPropertyName(IPropertySymbol property) => property.GetAttributes()
+        .FirstOrDefault(attribute => attribute.AttributeClass?.ToDisplayString()
+            == "System.Text.Json.Serialization.JsonPropertyNameAttribute")
+        ?.ConstructorArguments.FirstOrDefault().Value as string;
 
     static string RenderDocumentationNode(XNode node) => node switch
     {

@@ -1,8 +1,11 @@
+using System.Collections.Generic;
+
 namespace Cntryl.Portia;
 
 /// <summary>Describes how an explicitly selected Portia request appears to MCP clients.</summary>
 public sealed class McpToolOptions
 {
+    readonly Dictionary<string, McpJsonPropertyDescription> _propertyDescriptions = [with(StringComparer.Ordinal)];
     /// <summary>Overrides the request discriminator used as the tool name.</summary>
     internal string? Name { get; private set; }
 
@@ -23,6 +26,7 @@ public sealed class McpToolOptions
 
     /// <summary>Gets or sets whether the tool may interact with entities outside a closed domain.</summary>
     internal bool? OpenWorldHint { get; private set; }
+    internal IReadOnlyDictionary<string, McpJsonPropertyDescription> PropertyDescriptions => _propertyDescriptions;
 
     /// <summary>Overrides the stable discriminator-derived tool name.</summary>
     public McpToolOptions Named(string name)
@@ -48,6 +52,19 @@ public sealed class McpToolOptions
         Title = string.IsNullOrWhiteSpace(title)
             ? throw new ArgumentException("A tool title cannot be empty.", nameof(title))
             : title;
+        return this;
+    }
+
+    /// <summary>Describes a request property in the generated MCP input schema.</summary>
+    /// <param name="propertyName">The C# property name from the request contract.</param>
+    /// <param name="description">The model-facing property description.</param>
+    /// <param name="jsonName">An explicit JSON property name, when the contract uses <c>JsonPropertyName</c>.</param>
+    public McpToolOptions DescribeProperty(string propertyName, string description, string? jsonName = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(propertyName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
+        if (!_propertyDescriptions.TryAdd(propertyName, new McpJsonPropertyDescription(description, jsonName)))
+            throw new ArgumentException($"Request property '{propertyName}' has more than one description.", nameof(propertyName));
         return this;
     }
 
@@ -81,3 +98,5 @@ public sealed class McpToolOptions
         return this;
     }
 }
+
+sealed record McpJsonPropertyDescription(string Description, string? JsonName);
