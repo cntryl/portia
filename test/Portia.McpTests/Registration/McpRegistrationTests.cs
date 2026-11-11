@@ -455,7 +455,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldLetExplicitHttpConfigurationOverridePortiaDefaults()
+    public void ShouldRejectStatefulHttpConfigurationFromTransportCallback()
     {
         var services = new ServiceCollection();
         _ = services.AddPortia()
@@ -465,7 +465,53 @@ public sealed class McpRegistrationTests
 
         using var provider = services.BuildServiceProvider();
 
-        Assert.False(provider.GetRequiredService<IOptions<HttpServerTransportOptions>>().Value.Stateless);
+        var exception = Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<HttpServerTransportOptions>>().Value);
+
+        Assert.Contains("requires stateless Streamable HTTP", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("cancellation has not been qualified", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldRejectStatefulHttpConfigurationRegisteredAfterPortia()
+    {
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .AddMcpTool<ReadGreeting>()
+            .AddMcpHttp();
+        builder.Services.Configure<HttpServerTransportOptions>(options =>
+            options.SessionMode = HttpServerSessionMode.StatefulForInitializeClients);
+
+        using var app = builder.Build();
+
+        var exception = Assert.Throws<OptionsValidationException>(() => app.MapPortiaMcp());
+
+        Assert.Contains("requires stateless Streamable HTTP", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ShouldAllowSafeHttpTransportConfiguration()
+    {
+        var services = new ServiceCollection();
+        var configured = false;
+        _ = services.AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .AddMcpTool<ReadGreeting>()
+            .AddMcpHttp(options => options.ConfigureSessionOptions = (_, _, _) =>
+            {
+                configured = true;
+                return Task.CompletedTask;
+            });
+
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<IOptions<HttpServerTransportOptions>>().Value;
+        Assert.True(options.Stateless);
+        var sessionOptions = new McpServerOptions();
+        await options.ConfigureSessionOptions!(new DefaultHttpContext(), sessionOptions, CancellationToken.None);
+        Assert.True(configured);
+        Assert.True(sessionOptions.ScopeRequests);
     }
 
     [Fact]

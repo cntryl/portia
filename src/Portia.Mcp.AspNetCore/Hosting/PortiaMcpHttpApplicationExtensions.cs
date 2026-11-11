@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.AspNetCore;
 
 namespace Cntryl.Portia;
@@ -8,7 +9,7 @@ public static class PortiaMcpHttpApplicationExtensions
 {
     /// <summary>Registers stateless Streamable HTTP services for the declared Portia MCP tools.</summary>
     /// <param name="application">The shared Portia application.</param>
-    /// <param name="configure">Optional HTTP transport configuration applied after Portia's stateless default.</param>
+    /// <param name="configure">Optional HTTP transport configuration applied after Portia's stateless default. The transport must remain stateless.</param>
     /// <returns>The same application builder for chaining.</returns>
     public static PortiaBuilder AddMcpHttp(this PortiaBuilder application,
         Action<HttpServerTransportOptions>? configure = null)
@@ -34,6 +35,10 @@ public static class PortiaMcpHttpApplicationExtensions
                 };
             })
             .AddAuthorizationFilters();
+        application.Services.AddOptions<HttpServerTransportOptions>()
+            .Validate(options => options.Stateless,
+                "Portia MCP HTTP requires stateless Streamable HTTP; stateful cancellation has not been qualified.")
+            .ValidateOnStart();
         McpPrimitiveHandlers.Attach(server, application.Services);
         McpPrimitiveHandlers.MarkTransportActivated(application.Services, "AddMcpHttp");
         _ = application.Services.AddSingleton<PortiaMcpHttpMarker>();

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.AspNetCore;
 
 namespace Cntryl.Portia;
 
@@ -21,6 +22,7 @@ public static class PortiaMcpEndpointRouteBuilderExtensions
         if (endpoints.ServiceProvider.GetService<PortiaMcpHttpMarker>() is null)
             throw new InvalidOperationException(
                 "MapPortiaMcp requires AddMcpHttp() in the shared Portia application composition.");
+        _ = endpoints.ServiceProvider.GetRequiredService<IOptions<HttpServerTransportOptions>>().Value;
         if (!endpoints.ServiceProvider.GetServices<McpToolRegistration>().Any()
             && !endpoints.ServiceProvider.GetServices<McpResourceEntry>().Any()
             && !endpoints.ServiceProvider.GetServices<McpPromptEntry>().Any())
