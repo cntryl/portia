@@ -104,17 +104,15 @@ static class McpPrimitiveHandlers
         {
             if (catalog.FixedResourcesByUri.TryGetValue(uri!, out var fixedEntry))
             {
-                if (fixedEntry.Match(uri!, out var matched))
-                {
-                    entry = fixedEntry;
-                    values = matched;
-                }
+                entry = fixedEntry;
+                values = new Dictionary<string, string>(StringComparer.Ordinal);
             }
             else
             {
+                var candidateSegments = uri!.Split('/');
                 foreach (var candidate in catalog.ResourceTemplates)
                 {
-                    if (!candidate.Match(uri!, out var matched))
+                    if (!candidate.MatchValidatedSegments(candidateSegments, out var matched))
                         continue;
                     entry = candidate;
                     values = matched;

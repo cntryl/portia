@@ -198,6 +198,9 @@ public sealed class McpPrimitiveTests
         Assert.Equal("Hello, fixed-first.", Assert.IsType<TextResourceContents>(Assert.Single(firstFixed.Contents)).Text);
         var lastTemplate = await client.ReadResourceAsync("greetings://index/alternate/Portia");
         Assert.Equal("Hello, alternate:Portia.", Assert.IsType<TextResourceContents>(Assert.Single(lastTemplate.Contents)).Text);
+        var escapedTemplate = await client.ReadResourceAsync("greetings://index/template/Portia%20Smith");
+        Assert.Equal("Hello, template:Portia Smith.",
+            Assert.IsType<TextResourceContents>(Assert.Single(escapedTemplate.Contents)).Text);
 
         var prompts = await client.ListPromptsAsync();
         Assert.Equal(["prompt-first", "prompt-last"], prompts.Select(prompt => prompt.Name));
