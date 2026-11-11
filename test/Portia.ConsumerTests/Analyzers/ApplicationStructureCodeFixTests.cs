@@ -485,16 +485,34 @@ public sealed class ApplicationStructureCodeFixTests
     }
 
     [Fact]
-    public async Task ShouldDeclineMovingPartialTypeGivenMultipleDeclarations()
+    public async Task ShouldNotReportPartialTypeDeclarationsAsMultipleTypes()
     {
         using var workspace = new AdhocWorkspace();
         var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs",
             "namespace Shop.Core.Features.Orders.Values; public partial record Price; public partial record Price;");
 
-        var (actions, _) = await ActionsAsync(document, "PORTIA200");
+        var diagnostics = await DiagnosticsAsync(document, new ApplicationStructureAnalyzer());
 
-        Assert.Empty(actions);
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA200");
         await AssertCompilesAsync(document.Project);
+    }
+
+    [Fact]
+    public async Task ShouldSplitSeparateTypeGivenPartialDeclarationGroup()
+    {
+        using var workspace = new AdhocWorkspace();
+        var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs",
+            "namespace Shop.Core.Features.Orders.Values; public partial record Price; public partial record Price; public record Currency;");
+
+        var (actions, diagnostic) = await ActionsAsync(document, "PORTIA200");
+
+        Assert.Equal("Currency", diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan));
+        var solution = await ApplyAsync(Assert.Single(actions));
+        var project = solution.GetProject(document.Project.Id)!;
+        var moved = Assert.Single(project.Documents, item => item.Name == "Currency.cs");
+        Assert.Contains("record Currency", (await moved.GetTextAsync()).ToString(), StringComparison.Ordinal);
+        Assert.Contains("partial record Price", (await solution.GetDocument(document.Id)!.GetTextAsync()).ToString(), StringComparison.Ordinal);
+        await AssertCompilesAsync(project);
     }
 
     [Fact]

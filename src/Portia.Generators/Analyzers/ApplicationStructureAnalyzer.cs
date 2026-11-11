@@ -69,11 +69,19 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             .Where(node => node.Parent is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax).ToArray();
         if (declarations.Length == 0)
             return;
+        var typeDeclarations = new List<SyntaxNode>(declarations.Length);
+        var declaredTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        foreach (var declaration in declarations)
+        {
+            if (context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is not INamedTypeSymbol type
+                || declaredTypes.Add(type))
+                typeDeclarations.Add(declaration);
+        }
         var path = project.RelativePath(tree);
         var filename = tree.FilePath.Replace('\\', '/').Split('/').Last();
-        var keeper = declarations.FirstOrDefault(declaration => MatchesFilename(declaration, filename,
-            context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) as INamedTypeSymbol)) ?? declarations[0];
-        foreach (var declaration in declarations.Where(declaration => declaration != keeper))
+        var keeper = typeDeclarations.FirstOrDefault(declaration => MatchesFilename(declaration, filename,
+            context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) as INamedTypeSymbol)) ?? typeDeclarations[0];
+        foreach (var declaration in typeDeclarations.Where(declaration => declaration != keeper))
         {
             var type = context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) as INamedTypeSymbol;
             var properties = ImmutableDictionary<string, string?>.Empty.Add("ExpectedFileName", Filename(type));
