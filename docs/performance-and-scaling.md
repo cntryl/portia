@@ -432,3 +432,38 @@ performance change is claimed. BenchmarkDotNet 0.15.8 required its in-process to
 `net11.0` target; the comparison is partial evidence for #175, not a release performance
 qualification. See the [comparison report](qualification/runtime-async-comparison/README.md) and
 its checked-in samples.
+
+## MCP protocol qualification
+
+The in-repository MCP campaign runs on .NET 11 and exercises loopback Kestrel Streamable HTTP and
+the official SDK's controlled stdio child process. It records server startup, client
+negotiation, catalog discovery, and warmed tool, resource, and prompt operations separately.
+The same host composition exposes a direct `IRequestBus.SendAsync` control and a generated Portia
+REST POST control for each result size. These application controls are stored as separate rows
+from full MCP operations; their differences are useful adapter and transport comparisons, not an
+isolated server-only timing.
+
+Run the diagnostic matrix to validate all transports, catalog sizes, formats, and telemetry modes
+with three samples. Use a full campaign for reported timing:
+
+```sh
+dotnet run --configuration Release --no-build --project bench/Portia.Benchmarks -- \
+  --mcp-protocol-qualification diagnostic /tmp/portia-mcp-diagnostic.jsonl
+dotnet run --configuration Release --no-build --project bench/Portia.Benchmarks -- \
+  --mcp-protocol-qualification full docs/qualification/mcp-protocol-2026-11-11/raw.jsonl
+```
+
+The checked-in qualification folder contains the full JSONL samples, environment and resolved
+package graph, plus a summary. The workload uses 1, 100, and 1,000 tools, resource templates,
+and prompts; nested tool arguments; 256-byte, 4-KiB, and 64-KiB results; JSON, text, and binary
+resources; and rendered text prompts. Catalog size 1 uses a JSON resource; all three resource
+formats are measured at sizes 100 and 1,000. Telemetry modes are disabled, propagation-only,
+deterministic 10% sampled tracing, synchronous metric observation, and in-memory logging. No
+exporter is configured or awaited.
+
+Each warmed operation retains raw sequential latency samples and reports P50, P95, mean, and a
+separate throughput batch. Allocation is the process-wide managed-byte delta for that batch: the
+loopback HTTP measurement includes both client and in-process server, while stdio counts only the
+parent client process. The stdio SDK combines child startup and MCP initialize, so those two are
+reported together. These boundaries are recorded in the raw metadata and must be kept in mind when
+comparing transport results.
