@@ -141,7 +141,7 @@ public static class PortiaStreamResults
         {
             var ct = context.RequestAborted;
             var options = PortiaHttpBinding.GetJsonOptions(context);
-            var typeInfo = (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
+            var typeInfo = options.GetTypeInfo<T>();
             // A comment keeps an idle event source's connection from being reclaimed. It applies
             // only to the event-stream shape: a JSON array has nowhere to put one.
             var keepAlive = sse

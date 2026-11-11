@@ -22,7 +22,7 @@ public enum RemoteRequestOutcomeKind
 ///     not confirm that the remote handler received it, stopped, or had its effects rolled back. Reconcile effects
 ///     when the outcome is <see cref="OutcomeUnknown" />.
 /// </remarks>
-public abstract class RemoteRequestOutcome
+public closed class RemoteRequestOutcome
 {
     private protected RemoteRequestOutcome()
     {
@@ -72,7 +72,7 @@ public abstract class RemoteRequestOutcome
 ///     not confirm that the remote handler received it, stopped, or had its effects rolled back. Reconcile effects
 ///     when the outcome is <see cref="OutcomeUnknown" />.
 /// </remarks>
-public abstract class RemoteRequestOutcome<TOut>
+public closed class RemoteRequestOutcome<TOut>
 {
     private protected RemoteRequestOutcome()
     {

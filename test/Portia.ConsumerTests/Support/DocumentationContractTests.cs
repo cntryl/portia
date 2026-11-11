@@ -107,7 +107,7 @@ public sealed partial class DocumentationContractTests
                                     && !path.EndsWith("Portia.CodeFixes", StringComparison.Ordinal)))
         {
             var name = Path.GetFileName(project);
-            Assert.True(File.Exists(Path.Combine(project, "bin/Release/net10.0", name + ".xml")),
+            Assert.True(File.Exists(Path.Combine(project, "bin/Release/net11.0", name + ".xml")),
                 $"Generated XML documentation is missing for {name}.");
         }
     }
@@ -131,7 +131,7 @@ public sealed partial class DocumentationContractTests
 
     static void AssertXmlMembers(string project, params string[] expected)
     {
-        var xml = File.ReadAllText(Path.Combine(Root, "src", project, "bin/Release/net10.0", project + ".xml"));
+        var xml = File.ReadAllText(Path.Combine(Root, "src", project, "bin/Release/net11.0", project + ".xml"));
         foreach (var member in expected)
             Assert.Contains($"name=\"{member}\"", xml, StringComparison.Ordinal);
     }

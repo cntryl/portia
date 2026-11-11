@@ -22,7 +22,7 @@ public sealed class McpPrimitiveTests
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name
                             ?? throw new InvalidOperationException("Missing test configuration.");
         var host = Path.GetFullPath(
-            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net10.0/Portia.McpStdioHost.dll",
+            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll",
             AppContext.BaseDirectory);
         using var process = new Process
         {
@@ -82,7 +82,7 @@ public sealed class McpPrimitiveTests
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name
                             ?? throw new InvalidOperationException("Missing test configuration.");
         var host = Path.GetFullPath(
-            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net10.0/Portia.McpStdioHost.dll",
+            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll",
             AppContext.BaseDirectory);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var transport = new StdioClientTransport(new StdioClientTransportOptions

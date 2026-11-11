@@ -360,7 +360,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                         || !ApplicationProject.DerivesFrom(aggregate, "Aggregate"))
                         continue;
                     if (!features.TryGetValue(path[1], out var types))
-                        features.Add(path[1], types = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default));
+                        features.Add(path[1], types = [with(SymbolEqualityComparer.Default)]);
                     foreach (var node in declaration.DescendantNodes().OfType<SimpleNameSyntax>())
                     {
                         cancellationToken.ThrowIfCancellationRequested();

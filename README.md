@@ -1,6 +1,6 @@
 # Portia
 
-Portia is a cohesive application framework for .NET 10. It carries an operation from its entry point through
+Portia is a cohesive application framework for .NET 11. It carries an operation from its entry point through
 authorization and domain decisions, then runs the durable work that follows.
 
 ASP.NET Core already does HTTP well. Portia is the application model behind HTTP—and behind RPC, queues, notices,
@@ -138,16 +138,17 @@ See [application setup](docs/application-setup.md) and [Fitz upgrade notes](docs
 - [NativeAOT](docs/native-aot.md): trimming and source-generated JSON setup
 - [Model Context Protocol](docs/mcp.md): request-backed tools, resources, and prompts over stdio and Streamable HTTP
 - [Migrating to Portia 0.4](docs/migration-0.4.md): JSON ownership, tenant templates, and MCP tests
+- [Portia 0.11.0 migration notes](docs/migration-0.11.0.md): .NET 11, Fitz 4.1, JSON, and compiler updates
 - [Portia 0.10.0 migration notes](docs/migration-0.10.0.md): operator access, processor inspection, typed outcomes, and Fitz 4
 - [Portia 0.8 migration notes](docs/migration-0.8.md): Fitz 2.0 compatibility and queue persistence
-- [Fitz 4 upgrade](docs/fitz-4-upgrade.md): Portia 0.10.0's coordinated Wire 3 upgrade, retry policy, and persistence
+- [Fitz 4 upgrade](docs/fitz-4-upgrade.md): Portia 0.11.0's Wire 3 compatibility, retry policy, and persistence
 
 ## Development
 
 Package versions are managed in `Directory.Packages.props`; restore the solution normally.
 The standalone examples and package-consumer smoke projects declare their external versions
-explicitly and select the Portia package version during qualification. Install a stable .NET 10 SDK;
-`global.json` sets 10.0.403 as the minimum SDK and rolls forward to the latest installed .NET 10
+explicitly and select the Portia package version during qualification. Install a stable .NET 11 SDK;
+`global.json` sets 11.0.100 as the minimum SDK and rolls forward to the latest installed .NET 11
 feature band.
 
 ```sh

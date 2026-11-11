@@ -14,11 +14,11 @@ sealed class OpenApiSelectionListConverter : JsonConverter<OpenApiSelectionList>
 {
     public override OpenApiSelectionList Read(ref Utf8JsonReader reader, Type typeToConvert,
         JsonSerializerOptions options) => new(JsonSerializer.Deserialize(ref reader,
-        (System.Text.Json.Serialization.Metadata.JsonTypeInfo<OpenApiSelection[]>)options.GetTypeInfo(typeof(OpenApiSelection[])))!);
+        options.GetTypeInfo<OpenApiSelection[]>())!);
 
     public override void Write(Utf8JsonWriter writer, OpenApiSelectionList value, JsonSerializerOptions options) =>
         JsonSerializer.Serialize(writer, value.Values,
-            (System.Text.Json.Serialization.Metadata.JsonTypeInfo<OpenApiSelection[]>)options.GetTypeInfo(typeof(OpenApiSelection[])));
+            options.GetTypeInfo<OpenApiSelection[]>());
 }
 
 [Discriminator("test.openapi.converted-root")]
@@ -30,11 +30,11 @@ sealed class OpenApiRootSelectionRequestConverter : JsonConverter<OpenApiRootSel
 {
     public override OpenApiRootSelectionRequest Read(ref Utf8JsonReader reader, Type typeToConvert,
         JsonSerializerOptions options) => new(JsonSerializer.Deserialize(ref reader,
-        (System.Text.Json.Serialization.Metadata.JsonTypeInfo<OpenApiSelection[]>)options.GetTypeInfo(typeof(OpenApiSelection[])))!);
+        options.GetTypeInfo<OpenApiSelection[]>())!);
 
     public override void Write(Utf8JsonWriter writer, OpenApiRootSelectionRequest value, JsonSerializerOptions options) =>
         JsonSerializer.Serialize(writer, value.Values,
-            (System.Text.Json.Serialization.Metadata.JsonTypeInfo<OpenApiSelection[]>)options.GetTypeInfo(typeof(OpenApiSelection[])));
+            options.GetTypeInfo<OpenApiSelection[]>());
 }
 
 sealed class OpenApiRootSelectionHandler : IRequestHandler<OpenApiRootSelectionRequest, OpenApiSelectionList?>

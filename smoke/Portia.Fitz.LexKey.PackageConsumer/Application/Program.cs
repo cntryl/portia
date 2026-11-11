@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
 using Cntryl.Fitz;
 using Cntryl.Fitz.Testing;
 using Cntryl.Keys;
@@ -16,12 +15,12 @@ await using (var provider = services.BuildServiceProvider())
 {
     _ = provider.GetRequiredService<IProcessorStatusClient>();
     var options = provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
-    var requestInfo = (JsonTypeInfo<GetProcessorStatus>)options.GetTypeInfo(typeof(GetProcessorStatus));
+    var requestInfo = options.GetTypeInfo<GetProcessorStatus>();
     var request = new GetProcessorStatus("AccountBalanceProjector", "tenant-a");
     if (JsonSerializer.Deserialize(JsonSerializer.Serialize(request, requestInfo), requestInfo) != request)
         throw new InvalidOperationException("Packed processor status request metadata did not round-trip.");
 
-    var statusInfo = (JsonTypeInfo<ProcessorStatus>)options.GetTypeInfo(typeof(ProcessorStatus));
+    var statusInfo = options.GetTypeInfo<ProcessorStatus>();
     var status = new ProcessorStatus(request.Processor, "projector", request.Tenant,
         "stream://tenant-a/accounts/*", null,
         new EventStreamProgress(new EventCursor("opaque:committed"), new EventCursor("opaque:head"),

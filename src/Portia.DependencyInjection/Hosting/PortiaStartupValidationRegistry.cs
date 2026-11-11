@@ -2,7 +2,7 @@ namespace Cntryl.Portia;
 
 sealed class PortiaStartupValidationRegistry
 {
-    readonly Dictionary<string, Action> _validations = new(StringComparer.Ordinal);
+    readonly Dictionary<string, Action> _validations = [with(StringComparer.Ordinal)];
     TaskCompletionSource _endpointValidations = CompletedSource();
     int _pendingEndpointValidations;
     bool _validated;

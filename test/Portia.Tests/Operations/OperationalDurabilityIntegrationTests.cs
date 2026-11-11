@@ -111,7 +111,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
     async Task<Process> StartWorkerAsync(string mode, Guid? previousOwner = null)
     {
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
-        var assembly = Path.GetFullPath($"../../../../../test/Portia.Operations.TestWorker/bin/{configuration}/net10.0/Portia.Operations.TestWorker.dll", AppContext.BaseDirectory);
+        var assembly = Path.GetFullPath($"../../../../../test/Portia.Operations.TestWorker/bin/{configuration}/net11.0/Portia.Operations.TestWorker.dll", AppContext.BaseDirectory);
         var signal = Path.Combine(_directory, mode);
         var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         start.ArgumentList.Add(assembly);

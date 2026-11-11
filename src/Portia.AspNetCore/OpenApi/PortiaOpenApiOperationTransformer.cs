@@ -71,11 +71,11 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             if (!responseMetadata.ReplaceExisting && operation.Responses.ContainsKey(status))
                 continue;
             var response = new OpenApiResponse { Description = "Response" };
-            if (responseMetadata.Type is not null && responseMetadata.ContentTypes.Any())
+            if (responseMetadata.Type is not null && responseMetadata.ContentTypes.Count > 0)
             {
                 response.Content = responseMetadata.ContentTypes.Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(contentType => contentType,
-                        _ => new OpenApiMediaType
+                        _ => (IOpenApiMediaType)new OpenApiMediaType
                         {
                             Schema = PortiaOpenApiSchemaGenerator.Create(responseMetadata.Type, jsonOptions,
                                 context.Document!, schemaType,
@@ -152,7 +152,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 Required = !accepts.IsOptional,
                 Content = accepts.ContentTypes.Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(
                     contentType => contentType,
-                    _ => new OpenApiMediaType
+                    _ => (IOpenApiMediaType)new OpenApiMediaType
                     {
                         Schema = PortiaOpenApiSchemaGenerator.Create(accepts.RequestType, jsonOptions,
                             context.Document!, schemaType,
@@ -197,7 +197,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 Properties = properties,
                 Required = jsonRequired.Count == 0 ? null : jsonRequired
             };
-            var content = new Dictionary<string, OpenApiMediaType> { ["application/json"] = new() { Schema = schema } };
+            Dictionary<string, IOpenApiMediaType> content = new()
+            { ["application/json"] = new OpenApiMediaType { Schema = schema } };
             if (endpointMetadata.OfType<PortiaFormBindableBody>().Any() &&
                 PortiaHttpBinding.AcceptsFormBody(endpointMetadata, context.ApplicationServices))
             {
@@ -283,7 +284,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
     static OpenApiResponse Response(string description, string mediaType, IOpenApiSchema schema) => new()
     {
         Description = description,
-        Content = new Dictionary<string, OpenApiMediaType> { [mediaType] = new() { Schema = schema } }
+        Content = new Dictionary<string, IOpenApiMediaType>
+        { [mediaType] = new OpenApiMediaType { Schema = schema } }
     };
 
     sealed class DefaultErrorResponses(OpenApiDocument document)

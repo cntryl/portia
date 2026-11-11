@@ -4,6 +4,26 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.11.0
+
+Read the [0.11.0 migration notes](docs/migration-0.11.0.md) before upgrading. Package publication
+and deployment are separate release steps.
+
+### Changed
+
+- Target .NET 11 and require the stable .NET 11.0.100 SDK or a later .NET 11 feature band.
+- Upgrade Fitz client packages to 4.1.0 with the existing Fitz 0.4.0 / Wire 3 broker contract.
+  Refresh Microsoft packages to 11.0.0, Microsoft.OpenApi and its YAML reader to 3.11.0,
+  ModelContextProtocol to 2.4.0, OpenTelemetry to 1.21.0, AWSSDK.S3 to 4.0.104.12, and
+  Microsoft.NET.Test.Sdk to 18.11.1. The Accounts example uses ASP.NET Core instrumentation 1.20.2.
+- Use C# 15 closed hierarchies for remote request outcomes so consumers can exhaustively handle
+  completed, not-dispatched, cancellation-forwarded, and unknown outcomes.
+- Parse MCP result and schema snapshots directly into owned JSON elements. Reuse unchanged
+  referenced JSON-context registrations and emit processor dispatchers without reparsing generated source.
+- Use stable compiler language settings and .NET 11 process capture in repository tooling.
+  OpenAPI 3.1 documents now report version 3.1.2; optional initialized JSON properties retain their
+  declared defaults when omitted.
+
 ## 0.10.0
 
 This entry includes source changes previously prepared under the unpublished 0.9.3 version.

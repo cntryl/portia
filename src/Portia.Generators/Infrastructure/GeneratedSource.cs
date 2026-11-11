@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Cntryl.Portia;
@@ -40,13 +39,6 @@ static class GeneratedSource
     {
         context.CancellationToken.ThrowIfCancellationRequested();
         context.AddSource(hintName, SourceText.From(source, Encoding.UTF8));
-    }
-
-    public static void AddFormatted(SourceProductionContext context, string hintName, string source)
-    {
-        var root = CSharpSyntaxTree.ParseText(source, cancellationToken: context.CancellationToken)
-            .GetRoot(context.CancellationToken);
-        context.AddSource(hintName, SourceText.From(root.NormalizeWhitespace(eol: "\n").ToFullString() + "\n", Encoding.UTF8));
     }
 
     public static IEnumerable<(string Key, T[] Items)> Buckets<T>(IEnumerable<T> items,

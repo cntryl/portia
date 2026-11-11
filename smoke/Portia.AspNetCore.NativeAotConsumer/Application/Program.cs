@@ -54,8 +54,8 @@ _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
 if (JsonSerializer.IsReflectionEnabledByDefault)
     throw new InvalidOperationException("JSON reflection must be disabled in the NativeAOT consumer.");
 var jsonOptions = app.Services.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
-var firstType = (System.Text.Json.Serialization.Metadata.JsonTypeInfo<App_A.FirstPayload>)jsonOptions.GetTypeInfo(typeof(App_A.FirstPayload));
-var secondType = (System.Text.Json.Serialization.Metadata.JsonTypeInfo<App.SecondPayload>)jsonOptions.GetTypeInfo(typeof(App.SecondPayload));
+var firstType = jsonOptions.GetTypeInfo<App_A.FirstPayload>();
+var secondType = jsonOptions.GetTypeInfo<App.SecondPayload>();
 if (JsonSerializer.Serialize(new App_A.FirstPayload("contracts"), firstType) != "{\"value\":\"contracts\"}"
     || JsonSerializer.Deserialize("{\"value\":42}", secondType)?.Value != 42)
     throw new InvalidOperationException("Referenced JSON context composition failed.");
@@ -260,11 +260,11 @@ sealed class SmokeNamesConverter : JsonConverter<SmokeNames>
 {
     public override SmokeNames Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
         new(JsonSerializer.Deserialize(ref reader,
-            (System.Text.Json.Serialization.Metadata.JsonTypeInfo<string[]>)options.GetTypeInfo(typeof(string[])))!);
+            options.GetTypeInfo<string[]>())!);
 
     public override void Write(Utf8JsonWriter writer, SmokeNames value, JsonSerializerOptions options) =>
         JsonSerializer.Serialize(writer, value.Values,
-            (System.Text.Json.Serialization.Metadata.JsonTypeInfo<string[]>)options.GetTypeInfo(typeof(string[])));
+            options.GetTypeInfo<string[]>());
 }
 
 [JsonConverter(typeof(SmokeCountConverter))]

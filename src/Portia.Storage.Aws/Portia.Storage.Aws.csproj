@@ -6,7 +6,6 @@
   <ItemGroup>
     <PackageReference Include="AWSSDK.S3"/>
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions"/>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"/>
   </ItemGroup>
 
   <ItemGroup>

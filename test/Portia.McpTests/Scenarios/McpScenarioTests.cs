@@ -32,21 +32,24 @@ public sealed class McpScenarioTests
         _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync();
         using var http = app.GetTestClient();
+        McpToolSnapshot greeting;
+        McpCallSnapshot actor;
+        McpCallSnapshot failure;
         await using (var scenario = await McpScenario.ConnectAsync(http, new Uri("http://localhost/mcp")))
         {
             var tools = await scenario.ListTools().ExpectExactly(
                 "actors.read", "greetings.read", "greetings.reject");
-            var greeting = Assert.Single(tools, tool => tool.Name == "greetings.read");
+            greeting = Assert.Single(tools, tool => tool.Name == "greetings.read");
             Assert.Equal("Reads a greeting without changing application state.", greeting.Description);
             Assert.Equal("Read greeting", greeting.Title);
             Assert.True(greeting.ReadOnly);
             Assert.Equal("object", greeting.InputSchema.GetProperty("type").GetString());
 
-            var actor = await scenario.When("actors.read").ExpectSuccess();
+            actor = await scenario.When("actors.read").ExpectSuccess();
             Assert.Equal("scenario-agent|mcp|actors.read",
                 actor.StructuredJson?.GetProperty("result").GetString());
 
-            var failure = await scenario.When("greetings.reject").ExpectFailure("Conflict");
+            failure = await scenario.When("greetings.reject").ExpectFailure("Conflict");
             Assert.Null(failure.StructuredJson);
             Assert.Equal("Greeting already exists.", failure.Error?.GetProperty("message").GetString());
 
@@ -61,6 +64,10 @@ public sealed class McpScenarioTests
             }).ExpectFailure("Binding");
             Assert.True(malformed.IsError);
         }
+
+        Assert.Equal("object", greeting.InputSchema.GetProperty("type").GetString());
+        Assert.Equal("scenario-agent|mcp|actors.read", actor.StructuredJson?.GetProperty("result").GetString());
+        Assert.Equal("Greeting already exists.", failure.Error?.GetProperty("message").GetString());
 
         using var response = await http.GetAsync("/not-found");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);

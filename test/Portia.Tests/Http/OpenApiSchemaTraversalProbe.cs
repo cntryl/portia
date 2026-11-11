@@ -27,11 +27,11 @@ sealed class OpenApiTraversalCollectionConverter : JsonConverter<OpenApiTraversa
 {
     public override OpenApiTraversalCollection Read(ref Utf8JsonReader reader, Type typeToConvert,
         JsonSerializerOptions options) => new(JsonSerializer.Deserialize(ref reader,
-        (JsonTypeInfo<OpenApiTraversalItem[]>)options.GetTypeInfo(typeof(OpenApiTraversalItem[])))!);
+        options.GetTypeInfo<OpenApiTraversalItem[]>())!);
 
     public override void Write(Utf8JsonWriter writer, OpenApiTraversalCollection value, JsonSerializerOptions options) =>
         JsonSerializer.Serialize(writer, value.Values,
-            (JsonTypeInfo<OpenApiTraversalItem[]>)options.GetTypeInfo(typeof(OpenApiTraversalItem[])));
+            options.GetTypeInfo<OpenApiTraversalItem[]>());
 }
 
 [Discriminator("test.openapi.dictionary-traversal")]
@@ -102,11 +102,11 @@ sealed class OpenApiRecursiveArrayConverter : JsonConverter<OpenApiRecursiveArra
 {
     public override OpenApiRecursiveArray Read(ref Utf8JsonReader reader, Type typeToConvert,
         JsonSerializerOptions options) => new(JsonSerializer.Deserialize(ref reader,
-        (JsonTypeInfo<OpenApiRecursiveArray?[]>)options.GetTypeInfo(typeof(OpenApiRecursiveArray[])))!);
+        options.GetTypeInfo<OpenApiRecursiveArray?[]>())!);
 
     public override void Write(Utf8JsonWriter writer, OpenApiRecursiveArray value, JsonSerializerOptions options) =>
         JsonSerializer.Serialize(writer, value.Children,
-            (JsonTypeInfo<OpenApiRecursiveArray?[]>)options.GetTypeInfo(typeof(OpenApiRecursiveArray[])));
+            options.GetTypeInfo<OpenApiRecursiveArray?[]>());
 }
 
 sealed record OpenApiRecursiveArrayEnvelope([property: JsonPropertyName("a~/b")] OpenApiRecursiveArray? Tree = null);

@@ -62,5 +62,5 @@ public sealed class McpToolSnapshot
         tool.Annotations?.DestructiveHint,
         tool.Annotations?.IdempotentHint,
         tool.Annotations?.OpenWorldHint,
-        tool.Meta is null ? null : JsonDocument.Parse(tool.Meta.ToJsonString()).RootElement.Clone());
+        tool.Meta is null ? null : JsonElement.Parse(tool.Meta.ToJsonString()));
 }

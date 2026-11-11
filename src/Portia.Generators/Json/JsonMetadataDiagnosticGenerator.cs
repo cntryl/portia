@@ -11,15 +11,16 @@ namespace Cntryl.Portia;
 public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
 {
     static readonly ConditionalWeakTable<IAssemblySymbol, string[]> CoverageByAssembly = new();
-    static readonly HashSet<string> CandidateMethods = new(StringComparer.Ordinal)
-    {
+    static readonly HashSet<string> CandidateMethods =
+    [
+        with(StringComparer.Ordinal),
         "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "AddMcpTool", "AddMcpResource", "AddMcpPrompt", "SendAsync",
         "SendWithOutcomeAsync", "StreamAsync",
         "DispatchAsync",
         "DispatchStreamAsync", "EnqueueAsync", "EnqueueWithOptionsAsync", "PublishAsync", "ScheduleAsync", "EnsureAsync", "AddRequestSchedule",
         "MapPortiaGet", "MapPortiaPost", "MapPortiaPut", "MapPortiaPatch", "MapPortiaDelete", "MapPortiaGetStream",
         "MapPortiaGetSse", "Accepts", "Parameter", "Produces"
-    };
+    ];
 
     static readonly DiagnosticDescriptor MissingMetadata = new(
         "PORTIA025", "Missing Portia JSON metadata",

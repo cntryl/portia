@@ -125,7 +125,7 @@ static class PackedCompilerVerifier
         bool excludeHttpAnalyzer = false, bool applicationStructure = false)
     {
         var propertyGroup = new XElement("PropertyGroup",
-            new XElement("TargetFramework", "net10.0"),
+            new XElement("TargetFramework", "net11.0"),
             new XElement("OutputType", executable ? "Exe" : "Library"),
             new XElement("Nullable", "enable"),
             new XElement("TreatWarningsAsErrors", "true"),

@@ -32,7 +32,7 @@ public sealed class FixedTenantDirectoryTests
         using var cancellation = new CancellationTokenSource();
         var watch = directory.WatchAsync(cancellation.Token).ToListAsync().AsTask();
 
-        Assert.NotSame(watch, await Task.WhenAny(watch, Task.Delay(100)));
+        await Assert.ThrowsAsync<TimeoutException>(() => watch.WaitAsync(TimeSpan.FromMilliseconds(100)));
 
         await cancellation.CancelAsync();
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await watch);

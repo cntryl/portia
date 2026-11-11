@@ -106,7 +106,7 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
             throw new InvalidOperationException("A successful result envelope requires a value.");
         }
 
-        var deserialized = value.Deserialize((JsonTypeInfo<TOut>)_options.GetTypeInfo(typeof(TOut)));
+        var deserialized = value.Deserialize(_options.GetTypeInfo<TOut>());
         return Result<TOut>.Success(deserialized!);
     }
 
@@ -129,7 +129,7 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
     {
         // The value is written straight into the envelope. Serializing it to a JsonElement first
         // built a second, complete copy of the payload only to copy it out again.
-        var typeInfo = (JsonTypeInfo<TOut>)_options.GetTypeInfo(typeof(TOut));
+        var typeInfo = _options.GetTypeInfo<TOut>();
         return Write(writer =>
         {
             writer.WriteStartObject();

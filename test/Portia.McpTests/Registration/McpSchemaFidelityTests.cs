@@ -90,8 +90,9 @@ public sealed class McpSchemaFidelityTests
     [InlineData("{}", false)]
     [InlineData("{\"display_name\":null,\"nested\":{\"value\":1},\"values\":[]}", false)]
     [InlineData("{\"display_name\":\"ok\",\"nested\":{},\"values\":[]}", false)]
-    [InlineData("{\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[]}", false)]
+    [InlineData("{\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[]}", true)]
     [InlineData("{\"inherited\":\"base\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[]}", true)]
+    [InlineData("{\"inherited\":\"custom\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[]}", true)]
     [InlineData("{\"inherited\":\"base\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[2,3],\"choice\":\"Second\",\"note\":null}", true)]
     [InlineData("{\"inherited\":\"base\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[],\"note\":null,\"restricted\":null}", false)]
     public async Task ShouldAdvertiseTheEffectiveBindingContract(string input, bool valid)
@@ -122,11 +123,13 @@ public sealed class McpSchemaFidelityTests
             .ToDictionary(property => property.Name, property => (object?)property.Value.Clone());
         var result = await client.CallToolAsync(tool.Name, arguments);
         Assert.True((result.IsError == true) == !valid,
-            string.Join("; ", result.Content.OfType<TextContentBlock>().Select(content => content.Text)));
+            input + ": " + string.Join("; ", result.Content.OfType<TextContentBlock>().Select(content => content.Text)));
         Assert.Equal(valid ? 1 : 0, probe.Count);
         Assert.Equal(valid, schema.Evaluate(document.RootElement).IsValid);
         if (valid)
         {
+            Assert.Equal(document.RootElement.TryGetProperty("inherited", out var inherited)
+                ? inherited.GetString() : "base", probe.Inherited);
             var output = Assert.IsType<JsonElement>(tool.ProtocolTool.OutputSchema);
             var outputSchema = JsonSchema.Build(output,
                 new BuildOptions { Dialect = Dialect.Draft202012, SchemaRegistry = new() });
@@ -139,7 +142,7 @@ public sealed class McpSchemaFidelityTests
     {
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         var host = Path.GetFullPath(
-            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net10.0/Portia.McpStdioHost.dll",
+            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll",
             AppContext.BaseDirectory);
         await using var client = await McpClient.CreateAsync(new StdioClientTransport(
             new StdioClientTransportOptions
@@ -170,6 +173,7 @@ public sealed class McpSchemaFidelityTests
     public sealed class InvocationCount
     {
         public int Count { get; set; }
+        public string? Inherited { get; set; }
     }
 
     public record SchemaBase
@@ -235,6 +239,7 @@ public sealed class McpSchemaFidelityTests
         {
             probe.Count++;
             var request = context.Request;
+            probe.Inherited = request.Inherited;
             return ValueTask.FromResult(Result<SchemaReply>.Success(new SchemaReply(request.Name, request.Nested,
                 request.Note, request.Choice, request.Count)));
         }
