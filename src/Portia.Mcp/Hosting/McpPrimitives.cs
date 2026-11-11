@@ -284,6 +284,35 @@ sealed class McpPromptEntry<TRequest, TOut>(string name,
     }
 }
 
+sealed class McpPrimitiveCatalog
+{
+    internal List<McpResourceEntry> Resources { get; } = [];
+    internal List<McpResourceEntry> FixedResourcesInOrder { get; } = [];
+    internal Dictionary<string, McpResourceEntry> FixedResourcesByUri { get; } = [with(StringComparer.Ordinal)];
+    internal List<McpResourceEntry> ResourceTemplates { get; } = [];
+    internal List<McpPromptEntry> Prompts { get; } = [];
+    internal Dictionary<string, McpPromptEntry> PromptsByName { get; } = [with(StringComparer.Ordinal)];
+
+    internal void AddResource(McpResourceEntry entry)
+    {
+        Resources.Add(entry);
+        if (entry.IsTemplate)
+        {
+            ResourceTemplates.Add(entry);
+            return;
+        }
+
+        FixedResourcesInOrder.Add(entry);
+        FixedResourcesByUri.Add(entry.Template, entry);
+    }
+
+    internal void AddPrompt(McpPromptEntry entry)
+    {
+        Prompts.Add(entry);
+        PromptsByName.Add(entry.Name, entry);
+    }
+}
+
 static class McpUri
 {
     internal static void ValidateTemplate(string template)

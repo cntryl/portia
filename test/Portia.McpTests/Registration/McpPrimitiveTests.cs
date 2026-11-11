@@ -152,6 +152,62 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
+    public async Task ShouldIndexFixedResourcesAndPromptsWhilePreservingTemplateOrder()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<McpRegistrationTests.ReadGreetingHandler>()
+            .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://index/fixed-first",
+                _ => new McpRegistrationTests.ReadGreeting("fixed-first"),
+                options => { options.Public(); options.AsText("text/plain", static value => value); })
+            .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://index/fixed-second",
+                _ => new McpRegistrationTests.ReadGreeting("fixed-second"),
+                options => { options.Public(); options.AsText("text/plain", static value => value); })
+            .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://index/template/{name}",
+                values => new McpRegistrationTests.ReadGreeting($"template:{values["name"]}"),
+                options => { options.Public(); options.AsText("text/plain", static value => value); })
+            .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://index/alternate/{name}",
+                values => new McpRegistrationTests.ReadGreeting($"alternate:{values["name"]}"),
+                options => { options.Public(); options.AsText("text/plain", static value => value); })
+            .AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>("prompt-first",
+                values => new McpRegistrationTests.ReadGreeting($"first:{values["name"]}"),
+                value => [new McpPromptMessage("user", value)],
+                options => { options.Public(); options.Required("name"); })
+            .AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>("prompt-last",
+                values => new McpRegistrationTests.ReadGreeting($"last:{values["name"]}"),
+                value => [new McpPromptMessage("user", value)],
+                options => { options.Public(); options.Required("name"); })
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        _ = app.MapPortiaMcp().AllowAnonymous();
+        await app.StartAsync();
+        var transport = new HttpClientTransport(new HttpClientTransportOptions
+        {
+            Endpoint = new Uri("http://localhost/mcp")
+        }, app.GetTestClient(), null);
+        await using var client = await McpClient.CreateAsync(transport);
+
+        var resources = await client.ListResourcesAsync();
+        Assert.Equal(["greetings://index/fixed-first", "greetings://index/fixed-second"],
+            resources.Select(resource => resource.Uri));
+        var templates = await client.ListResourceTemplatesAsync();
+        Assert.Equal(["greetings://index/template/{name}", "greetings://index/alternate/{name}"],
+            templates.Select(resource => resource.UriTemplate));
+        var firstFixed = await client.ReadResourceAsync("greetings://index/fixed-first");
+        Assert.Equal("Hello, fixed-first.", Assert.IsType<TextResourceContents>(Assert.Single(firstFixed.Contents)).Text);
+        var lastTemplate = await client.ReadResourceAsync("greetings://index/alternate/Portia");
+        Assert.Equal("Hello, alternate:Portia.", Assert.IsType<TextResourceContents>(Assert.Single(lastTemplate.Contents)).Text);
+
+        var prompts = await client.ListPromptsAsync();
+        Assert.Equal(["prompt-first", "prompt-last"], prompts.Select(prompt => prompt.Name));
+        var firstPrompt = await client.GetPromptAsync("prompt-first", new Dictionary<string, object?> { ["name"] = "Portia" });
+        var lastPrompt = await client.GetPromptAsync("prompt-last", new Dictionary<string, object?> { ["name"] = "Portia" });
+        Assert.Equal("Hello, first:Portia.", Assert.IsType<TextContentBlock>(Assert.Single(firstPrompt.Messages).Content).Text);
+        Assert.Equal("Hello, last:Portia.", Assert.IsType<TextContentBlock>(Assert.Single(lastPrompt.Messages).Content).Text);
+    }
+
+    [Fact]
     public async Task ShouldServePromptOnlyHostThroughRequestBus()
     {
         var builder = WebApplication.CreateBuilder();

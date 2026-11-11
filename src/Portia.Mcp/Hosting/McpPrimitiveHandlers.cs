@@ -45,7 +45,7 @@ static class McpPrimitiveHandlers
         deadline.CancelAfter(services.GetRequiredService<McpLimits>().OperationDeadline);
         var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
         var visible = new List<Resource>();
-        foreach (var entry in services.GetServices<McpResourceEntry>().Where(entry => !entry.IsTemplate))
+        foreach (var entry in services.GetRequiredService<McpPrimitiveCatalog>().FixedResourcesInOrder)
             if (await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
                 visible.Add(new Resource
                 {
@@ -71,7 +71,7 @@ static class McpPrimitiveHandlers
         deadline.CancelAfter(services.GetRequiredService<McpLimits>().OperationDeadline);
         var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
         var visible = new List<ResourceTemplate>();
-        foreach (var entry in services.GetServices<McpResourceEntry>().Where(entry => entry.IsTemplate))
+        foreach (var entry in services.GetRequiredService<McpPrimitiveCatalog>().ResourceTemplates)
             if (await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
                 visible.Add(new ResourceTemplate
                 {
@@ -97,17 +97,29 @@ static class McpPrimitiveHandlers
         var uri = call.Params.Uri;
         var validUri = uri is not null && Encoding.UTF8.GetByteCount(uri) <= limits.MaxResourceUriBytes
                        && McpUri.TryValidate(uri);
+        var catalog = services.GetRequiredService<McpPrimitiveCatalog>();
         McpResourceEntry? entry = null;
         Dictionary<string, string>? values = null;
         if (validUri)
         {
-            foreach (var candidate in services.GetServices<McpResourceEntry>())
+            if (catalog.FixedResourcesByUri.TryGetValue(uri!, out var fixedEntry))
             {
-                if (!candidate.Match(uri!, out var matched))
-                    continue;
-                entry = candidate;
-                values = matched;
-                break;
+                if (fixedEntry.Match(uri!, out var matched))
+                {
+                    entry = fixedEntry;
+                    values = matched;
+                }
+            }
+            else
+            {
+                foreach (var candidate in catalog.ResourceTemplates)
+                {
+                    if (!candidate.Match(uri!, out var matched))
+                        continue;
+                    entry = candidate;
+                    values = matched;
+                    break;
+                }
             }
         }
         using var receive = PortiaTelemetry.StartProcess(entry?.Template ?? "unknown",
@@ -185,7 +197,7 @@ static class McpPrimitiveHandlers
         deadline.CancelAfter(services.GetRequiredService<McpLimits>().OperationDeadline);
         var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
         var visible = new List<Prompt>();
-        foreach (var entry in services.GetServices<McpPromptEntry>())
+        foreach (var entry in services.GetRequiredService<McpPrimitiveCatalog>().Prompts)
             if (await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
                 visible.Add(new Prompt
                 {
@@ -213,7 +225,10 @@ static class McpPrimitiveHandlers
     {
         var services = Services(call);
         var limits = services.GetRequiredService<McpLimits>();
-        var entry = services.GetServices<McpPromptEntry>().FirstOrDefault(prompt => prompt.Name == call.Params.Name);
+        var catalog = services.GetRequiredService<McpPrimitiveCatalog>();
+        var entry = call.Params.Name is { } name && catalog.PromptsByName.TryGetValue(name, out var found)
+            ? found
+            : null;
         using var receive = PortiaTelemetry.StartProcess(entry?.Name ?? "unknown",
             new McpPromptInvocation(entry?.Name ?? "unknown"), PortiaTelemetry.CaptureTraceContext(),
             receivedTraceContext: false);
