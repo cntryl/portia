@@ -1,14 +1,82 @@
 using System.Net;
 using System.Security.Claims;
+using System.Text.Json;
 using Cntryl.Portia.Testing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
+using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 
 namespace Cntryl.Portia.Tests;
 
 [Collection("MCP HTTP integration")]
 public sealed class McpScenarioTests
 {
+    [Fact]
+    public void ShouldPreservePrimitiveSnapshotConstructionAndDeconstruction()
+    {
+        var resource = new McpResourceSnapshot("resource://one", "One", "text/plain", false);
+        var (uri, name, mimeType, isTemplate) = resource;
+        Assert.Equal(("resource://one", "One", "text/plain", false), (uri, name, mimeType, isTemplate));
+
+        var contents = new McpResourceContentSnapshot("resource://one", "text/plain", "content", null);
+        var (contentUri, contentMimeType, text, bytes) = contents;
+        Assert.Equal(("resource://one", "text/plain", "content", null),
+            (contentUri, contentMimeType, text, bytes));
+
+        var prompt = new McpPromptSnapshot("prompt", new Dictionary<string, bool> { ["name"] = true });
+        var (promptName, arguments) = prompt;
+        Assert.Equal("prompt", promptName);
+        Assert.True(arguments["name"]);
+    }
+
+    [Fact]
+    public async Task ShouldExerciseToolsResourcesAndPromptsThroughOwnedStdioScenario()
+    {
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name
+                            ?? throw new InvalidOperationException("Missing test configuration.");
+        var host = Path.GetFullPath(
+            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll",
+            AppContext.BaseDirectory);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await using (var scenario = await McpScenario.ConnectStdioAsync(new StdioClientTransportOptions
+        {
+            Command = "dotnet",
+            Arguments = [host],
+            Name = "Portia stdio scenario test"
+        }, timeout.Token))
+        {
+            _ = await scenario.ListTools().ExpectExactly("stdio.greetings.read");
+            _ = await scenario.When("stdio.greetings.read", new Dictionary<string, object?> { ["name"] = "Portia" })
+                .ExpectResult(JsonSerializerOptions.Default.GetTypeInfo<string>(), value =>
+                    Assert.Equal("Hello, Portia, from stdio-test-actor.", value));
+        }
+
+        await using (var scenario = await McpScenario.ConnectStdioAsync(new StdioClientTransportOptions
+        {
+            Command = "dotnet",
+            Arguments = [host, "--resource-only"],
+            Name = "Portia stdio resource test"
+        }, timeout.Token))
+        {
+            _ = await scenario.ListResourceTemplates().ExpectExactly("greetings://stdio/{name}");
+            var resource = await scenario.ReadResource("greetings://stdio/Portia");
+            Assert.Contains("stdio-test-actor", Assert.Single(resource).Text, StringComparison.Ordinal);
+            Assert.Equal(TimeSpan.Zero, Assert.Single(resource).TimeToLive);
+            Assert.Equal(CacheScope.Private, Assert.Single(resource).CacheScope);
+        }
+
+        await using var promptScenario = await McpScenario.ConnectStdioAsync(new StdioClientTransportOptions
+        {
+            Command = "dotnet",
+            Arguments = [host, "--prompt-only"],
+            Name = "Portia stdio prompt test"
+        }, timeout.Token);
+        _ = await promptScenario.ListPrompts().ExpectExactly("stdio-greeting");
+        var prompt = await promptScenario.GetPrompt("stdio-greeting", new Dictionary<string, object?> { ["name"] = "Portia" });
+        Assert.Contains("stdio-test-actor", Assert.Single(prompt).Text, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task ShouldSnapshotCatalogAndExerciseRealDispatchFailures()
     {
@@ -21,6 +89,12 @@ public sealed class McpScenarioTests
             .AddMcpTool<McpRegistrationTests.ReadGreeting>(tool => tool.ReadOnly().Titled("Read greeting"))
             .AddMcpTool<McpRegistrationTests.RejectGreeting>()
             .AddMcpTool<McpRegistrationTests.ReadActor>()
+            .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://scenario/{name}",
+                values => new McpRegistrationTests.ReadGreeting(values["name"]),
+                resource => { resource.Authenticated(); resource.AsText("text/plain", value => value); })
+            .AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>("scenario-greeting",
+                values => new McpRegistrationTests.ReadGreeting(values["name"]),
+                value => [new("user", value)], prompt => { prompt.Authenticated(); prompt.Required("name"); })
             .AddMcpHttp();
         await using var app = builder.Build();
         app.Use((context, next) =>
@@ -45,7 +119,22 @@ public sealed class McpScenarioTests
             Assert.True(greeting.ReadOnly);
             Assert.Equal("object", greeting.InputSchema.GetProperty("type").GetString());
 
-            actor = await scenario.When("actors.read").ExpectSuccess();
+            var templates = await scenario.ListResourceTemplates().ExpectExactly("greetings://scenario/{name}");
+            Assert.True(Assert.Single(templates).IsTemplate);
+            var contents = await scenario.ReadResource("greetings://scenario/Portia")
+                .Inspect(snapshots => Assert.Equal("Hello, Portia.", Assert.Single(snapshots).Text));
+            Assert.Equal("Hello, Portia.", Assert.Single(contents).Text);
+
+            var prompts = await scenario.ListPrompts().ExpectExactly("scenario-greeting");
+            Assert.True(Assert.Single(prompts).Arguments["name"]);
+            var messages = await scenario.GetPrompt("scenario-greeting",
+                new Dictionary<string, object?> { ["name"] = "Portia" })
+                .Inspect(snapshots => Assert.Equal("Hello, Portia.", Assert.Single(snapshots).Text));
+            Assert.Equal("User", Assert.Single(messages).Role);
+
+            actor = await scenario.When("actors.read")
+                .ExpectResult(JsonSerializerOptions.Default.GetTypeInfo<string>(), value =>
+                    Assert.Equal("scenario-agent|mcp|actors.read", value));
             Assert.Equal("scenario-agent|mcp|actors.read",
                 actor.StructuredJson?.GetProperty("result").GetString());
 

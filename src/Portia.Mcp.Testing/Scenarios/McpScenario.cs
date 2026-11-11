@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -33,16 +36,54 @@ public sealed class McpScenario : IAsyncDisposable
         return new McpScenario(client);
     }
 
+    /// <summary>Connects to an MCP stdio server and owns the created transport and child process.</summary>
+    public static async ValueTask<McpScenario> ConnectStdioAsync(StdioClientTransportOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var transport = new StdioClientTransport(options, NullLoggerFactory.Instance);
+        var client = await McpClient.CreateAsync(transport, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        return new McpScenario(client);
+    }
+
     /// <summary>Lists the complete tool catalog and returns awaitable expectations.</summary>
     public McpToolListExpectations ListTools(CancellationToken cancellationToken = default) =>
         new(ListToolsCoreAsync(cancellationToken));
+
+    /// <summary>Lists fixed resources and returns awaitable expectations.</summary>
+    public McpResourceListExpectations ListResources(CancellationToken cancellationToken = default) =>
+        new(ListResourcesAsync(cancellationToken));
+
+    /// <summary>Lists resource templates and returns awaitable expectations.</summary>
+    public McpResourceListExpectations ListResourceTemplates(CancellationToken cancellationToken = default) =>
+        new(ListResourceTemplatesAsync(cancellationToken));
+
+    /// <summary>Reads a resource and returns awaitable expectations.</summary>
+    public McpResourceReadExpectations ReadResource(string uri, CancellationToken cancellationToken = default) =>
+        new(ReadResourceAsync(uri, cancellationToken));
+
+    /// <summary>Lists prompts and returns awaitable expectations.</summary>
+    public McpPromptListExpectations ListPrompts(CancellationToken cancellationToken = default) =>
+        new(ListPromptsAsync(cancellationToken));
+
+    /// <summary>Gets a rendered prompt and returns awaitable expectations.</summary>
+    public McpPromptGetExpectations GetPrompt(string name,
+        IReadOnlyDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default) =>
+        new(GetPromptAsync(name, arguments, cancellationToken));
 
     /// <summary>Lists visible fixed resources.</summary>
     public async Task<IReadOnlyList<McpResourceSnapshot>> ListResourcesAsync(CancellationToken cancellationToken = default)
     {
         var resources = await _client.ListResourcesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         return resources.Select(resource => new McpResourceSnapshot(resource.Uri, resource.Name,
-            resource.MimeType, false)).ToArray();
+            resource.MimeType, false)
+        {
+            Title = resource.Title,
+            Description = resource.Description,
+            Annotations = SnapshotAnnotations(resource.ProtocolResource.Annotations),
+            Metadata = SnapshotJson(resource.ProtocolResource.Meta)
+        }).ToArray();
     }
 
     /// <summary>Lists visible resource URI templates.</summary>
@@ -52,7 +93,13 @@ public sealed class McpScenario : IAsyncDisposable
         var templates = await _client.ListResourceTemplatesAsync(cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         return templates.Select(template => new McpResourceSnapshot(template.UriTemplate, template.Name,
-            template.MimeType, true)).ToArray();
+            template.MimeType, true)
+        {
+            Title = template.Title,
+            Description = template.Description,
+            Annotations = SnapshotAnnotations(template.ProtocolResourceTemplate.Annotations),
+            Metadata = SnapshotJson(template.ProtocolResourceTemplate.Meta)
+        }).ToArray();
     }
 
     /// <summary>Reads a resource through MCP.</summary>
@@ -63,9 +110,19 @@ public sealed class McpScenario : IAsyncDisposable
         var result = await _client.ReadResourceAsync(uri, cancellationToken: cancellationToken).ConfigureAwait(false);
         return result.Contents.Select(content => content switch
         {
-            TextResourceContents text => new McpResourceContentSnapshot(text.Uri, text.MimeType, text.Text, null),
+            TextResourceContents text => new McpResourceContentSnapshot(text.Uri, text.MimeType, text.Text, null)
+            {
+                Metadata = SnapshotJson(text.Meta),
+                TimeToLive = result.TimeToLive,
+                CacheScope = result.CacheScope
+            },
             BlobResourceContents blob => new McpResourceContentSnapshot(blob.Uri, blob.MimeType, null,
-                blob.DecodedData.ToArray()),
+                blob.DecodedData.ToArray())
+            {
+                Metadata = SnapshotJson(blob.Meta),
+                TimeToLive = result.TimeToLive,
+                CacheScope = result.CacheScope
+            },
             _ => throw new InvalidOperationException("Unsupported resource content type.")
         }).ToArray();
     }
@@ -76,7 +133,15 @@ public sealed class McpScenario : IAsyncDisposable
         var prompts = await _client.ListPromptsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         return prompts.Select(prompt => new McpPromptSnapshot(prompt.Name,
             prompt.ProtocolPrompt.Arguments?.ToDictionary(argument => argument.Name, argument => argument.Required == true,
-                StringComparer.Ordinal) ?? [with(StringComparer.Ordinal)])).ToArray();
+                StringComparer.Ordinal) ?? [with(StringComparer.Ordinal)])
+        {
+            Title = prompt.ProtocolPrompt.Title,
+            Description = prompt.ProtocolPrompt.Description,
+            Metadata = SnapshotJson(prompt.ProtocolPrompt.Meta),
+            ArgumentDescriptions = prompt.ProtocolPrompt.Arguments?.ToDictionary(argument => argument.Name,
+                argument => argument.Description, StringComparer.Ordinal)
+                ?? [with(StringComparer.Ordinal)]
+        }).ToArray();
     }
 
     /// <summary>Gets rendered prompt messages.</summary>
@@ -86,8 +151,14 @@ public sealed class McpScenario : IAsyncDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         var result = await _client.GetPromptAsync(name, arguments, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
-        return result.Messages.Select(message => new McpPromptMessageSnapshot(message.Role.ToString(),
-            message.Content is TextContentBlock text ? text.Text : string.Empty)).ToArray();
+        return result.Messages.Select(message => message.Content is TextContentBlock text
+            ? new McpPromptMessageSnapshot(message.Role.ToString(), text.Text)
+            {
+                Metadata = SnapshotJson(result.Meta),
+                ContentMetadata = SnapshotJson(text.Meta)
+            }
+            : throw new NotSupportedException($"MCP testing snapshots do not support prompt content '{message.Content.GetType().Name}'."))
+            .ToArray();
     }
 
     /// <summary>Invokes a tool and returns awaitable expectations.</summary>
@@ -118,5 +189,23 @@ public sealed class McpScenario : IAsyncDisposable
         }
 
         return new McpCallSnapshot(result.IsError == true, text, structured, error);
+    }
+
+    static JsonElement? SnapshotJson(JsonObject? value) => value is null
+        ? null
+        : JsonElement.Parse(value.ToJsonString());
+
+    static JsonElement? SnapshotAnnotations(Annotations? annotations)
+    {
+        if (annotations is null)
+            return null;
+        var snapshot = new JsonObject();
+        if (annotations.Audience is { } audience)
+            snapshot["audience"] = new JsonArray(audience.Select(role => (JsonNode?)JsonValue.Create(role.ToString().ToLowerInvariant())).ToArray());
+        if (annotations.Priority is { } priority)
+            snapshot["priority"] = JsonValue.Create(priority);
+        if (annotations.LastModified is { } lastModified)
+            snapshot["lastModified"] = JsonValue.Create(lastModified);
+        return JsonElement.Parse(snapshot.ToJsonString());
     }
 }
