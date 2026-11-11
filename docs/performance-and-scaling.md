@@ -325,6 +325,13 @@ filesystem collision preflight in the code fix landed after these timing samples
 changes are not included in the measurements. Raw samples and environment records remain outside
 the repository at `/tmp/portia-analyzer-followup`.
 
+The .NET 11 / Portia 0.11 compiler comparison uses the same current benchmark harness and workload
+against the `7d7e3c4` baseline on macOS 27.0.1 Arm64. It measures all eight generators and five
+analyzers over 20 compiler samples, validates generated output and consumer compilation, and
+preserves raw results in [the .NET 11 compiler qualification](qualification/compiler-net11-2026-11-11/README.md).
+The comparison shows small mixed latency and allocation changes; it does not establish a 95%
+confidence claim or qualify runtime hot paths.
+
 The namespace code-action campaign used one source project, one consuming project, and 1,000
 qualified constructor references. It measured discovery, preview, and application separately;
 application used `AdhocWorkspace.TryApplyChanges`, so it does not qualify disk-backed or

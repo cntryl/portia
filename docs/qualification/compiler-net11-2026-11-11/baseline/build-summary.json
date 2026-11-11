@@ -1,0 +1,18 @@
+[
+  {
+    "workload": "combined",
+    "mode": "cold-compiler",
+    "samples": 2,
+    "p50Milliseconds": 9432.2169,
+    "p95Milliseconds": 9821.7103,
+    "boundary": "MSBuild invocation with prebuilt framework references; fresh compiler process for cold builds; restore excluded"
+  },
+  {
+    "workload": "combined",
+    "mode": "unchanged-build",
+    "samples": 2,
+    "p50Milliseconds": 625.1106500000001,
+    "p95Milliseconds": 625.1411,
+    "boundary": "MSBuild invocation with prebuilt framework references; fresh compiler process for cold builds; restore excluded"
+  }
+]

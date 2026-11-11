@@ -1,0 +1,1404 @@
+{
+  "sourceCommit": "d94d17d169bcda2beaf217ca0030f470d054dcc0",
+  "method": "One fresh process per workload; full controls and JIT warmup before sampling; atomic checkpoint after each repetition outside operation timings.",
+  "profiles": {
+    "combined": {
+      "framework": ".NET 11.0.0",
+      "os": "macOS 27.0.1",
+      "architecture": "Arm64",
+      "processors": 10,
+      "roslyn": "5.9.0.0",
+      "repetitions": 20,
+      "references": [
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Mvc.Core.dll",
+          "hash": "34535DDE255337A3D1FC8C4E868C59341AE983F2E3926BC5E1E504C66C726742"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Routing.Abstractions.dll",
+          "hash": "1478F6A04F05E69AA2C7E4D52C4644B6643E902EE9FFAE8C1816F4CACCC4855E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Reflection.Metadata.dll",
+          "hash": "0D15671C3F83EC68FB550A0DC8F94E51D9B86F9B6192E693083E71910853AF0F"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/System.Composition.AttributedModel.dll",
+          "hash": "75A980D33643C4D053246E4CD2A26D17CE6892D609BBF99AD6D9FC43CFBF79A7"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Metadata.dll",
+          "hash": "BCB98A2E9A356CF671F5BD9517EC41730D5B123BDFE4370B65090BE729401C22"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Reflection.Emit.dll",
+          "hash": "5206B46184F03FA5E8E135618B56F5AD41374AA491A9F704BFF972CD5E034BFB"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Transactions.dll",
+          "hash": "5BF6F7D5F3B5390C00E3418378DB5C45FA72F8E105ADA8FAFCE1B72389A50BB0"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Diagnostics.dll",
+          "hash": "9F225C89146CC1FC2205096A7590B1840EFFD40E520BFA8163DD221B06B144AB"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.SecureString.dll",
+          "hash": "C9CF8B8D8830CD0B08CEC75E75A42482516CC5D0C8A1C8D7589A1D80075D205F"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Authorization.dll",
+          "hash": "F5B8EB317E7FFA693D5A9BBCE8F03B3C281CF2E33B1A0D854AB486A0D40987AF"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Server.HttpSys.dll",
+          "hash": "011E145E89E3CC4C6C2A3ECA3217EEFE9AFA49FEEC88B4C3571FFC831B680CD1"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Portia.Storage.Abstractions.dll",
+          "hash": "EFA2D55231BE6228E18409A1384189ED3BD381FB1B8665A0801787766AC3F51C"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Collections.Specialized.dll",
+          "hash": "FAE11680652557C60A4E17773BD97776BDC944B63A84F743E4CB084C90288D70"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.ResponseCaching.Abstractions.dll",
+          "hash": "0FDE1367CCCE0FB76C831883CA850D44F9659C3718D19B61CADA52DC283D0CDA"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Threading.dll",
+          "hash": "4166F7E673F1F2826DC47001542FA016A3D0D166760939D51AA17E90A2F5E379"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.Cryptography.dll",
+          "hash": "F249D2ACD6F26BD2B2C3EB2D4ADDFF62CD837726EC16C9E4FCC04C8BAE2EA5E0"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Windows.dll",
+          "hash": "7C37DE42121F5296DA8F9F29AD43DCC60FB19D23144365F7F3CB905D8110D1CD"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Configuration.CommandLine.dll",
+          "hash": "B2A371E5565C56EED5EE82E6AF88DE1A524502856408E59647AC819B70BD6545"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.Mail.dll",
+          "hash": "FBF2B3855E5445685BB49E18E54EFFCAEF817F24BB474D13DFF30362317D318B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Diagnostics.HealthChecks.dll",
+          "hash": "7E29BF6DE9E7E3A19791ECBC649C20A9D0A4A44E9E2FF8CC83E120DBB7E1488D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Cors.dll",
+          "hash": "BF356335A3A51D60AB23F37A25C44A9A60EF95B90F23433F26B50429D49BC68B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Reflection.DispatchProxy.dll",
+          "hash": "E1BC0D1CDDAED35B9F1BB7F6D3AFEB2FBEE3CD69E64AE0640419D274B1891021"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Linq.Queryable.dll",
+          "hash": "FCA664665AAD65AAA910C4BAFDE6FEAF691095CA8D4138949DFBC90721B12BD7"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Numerics.Vectors.dll",
+          "hash": "FB96D2D056159176DE0C3B21D9F174181FDD5A245AF29A3FB248EC6667D42D17"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Http.Abstractions.dll",
+          "hash": "DC35F7E0C05FAAFF59EF060EC6EF6B832A9CAB9C11C302A70057D9BDD32AF073"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Logging.EventLog.dll",
+          "hash": "9C6BA61A134709E8FDA1A14919325B20ED21742003AC13C866A9884B2FF6496A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.Claims.dll",
+          "hash": "8DE1AA13BB66D0D0E329A1C0F74310A3C852D881015044F7187986B16A2098E9"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Server.Kestrel.Transport.Quic.dll",
+          "hash": "08B977718542D6522732A7A777EEA97726CC617C5773C14D5ACAC0401E6BB97D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Options.DataAnnotations.dll",
+          "hash": "FD2FD425AE141DB4AAB1C574492465EFAED897CE7F755CC0C23799E42184D400"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Mvc.Abstractions.dll",
+          "hash": "02801E48123151F84D0705D2117EB3B9C1B3D9F29C069CF102963A3D0BA54484"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Private.Uri.dll",
+          "hash": "E1361B7F609C84D300DFA20E9C9B18BF77B60C67944F20EB6F1E6390F1D81C39"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Microsoft.CodeAnalysis.CSharp.Workspaces.dll",
+          "hash": "AF851EDB8F0C128CBFA32BE81596381EB2C806E4A961B50B47825536F3FB36D9"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/System.Threading.RateLimiting.dll",
+          "hash": "80D31D21BEF49C468E2217A98BEC31493ED9F74A1C23DEE09703710684AE41FB"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.Extensions.Hosting.Abstractions.dll",
+          "hash": "7CC7B76E9990B3ACA07681EE6C76FFE143A582164A3E390068D16796AD1C2BB1"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.Cryptography.Csp.dll",
+          "hash": "C9E248DBA02BF4581670A724045540BCA8EB2594F65007C439FC6A1221D40EDE"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.Principal.dll",
+          "hash": "E720628C30BF1F4369388B89EA2FB7AEDC9C6CBF05D212ACAE389DAE04AF1E0D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Private.CoreLib.dll",
+          "hash": "D451F2404D38CB248647BB1374193E50AA1E33708A26C72FBDC31BF6D136483F"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Linq.dll",
+          "hash": "42B679E66DEA094A59DDEF5A29DD3F978294AC2101E7C53F7F26B3AD07864212"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.CookiePolicy.dll",
+          "hash": "FD65E5365B2FCCCC126588503DFD6E0D8E524401F05856DD75A9A6DFF36F04DA"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Authentication.Abstractions.dll",
+          "hash": "017F772B7E5AB6361A2BC94EF1DCE468A9F7FCAD60DF8AF2EB43409BC407EBC8"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.Compression.FileSystem.dll",
+          "hash": "2C58487F433BC7CF3E3BEF2E06E2DADEFBB379745671A4F70CE417216A00D136"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Diagnostics.HealthChecks.dll",
+          "hash": "9B9E0B2C4D9BEF0795F305E4C9CA17080103F89D3E076127195526F3D189E6E8"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.FileSystem.Watcher.dll",
+          "hash": "B15955E31A659361FBAD6DA051CEE7DB506D9FA6FF4AF4C1E2EA25E81DC2B82B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Hosting.dll",
+          "hash": "37CEC0CFF0F6E8823642AA46931A19DA0E600CEE815C5C371670348449367D70"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Authentication.OAuth.dll",
+          "hash": "6E1687CC7824473311E6B4B5A7C324A9D7E9564390328B70F6F8D74C9940CF04"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.Win32.Registry.dll",
+          "hash": "730925FBD4012BB2D33440B985A9D058CF2940AF9EEBC9D94C2C9BA78868FBA8"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.WebHeaderCollection.dll",
+          "hash": "0F4FEA10432E5C7399D925940B9CCDA51334C3B648E0F44E557B72D0C7126CAF"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Text.Encoding.dll",
+          "hash": "B8FD71857095ADABA0E5CC580FB09E48D3DDC12F9D13141A6D1A863EF5693725"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Configuration.Json.dll",
+          "hash": "B7532C440493DEC4EE843581DA249E540EBA22730E0B6CBA7AE8865DC35BE18C"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.dll",
+          "hash": "03A1BFEBB8CE1F7AE91EF27AFE6DB7F67743B806FEA1F9166DB8E2E005D00A5E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Authorization.Policy.dll",
+          "hash": "F714E3EC107A4C18C48FC292FB3711A1CB96785161C26C940001589D39D3E15F"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.NetworkInformation.dll",
+          "hash": "DD78346C5B0CD51B9661837BA1C90A358D0287B31313EFCDC167DE18010A075F"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Data.dll",
+          "hash": "2925C4738908E9AB1D98A05383DA12DFE0A90FDA9E965128DDEA1B3B6F38B05C"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Collections.NonGeneric.dll",
+          "hash": "A4889CDAEA1D1D7D0BFCE24C2A404733F57F56D6C5E18AA85DA4CBEAEE314184"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Text.Encoding.Extensions.dll",
+          "hash": "27CC55EA348899AABDCA3E2555B934640AAC6B58F76D21F95730FF156B8FDA4E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.DataProtection.dll",
+          "hash": "5963575E4396535539206DFB25A6ED1E641C3DC7CB5AF289DAADAE59C4ABBDDE"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.SignalR.Common.dll",
+          "hash": "A004CACA0F60E25C0FA314B743D90D2483BFC17FC1FA96F437CB136BF7FF9720"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Diagnostics.Tracing.dll",
+          "hash": "FB98C0A7D9A5CDD5D667DDA46F8613BE0806D18196224FB4A978377A61813BC1"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.ComponentModel.TypeConverter.dll",
+          "hash": "58AE7A0F286E7D8332F79794037AED4B35D7A62CDB8A8073E3CC2D3C4D194E8E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Http.Results.dll",
+          "hash": "0DB52F406EC4BD1D6F67EDC93F29F0A6538739571F68736C6281EB74F2522C37"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Server.IISIntegration.dll",
+          "hash": "75FABCB2B98D49E1FB119914D08E5A6361B3B7501FCB946196F832B5FA2AE2FD"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.ResponseCaching.dll",
+          "hash": "2610DB8F208418B3ACB222C4EB66134DA7DA8CBDAF4BB6C621D6588B56378810"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Xml.Linq.dll",
+          "hash": "642CE9D5E0F34834926158D9EDBE02CCAFE75734585639744A408C8063A88B05"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Web.HttpUtility.dll",
+          "hash": "D1D6C02A5B75F32D28255C538CE4C26208E824E32F99FD7BEB7564A87A95757A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Identity.Core.dll",
+          "hash": "E282F34EB4FFA4EEF6D4F42A854DE0236AAB5C6F059E6863EF0724251B38CDF8"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Diagnostics.Abstractions.dll",
+          "hash": "C5C80E92394EAADD68C4224DCC063243BE9A03D41ACA3FDC655DD994607A3665"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Globalization.dll",
+          "hash": "CA3CFBDF947CF75961FBC9C981048ECEA31931C16385D31F0910772087A05AAF"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.HttpLogging.dll",
+          "hash": "213121A92519C1E0381737ADAA8175105186A1AAC77D3A5EE9CCE91AB818AA23"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Hosting.Server.Abstractions.dll",
+          "hash": "EF2A5338B81D350C8C1032C635D2FA059532FA1E68B26E0E1D5E83A1F7FCAE09"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Portia.AspNetCore.Generators.dll",
+          "hash": "EBBA5A59655714E82E6CE06A5BF0817A6ABEFA183DD0CA1CAF653A0EE29F76D3"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Memory.dll",
+          "hash": "C3C5A1F380E37146151ACF47DABA60190670191417A353D7AD47B7883D439CCA"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Private.Xml.dll",
+          "hash": "EF0244308B272E951C132959542DF987E62545A06F45C033450768A21550A272"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.ServicePoint.dll",
+          "hash": "14883E201CA345F2BECEF93A90E4F41EFC359E108F457D18D5FED5F18B17BC0F"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Routing.dll",
+          "hash": "A427377D1524F73CA2D96DF33D2879D842E69278616330A9334902302354699A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Text.Json.dll",
+          "hash": "3537D215A0947EABA3B37E590885BD854ED26029CF298AB264A903AC5647E74B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Logging.Configuration.dll",
+          "hash": "1B6DAE960ED8AA2DBFAA41CD153DD1225A08BE36DFDBF5C3E75C727B10072EB9"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Diagnostics.Process.dll",
+          "hash": "84F092C879BDC679172E53C535897B1B424A764B67B894742A2792EB5F9D27C7"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.dll",
+          "hash": "689D9066F5548958EF1511B24ACDB8821C326CDD40E8025D5D84B79706A57D61"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Logging.Console.dll",
+          "hash": "65D7282A08303CCB1F357B1C982781E849F21F5C0682372B450F9F41DC1BC356"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Globalization.Extensions.dll",
+          "hash": "5C30F9B509172305BED6FBC1ABFEEF9D56A7A8D9456987A77F1C329A1040CECB"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Text.RegularExpressions.dll",
+          "hash": "8A57ECA85EE68B40E383DCD9C0895A4C0907D74C8FAF7D77A1F069EADF5C9745"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Mvc.RazorPages.dll",
+          "hash": "E95EF540075752E894D8CD6CAF5114A9F0A18054553B8DC8CE9D25C909261A15"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Xml.XmlDocument.dll",
+          "hash": "A4C2C049FFA1E9465BCA4ADAE85A2E44EFDA09E38A79572ED22B6225109059D5"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Antiforgery.dll",
+          "hash": "40C4D566EFA266BA56C792BE776336B1D11BD1B506B4B5E8DE4AA928B0FCE379"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.ComponentModel.Annotations.dll",
+          "hash": "4A495AAF7423E57721DA0399100FD1C140D9300A1B577BF0A280AD60001AA9C7"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.Sockets.dll",
+          "hash": "1FC289971CA37AB964BDA03C434D26C43D8B159BD90C15BC8753B33311E38985"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.Http.Json.dll",
+          "hash": "E07C69633DB5D51C82187BAD70AF188366ED1C33619CB3E8D6D072E202F489EE"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.InteropServices.JavaScript.dll",
+          "hash": "5B87C0AC091710473C7A5006849ECA571890BA10F040A2DACE682B88471A54FD"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Xml.XPath.dll",
+          "hash": "76CA453A48AE50525972FEC7197CEB5433FA32BD704BC61AE88B25DD8C219833"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/netstandard.dll",
+          "hash": "CA1206E0AC0BDC2B79950ED431A198F453B2F229EA17F0993BAED7A412DA59BE"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Resources.ResourceManager.dll",
+          "hash": "4B0528DAEEFB1AD6757D55725AD3792F11CB596B596A29AAF7E3DB93CCC84428"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Caching.Memory.dll",
+          "hash": "11B2B905C0CB4C02539FBF7F54CDB550EF8729208139426E98342C78D22A8292"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Threading.ThreadPool.dll",
+          "hash": "677C4011667455EEB9387FF26A979BDC606393D65DCE3C03EBA3C42AD9992569"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Linq.Parallel.dll",
+          "hash": "120CC6FB0B8D21FF9FD3F557DA68A46CE6F5CD5C46E1C7ED27BBBF185C596D64"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Humanizer.dll",
+          "hash": "D6853075547D7E303EFD60354D911A2FF18EDBA582CDA2FA59D91A2E5DCF9E98"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Linq.Expressions.dll",
+          "hash": "33128EE1DB9AA8B7CD01939653F9A94BF30C64B97696C3A495D07A5EE42BE0AC"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Microsoft.CodeAnalysis.Workspaces.dll",
+          "hash": "E405CBE085BB8F1A3FCC7308AF0DC6C5B3BE495196046A1840607B17BABE13A0"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Server.Kestrel.dll",
+          "hash": "FA2B8154C3912FBFFF0CCC4164707B8D3CB9BBC6563E006C4455E4CDB56B9931"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.FileSystem.Primitives.dll",
+          "hash": "901D0B12B0E6E87C7478CDB025BE61F443B1D062F9C09663710EC96381B1B671"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.ServiceModel.Web.dll",
+          "hash": "7A00DC281B10829C2FB66BC2A9C14FFDA39FA79710CEBE53B93275E287AB9054"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.RateLimiting.dll",
+          "hash": "9C9E19F76D9629EA6D0B9497608A039F507222FC9636B89B1BD7AE0DF8BCBA47"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Validation.dll",
+          "hash": "1D7D58A4FD9C6AB493C333B5CDCF6C5B6A7C6B58B44AAA386CC0397A5EB60E79"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Identity.Stores.dll",
+          "hash": "0EE5BAD4067446766A3469F18BFAFB14BD21669CC7153099E9C29A487023BBD1"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Drawing.dll",
+          "hash": "0E32549E042C0404335D27D0ACEABB35EC875B19D63897A665B8386D631B01D9"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Formats.Asn1.dll",
+          "hash": "BE3EBE9B85C65A21B3D921BA86F3A6C87B99762F1BA2B0056EE9CC12246E050E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.FileSystemGlobbing.dll",
+          "hash": "F8E591B7A05464B94078B1B4711232377170F5AC4B3F9B42BB672EFCA26CC884"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Collections.dll",
+          "hash": "F0B2059ADC54C5DF9761B50C1F19C3BE9298B4E514D49B041C9E77CB21CF9601"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Buffers.dll",
+          "hash": "6721B92BC1A51AC932B46F51F0CB910DD91A27DE1F47C0FC2A1508558FF22599"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Threading.Thread.dll",
+          "hash": "48BE48E5226202FC48112977B00B616080B93BDE71E569BA58DFD044934C4C0F"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Mvc.TagHelpers.dll",
+          "hash": "4C45B867DF23CC6122F3A72AB0429FB9D68021BB97BBC8AAE75E76821B260083"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.Serialization.dll",
+          "hash": "5AB4A693DA6DE8E18322097E55DBA59DFCF86CF434EC072F8ABFA019A36F45A2"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Hosting.dll",
+          "hash": "ED0762492E45555EBFE70A0C0FD138B3AA57ED7912A442CCDEFED6642D2BF587"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.Serialization.Formatters.dll",
+          "hash": "EFD04CB6DFA769FAB40177F870911ECA9FD7698BF2DFD25993803CE16208E7E8"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.Requests.dll",
+          "hash": "83C5F7B0866018C89D3CE06BDEB40C94D83E5FB36A0F54E009CD24A2727ADF0E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Http.Connections.dll",
+          "hash": "41066FF9F0B3CA2BAAF5FB21D1254F80187D6FED3E700B7BE9BD0FDF851BC78D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.dll",
+          "hash": "D200EEF0D625B54FA4C3B374788787DA389A09D4E2F3233D98FB88B5441EC2CB"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/System.Configuration.ConfigurationManager.dll",
+          "hash": "BC13D89AF4E766684FA64A5F6BF106B1326A1BD266F9B82CBBF7CDD5BAE079B4"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.SignalR.Protocols.Json.dll",
+          "hash": "D74B573F65C8AAEA3C38582C3F290A234B0CC2D653B72EE8D8F1D6F650CB8012"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.dll",
+          "hash": "CB4F44ECB930984370F86A1AAAB564E10EF9DA911F0F905FD82CFFCB15B18A07"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+          "hash": "69874BF04F109190F3F21BB1BA40917B8123C263B75329E20346502EF69F2C98"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Microsoft.DiaSymReader.dll",
+          "hash": "7F3E7543321FF4C2675B94E56A4A32C935C11C82FCC60D4F6CB611CB0A8DAADC"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.FileSystem.dll",
+          "hash": "878E49D57D09B595904136AB94519DA87FC22E8BB85AB68831AACDDFE494CDDF"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Components.Server.dll",
+          "hash": "EF4C6CC38DFA14C0B7BE49BCCC27F851E9B8F40DA17CEF9DC12B93443205C5FA"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Threading.Timer.dll",
+          "hash": "ADF0519C5CCFAA1422A3FFC9B0F60A5A9C0AD698C53F014875E59EE959C643AD"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.FileProviders.Physical.dll",
+          "hash": "0173042D8D8FBD6101C13428A4830B89DCA8EDD3E17B35C193F75A971BA6E61B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.FileProviders.Composite.dll",
+          "hash": "4ED3392A1995AA73CBFF6CD1D9BA1856A483BF7697E4B657394C6CE2F2E62E51"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.Serialization.Primitives.dll",
+          "hash": "0C6A22776B35D38916FF00A051FBA2802BD6D9D7BB6AEF8B56ACF873C2AD912D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Localization.Abstractions.dll",
+          "hash": "F623859EA6FF00BB30F017AB68A38AB7E4F51B512D2A0FD8EA107982F4D0E618"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Dynamic.Runtime.dll",
+          "hash": "71E3C6D8AFE489A5A65ACA837ADF3DFE1EA06788AAC9DDD82287F6A4BBBE1CF0"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.IsolatedStorage.dll",
+          "hash": "3277EDBE150B0C88E58458BA7BC4764B083E477A83B8C60667905C6616CDDA5D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.Loader.dll",
+          "hash": "74CA43AE9A5B14C2610EFB2F6F7DE125184B5AB8717A29D2B8E8278B173656A8"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Xml.XDocument.dll",
+          "hash": "10E250F4517FFDFEC517806102153F4F38BA678E5A1A38FF73A13B19F1726E08"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.Principal.Windows.dll",
+          "hash": "F1848DD73121CD36B00D13028EC1C91BB6A5725A3EB61E791E0C818C2EC171DD"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.Extensions.Logging.Abstractions.dll",
+          "hash": "B54A9D6EE34EEDFA15C6B67538112C122CEBD7AD43666CF0BB4026C3E1080170"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.dll",
+          "hash": "B2B8295B216B5EF30C410806415706937B901EF0F951CA04CD5630E563B63B58"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Hosting.Abstractions.dll",
+          "hash": "473A5CF0F29D5CDFEFDB4B15DC56402754E65DBEFBA97331D0CC34B1A2D8898B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.InteropServices.RuntimeInformation.dll",
+          "hash": "8B908C7AC3BABAA41DEBF33587701D0731015F498613DB58825B0F003071C0A3"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.WebSockets.dll",
+          "hash": "162E422E0C4D72363AB00ED7D197FAB00875DD84C88B4793128B7555A116862C"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Resources.Writer.dll",
+          "hash": "74B4238F05A9169F338E370FA96A548CB158E14BA33DB458DAB3C79A79D45C9E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.Serialization.Json.dll",
+          "hash": "C6667B9B4A1A14A1A401190707E93C7DF6B1B784F4B4341B5FD956943CA282B7"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.ServerSentEvents.dll",
+          "hash": "7964C8538B12939C3681E2FEB8FD8268B11CFE30BA39FE9A88C17D1BAABE2EDE"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.Primitives.dll",
+          "hash": "443E8A641421184D2E5805C7B7996A936710BCD7236B5D85D4001B27148A8201"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Text.Encodings.Web.dll",
+          "hash": "B5D39E381D6E0E7C871BA62F1E50B7CC9351B02A7FFDFF060FCB926B6C8788EE"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.dll",
+          "hash": "E2EA2A83D6B58DEB73F625B297DF40DBC9ADF222C56E6C6E54E53ADA40097498"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.DependencyInjection.dll",
+          "hash": "C661748D77777F417A90168EC00B6D27D929A4BD449B5B853C787949D7DCD2AB"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.JSInterop.dll",
+          "hash": "B67E17F198FD6C7F7060849A680546C9C39902F80A9B947E65774C92253ED020"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Authentication.Core.dll",
+          "hash": "CA6C913332B54A5AE36222FB754BF5C906A17CB3D42DC1971FA4F0A3B6D73D2F"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.Ping.dll",
+          "hash": "AEC5BA2DF626438677E24683314E1A1BAA8E9EB37731103CD8E056B4154C88A6"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Configuration.FileExtensions.dll",
+          "hash": "E7EB65B23468166E5795EFBB916B96028AB33BEE4823643823C375F9BBDAE47D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.WebClient.dll",
+          "hash": "E74A3D5912717B0C77699F525B414E9A8D9E804692A699CBBF183882DF6C926D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Configuration.Xml.dll",
+          "hash": "C5BC86FC44839619814D54BEEA65953E149AB32E47455CDE24AA23EA65DB8214"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Components.Endpoints.dll",
+          "hash": "1D8194AD74921B78DCEFC37E09C3186AB125E80BA3EB4EE77F88A77ECAC4946A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Cryptography.Internal.dll",
+          "hash": "24062B9DDF48BD84CF2F3293B9891874E6A2E8B34EC9B7B6D42F3C57809C0BB0"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Localization.Routing.dll",
+          "hash": "1F7964BE1935865B86CB2827C0FFBB8FC99EEF352327DE8A9FECFD73B0E50674"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.ComponentModel.EventBasedAsync.dll",
+          "hash": "1926480FC2900AD050E2228D3E76EC1C6AA675A984DAB9DC1D404B4BE8F2D6ED"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/WindowsBase.dll",
+          "hash": "8AC50A91CB9E68040F43773B9E81405B2BCA782EBDD9FD843DE1CBD897654EDF"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Configuration.KeyPerFile.dll",
+          "hash": "AC7D5AE808A71CBE114291B86FC33A490AB767710B514866ECA4D3563B925902"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Logging.TraceSource.dll",
+          "hash": "76B5D890501FF21FC4031070092A133A7D4D13686329DFD065B4B02FF95C1A26"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Microsoft.AspNetCore.OpenApi.dll",
+          "hash": "5D294400EAC9DA2753A5F791732938006CC1F16175F1AF83AD9A729D96847BF1"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.StaticAssets.dll",
+          "hash": "8452A30371F2763475CE0A7D1C931CE66ABCDF129930B32D9CC3F6E75E106D2B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.Compression.ZipFile.dll",
+          "hash": "FA3C9C29764CE90AF649F6F94D5EFBE334D7A4D6A1FBD76BDDB57A9E61E2043E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Components.dll",
+          "hash": "792E7C0F0DAD0B0BBEC268FD13653FCA09160C96E5E1933B39826A94FEE2CF0E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Web.dll",
+          "hash": "BB97A08C95421F3BBD84F264E4A20F1DF2995E25137A9AC8507CE17BB6126F8C"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.Quic.dll",
+          "hash": "8336DB0342DD829010FEB9C03948DACAE50BA476EFB32A54B030903D1C1AFCCC"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Mvc.Formatters.Xml.dll",
+          "hash": "5FC3B9DD655568A9CD805421DE39D0C3D3CA2E42F5A9F8B0449DE02AB221BE9E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Formats.Tar.dll",
+          "hash": "4A7BC2772BA9666FA7DCAAA1B0CF15B930DA33FFB98866F63F0929F847A2103D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Diagnostics.Debug.dll",
+          "hash": "E863694D3CB1EEFEC191993C598ED3A16138AE11C80D3C7242BD3500D57BC44A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.ObjectModel.dll",
+          "hash": "958168A990B1A399A69C62F5474A6A3FCF7E757BDA552DEF89E7C14890B2594A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Threading.Tasks.Dataflow.dll",
+          "hash": "3AA93862238AC843086D41DBF488AEC1DD079B019AFABE6CFC697F9242D32335"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Reflection.TypeExtensions.dll",
+          "hash": "2B05A4A4A08BFDA2BC3BFABDB6488676FFA06FD8E58CD654C9CDE92F30BEAC0E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Connections.Abstractions.dll",
+          "hash": "4D28485037C80BC8E9F87F5BF0431E45349597B136C41443A9C8F6FC8A85AC82"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.Cryptography.Primitives.dll",
+          "hash": "2F35781931B433FCF4B4BA045BBF5B15F40E7257D925432A7104E6D1942DB118"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.CSharp.dll",
+          "hash": "14AE5E213B9DD42B19A9E3F2FD78F92339260F8EE2CC998F80EB238FB1481CF5"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Threading.Tasks.Extensions.dll",
+          "hash": "08E1EF6DDB1E2F242E1582F47DAC3FA579A1267293A3A3791E8968A8E6A1974E"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/System.Security.Cryptography.ProtectedData.dll",
+          "hash": "881812767FA0E7A31C13991989CAC47BFBEFCA4C6F270AC95F4F798FCAA0FD4E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Server.Kestrel.Core.dll",
+          "hash": "1408523399E765FFF1B2ABC5219DBE692D38FED5EBE547A877C09E49C3686A8B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.Http.dll",
+          "hash": "829523A5FEB5770E6470243AA9318A4E7DAE43EE73F48843930B1ACC444FCC1D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.WebSockets.dll",
+          "hash": "600EE4E41DA48EB205C1DE7704DEA2DEBDCD7F63BFB92954A8D4C9958D0BE1D6"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.Win32.Primitives.dll",
+          "hash": "90E963822ABBD55A61427994F9C60A32B2B38E2F680EAE997CE82C0AD5F4B2D6"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.Extensions.FileProviders.Abstractions.dll",
+          "hash": "BBA428620092FA7750A432715FFC4AD998E932FB5D8FA7B5B5AD1AD89828DD32"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Private.Xml.Linq.dll",
+          "hash": "651876CEAEE5E605540060D1F5ACC9A0BF64CECC8038C181086C92F4F12DCACD"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Drawing.Primitives.dll",
+          "hash": "A71A972ADFF8B6E3C22AF2465F4130450BE62586871E44E88A2A5B9DF7883DFD"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Server.IIS.dll",
+          "hash": "1BC246F0BA6C353BF360E0A7A17801B7A164C2EBFFAC96F9CF0B3AE57BBD274E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Cryptography.KeyDerivation.dll",
+          "hash": "6C05A172049EDE27AC50097D7507C002D27D613956B5AEF81FA8CD0E7763B9F7"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Mvc.ApiExplorer.dll",
+          "hash": "006A7CB578AE6EFA8D9879174B96550B2ABDBA8702BC16574A23C96BDC134429"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.Pipes.dll",
+          "hash": "4C4F9BE292333C81834ACB0D68CD63DE088A859BE865BDD0C188267E7CC2F58E"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Microsoft.CodeAnalysis.dll",
+          "hash": "55618D457128EEC582017545B8929EBF195669003B6EC737110F9519E1711D28"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/System.Security.Cryptography.Xml.dll",
+          "hash": "A1E6D7EF66EE027BD419163A92B0FCF423183B7543AD75A3C6DC64882B645BD8"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.Compression.Brotli.dll",
+          "hash": "7C6467A3ADF5447868B0B5F6350F5FB5ECAB179B0D14B758755AE7674263E8C0"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.ObjectPool.dll",
+          "hash": "6811EBBD1A0DE0F78C65EC2B8AAF2060704A5D6E0F91289442BF8C72D9E9842D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Reflection.Emit.ILGeneration.dll",
+          "hash": "96541F70435EBFEC735D56E6DA95B23736A446FDCA6776B46D99DDAFCEC00708"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.ValueTuple.dll",
+          "hash": "08D932F3C00815107530B1404B9A3C95E66268851D24DB12E2477BB37DD1DE44"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Configuration.EnvironmentVariables.dll",
+          "hash": "73851F9216D621F53CE3E754C174113537429352663A0C2E2E6FCCD4A54F5400"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Linq.AsyncEnumerable.dll",
+          "hash": "4E6D8E83C94AEA8E274C2682D3DBE582DE0AA7FC8DA4BB159199E37C02BB8172"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/System.Security.Cryptography.Pkcs.dll",
+          "hash": "81CAB825166A906193867EFE46D85333460CD24BD31874B70827E1C171AB2987"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Html.Abstractions.dll",
+          "hash": "CAFD95B1D4C0C60211E4DBF190B31A6E2538C405FB2E5B7393BAFAA325492DB6"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Xml.ReaderWriter.dll",
+          "hash": "1091A468A7D65DB5DED2013E4C24281201083CAE0A30EFDD0967B697CEE88B05"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.VisualBasic.dll",
+          "hash": "5435EA3F04A366B4EB0DAB296AAB11B0347F7B85837B263CC5907154910D6D21"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.Extensions.dll",
+          "hash": "FEFC78BD9BB51A56FA9715B22DE701B68DDC93028D32E85CFF7066A55554437D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Mvc.ViewFeatures.dll",
+          "hash": "FCBCFE4AC8C3338857A60A1BC29335941E76F7CE80CB982EFE3248CF606D3EA4"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.InteropServices.dll",
+          "hash": "0F943889FDF254168619D774D17997B2FFF08318FEC3DF87BCD8C71440EBE9E5"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.MemoryMappedFiles.dll",
+          "hash": "816881C826AC61074EF4D87497CF6BD465BAC51C841C295C6787572E84E10EDD"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Configuration.dll",
+          "hash": "E7C0127AA4D4DB996D85EDEB10F36AD1ACB427A6DBB88669564105F96E3F6E72"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Mvc.DataAnnotations.dll",
+          "hash": "EA7DE2D8CE173FEDF1E3E074D8CFCA43321075E80DBF0F1AC5B167E6342B96AE"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Xml.XPath.XDocument.dll",
+          "hash": "4DC7AF6F9FCF8559340A68AB555C5445761DB3E3A4818D355216D8FA71A3AE82"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Http.dll",
+          "hash": "31048635F2718B85E99697E18EDD82B363ECDAB6327EFA49578FAD8BD5AC626C"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Authentication.Cookies.dll",
+          "hash": "F6D9549D9DCA79630328321D65051108F503761A246572B388E51230224AD84A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Reflection.Extensions.dll",
+          "hash": "FDABADFC810318DADE8076BDADEF4302260491901AAECD93229D23197800167D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.HostFiltering.dll",
+          "hash": "0FF4FE81E9A2BF35F80F2BDC35F9DE4886E668A160C2764A318696DF668B456D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Threading.AccessControl.dll",
+          "hash": "CA7518E37A84E999A662E5E99475D2F94F6D50F8BF1744DA3506058AAFEB2E17"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Xml.Serialization.dll",
+          "hash": "C37B007B7E24027A4FF25ECA796E6DA119FE488FCF433AC76C353ED17297E875"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/System.Composition.TypedParts.dll",
+          "hash": "48497C3D1C37B0B9E98179105679CE143D425332AAC9D070D74787675F4A8870"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.FileSystem.AccessControl.dll",
+          "hash": "83E68A5A8B87C5AA01B5E909CA851C26D6A1993A1A352AED11551671777811C4"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Http.Extensions.dll",
+          "hash": "04D0D7FABB18C596191A5C270A13A9FCB46755835F4DC68E9B51DAA1C49DA2E2"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Xml.XmlSerializer.dll",
+          "hash": "A4BE5A0629445C2BE7C3F93766735AF81DDA198CD4BADAE298ABB0D0E1ED81F3"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/System.Composition.Runtime.dll",
+          "hash": "65DB10E03408098984916CE2A004D38F272A6C677F6FAE5B2A4397537F5040B8"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Components.Forms.dll",
+          "hash": "4D1CE4DB4B34C2FB741093EB21140385C55031D4C44939AAA780DD90A7D18696"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Microsoft.CodeAnalysis.Elfie.dll",
+          "hash": "8EC0E18AC570157B3863F70035B644925D89996AD901F31EF918D2B0F7428941"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.dll",
+          "hash": "8C750B207FF20B968BD4D1AC96E6C9CED5DD68BCC56638B76C5388B9BBA4E426"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.Pipelines.dll",
+          "hash": "1FAB9BEB1A9836439D394CA2A229C1585A05A8E5175492CC4A3DBD6614EFABF2"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Mvc.Formatters.Json.dll",
+          "hash": "836ADC32A6CA029E59923DF6AEE21C28A986BD4313BA88B9F5A23D160970AB2C"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.Extensions.Configuration.Abstractions.dll",
+          "hash": "71796328474D92837BA3C370BFF3E3D1D788015F315881FAE73773366D9B26A4"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Microsoft.CodeAnalysis.CSharp.dll",
+          "hash": "FC571A6647AC45B0B0DC1866B795529BB2EEB93ADF9BE97FCD5903CF482F700A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Configuration.Ini.dll",
+          "hash": "E22946A38AC8181ED2B04F4032170D272A3087AB510DBF08398F3FC534F13C1A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Threading.Overlapped.dll",
+          "hash": "45B870915C8AF8D92146B5E54CC594B5A0C79B3F7DEBFE0074DA7C8868A2EAB6"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Microsoft.CodeAnalysis.CSharp.Features.dll",
+          "hash": "9808D3754110D1E6DCC2DC4CD85C0B98148CA4384A4AECFECE8FCCB994F8791D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Threading.Tasks.dll",
+          "hash": "0BAD149C6CEECEC7B60CB1C909C00E81FC77A2D417413BD1E673083A32127D46"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.WebProxy.dll",
+          "hash": "3C59E33E1513CC8BEACDC66E73C6E9E77597B6EC09939FF729D85AA8D4B7200F"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Http.Connections.Common.dll",
+          "hash": "A4518ADF04735C1A9FAE450DC32F6E61D5A3F0B7E928B2DEFF88D0B65301157C"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Collections.Immutable.dll",
+          "hash": "F4E01BA998B847B4093262CBD6388BF70CE44B6DB9136EB2DF113FF98CE88395"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.Extensions.Options.dll",
+          "hash": "1FA88762202FD230488291AB02E5C86F8E5BB26403A96991302807AE7542836A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.Cryptography.Cng.dll",
+          "hash": "9CD2AF0939DB050EEF752461B12A5CED75BF52083A2A744A131044C78360E5E9"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.AccessControl.dll",
+          "hash": "47D509E85C296A3736A5BBBD8F59B1D032A66EA9273DFBD884F3EFCB7212E845"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.VisualBasic.Core.dll",
+          "hash": "37AED0329A189375110E5F75F50F3194D1DC7557FA43B0F99A0E24D6D4A4A3BF"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Data.Common.dll",
+          "hash": "2DF2B63D1833816A4CA6836D0D8D4942D18731ECD2B30FA8024E2B366F6BE8FB"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Diagnostics.dll",
+          "hash": "F94FB27C2B194ECB80E60744302141FE87D45350D1D488AF802B9E8D34048BF7"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.Extensions.Diagnostics.Abstractions.dll",
+          "hash": "24D4785FB483CEC7F9A1F83EFD1A33AD7384E7FBD5D69BE719474A114F04A2C8"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Components.Authorization.dll",
+          "hash": "670CAC6C0AC7B951613329B04B7A100F696A157CB978D2864A136783914B47D8"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Configuration.dll",
+          "hash": "12E8556F44E7770AAF6598EF146E1ECA60FE7E79FB2CDED26533F84AD653C115"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Server.Kestrel.Transport.NamedPipes.dll",
+          "hash": "21F924A8B1D960E5E737434AEE282EB219115739B37A8770DED4BF79A48BFD7E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Identity.dll",
+          "hash": "17ADC2FCB8C943DE1F4460ACDF05ECBE0E537940533AE50FEB89C7A05B41A1B5"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/System.Composition.Hosting.dll",
+          "hash": "DBD0A3C9FE826E5FA87C616AA345A563CC5E79A563193CAF4356767A097E2343"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Diagnostics.DiagnosticSource.dll",
+          "hash": "B9F0A57C54481E9513018B339CF0A69557B60DE6F7C20C03E2387B3D0D754869"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Transactions.Local.dll",
+          "hash": "399557913023AF487AA866719711FAE4935A7B2A833B54919C96FD2E1BA20E78"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.Cryptography.OpenSsl.dll",
+          "hash": "8650EDDAD63831DF0F4567513C20CAD49BAE097FB5995814B4DEE526E708B457"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.Cryptography.X509Certificates.dll",
+          "hash": "FA23D69D42566E7B8744F887385FB462F21CC30BA6CAD5F41E90876A864B13D7"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Reflection.dll",
+          "hash": "251D1B3A8A6A99888C7C2780D6F46867C6F718E69377623CD14D1290F0E7AADF"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.Pipes.AccessControl.dll",
+          "hash": "2728D0BE5F970899F1DE0EFFDF588A4CD54D9076F0FE45F8AAE1CB9B8FF92B0C"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Configuration.Binder.dll",
+          "hash": "329FC9978A9E2271BCD239ECA648676BC750AFCF9C1568175C5B903B9955E81E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.HttpOverrides.dll",
+          "hash": "BC252D6F8F368891D2C748CF10E2987BBD4559F0FFA1314FEED13295B7576806"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Private.DataContractSerialization.dll",
+          "hash": "3A7779FBB4CEE3F81016272246C10F065BB87EC0AAF862263190E8F8D8EE0C16"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.SignalR.Core.dll",
+          "hash": "74D4D17E4BDB5111216F2B921263D5B8645DD1F25BB1557F04E227481584D939"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.Cryptography.Encoding.dll",
+          "hash": "93FA61CA4066561A889FACB716233B14F5079202E9C008B9984932D661A1D0D7"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.UnmanagedMemoryStream.dll",
+          "hash": "98EA18B8B9A83E564E6AE35E2A7C6AAE998EBFCDC576B99A6B36E6508AE4A888"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Portia.Generators.dll",
+          "hash": "4EA0863DA21DE3367421ED823AAC8E3A094C18584F6704D6B5B7C98A0A7395F4"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Logging.Debug.dll",
+          "hash": "B34036DE50067EE083F45078DD11BBE7EB2E39D1FBD4C0B0C1AE5FBB82D41852"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Session.dll",
+          "hash": "F5A3B790802782E8D9A739BED20DBD8B423EF43241830722EB4F2AD81DEC39D8"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Razor.dll",
+          "hash": "416A8CD6491F222B5E929C90608F80720E20CF2D692DEF588A21069A97558662"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/System.Composition.Convention.dll",
+          "hash": "E97F2E6B99F9801D752042419B55AB2DA7FAA6F3350DCB91D030F7EDE0425CAE"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Portia.AspNetCore.dll",
+          "hash": "9385DC053ED50521A797FBAC3138065E320B7DC0815B5038DBAD7E3C7ACB485D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.SignalR.dll",
+          "hash": "091FEA35729A9DB0E31B4EB85AFD2C42ABED9859ECB6A35916B7E8C88836EBF7"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Features.dll",
+          "hash": "FA0AE27005A3382D8FE9FFF20978EEBAB034A18B8F947E4A79DAACF0C73F1D1B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Diagnostics.FileVersionInfo.dll",
+          "hash": "7BD783A5031D9DA6ED907CEB031AEFD93AD3E7214664B79AFCC06829109DAEDE"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.Intrinsics.dll",
+          "hash": "1A22CDBA338676FB573CC80D3FB0C8C7291BA83C35E819911ECF104E64643D36"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.FileSystem.DriveInfo.dll",
+          "hash": "27C2010F2B404761AC164C5F8928CC352FEB8BF2EB62DC0956D72937DED7AAA8"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Security.Cryptography.Algorithms.dll",
+          "hash": "0DB057DBEFBD8BFE4AEE4EC277BB86E9DB05F3FEF2D76B249B9286E0E33BF638"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Microsoft.CodeAnalysis.Scripting.dll",
+          "hash": "7E96A8C0BB8F63CAFD54EE274D1C638EC609834207FEF35469C01A2E4EF065D1"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Logging.dll",
+          "hash": "89B98562E348EF1B0057769A0EB04A9E8331DB68E34C9D900E1FE1333587F2A6"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.IO.Compression.dll",
+          "hash": "763B55D33310EDB54145B08C78E4F77A4E2036449645E8E9F3C0067E6CE3F874"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Portia.Testing.dll",
+          "hash": "9FA7AFBF80D3C149FD8FAB0CEE79442561835E0220D0D4444B250CED9B52E939"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Mvc.Razor.dll",
+          "hash": "80FCA5FE7AA08ACDEAE0FAC3F06ED9FBE41BFE0C49FFB817092EF02C55293770"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.ComponentModel.DataAnnotations.dll",
+          "hash": "9BCDF20BEE2692A3C7891982F0537C491823420CF35686DEAD0D63B07A617221"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Diagnostics.Tools.dll",
+          "hash": "F343C0775130DAAF071DD865551F9E7D159BFF10A02F0E8A307606A1252F04F5"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.Extensions.Caching.Abstractions.dll",
+          "hash": "A10D8EF129601C640E01C18ED219C999314368F0BB6C5BF3C7AF0A8F90274E9C"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Localization.dll",
+          "hash": "8897639CA93CC53F9CFB65758E522C3F5BF5CEE0E98B04017BD92B758032FA01"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Microsoft.OpenApi.dll",
+          "hash": "838F23FD0B01BBA85157A5BD279847213579786C80B4141B390FEF39AD385C12"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.ComponentModel.Primitives.dll",
+          "hash": "00F8BED0E062644973CE5921EB4CC9D925899C8521D7D0B32AFCCBD050005D75"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.RequestDecompression.dll",
+          "hash": "47FB95B2C9791D758DC45E3C116A3F6BE55B6263ACBDA64D16EA9508C7AB2527"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.Security.dll",
+          "hash": "524EA90D34D125983840B636DC5B87A7D73F1FC00EE2DF13BED238D26EB55ACC"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.Handles.dll",
+          "hash": "D64E898414D53CCC5F775C47DB6EC26A24ADE8F2907EF35FD8F16D06AE455177"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Portia.Abstractions.dll",
+          "hash": "8BF0D4B644CC14BF0C4654906883EF656582013ACEF6B59B7D3EDB5668DCD19A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Reflection.Primitives.dll",
+          "hash": "F73E06A15DB85F37261DEA933790C250DEC68CDA7106C6565BDADF91BBF84130"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.StaticFiles.dll",
+          "hash": "738B0D6C78AE2FDA7C5AAD90512BD42E558314CA772CA53024625BF58F5FF7E0"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Components.Web.dll",
+          "hash": "5BE53261874A96E0401AFCA7A46DC2C78625A34E36E3A443DA3870F0617680A4"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.CompilerServices.VisualC.dll",
+          "hash": "2472983A504251D18D6F102E13258A704AE1B9C594A26AB7B784A06BDACCBAF8"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Net.Http.Headers.dll",
+          "hash": "D180A6473B53BF4DD8F8026D256071F09B6368FF700614D2F406464B593A0F67"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Threading.Channels.dll",
+          "hash": "EEE6C47292818E554D5B38CF81F567C8D7F68A5CBFA6928728506641C4BA6811"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Mvc.dll",
+          "hash": "C1AB52097946657BF8ABA13D5E1A4BAED10B49AEBC8AAC72C19ECBEFD47668E3"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.CompilerServices.Unsafe.dll",
+          "hash": "FB5D929EE9C1F8BF00144764112734B0EED0B7D3F99D4082C30691620F7022C4"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Options.ConfigurationExtensions.dll",
+          "hash": "10E824FEF1182C76618F6FFB7BC30A88A799AC9E8900A6F4B85BEC9246BC0586"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Console.dll",
+          "hash": "FF90E9D146FE5DCAC190944224374465DF0EC5A6C3DAE9872D7CD1C51D4AFE7E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Mvc.Localization.dll",
+          "hash": "9DECBE8C384D8D9BFBCEBA956BC65F8BB15E735AE0ADB01AF37ECD0A468B2B75"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Numerics.dll",
+          "hash": "D8FA725B31A5E938CFA20E7077B7F7F6284EE94620C3D1BC6374AE08E83B69BB"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.Numerics.dll",
+          "hash": "BAC841AB1445F0E2C482F89F3ACF8AE355C7FB3F20907B3D95C58756E67B4A7D"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.WebUtilities.dll",
+          "hash": "742484565FEC3AF23768864A1699F3831019473CC65FD59267F0B953D410E224"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Configuration.UserSecrets.dll",
+          "hash": "74280611402AA8400B06C93310137F3578B05D0F637BBE64C3A6501BFEC44D03"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Runtime.Serialization.Xml.dll",
+          "hash": "655F32169B2D4BF743B7EC68EC707F72094774E5A41CA744A326896D9BFB8475"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.OutputCaching.dll",
+          "hash": "E4B0B67311033D90E85E7286E477776C622DF1E5A67C65FEBB7186E625F7AD22"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Diagnostics.StackTrace.dll",
+          "hash": "5A918665B3DA20C25D15E9E567B4E261ED06B8B885F70B78E802086BDB0BB7F6"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Resources.Reader.dll",
+          "hash": "3BDBB27816F9D2B3B4B89160E7BC06FD9636BBCDF8EC4A561649E5288B38262B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Diagnostics.Contracts.dll",
+          "hash": "500DE6F7C006FCB982C028FE509B182CBA33767691BA6B5B06BC5724729106A7"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.WebSockets.Client.dll",
+          "hash": "E54B696394C51514E200F5BCF6542F528CC38B038A93D0077420EB15679BA04B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.DataProtection.Abstractions.dll",
+          "hash": "E2A434FDF047DD6E0DD80296AC421A23C6B09507482FC0EF7C4D153D8827C1C0"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Portia.CodeFixes.dll",
+          "hash": "2099903D40C723B0F34993A8435F221DEDED5FD342E5D23835BFA6705F095C5E"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.ResponseCompression.dll",
+          "hash": "E204FC56335ADBBBE92B1F96B7C331200691F4095FF6DC661338056F78367608"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Authentication.BearerToken.dll",
+          "hash": "01A2424DB3978C193298B7784D31C6A899D312A5D26247E032D88E4B49E06AB6"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.ComponentModel.dll",
+          "hash": "91853E05C6F5C17CA72E2CD81DF831B531305951CCC8AC6D9AA0F3203951BF07"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Razor.Runtime.dll",
+          "hash": "FC9298EF3372339EC9DEA467E5D5388C1274865ABD9CB30DA45D98DF6A997A23"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.HttpsPolicy.dll",
+          "hash": "333520BAE18EC0D47CFDD407CF204DF2D08646803BF081DAA13A89081AA32508"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.AppContext.dll",
+          "hash": "0E5C7CDBD909577FD6BF493986E142FE27D4166DC46C7BF7B831910BC677EE69"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/mscorlib.dll",
+          "hash": "B320E28237CDDC64C6FB2B4B99EA600E795903E80D4401161347255936EDBBB6"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.HttpListener.dll",
+          "hash": "234D7B74FEA87480F18496B1B49FC1B1709FF1FD3ED96E9925B91D08E25E6E66"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/System.Formats.Cbor.dll",
+          "hash": "7931AE194AEBD2667E9800EF22E6DD6E3EB47FC38CB3A21333892E08131CFCD3"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Data.DataSetExtensions.dll",
+          "hash": "B6E9429A3C24F954A5ECFD4BBD914812DB9D02FDAAB929F5BFA6D43E28695F4A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.WebEncoders.dll",
+          "hash": "BC00A25E8C625B4018BFD42B940BF3ED6F2CCDF7CFAB413017FB68EFE823DC9A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.FileProviders.Embedded.dll",
+          "hash": "BFDA4F2CD6622DD3964818E290666962F57268177B871003C3D4F98FD7A2D91A"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Globalization.Calendars.dll",
+          "hash": "D4BCFD3A77F37574F107B969632275416D7FC33DDA4F0068A0C43FB0D03719B9"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/Microsoft.Extensions.Primitives.dll",
+          "hash": "EFDAA858420803B8D179A5041FE9749514954076A949587D0BE8050FD44C7229"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Net.NameResolution.dll",
+          "hash": "287EACB602B88C87469E71E86D3CD225671489F1EA88734774D9DA6F5BF557D1"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Text.Encoding.CodePages.dll",
+          "hash": "327B92A1F82698B0318E15B72D17A7A92E9C7242B09C4781B13E43314AAFF06F"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Diagnostics.TraceSource.dll",
+          "hash": "A708594C50C8161D3823DDE1BBF1C78382A0FEBDB42F1FF1565E13F601FFA730"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Logging.EventSource.dll",
+          "hash": "6028E908A5221A3454A3A80BA0F9D259C89EB0F67826727B80B6AD18F4963BE9"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Xml.dll",
+          "hash": "7B64534B63ED9F73FFFF7E4C42660A2F77FD56C409C7EDA9F820A0155BF910F7"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Reflection.Emit.Lightweight.dll",
+          "hash": "DFB7CD6AFAF69F66788E19EC0242B86BF0805632D374E6D817D7B692DE65613B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Http.Features.dll",
+          "hash": "C3D52060530E90B8A9DD74EBA83488290414C94901B838721F35E732BA3B06EB"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Rewrite.dll",
+          "hash": "2D67E33E310FADFB74A4A75F95DFCB367BF78D37CE4EFE85CF0189F08C980C8B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/System.Diagnostics.EventLog.dll",
+          "hash": "484D74CD60563EA11E2FD0B5F32930F50619045A0158651905ACC67DE5CE8789"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.dll",
+          "hash": "DCC3FC957B2FD5811AC9C726F8E9C422CAEC73288543986FEEC1DDEA460FC39B"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Portia.Core.dll",
+          "hash": "4213A67F23C1ED47D9C183C1DE9772CC3964010D707D7E5A9B61FE16497EE999"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.DataProtection.Extensions.dll",
+          "hash": "5404D1EA1116AABE9E3E6274547769B6981E01B8F9C8B235A9A295D3B26E2830"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Http.dll",
+          "hash": "084C6DA917BC5A55A91634A3C26CD438D6A78AC4276B9C4A83466355C680E7FC"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Threading.Tasks.Parallel.dll",
+          "hash": "BD5BFBA87FE4D06EE1901085C7DAEFE8E2BEEC3CD1DAB6C86E04A9FDC17B210E"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Microsoft.CodeAnalysis.Features.dll",
+          "hash": "FE22744AA7756F8EEA509BAD9E4B97A83B4B77C2D9BF1E62EFAF97959FDC0347"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Authentication.dll",
+          "hash": "2674182122B5A8F64FA21C4950D7CB5DC500A53C1688A71E0843394C5E871D31"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.AspNetCore.Mvc.Cors.dll",
+          "hash": "C34B153B13C441CC841775CB841C2AA1ED4ED0A85C9A6897D39D33B874E8474B"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App/11.0.0/Microsoft.Extensions.Localization.dll",
+          "hash": "DBEAED2D7D96EA6CFF1EDB554E60C5BECACFF5BD21AC844FB14897D91791E300"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Core.dll",
+          "hash": "6BBD7A9BDCD9ECAC1FF09F5C14A8BD3BE4B031CE5DAB03562B7DE0323C3F7394"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Collections.Concurrent.dll",
+          "hash": "AD37E47F52A04CDEED6530C40366E4A3B66452D986B7EAA9A32FDBE552237360"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Portia.DependencyInjection.dll",
+          "hash": "108F91EDF38DAA999594DA06946BDD7122B5ADB9D59B60E62987AC054750D30D"
+        },
+        {
+          "Display": "/private/tmp/portia-compiler-baseline/bench/Portia.CompilerBenchmarks/bin/Release/net10.0/Portia.CompilerBenchmarks.dll",
+          "hash": "06628497EE330F416EBDC23BF56512146028FB05FE0305183ADDE261C4C39AAE"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.Diagnostics.TextWriterTraceListener.dll",
+          "hash": "E2DCE43F866F42EFEDB4A72CF9801AAB58EC748A21F00783968EE06885A8AD1F"
+        },
+        {
+          "Display": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/11.0.0/System.ServiceProcess.dll",
+          "hash": "DB1C1284DAC691BF05D33594D4D942C6C6BB873932301BE0B4957C1CC34AA896"
+        }
+      ],
+      "generators": [
+        "Cntryl.Portia.DomainEventCatalogGenerator",
+        "Cntryl.Portia.JsonMetadataDiagnosticGenerator",
+        "Cntryl.Portia.JsonRootMarkerGenerator",
+        "Cntryl.Portia.PortiaServiceRegistrationGenerator",
+        "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator",
+        "Cntryl.Portia.RequestHttpBindingGenerator",
+        "Cntryl.Portia.RequestShapeDiagnosticsGenerator"
+      ],
+      "analyzers": [
+        "Cntryl.Portia.ApplicationBoundaryAnalyzer",
+        "Cntryl.Portia.ApplicationContractAnalyzer",
+        "Cntryl.Portia.ApplicationStructureAnalyzer",
+        "Cntryl.Portia.ComponentPracticeAnalyzer",
+        "Cntryl.Portia.ScenarioObservationAnalyzer"
+      ],
+      "jsonGeneratorPath": "/Users/jrepanich/.nuget/packages/microsoft.netcore.app.ref/10.0.15/analyzers/dotnet/cs/System.Text.Json.SourceGeneration.dll",
+      "jsonGeneratorHash": "39F9EF1932AB0014AF65CE996C8D920E1853DBCD72A4B530797994AD5653177D",
+      "allocationMethod": "GC.GetTotalAllocatedBytes(true); setup and validation excluded; joined per-generator allocation -1 is unassigned, measured separately in isolated rows; fresh compilations reset source semantic caches"
+    }
+  }
+}
