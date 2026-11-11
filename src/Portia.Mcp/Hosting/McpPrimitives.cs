@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -174,6 +175,7 @@ abstract class McpEntry(Type requestType, McpEntryOptions options)
 abstract class McpResourceEntry(Type requestType, McpEntryOptions options, string template)
     : McpEntry(requestType, options)
 {
+    readonly string[] _templateSegments = template.Split('/');
     internal string Template { get; } = template;
     internal string Name { get; } = options.Name ?? template;
     internal bool IsTemplate => Template.Contains('{', StringComparison.Ordinal);
@@ -181,27 +183,35 @@ abstract class McpResourceEntry(Type requestType, McpEntryOptions options, strin
     internal abstract ValueTask<ReadResourceResult> ReadAsync(IReadOnlyDictionary<string, string> values,
         string uri, IServiceProvider services, ClaimsPrincipal actor, JsonSerializerOptions json, CancellationToken ct);
 
-    internal bool Match(string uri, out Dictionary<string, string> values)
+    internal bool MatchValidatedSegments(string[] candidateSegments,
+        [NotNullWhen(true)] out Dictionary<string, string>? values)
     {
-        values = [with(StringComparer.Ordinal)];
-        if (!McpUri.TryValidate(uri))
+        values = null;
+        if (candidateSegments.Length != _templateSegments.Length)
             return false;
-        var candidate = uri.Split('/');
-        var pattern = Template.Split('/');
-        if (candidate.Length != pattern.Length)
-            return false;
-        for (var i = 0; i < pattern.Length; i++)
+
+        for (var i = 0; i < _templateSegments.Length; i++)
         {
-            if (pattern[i].Length > 2 && pattern[i][0] == '{' && pattern[i][^1] == '}')
-            {
-                var decoded = Uri.UnescapeDataString(candidate[i]);
-                if (decoded.Length == 0 || decoded is "." or "..")
-                    return false;
-                values.Add(pattern[i][1..^1], decoded);
-            }
-            else if (!string.Equals(pattern[i], candidate[i], StringComparison.Ordinal))
+            var pattern = _templateSegments[i];
+            if (pattern.Length > 2 && pattern[0] == '{' && pattern[^1] == '}')
+                continue;
+            if (!string.Equals(pattern, candidateSegments[i], StringComparison.Ordinal))
                 return false;
         }
+
+        var captures = new Dictionary<string, string>(StringComparer.Ordinal);
+        for (var i = 0; i < _templateSegments.Length; i++)
+        {
+            var pattern = _templateSegments[i];
+            if (pattern.Length <= 2 || pattern[0] != '{' || pattern[^1] != '}')
+                continue;
+            var decoded = Uri.UnescapeDataString(candidateSegments[i]);
+            if (decoded.Length == 0 || decoded is "." or "..")
+                return false;
+            captures.Add(pattern[1..^1], decoded);
+        }
+
+        values = captures;
         return true;
     }
 }
@@ -281,6 +291,35 @@ sealed class McpPromptEntry<TRequest, TOut>(string name,
                 Content = new TextContentBlock { Text = message.Text }
             }).ToArray()
         };
+    }
+}
+
+sealed class McpPrimitiveCatalog
+{
+    internal List<McpResourceEntry> Resources { get; } = [];
+    internal List<McpResourceEntry> FixedResourcesInOrder { get; } = [];
+    internal Dictionary<string, McpResourceEntry> FixedResourcesByUri { get; } = [with(StringComparer.Ordinal)];
+    internal List<McpResourceEntry> ResourceTemplates { get; } = [];
+    internal List<McpPromptEntry> Prompts { get; } = [];
+    internal Dictionary<string, McpPromptEntry> PromptsByName { get; } = [with(StringComparer.Ordinal)];
+
+    internal void AddResource(McpResourceEntry entry)
+    {
+        Resources.Add(entry);
+        if (entry.IsTemplate)
+        {
+            ResourceTemplates.Add(entry);
+            return;
+        }
+
+        FixedResourcesInOrder.Add(entry);
+        FixedResourcesByUri.Add(entry.Template, entry);
+    }
+
+    internal void AddPrompt(McpPromptEntry entry)
+    {
+        Prompts.Add(entry);
+        PromptsByName.Add(entry.Name, entry);
     }
 }
 

@@ -45,9 +45,9 @@ public static class PortiaMcpApplicationExtensions
                 throw new InvalidOperationException("Ambiguous MCP resource registration.");
         }
         var entry = new McpResourceEntry<TRequest, TOut>(uriTemplate, bind, options);
-        catalog.Resources.Add(entry);
+        catalog.AddResource(entry);
         _ = application.Services.AddSingleton<McpResourceEntry>(entry);
-        RegisterPrimitives(application);
+        RegisterPrimitives(application, catalog);
         return application;
 
         static bool CanOverlap(string left, string right)
@@ -77,12 +77,12 @@ public static class PortiaMcpApplicationExtensions
         if (options.Access == McpAccess.Unset)
             throw new ArgumentException("Prompt requires access.", nameof(configure));
         var catalog = PrimitiveCatalogs.GetValue(application, static _ => new McpPrimitiveCatalog());
-        if (catalog.Prompts.Any(prompt => prompt.Name == name))
+        if (catalog.PromptsByName.ContainsKey(name))
             throw new InvalidOperationException("Duplicate MCP prompt registration.");
         var entry = new McpPromptEntry<TRequest, TOut>(name, bind, render, options);
-        catalog.Prompts.Add(entry);
+        catalog.AddPrompt(entry);
         _ = application.Services.AddSingleton<McpPromptEntry>(entry);
-        RegisterPrimitives(application);
+        RegisterPrimitives(application, catalog);
         return application;
     }
 
@@ -120,8 +120,9 @@ public static class PortiaMcpApplicationExtensions
         target.OperationDeadline = source.OperationDeadline;
     }
 
-    static void RegisterPrimitives(PortiaBuilder application)
+    static void RegisterPrimitives(PortiaBuilder application, McpPrimitiveCatalog catalog)
     {
+        application.Services.TryAddSingleton(catalog);
         application.Services.TryAddSingleton(new McpLimits());
         application.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, McpStartupValidator>());
     }
@@ -234,9 +235,4 @@ public static class PortiaMcpApplicationExtensions
         internal Dictionary<string, Type> Names { get; } = [with(StringComparer.Ordinal)];
     }
 
-    sealed class McpPrimitiveCatalog
-    {
-        internal List<McpResourceEntry> Resources { get; } = [];
-        internal List<McpPromptEntry> Prompts { get; } = [];
-    }
 }
