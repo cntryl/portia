@@ -117,9 +117,11 @@ app.Run();
 ```
 
 The default endpoint is `/mcp` and the default HTTP mode is stateless Streamable HTTP. The optional
-`AddMcpHttp(options => ...)` callback can select another SDK-supported session mode. Portia preserves
-the callback and then requires a fresh service scope for each operation, including in stateless mode.
-This releases request-scoped application services after every call. Standard
+`AddMcpHttp(options => ...)` callback remains available for other SDK transport settings, but the
+final session mode must remain stateless. Configuring a stateful mode fails validation during endpoint
+mapping or host startup. Portia will enable stateful modes only after their cancellation path is
+qualified. Portia also requires a fresh service scope for each operation, including in stateless mode;
+this releases request-scoped application services after every call. Standard
 ASP.NET Core endpoint conventions remain authoritative for authentication, authorization, host
 filtering, and CORS. Portia uses the authenticated `HttpContext.User`; MCP arguments and metadata
 cannot replace that principal. An unauthenticated caller stays anonymous: `IMcpActorProvider`
