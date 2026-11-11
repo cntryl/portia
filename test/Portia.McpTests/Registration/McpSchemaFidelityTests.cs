@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Json.Schema;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
@@ -73,6 +74,27 @@ public sealed class McpSchemaFidelityTests
             .TryGetProperty("sourceRecordId", out _));
         Assert.True(secondSchema.GetProperty("properties").GetProperty("nested").GetProperty("properties")
             .TryGetProperty("source_record_id", out _));
+    }
+
+    [Fact]
+    public void ShouldAttachPropertyDescriptionsUsingFinalJsonTypeInfoNames()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddPortia().ConfigureJson(json => json.TypeInfoResolver =
+                McpSchemaJsonContext.Default.WithAddedModifier(typeInfo =>
+                {
+                    if (typeInfo.Type == typeof(ResolverRenamedGreeting))
+                        typeInfo.Properties.Single(property => property.Name == "name").Name = "resolver_name";
+                }))
+            .AddRequestHandler<ResolverRenamedGreetingHandler>()
+            .AddMcpTool<ResolverRenamedGreeting>();
+
+        using var provider = services.BuildServiceProvider();
+        var tool = Assert.Single(provider.GetServices<McpServerTool>());
+        var properties = tool.ProtocolTool.InputSchema.GetProperty("properties");
+
+        Assert.Equal("The public name selected by the JSON resolver.", properties.GetProperty("resolver_name")
+            .GetProperty("description").GetString());
     }
 
     [Fact]
@@ -191,6 +213,11 @@ public sealed class McpSchemaFidelityTests
     public sealed record SchemaNested(int Value, string SourceRecordId = "source");
     public sealed record SchemaReply(string Name, SchemaNested Nested, string? Note, SchemaChoice Choice, int Count);
 
+    /// <summary>Reads a greeting whose JSON name is changed by a configured resolver.</summary>
+    /// <param name="Name">The public name selected by the JSON resolver.</param>
+    [Discriminator("schema.resolver-renamed")]
+    public sealed record ResolverRenamedGreeting(string Name) : IRequest<string>, ICallable;
+
     [JsonConverter(typeof(JsonStringEnumConverter<SchemaChoice>))]
     public enum SchemaChoice { First, Second }
 
@@ -244,11 +271,18 @@ public sealed class McpSchemaFidelityTests
                 request.Note, request.Choice, request.Count)));
         }
     }
+
+    public sealed class ResolverRenamedGreetingHandler : IRequestHandler<ResolverRenamedGreeting, string>
+    {
+        public ValueTask<Result<string>> HandleAsync(IRequestContext<ResolverRenamedGreeting> context,
+            CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+    }
 }
 
 [PortiaJsonContext]
 [JsonSerializable(typeof(McpSchemaFidelityTests.SchemaProbe))]
 [JsonSerializable(typeof(McpSchemaFidelityTests.SchemaReply))]
+[JsonSerializable(typeof(McpSchemaFidelityTests.ResolverRenamedGreeting))]
 [JsonSerializable(typeof(McpSchemaFidelityTests.ScalarProbe))]
 [JsonSerializable(typeof(McpSchemaFidelityTests.NullableReply))]
 [JsonSerializable(typeof(McpSchemaFidelityTests.NoResult))]

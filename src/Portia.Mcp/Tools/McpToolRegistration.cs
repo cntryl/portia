@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.ComponentModel;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using System.Text.Json;
@@ -112,9 +113,15 @@ public abstract class McpToolRegistration
         inputObject["type"] = "object";
         if (inputObject["properties"] is JsonObject properties)
         {
+            var contractNames = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var property in binding.Properties)
+                if (property.AttributeProvider is MemberInfo member)
+                    contractNames.TryAdd(member.Name, property.Name);
+
             foreach (var (propertyName, propertyDescription) in _propertyDescriptions)
             {
-                var jsonName = propertyDescription.JsonName
+                var jsonName = contractNames.GetValueOrDefault(propertyName)
+                    ?? propertyDescription.JsonName
                     ?? json.PropertyNamingPolicy?.ConvertName(propertyName) ?? propertyName;
                 if (properties[jsonName] is JsonObject propertySchema)
                     propertySchema["description"] = propertyDescription.Description;
