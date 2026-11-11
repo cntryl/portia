@@ -443,6 +443,15 @@ REST POST control for each result size. These application controls are stored as
 from full MCP operations; their differences are useful adapter and transport comparisons, not an
 isolated server-only timing.
 
+The raw matrix also includes `adapter-only` rows. They directly invoke the registered Portia tool
+`InvokeAsync` method or the registered resource-read and prompt-get handler delegates from the
+same HTTP host configuration. Each latency sample excludes MCP server dispatch, JSON-RPC
+serialization, the MCP client, and transport work; the request context and configured service
+scope are prepared before the latency timer starts. Throughput and process-allocation figures
+cover the repeated direct-call loop, including that request-context and scope setup, while still
+excluding result validation, protocol dispatch, client, and transport. Adapter outputs are checked
+during warmup and latency samples, after each sample's timer stops.
+
 Run the diagnostic matrix to validate all transports, catalog sizes, formats, and telemetry modes
 with three samples. Use a full campaign for reported timing:
 

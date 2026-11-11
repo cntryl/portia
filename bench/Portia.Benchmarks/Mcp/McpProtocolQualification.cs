@@ -13,16 +13,22 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
+using System.Threading.Channels;
 
 namespace Cntryl.Portia;
 
 /// <summary>Runs a reproducible end-to-end MCP transport qualification campaign.</summary>
 public static class McpProtocolQualification
 {
+    static long _adapterRequestId;
     static readonly int[] CatalogSizes = [1, 100, 1000];
     static readonly int[] PayloadSizes = [256, 4096, 65536];
+    static readonly int[] NestedValues = [3, 5, 8];
     static readonly string[] TelemetryModes = ["disabled", "propagation", "sampled-tracing", "metrics", "logging"];
     static readonly ClaimsPrincipal Actor = new(new ClaimsIdentity(
         [new Claim(ClaimTypes.NameIdentifier, "mcp-benchmark")], "benchmark"));
@@ -49,9 +55,11 @@ public static class McpProtocolQualification
             foreach (var catalogSize in catalogSizes)
             {
                 await using var server = await McpBenchmarkServer.StartHttpAsync(catalogSize, telemetryMode);
+                await using var adapter = server.CreateAdapterOnlySession();
                 await WriteMeasurementAsync(output, "http", catalogSize, telemetryMode, "startup", 0,
                     Measurement.Single(server.StartupMilliseconds));
 
+                await MeasureAdapterOnlyAsync(output, server, adapter, catalogSize, telemetryMode, plan);
                 await MeasureApplicationControlsAsync(output, server, catalogSize, telemetryMode, plan);
                 await using var httpClient = await McpBenchmarkClient.ConnectHttpAsync(server.Endpoint);
                 await WriteMeasurementAsync(output, "http", catalogSize, telemetryMode, "negotiation", 0,
@@ -138,6 +146,182 @@ public static class McpProtocolQualification
                 await WriteMeasuredAsync(output, server, transport, catalogSize, telemetryMode,
                     $"read-resource-{ResourceFormat.ForIndex(formatIndex).Name}", size,
                     () => client.ReadResourceAsync(formatIndex, size), plan);
+        }
+    }
+
+    static async Task MeasureAdapterOnlyAsync(StreamWriter output, McpBenchmarkServer server,
+        McpAdapterOnlySession adapter, int catalogSize, string telemetryMode, CampaignPlan plan)
+    {
+        var tool = (adapter.Server.ServerOptions.ToolCollection
+            ?? throw new InvalidOperationException("The MCP tool adapter catalog was not registered."))
+            .Single(candidate => candidate.ProtocolTool.Name == "benchmark.tool.0000");
+        var readResource = adapter.Server.ServerOptions.Handlers.ReadResourceHandler
+            ?? throw new InvalidOperationException("The MCP resource adapter was not registered.");
+        var getPrompt = adapter.Server.ServerOptions.Handlers.GetPromptHandler
+            ?? throw new InvalidOperationException("The MCP prompt adapter was not registered.");
+
+        foreach (var size in PayloadSizes)
+        {
+            var toolArguments = ToolArguments(size);
+            await WriteAdapterMeasuredAsync(output, server, adapter, "tool-call", size,
+                provider => new ModelContextProtocol.Server.RequestContext<CallToolRequestParams>(
+                    adapter.Server, AdapterRequest(RequestMethods.ToolsCall),
+                    new CallToolRequestParams
+                    {
+                        Name = tool.ProtocolTool.Name,
+                        Arguments = toolArguments
+                    })
+                {
+                    MatchedPrimitive = tool,
+                    Services = provider,
+                    User = Actor
+                },
+                context => tool.InvokeAsync(context),
+                result =>
+                {
+                    if (result.IsError == true || result.StructuredContent is not { } structured ||
+                        !structured.TryGetProperty("result", out var value) ||
+                        !value.TryGetProperty("data", out var data) || data.GetString()?.Length != size)
+                        throw new InvalidOperationException("The direct MCP tool adapter did not return the expected structured result.");
+                }, plan, catalogSize, telemetryMode);
+
+            await WriteAdapterMeasuredAsync(output, server, adapter, "render-prompt", size,
+                provider => new ModelContextProtocol.Server.RequestContext<GetPromptRequestParams>(
+                    adapter.Server, AdapterRequest(RequestMethods.PromptsGet),
+                    new GetPromptRequestParams
+                    {
+                        Name = "benchmark_prompt_0000",
+                        Arguments = new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+                        {
+                            ["size"] = JsonSerializer.SerializeToElement(size.ToString(CultureInfo.InvariantCulture))
+                        }
+                    })
+                {
+                    Services = provider,
+                    User = Actor
+                }, context => getPrompt(context, CancellationToken.None),
+                result =>
+                {
+                    if (result.Messages.Count != 1 || result.Messages[0].Content is not TextContentBlock text ||
+                        text.Text.Length != size)
+                        throw new InvalidOperationException("The direct MCP prompt adapter did not render the expected text.");
+                }, plan, catalogSize, telemetryMode);
+
+            var formatCount = Math.Min(catalogSize, 3);
+            for (var formatIndex = 0; formatIndex < formatCount; formatIndex++)
+            {
+                var uri = $"benchmark://resource/{formatIndex:D4}/{size.ToString(CultureInfo.InvariantCulture)}";
+                var format = ResourceFormat.ForIndex(formatIndex);
+                await WriteAdapterMeasuredAsync(output, server, adapter, $"read-resource-{format.Name}", size,
+                    provider => new ModelContextProtocol.Server.RequestContext<ReadResourceRequestParams>(
+                        adapter.Server, AdapterRequest(RequestMethods.ResourcesRead),
+                        new ReadResourceRequestParams { Uri = uri })
+                    {
+                        Services = provider,
+                        User = Actor
+                    }, context => readResource(context, CancellationToken.None),
+                    result =>
+                    {
+                        var contentMatches = result.Contents.Count == 1 && format.Kind switch
+                        {
+                            ResourceContentKind.Json => result.Contents[0] is TextResourceContents json &&
+                                JsonElement.Parse(json.Text).GetProperty("data").GetString()?.Length == size,
+                            ResourceContentKind.Text => result.Contents[0] is TextResourceContents text && text.Text.Length == size,
+                            ResourceContentKind.Binary => result.Contents[0] is BlobResourceContents blob &&
+                                blob.DecodedData.Length == size,
+                            _ => false
+                        };
+                        if (!contentMatches)
+                            throw new InvalidOperationException("The direct MCP resource adapter returned an unexpected result.");
+                    }, plan, catalogSize, telemetryMode);
+            }
+        }
+
+        static Dictionary<string, JsonElement> ToolArguments(int size) => new(StringComparer.Ordinal)
+        {
+            ["input"] = JsonSerializer.SerializeToElement("benchmark nested arguments"),
+            ["result_bytes"] = JsonSerializer.SerializeToElement(size),
+            ["nested"] = JsonSerializer.SerializeToElement(new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["group"] = "north",
+                ["values"] = NestedValues,
+                ["source"] = new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["name"] = "portia",
+                    ["revision"] = 7
+                }
+            })
+        };
+
+        static JsonRpcRequest AdapterRequest(string method) => new()
+        {
+            Id = new RequestId(Interlocked.Increment(ref _adapterRequestId)),
+            Method = method
+        };
+    }
+
+    static async Task WriteAdapterMeasuredAsync<TContext, TResult>(StreamWriter output,
+        McpBenchmarkServer server, McpAdapterOnlySession adapter, string operation, int payloadBytes,
+        Func<IServiceProvider, TContext> createContext, Func<TContext, ValueTask<TResult>> invoke,
+        Action<TResult> validate, CampaignPlan plan, int catalogSize, string telemetryMode)
+    {
+        var before = server.Telemetry.Snapshot();
+        var measurement = await MeasureAdapterInvocationAsync(adapter, createContext, invoke, validate, plan);
+        var after = server.Telemetry.Snapshot();
+        await WriteMeasurementAsync(output, "adapter-only", catalogSize, telemetryMode, operation,
+            payloadBytes, measurement, after.Difference(before));
+    }
+
+    static async Task<Measurement> MeasureAdapterInvocationAsync<TContext, TResult>(
+        McpAdapterOnlySession adapter, Func<IServiceProvider, TContext> createContext,
+        Func<TContext, ValueTask<TResult>> invoke, Action<TResult> validate, CampaignPlan plan)
+    {
+        var raw = new double[plan.Samples];
+        for (var index = 0; index < plan.Warmups; index++)
+            _ = await InvokeOnceAsync(measureLatency: false, validateResult: true).ConfigureAwait(false);
+
+        for (var index = 0; index < raw.Length; index++)
+        {
+            var sample = await InvokeOnceAsync(measureLatency: true, validateResult: true).ConfigureAwait(false);
+            raw[index] = sample * 1_000_000d / Stopwatch.Frequency;
+        }
+
+        var allocatedBefore = GC.GetTotalAllocatedBytes(precise: false);
+        var throughputStarted = Stopwatch.GetTimestamp();
+        for (var index = 0; index < plan.ThroughputIterations; index++)
+            _ = await InvokeOnceAsync(measureLatency: false, validateResult: false).ConfigureAwait(false);
+        var throughputElapsed = Stopwatch.GetElapsedTime(throughputStarted);
+        var throughputAllocated = GC.GetTotalAllocatedBytes(precise: false) - allocatedBefore;
+
+        return Measurement.From(raw, plan.ThroughputIterations, throughputElapsed.TotalSeconds, throughputAllocated);
+
+        async ValueTask<long> InvokeOnceAsync(bool measureLatency, bool validateResult)
+        {
+            var scope = adapter.Server.ServerOptions.ScopeRequests
+                ? adapter.Services.GetRequiredService<IServiceScopeFactory>().CreateScope()
+                : null;
+            try
+            {
+                var context = createContext(scope?.ServiceProvider ?? adapter.Services);
+                if (!measureLatency)
+                {
+                    var unmeasuredResult = await invoke(context).ConfigureAwait(false);
+                    if (validateResult)
+                        validate(unmeasuredResult);
+                    return 0;
+                }
+
+                var started = Stopwatch.GetTimestamp();
+                var result = await invoke(context).ConfigureAwait(false);
+                var elapsedTicks = Stopwatch.GetTimestamp() - started;
+                if (validateResult)
+                    validate(result);
+                return elapsedTicks;
+            }
+            finally
+            {
+                scope?.Dispose();
+            }
         }
     }
 
@@ -272,7 +456,8 @@ public static class McpProtocolQualification
                 discovery = "Tool/resource-template/prompt listing measured independently before warmed primitive operations.",
                 latency = "Sequential wall-clock operation samples; p50, p95, mean and every raw sample are retained.",
                 allocations = "Process-wide managed bytes during the separate throughput batch divided by operations; HTTP includes client and in-process server; stdio measures the parent client process.",
-                adapterDelta = "MCP measurements and direct/REST controls are separate rows; derived paired differences are reported in the summary, not claimed as isolated server-only cost.",
+                adapterDelta = "MCP measurements and direct/REST controls are separate rows; derived paired differences include client and transport cost.",
+                adapterOnly = "The adapter-only rows call the registered Portia tool InvokeAsync method or the registered resource-read/prompt-get handler from the host's MCP server options. The MCP server dispatch pipeline, JSON-RPC serialization, client and transport are excluded. RequestContext and configured per-request service scope are created for every call before the latency timer starts. P50/P95/mean cover only the direct Portia adapter handler invocation; result validation runs after the latency timer. Throughput and process allocations cover the repeated direct-call loop including request-context and scope setup, but not result validation, protocol dispatch, client or transport.",
                 exporterWait = false
             }
         };
@@ -424,6 +609,14 @@ sealed class McpBenchmarkServer : IAsyncDisposable
     internal BenchmarkTelemetry Telemetry { get; }
     internal double StartupMilliseconds { get; }
 
+    internal McpAdapterOnlySession CreateAdapterOnlySession()
+    {
+        var options = _application.Services.GetRequiredService<IOptions<McpServerOptions>>().Value;
+        var transport = new AdapterOnlyTransport();
+        var server = McpServer.Create(transport, options, NullLoggerFactory.Instance, _application.Services);
+        return new McpAdapterOnlySession(server, _application.Services);
+    }
+
     internal static async Task<McpBenchmarkServer> StartHttpAsync(int catalogSize, string telemetryMode)
     {
         var started = Stopwatch.GetTimestamp();
@@ -511,6 +704,32 @@ sealed class McpBenchmarkServer : IAsyncDisposable
                 }
             }
         }
+    }
+}
+
+sealed class McpAdapterOnlySession(McpServer server, IServiceProvider services) : IAsyncDisposable
+{
+    internal McpServer Server { get; } = server;
+    internal IServiceProvider Services { get; } = services;
+
+    public ValueTask DisposeAsync() => Server.DisposeAsync();
+}
+
+sealed class AdapterOnlyTransport : ITransport
+{
+    readonly Channel<JsonRpcMessage> _messages = Channel.CreateUnbounded<JsonRpcMessage>();
+
+    public string? SessionId => null;
+    public ChannelReader<JsonRpcMessage> MessageReader => _messages.Reader;
+
+    public Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default) =>
+        Task.FromException(new InvalidOperationException(
+            "Adapter-only MCP measurements must not send protocol messages."));
+
+    public ValueTask DisposeAsync()
+    {
+        _messages.Writer.TryComplete();
+        return ValueTask.CompletedTask;
     }
 }
 
