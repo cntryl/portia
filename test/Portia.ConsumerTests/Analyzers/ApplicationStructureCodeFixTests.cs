@@ -469,6 +469,36 @@ public sealed class ApplicationStructureCodeFixTests
         }
     }
 
+    [Theory]
+    [InlineData("PORTIA200", "Price.cs", "namespace Shop.Core.Features.Orders.Values; public record Price; public record Currency;")]
+    [InlineData("PORTIA201", "Wrong.cs", "namespace Shop.Core.Features.Orders.Values; public record Currency;")]
+    public async Task ShouldDeclineFileActionGivenDestinationDirectory(string id, string filename, string source)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "portia-codefix-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(directory, "Currency.cs"));
+        try
+        {
+            using var workspace = new AdhocWorkspace();
+            var project = workspace.AddProject(ProjectInfo.Create(ProjectId.CreateNewId(), VersionStamp.Create(),
+                    "Shop.Core", "Shop.Core", LanguageNames.CSharp).WithDefaultNamespace("Shop.Core"))
+                .WithParseOptions(new CSharpParseOptions(LanguageVersion.Preview))
+                .WithCompilationOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
+                .AddMetadataReferences(((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+                    .Select(file => MetadataReference.CreateFromFile(file)));
+            var document = project.AddDocument(filename, SourceText.From(source),
+                ["Features", "Orders", "Values"], Path.Combine(directory, filename));
+            Assert.True(workspace.TryApplyChanges(document.Project.Solution));
+
+            var (actions, _) = await ActionsAsync(workspace.CurrentSolution.GetDocument(document.Id)!, id);
+
+            Assert.Empty(actions);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task ShouldBeIdempotentAfterSplittingTypes()
     {

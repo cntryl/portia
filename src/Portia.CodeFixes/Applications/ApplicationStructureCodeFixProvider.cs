@@ -242,7 +242,8 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
             return false;
         var destination = SiblingPath(document.FilePath, filename);
 #pragma warning disable RS1035 // Code actions preflight files outside the solution before offering a file operation.
-        if (destination is not null && System.IO.File.Exists(destination)
+        if (destination is not null
+            && (System.IO.File.Exists(destination) || System.IO.Directory.Exists(destination))
             && !string.Equals(System.IO.Path.GetFullPath(destination),
                 System.IO.Path.GetFullPath(document.FilePath ?? string.Empty), StringComparison.Ordinal))
 #pragma warning restore RS1035
