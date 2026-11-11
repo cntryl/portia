@@ -132,6 +132,20 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
+    public void ShouldGeneratePropertyDescriptionsFromInheritedRequestMembers()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddPortia()
+            .AddRequestHandler<InheritedDocumentedGreetingHandler>()
+            .AddMcpTool<InheritedDocumentedGreeting>();
+        using var provider = services.BuildServiceProvider();
+        var tool = Assert.Single(provider.GetServices<McpServerTool>());
+
+        Assert.Equal("The person whose greeting should be read.", tool.ProtocolTool.InputSchema
+            .GetProperty("properties").GetProperty("name").GetProperty("description").GetString());
+    }
+
+    [Fact]
     public void ShouldRenderXmlReferencesAndResolveInheritedDocumentation()
     {
         var services = new ServiceCollection();
@@ -368,6 +382,19 @@ public sealed class McpRegistrationTests
             application.AddMcpTool<ReadGreeting>(tool => tool.Named("greetings.other")));
 
         // Assert
+        Assert.Contains("conflicting MCP tool declarations", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldRejectConflictingPropertyDescriptionsInDuplicateDeclarations()
+    {
+        var application = new ServiceCollection().AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .AddMcpTool<ReadGreeting>(tool => tool.DescribeProperty("Name", "The first description."));
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            application.AddMcpTool<ReadGreeting>(tool => tool.DescribeProperty("Name", "The second description.")));
+
         Assert.Contains("conflicting MCP tool declarations", exception.Message, StringComparison.Ordinal);
     }
 
@@ -1159,6 +1186,22 @@ public sealed class McpRegistrationTests
             ValueTask.FromResult(Result<string>.Success(context.Request.Name));
     }
 
+    public record DocumentedGreetingBase
+    {
+        /// <summary>The person whose greeting should be read.</summary>
+        public string Name { get; init; } = string.Empty;
+    }
+
+    /// <summary>Reads a greeting from an inherited request property.</summary>
+    [Discriminator("greetings.inherited-property")]
+    public sealed record InheritedDocumentedGreeting : DocumentedGreetingBase, IRequest<string>, ICallable;
+
+    public sealed class InheritedDocumentedGreetingHandler : IRequestHandler<InheritedDocumentedGreeting, string>
+    {
+        public ValueTask<Result<string>> HandleAsync(IRequestContext<InheritedDocumentedGreeting> context,
+            CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+    }
+
     public sealed class ReadGreetingHandler : IRequestHandler<ReadGreeting, string>
     {
         public ValueTask<Result<string>> HandleAsync(IRequestContext<ReadGreeting> context, CancellationToken ct) =>
@@ -1439,6 +1482,7 @@ public sealed class McpRegistrationTests
 [JsonSerializable(typeof(McpRegistrationTests.IdentifiedInvocation))]
 [JsonSerializable(typeof(McpRegistrationTests.ReadGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.DocumentedGreeting))]
+[JsonSerializable(typeof(McpRegistrationTests.InheritedDocumentedGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.RejectGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.InspectNestedInput))]
 [JsonSerializable(typeof(McpRegistrationTests.NestedInput))]

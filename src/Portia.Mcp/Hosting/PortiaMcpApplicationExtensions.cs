@@ -223,7 +223,10 @@ public static class PortiaMcpApplicationExtensions
     static bool Equivalent(McpToolRegistration left, McpToolRegistration right) =>
         left.Name == right.Name && left.Description == right.Description && left.Title == right.Title
         && left.ReadOnly == right.ReadOnly && left.Destructive == right.Destructive
-        && left.Idempotent == right.Idempotent && left.OpenWorld == right.OpenWorld;
+        && left.Idempotent == right.Idempotent && left.OpenWorld == right.OpenWorld
+        && left.PropertyDescriptions.Count == right.PropertyDescriptions.Count
+        && left.PropertyDescriptions.All(pair => right.PropertyDescriptions.TryGetValue(pair.Key, out var description)
+                                                   && pair.Value == description);
 
     sealed class ToolCatalog
     {

@@ -45,6 +45,8 @@ public abstract class McpToolRegistration
 
     internal string RequestName { get; }
 
+    internal IReadOnlyDictionary<string, McpJsonPropertyDescription> PropertyDescriptions => _propertyDescriptions;
+
     internal McpInvocation Invocation { get; }
 
     /// <summary>Gets the concrete Portia request type.</summary>

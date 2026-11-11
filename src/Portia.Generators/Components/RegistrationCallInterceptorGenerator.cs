@@ -347,12 +347,13 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
         var description = DocumentationSummary(type) ?? $"Invokes the {type.Name} request.";
 
-        var propertyDescriptions = type.GetMembers().OfType<IPropertySymbol>()
+        var propertyDescriptions = RequestProperties(type)
             .Where(property => !property.IsStatic && !property.IsIndexer
                 && property.GetMethod?.DeclaredAccessibility == Accessibility.Public)
             .OrderBy(property => property.Name, StringComparer.Ordinal)
             .Select(property => (Property: property,
-                Description: DocumentationSummary(property) ?? ParameterDescription(type, property.Name)))
+                Description: DocumentationSummary(property)
+                              ?? ParameterDescription(property.ContainingType, property.Name)))
             .Where(item => item.Description is not null)
             .ToArray();
         var configure = propertyDescriptions.Length == 0 ? "configure"
@@ -372,6 +373,22 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                    + genericTypes + "(builder, " + RequestTransportDiscovery.FormatStringLiteral(name!) + ", "
                    + RequestTransportDiscovery.FormatStringLiteral(description!) + ", " + configure + ");\n";
         return new Call(InterceptableLocationModel.From(location), "MCP tool", body, null, diagnosticLocation);
+    }
+
+    static IEnumerable<IPropertySymbol> RequestProperties(INamedTypeSymbol type)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var current = type; current is not null && current.SpecialType != SpecialType.System_Object;
+             current = current.BaseType)
+        {
+            foreach (var property in current.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (!property.IsStatic && !property.IsIndexer
+                    && property.GetMethod?.DeclaredAccessibility == Accessibility.Public
+                    && seen.Add(property.Name))
+                    yield return property;
+            }
+        }
     }
 
     static string? DocumentationSummary(INamedTypeSymbol type) =>
