@@ -470,6 +470,34 @@ public sealed class ApplicationStructureCodeFixTests
     }
 
     [Fact]
+    public async Task ShouldBeIdempotentAfterSplittingTypes()
+    {
+        using var workspace = new AdhocWorkspace();
+        var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs",
+            "namespace Shop.Core.Features.Orders.Values; public record Price; public record Currency;");
+        var (actions, _) = await ActionsAsync(document, "PORTIA200");
+        var once = await ApplyAsync(Assert.Single(actions));
+
+        var remaining = once.GetDocument(document.Id)!;
+        Assert.DoesNotContain(await DiagnosticsAsync(remaining, new ApplicationStructureAnalyzer()),
+            diagnostic => diagnostic.Id is "PORTIA200" or "PORTIA201");
+        await AssertCompilesAsync(remaining.Project);
+    }
+
+    [Fact]
+    public async Task ShouldDeclineMovingPartialTypeGivenMultipleDeclarations()
+    {
+        using var workspace = new AdhocWorkspace();
+        var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs",
+            "namespace Shop.Core.Features.Orders.Values; public partial record Price; public partial record Price;");
+
+        var (actions, _) = await ActionsAsync(document, "PORTIA200");
+
+        Assert.Empty(actions);
+        await AssertCompilesAsync(document.Project);
+    }
+
+    [Fact]
     public async Task ShouldLeaveRenameCycleUnchangedGivenFixAll()
     {
         using var workspace = new AdhocWorkspace();
