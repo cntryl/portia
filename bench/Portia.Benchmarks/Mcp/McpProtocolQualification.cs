@@ -459,9 +459,15 @@ sealed class McpBenchmarkServer : IAsyncDisposable
         }
         catch
         {
-            if (app is not null)
-                await app.DisposeAsync().ConfigureAwait(false);
-            telemetry.Dispose();
+            try
+            {
+                if (app is not null)
+                    await app.DisposeAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                telemetry.Dispose();
+            }
             throw;
         }
     }
