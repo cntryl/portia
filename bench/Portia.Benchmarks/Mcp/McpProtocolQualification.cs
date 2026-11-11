@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -18,14 +19,13 @@ using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
-using System.Threading.Channels;
 
 namespace Cntryl.Portia;
 
 /// <summary>Runs a reproducible end-to-end MCP transport qualification campaign.</summary>
 public static class McpProtocolQualification
 {
-    static long _adapterRequestId;
+    static long AdapterRequestId;
     static readonly int[] CatalogSizes = [1, 100, 1000];
     static readonly int[] PayloadSizes = [256, 4096, 65536];
     static readonly int[] NestedValues = [3, 5, 8];
@@ -255,7 +255,7 @@ public static class McpProtocolQualification
 
         static JsonRpcRequest AdapterRequest(string method) => new()
         {
-            Id = new RequestId(Interlocked.Increment(ref _adapterRequestId)),
+            Id = new RequestId(Interlocked.Increment(ref AdapterRequestId)),
             Method = method
         };
     }
