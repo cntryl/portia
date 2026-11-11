@@ -78,6 +78,17 @@ public sealed class ApplicationStructureAnalyzerTests
         Assert.Equal("Currency", diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan));
     }
 
+    [Fact]
+    public void ShouldNotReportRepeatedPartialDeclarationsGivenOneLogicalType()
+    {
+        const string source = "namespace Shop.Core.Features.Orders.Values; public partial record Price; public partial record Price;";
+
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Values/Price.cs", source)]);
+
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA200");
+    }
+
     [Theory]
     [InlineData("class Price; public delegate void Changed();")]
     [InlineData("class Price; public enum Currency { Usd }")]
