@@ -473,6 +473,22 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
+    public async Task ShouldRejectStatefulHttpConfigurationAtStartupWithoutMappedEndpoint()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<ReadGreetingHandler>()
+            .AddMcpTool<ReadGreeting>()
+            .AddMcpHttp(options => options.Stateless = false);
+        await using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<OptionsValidationException>(() => app.StartAsync());
+
+        Assert.Contains("requires stateless Streamable HTTP", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ShouldRejectStatefulHttpConfigurationRegisteredAfterPortia()
     {
         var builder = WebApplication.CreateBuilder();
