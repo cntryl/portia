@@ -78,6 +78,7 @@ for portia_runtime_mode in off on; do
     --inProcess --job short \
     --filter '*RequestDispatchBenchmarks*' '*HttpLifecycleBenchmarks.Json*' '*ProcessorDispatchBenchmarks*' \
     --outliers DontRemove --allStats --keepFiles \
+    --exporters json \
     --artifacts "$portia_runtime_mode_output/BenchmarkDotNet.Artifacts" \
     > "$portia_runtime_mode_output/benchmarks.log" 2>&1
 done
