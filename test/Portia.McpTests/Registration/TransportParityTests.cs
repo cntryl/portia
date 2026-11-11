@@ -118,6 +118,12 @@ public sealed class TransportParityTests
         var concurrent = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ =>
             ChangeAsync(new QualifiedChange(QualifiedObservations.Tenant, 3, "conflict"))));
         Assert.All(concurrent, result => Assert.Equal(409, result.Status));
+
+        // An HTTP response can be observed before its asynchronous request-scope disposal continuation runs.
+        var observations = app.Services.GetRequiredService<QualifiedObservations>();
+        for (var attempt = 0; observations.Completed.Count < 22 && attempt < 100; attempt++)
+            await Task.Delay(TimeSpan.FromMilliseconds(50), token);
+
         var afterConcurrency = await ReadAsync();
         Assert.Equal(CommittedValues, afterConcurrency.Values);
         Assert.Equal(22, afterConcurrency.Scopes.Length);
