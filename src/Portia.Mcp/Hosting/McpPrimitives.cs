@@ -38,6 +38,26 @@ public abstract class McpEntryOptions
 {
     internal McpAccess Access { get; private set; }
     internal Type? PolicyType { get; private set; }
+    internal string? Name { get; set; }
+    internal string? Title { get; private set; }
+    internal string? Description { get; private set; }
+
+    /// <summary>Adds a human-readable display title without changing the protocol identity.</summary>
+    public McpEntryOptions Titled(string title)
+    {
+        Title = string.IsNullOrWhiteSpace(title)
+            ? throw new ArgumentException("A title cannot be empty.", nameof(title)) : title;
+        return this;
+    }
+
+    /// <summary>Adds a model-facing description.</summary>
+    public McpEntryOptions DescribedAs(string description)
+    {
+        Description = string.IsNullOrWhiteSpace(description)
+            ? throw new ArgumentException("A description cannot be empty.", nameof(description)) : description;
+        return this;
+    }
+
     /// <summary>Allows authenticated actors to discover and invoke the entry.</summary>
     public void Authenticated() => Access = McpAccess.Authenticated;
     /// <summary>Explicitly exposes the entry to anonymous actors.</summary>
@@ -59,6 +79,14 @@ public sealed class McpResourceOptions<TOut> : McpEntryOptions
     internal Func<TOut, string>? Text { get; private set; }
     internal bool Json { get; private set; }
     internal string? MediaType { get; private set; }
+
+    /// <summary>Overrides the resource's display name without changing its URI.</summary>
+    public McpResourceOptions<TOut> Named(string name)
+    {
+        Name = string.IsNullOrWhiteSpace(name)
+            ? throw new ArgumentException("A resource name cannot be empty.", nameof(name)) : name;
+        return this;
+    }
     /// <summary>Serializes the result using Portia's JSON configuration.</summary>
     public void AsJson()
     {
@@ -95,15 +123,23 @@ public sealed class McpResourceOptions<TOut> : McpEntryOptions
 public sealed class McpPromptOptions : McpEntryOptions
 {
     internal Dictionary<string, bool> Arguments { get; } = [with(StringComparer.Ordinal)];
+    internal Dictionary<string, string?> ArgumentDescriptions { get; } = [with(StringComparer.Ordinal)];
     /// <summary>Declares a required string argument.</summary>
-    public void Required(string name) => Add(name, true);
+    public void Required(string name) => Add(name, true, null);
+    /// <summary>Declares a required string argument with a model-facing description.</summary>
+    public void Required(string name, string description) => Add(name, true, description);
     /// <summary>Declares an optional string argument.</summary>
-    public void Optional(string name) => Add(name, false);
-    void Add(string name, bool required)
+    public void Optional(string name) => Add(name, false, null);
+    /// <summary>Declares an optional string argument with a model-facing description.</summary>
+    public void Optional(string name, string description) => Add(name, false, description);
+    void Add(string name, bool required, string? description)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (description is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(description);
         if (!Arguments.TryAdd(name, required))
             throw new ArgumentException("Duplicate prompt argument.", nameof(name));
+        ArgumentDescriptions.Add(name, description);
     }
 }
 
@@ -139,6 +175,7 @@ abstract class McpResourceEntry(Type requestType, McpEntryOptions options, strin
     : McpEntry(requestType, options)
 {
     internal string Template { get; } = template;
+    internal string Name { get; } = options.Name ?? template;
     internal bool IsTemplate => Template.Contains('{', StringComparison.Ordinal);
     internal abstract string MimeType { get; }
     internal abstract ValueTask<ReadResourceResult> ReadAsync(IReadOnlyDictionary<string, string> values,
@@ -207,6 +244,8 @@ abstract class McpPromptEntry(Type requestType, McpPromptOptions options, string
     : McpEntry(requestType, options)
 {
     internal string Name { get; } = name;
+    internal string? Title => PromptOptions.Title;
+    internal string? Description => PromptOptions.Description;
     internal McpPromptOptions PromptOptions { get; } = options;
     internal abstract ValueTask<GetPromptResult> GetAsync(IReadOnlyDictionary<string, string> values,
         IServiceProvider services, ClaimsPrincipal actor, CancellationToken ct);

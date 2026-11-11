@@ -46,7 +46,14 @@ static class McpPrimitiveHandlers
         var visible = new List<Resource>();
         foreach (var entry in services.GetServices<McpResourceEntry>().Where(entry => !entry.IsTemplate))
             if (await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
-                visible.Add(new Resource { Name = entry.Template, Uri = entry.Template, MimeType = entry.MimeType });
+                visible.Add(new Resource
+                {
+                    Name = entry.Name,
+                    Uri = entry.Template,
+                    MimeType = entry.MimeType,
+                    Title = entry.Options.Title,
+                    Description = entry.Options.Description
+                });
         return new ListResourcesResult
         {
             Resources = visible,
@@ -67,9 +74,11 @@ static class McpPrimitiveHandlers
             if (await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
                 visible.Add(new ResourceTemplate
                 {
-                    Name = entry.Template,
+                    Name = entry.Name,
                     UriTemplate = entry.Template,
-                    MimeType = entry.MimeType
+                    MimeType = entry.MimeType,
+                    Title = entry.Options.Title,
+                    Description = entry.Options.Description
                 });
         return new ListResourceTemplatesResult
         {
@@ -135,8 +144,15 @@ static class McpPrimitiveHandlers
                 visible.Add(new Prompt
                 {
                     Name = entry.Name,
+                    Title = entry.Title,
+                    Description = entry.Description,
                     Arguments = entry.PromptOptions.Arguments
-                    .Select(argument => new PromptArgument { Name = argument.Key, Required = argument.Value }).ToArray()
+                    .Select(argument => new PromptArgument
+                    {
+                        Name = argument.Key,
+                        Required = argument.Value,
+                        Description = entry.PromptOptions.ArgumentDescriptions[argument.Key]
+                    }).ToArray()
                 });
         return new ListPromptsResult
         {

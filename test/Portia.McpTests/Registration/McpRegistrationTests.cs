@@ -119,6 +119,19 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
+    public void ShouldGeneratePropertyDescriptionsUsingJsonContractNames()
+    {
+        var services = new ServiceCollection();
+        _ = services.AddPortia().AddRequestHandler<DocumentedGreetingHandler>().AddMcpTool<DocumentedGreeting>();
+        using var provider = services.BuildServiceProvider();
+        var tool = Assert.Single(provider.GetServices<McpServerTool>());
+
+        Assert.Equal("Reads a greeting by its documented name.", tool.ProtocolTool.Description);
+        Assert.Equal("The person whose greeting should be read.", tool.ProtocolTool.InputSchema
+            .GetProperty("properties").GetProperty("greeting_name").GetProperty("description").GetString());
+    }
+
+    [Fact]
     public void ShouldRenderXmlReferencesAndResolveInheritedDocumentation()
     {
         var services = new ServiceCollection();
@@ -1134,6 +1147,18 @@ public sealed class McpRegistrationTests
     [RequestRoute("public", "greetings", "message", "read")]
     public sealed record ReadGreeting(string Name) : IRequest<string>, ICallable;
 
+    /// <summary>Reads a greeting by its documented name.</summary>
+    /// <param name="Name">The person whose greeting should be read.</param>
+    [Discriminator("greetings.documented")]
+    public sealed record DocumentedGreeting([property: JsonPropertyName("greeting_name")] string Name)
+        : IRequest<string>, ICallable;
+
+    public sealed class DocumentedGreetingHandler : IRequestHandler<DocumentedGreeting, string>
+    {
+        public ValueTask<Result<string>> HandleAsync(IRequestContext<DocumentedGreeting> context, CancellationToken ct) =>
+            ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+    }
+
     public sealed class ReadGreetingHandler : IRequestHandler<ReadGreeting, string>
     {
         public ValueTask<Result<string>> HandleAsync(IRequestContext<ReadGreeting> context, CancellationToken ct) =>
@@ -1413,6 +1438,7 @@ public sealed class McpRegistrationTests
 [PortiaJsonContext]
 [JsonSerializable(typeof(McpRegistrationTests.IdentifiedInvocation))]
 [JsonSerializable(typeof(McpRegistrationTests.ReadGreeting))]
+[JsonSerializable(typeof(McpRegistrationTests.DocumentedGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.RejectGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.InspectNestedInput))]
 [JsonSerializable(typeof(McpRegistrationTests.NestedInput))]

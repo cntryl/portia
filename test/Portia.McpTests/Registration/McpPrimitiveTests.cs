@@ -118,7 +118,14 @@ public sealed class McpPrimitiveTests
             .AddRequestHandler<McpRegistrationTests.ReadGreetingHandler>()
             .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://local/{name}",
                 values => new McpRegistrationTests.ReadGreeting(values["name"]),
-                options => { options.Authenticated(); options.AsText("text/plain", value => value); })
+                options =>
+                {
+                    options.Authenticated();
+                    options.Named("Greeting resource");
+                    options.Titled("Greeting");
+                    options.DescribedAs("Reads a greeting as resource text.");
+                    options.AsText("text/plain", value => value);
+                })
             .AddMcpHttp();
         await using var app = builder.Build();
         app.Use((context, next) =>
@@ -137,6 +144,9 @@ public sealed class McpPrimitiveTests
         var templates = await raw.ListResourceTemplatesAsync();
         var template = Assert.Single(templates);
         Assert.Equal("greetings://local/{name}", template.UriTemplate);
+        Assert.Equal("Greeting resource", template.Name);
+        Assert.Equal("Greeting", template.Title);
+        Assert.Equal("Reads a greeting as resource text.", template.Description);
         var result = await raw.ReadResourceAsync("greetings://local/Portia");
         Assert.Equal("Hello, Portia.", Assert.IsType<TextResourceContents>(Assert.Single(result.Contents)).Text);
     }
@@ -151,7 +161,13 @@ public sealed class McpPrimitiveTests
             .AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>("greeting",
                 values => new McpRegistrationTests.ReadGreeting(values["name"]),
                 value => [new McpPromptMessage("user", value)],
-                options => { options.Authenticated(); options.Required("name"); })
+                options =>
+                {
+                    options.Authenticated();
+                    options.Titled("Greeting prompt");
+                    options.DescribedAs("Renders a greeting for a supplied name.");
+                    options.Required("name", "The person whose greeting should be read.");
+                })
             .AddMcpHttp();
         await using var app = builder.Build();
         app.Use((context, next) =>
@@ -168,6 +184,9 @@ public sealed class McpPrimitiveTests
         await using var client = await McpClient.CreateAsync(transport);
         var prompt = Assert.Single(await client.ListPromptsAsync());
         Assert.Equal("greeting", prompt.Name);
+        Assert.Equal("Greeting prompt", prompt.ProtocolPrompt.Title);
+        Assert.Equal("Renders a greeting for a supplied name.", prompt.ProtocolPrompt.Description);
+        Assert.Equal("The person whose greeting should be read.", Assert.Single(prompt.ProtocolPrompt.Arguments!).Description);
         var result = await client.GetPromptAsync("greeting", new Dictionary<string, object?> { ["name"] = "Portia" });
         Assert.Equal("Hello, Portia.", Assert.IsType<TextContentBlock>(Assert.Single(result.Messages).Content).Text);
     }

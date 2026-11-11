@@ -1,1 +1,7 @@
 #nullable enable
+Cntryl.Portia.McpEntryOptions.DescribedAs(string! description) -> Cntryl.Portia.McpEntryOptions!
+Cntryl.Portia.McpEntryOptions.Titled(string! title) -> Cntryl.Portia.McpEntryOptions!
+Cntryl.Portia.McpPromptOptions.Optional(string! name, string! description) -> void
+Cntryl.Portia.McpPromptOptions.Required(string! name, string! description) -> void
+Cntryl.Portia.McpResourceOptions<TOut>.Named(string! name) -> Cntryl.Portia.McpResourceOptions<TOut>!
+Cntryl.Portia.McpToolOptions.DescribeProperty(string! propertyName, string! description, string? jsonName = null) -> Cntryl.Portia.McpToolOptions!
