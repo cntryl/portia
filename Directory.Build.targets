@@ -1,4 +1,9 @@
 <Project>
+  <!-- Runtime Async remains opt-in and is applied only to projects targeting .NET 11. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <Features>$(Features);runtime-async=on</Features>
+  </PropertyGroup>
+
   <Target Name="BuildProjectReferencedAnalyzersForDesignTime"
           BeforeTargets="CoreCompile"
           Condition="'$(DesignTimeBuild)' == 'true'">
