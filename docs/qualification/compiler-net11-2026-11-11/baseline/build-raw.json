@@ -1,0 +1,80 @@
+[
+  {
+    "workload": "combined",
+    "mode": "cold-compiler",
+    "repetition": 0,
+    "milliseconds": 9821.7103,
+    "command": [
+      "dotnet",
+      "build",
+      "/private/tmp/portia-compiler-baseline-current-harness-full/profiles/combined/fixtures/combined/CompilerConsumer.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "-m:1",
+      "/nodeReuse:false",
+      "-p:UseSharedCompilation=false",
+      "-p:BuildProjectReferences=false",
+      "--no-incremental"
+    ],
+    "compiledSuccessfully": true
+  },
+  {
+    "workload": "combined",
+    "mode": "cold-compiler",
+    "repetition": 1,
+    "milliseconds": 9042.7235,
+    "command": [
+      "dotnet",
+      "build",
+      "/private/tmp/portia-compiler-baseline-current-harness-full/profiles/combined/fixtures/combined/CompilerConsumer.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "-m:1",
+      "/nodeReuse:false",
+      "-p:UseSharedCompilation=false",
+      "-p:BuildProjectReferences=false",
+      "--no-incremental"
+    ],
+    "compiledSuccessfully": true
+  },
+  {
+    "workload": "combined",
+    "mode": "unchanged-build",
+    "repetition": 0,
+    "milliseconds": 625.1411,
+    "command": [
+      "dotnet",
+      "build",
+      "/private/tmp/portia-compiler-baseline-current-harness-full/profiles/combined/fixtures/combined/CompilerConsumer.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "-m:1",
+      "/nodeReuse:false",
+      "-p:UseSharedCompilation=false",
+      "-p:BuildProjectReferences=false"
+    ],
+    "compiledSuccessfully": true
+  },
+  {
+    "workload": "combined",
+    "mode": "unchanged-build",
+    "repetition": 1,
+    "milliseconds": 625.0802,
+    "command": [
+      "dotnet",
+      "build",
+      "/private/tmp/portia-compiler-baseline-current-harness-full/profiles/combined/fixtures/combined/CompilerConsumer.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "-m:1",
+      "/nodeReuse:false",
+      "-p:UseSharedCompilation=false",
+      "-p:BuildProjectReferences=false"
+    ],
+    "compiledSuccessfully": true
+  }
+]

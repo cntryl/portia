@@ -1,0 +1,44 @@
+.NET SDK:
+ Version:           11.0.100
+ Commit:            297acf930f
+ Workload version:  11.0.100-manifests.08e30c08
+ MSBuild version:   18.12.2-1.26529.118+297acf930
+
+Runtime Environment:
+ OS Name:     Mac OS X
+ OS Version:  27.0
+ OS Platform: Darwin
+ RID:         osx-arm64
+ Base Path:   /usr/local/share/dotnet/sdk/11.0.100
+
+.NET workloads installed:
+There are no installed workloads to display.
+Configured to use workload sets when installing new manifests.
+No workload sets are installed. Run "dotnet workload restore" to install a workload set.
+
+Host:
+  Version:      11.0.0
+  Architecture: arm64
+  Commit:       297acf930f
+
+.NET SDKs installed:
+  11.0.100 [/usr/local/share/dotnet/sdk]
+
+.NET runtimes installed:
+  Microsoft.AspNetCore.App 11.0.0 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.NETCore.App 11.0.0 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App]
+
+Other architectures found:
+  None
+
+Environment variables:
+  DOTNET_ROLL_FORWARD                      [Major]
+
+global.json file:
+  /private/tmp/portia-compiler-baseline/global.json
+
+Learn more:
+  https://aka.ms/dotnet/info
+
+Download .NET:
+  https://aka.ms/dotnet/download
