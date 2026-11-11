@@ -1,7 +1,7 @@
 # MCP protocol performance baseline
 
-- Captured: 2026-11-11T18:28:35.736458+00:00
-- Source: `30b7410f1a3532c3fb59a9b913819520990b5d21` (worktree status: `clean`)
+- Captured: 2026-11-11T18:44:06.335061+00:00
+- Source: `d165526d965c9a3bd7528384405cae7ce396bea2` (worktree status: `clean`)
 - SDK/runtime: .NET SDK 11.0.100, .NET 11.0.0
 - Environment: macOS 27.0.1, Arm64, 10 logical processors, server GC `False`
 - MCP packages: `ModelContextProtocol` 2.4.0, `ModelContextProtocol.AspNetCore` 2.4.0
@@ -14,9 +14,9 @@ P50 microseconds for 4-KiB results with telemetry disabled. These rows invoke th
 
 | Catalog | Tool call | JSON resource | Text resource | Binary resource | Render prompt |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 21.3 | 12.1 | — | — | 4.2 |
-| 100 | 35.9 | 23.8 | 10.0 | 7.2 | 9.1 |
-| 1000 | 26.5 | 28.8 | 17.0 | 15.6 | 19.9 |
+| 1 | 19.7 | 13.3 | — | — | 3.9 |
+| 100 | 27.8 | 15.7 | 9.5 | 7.3 | 9.4 |
+| 1000 | 11.2 | 11.6 | 18.8 | 18.0 | 9.5 |
 
 Latency starts after the request context and the configured per-request service scope are created; it stops when the registered Portia adapter handler returns. Result validation runs after the timer. Throughput and process-allocation rows include per-call context and scope setup but exclude result validation and all MCP dispatch/client/transport work. The timed work includes Portia binding, request-bus dispatch, resource rendering or prompt rendering, and configured telemetry.
 
@@ -28,11 +28,11 @@ Telemetry modes ran in matrix order within one process. The direct telemetry row
 
 | Telemetry | P50 (µs) | P95 (µs) | Ops/s | Bytes/op | Activities | Metrics | Logs |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| disabled | 35.9 | 36.5 | 29,329 | 51,167 | 0 | 0 | 0 |
-| propagation | 7.5 | 8.3 | 41,048 | 51,900 | 0 | 0 | 0 |
-| sampled-tracing | 7.1 | 7.5 | 135,318 | 51,953 | 18 | 0 | 0 |
-| metrics | 7.5 | 7.9 | 136,351 | 51,200 | 0 | 270 | 0 |
-| logging | 8.6 | 9.3 | 28,547 | 50,981 | 0 | 0 | 90 |
+| disabled | 27.8 | 63.8 | 37,288 | 51,211 | 0 | 0 | 0 |
+| propagation | 7.0 | 7.9 | 34,459 | 51,565 | 0 | 0 | 0 |
+| sampled-tracing | 7.1 | 8.1 | 43,910 | 51,900 | 18 | 0 | 0 |
+| metrics | 8.7 | 9.1 | 38,226 | 50,763 | 0 | 270 | 0 |
+| logging | 7.2 | 8.0 | 136,426 | 51,275 | 0 | 0 | 90 |
 
 ## Startup and protocol initialization
 
@@ -40,21 +40,21 @@ HTTP startup and initialize are separate. The SDK stdio client combines child-pr
 
 | Catalog | Telemetry | HTTP startup (ms) | HTTP initialize (ms) | stdio startup + initialize (ms) |
 | --- | --- | --- | --- | --- |
-| 1 | disabled | 70.1 | 31.8 | 141.6 |
-| 1 | propagation | 3.1 | 1.0 | 151.4 |
-| 1 | sampled-tracing | 1.8 | 0.7 | 137.1 |
-| 1 | metrics | 2.6 | 0.7 | 166.4 |
-| 1 | logging | 9.7 | 1.2 | 1,832.0 |
-| 100 | disabled | 55.9 | 0.8 | 187.4 |
-| 100 | propagation | 9.8 | 0.6 | 192.5 |
-| 100 | sampled-tracing | 5.5 | 0.6 | 188.5 |
-| 100 | metrics | 6.0 | 0.7 | 1,407.7 |
-| 100 | logging | 16.5 | 1.0 | 1,136.4 |
-| 1,000 | disabled | 874.7 | 1.2 | 857.9 |
-| 1,000 | propagation | 121.0 | 0.7 | 837.8 |
-| 1,000 | sampled-tracing | 119.3 | 1.1 | 832.2 |
-| 1,000 | metrics | 877.6 | 1.2 | 2,481.8 |
-| 1,000 | logging | 269.8 | 1.4 | 3,895.7 |
+| 1 | disabled | 86.8 | 40.0 | 152.4 |
+| 1 | propagation | 2.3 | 1.2 | 206.9 |
+| 1 | sampled-tracing | 1.8 | 0.9 | 172.7 |
+| 1 | metrics | 2.8 | 0.6 | 153.5 |
+| 1 | logging | 3.6 | 0.7 | 155.4 |
+| 100 | disabled | 64.3 | 0.9 | 239.7 |
+| 100 | propagation | 7.0 | 0.6 | 205.0 |
+| 100 | sampled-tracing | 7.1 | 0.7 | 205.6 |
+| 100 | metrics | 7.3 | 0.6 | 214.6 |
+| 100 | logging | 6.2 | 0.6 | 253.2 |
+| 1,000 | disabled | 1,121.7 | 1.4 | 895.0 |
+| 1,000 | propagation | 133.9 | 1.0 | 920.9 |
+| 1,000 | sampled-tracing | 149.0 | 1.1 | 920.1 |
+| 1,000 | metrics | 146.0 | 1.3 | 908.1 |
+| 1,000 | logging | 143.3 | 0.8 | 965.0 |
 
 ## Discovery with telemetry disabled
 
@@ -64,10 +64,10 @@ P50 milliseconds for listing the complete catalog.
 | --- | --- | --- | --- | --- |
 | 1 | http | 0.3 | 0.2 | 0.2 |
 | 1 | stdio | 0.2 | 0.1 | 0.1 |
-| 100 | http | 7.9 | 0.8 | 1.2 |
-| 100 | stdio | 5.4 | 0.5 | 0.8 |
-| 1,000 | http | 17.7 | 1.1 | 2.1 |
-| 1,000 | stdio | 23.7 | 1.0 | 1.8 |
+| 100 | http | 8.5 | 0.8 | 1.2 |
+| 100 | stdio | 6.5 | 0.6 | 1.0 |
+| 1,000 | http | 21.4 | 1.4 | 2.2 |
+| 1,000 | stdio | 28.8 | 1.1 | 1.9 |
 
 ## End-to-end operations at 4 KiB with telemetry disabled
 
@@ -77,10 +77,10 @@ P50 milliseconds. A dash means that the catalog did not contain that resource fo
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | http | 0.3 | 0.3 | — | — | 0.2 |
 | 1 | stdio | 0.2 | 0.2 | — | — | 0.1 |
-| 100 | http | 0.4 | 0.3 | 0.3 | 0.3 | 0.3 |
-| 100 | stdio | 0.3 | 0.3 | 0.1 | 0.1 | 0.1 |
-| 1,000 | http | 0.2 | 0.2 | 0.2 | 0.2 | 0.2 |
-| 1,000 | stdio | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 |
+| 100 | http | 0.9 | 0.7 | 0.5 | 0.5 | 0.4 |
+| 100 | stdio | 0.5 | 0.4 | 0.2 | 0.2 | 0.2 |
+| 1,000 | http | 0.2 | 0.3 | 0.3 | 0.2 | 0.2 |
+| 1,000 | stdio | 0.2 | 0.2 | 0.1 | 0.1 | 0.1 |
 
 ## End-to-end telemetry comparison
 
@@ -88,16 +88,16 @@ P50/P95 milliseconds, 4-KiB tool calls, 100-entry catalog. Allocation is process
 
 | Telemetry | Transport | P50 (ms) | P95 (ms) | Ops/s | Bytes/op | Activities | Metrics | Logs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| disabled | http | 0.41 | 0.48 | 2,263 | 180,652 | 0 | 0 | 0 |
-| disabled | stdio | 0.32 | 0.38 | 2,936 | 48,682 | — | — | — |
-| propagation | http | 0.18 | 0.48 | 5,802 | 186,353 | 0 | 0 | 0 |
-| propagation | stdio | 0.14 | 0.17 | 6,636 | 49,672 | — | — | — |
-| sampled-tracing | http | 0.12 | 0.17 | 8,085 | 186,879 | 134 | 0 | 0 |
-| sampled-tracing | stdio | 0.14 | 0.20 | 4,946 | 49,938 | — | — | — |
-| metrics | http | 0.18 | 0.27 | 5,764 | 180,264 | 0 | 270 | 0 |
-| metrics | stdio | 0.45 | 0.99 | 316 | 48,521 | — | — | — |
-| logging | http | 0.33 | 1.08 | 1,439 | 182,509 | 0 | 0 | 1440 |
-| logging | stdio | 0.45 | 1.55 | 1,562 | 48,504 | — | — | — |
+| disabled | http | 0.90 | 1.25 | 1,237 | 181,461 | 0 | 0 | 0 |
+| disabled | stdio | 0.46 | 0.58 | 2,085 | 48,648 | — | — | — |
+| propagation | http | 0.14 | 0.22 | 5,978 | 186,380 | 0 | 0 | 0 |
+| propagation | stdio | 0.17 | 0.26 | 4,617 | 49,697 | — | — | — |
+| sampled-tracing | http | 0.16 | 0.25 | 5,194 | 186,836 | 134 | 0 | 0 |
+| sampled-tracing | stdio | 0.24 | 0.29 | 3,942 | 49,966 | — | — | — |
+| metrics | http | 0.16 | 0.25 | 5,067 | 180,353 | 0 | 270 | 0 |
+| metrics | stdio | 0.20 | 0.35 | 4,533 | 48,676 | — | — | — |
+| logging | http | 0.12 | 0.24 | 6,694 | 182,850 | 0 | 0 | 1440 |
+| logging | stdio | 0.24 | 0.36 | 4,159 | 48,649 | — | — | — |
 
 ## Application controls and MCP comparison
 
@@ -105,17 +105,17 @@ P50 microseconds for 4-KiB operations in the 100-entry, telemetry-disabled workl
 
 | Operation | Direct request bus | REST control | MCP HTTP | MCP stdio | HTTP minus REST | stdio minus REST |
 | --- | --- | --- | --- | --- | --- | --- |
-| tool-call | 1.4 | 113.2 | 405.6 | 323.9 | 292.4 | 210.7 |
-| read-resource-json | 1.4 | 113.2 | 336.1 | 272.4 | 222.9 | 159.2 |
-| read-resource-text | 1.4 | 113.2 | 281.6 | 119.4 | 168.4 | 6.2 |
-| read-resource-binary | 1.4 | 113.2 | 284.7 | 122.0 | 171.5 | 8.8 |
-| render-prompt | 1.4 | 113.2 | 283.1 | 127.2 | 169.9 | 14.0 |
+| tool-call | 1.5 | 136.3 | 898.4 | 462.0 | 762.1 | 325.7 |
+| read-resource-json | 1.5 | 136.3 | 715.0 | 410.3 | 578.7 | 274.0 |
+| read-resource-text | 1.5 | 136.3 | 460.1 | 192.4 | 323.8 | 56.1 |
+| read-resource-binary | 1.5 | 136.3 | 486.1 | 195.6 | 349.8 | 59.3 |
+| render-prompt | 1.5 | 136.3 | 376.2 | 180.5 | 239.9 | 44.2 |
 
 ## Interpretation and limits
 
 The complete workload covers Streamable HTTP, SDK-controlled stdio, catalog sizes 1/100/1,000, five telemetry modes, nested tool arguments, 256-byte/4-KiB/64-KiB results, JSON/text/binary resources, and rendered prompts. Catalog size 1 uses JSON resources; catalogs 100 and 1,000 include all three resource formats. No exporter is configured or awaited.
 
-The adapter-only rows identify catalog-size-dependent Portia lookup costs: for 4-KiB results with telemetry disabled, JSON resource-read P50 rises from 12.1 µs at catalog 1 to 28.8 µs at 1,000; prompt-get P50 rises from 4.2 µs to 19.9 µs. These direct rows isolate the handler path but include request-bus/handler work and output construction. They identify linear entry lookup as a concrete candidate for an M6 paired experiment; they do not establish that an optimization is material. The 30-sample distributions are descriptive, and no before/after confidence interval or allocation reduction is claimed.
+In this run, adapter-only P50 for 4-KiB results with telemetry disabled was 13.3/15.7/11.6 µs for JSON resource reads and 3.9/9.4/9.5 µs for prompt gets at catalog sizes 1/100/1,000. Earlier campaign values differed materially, so these single-run numbers do not establish a stable catalog-size trend or a material optimization opportunity. The direct rows isolate the handler path but still include request-bus/handler work and output construction. A paired before/after experiment is needed to assess the index change; the 30-sample distributions here are descriptive and claim no confidence interval or allocation reduction.
 
 The HTTP and stdio measurements include SDK client, server dispatch, protocol, transport, Portia adapter, and handler work. Direct request-bus and REST rows are controls only. HTTP allocations cover both client and server; stdio allocations cover the parent process; adapter-only allocations cover the benchmark process during direct-call batches, including request context and service-scope setup. Use the raw samples when assessing tails or comparing later source changes.
 
