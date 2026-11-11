@@ -67,6 +67,42 @@ public sealed class McpScenarioTests
     }
 
     [Fact]
+    public async Task ShouldTerminateStdioChildWhenInitializationFails()
+    {
+        var started = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var options = new StdioClientTransportOptions
+        {
+            Command = "dotnet",
+            Arguments = [GetStdioHostPath(), "--fail-initialization"],
+            Name = "Portia stdio failed initialization test",
+            ShutdownTimeout = TimeSpan.FromMilliseconds(500),
+            StandardErrorLines = line =>
+            {
+                if (int.TryParse(line, out var processId))
+                    started.TrySetResult(processId);
+            }
+        };
+
+        async Task ConnectAsync()
+        {
+            await using var scenario = await McpScenario.ConnectStdioAsync(options);
+        }
+
+        var failure = await Assert.ThrowsAnyAsync<Exception>(ConnectAsync);
+        Assert.IsNotType<OperationCanceledException>(failure);
+        var childProcessId = await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        try
+        {
+            Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(5)),
+                "A failed MCP initialization left its stdio child process running.");
+        }
+        finally
+        {
+            KillProcessIfRunning(childProcessId);
+        }
+    }
+
+    [Fact]
     public void ShouldPreservePrimitiveSnapshotConstructionAndDeconstruction()
     {
         var resource = new McpResourceSnapshot("resource://one", "One", "text/plain", false);
@@ -146,6 +182,14 @@ public sealed class McpScenarioTests
             .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://scenario/{name}",
                 values => new McpRegistrationTests.ReadGreeting(values["name"]),
                 resource => { resource.Authenticated(); resource.AsText("text/plain", value => value); })
+            .AddMcpResource<McpRegistrationTests.ReadActor, string>("greetings://local/fixed",
+                _ => new McpRegistrationTests.ReadActor(),
+                resource =>
+                {
+                    resource.Authenticated();
+                    resource.Named("fixed greeting");
+                    resource.AsText("text/plain", value => value);
+                })
             .AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>("scenario-greeting",
                 values => new McpRegistrationTests.ReadGreeting(values["name"]),
                 value => [new("user", value)], prompt => { prompt.Authenticated(); prompt.Required("name"); })
@@ -178,6 +222,9 @@ public sealed class McpScenarioTests
             var contents = await scenario.ReadResource("greetings://scenario/Portia")
                 .Inspect(snapshots => Assert.Equal("Hello, Portia.", Assert.Single(snapshots).Text));
             Assert.Equal("Hello, Portia.", Assert.Single(contents).Text);
+
+            var resources = await scenario.ListResources().ExpectExactly("greetings://local/fixed");
+            Assert.Equal("fixed greeting", Assert.Single(resources).Name);
 
             var prompts = await scenario.ListPrompts().ExpectExactly("scenario-greeting");
             Assert.True(Assert.Single(prompts).Arguments["name"]);
@@ -245,6 +292,19 @@ public sealed class McpScenarioTests
         }
 
         return false;
+    }
+
+    static void KillProcessIfRunning(int processId)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch (ArgumentException)
+        {
+        }
     }
 }
 
