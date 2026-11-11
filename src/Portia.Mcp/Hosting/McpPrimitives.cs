@@ -221,7 +221,7 @@ sealed class McpResourceEntry<TRequest, TOut>(string template,
             new RequestDispatchContext(actor, new McpResourceInvocation(Template),
                 timeProvider: services.GetService<TimeProvider>()), ct).ConfigureAwait(false);
         if (!result.IsSuccess)
-            throw new McpException("Resource unavailable.");
+            throw new McpRequestFailureException(result.Error);
         ResourceContents content;
         if (options.Binary is { } binary)
             content = BlobResourceContents.FromBytes(binary(result.Value), uri, MimeType);
@@ -265,12 +265,14 @@ sealed class McpPromptEntry<TRequest, TOut>(string name,
             new RequestDispatchContext(actor, new McpPromptInvocation(Name),
                 timeProvider: services.GetService<TimeProvider>()), ct).ConfigureAwait(false);
         if (!result.IsSuccess)
-            throw new McpException("Prompt unavailable.");
+            throw new McpRequestFailureException(result.Error);
         var messages = render(result.Value);
         if (messages.Count > services.GetRequiredService<McpLimits>().MaxPromptMessages)
-            throw new McpException("Prompt unavailable.");
+            throw new McpRequestFailureException(
+                new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
         if (messages.Any(message => message.Role is not ("user" or "assistant") || message.Text is null))
-            throw new McpException("Prompt unavailable.");
+            throw new McpRequestFailureException(
+                new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
         return new GetPromptResult
         {
             Messages = messages.Select(message => new PromptMessage
@@ -331,4 +333,9 @@ static class McpUri
         }
         return true;
     }
+}
+
+sealed class McpRequestFailureException(RequestError error) : Exception
+{
+    internal RequestError Error { get; } = error;
 }

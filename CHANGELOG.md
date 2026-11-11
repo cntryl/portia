@@ -4,6 +4,19 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## Unreleased
+
+### Fixed
+
+- Preserve one asynchronous service scope per MCP HTTP operation in stateless mode, and propagate
+  caller cancellation through resource reads and prompt gets. Resource and prompt operations now
+  emit bounded, correlated Portia telemetry with sanitized protocol failures.
+
+### Added
+
+- Qualify MCP application parity, scope disposal, cancellation, deadline handling, and exported
+  telemetry across stateless HTTP and stdio. Re-enable stdio cancellation coverage on MCP SDK 2.4.0.
+
 ## 0.11.0
 
 Read the [0.11.0 migration notes](docs/migration-0.11.0.md) before upgrading. Package publication

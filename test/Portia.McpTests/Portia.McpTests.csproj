@@ -11,11 +11,15 @@
 
   <ItemGroup>
     <PackageReference Include="JsonSchema.Net"/>
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory"/>
     <PackageReference Include="Microsoft.NET.Test.Sdk"/>
     <PackageReference Include="Microsoft.AspNetCore.TestHost"/>
     <PackageReference Include="xunit"/>
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all"/>
     <ProjectReference Include="../../src/Portia.Admin.Mcp.AspNetCore/Portia.Admin.Mcp.AspNetCore.csproj"/>
+    <ProjectReference Include="../../src/Portia.Telemetry/Portia.Telemetry.csproj"/>
+    <ProjectReference Include="../../src/Portia.Testing/Portia.Testing.csproj"/>
+    <ProjectReference Include="../../src/Portia.AspNetCore.Generators/Portia.AspNetCore.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false"/>
     <ProjectReference Include="../../src/Portia.Mcp/Portia.Mcp.csproj"/>
     <ProjectReference Include="../../src/Portia.Mcp.AspNetCore/Portia.Mcp.AspNetCore.csproj"/>
     <ProjectReference Include="../../src/Portia.Mcp.Testing/Portia.Mcp.Testing.csproj"/>

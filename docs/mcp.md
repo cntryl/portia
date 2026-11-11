@@ -117,8 +117,9 @@ app.Run();
 ```
 
 The default endpoint is `/mcp` and the default HTTP mode is stateless Streamable HTTP. The optional
-`AddMcpHttp(options => ...)` callback can select another SDK-supported session mode without Portia
-overwriting it later during `Build()`. Standard
+`AddMcpHttp(options => ...)` callback can select another SDK-supported session mode. Portia preserves
+the callback and then requires a fresh service scope for each operation, including in stateless mode.
+This releases request-scoped application services after every call. Standard
 ASP.NET Core endpoint conventions remain authoritative for authentication, authorization, host
 filtering, and CORS. Portia uses the authenticated `HttpContext.User`; MCP arguments and metadata
 cannot replace that principal. An unauthenticated caller stays anonymous: `IMcpActorProvider`
@@ -160,6 +161,15 @@ provider is registered. `UseLocalDevelopmentActor()` is intentionally named and 
 single-user development convenience; production hosts use `UseActorProvider<TProvider>()`. Protocol
 frames use standard output; `AddMcpStdio()` routes the built-in console logger to standard error so
 hosting diagnostics cannot corrupt the protocol stream.
+
+In the default stateless HTTP mode and over stdio, client cancellation flows through tools, resources,
+and prompts to the dispatched request. Portia disposes the operation scope when cancellation ends the
+call. The stable MCP SDK 2.4.0 fixes stdio cancellation notification ordering; the qualification
+suite exercises each primitive on both supported protocol revisions. A timeout imposed by
+`OperationDeadline` returns a sanitized failure, while caller cancellation remains cancellation.
+Stateful Streamable HTTP cancellation remains limited by the SDK's open [transport cancellation
+work](https://github.com/modelcontextprotocol/csharp-sdk/pull/1377); it is not covered by Portia's
+current qualification. See the [MCP transport qualification record](qualification/138-mcp-transport/README.md).
 
 ## Results and failures
 

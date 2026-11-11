@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -94,41 +95,86 @@ static class McpPrimitiveHandlers
         var services = Services(call);
         var limits = services.GetRequiredService<McpLimits>();
         var uri = call.Params.Uri;
-        if (uri is null || Encoding.UTF8.GetByteCount(uri) > limits.MaxResourceUriBytes || !McpUri.TryValidate(uri))
-            throw new McpException("Resource unavailable.");
+        var validUri = uri is not null && Encoding.UTF8.GetByteCount(uri) <= limits.MaxResourceUriBytes
+                       && McpUri.TryValidate(uri);
+        McpResourceEntry? entry = null;
+        Dictionary<string, string>? values = null;
+        if (validUri)
+        {
+            foreach (var candidate in services.GetServices<McpResourceEntry>())
+            {
+                if (!candidate.Match(uri!, out var matched))
+                    continue;
+                entry = candidate;
+                values = matched;
+                break;
+            }
+        }
+        using var receive = PortiaTelemetry.StartProcess(entry?.Template ?? "unknown",
+            new McpResourceInvocation(entry?.Template ?? "unknown"), PortiaTelemetry.CaptureTraceContext(),
+            receivedTraceContext: false);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(limits.OperationDeadline);
         try
         {
+            if (entry is null || values is null)
+                throw new McpRequestFailureException(
+                    new RequestError(RequestErrorKind.Validation, "Resource unavailable."));
             var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
-            foreach (var entry in services.GetServices<McpResourceEntry>())
+            if (!await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
+                throw new McpRequestFailureException(
+                    new RequestError(RequestErrorKind.Validation, "Resource unavailable."));
+            var json = services.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
+            var result = await entry.ReadAsync(values, uri!, services, actor, json, deadline.Token)
+                .ConfigureAwait(false);
+            var size = result.Contents.Sum(content => content switch
             {
-                if (!entry.Match(uri, out var values) ||
-                    !await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
-                    continue;
-                var json = services.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
-                var result = await entry.ReadAsync(values, uri, services, actor, json, deadline.Token)
-                    .ConfigureAwait(false);
-                var size = result.Contents.Sum(content => content switch
-                {
-                    TextResourceContents text => JsonEncodedText.Encode(text.Text).EncodedUtf8Bytes.Length
-                                                 + Encoding.UTF8.GetByteCount(text.Uri) + 128L,
-                    BlobResourceContents blob => ((long)blob.DecodedData.Length + 2) / 3 * 4
-                                                 + Encoding.UTF8.GetByteCount(blob.Uri) + 128,
-                    _ => long.MaxValue
-                });
-                if (size > limits.MaxResultBytes)
-                    throw new McpException("Resource unavailable.");
-                return result;
-            }
+                TextResourceContents text => JsonEncodedText.Encode(text.Text).EncodedUtf8Bytes.Length
+                                             + Encoding.UTF8.GetByteCount(text.Uri) + 128L,
+                BlobResourceContents blob => ((long)blob.DecodedData.Length + 2) / 3 * 4
+                                             + Encoding.UTF8.GetByteCount(blob.Uri) + 128,
+                _ => long.MaxValue
+            });
+            if (size > limits.MaxResultBytes)
+                throw new McpRequestFailureException(
+                    new RequestError(RequestErrorKind.Validation, "Resource unavailable."));
+            PortiaTelemetry.RecordOutcome(receive, true, null);
+            return result;
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            PortiaTelemetry.RecordCanceled(receive);
+            throw;
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+        {
+            PortiaTelemetry.RecordOutcome(receive, false, null);
             throw new McpException("Resource unavailable.");
         }
-        catch (McpException) { throw; }
-        catch (Exception) { throw new McpException("Resource unavailable."); }
-        throw new McpException("Resource unavailable.");
+        catch (McpActorRequiredException)
+        {
+            PortiaTelemetry.RecordOutcome(receive, false,
+                new RequestError(RequestErrorKind.Unauthorized, "An authenticated actor is required."));
+            throw new McpException("Resource unavailable.");
+        }
+        catch (McpRequestFailureException exception)
+        {
+            PortiaTelemetry.RecordOutcome(receive, false, exception.Error);
+            throw new McpException("Resource unavailable.");
+        }
+        catch (EventStreamConcurrencyException)
+        {
+            PortiaTelemetry.RecordOutcome(receive, false,
+                new RequestError(RequestErrorKind.Conflict, "The request conflicted with a concurrent update.", true));
+            throw new McpException("Resource unavailable.");
+        }
+        catch (Exception exception)
+        {
+            PortiaTelemetry.RecordOutcome(receive, false, null);
+            PortiaTelemetry.RecordRunnerFault(nameof(McpPrimitiveHandlers), RunnerFaultStage.Execution, exception,
+                services.GetService<ILoggerFactory>()?.CreateLogger("Cntryl.Portia.McpPrimitiveHandlers"));
+            throw new McpException("Resource unavailable.");
+        }
     }
 
     static async ValueTask<ListPromptsResult> ListPromptsAsync(
@@ -167,44 +213,84 @@ static class McpPrimitiveHandlers
     {
         var services = Services(call);
         var limits = services.GetRequiredService<McpLimits>();
+        var entry = services.GetServices<McpPromptEntry>().FirstOrDefault(prompt => prompt.Name == call.Params.Name);
+        using var receive = PortiaTelemetry.StartProcess(entry?.Name ?? "unknown",
+            new McpPromptInvocation(entry?.Name ?? "unknown"), PortiaTelemetry.CaptureTraceContext(),
+            receivedTraceContext: false);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(limits.OperationDeadline);
         try
         {
+            if (entry is null)
+                throw new McpRequestFailureException(
+                    new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
             var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
-            var entry = services.GetServices<McpPromptEntry>().FirstOrDefault(prompt => prompt.Name == call.Params.Name);
-            if (entry is null || !await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
-                throw new McpException("Prompt unavailable.");
+            if (!await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
+                throw new McpRequestFailureException(
+                    new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
             var input = call.Params.Arguments ?? new Dictionary<string, JsonElement>(StringComparer.Ordinal);
             if (input.Any(argument => !entry.PromptOptions.Arguments.ContainsKey(argument.Key)) ||
                 entry.PromptOptions.Arguments.Any(argument => argument.Value && !input.ContainsKey(argument.Key)))
-                throw new McpException("Prompt unavailable.");
+                throw new McpRequestFailureException(
+                    new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
             var values = new Dictionary<string, string>(StringComparer.Ordinal);
             long bytes = 0;
             foreach (var argument in input)
             {
                 if (argument.Value.ValueKind != JsonValueKind.String)
-                    throw new McpException("Prompt unavailable.");
+                    throw new McpRequestFailureException(
+                        new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
                 var value = argument.Value.GetString()!;
                 bytes += Encoding.UTF8.GetByteCount(argument.Key)
                          + Encoding.UTF8.GetByteCount(argument.Value.GetRawText()) + 4;
                 if (bytes > limits.MaxPromptArgumentBytes)
-                    throw new McpException("Prompt unavailable.");
+                    throw new McpRequestFailureException(
+                        new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
                 values.Add(argument.Key, value);
             }
             var result = await entry.GetAsync(values, services, actor, deadline.Token).ConfigureAwait(false);
             var size = result.Messages.Sum(message => message.Content is TextContentBlock text
                 ? JsonEncodedText.Encode(text.Text).EncodedUtf8Bytes.Length + 128L : long.MaxValue);
             if (size > limits.MaxResultBytes)
-                throw new McpException("Prompt unavailable.");
+                throw new McpRequestFailureException(
+                    new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
+            PortiaTelemetry.RecordOutcome(receive, true, null);
             return result;
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            PortiaTelemetry.RecordCanceled(receive);
+            throw;
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+        {
+            PortiaTelemetry.RecordOutcome(receive, false, null);
             throw new McpException("Prompt unavailable.");
         }
-        catch (McpException) { throw; }
-        catch (Exception) { throw new McpException("Prompt unavailable."); }
+        catch (McpActorRequiredException)
+        {
+            PortiaTelemetry.RecordOutcome(receive, false,
+                new RequestError(RequestErrorKind.Unauthorized, "An authenticated actor is required."));
+            throw new McpException("Prompt unavailable.");
+        }
+        catch (McpRequestFailureException exception)
+        {
+            PortiaTelemetry.RecordOutcome(receive, false, exception.Error);
+            throw new McpException("Prompt unavailable.");
+        }
+        catch (EventStreamConcurrencyException)
+        {
+            PortiaTelemetry.RecordOutcome(receive, false,
+                new RequestError(RequestErrorKind.Conflict, "The request conflicted with a concurrent update.", true));
+            throw new McpException("Prompt unavailable.");
+        }
+        catch (Exception exception)
+        {
+            PortiaTelemetry.RecordOutcome(receive, false, null);
+            PortiaTelemetry.RecordRunnerFault(nameof(McpPrimitiveHandlers), RunnerFaultStage.Execution, exception,
+                services.GetService<ILoggerFactory>()?.CreateLogger("Cntryl.Portia.McpPrimitiveHandlers"));
+            throw new McpException("Prompt unavailable.");
+        }
     }
 
     static IServiceProvider Services(MessageContext call) =>

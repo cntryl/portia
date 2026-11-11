@@ -27,12 +27,15 @@ Portia emits only three static activity names:
 - `portia.request.process` (`Consumer`)
 - `portia.request.execute` (`Internal`)
 
-Local and HTTP calls create one execute span. RPC creates a send -> process -> execute chain in one
-trace. Queue, notice, and schedule producers end their send span before delivery; every delivery,
+Local and HTTP dispatch create one execute span. MCP tool calls, resource reads, and prompt gets add
+one bounded `process` span around the ingress operation, with the dispatched request's `execute`
+span as its child. Their request names come from registered tool discriminators, resource templates,
+or prompt names; unmatched resource and prompt requests use `unknown`. RPC creates a send -> process
+-> execute chain in one trace. Queue, notice, and schedule producers end their send span before delivery; every delivery,
 retry, or schedule firing starts a distinct root trace linked to the producer context, with at most
 one process span and one execute child. Queue retries never parent their next attempt, notice fanout
 does not create a wide producer trace, and recurring schedules never extend an earlier firing.
-Linked deliveries remain roots even when an unrelated activity is ambient. Wire trace context is
+Linked deliveries remain roots even when an unrelated activity is ambient. Fitz wire trace context is
 marked remote at ingress so parent-based samplers distinguish received context from local activity.
 
 Polling, reservation renewal, acknowledgement, retry delay, checkpoints, event processing, tenant
@@ -122,6 +125,11 @@ worker faults. Application exception text can enter event 1002, event 1101, and 
 exception events; applications should therefore avoid secrets in exception messages and apply
 their normal log and trace filtering policy.
 
+The MCP SDK also emits an error log containing the full resource URI when a resource read fails
+([SDK 2.4.0 source](https://github.com/modelcontextprotocol/csharp-sdk/blob/v2.4.0/src/ModelContextProtocol.Core/Server/McpServerImpl.cs#L1236-L1245)).
+The host owns logging filters and exporters, so keep sensitive identifiers out of resource URIs or
+redact/filter that SDK category before exporting logs.
+
 Scheduled actor validation is the exception to silent retry: each thrown exception or transient
 result records a validation-stage worker fault. A firing is tried at most three times, with one- and
 two-second delays, and is recorded lost once after permanent rejection or exhaustion.
@@ -196,6 +204,7 @@ proves current backlog nor detects a stalled worker. There is no scalar `portia_
 series to `max`; preserve the instrument's histogram semantics.
 
 Bounded polling and exact raw samples establish the backend semantics, beyond query parsing.
-MCP workloads are deferred with #137–#142. The release dependency check rejects prerelease
+MCP application and transport qualification and its measured performance work are tracked in #138–#142.
+The release dependency check rejects prerelease
 external direct and locked transitive NuGet dependencies; the existing transitive analyzer now
 uses its stable 5.9.0 release.

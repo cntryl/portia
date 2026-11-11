@@ -23,6 +23,15 @@ public static class PortiaMcpHttpApplicationExtensions
             {
                 options.Stateless = true;
                 configure?.Invoke(options);
+                var configureSession = options.ConfigureSessionOptions;
+                options.ConfigureSessionOptions = async (context, serverOptions, token) =>
+                {
+                    if (configureSession is not null)
+                        await configureSession(context, serverOptions, token).ConfigureAwait(false);
+                    // The SDK disables operation scopes for stateless HTTP before this hook.
+                    // Restore a per-operation scope so application services are released after each call.
+                    serverOptions.ScopeRequests = true;
+                };
             })
             .AddAuthorizationFilters();
         McpPrimitiveHandlers.Attach(server, application.Services);
