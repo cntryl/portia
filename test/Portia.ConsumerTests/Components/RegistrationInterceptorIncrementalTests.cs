@@ -103,6 +103,49 @@ public sealed class RegistrationInterceptorIncrementalTests
             $"Call-site models were {reason} after an unrelated event was added."));
     }
 
+    [Fact]
+    public void ShouldRefreshGeneratedMcpDescriptionAfterDocumentationOnlyEdit()
+    {
+        const string initial = """
+            using Cntryl.Portia;
+            using Microsoft.Extensions.DependencyInjection;
+            /// <summary>Finds an account.</summary>
+            [Discriminator("account.find", 1)]
+            public sealed record FindAccount(string AccountId) : IRequest<string>, ICallable;
+            public static class Composition
+            {
+                public static PortiaBuilder Compose(IServiceCollection services) => services.AddPortia().AddMcpTool<FindAccount>();
+            }
+            """;
+        const string edited = """
+            using Cntryl.Portia;
+            using Microsoft.Extensions.DependencyInjection;
+            /// <summary>Finds an account by its public identifier.</summary>
+            [Discriminator("account.find", 1)]
+            public sealed record FindAccount(string AccountId) : IRequest<string>, ICallable;
+            public static class Composition
+            {
+                public static PortiaBuilder Compose(IServiceCollection services) => services.AddPortia().AddMcpTool<FindAccount>();
+            }
+            """;
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
+            [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
+        var tree = CSharpSyntaxTree.ParseText(initial, parseOptions, "Composition.cs");
+        var compilation = CSharpCompilation.Create("McpDescriptionIncremental", [tree],
+            References().Append(MetadataReference.CreateFromFile(typeof(McpToolOptions).Assembly.Location)),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            [new RegistrationCallInterceptorGenerator().AsSourceGenerator()], parseOptions: parseOptions);
+
+        driver = driver.RunGenerators(compilation);
+        Assert.Contains("Finds an account.", Generated(driver), StringComparison.Ordinal);
+
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree,
+            CSharpSyntaxTree.ParseText(edited, parseOptions, "Composition.cs")));
+
+        Assert.Contains("Finds an account by its public identifier.", Generated(driver), StringComparison.Ordinal);
+    }
+
     /// <summary>A request sent only through the outcome-aware API still enters the generated transport catalog.</summary>
     [Fact]
     public void ShouldRegisterRequestDispatchedThroughOutcomeAwareSender()
