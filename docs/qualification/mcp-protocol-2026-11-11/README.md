@@ -2,7 +2,7 @@
 
 - Captured: 2026-11-11T20:00:28.197115+00:00
 - Benchmark source commit: `c47b8997c293a84893f5deae705e1b23f36bdd22` (worktree status: `clean`)
-- Final production source: `src/Portia.Mcp` tree `dcfa4715f2aede74df0a604d98c8f1138d643c4b`, identical to merged main commit `d8412cc5bc280af2a96b29c87833a364a2365b1e` (#197). The benchmark-only branch adds the harness/report; it does not change the measured MCP production tree.
+- Final production source: `src/Portia.Mcp` tree `dcfa4715f2aede74df0a604d98c8f1138d643c4b`, identical to current main commit `4f066f38da0d3a2bbf406b8225af35c44ae7c24b` and the earlier merged main commit `d8412cc5bc280af2a96b29c87833a364a2365b1e` (#197). Merges #198 and #199 changed no MCP production files. The benchmark-only branch adds the harness/report; it does not change the measured MCP production tree.
 - Benchmark project tree: `0892f047138e30c6e67d16323d1962bc553498d8`
 - SDK/runtime: .NET SDK 11.0.100, .NET 11.0.0
 - Environment: macOS 27.0.1, Arm64, 10 logical processors, server GC `False`
