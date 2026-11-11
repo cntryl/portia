@@ -483,10 +483,28 @@ sealed class McpBenchmarkServer : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _restClient.Dispose();
-        await _application.StopAsync().ConfigureAwait(false);
-        await _application.DisposeAsync().ConfigureAwait(false);
-        Telemetry.Dispose();
+        try
+        {
+            _restClient.Dispose();
+        }
+        finally
+        {
+            try
+            {
+                await _application.StopAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                try
+                {
+                    await _application.DisposeAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    Telemetry.Dispose();
+                }
+            }
+        }
     }
 }
 
@@ -603,8 +621,14 @@ sealed class McpBenchmarkClient : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await _client.DisposeAsync().ConfigureAwait(false);
-        _http?.Dispose();
+        try
+        {
+            await _client.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _http?.Dispose();
+        }
     }
 }
 
