@@ -46,7 +46,9 @@ both versions produce the same source-matched event and JSON-root identities.
 
 ## The four shared-key changes
 
-The generated source snapshots and generator source snapshots are retained in `raw-evidence.tar.gz`.
+The generated source snapshots and generator source snapshots are retained in the checked-in
+[`raw-evidence.tar.gz`](raw-evidence.tar.gz). The cross-version inventory is available directly in
+[`cross-version.json`](cross-version.json).
 For the unchanged case, the four common keys with different byte hashes are:
 
 1. `DomainEventTypeCatalogGeneratedExtensions.g.cs` changed from an inline list of 1,001
@@ -75,7 +77,7 @@ files, and 2 HTTP binding/interceptor files. The single baseline-only key is the
 
 Both campaigns ran under .NET 11.0.0 and Roslyn 5.9.0. The baseline Portia source is `7d7e3c4` and
 targets `net10.0`; `DOTNET_ROLL_FORWARD=Major` runs its harness on .NET 11. The current source is
-`bc8dadeb9d5b8e429eebd3aa00e882bb8f20859f`. Both runs use the same .NET 11
+`dcee7a0bb67bc7546b77ac0b9e4636c1f05ed037`. Both runs use the same .NET 11
 `System.Text.Json.SourceGeneration.dll`; its binary hash is recorded and checked.
 
 A fresh analyzer-enabled build of the historical baseline fails with Roslyn `RS0025` duplicate
@@ -111,8 +113,9 @@ bash scripts/compiler-output-identity-campaign.sh /tmp/portia-output-identity
 
 The script creates and removes a temporary historical worktree, preserves the fixture sources,
 generator source and assembly snapshots, records raw generated source by content hash, verifies all
-hashes and invalidation rules, and writes `raw-evidence.tar.gz`. The harness and verifier source
-hashes are recorded in each manifest.
+hashes and invalidation rules, and writes `raw-evidence.tar.gz`. The checked-in evidence was captured
+against the current commit above. Each manifest records the benchmark harness source hash; the
+verifier and campaign script sources are retained in the evidence archive.
 
 Issue #175 remains open. This slice establishes no runtime performance result, NativeAOT result, or
 generated-code ergonomics result, and it does not make a global semantic-equivalence claim for all

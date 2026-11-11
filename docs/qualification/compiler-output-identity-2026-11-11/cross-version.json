@@ -1,0 +1,787 @@
+{
+  "baselineSourceCommit": "7d7e3c4",
+  "currentSourceCommit": "dcee7a0bb67bc7546b77ac0b9e4636c1f05ed037",
+  "harnessSourceHash": "54bafeb6ca9f74462a47a86026eb865791bf99bb2077c242c25b7ff1c23aab31",
+  "framework": ".NET 11.0.0",
+  "roslyn": "5.9.0.0",
+  "identityScope": "event discriminator/type/version registrations and JSON root/context pairs; raw generated source hashes are inventoried per generator and hint",
+  "byteEqualityAcrossVersionsClaimed": false,
+  "cases": [
+    {
+      "edit": "unchanged",
+      "sourceIdentityEqual": true,
+      "eventIdentityEqual": true,
+      "jsonRootIdentityEqual": true,
+      "baselineOutputFiles": 2067,
+      "currentOutputFiles": 2104,
+      "sameKeySameHash": 2062,
+      "sameKeyChangedHash": 4,
+      "sameKeyChanged": [
+        {
+          "key": "Cntryl.Portia.DomainEventCatalogGenerator|DomainEventTypeCatalogGeneratedExtensions.g.cs",
+          "baselineHash": "02F33B833F651F08E8411245F3D07208DC46FE7403B9AB99FF243A8516B2B671",
+          "currentHash": "B5D575B35F3F7551AAD1641AC1CA9AAD20C45B9B363C96CF39C10E1537D06D0D"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkProjector_918537A05B8B45E29CC302E11A55DBD0CF3D89350EBC7CF2B72F96F4FA5B0B0C.EventDispatcher.g.cs",
+          "baselineHash": "F9D28A8EB2D6140F132A51E9E5DA12CFBEDCC3598D6621A5B729474EEF32BC19",
+          "currentHash": "DCF498F444936431CF11380E39C58978ECF31092EB24AA21D2D2A230E92133D2"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkReactor_5720C775945ADA8EC393EE10C3600C7AD696B15ABDB8DFB31AF48E461E1683BA.EventDispatcher.g.cs",
+          "baselineHash": "CFDA1A9D286CC9457A53F2EC0B612A0CB0E838E1F3F1130578A5CE2F19BAFE07",
+          "currentHash": "389AE196C5E7AD788511F15627D96AF95AD067BAE3A0BE87CD05FA13CB6421A1"
+        },
+        {
+          "key": "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaGeneratedRegistrationInterceptors.g.cs",
+          "baselineHash": "2310B68D8C9FBE85C8FC3B97689F6DC5C8F8C6F4CDCE5BC8FC4082A7E218C086",
+          "currentHash": "C50DD27B02BA70BF222D5ADEF2D1D911FBF622D68BBF650147A6A5096789D611"
+        }
+      ],
+      "baselineOnlyKeys": [
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaGeneratedHttpBinding.g.cs"
+      ],
+      "currentOnlyKeys": [
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.0.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.1.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.2.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.3.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.4.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.5.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.6.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.7.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.8.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.9.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.Root.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.a.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.b.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.c.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.d.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.e.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaRegistrationInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.0.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.1.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.2.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.3.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.4.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.5.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.6.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.7.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.8.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.9.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.Root.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.a.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.b.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.c.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.d.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.e.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterJsonContexts.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpBinding.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs"
+      ],
+      "baselineDelta": {
+        "added": [],
+        "removed": [],
+        "changed": []
+      },
+      "currentDelta": {
+        "added": [],
+        "removed": [],
+        "changed": []
+      }
+    },
+    {
+      "edit": "unrelated-body-edit",
+      "sourceIdentityEqual": true,
+      "eventIdentityEqual": true,
+      "jsonRootIdentityEqual": true,
+      "baselineOutputFiles": 2067,
+      "currentOutputFiles": 2104,
+      "sameKeySameHash": 2062,
+      "sameKeyChangedHash": 4,
+      "sameKeyChanged": [
+        {
+          "key": "Cntryl.Portia.DomainEventCatalogGenerator|DomainEventTypeCatalogGeneratedExtensions.g.cs",
+          "baselineHash": "02F33B833F651F08E8411245F3D07208DC46FE7403B9AB99FF243A8516B2B671",
+          "currentHash": "B5D575B35F3F7551AAD1641AC1CA9AAD20C45B9B363C96CF39C10E1537D06D0D"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkProjector_918537A05B8B45E29CC302E11A55DBD0CF3D89350EBC7CF2B72F96F4FA5B0B0C.EventDispatcher.g.cs",
+          "baselineHash": "F9D28A8EB2D6140F132A51E9E5DA12CFBEDCC3598D6621A5B729474EEF32BC19",
+          "currentHash": "DCF498F444936431CF11380E39C58978ECF31092EB24AA21D2D2A230E92133D2"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkReactor_5720C775945ADA8EC393EE10C3600C7AD696B15ABDB8DFB31AF48E461E1683BA.EventDispatcher.g.cs",
+          "baselineHash": "CFDA1A9D286CC9457A53F2EC0B612A0CB0E838E1F3F1130578A5CE2F19BAFE07",
+          "currentHash": "389AE196C5E7AD788511F15627D96AF95AD067BAE3A0BE87CD05FA13CB6421A1"
+        },
+        {
+          "key": "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaGeneratedRegistrationInterceptors.g.cs",
+          "baselineHash": "2310B68D8C9FBE85C8FC3B97689F6DC5C8F8C6F4CDCE5BC8FC4082A7E218C086",
+          "currentHash": "C50DD27B02BA70BF222D5ADEF2D1D911FBF622D68BBF650147A6A5096789D611"
+        }
+      ],
+      "baselineOnlyKeys": [
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaGeneratedHttpBinding.g.cs"
+      ],
+      "currentOnlyKeys": [
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.0.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.1.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.2.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.3.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.4.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.5.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.6.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.7.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.8.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.9.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.Root.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.a.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.b.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.c.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.d.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.e.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaRegistrationInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.0.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.1.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.2.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.3.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.4.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.5.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.6.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.7.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.8.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.9.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.Root.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.a.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.b.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.c.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.d.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.e.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterJsonContexts.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpBinding.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs"
+      ],
+      "baselineDelta": {
+        "added": [],
+        "removed": [],
+        "changed": []
+      },
+      "currentDelta": {
+        "added": [],
+        "removed": [],
+        "changed": []
+      }
+    },
+    {
+      "edit": "referenced-feature-replacement",
+      "sourceIdentityEqual": true,
+      "eventIdentityEqual": true,
+      "jsonRootIdentityEqual": true,
+      "baselineOutputFiles": 2067,
+      "currentOutputFiles": 2104,
+      "sameKeySameHash": 2062,
+      "sameKeyChangedHash": 4,
+      "sameKeyChanged": [
+        {
+          "key": "Cntryl.Portia.DomainEventCatalogGenerator|DomainEventTypeCatalogGeneratedExtensions.g.cs",
+          "baselineHash": "02F33B833F651F08E8411245F3D07208DC46FE7403B9AB99FF243A8516B2B671",
+          "currentHash": "B5D575B35F3F7551AAD1641AC1CA9AAD20C45B9B363C96CF39C10E1537D06D0D"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkProjector_918537A05B8B45E29CC302E11A55DBD0CF3D89350EBC7CF2B72F96F4FA5B0B0C.EventDispatcher.g.cs",
+          "baselineHash": "F9D28A8EB2D6140F132A51E9E5DA12CFBEDCC3598D6621A5B729474EEF32BC19",
+          "currentHash": "DCF498F444936431CF11380E39C58978ECF31092EB24AA21D2D2A230E92133D2"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkReactor_5720C775945ADA8EC393EE10C3600C7AD696B15ABDB8DFB31AF48E461E1683BA.EventDispatcher.g.cs",
+          "baselineHash": "CFDA1A9D286CC9457A53F2EC0B612A0CB0E838E1F3F1130578A5CE2F19BAFE07",
+          "currentHash": "389AE196C5E7AD788511F15627D96AF95AD067BAE3A0BE87CD05FA13CB6421A1"
+        },
+        {
+          "key": "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaGeneratedRegistrationInterceptors.g.cs",
+          "baselineHash": "2310B68D8C9FBE85C8FC3B97689F6DC5C8F8C6F4CDCE5BC8FC4082A7E218C086",
+          "currentHash": "C50DD27B02BA70BF222D5ADEF2D1D911FBF622D68BBF650147A6A5096789D611"
+        }
+      ],
+      "baselineOnlyKeys": [
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaGeneratedHttpBinding.g.cs"
+      ],
+      "currentOnlyKeys": [
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.0.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.1.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.2.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.3.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.4.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.5.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.6.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.7.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.8.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.9.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.Root.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.a.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.b.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.c.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.d.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.e.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaRegistrationInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.0.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.1.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.2.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.3.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.4.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.5.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.6.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.7.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.8.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.9.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.Root.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.a.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.b.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.c.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.d.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.e.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterJsonContexts.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpBinding.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs"
+      ],
+      "baselineDelta": {
+        "added": [],
+        "removed": [],
+        "changed": []
+      },
+      "currentDelta": {
+        "added": [],
+        "removed": [],
+        "changed": []
+      }
+    },
+    {
+      "edit": "call-site-whitespace",
+      "sourceIdentityEqual": true,
+      "eventIdentityEqual": true,
+      "jsonRootIdentityEqual": true,
+      "baselineOutputFiles": 2067,
+      "currentOutputFiles": 2104,
+      "sameKeySameHash": 2062,
+      "sameKeyChangedHash": 4,
+      "sameKeyChanged": [
+        {
+          "key": "Cntryl.Portia.DomainEventCatalogGenerator|DomainEventTypeCatalogGeneratedExtensions.g.cs",
+          "baselineHash": "02F33B833F651F08E8411245F3D07208DC46FE7403B9AB99FF243A8516B2B671",
+          "currentHash": "B5D575B35F3F7551AAD1641AC1CA9AAD20C45B9B363C96CF39C10E1537D06D0D"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkProjector_918537A05B8B45E29CC302E11A55DBD0CF3D89350EBC7CF2B72F96F4FA5B0B0C.EventDispatcher.g.cs",
+          "baselineHash": "F9D28A8EB2D6140F132A51E9E5DA12CFBEDCC3598D6621A5B729474EEF32BC19",
+          "currentHash": "DCF498F444936431CF11380E39C58978ECF31092EB24AA21D2D2A230E92133D2"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkReactor_5720C775945ADA8EC393EE10C3600C7AD696B15ABDB8DFB31AF48E461E1683BA.EventDispatcher.g.cs",
+          "baselineHash": "CFDA1A9D286CC9457A53F2EC0B612A0CB0E838E1F3F1130578A5CE2F19BAFE07",
+          "currentHash": "389AE196C5E7AD788511F15627D96AF95AD067BAE3A0BE87CD05FA13CB6421A1"
+        },
+        {
+          "key": "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaGeneratedRegistrationInterceptors.g.cs",
+          "baselineHash": "F63DCE82F582967E05C4240409F15E01A3F9BEF88DF789DB13144AA08313F82B",
+          "currentHash": "C50DD27B02BA70BF222D5ADEF2D1D911FBF622D68BBF650147A6A5096789D611"
+        }
+      ],
+      "baselineOnlyKeys": [
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaGeneratedHttpBinding.g.cs"
+      ],
+      "currentOnlyKeys": [
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.0.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.1.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.2.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.3.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.4.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.5.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.6.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.7.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.8.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.9.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.Root.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.a.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.b.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.c.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.d.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.e.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaRegistrationInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.0.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.1.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.2.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.3.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.4.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.5.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.6.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.7.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.8.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.9.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.Root.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.a.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.b.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.c.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.d.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.e.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterJsonContexts.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpBinding.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs"
+      ],
+      "baselineDelta": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaGeneratedRegistrationInterceptors.g.cs",
+          "Cntryl.Portia.RequestHttpBindingGenerator|PortiaGeneratedHttpBinding.g.cs"
+        ]
+      },
+      "currentDelta": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaRegistrationInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs",
+          "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs"
+        ]
+      }
+    },
+    {
+      "edit": "route-change",
+      "sourceIdentityEqual": true,
+      "eventIdentityEqual": true,
+      "jsonRootIdentityEqual": true,
+      "baselineOutputFiles": 2067,
+      "currentOutputFiles": 2104,
+      "sameKeySameHash": 2062,
+      "sameKeyChangedHash": 4,
+      "sameKeyChanged": [
+        {
+          "key": "Cntryl.Portia.DomainEventCatalogGenerator|DomainEventTypeCatalogGeneratedExtensions.g.cs",
+          "baselineHash": "02F33B833F651F08E8411245F3D07208DC46FE7403B9AB99FF243A8516B2B671",
+          "currentHash": "B5D575B35F3F7551AAD1641AC1CA9AAD20C45B9B363C96CF39C10E1537D06D0D"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkProjector_918537A05B8B45E29CC302E11A55DBD0CF3D89350EBC7CF2B72F96F4FA5B0B0C.EventDispatcher.g.cs",
+          "baselineHash": "F9D28A8EB2D6140F132A51E9E5DA12CFBEDCC3598D6621A5B729474EEF32BC19",
+          "currentHash": "DCF498F444936431CF11380E39C58978ECF31092EB24AA21D2D2A230E92133D2"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkReactor_5720C775945ADA8EC393EE10C3600C7AD696B15ABDB8DFB31AF48E461E1683BA.EventDispatcher.g.cs",
+          "baselineHash": "CFDA1A9D286CC9457A53F2EC0B612A0CB0E838E1F3F1130578A5CE2F19BAFE07",
+          "currentHash": "389AE196C5E7AD788511F15627D96AF95AD067BAE3A0BE87CD05FA13CB6421A1"
+        },
+        {
+          "key": "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaGeneratedRegistrationInterceptors.g.cs",
+          "baselineHash": "7CB0ADD3D495187889B0F211AA135188C4FF9531E36BF97F14F85726521EF9EE",
+          "currentHash": "C50DD27B02BA70BF222D5ADEF2D1D911FBF622D68BBF650147A6A5096789D611"
+        }
+      ],
+      "baselineOnlyKeys": [
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaGeneratedHttpBinding.g.cs"
+      ],
+      "currentOnlyKeys": [
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.0.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.1.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.2.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.3.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.4.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.5.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.6.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.7.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.8.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.9.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.Root.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.a.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.b.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.c.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.d.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.e.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaRegistrationInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.0.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.1.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.2.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.3.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.4.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.5.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.6.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.7.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.8.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.9.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.Root.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.a.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.b.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.c.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.d.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.e.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterJsonContexts.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpBinding.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs"
+      ],
+      "baselineDelta": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaGeneratedRegistrationInterceptors.g.cs",
+          "Cntryl.Portia.RequestHttpBindingGenerator|PortiaGeneratedHttpBinding.g.cs"
+        ]
+      },
+      "currentDelta": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaRegistrationInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs",
+          "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs"
+        ]
+      }
+    },
+    {
+      "edit": "event-add",
+      "sourceIdentityEqual": true,
+      "eventIdentityEqual": true,
+      "jsonRootIdentityEqual": true,
+      "baselineOutputFiles": 2077,
+      "currentOutputFiles": 2114,
+      "sameKeySameHash": 2072,
+      "sameKeyChangedHash": 4,
+      "sameKeyChanged": [
+        {
+          "key": "Cntryl.Portia.DomainEventCatalogGenerator|DomainEventTypeCatalogGeneratedExtensions.g.cs",
+          "baselineHash": "990482C78588A77B7D89CA06C96B90FE6CABF27F50F0B77AF3DE6EBB7C8158F3",
+          "currentHash": "B5D575B35F3F7551AAD1641AC1CA9AAD20C45B9B363C96CF39C10E1537D06D0D"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkProjector_918537A05B8B45E29CC302E11A55DBD0CF3D89350EBC7CF2B72F96F4FA5B0B0C.EventDispatcher.g.cs",
+          "baselineHash": "F9D28A8EB2D6140F132A51E9E5DA12CFBEDCC3598D6621A5B729474EEF32BC19",
+          "currentHash": "DCF498F444936431CF11380E39C58978ECF31092EB24AA21D2D2A230E92133D2"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkReactor_5720C775945ADA8EC393EE10C3600C7AD696B15ABDB8DFB31AF48E461E1683BA.EventDispatcher.g.cs",
+          "baselineHash": "CFDA1A9D286CC9457A53F2EC0B612A0CB0E838E1F3F1130578A5CE2F19BAFE07",
+          "currentHash": "389AE196C5E7AD788511F15627D96AF95AD067BAE3A0BE87CD05FA13CB6421A1"
+        },
+        {
+          "key": "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaGeneratedRegistrationInterceptors.g.cs",
+          "baselineHash": "FA6C0294FA5CC4C694C8A2C0D2E83DD97F45313D9EC746E72B257B793E4924CA",
+          "currentHash": "C50DD27B02BA70BF222D5ADEF2D1D911FBF622D68BBF650147A6A5096789D611"
+        }
+      ],
+      "baselineOnlyKeys": [
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaGeneratedHttpBinding.g.cs"
+      ],
+      "currentOnlyKeys": [
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.0.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.1.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.2.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.3.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.4.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.5.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.6.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.7.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.8.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.9.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.Root.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.a.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.b.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.c.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.d.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.e.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaRegistrationInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.0.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.1.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.2.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.3.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.4.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.5.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.6.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.7.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.8.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.9.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.Root.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.a.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.b.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.c.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.d.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.e.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterJsonContexts.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpBinding.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs"
+      ],
+      "baselineDelta": {
+        "added": [
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext1.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext2.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext3.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext4.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext5.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext6.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext7.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext8.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext9.ExtraEvent.g.cs"
+        ],
+        "removed": [],
+        "changed": [
+          "Cntryl.Portia.DomainEventCatalogGenerator|DomainEventTypeCatalogGeneratedExtensions.g.cs",
+          "Cntryl.Portia.JsonRootMarkerGenerator|PortiaJsonRoots.g.cs",
+          "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaGeneratedRegistrationInterceptors.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext1.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext2.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext3.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext4.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext5.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext6.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext7.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext8.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext9.GetJsonTypeInfo.g.cs"
+        ]
+      },
+      "currentDelta": {
+        "added": [
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext1.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext2.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext3.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext4.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext5.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext6.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext7.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext8.ExtraEvent.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext9.ExtraEvent.g.cs"
+        ],
+        "removed": [],
+        "changed": [
+          "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.8.g.cs",
+          "Cntryl.Portia.JsonRootMarkerGenerator|PortiaJsonRoots.g.cs",
+          "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.2.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext1.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext2.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext3.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext4.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext5.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext6.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext7.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext8.GetJsonTypeInfo.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext9.GetJsonTypeInfo.g.cs"
+        ]
+      }
+    },
+    {
+      "edit": "event-remove",
+      "sourceIdentityEqual": true,
+      "eventIdentityEqual": true,
+      "jsonRootIdentityEqual": true,
+      "baselineOutputFiles": 2066,
+      "currentOutputFiles": 2103,
+      "sameKeySameHash": 2061,
+      "sameKeyChangedHash": 4,
+      "sameKeyChanged": [
+        {
+          "key": "Cntryl.Portia.DomainEventCatalogGenerator|DomainEventTypeCatalogGeneratedExtensions.g.cs",
+          "baselineHash": "903BDFFD844AF403AA320470E2F71DC3686951F910CE61C70E6F7EB21E7AF7FC",
+          "currentHash": "B5D575B35F3F7551AAD1641AC1CA9AAD20C45B9B363C96CF39C10E1537D06D0D"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkProjector_918537A05B8B45E29CC302E11A55DBD0CF3D89350EBC7CF2B72F96F4FA5B0B0C.EventDispatcher.g.cs",
+          "baselineHash": "F9D28A8EB2D6140F132A51E9E5DA12CFBEDCC3598D6621A5B729474EEF32BC19",
+          "currentHash": "DCF498F444936431CF11380E39C58978ECF31092EB24AA21D2D2A230E92133D2"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkReactor_5720C775945ADA8EC393EE10C3600C7AD696B15ABDB8DFB31AF48E461E1683BA.EventDispatcher.g.cs",
+          "baselineHash": "CFDA1A9D286CC9457A53F2EC0B612A0CB0E838E1F3F1130578A5CE2F19BAFE07",
+          "currentHash": "389AE196C5E7AD788511F15627D96AF95AD067BAE3A0BE87CD05FA13CB6421A1"
+        },
+        {
+          "key": "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaGeneratedRegistrationInterceptors.g.cs",
+          "baselineHash": "ADD4B21DE0A5D6D422652A1906A36595DA281F326F8DA10E03BDBEA79ABEF443",
+          "currentHash": "C50DD27B02BA70BF222D5ADEF2D1D911FBF622D68BBF650147A6A5096789D611"
+        }
+      ],
+      "baselineOnlyKeys": [
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaGeneratedHttpBinding.g.cs"
+      ],
+      "currentOnlyKeys": [
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.0.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.1.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.2.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.3.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.4.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.5.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.6.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.7.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.8.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.9.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.Root.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.a.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.b.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.c.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.d.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.e.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaRegistrationInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.0.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.1.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.2.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.3.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.4.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.5.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.6.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.7.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.8.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.9.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.Root.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.a.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.b.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.c.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.d.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.e.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterJsonContexts.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpBinding.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs"
+      ],
+      "baselineDelta": {
+        "added": [],
+        "removed": [
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.Event0.g.cs"
+        ],
+        "changed": [
+          "Cntryl.Portia.DomainEventCatalogGenerator|DomainEventTypeCatalogGeneratedExtensions.g.cs",
+          "Cntryl.Portia.JsonRootMarkerGenerator|PortiaJsonRoots.g.cs",
+          "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaGeneratedRegistrationInterceptors.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.GetJsonTypeInfo.g.cs"
+        ]
+      },
+      "currentDelta": {
+        "added": [],
+        "removed": [
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.Event0.g.cs"
+        ],
+        "changed": [
+          "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.2.g.cs",
+          "Cntryl.Portia.JsonRootMarkerGenerator|PortiaJsonRoots.g.cs",
+          "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.d.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.GetJsonTypeInfo.g.cs"
+        ]
+      }
+    },
+    {
+      "edit": "event-rename",
+      "sourceIdentityEqual": true,
+      "eventIdentityEqual": true,
+      "jsonRootIdentityEqual": true,
+      "baselineOutputFiles": 2067,
+      "currentOutputFiles": 2104,
+      "sameKeySameHash": 2062,
+      "sameKeyChangedHash": 4,
+      "sameKeyChanged": [
+        {
+          "key": "Cntryl.Portia.DomainEventCatalogGenerator|DomainEventTypeCatalogGeneratedExtensions.g.cs",
+          "baselineHash": "38765F780D3A74FAD6CD0AB1714015370CE22D9EFB313377893F417D3F449135",
+          "currentHash": "B5D575B35F3F7551AAD1641AC1CA9AAD20C45B9B363C96CF39C10E1537D06D0D"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkProjector_918537A05B8B45E29CC302E11A55DBD0CF3D89350EBC7CF2B72F96F4FA5B0B0C.EventDispatcher.g.cs",
+          "baselineHash": "F9D28A8EB2D6140F132A51E9E5DA12CFBEDCC3598D6621A5B729474EEF32BC19",
+          "currentHash": "DCF498F444936431CF11380E39C58978ECF31092EB24AA21D2D2A230E92133D2"
+        },
+        {
+          "key": "Cntryl.Portia.ProjectorReactorEventDispatcherGenerator|BenchmarkReactor_5720C775945ADA8EC393EE10C3600C7AD696B15ABDB8DFB31AF48E461E1683BA.EventDispatcher.g.cs",
+          "baselineHash": "CFDA1A9D286CC9457A53F2EC0B612A0CB0E838E1F3F1130578A5CE2F19BAFE07",
+          "currentHash": "389AE196C5E7AD788511F15627D96AF95AD067BAE3A0BE87CD05FA13CB6421A1"
+        },
+        {
+          "key": "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaGeneratedRegistrationInterceptors.g.cs",
+          "baselineHash": "A5728D4B8E7F987DA8D801EA7440418C985D3BC648AAB059A3AA21FAD632DB07",
+          "currentHash": "C50DD27B02BA70BF222D5ADEF2D1D911FBF622D68BBF650147A6A5096789D611"
+        }
+      ],
+      "baselineOnlyKeys": [
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaGeneratedHttpBinding.g.cs"
+      ],
+      "currentOnlyKeys": [
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.0.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.1.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.2.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.3.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.4.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.5.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.6.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.7.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.8.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.9.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.Root.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.a.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.b.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.c.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.d.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.e.g.cs",
+        "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaRegistrationInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.0.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.1.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.2.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.3.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.4.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.5.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.6.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.7.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.8.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.9.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.Root.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.a.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.b.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.c.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.d.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.e.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.f.g.cs",
+        "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterJsonContexts.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpBinding.Root.g.cs",
+        "Cntryl.Portia.RequestHttpBindingGenerator|PortiaHttpInterceptors.CompilerFixturesComposition.ef449c25da726addf3fd2dc71fa979b92b5667c76f6f2b66472c62bc51676d09.g.cs"
+      ],
+      "baselineDelta": {
+        "added": [
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.RenamedEvent0.g.cs"
+        ],
+        "removed": [
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.Event0.g.cs"
+        ],
+        "changed": [
+          "Cntryl.Portia.DomainEventCatalogGenerator|DomainEventTypeCatalogGeneratedExtensions.g.cs",
+          "Cntryl.Portia.JsonRootMarkerGenerator|PortiaJsonRoots.g.cs",
+          "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaGeneratedRegistrationInterceptors.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.GetJsonTypeInfo.g.cs"
+        ]
+      },
+      "currentDelta": {
+        "added": [
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.RenamedEvent0.g.cs"
+        ],
+        "removed": [
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.Event0.g.cs"
+        ],
+        "changed": [
+          "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.2.g.cs",
+          "Cntryl.Portia.DomainEventCatalogGenerator|PortiaEventCatalog.e.g.cs",
+          "Cntryl.Portia.JsonRootMarkerGenerator|PortiaJsonRoots.g.cs",
+          "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.7.g.cs",
+          "Cntryl.Portia.RegistrationCallInterceptorGenerator|PortiaShared.RegisterEvents.d.g.cs",
+          "System.Text.Json.SourceGeneration.JsonSourceGenerator|JsonContext0.GetJsonTypeInfo.g.cs"
+        ]
+      }
+    }
+  ]
+}
