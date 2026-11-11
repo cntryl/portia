@@ -86,6 +86,95 @@ public static class McpProtocolQualification
         }));
     }
 
+    /// <summary>Measures fixed-resource, template-resource, and prompt lookup at each catalog size.</summary>
+    public static async Task RunAdapterLookupQualificationAsync(string outputPath)
+    {
+        const int payloadBytes = 4096;
+        var plan = new CampaignPlan(100, 500, 1000);
+        var fullOutputPath = Path.GetFullPath(outputPath);
+        var metadata = await MetadataAsync("adapter-lookup", plan).ConfigureAwait(false);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullOutputPath)!);
+        await using var output = new StreamWriter(fullOutputPath, false, new UTF8Encoding(false));
+        output.AutoFlush = true;
+        await output.WriteLineAsync(JsonSerializer.Serialize(metadata)).ConfigureAwait(false);
+
+        foreach (var catalogSize in CatalogSizes)
+        {
+            await using var server = await McpBenchmarkServer.StartHttpAsync(
+                catalogSize, "disabled", includeFixedLookupResource: true).ConfigureAwait(false);
+            await using var adapter = server.CreateAdapterOnlySession();
+            var readResource = adapter.Server.ServerOptions.Handlers.ReadResourceHandler
+                ?? throw new InvalidOperationException("The MCP resource adapter was not registered.");
+            var getPrompt = adapter.Server.ServerOptions.Handlers.GetPromptHandler
+                ?? throw new InvalidOperationException("The MCP prompt adapter was not registered.");
+
+            await MeasureResourceAsync("read-resource-fixed-json", "benchmark://fixed/lookup");
+            await MeasureResourceAsync("read-resource-template-last-json",
+                $"benchmark://resource/{catalogSize - 1:D4}/{payloadBytes.ToString(CultureInfo.InvariantCulture)}");
+            await MeasurePromptAsync("get-prompt-first", "benchmark_prompt_0000");
+            await MeasurePromptAsync("get-prompt-last", $"benchmark_prompt_{catalogSize - 1:D4}");
+
+            async Task MeasureResourceAsync(string operation, string uri)
+            {
+                await WriteAdapterMeasuredAsync(output, server, adapter, operation, payloadBytes,
+                    provider => new ModelContextProtocol.Server.RequestContext<ReadResourceRequestParams>(
+                        adapter.Server, AdapterRequest(RequestMethods.ResourcesRead),
+                        new ReadResourceRequestParams { Uri = uri })
+                    {
+                        Services = provider,
+                        User = Actor
+                    }, context => readResource(context, CancellationToken.None),
+                    result =>
+                    {
+                        if (result.Contents.Count != 1 || result.Contents[0] is not TextResourceContents text ||
+                            JsonElement.Parse(text.Text).GetProperty("data").GetString()?.Length != payloadBytes)
+                            throw new InvalidOperationException("The direct MCP resource adapter returned an unexpected result.");
+                    }, plan, catalogSize, "disabled").ConfigureAwait(false);
+            }
+
+            async Task MeasurePromptAsync(string operation, string name)
+            {
+                await WriteAdapterMeasuredAsync(output, server, adapter, operation, payloadBytes,
+                    provider => new ModelContextProtocol.Server.RequestContext<GetPromptRequestParams>(
+                        adapter.Server, AdapterRequest(RequestMethods.PromptsGet),
+                        new GetPromptRequestParams
+                        {
+                            Name = name,
+                            Arguments = new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+                            {
+                                ["size"] = JsonSerializer.SerializeToElement(
+                                    payloadBytes.ToString(CultureInfo.InvariantCulture))
+                            }
+                        })
+                    {
+                        Services = provider,
+                        User = Actor
+                    }, context => getPrompt(context, CancellationToken.None),
+                    result =>
+                    {
+                        if (result.Messages.Count != 1 || result.Messages[0].Content is not TextContentBlock text ||
+                            text.Text.Length != payloadBytes)
+                            throw new InvalidOperationException("The direct MCP prompt adapter returned an unexpected result.");
+                    }, plan, catalogSize, "disabled").ConfigureAwait(false);
+            }
+
+            JsonRpcRequest AdapterRequest(string method) => new()
+            {
+                Id = new RequestId(Interlocked.Increment(ref AdapterRequestId)),
+                Method = method
+            };
+        }
+
+        await output.WriteLineAsync(JsonSerializer.Serialize(new
+        {
+            recordType = "complete",
+            completedUtc = DateTimeOffset.UtcNow,
+            outputPath = fullOutputPath,
+            mode = "adapter-lookup",
+            configurations = CatalogSizes.Length * 4
+        })).ConfigureAwait(false);
+    }
+
     /// <summary>Starts the benchmark server used by the official stdio client transport.</summary>
     public static async Task RunStdioServerAsync(int catalogSize, string telemetryMode)
     {
@@ -492,7 +581,8 @@ public static class McpProtocolQualification
         throw new DirectoryNotFoundException("Run the MCP qualification from within the Portia repository.");
     }
 
-    internal static PortiaBuilder RegisterCatalog(PortiaBuilder application, int catalogSize)
+    internal static PortiaBuilder RegisterCatalog(PortiaBuilder application, int catalogSize,
+        bool includeFixedLookupResource = false)
     {
         for (var index = 0; index < catalogSize; index++)
         {
@@ -526,6 +616,15 @@ public static class McpProtocolQualification
                     options.Required("size", "Result size in bytes.");
                 });
         }
+
+        if (includeFixedLookupResource)
+            application.AddMcpResource<BenchmarkRequest, BenchmarkOutput>("benchmark://fixed/lookup",
+                _ => BenchmarkRequest.ForSize(4096), options =>
+                {
+                    options.Public();
+                    options.Named("fixed-lookup-resource");
+                    options.AsJson();
+                });
 
         return BenchmarkToolCatalog.Register(application, catalogSize);
 
@@ -617,7 +716,8 @@ sealed class McpBenchmarkServer : IAsyncDisposable
         return new McpAdapterOnlySession(server, _application.Services);
     }
 
-    internal static async Task<McpBenchmarkServer> StartHttpAsync(int catalogSize, string telemetryMode)
+    internal static async Task<McpBenchmarkServer> StartHttpAsync(int catalogSize, string telemetryMode,
+        bool includeFixedLookupResource = false)
     {
         var started = Stopwatch.GetTimestamp();
         var telemetry = BenchmarkTelemetry.Attach(telemetryMode);
@@ -634,7 +734,8 @@ sealed class McpBenchmarkServer : IAsyncDisposable
                 telemetryMode == "logging", serviceProvider.GetRequiredService<ILoggerFactory>()));
             var application = builder.Services.AddPortia().AddHttp()
                 .AddRequestHandler<BenchmarkRequestHandler>();
-            application = McpProtocolQualification.RegisterCatalog(application, catalogSize)
+            application = McpProtocolQualification.RegisterCatalog(application, catalogSize,
+                    includeFixedLookupResource)
                 .AddMcpHttp();
             app = builder.Build();
             app.Use(async (context, next) =>
