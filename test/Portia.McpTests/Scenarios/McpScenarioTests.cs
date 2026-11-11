@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
@@ -12,6 +13,59 @@ namespace Cntryl.Portia.Tests;
 [Collection("MCP HTTP integration")]
 public sealed class McpScenarioTests
 {
+    [Fact]
+    public async Task ShouldTerminateStdioChildAfterScenarioDisposal()
+    {
+        var host = GetStdioHostPath();
+        var processId = 0;
+        var options = new StdioClientTransportOptions
+        {
+            Command = "dotnet",
+            Arguments = [host, "--report-process-id"],
+            Name = "Portia stdio disposal test",
+            StandardErrorLines = line =>
+            {
+                if (int.TryParse(line, out var parsed))
+                    Interlocked.Exchange(ref processId, parsed);
+            }
+        };
+
+        await using (var scenario = await McpScenario.ConnectStdioAsync(options))
+            _ = await scenario.ListTools().ExpectExactly("stdio.greetings.read");
+
+        Assert.True(Volatile.Read(ref processId) > 0, "The child process did not report its PID.");
+        Assert.True(await WaitForProcessExitAsync(Volatile.Read(ref processId), TimeSpan.FromSeconds(5)),
+            "Disposing the scenario left its stdio child process running.");
+    }
+
+    [Fact]
+    public async Task ShouldTerminateStdioChildWhenConnectionIsCanceled()
+    {
+        var started = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cancellation = new CancellationTokenSource();
+        var options = new StdioClientTransportOptions
+        {
+            Command = "dotnet",
+            Arguments = [GetStdioHostPath(), "--hang-before-mcp"],
+            Name = "Portia stdio canceled connection test",
+            StandardErrorLines = line =>
+            {
+                if (int.TryParse(line, out var processId) && started.TrySetResult(processId))
+                    cancellation.Cancel();
+            }
+        };
+
+        async Task ConnectAsync()
+        {
+            await using var scenario = await McpScenario.ConnectStdioAsync(options, cancellation.Token);
+        }
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(ConnectAsync);
+        var childProcessId = await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(5)),
+            "Canceling stdio connection left its child process running.");
+    }
+
     [Fact]
     public void ShouldPreservePrimitiveSnapshotConstructionAndDeconstruction()
     {
@@ -160,6 +214,37 @@ public sealed class McpScenarioTests
 
         using var response = await http.GetAsync("/not-found");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    static string GetStdioHostPath()
+    {
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name
+                            ?? throw new InvalidOperationException("Missing test configuration.");
+        return Path.GetFullPath(
+            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll",
+            AppContext.BaseDirectory);
+    }
+
+    static async Task<bool> WaitForProcessExitAsync(int processId, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                using var process = Process.GetProcessById(processId);
+                if (process.HasExited)
+                    return true;
+            }
+            catch (ArgumentException)
+            {
+                return true;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(50)).ConfigureAwait(false);
+        }
+
+        return false;
     }
 }
 

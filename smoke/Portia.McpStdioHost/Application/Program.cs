@@ -1,6 +1,16 @@
 using Cntryl.Portia;
 using Microsoft.Extensions.Hosting;
 
+if (args.Contains("--hang-before-mcp", StringComparer.Ordinal))
+{
+    Console.Error.WriteLine(Environment.ProcessId);
+    await Task.Delay(Timeout.InfiniteTimeSpan);
+    return;
+}
+
+if (args.Contains("--report-process-id", StringComparer.Ordinal))
+    Console.Error.WriteLine(Environment.ProcessId);
+
 var builder = Host.CreateApplicationBuilder([]);
 var application = builder.Services.AddPortia().AddRequestHandler<StdioGreetingHandler>();
 if (args.Contains("--resource-only", StringComparer.Ordinal))
