@@ -18,10 +18,12 @@ The raw evidence is in [m6-lookup-paired.jsonl](m6-lookup-paired.jsonl). It cont
 before/after pairs, 500 latency samples after 100 warmups, and a separate 1,000-call throughput and
 allocation batch for each operation and catalog size. The baseline source is `729c9a03667cbec2ac9ee4b5c12ba80c1e475f07`; the candidate is `01030e984267a9443617f4a844abdeeb23a94baa`. Their MCP source trees are recorded in the artifact. The benchmark project tree is identical (`c635709a735f149369116342565fb15b3149b1bb`). Both use .NET 11.0.0, the same package assets, ModelContextProtocol 2.4.0, and the same Arm64 machine.
 
-After PR191 was rebased onto `bc8dadeb9d5b8e429eebd3aa00e882bb8f20859f`, the equivalent baseline
-and candidate source commits are `117f140eb6b9afca5e2ebd2e21cba9072e2c5582` and
-`8045d57e6c099077b502d6b56d7c8f109c651518`. Their MCP and benchmark tree hashes match the measured
-source trees above; the raw records retain the exact pre-rebase commit IDs captured by each run.
+After PR191 was rebased onto current main `4f066f38da0d3a2bbf406b8225af35c44ae7c24b` and PR192
+onto its updated head `82c20c3438fe4b9e04aeb90677c42c8ebe50d854`, the equivalent baseline and
+candidate source commits are `0c004c23e035d1e4d44dd7944a9f4e116f609a31` and
+`3f10afc7cbc742dc995f70c629d67b9cbcc94b54`. Their MCP trees (`dcfa4715…` and `e741395c…`) and
+benchmark trees (`c635709a…` on both sides) match the measured source trees above. The raw records
+retain the exact pre-rebase commit IDs captured by each run.
 
 P50, P95, and allocations are medians of the ten per-run values. The paired 95% intervals use the
 ten per-run P50 differences (candidate minus baseline), a paired Student t interval with 9 degrees
