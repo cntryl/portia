@@ -170,6 +170,7 @@ public sealed class McpScenarioTests
     [Fact]
     public async Task ShouldSnapshotCatalogAndExerciseRealDispatchFailures()
     {
+        var postRequests = 0;
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia()
@@ -195,6 +196,12 @@ public sealed class McpScenarioTests
                 value => [new("user", value)], prompt => { prompt.Authenticated(); prompt.Required("name"); })
             .AddMcpHttp();
         await using var app = builder.Build();
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Path == "/mcp" && context.Request.Method == "POST")
+                Interlocked.Increment(ref postRequests);
+            await next(context);
+        });
         app.Use((context, next) =>
         {
             context.User = new ClaimsPrincipal(new ClaimsIdentity(
@@ -223,8 +230,13 @@ public sealed class McpScenarioTests
                 .Inspect(snapshots => Assert.Equal("Hello, Portia.", Assert.Single(snapshots).Text));
             Assert.Equal("Hello, Portia.", Assert.Single(contents).Text);
 
-            var resources = await scenario.ListResources().ExpectExactly("greetings://local/fixed");
-            Assert.Equal("fixed greeting", Assert.Single(resources).Name);
+            Interlocked.Exchange(ref postRequests, 0);
+            var resourceListing = scenario.ListResources()
+                .ExpectExactly("greetings://local/fixed")
+                .Inspect(snapshots => Assert.Equal("fixed greeting", Assert.Single(snapshots).Name));
+            var resources = await resourceListing;
+            Assert.Same(resources, await resourceListing);
+            Assert.Equal(1, Volatile.Read(ref postRequests));
 
             var prompts = await scenario.ListPrompts().ExpectExactly("scenario-greeting");
             Assert.True(Assert.Single(prompts).Arguments["name"]);
