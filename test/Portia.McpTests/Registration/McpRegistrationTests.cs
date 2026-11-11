@@ -158,7 +158,7 @@ public sealed class McpRegistrationTests
         using var provider = services.BuildServiceProvider();
         var tools = provider.GetServices<McpServerTool>().ToDictionary(tool => tool.ProtocolTool.Name);
 
-        Assert.Equal("Returns ReadGreeting when the null value is missing.",
+        Assert.Equal("Returns ReadGreeting when the null value is missing; owners use \"Tom & Jerry\".",
             tools["greetings.markup"].ProtocolTool.Description);
         Assert.Equal("Reads a greeting inherited by the concrete MCP request.",
             tools["greetings.inherited"].ProtocolTool.Description);
@@ -214,17 +214,17 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldGenerateDescriptionForRequestFromContractsAssemblyWithoutXmlFile()
+    public void ShouldGenerateFallbackForRequestFromContractsAssemblyWithoutDocumentation()
     {
         var services = new ServiceCollection();
         _ = services.AddPortia()
-            .AddRequestHandler<ExternalGreetingHandler>()
-            .AddMcpTool<ExternalGreeting>(tool => tool.ReadOnly());
+            .AddRequestHandler<UndocumentedGreetingHandler>()
+            .AddMcpTool<UndocumentedGreeting>();
 
         using var provider = services.BuildServiceProvider();
         var tool = Assert.Single(provider.GetServices<McpServerTool>());
 
-        Assert.Equal("Invokes the ExternalGreeting request.", tool.ProtocolTool.Description);
+        Assert.Equal("Invokes the UndocumentedGreeting request.", tool.ProtocolTool.Description);
     }
 
     [Fact]
@@ -1361,7 +1361,13 @@ public sealed class McpRegistrationTests
             CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
     }
 
-    /// <summary>Returns <see cref="ReadGreeting" /> when the <see langword="null" /> value is missing.</summary>
+    public sealed class UndocumentedGreetingHandler : IRequestHandler<UndocumentedGreeting, string>
+    {
+        public ValueTask<Result<string>> HandleAsync(IRequestContext<UndocumentedGreeting> context,
+            CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+    }
+
+    /// <summary>Returns <see cref="ReadGreeting" /> when the <see langword="null" /> value is missing; owners use &quot;Tom &amp; Jerry&quot;.</summary>
     [Discriminator("greetings.markup")]
     public sealed record MarkupGreeting(string Name) : IRequest<string>, ICallable;
 
@@ -1493,6 +1499,7 @@ public sealed class McpRegistrationTests
 [JsonSerializable(typeof(McpPrimitiveTests.SlowRead))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(ExternalGreeting))]
+[JsonSerializable(typeof(UndocumentedGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.InheritedGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.MarkupGreeting))]
 [JsonSerializable(typeof(McpRegistrationTests.PostDispatchJsonFailure))]

@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsPackable>false</IsPackable>
     <IsTestProject>false</IsTestProject>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
     <RootNamespace>Cntryl.Portia.McpContracts</RootNamespace>
   </PropertyGroup>
   <ItemGroup>

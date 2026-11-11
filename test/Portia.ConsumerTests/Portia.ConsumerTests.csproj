@@ -19,6 +19,7 @@
     <PackageReference Include="xunit"/>
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all"/>
     <ProjectReference Include="../Consumer.Contracts/Consumer.Contracts.csproj"/>
+    <ProjectReference Include="../Portia.McpContracts/Portia.McpContracts.csproj"/>
     <ProjectReference Include="../Consumer.FeatureOne/Consumer.FeatureOne.csproj"/>
     <ProjectReference Include="../Consumer.FeatureTwo/Consumer.FeatureTwo.csproj"/>
     <ProjectReference Include="../../src/Portia.Testing/Portia.Testing.csproj"/>
