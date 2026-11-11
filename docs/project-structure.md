@@ -182,13 +182,13 @@ or model, or perform operation-specific validation in Core. A total warning coun
 establish which construction patterns were reported.
 
 Code actions name the exact change and use the IDE's normal preview. File actions decline existing
-destination files and linked files. Splitting moves nested types with their owner and declines
+destination files or directories and linked files. Splitting moves nested types with their owner and declines
 file-local types and conditional directives that require a semantic decision. File-leading
 `#nullable` and `#pragma warning` directives are copied to each split file. Namespace changes use
 [Roslyn's document namespace refactoring](https://source.dot.net/Microsoft.CodeAnalysis.Features/src/roslyn/src/Analyzers/Core/CodeFixes/MatchFolderAndNamespace/AbstractChangeNamespaceToMatchFolderCodeFixProvider.cs.html)
 to update references, and decline known destination conflicts and partial types spread across files.
 Fix All supports document, project, and solution scopes for these actions. File operations check
-for collisions among solution documents and existing files on disk.
+for collisions among solution documents and existing files or directories on disk.
 In the tested .NET 10 MSBuild workspace, adding documents also adds explicit `Compile` items that
 conflict with SDK default globs, while replacement renames did not take effect. PORTIA200 and
 PORTIA201 file fixes are therefore unavailable in that workspace; PORTIA202 can still be applied by
