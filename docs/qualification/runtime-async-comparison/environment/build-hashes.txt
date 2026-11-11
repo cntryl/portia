@@ -1,0 +1,9 @@
+SHA-256 hashes from source revision 5dbdede91ca4dba73807abba8056a4387720ff1d
+
+Portia.Benchmarks.dll (UseRuntimeAsync=false): c563f47abe07868b09c9a11714fd3a51fed6183f1bdc7ecb7ab4c9ae3082a46e
+Portia.Benchmarks.dll (UseRuntimeAsync=true):  cdf5a8e3e009e66628dfec891df36f6882532697d70c5fc7c8a1ea980ec4c52d
+Portia.Core.dll (UseRuntimeAsync=false):       48151987a3203cdca50638bf76079319e0cd00da5e6c7fbd00048f8f312b585a
+Portia.Core.dll (UseRuntimeAsync=true):        901d4f980d953a927edf7c5f5874ddb8111912dc89fff6163e0cdb94266ae5ab
+
+Portia.Benchmarks.runtimeconfig.json (both):   1c1d530a0c5048f8086c8d8289aab7513c02a9f836e1c1ba733b312cda3122a6
+Portia.Benchmarks.deps.json (both):            fafbe4187f6220428b9a697a29180748fea9532d5db00c7541dfe1941a9375d5

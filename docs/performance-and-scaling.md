@@ -418,3 +418,10 @@ successful results, and failure metadata after the client is disposed.
 The local raw compiler samples are under `/tmp/portia-net11-stable.mmQb1Q`, in `before-json` and
 `after-json`; the allocation probe is in `json-allocation`. These are source-change comparisons
 on .NET 11, rather than measurements of the .NET 10 to .NET 11 runtime upgrade.
+
+A bounded same-runtime Runtime Async on/off diagnostic comparison covers request dispatch, generated
+HTTP JSON endpoints, and processor dispatch. All 22 paired timing intervals overlapped, so no
+performance change is claimed. BenchmarkDotNet 0.15.8 required its in-process toolchain for this
+`net11.0` target; the comparison is partial evidence for #175, not a release performance
+qualification. See the [comparison report](qualification/runtime-async-comparison/README.md) and
+its checked-in samples.
