@@ -70,6 +70,7 @@ public sealed class McpScenarioTests
     public async Task ShouldTerminateStdioChildWhenInitializationFails()
     {
         var started = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var observedProcessId = 0;
         var options = new StdioClientTransportOptions
         {
             Command = "dotnet",
@@ -79,7 +80,10 @@ public sealed class McpScenarioTests
             StandardErrorLines = line =>
             {
                 if (int.TryParse(line, out var processId))
+                {
+                    Interlocked.Exchange(ref observedProcessId, processId);
                     started.TrySetResult(processId);
+                }
             }
         };
 
@@ -88,17 +92,26 @@ public sealed class McpScenarioTests
             await using var scenario = await McpScenario.ConnectStdioAsync(options);
         }
 
-        var failure = await Assert.ThrowsAnyAsync<Exception>(ConnectAsync);
-        Assert.IsNotType<OperationCanceledException>(failure);
-        var childProcessId = await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var childProcessId = 0;
         try
         {
+            var failure = await Assert.ThrowsAnyAsync<Exception>(ConnectAsync);
+            Assert.False(failure is OperationCanceledException,
+                "MCP initialization should fail with a protocol error, not cancellation.");
+            childProcessId = await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(5)),
                 "A failed MCP initialization left its stdio child process running.");
         }
         finally
         {
-            KillProcessIfRunning(childProcessId);
+            if (childProcessId == 0)
+                childProcessId = Volatile.Read(ref observedProcessId);
+            if (childProcessId > 0)
+            {
+                KillProcessIfRunning(childProcessId);
+                Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(5)),
+                    "Cleanup after a failed MCP initialization left its stdio child process running.");
+            }
         }
     }
 
