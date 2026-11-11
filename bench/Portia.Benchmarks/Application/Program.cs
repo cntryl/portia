@@ -3,6 +3,11 @@ using Cntryl.Portia;
 
 if (args.Length == 2 && args[0] == "--prometheus-qualification")
     await PrometheusQualification.RunAsync(args[1]);
+else if (args.Length >= 3 && args[0] == "--mcp-stdio-server")
+    await McpProtocolQualification.RunStdioServerAsync(
+        int.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture), args[2]);
+else if (args.Length >= 3 && args[0] == "--mcp-protocol-qualification")
+    await McpProtocolQualification.RunAsync(args[1], args[2]);
 else if (args.Length >= 3 && args[0] == "--fitz-append-campaign")
     await FitzAppendCampaign.RunAsync(args[1], new Uri(args[2]), args.Length > 3 ? int.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture) : 30);
 else if (args.Length == 3 && args[0] == "--fitz-restart-readback")
