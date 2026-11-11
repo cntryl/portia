@@ -177,7 +177,7 @@ public abstract class McpToolRegistration
                     arguments[argument.Key] = JsonNode.Parse(argument.Value.GetRawText());
             }
 
-            return (TRequest?)arguments.Deserialize(Strict(json).GetTypeInfo(typeof(TRequest)))
+            return (TRequest?)arguments.Deserialize(Strict(json).GetTypeInfo<TRequest>())
                    ?? throw new JsonException("The MCP tool input cannot be null.");
         }
         catch (JsonException exception)
@@ -268,8 +268,7 @@ public abstract class McpToolRegistration
             writer.WriteEndObject();
         }
 
-        using var document = JsonDocument.Parse(buffer.WrittenMemory);
-        return document.RootElement.Clone();
+        return JsonElement.Parse(buffer.WrittenSpan);
     }
 
     static bool IsValidName(string name)
@@ -314,11 +313,7 @@ public abstract class McpToolRegistration
         }
     }
 
-    static JsonElement Element(JsonNode node)
-    {
-        using var document = JsonDocument.Parse(node.ToJsonString());
-        return document.RootElement.Clone();
-    }
+    static JsonElement Element(JsonNode node) => JsonElement.Parse(node.ToJsonString());
 }
 
 /// <summary>Generated descriptor for a no-result MCP request.</summary>
@@ -355,7 +350,7 @@ public sealed class McpToolRegistration<TRequest, TOut>(string name, string desc
             static result => result.IsSuccess ? null : result.Error!,
             static (result, options) =>
             {
-                var value = StructuredResult(result.Value, (JsonTypeInfo<TOut>)options.GetTypeInfo(typeof(TOut)));
+                var value = StructuredResult(result.Value, options.GetTypeInfo<TOut>());
                 return new CallToolResult
                 {
                     IsError = false,

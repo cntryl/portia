@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
@@ -26,15 +25,8 @@ static class ProcessRunner
                 startInfo.Environment[pair.Key] = pair.Value;
         }
 
-        using var process = new Process { StartInfo = startInfo };
-        if (!process.Start())
-            throw new InvalidOperationException($"Could not start {executable}.");
-
-        var standardOutput = process.StandardOutput.ReadToEndAsync();
-        var standardError = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync().ConfigureAwait(false);
-        return new ProcessResult(process.ExitCode,
-            await standardOutput.ConfigureAwait(false) + await standardError.ConfigureAwait(false));
+        var output = await Process.RunAndCaptureTextAsync(startInfo).ConfigureAwait(false);
+        return new ProcessResult(output.ExitStatus.ExitCode, output.StandardOutput + output.StandardError);
     }
 
     internal sealed record ProcessResult(int ExitCode, string Output);

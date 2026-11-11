@@ -15,7 +15,7 @@ public sealed class PortiaFitzBuilder
 
     readonly PortiaBuilder _application;
     readonly Client? _borrowedClient;
-    readonly HashSet<string> _capabilities = new(StringComparer.Ordinal);
+    readonly HashSet<string> _capabilities = [with(StringComparer.Ordinal)];
     readonly HashSet<RequestTransportId> _requiredWorkerTransports = [];
     readonly HashSet<RequestTransportId> _workerTransports = [.. AllBuiltInTransports];
     readonly Lazy<IReadOnlyList<FitzWorkerDefinition>> _workers;

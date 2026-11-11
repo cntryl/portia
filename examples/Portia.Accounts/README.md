@@ -116,8 +116,8 @@ uses a fresh NuGet cache. It fails if the selected package version is missing fr
 dotnet restore Portia.slnx
 dotnet build Portia.slnx --configuration Release --no-restore
 dotnet pack Portia.slnx --configuration Release --no-build --no-restore \
-  --output artifacts/packages -p:PackageVersion=0.10.0
-PORTIA_SMOKE_PACKAGE_VERSION=0.10.0 \
+  --output artifacts/packages -p:PackageVersion=0.11.0
+PORTIA_SMOKE_PACKAGE_VERSION=0.11.0 \
   scripts/qualify-account-example.sh /tmp/portia-account-otel-evidence
 ```
 

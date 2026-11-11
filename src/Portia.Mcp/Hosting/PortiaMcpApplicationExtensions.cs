@@ -228,7 +228,7 @@ public static class PortiaMcpApplicationExtensions
     sealed class ToolCatalog
     {
         internal Dictionary<Type, McpToolRegistration> Registrations { get; } = [];
-        internal Dictionary<string, Type> Names { get; } = new(StringComparer.Ordinal);
+        internal Dictionary<string, Type> Names { get; } = [with(StringComparer.Ordinal)];
     }
 
     sealed class McpPrimitiveCatalog

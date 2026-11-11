@@ -393,3 +393,28 @@ Raw samples are outside the repository under `/tmp/portia-optimization-final`, i
 `baseline-repeated-20`, `baseline-distinct-20`, `final-repeated-20`, and `final-distinct-20`.
 The local runtime qualification matrix and macOS Arm64 NativeAOT HTTP consumer both passed.
 Those are behavior checks; no runtime throughput improvement is claimed from them.
+
+## Stable .NET 11 follow-up
+
+A bounded comparison used .NET 11.0.0, Arm64, Roslyn 5.9.0, and five samples of the compiler
+harness's `json` profile: 100 commands, one referenced feature assembly, ten JSON contexts, and
+one HTTP mapping. The baseline binaries were captured before the stable source changes. All
+generator output and eight edit variants compiled in both runs.
+
+Direct processor-dispatcher emission removes a generated-source parse and whitespace-normalization
+pass. Isolated cold dispatcher allocation fell from 1,127,008 to 965,272 bytes (14.4%), with P50
+changing from 4.70 to 3.65 ms. Whole-driver timing was mixed across edit cases: cold P50 changed
+from 91.87 to 86.05 ms, while referenced-feature replacement changed from 37.77 to 41.19 ms.
+Five samples do not establish a general compiler latency improvement. Incremental regression
+tests separately verify that unrelated edits reuse shared JSON registrations and that a changed
+referenced context factory invalidates them.
+
+An isolated MCP-envelope allocation probe compared the previous document-plus-clone path with
+`JsonElement.Parse` for 16-, 256-, and 4,096-character payloads over 5,000 calls each. Direct
+element parsing saved approximately 72 bytes per envelope and produced equivalent retained JSON.
+This measures the parsing change, not MCP transport throughput. Protocol tests retain schemas,
+successful results, and failure metadata after the client is disposed.
+
+The local raw compiler samples are under `/tmp/portia-net11-stable.mmQb1Q`, in `before-json` and
+`after-json`; the allocation probe is in `json-allocation`. These are source-change comparisons
+on .NET 11, rather than measurements of the .NET 10 to .NET 11 runtime upgrade.

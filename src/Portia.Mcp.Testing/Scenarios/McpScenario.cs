@@ -76,7 +76,7 @@ public sealed class McpScenario : IAsyncDisposable
         var prompts = await _client.ListPromptsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         return prompts.Select(prompt => new McpPromptSnapshot(prompt.Name,
             prompt.ProtocolPrompt.Arguments?.ToDictionary(argument => argument.Name, argument => argument.Required == true,
-                StringComparer.Ordinal) ?? new Dictionary<string, bool>(StringComparer.Ordinal))).ToArray();
+                StringComparer.Ordinal) ?? [with(StringComparer.Ordinal)])).ToArray();
     }
 
     /// <summary>Gets rendered prompt messages.</summary>
@@ -114,8 +114,7 @@ public sealed class McpScenario : IAsyncDisposable
         JsonElement? error = null;
         if (result.Meta?[McpFailureMetadata.Key] is { } failure)
         {
-            using var document = JsonDocument.Parse(failure.ToJsonString());
-            error = document.RootElement.Clone();
+            error = JsonElement.Parse(failure.ToJsonString());
         }
 
         return new McpCallSnapshot(result.IsError == true, text, structured, error);

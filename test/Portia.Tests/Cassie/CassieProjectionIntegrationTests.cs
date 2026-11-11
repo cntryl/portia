@@ -198,7 +198,9 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         var read = await repository.OpenReopenedReadAsync();
 
         var begin = repository.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)).AsTask();
-        var startedEarly = await Task.WhenAny(begin, Task.Delay(TimeSpan.FromMilliseconds(500))) == begin;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+        var startedEarly = await Task.WhenAny(begin, Task.Delay(Timeout.InfiniteTimeSpan, timeout.Token)) == begin;
+        await timeout.CancelAsync();
         await read.DisposeAsync();
         await using var batch = await begin.WaitAsync(TimeSpan.FromSeconds(15));
 

@@ -154,7 +154,7 @@ public sealed class InMemoryEventStore : IEventStore, IDomainEventProgressReader
 
             if (committedIds is null)
             {
-                _eventIds[stream] = committedIds = new HashSet<Uuid>(batchIds.Count);
+                _eventIds[stream] = committedIds = [with(batchIds.Count)];
             }
 
             committedIds.UnionWith(batchIds);

@@ -5,8 +5,8 @@ public sealed class FakeObjectStorage : IObjectStorage
 {
     readonly object _sync = new();
     readonly Dictionary<TenantId, Dictionary<string, byte[]>> _objects = [];
-    readonly Dictionary<string, Upload> _uploads = new(StringComparer.Ordinal);
-    readonly Dictionary<string, CompletedUpload> _completedUploads = new(StringComparer.Ordinal);
+    readonly Dictionary<string, Upload> _uploads = [with(StringComparer.Ordinal)];
+    readonly Dictionary<string, CompletedUpload> _completedUploads = [with(StringComparer.Ordinal)];
     DateTimeOffset _nextCompletedPrune;
 
     /// <summary>Gets the number of active upload sessions.</summary>
@@ -293,7 +293,7 @@ public sealed class FakeObjectStorage : IObjectStorage
     {
         if (!_objects.TryGetValue(tenantId, out var objects))
         {
-            objects = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+            objects = [with(StringComparer.Ordinal)];
             _objects.Add(tenantId, objects);
         }
 

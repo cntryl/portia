@@ -153,7 +153,7 @@ public static partial class PortiaHttpBinding
             throw new BadHttpRequestException($"Property '{name}' cannot be null.");
         }
 
-        var typeInfo = (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
+        var typeInfo = options.GetTypeInfo<T>();
         var result = value.Deserialize(typeInfo);
         return result is null && !nullable
             ? throw new BadHttpRequestException($"Property '{name}' cannot be null.")
@@ -231,7 +231,7 @@ public static partial class PortiaHttpBinding
         {
             if (!string.Equals(property.Name, binding.Name, comparison))
                 continue;
-            var actual = property.Value.Deserialize((JsonTypeInfo<TValue>)binding.Options.GetTypeInfo(typeof(TValue)));
+            var actual = property.Value.Deserialize(binding.Options.GetTypeInfo<TValue>());
             if (!EqualityComparer<TValue>.Default.Equals(expected, actual))
                 throw new BadHttpRequestException("A body value conflicts with its route value.");
         }

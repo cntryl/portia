@@ -158,8 +158,7 @@ public sealed class OpenApiTests : IAsyncDisposable
             {
                 var json = context.RequestServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
                 var request = await JsonSerializer.DeserializeAsync(context.Request.Body,
-                    (System.Text.Json.Serialization.Metadata.JsonTypeInfo<OpenApiRootSelectionRequest>)json.GetTypeInfo(
-                        typeof(OpenApiRootSelectionRequest)), ct);
+                    json.GetTypeInfo<OpenApiRootSelectionRequest>(), ct);
                 return request ?? throw new JsonException("The test request body was null.");
             }));
         await _app.StartAsync();
@@ -409,7 +408,7 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.Null(yamlUpload.Responses["400"].Content);
 
         using var raw = JsonDocument.Parse(json);
-        Assert.Equal("3.1.1", raw.RootElement.GetProperty("openapi").GetString());
+        Assert.Equal("3.1.2", raw.RootElement.GetProperty("openapi").GetString());
         var paths = raw.RootElement.GetProperty("paths");
         Assert.True(paths.TryGetProperty("/api/orders", out var createPath), json);
         var create = createPath.GetProperty("post");
@@ -675,7 +674,7 @@ public sealed class OpenApiTests : IAsyncDisposable
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var raw = JsonDocument.Parse(document);
-        Assert.Equal("3.1.1", raw.RootElement.GetProperty("openapi").GetString());
+        Assert.Equal("3.1.2", raw.RootElement.GetProperty("openapi").GetString());
         Assert.Equal("httpGetWidget", raw.RootElement.GetProperty("paths")
             .GetProperty("/widgets/{widget_id}").GetProperty("get").GetProperty("operationId").GetString());
     }

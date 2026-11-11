@@ -1096,7 +1096,7 @@ public sealed class McpRegistrationTests
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name
                             ?? throw new InvalidOperationException("The test configuration could not be determined.");
         return Path.GetFullPath(
-            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net10.0/Portia.McpStdioHost.dll",
+            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll",
             AppContext.BaseDirectory);
     }
 

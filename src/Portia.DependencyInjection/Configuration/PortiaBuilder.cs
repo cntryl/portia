@@ -14,7 +14,7 @@ public sealed class PortiaBuilder
 {
     readonly ApplicationComponentCatalog _catalog = new();
     readonly Lock _generatedRegistrationGate = new();
-    readonly HashSet<object> _generatedRegistrations = new(ReferenceEqualityComparer.Instance);
+    readonly HashSet<object> _generatedRegistrations = [with(ReferenceEqualityComparer.Instance)];
     readonly PortiaJsonComposer _json = new();
 
     internal PortiaBuilder(IServiceCollection services)

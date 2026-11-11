@@ -1,6 +1,6 @@
 # Getting started
 
-Portia targets .NET 10. Applications choose the runtime packages they need and can add
+Portia targets .NET 11. Applications choose the runtime packages they need and can add
 `Cntryl.Portia.Analyzers` independently for Portia diagnostics, code fixes, and compile-time
 generation. `Cntryl.Portia.DependencyInjection` supplies registration APIs but does not require DI-free
 Portia users to depend on it for tooling. `Cntryl.Portia.AspNetCore` includes its HTTP-specific
@@ -9,7 +9,7 @@ and `Cntryl.Portia.Jwt` when inbound work carries JWT actor identities. `Cntryl.
 adds native SQL projection repositories through `AddCassie` and `AddCassieProjection`; see the
 [Cassie repository guide](cassie-projections.md). Packages use the
 cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
-Portia 0.10.0 uses Fitz .NET 4.0.0 and requires a compatible Fitz 0.4.0 / Wire 3 broker.
+Portia 0.11.0 uses Fitz .NET 4.1.0 and requires a compatible Fitz 0.4.0 / Wire 3 broker.
 Upgrade the broker and clients together; follow the [Fitz 4 upgrade guide](fitz-4-upgrade.md)
 before reconnecting an existing deployment.
 Add the optional `Cntryl.Portia.Telemetry` package and call `AddOpenTelemetry().WithPortia()` when the

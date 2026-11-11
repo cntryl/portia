@@ -17,7 +17,7 @@ public static class EventAssert
     {
         ArgumentNullException.ThrowIfNull(expected);
         ArgumentNullException.ThrowIfNull(actual);
-        var difference = Difference(expected, actual, expected.GetType().Name, new HashSet<(object, object)>(PairComparer.Instance));
+        var difference = Difference(expected, actual, expected.GetType().Name, [with(PairComparer.Instance)]);
         if (difference is not null)
             throw new InvalidOperationException($"Event payload differs at {difference}.");
     }
@@ -36,7 +36,7 @@ public static class EventAssert
         for (var index = 0; index < expected.Count; index++)
         {
             var difference = Difference(expected[index], actual[index], $"[{index}].{expected[index]?.GetType().Name}",
-                new HashSet<(object, object)>(PairComparer.Instance));
+                [with(PairComparer.Instance)]);
             if (difference is not null)
                 throw new InvalidOperationException($"Event payload differs at {difference}.");
         }

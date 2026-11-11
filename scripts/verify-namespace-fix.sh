@@ -11,7 +11,7 @@ mkdir -p "$portia_output/Features/Orders/Models"
 cat > "$portia_output/NamespaceSmoke.Common.csproj" <<EOF
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <RootNamespace>NamespaceSmoke.Common</RootNamespace>
     <PortiaProjectStructure>true</PortiaProjectStructure>
   </PropertyGroup>
@@ -19,7 +19,7 @@ cat > "$portia_output/NamespaceSmoke.Common.csproj" <<EOF
   <ItemGroup>
     <Analyzer Include="$portia_root/src/Portia.Generators/bin/Release/netstandard2.0/Portia.Generators.dll"/>
     <Analyzer Include="$portia_root/src/Portia.CodeFixes/bin/Release/netstandard2.0/Portia.CodeFixes.dll"/>
-    <Reference Include="Portia.Abstractions" HintPath="$portia_root/src/Portia.Abstractions/bin/Release/net10.0/Portia.Abstractions.dll"/>
+    <Reference Include="Portia.Abstractions" HintPath="$portia_root/src/Portia.Abstractions/bin/Release/net11.0/Portia.Abstractions.dll"/>
   </ItemGroup>
 </Project>
 EOF

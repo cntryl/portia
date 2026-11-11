@@ -34,7 +34,7 @@ public sealed class JsonDomainEventSerializerContractTests
                 7,
                 JsonSerializer.SerializeToNode(ev.Metadata, PortiaCoreJsonContext.Default.DomainEventMetadata)!
                     .AsObject(),
-                JsonSerializer.SerializeToNode(ev, options.GetTypeInfo(typeof(WidgetNamed)))!.AsObject()),
+                JsonSerializer.SerializeToNode(ev, options.GetTypeInfo<WidgetNamed>())!.AsObject()),
             PortiaCoreJsonContext.Default.EventEnvelope);
 
         var actual = serializer.Serialize(ev);

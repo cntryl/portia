@@ -135,7 +135,7 @@ public sealed partial class FleetPartitionRunner(
                 options.Validate(current);
                 var assigned = ready
                     ? assignments.GetAssignments(current, workers, options.WorkerId!)
-                    : new HashSet<string>(StringComparer.Ordinal);
+                    : [with(StringComparer.Ordinal)];
                 var revoked = active.Keys.Where(partition => !assigned.Contains(partition)).ToArray();
                 foreach (var partition in revoked)
                     Cancel(active[partition].Cancellation);

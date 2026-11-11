@@ -368,7 +368,7 @@ public sealed class ProcessorStatusRpcTests
     {
         readonly InMemoryRpcClient _inner = new();
         readonly List<RpcWorkerRegistration> _registrations = [];
-        readonly HashSet<string> _patterns = new(StringComparer.Ordinal);
+        readonly HashSet<string> _patterns = [with(StringComparer.Ordinal)];
         internal int FailedWithdrawals { get; private set; }
         internal bool AllowWithdrawal { get; set; }
         internal bool AllowWithdrawalAfterFailure { get; init; }

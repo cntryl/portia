@@ -10,7 +10,7 @@ static class GeneratorCompilation
 {
     public static IReadOnlyList<Diagnostic> WarningsAsErrorsDiagnostics(string source)
     {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Latest);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
             .Append(typeof(IRemoteRequestSender).Assembly.Location)
@@ -33,7 +33,7 @@ static class GeneratorCompilation
     public static IReadOnlyList<Diagnostic> Diagnostics(string source,
         IReadOnlyCollection<MetadataReference> additionalReferences, params IIncrementalGenerator[] generators)
     {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
@@ -59,7 +59,7 @@ static class GeneratorCompilation
     public static IReadOnlyList<Diagnostic> Diagnostics(string source,
         IReadOnlyCollection<MetadataReference> additionalReferences, params DiagnosticAnalyzer[] analyzers)
     {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
@@ -80,7 +80,7 @@ static class GeneratorCompilation
     public static IReadOnlyList<Diagnostic> OutputDiagnostics(string source,
         IReadOnlyCollection<MetadataReference> additionalReferences, params IIncrementalGenerator[] generators)
     {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
@@ -108,7 +108,7 @@ static class GeneratorCompilation
 
     static Assembly Compile(string source, string? suppressedDiagnostic, params IIncrementalGenerator[] generators)
     {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
@@ -148,7 +148,7 @@ static class GeneratorCompilation
         IReadOnlyCollection<MetadataReference> additionalReferences,
         params IIncrementalGenerator[] generators)
     {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
@@ -173,7 +173,7 @@ static class GeneratorCompilation
 
     public static MetadataReference ReferenceNamed(string assemblyName, string source, params IIncrementalGenerator[] generators)
     {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)

@@ -358,7 +358,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     }
 
     static string? DocumentationSummary(INamedTypeSymbol type) =>
-        DocumentationSummary(type, new HashSet<ISymbol>(SymbolEqualityComparer.Default));
+        DocumentationSummary(type, [with(SymbolEqualityComparer.Default)]);
 
     static string? DocumentationSummary(INamedTypeSymbol type, HashSet<ISymbol> visited)
     {

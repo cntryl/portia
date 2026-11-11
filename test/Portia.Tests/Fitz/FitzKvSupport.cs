@@ -9,7 +9,7 @@ namespace Cntryl.Portia;
 /// </summary>
 sealed class FakeKvClient : IKvClient
 {
-    public Dictionary<string, byte[]> Committed { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, byte[]> Committed { get; } = [with(StringComparer.Ordinal)];
 
     public List<FakeKvTransaction> Transactions { get; } = [];
 
@@ -34,7 +34,7 @@ sealed class FakeKvClient : IKvClient
     ///     at BEGIN for a ReadWrite transaction's lifetime, so a second writer is rejected rather than
     ///     queued — modeled here so a test can see two components contending for one resource.
     /// </summary>
-    internal HashSet<string> WriteLocks { get; } = new(StringComparer.Ordinal);
+    internal HashSet<string> WriteLocks { get; } = [with(StringComparer.Ordinal)];
 
     public Task<IKvTransaction> BeginAsync(string route, KvMode mode = KvMode.ReadWrite,
         CancellationToken cancellationToken = default)
@@ -62,7 +62,7 @@ sealed class FakeKvClient : IKvClient
 sealed class FakeKvTransaction(FakeKvClient client, string route, KvMode mode)
     : IKvTransaction
 {
-    readonly Dictionary<string, byte[]> _staged = new(StringComparer.Ordinal);
+    readonly Dictionary<string, byte[]> _staged = [with(StringComparer.Ordinal)];
 
     public string Route => route;
 

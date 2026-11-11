@@ -12,7 +12,7 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
     Func<Type, Type, bool?>? schemaCollectionElementIsNullable)
 {
     readonly Dictionary<Type, string> _activeMappings = [];
-    readonly HashSet<JsonNode> _processed = new(ReferenceEqualityComparer.Instance);
+    readonly HashSet<JsonNode> _processed = [with(ReferenceEqualityComparer.Instance)];
 
     public JsonNode Export(Type type, bool rootIsNullable = false) => Export(type, [], rootIsNullable);
 

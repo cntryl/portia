@@ -7,7 +7,7 @@ namespace Cntryl.Portia;
 
 sealed class FleetAssignmentCache
 {
-    readonly Dictionary<string, string?> _owners = new(StringComparer.Ordinal);
+    readonly Dictionary<string, string?> _owners = [with(StringComparer.Ordinal)];
     byte[][] _workerIds = [];
     string[] _workers = [];
 

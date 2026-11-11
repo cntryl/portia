@@ -189,14 +189,14 @@ public static class PortiaAdminMcpExtensions
         _ => "Verify processing of the approved unit without asserting business success."
     };
 
-    static readonly JsonElement InputSchema = JsonDocument.Parse("""
+    static readonly JsonElement InputSchema = JsonElement.Parse("""
         {"type":"object","properties":{
           "scope":{"type":"object","properties":{"tenant":{"type":["string","null"]}},"required":["tenant"],"additionalProperties":false},
           "target":{"type":"object","properties":{"processor":{"type":"string"},"pattern":{"type":"string"},
              "scope":{"type":"object","properties":{"tenant":{"type":["string","null"]}},"required":["tenant"]},"rebuildId":{"type":["string","null"]}},"required":["processor","pattern","scope"]},
           "attemptId":{"type":"string","format":"uuid"},"planId":{"type":"string","format":"uuid"}},
           "required":["scope"],"additionalProperties":false}
-        """).RootElement.Clone();
+        """);
 
     static async ValueTask<CallToolResult> CallAsync(ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call, CancellationToken ct)
     {

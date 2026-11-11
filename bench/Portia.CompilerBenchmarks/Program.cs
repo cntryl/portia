@@ -34,7 +34,7 @@ await CompilerCampaign.RunAsync(args[0], args[1], args.Length > 2 ? int.Parse(ar
 
 static class CompilerCampaign
 {
-    static readonly CSharpParseOptions ParseOptions = new CSharpParseOptions(LanguageVersion.Preview)
+    static readonly CSharpParseOptions ParseOptions = new CSharpParseOptions(LanguageVersion.Latest)
         .WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
     static readonly CSharpCompilationOptions CompilationOptions = new(OutputKind.DynamicallyLinkedLibrary,
         optimizationLevel: OptimizationLevel.Release, nullableContextOptions: NullableContextOptions.Enable,
@@ -271,8 +271,8 @@ static class CompilerCampaign
             File.WriteAllBytes(Path.Combine(directory, "CompilerFeature" + index + ".dll"), feature.Image);
         var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
         var project = new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"),
-            new XElement("PropertyGroup", new XElement("TargetFramework", "net10.0"),
-                new XElement("Nullable", "enable"), new XElement("LangVersion", "preview"),
+            new XElement("PropertyGroup", new XElement("TargetFramework", "net11.0"),
+                new XElement("Nullable", "enable"), new XElement("LangVersion", "15.0"),
                 new XElement("InterceptorsNamespaces", "Cntryl.Portia.Generated"),
                 new XElement("IsPackable", "false"), new XElement("EnableNETAnalyzers", "false"),
                 new XElement("RestorePackagesWithLockFile", "true")),

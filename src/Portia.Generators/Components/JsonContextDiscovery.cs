@@ -21,7 +21,10 @@ static class JsonContextDiscovery
 
     public static IncrementalValueProvider<ImmutableArray<DiscoveredJsonContext>> ReferencedContexts(
         IncrementalGeneratorInitializationContext context) =>
-        context.CompilationProvider.Select(static (compilation, _) => ReferencedJsonContexts(compilation));
+        context.CompilationProvider.Select(static (compilation, _) => ReferencedJsonContexts(compilation))
+            // A compilation edit creates a new array even when its referenced factories did not change.
+            .WithComparer(ContextsComparer.Instance)
+            .WithTrackingName("PortiaReferencedJsonContexts");
 
     static DiscoveredJsonContext? JsonContextModel(INamedTypeSymbol symbol) =>
         JsonContextShape.UnsupportedReason(symbol) is null ? new(symbol.ToDisplayString(), Type(symbol)) : null;
@@ -54,6 +57,25 @@ static class JsonContextDiscovery
     }
 
     static string Type(ITypeSymbol symbol) => symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+    sealed class ContextsComparer : IEqualityComparer<ImmutableArray<DiscoveredJsonContext>>
+    {
+        internal static readonly ContextsComparer Instance = new();
+
+        public bool Equals(ImmutableArray<DiscoveredJsonContext> x, ImmutableArray<DiscoveredJsonContext> y) =>
+            x.IsDefault == y.IsDefault && (x.IsDefault || x.SequenceEqual(y));
+
+        public int GetHashCode(ImmutableArray<DiscoveredJsonContext> contexts)
+        {
+            var hash = 17;
+            if (!contexts.IsDefault)
+            {
+                foreach (var context in contexts)
+                    hash = unchecked(hash * 31 + context.GetHashCode());
+            }
+            return hash;
+        }
+    }
 }
 
 sealed record DiscoveredJsonContext(string DisplayName, string TypeName);

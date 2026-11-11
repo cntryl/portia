@@ -94,7 +94,7 @@ public sealed class McpResourceOptions<TOut> : McpEntryOptions
 /// <summary>Configures prompt arguments and visibility.</summary>
 public sealed class McpPromptOptions : McpEntryOptions
 {
-    internal Dictionary<string, bool> Arguments { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, bool> Arguments { get; } = [with(StringComparer.Ordinal)];
     /// <summary>Declares a required string argument.</summary>
     public void Required(string name) => Add(name, true);
     /// <summary>Declares an optional string argument.</summary>
@@ -146,7 +146,7 @@ abstract class McpResourceEntry(Type requestType, McpEntryOptions options, strin
 
     internal bool Match(string uri, out Dictionary<string, string> values)
     {
-        values = new(StringComparer.Ordinal);
+        values = [with(StringComparer.Ordinal)];
         if (!McpUri.TryValidate(uri))
             return false;
         var candidate = uri.Split('/');
@@ -191,7 +191,7 @@ sealed class McpResourceEntry<TRequest, TOut>(string template,
         else
         {
             var text = options.Text is { } projection ? projection(result.Value)
-                : JsonSerializer.Serialize(result.Value, json.GetTypeInfo(typeof(TOut)));
+                : JsonSerializer.Serialize(result.Value, json.GetTypeInfo<TOut>());
             content = new TextResourceContents { Uri = uri, MimeType = MimeType, Text = text };
         }
         return new ReadResourceResult

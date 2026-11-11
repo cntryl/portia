@@ -6,7 +6,7 @@ portia_example_root="$portia_qualification_root/examples/Portia.Accounts"
 portia_compose_file="$portia_example_root/compose.yaml"
 portia_project="portia-accounts-qualification-$$"
 portia_evidence_directory=${1:-"$portia_qualification_root/artifacts/account-otel"}
-portia_package_version=${PORTIA_SMOKE_PACKAGE_VERSION:-0.10.0}
+portia_package_version=${PORTIA_SMOKE_PACKAGE_VERSION:-0.11.0}
 portia_test_project="$portia_example_root/Portia.Accounts.Tests/Portia.Accounts.Tests.csproj"
 portia_api_project="$portia_example_root/Portia.Accounts.Api/Portia.Accounts.Api.csproj"
 portia_worker_project="$portia_example_root/Portia.Accounts.Worker/Portia.Accounts.Worker.csproj"
@@ -91,12 +91,12 @@ export OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://127.0.0.1:4317
 export OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://127.0.0.1:4317
 export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 
-dotnet "$portia_example_root/Portia.Accounts.Worker/bin/Release/net10.0/Portia.Accounts.Worker.dll" \
+dotnet "$portia_example_root/Portia.Accounts.Worker/bin/Release/net11.0/Portia.Accounts.Worker.dll" \
   >"$portia_evidence_directory/worker.log" 2>&1 &
 portia_worker_pid=$!
 ASPNETCORE_ENVIRONMENT=Development \
 ASPNETCORE_URLS=http://127.0.0.1:5088 \
-  dotnet "$portia_example_root/Portia.Accounts.Api/bin/Release/net10.0/Portia.Accounts.Api.dll" \
+  dotnet "$portia_example_root/Portia.Accounts.Api/bin/Release/net11.0/Portia.Accounts.Api.dll" \
   >"$portia_evidence_directory/api.log" 2>&1 &
 portia_api_pid=$!
 

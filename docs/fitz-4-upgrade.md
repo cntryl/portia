@@ -1,13 +1,15 @@
 # Upgrading to Fitz .NET 4
 
-Portia 0.10.0 targets `Cntryl.Fitz.*` 4.0.0 and requires Fitz server 0.4.0 / Wire 3.
+Portia 0.11.0 targets `Cntryl.Fitz.*` 4.1.0 and requires Fitz server 0.4.0 / Wire 3.
 Integration, example, benchmark, and crash-durability fixtures pin the published 0.4.0 broker image.
-See the [.NET client release notes](https://github.com/cntryl/fitz-dotnet/blob/v4.0.0/CHANGELOG.md)
+See the [.NET client release notes](https://github.com/cntryl/fitz-dotnet/blob/v4.1.0/CHANGELOG.md)
 and [broker migration guide](https://github.com/cntryl/fitz/blob/v0.4.0/docs/operations/migration-guide.md#040-coordinated-wire-3-broker-and-sdk-cutover).
 
 ## Coordinated broker and client cutover
 
-Upgrade the broker and every connected SDK together. Fitz 0.4.0 accepts only Wire 3 and cannot
+When moving from Wire 1 or Wire 2, upgrade the broker and every connected SDK together.
+Fitz .NET 4.0 to 4.1 retains the same Fitz 0.4.0 / Wire 3 broker contract.
+Fitz 0.4.0 accepts only Wire 3 and cannot
 serve Wire 1 or Wire 2 clients. Stop traffic and consumers before replacing the broker and
 clients, and roll back both together. Reconnecting creates a fresh ephemeral session; clients
 reauthenticate and recreate subscriptions and worker registrations.
