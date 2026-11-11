@@ -65,8 +65,10 @@ scripts/compiler-campaign.sh /tmp/portia-compiler-current 20 combined 2
 
 ## Remaining qualification
 
-This campaign establishes compiler and analyzer behavior on one macOS Arm64 host. It does not
+This campaign establishes compiler and analyzer behavior on one macOS Arm64 host. It records one
+generated-output hash per source snapshot and tracked-step counts for edits, but does not establish
+cross-version output identity or the expected per-edit invalidation behavior. It also does not
 qualify runtime hot paths or Linux NativeAOT. Hosted CI on the exact .NET 11 change and MCP
 description branch passed build, test, packed-consumer, and NativeAOT lanes; retain the CI checks
-as the platform qualification evidence. Generated-code ergonomics and a full runtime regression
-campaign remain open under issue #175.
+as the platform qualification evidence. Output identity and invalidation, runtime regressions,
+generated-code ergonomics, and a full runtime campaign remain open under issue #175.
