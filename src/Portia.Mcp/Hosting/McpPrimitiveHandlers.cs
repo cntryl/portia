@@ -105,7 +105,7 @@ static class McpPrimitiveHandlers
             if (catalog.FixedResourcesByUri.TryGetValue(uri!, out var fixedEntry))
             {
                 entry = fixedEntry;
-                values = new Dictionary<string, string>(StringComparer.Ordinal);
+                values = [with(StringComparer.Ordinal)];
             }
             else
             {
