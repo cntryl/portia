@@ -16,6 +16,7 @@ using System.Xml.Linq;
 using Cntryl.Portia;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 if (args.Length > 0 && args[0] == "namespace-code-action")
@@ -27,6 +28,14 @@ if (args.Length > 0 && args[0] == "namespace-code-action")
     return;
 }
 
+if (args.Length > 0 && args[0] == "output-identity")
+{
+    if (args.Length < 3)
+        throw new ArgumentException("Usage: output-identity OUTPUT JSON_SOURCE_GENERATOR_DLL");
+    await CompilerCampaign.OutputIdentityAsync(args[1], args[2]);
+    return;
+}
+
 if (args.Length < 2)
     throw new ArgumentException("Usage: OUTPUT JSON_SOURCE_GENERATOR_DLL [REPETITIONS=20] [WORKLOAD_FILTER]");
 await CompilerCampaign.RunAsync(args[0], args[1], args.Length > 2 ? int.Parse(args[2], CultureInfo.InvariantCulture) : 20,
@@ -34,6 +43,12 @@ await CompilerCampaign.RunAsync(args[0], args[1], args.Length > 2 ? int.Parse(ar
 
 static class CompilerCampaign
 {
+    static readonly Encoding SnapshotEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+    static readonly JsonSerializerOptions OutputJsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
     static readonly CSharpParseOptions ParseOptions = new CSharpParseOptions(LanguageVersion.Latest)
         .WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
     static readonly CSharpCompilationOptions CompilationOptions = new(OutputKind.DynamicallyLinkedLibrary,
@@ -189,6 +204,232 @@ static class CompilerCampaign
         await CancellationAsync(output, jsonGenerator);
     }
 
+    internal static async Task OutputIdentityAsync(string output, string jsonGeneratorPath)
+    {
+        Directory.CreateDirectory(output);
+        var jsonGenerator = Assembly.LoadFrom(jsonGeneratorPath).GetTypes()
+            .Single(type => !type.IsAbstract && typeof(IIncrementalGenerator).IsAssignableFrom(type));
+        var workload = Workloads.Single(item => item.Name == "combined");
+        var features = Enumerable.Range(0, workload.Features).Select(index => Feature(index, false, jsonGenerator)).ToArray();
+        var replacement = Feature(0, true, jsonGenerator);
+        var trees = Sources(workload);
+        EmitFixture(output, workload.Name, trees, features);
+        var replacementDirectory = Path.Combine(output, "inputs", "referenced-feature-replacement");
+        Directory.CreateDirectory(replacementDirectory);
+        await File.WriteAllTextAsync(Path.Combine(replacementDirectory, "CompilerFeature0.Feature.cs"), replacement.Source, SnapshotEncoding);
+        await File.WriteAllBytesAsync(Path.Combine(replacementDirectory, "CompilerFeature0.replacement.dll"), replacement.Image);
+        var compilation = CreateCompilation("CompilerConsumer", trees, features);
+        var variants = Variants(compilation, trees, features[0], replacement);
+        var initialDriver = Driver(jsonGenerator).RunGeneratorsAndUpdateCompilation(
+            compilation, out var initialGenerated, out var initialDiagnostics);
+        Validate(initialGenerated, initialDiagnostics);
+
+        var contentRoot = Path.Combine(Directory.GetParent(Path.GetFullPath(output))!.FullName, "generated-source-content");
+        Directory.CreateDirectory(contentRoot);
+        var baselineOutputs = OutputFiles(initialDriver.GetRunResult(), jsonGenerator);
+        var cases = new List<object>();
+        foreach (var (name, variant) in variants)
+        {
+            GeneratorDriver variantDriver;
+            Compilation generated;
+            ImmutableArray<Diagnostic> diagnostics;
+            if (name == "unchanged")
+            {
+                variantDriver = initialDriver;
+                generated = initialGenerated;
+                diagnostics = initialDiagnostics;
+            }
+            else
+            {
+                variantDriver = initialDriver.RunGeneratorsAndUpdateCompilation(variant, out generated, out diagnostics);
+                Validate(generated, diagnostics);
+            }
+
+            var runResult = variantDriver.GetRunResult();
+            var outputFiles = OutputFiles(runResult, jsonGenerator);
+            var contracts = VerifyGeneratedContracts(variant, runResult);
+            foreach (var file in outputFiles)
+            {
+                var path = Path.Combine(contentRoot, file.Hash + ".g.cs");
+                if (!File.Exists(path) || HashFile(path) != file.Hash)
+                    await File.WriteAllTextAsync(path, file.Source, SnapshotEncoding);
+            }
+            var currentMap = outputFiles.ToDictionary(file => file.Generator + "|" + file.HintName, file => file.Hash,
+                StringComparer.Ordinal);
+            var initialMap = baselineOutputs.ToDictionary(file => file.Generator + "|" + file.HintName, file => file.Hash,
+                StringComparer.Ordinal);
+            var added = currentMap.Keys.Except(initialMap.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            var removed = initialMap.Keys.Except(currentMap.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            var changed = currentMap.Keys.Intersect(initialMap.Keys, StringComparer.Ordinal)
+                .Where(key => currentMap[key] != initialMap[key]).Order(StringComparer.Ordinal).ToArray();
+            var sourceInputs = variant.SyntaxTrees.OrderBy(tree => tree.FilePath, StringComparer.Ordinal)
+                .Select(tree => new
+                {
+                    path = tree.FilePath,
+                    sha256 = Hash(tree.GetText().ToString())
+                }).ToArray();
+            var inputDirectory = Path.Combine(output, "inputs", name);
+            Directory.CreateDirectory(inputDirectory);
+            foreach (var tree in variant.SyntaxTrees)
+                await File.WriteAllTextAsync(Path.Combine(inputDirectory, Path.GetFileName(tree.FilePath)),
+                    tree.GetText().ToString(), SnapshotEncoding);
+
+            cases.Add(new
+            {
+                edit = name,
+                sourceInputs,
+                sourceHash = Hash(string.Join("\n", variant.SyntaxTrees.Select(tree => tree.GetText().ToString()))),
+                generatedSourceHash = Hash(string.Join("\n", outputFiles.OrderBy(file => file.Generator, StringComparer.Ordinal)
+                    .ThenBy(file => file.HintName, StringComparer.Ordinal).Select(file => file.Hash))),
+                generatedBytes = outputFiles.Sum(file => Encoding.UTF8.GetByteCount(file.Source)),
+                outputCompiled = true,
+                contracts,
+                outputs = outputFiles.Select(file => new
+                {
+                    file.Generator,
+                    file.HintName,
+                    file.Hash,
+                    file.Bytes,
+                    content = file.Hash + ".g.cs"
+                }).ToArray(),
+                deltaFromUnchanged = new { added, removed, changed },
+                trackedSteps = runResult.Results.Select((result, index) => new
+                {
+                    generator = index < GeneratorTypes.Length ? GeneratorTypes[index].FullName : jsonGenerator.FullName,
+                    steps = result.TrackedSteps.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => new
+                    {
+                        name = pair.Key,
+                        reasons = Reasons(pair.Value)
+                    })
+                }).ToArray()
+            });
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(output, "manifest.json"), JsonSerializer.Serialize(new
+        {
+            sourceCommit = Environment.GetEnvironmentVariable("PORTIA_SOURCE_COMMIT"),
+            harnessSourceHash = Environment.GetEnvironmentVariable("PORTIA_HARNESS_HASH"),
+            framework = RuntimeInformation.FrameworkDescription,
+            os = RuntimeInformation.OSDescription,
+            architecture = RuntimeInformation.ProcessArchitecture.ToString(),
+            roslyn = typeof(CSharpCompilation).Assembly.GetName().Version?.ToString(),
+            workload = "combined",
+            sourceHash = Hash(string.Join("\n", trees.Select(tree => tree.GetText().ToString()))),
+            featureHashes = features.Select(feature => feature.Hash).ToArray(),
+            featureSourceHashes = features.Select(feature => Hash(feature.Source)).ToArray(),
+            replacementFeatureHash = replacement.Hash,
+            replacementFeatureSourceHash = Hash(replacement.Source),
+            jsonGeneratorHash = HashFile(jsonGeneratorPath),
+            generators = GeneratorAssemblies.Select(assembly => new
+            {
+                name = assembly.GetName().Name,
+                version = assembly.GetName().Version?.ToString(),
+                hash = HashFile(assembly.Location)
+            }),
+            cases
+        }, OutputJsonOptions));
+    }
+
+    static OutputContracts VerifyGeneratedContracts(Compilation compilation, GeneratorDriverRunResult result)
+    {
+        var expectedEvents = compilation.SyntaxTrees.SelectMany(tree =>
+            {
+                var semanticModel = compilation.GetSemanticModel(tree);
+                return tree.GetRoot().DescendantNodes().OfType<RecordDeclarationSyntax>()
+                    .Select(declaration => semanticModel.GetDeclaredSymbol(declaration))
+                    .Where(symbol => symbol?.BaseType?.ToDisplayString() == "Cntryl.Portia.DomainEvent")
+                    .Select(symbol =>
+                    {
+                        var attribute = symbol!.GetAttributes().Single(item =>
+                            item.AttributeClass?.ToDisplayString() == "Cntryl.Portia.DiscriminatorAttribute");
+                        return new EventIdentity(TypeName(symbol), (string)attribute.ConstructorArguments[0].Value!,
+                            (int)attribute.ConstructorArguments[1].Value!);
+                    });
+            }).OrderBy(item => item.Type, StringComparer.Ordinal).ToArray();
+        var catalogIndex = Array.FindIndex(GeneratorTypes, type => type.Name == "DomainEventCatalogGenerator");
+        var actualEvents = result.Results[catalogIndex].GeneratedSources.SelectMany(source =>
+                CSharpSyntaxTree.ParseText(source.SourceText, ParseOptions).GetRoot().DescendantNodes()
+                    .OfType<InvocationExpressionSyntax>())
+            .Select(ParseEventRegistration).Where(item => item is not null).Select(item => item!)
+            .OrderBy(item => item.Type, StringComparer.Ordinal).ToArray();
+        if (!expectedEvents.SequenceEqual(actualEvents))
+        {
+            var expectedSet = expectedEvents.ToHashSet();
+            var actualSet = actualEvents.ToHashSet();
+            throw new InvalidOperationException($"Generated domain-event catalog does not match source event identities "
+                + $"(expected {expectedEvents.Length}, actual {actualEvents.Length}; "
+                + $"expected sample: {string.Join(";", expectedEvents.Take(3))}; "
+                + $"actual sample: {string.Join(";", actualEvents.Take(3))}; "
+                + $"expected-only: {string.Join(";", expectedSet.Except(actualSet).Take(3))}; "
+                + $"actual-only: {string.Join(";", actualSet.Except(expectedSet).Take(3))}).");
+        }
+
+        var expectedRoots = compilation.SyntaxTrees.SelectMany(tree =>
+                tree.GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>()
+                    .Select(declaration => compilation.GetSemanticModel(tree).GetDeclaredSymbol(declaration)))
+            .Where(symbol => symbol?.GetAttributes().Any(attribute =>
+                attribute.AttributeClass?.ToDisplayString() == "Cntryl.Portia.PortiaJsonContextAttribute") == true)
+            .SelectMany(context => context!.GetAttributes().Where(attribute =>
+                    attribute.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializableAttribute")
+                .Select(attribute => new JsonRootIdentity(TypeName((INamedTypeSymbol)attribute.ConstructorArguments[0].Value!), TypeName(context))))
+            .Distinct().OrderBy(item => item.ContextType, StringComparer.Ordinal)
+            .ThenBy(item => item.RootType, StringComparer.Ordinal).ToArray();
+        var rootsIndex = Array.FindIndex(GeneratorTypes, type => type.Name == "JsonRootMarkerGenerator");
+        var actualRoots = result.Results[rootsIndex].GeneratedSources.SelectMany(source =>
+                CSharpSyntaxTree.ParseText(source.SourceText, ParseOptions).GetRoot().DescendantNodes()
+                    .OfType<AttributeListSyntax>().Where(list => list.Target?.Identifier.ValueText == "assembly")
+                    .SelectMany(list => list.Attributes).Where(attribute =>
+                        attribute.Name.ToString().EndsWith("PortiaJsonRootAttribute", StringComparison.Ordinal)))
+            .Select(attribute => attribute.ArgumentList!.Arguments.Select(argument => argument.Expression)
+                .OfType<TypeOfExpressionSyntax>().Select(typeOf => NormalizeTypeName(typeOf.Type.ToString())).Take(2).ToArray())
+            .Where(arguments => arguments.Length == 2)
+            .Select(arguments => new JsonRootIdentity(arguments[0], arguments[1]))
+            .Distinct().OrderBy(item => item.ContextType, StringComparer.Ordinal)
+            .ThenBy(item => item.RootType, StringComparer.Ordinal).ToArray();
+        if (!expectedRoots.SequenceEqual(actualRoots))
+            throw new InvalidOperationException("Generated JSON-root identities do not match source contexts.");
+
+        return new OutputContracts(expectedEvents, actualEvents, expectedRoots, actualRoots);
+    }
+
+    static EventIdentity? ParseEventRegistration(InvocationExpressionSyntax invocation)
+    {
+        var generic = invocation.Expression switch
+        {
+            GenericNameSyntax genericName => genericName,
+            MemberAccessExpressionSyntax { Name: GenericNameSyntax genericName } => genericName,
+            _ => null
+        };
+        if (generic?.TypeArgumentList.Arguments.SingleOrDefault() is not { } typeArgument)
+            return null;
+        var arguments = invocation.ArgumentList.Arguments.Select(argument => argument.Expression).ToArray();
+        var eventName = arguments.OfType<LiteralExpressionSyntax>().Select(literal => literal.Token.Value)
+            .OfType<string>().SingleOrDefault(value => value.StartsWith("compiler.", StringComparison.Ordinal));
+        var version = arguments.OfType<LiteralExpressionSyntax>().Select(literal => literal.Token.Value)
+            .OfType<int>().SingleOrDefault();
+        if (eventName is null || !NormalizeTypeName(typeArgument.ToString()).StartsWith("CompilerFixtures.", StringComparison.Ordinal))
+            return null;
+        return new EventIdentity(NormalizeTypeName(typeArgument.ToString()), eventName, version);
+    }
+
+    static string TypeName(ITypeSymbol type) => NormalizeTypeName(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+    static string NormalizeTypeName(string value) => value.Replace("global::", string.Empty, StringComparison.Ordinal);
+    sealed record EventIdentity(string Type, string Name, int Version);
+    sealed record JsonRootIdentity(string RootType, string ContextType);
+    sealed record OutputContracts(EventIdentity[] ExpectedEvents, EventIdentity[] GeneratedEvents,
+        JsonRootIdentity[] ExpectedJsonRoots, JsonRootIdentity[] GeneratedJsonRoots);
+
+    static OutputFile[] OutputFiles(GeneratorDriverRunResult result, Type jsonGenerator) => result.Results
+        .SelectMany((generator, index) => generator.GeneratedSources.Select(source => new OutputFile(
+            index < GeneratorTypes.Length ? GeneratorTypes[index].FullName! : jsonGenerator.FullName!,
+            source.HintName,
+            source.SourceText.ToString(),
+            Hash(source.SourceText.ToString()),
+            Encoding.UTF8.GetByteCount(source.SourceText.ToString()))))
+        .OrderBy(file => file.Generator, StringComparer.Ordinal).ThenBy(file => file.HintName, StringComparer.Ordinal).ToArray();
+
+    sealed record OutputFile(string Generator, string HintName, string Source, string Hash, int Bytes);
+
     static async Task WriteAtomicAsync(string path, string value)
     {
         var temporary = path + ".tmp";
@@ -268,7 +509,12 @@ static class CompilerCampaign
         foreach (var tree in trees)
             File.WriteAllText(Path.Combine(directory, tree.FilePath), tree.GetText().ToString());
         foreach (var (feature, index) in features.Select((feature, index) => (feature, index)))
+        {
             File.WriteAllBytes(Path.Combine(directory, "CompilerFeature" + index + ".dll"), feature.Image);
+            var featureSourceDirectory = Path.Combine(output, "feature-inputs", "CompilerFeature" + index);
+            Directory.CreateDirectory(featureSourceDirectory);
+            File.WriteAllText(Path.Combine(featureSourceDirectory, "Feature.cs"), feature.Source, SnapshotEncoding);
+        }
         var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
         var project = new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"),
             new XElement("PropertyGroup", new XElement("TargetFramework", "net11.0"),
@@ -313,7 +559,7 @@ static class CompilerCampaign
         if (!emission.Success)
             throw new InvalidOperationException(string.Join("\n", emission.Diagnostics));
         var bytes = image.ToArray();
-        return new FeatureReference(MetadataReference.CreateFromImage(bytes), Convert.ToHexString(SHA256.HashData(bytes)), bytes);
+        return new FeatureReference(MetadataReference.CreateFromImage(bytes), Convert.ToHexString(SHA256.HashData(bytes)), bytes, source);
     }
 
     static SyntaxTree[] Sources(Workload workload)
@@ -469,7 +715,7 @@ static class CompilerCampaign
     }
 
     sealed record Workload(string Name, int Commands, int Features, int Contexts, int Mappings, int UnrelatedTypes, bool Authorizers = true, bool Guards = true);
-    sealed record FeatureReference(MetadataReference Reference, string Hash, byte[] Image);
+    sealed record FeatureReference(MetadataReference Reference, string Hash, byte[] Image, string Source);
     sealed record Row(string Workload, string Edit, string Component, int Repetition, double Milliseconds,
         long AllocatedBytes, int GeneratedBytes, Dictionary<string, int> Reasons);
 }
