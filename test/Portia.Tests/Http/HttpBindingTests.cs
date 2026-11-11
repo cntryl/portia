@@ -192,7 +192,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
                 {
                     if (!result.IsSuccess)
                         return null;
-                    http.Response.Cookies.Append("session", result.Value, new CookieOptions { HttpOnly = true });
+                    http.Response.Cookies.Append("session", result.Value,
+                        new CookieOptions { HttpOnly = true, Secure = true });
                     http.Response.Headers["X-Signed-In"] = result.Value;
                     return Results.Redirect("/home");
                 })).DisableAntiforgery());
@@ -205,6 +206,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
         Assert.StartsWith("session=jeff", cookie, StringComparison.Ordinal);
         Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -484,7 +486,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
                 .OnResult((http, result) =>
                 {
                     http.Response.Headers.CacheControl = "no-store";
-                    http.Response.Cookies.Append("last_widget", result.Value);
+                    http.Response.Cookies.Append("last_widget", result.Value, new CookieOptions { Secure = true });
                     return null;
                 })));
         var widgetId = Uuid.CreateVersion4();
@@ -494,8 +496,9 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal($"{widgetId} (archived: True)", await response.Content.ReadFromJsonAsync<string>());
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
-        Assert.StartsWith("last_widget=", Assert.Single(response.Headers.GetValues("Set-Cookie")),
-            StringComparison.Ordinal);
+        var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
+        Assert.StartsWith("last_widget=", cookie, StringComparison.Ordinal);
+        Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
