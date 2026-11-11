@@ -42,16 +42,19 @@ def main():
         f"{metadata['processorCount']} logical processors, server GC `{metadata['serverGc']}`",
         f"- MCP packages: `ModelContextProtocol` {dependencies['ModelContextProtocol']}, "
         f"`ModelContextProtocol.AspNetCore` {dependencies['ModelContextProtocol.AspNetCore']}",
-        f"- Samples: {metadata['plan']['Samples']} sequential latencies per operation after "
+        f"- Warm operations: {metadata['plan']['Samples']} sequential latency samples after "
         f"{metadata['plan']['Warmups']} warmups; throughput batches contain "
-        f"{metadata['plan']['ThroughputIterations']} operations.",
+        f"{metadata['plan']['ThroughputIterations']} operations. Startup and initialize are "
+        "single observations per configuration.",
         "- The raw JSONL records every latency sample, throughput duration, process allocation "
         "delta, telemetry count, workload setting, and resolved package version.",
         "",
         "## Startup and protocol initialization",
         "",
         "HTTP startup and initialize are separate. The SDK stdio client combines child-process "
-        "startup and initialize, so it has one row.",
+        "startup and initialize, so it has one row. Startup/initialize numbers are single "
+        "observations; the first application startup includes cold JIT effects, so use them only "
+        "as lifecycle diagnostics.",
         "",
         "| Catalog | Telemetry | HTTP startup (ms) | HTTP initialize (ms) | stdio startup + initialize (ms) |",
         "| ---: | --- | ---: | ---: | ---: |",

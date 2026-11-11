@@ -462,7 +462,9 @@ deterministic 10% sampled tracing, synchronous metric observation, and in-memory
 exporter is configured or awaited.
 
 Each warmed operation retains raw sequential latency samples and reports P50, P95, mean, and a
-separate throughput batch. Allocation is the process-wide managed-byte delta for that batch: the
+separate throughput batch. Startup and initialize are single observations per configuration; use
+them as lifecycle diagnostics because the first app start includes cold JIT effects. Allocation is
+the process-wide managed-byte delta for that batch: the
 loopback HTTP measurement includes both client and in-process server, while stdio counts only the
 parent client process. The stdio SDK combines child startup and MCP initialize, so those two are
 reported together. These boundaries are recorded in the raw metadata and must be kept in mind when
