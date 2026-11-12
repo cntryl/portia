@@ -46,7 +46,36 @@ EOF
 }
 
 portia_globbed="$portia_output/globbed"
+portia_consumer="$portia_output/consumer"
 write_fixture "$portia_globbed" ""
+mkdir "$portia_consumer"
+cat > "$portia_consumer/Consumer.csproj" <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../globbed/Shop.Core.csproj" />
+  </ItemGroup>
+</Project>
+EOF
+cat > "$portia_consumer/CoreTypesConsumer.cs" <<'EOF'
+using Shop.Core.Features.Orders.Values;
+
+namespace Shop.Consumer;
+
+public static class CoreTypesConsumer
+{
+    public static (Price Price, Currency Currency) Create() =>
+        (new Price("12.50"), new Currency("USD"));
+}
+EOF
+cat > "$portia_globbed/PortiaStructureSmoke.slnx" <<'EOF'
+<Solution>
+  <Project Path="Shop.Core.csproj" />
+  <Project Path="../consumer/Consumer.csproj" />
+</Solution>
+EOF
 dotnet restore "$portia_globbed/PortiaStructureSmoke.slnx" > "$portia_globbed/restore.log" 2>&1
 dotnet run --project "$portia_root/eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj" \
   --configuration Release --no-build -- fix-application-structure --solution "$portia_globbed/PortiaStructureSmoke.slnx" \
