@@ -121,6 +121,19 @@ Adapter-only rows call the registered Portia tool or resource/prompt handler dir
 
 HTTP/stdio measurements include SDK client, server dispatch, protocol, transport, Portia adapter, and handler work. HTTP allocations cover client plus in-process server; stdio allocations cover the parent process. Throughput and allocations use a separate 50-operation batch. Direct request-bus and REST rows are controls, not server-only or adapter-only timings.
 
+## Untimed end-to-end payload verification
+
+The timed HTTP/stdio client calls in the captured campaign checked response success and content shape, but did not assert returned payload lengths. Adapter-only results were checked after their timing intervals. A separate fast qualification mode now checks exact UTF-8 byte lengths for 256-byte, 4-KiB, and 64-KiB tool results, JSON resource data, text resources, and rendered prompts, plus exact decoded byte lengths for binary resources, through both Streamable HTTP and stdio. These assertions run outside all timing intervals and emit no benchmark rows. This follow-up gate does not modify or retroactively verify the historical raw timing rows.
+
+Run the repeatable payload correctness gate with:
+
+```sh
+dotnet run --configuration Release --project bench/Portia.Benchmarks -- \
+  --mcp-protocol-payload-qualification
+```
+
+CI is configured to run this gate after building the benchmark project.
+
 ## Reproduction
 
 From the repository root, restore and build the benchmark project, then run:

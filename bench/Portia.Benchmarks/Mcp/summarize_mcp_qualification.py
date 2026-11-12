@@ -191,6 +191,21 @@ def main():
             "and stdio operation rows include SDK client, protocol, transport, Portia adapter, and "
             "handler work. Direct bus and REST rows are controls only.",
             "",
+            "## Untimed payload correctness gate",
+            "",
+            "The timed HTTP/stdio calls check response success and content shape; they do not assert "
+            "returned payload lengths. A separate fast gate verifies exact 256-byte, 4-KiB, and "
+            "64-KiB tool results, JSON resource data, text resources, binary resources, and rendered "
+            "prompts through both real transports. Its checks run outside timing intervals and do "
+            "not add measurement rows or retroactively validate a captured timing artifact.",
+            "",
+            "Run the correctness gate independently with:",
+            "",
+            "```sh",
+            "dotnet run --configuration Release --no-build --project bench/Portia.Benchmarks -- \\",
+            "  --mcp-protocol-payload-qualification",
+            "```",
+            "",
             "## Reproduction",
             "",
             "From the repository root, restore/build the benchmark project, then run:",

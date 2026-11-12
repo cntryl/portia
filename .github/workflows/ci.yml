@@ -58,6 +58,9 @@ jobs:
       - name: Qualify runtime performance fixtures with JSON reflection disabled
         run: dotnet run --project bench/Portia.Benchmarks/Portia.Benchmarks.csproj --configuration Release --no-build -- --runtime-qualification
 
+      - name: Qualify MCP payload sizes over HTTP and stdio
+        run: dotnet run --project bench/Portia.Benchmarks/Portia.Benchmarks.csproj --configuration Release --no-build -- --mcp-protocol-payload-qualification
+
       - name: Test solution
         run: >-
           dotnet test Portia.slnx
