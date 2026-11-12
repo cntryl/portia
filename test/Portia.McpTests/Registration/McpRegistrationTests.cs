@@ -119,6 +119,19 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
+    public void ShouldUseExplicitToolDescriptionOverGeneratedRequestSummary()
+    {
+        const string explicitDescription = "Uses the caller-provided description.";
+        var services = new ServiceCollection();
+        _ = services.AddPortia().AddRequestHandler<ReadGreetingHandler>()
+            .AddMcpTool<ReadGreeting>(tool => tool.DescribedAs(explicitDescription));
+        using var provider = services.BuildServiceProvider();
+        var tool = Assert.Single(provider.GetServices<McpServerTool>());
+
+        Assert.Equal(explicitDescription, tool.ProtocolTool.Description);
+    }
+
+    [Fact]
     public void ShouldGeneratePropertyDescriptionsUsingJsonContractNames()
     {
         var services = new ServiceCollection();
