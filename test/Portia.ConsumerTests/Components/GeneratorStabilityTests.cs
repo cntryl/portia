@@ -103,18 +103,31 @@ public sealed class GeneratorStabilityTests
     [Fact]
     public void EveryGeneratorAndAnalyzerIsCovered()
     {
-        Assert.Equal(8, AllGenerators().Length);
-        Assert.Equal(5, AllAnalyzers().Length);
+        // Arrange
+        const int expectedGenerators = 8;
+        const int expectedAnalyzers = 5;
+
+        // Act
+        var generators = AllGenerators();
+        var analyzers = AllAnalyzers();
+
+        // Assert
+        Assert.Equal(expectedGenerators, generators.Length);
+        Assert.Equal(expectedAnalyzers, analyzers.Length);
     }
 
     /// <summary>Every prefix of a realistic file, as it exists while being typed, runs without an exception.</summary>
     [Fact]
     public void NeverThrowOnIncompleteCode()
     {
+        // Arrange
         var failures = new List<string>();
+
+        // Act
         for (var length = 0; length <= Corpus.Length; length += 11)
             failures.AddRange(Failures(Corpus[..length]).Select(failure => $"prefix {length}: {failure}"));
 
+        // Assert
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures.Take(20)));
     }
 
@@ -122,14 +135,18 @@ public sealed class GeneratorStabilityTests
     [Fact]
     public void NeverThrowWithAnyLineMissing()
     {
+        // Arrange
         var lines = Corpus.Split('\n');
         var failures = new List<string>();
+
+        // Act
         for (var index = 0; index < lines.Length; index++)
         {
             var source = string.Join('\n', lines.Where((_, line) => line != index));
             failures.AddRange(Failures(source).Select(failure => $"without line {index + 1}: {failure}"));
         }
 
+        // Assert
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures.Take(20)));
     }
 
@@ -137,9 +154,13 @@ public sealed class GeneratorStabilityTests
     [Fact]
     public void OutputIsDeterministic()
     {
+        // Arrange
         var first = Snapshot(Run(Corpus));
+
+        // Act
         var second = Snapshot(Run(Corpus));
 
+        // Assert
         Assert.NotEmpty(first);
         Assert.Equal(first, second);
     }

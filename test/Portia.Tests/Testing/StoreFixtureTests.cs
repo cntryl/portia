@@ -10,8 +10,13 @@ public sealed class StoreFixtureTests
     [Fact]
     public async Task ShouldDefaultToInMemoryEventStore()
     {
+        // Arrange
+        // The fixture is built with no store supplied.
+
+        // Act
         await using var fixture = new StoreFixture();
 
+        // Assert
         Assert.IsType<InMemoryEventStore>(fixture.Store);
     }
 
@@ -19,9 +24,13 @@ public sealed class StoreFixtureTests
     [Fact]
     public async Task ShouldUseSuppliedEventStore()
     {
+        // Arrange
         var store = new InMemoryEventStore();
+
+        // Act
         await using var fixture = new StoreFixture(store);
 
+        // Assert
         Assert.Same(store, fixture.Store);
     }
 
@@ -29,6 +38,7 @@ public sealed class StoreFixtureTests
     [Fact]
     public async Task ShouldHydrateStateSavedThroughRepository()
     {
+        // Arrange
         await using var fixture = new StoreFixture();
         var id = Uuid.CreateVersion4();
 
@@ -36,8 +46,10 @@ public sealed class StoreFixtureTests
         aggregate.ChangeValue(3);
         await fixture.Repository.SaveAsync(aggregate, new RequestDispatchContext(RequestActor.System));
 
+        // Act
         var hydrated = await fixture.Repository.HydrateAsync(new TestAggregate(id));
 
+        // Assert
         Assert.Equal(3, hydrated.Value);
     }
 
@@ -45,6 +57,7 @@ public sealed class StoreFixtureTests
     [Fact]
     public async Task ShouldExecuteAndHydrateThroughRepository()
     {
+        // Arrange
         await using var fixture = new StoreFixture();
         var id = Uuid.CreateVersion4();
 
@@ -54,8 +67,10 @@ public sealed class StoreFixtureTests
             return AggregateOutcome.Commit(Result.Success);
         }, new RequestDispatchContext(RequestActor.System));
 
+        // Act
         var hydrated = await fixture.Repository.HydrateAsync(new TestAggregate(id));
 
+        // Assert
         Assert.Equal(6, hydrated.Value);
     }
 
@@ -63,8 +78,13 @@ public sealed class StoreFixtureTests
     [Fact]
     public async Task ShouldResolveAggregateExecutorFromServices()
     {
+        // Arrange
         await using var fixture = new StoreFixture();
 
-        Assert.NotNull(fixture.Services.GetService(typeof(IAggregateExecutor)));
+        // Act
+        var executor = fixture.Services.GetService(typeof(IAggregateExecutor));
+
+        // Assert
+        Assert.NotNull(executor);
     }
 }

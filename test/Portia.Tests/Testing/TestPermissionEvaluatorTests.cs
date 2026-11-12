@@ -7,11 +7,14 @@ public sealed class TestPermissionEvaluatorTests
     [Fact]
     public async Task ShouldRecordEveryConcurrentEvaluation()
     {
+        // Arrange
         var evaluator = TestPermissionEvaluator.AllowAll();
 
+        // Act
         await Parallel.ForAsync(0, 10_000, async (index, ct) =>
             _ = await evaluator.EvaluateAsync(RequestActor.System, $"p{index}", ct));
 
+        // Assert
         Assert.Equal(10_000, evaluator.EvaluatedPermissions.Distinct().Count());
     }
 }

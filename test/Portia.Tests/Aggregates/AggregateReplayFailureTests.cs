@@ -21,12 +21,17 @@ public sealed class AggregateReplayFailureTests
     [InlineData(2, true, true)]
     public async Task ShouldDiscardAfterReplayApplicationFailure(int failureIndex, bool readOnly, bool useOverride)
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var failure = new InvalidOperationException("Replay mutation failed.");
         var aggregate = new ReplayAggregate(id, failureIndex, useOverride, failure);
         var events = Enumerable.Range(0, 3).Select(index => (DomainEvent)
             DomainEventSeed.Attach(new ValueChanged(index + 1), id, (ulong)index + 1)).ToArray();
+
+        // Act
         IReadOnlyList<DomainEvent> history = readOnly ? new ReadOnlyCollection<DomainEvent>(events) : events;
+
+        // Assert
         Assert.Same(failure, Assert.Throws<InvalidOperationException>(() => aggregate.Load(history)));
         Assert.Equal(failureIndex + 1, aggregate.Applied);
         Assert.Equal((ulong)failureIndex, aggregate.Version);
@@ -51,9 +56,14 @@ public sealed class AggregateReplayFailureTests
     [Fact]
     public void ShouldKeepPreApplyValidationFailureRetryable()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var aggregate = new ReplayAggregate(id, -1, false, new InvalidOperationException());
+
+        // Act
         var first = DomainEventSeed.Attach(new ValueChanged(1), id, 1);
+
+        // Assert
         Assert.Throws<InvalidOperationException>(() => aggregate.Load([first, DomainEventSeed.Attach(new ValueChanged(2), id, 3)]));
         Assert.Equal(0, aggregate.Applied);
         aggregate.Load([first, DomainEventSeed.Attach(new ValueChanged(2), id, 2)]);

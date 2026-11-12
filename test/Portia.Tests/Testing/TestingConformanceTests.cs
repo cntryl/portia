@@ -7,31 +7,61 @@ public sealed class TestingConformanceTests
 {
     /// <summary>A durable deduplication primitive executes one effect per event identity.</summary>
     [Fact]
-    public async Task ShouldAcceptProbeGivenDurableConcurrentReactionDeduplication() =>
-        await ReactionDeduplicationConformance.VerifyAsync(new CorrectDeduplicationProbe());
+    public async Task ShouldAcceptProbeGivenDurableConcurrentReactionDeduplication()
+    {
+        // Arrange
+        var probe = new CorrectDeduplicationProbe();
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await ReactionDeduplicationConformance.VerifyAsync(probe));
+
+        // Assert
+        Assert.Null(exception);
+    }
 
     /// <summary>A primitive that executes duplicates is rejected.</summary>
     [Fact]
     public async Task ShouldRejectProbeGivenReactionDuplicateExecutesAgain()
     {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            ReactionDeduplicationConformance.VerifyAsync(new BrokenDeduplicationProbe()).AsTask());
+        // Arrange
+        var probe = new BrokenDeduplicationProbe();
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            ReactionDeduplicationConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("duplicate", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>A projection repository with atomic commits and isolated generations passes.</summary>
     [Fact]
-    public async Task ShouldAcceptProbeGivenAtomicProjectionStoreSemantics() =>
-        await ProjectionStoreConformance.VerifyAsync(new ProjectionProbe(false));
+    public async Task ShouldAcceptProbeGivenAtomicProjectionStoreSemantics()
+    {
+        // Arrange
+        var probe = new ProjectionProbe(false);
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await ProjectionStoreConformance.VerifyAsync(probe));
+
+        // Assert
+        Assert.Null(exception);
+    }
 
     /// <summary>A projection repository that exposes uncommitted data is rejected.</summary>
     [Fact]
     public async Task ShouldRejectProbeGivenProjectionDisposalLeaksChanges()
     {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            ProjectionStoreConformance.VerifyAsync(new ProjectionProbe(true)).AsTask());
+        // Arrange
+        var probe = new ProjectionProbe(true);
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("uncommitted", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -39,24 +69,45 @@ public sealed class TestingConformanceTests
     [Fact]
     public async Task ShouldRejectProbeGivenProjectionConflictUsesAdapterException()
     {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            ProjectionStoreConformance.VerifyAsync(new ProjectionProbe(false, false)).AsTask());
+        // Arrange
+        var probe = new ProjectionProbe(false, false);
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains(nameof(ProjectionConcurrencyException), exception.Message, StringComparison.Ordinal);
     }
 
     /// <summary>The in-memory event store honors ordering, offsets, and stream concurrency.</summary>
     [Fact]
-    public async Task ShouldAcceptProbeGivenConformantEventStore() =>
-        await EventStoreConformance.VerifyAsync(new EventStoreProbe(true));
+    public async Task ShouldAcceptProbeGivenConformantEventStore()
+    {
+        // Arrange
+        var probe = new EventStoreProbe(true);
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await EventStoreConformance.VerifyAsync(probe));
+
+        // Assert
+        Assert.Null(exception);
+    }
 
     /// <summary>A store that accepts a stale append is rejected.</summary>
     [Fact]
     public async Task ShouldRejectProbeGivenEventStoreIgnoresExpectedStreamPosition()
     {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            EventStoreConformance.VerifyAsync(new EventStoreProbe(false)).AsTask());
+        // Arrange
+        var probe = new EventStoreProbe(false);
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            EventStoreConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("stale append", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 

@@ -13,18 +13,24 @@ public sealed class InMemoryRpcDeadlineTests
     [InlineData(86400001)]
     public void ShouldRejectInvalidBudgetsGivenTimeoutOutsideTheFitzRange(int milliseconds)
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
 
-        _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
+        // Act
+        var exception = Record.Exception(() =>
         {
             _ = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromMilliseconds(milliseconds));
         });
+
+        // Assert
+        _ = Assert.IsType<ArgumentOutOfRangeException>(exception);
     }
 
     /// <summary>A zero budget expires before any registered worker receives the call.</summary>
     [Fact]
     public async Task ShouldAvoidDispatchGivenZeroBudget()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         var dispatched = 0;
         await using var worker = await rpc.RegisterWorkerAsync(Route, (_, _, _) =>
@@ -34,8 +40,10 @@ public sealed class InMemoryRpcDeadlineTests
         });
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.Zero);
 
+        // Act
         var failure = await Record.ExceptionAsync(() => ConsumeAsync(call).WaitAsync(HangGuard));
 
+        // Assert
         Assert.Equal(0, dispatched);
         _ = Assert.IsAssignableFrom<OperationCanceledException>(failure);
         Assert.Equal(RpcCancellationOutcome.RequestNotSent, await call.Cancellation.WaitAsync(HangGuard));
@@ -48,6 +56,7 @@ public sealed class InMemoryRpcDeadlineTests
     public async Task ShouldAvoidDispatchGivenCancellationBeforeEnumeration(bool useConsumerToken)
     {
 #pragma warning disable CA1859 // Exercise token propagation through the published Fitz interface.
+        // Arrange
         IRpcClient rpc = new InMemoryRpcClient();
 #pragma warning restore CA1859
         var dispatched = 0;
@@ -58,8 +67,12 @@ public sealed class InMemoryRpcDeadlineTests
         });
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
+
+        // Act
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty,
             useConsumerToken ? CancellationToken.None : cancellation.Token);
+
+        // Assert
         Assert.False(call.Cancellation.IsCompleted);
 
         var failure = await Record.ExceptionAsync(() =>
@@ -74,12 +87,16 @@ public sealed class InMemoryRpcDeadlineTests
     [Fact]
     public async Task ShouldStopAtBudgetGivenWorkerIgnoringCancellation()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         var probe = new IgnoringWorker();
         await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync);
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromSeconds(1));
+
+        // Act
         var consumption = ConsumeAsync(call);
 
+        // Assert
         try
         {
             await probe.Started.Task.WaitAsync(HangGuard);
@@ -100,18 +117,22 @@ public sealed class InMemoryRpcDeadlineTests
     [Fact]
     public async Task ShouldReportCancellationGivenConcurrentExpiredCallsWithoutTerminalResponse()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var worker = await rpc.RegisterWorkerAsync(Route, (_, _, _) => new ValueTask(release.Task));
         var calls = Enumerable.Range(0, 64)
             .Select(_ => rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromMilliseconds(1)))
             .ToArray();
+
+        // Act
         var consumption = Task.WhenAll(calls.Select(async call =>
         {
             var failure = await Record.ExceptionAsync(() => ConsumeAsync(call));
             return (Failure: failure, Cancellation: await call.Cancellation);
         }));
 
+        // Assert
         try
         {
             var results = await consumption.WaitAsync(HangGuard);
@@ -136,14 +157,18 @@ public sealed class InMemoryRpcDeadlineTests
     [InlineData(true)]
     public async Task ShouldStopWaitingGivenCancelledCallAndIgnoringWorker(bool useConsumerToken)
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         var probe = new IgnoringWorker();
         await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync);
         using var cancellation = new CancellationTokenSource();
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty,
             useConsumerToken ? CancellationToken.None : cancellation.Token);
+
+        // Act
         var consumption = ConsumeAsync(call, useConsumerToken ? cancellation.Token : CancellationToken.None);
 
+        // Assert
         try
         {
             await probe.Started.Task.WaitAsync(HangGuard);
@@ -167,14 +192,18 @@ public sealed class InMemoryRpcDeadlineTests
     [InlineData(true)]
     public async Task ShouldCombineCancellationGivenSeparateCallAndConsumerTokens(bool cancelConsumer)
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         var probe = new IgnoringWorker();
         await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync);
         using var callerCancellation = new CancellationTokenSource();
         using var consumerCancellation = new CancellationTokenSource();
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, callerCancellation.Token);
+
+        // Act
         var consumption = ConsumeAsync(call, consumerCancellation.Token);
 
+        // Assert
         try
         {
             await probe.Started.Task.WaitAsync(HangGuard);
@@ -198,6 +227,7 @@ public sealed class InMemoryRpcDeadlineTests
     [Fact]
     public async Task ShouldIsolateCancellationGivenThrowingWorkerCallback()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         var callbackRan = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var probe = new IgnoringWorker(() =>
@@ -209,8 +239,11 @@ public sealed class InMemoryRpcDeadlineTests
         using var cancellation = new CancellationTokenSource();
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, cancellation.Token);
         var consumption = ConsumeAsync(call);
+
+        // Act
         var stop = Task.CompletedTask;
 
+        // Assert
         try
         {
             await probe.Started.Task.WaitAsync(HangGuard);
@@ -237,11 +270,16 @@ public sealed class InMemoryRpcDeadlineTests
     [InlineData(true)]
     public async Task ShouldCompleteCancellationGivenTerminalWorkerCall(bool failWorker)
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         await using var worker = await rpc.RegisterWorkerAsync(Route, (_, writer, ct) => failWorker
             ? ValueTask.FromException(new InvalidOperationException("worker failed"))
             : writer.SendAsync(new byte[] { 42 }, true, ct));
+
+        // Act
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
+
+        // Assert
         Assert.False(call.Cancellation.IsCompleted);
 
         if (failWorker)
@@ -261,14 +299,18 @@ public sealed class InMemoryRpcDeadlineTests
     [Fact]
     public async Task ShouldKeepCancellationNotRequestedGivenUnrelatedWorkerCancellation()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         using var callerCancellation = new CancellationTokenSource();
         using var workerCancellation = new CancellationTokenSource();
         workerCancellation.Cancel();
         await using var worker = await rpc.RegisterWorkerAsync(Route, (_, _, _) =>
             ValueTask.FromException(new OperationCanceledException(workerCancellation.Token)));
+
+        // Act
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, callerCancellation.Token);
 
+        // Assert
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ConsumeAsync(call).WaitAsync(HangGuard));
 
         Assert.False(callerCancellation.IsCancellationRequested);
@@ -279,9 +321,13 @@ public sealed class InMemoryRpcDeadlineTests
     [Fact]
     public async Task ShouldCompleteCancellationGivenMissingWorker()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
+
+        // Act
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
 
+        // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() => ConsumeAsync(call).WaitAsync(HangGuard));
 
         Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard));
@@ -293,6 +339,7 @@ public sealed class InMemoryRpcDeadlineTests
     [InlineData(true)]
     public async Task ShouldExposeLazyRpcCallGivenConcreteClient(bool useMaximumBudget)
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         var dispatched = 0;
         TimeSpan? receivedBudget = null;
@@ -302,9 +349,13 @@ public sealed class InMemoryRpcDeadlineTests
             receivedBudget = request.RemainingTime;
             return writer.SendAsync(new byte[] { 42 }, true, ct);
         });
+
+        // Act
         var call = useMaximumBudget
             ? rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromDays(1))
             : rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
+
+        // Assert
         _ = Assert.IsType<RpcCall>(call);
         Assert.Equal(0, dispatched);
         Assert.False(call.Cancellation.IsCompleted);
@@ -332,14 +383,18 @@ public sealed class InMemoryRpcDeadlineTests
     [Fact]
     public async Task ShouldForwardCancellationGivenEarlyStreamDisposal()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         var probe = new IgnoringWorker();
         await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleStreamingAsync);
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
         var enumerator = call.GetAsyncEnumerator();
         var firstMove = enumerator.MoveNextAsync().AsTask();
+
+        // Act
         var disposed = false;
 
+        // Assert
         try
         {
             Assert.True(await firstMove.WaitAsync(HangGuard));
@@ -367,6 +422,7 @@ public sealed class InMemoryRpcDeadlineTests
     [InlineData(true)]
     public async Task ShouldStopWithoutWaitingGivenBlockingWorkerCallback(bool disposeStream)
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         using var callbackRelease = new ManualResetEventSlim();
         var callbackEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -390,8 +446,11 @@ public sealed class InMemoryRpcDeadlineTests
         var firstMove = enumerator.MoveNextAsync().AsTask();
         Task<bool>? nextMove = null;
         var stop = Task.CompletedTask;
+
+        // Act
         var disposed = false;
 
+        // Assert
         try
         {
             Assert.True(await firstMove.WaitAsync(HangGuard));
@@ -433,12 +492,16 @@ public sealed class InMemoryRpcDeadlineTests
     [Fact]
     public async Task ShouldCompleteWithoutCancellationGivenFinalFrameAndBusyWorker()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         var probe = new IgnoringWorker();
         await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleFinalThenWaitAsync);
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
+
+        // Act
         var consumption = ReadFramesAsync(call);
 
+        // Assert
         try
         {
             await probe.Started.Task.WaitAsync(HangGuard);
@@ -461,6 +524,7 @@ public sealed class InMemoryRpcDeadlineTests
     [Fact]
     public async Task ShouldStopWaitingGivenSynchronousWorkerIgnoringCancellation()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         using var release = new ManualResetEventSlim();
         using var cancellation = new CancellationTokenSource();
@@ -482,8 +546,11 @@ public sealed class InMemoryRpcDeadlineTests
             }
         });
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, cancellation.Token);
+
+        // Act
         var consumption = Task.Run(() => ConsumeAsync(call));
 
+        // Assert
         try
         {
             await started.Task.WaitAsync(HangGuard);
@@ -506,6 +573,7 @@ public sealed class InMemoryRpcDeadlineTests
     [Fact]
     public async Task ShouldPreserveEachFrameGivenReusedWorkerBuffer()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         var reused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var worker = await rpc.RegisterWorkerAsync(Route, async (_, writer, ct) =>
@@ -520,8 +588,11 @@ public sealed class InMemoryRpcDeadlineTests
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
 
         var frames = await ReadFramesAsync(call).WaitAsync(HangGuard);
+
+        // Act
         await reused.Task.WaitAsync(HangGuard);
 
+        // Assert
         Assert.Equal(2, frames.Count);
         Assert.Equal(new byte[] { 1 }, frames[0].Body.ToArray());
         Assert.Equal(new byte[] { 2 }, frames[1].Body.ToArray());
@@ -534,6 +605,7 @@ public sealed class InMemoryRpcDeadlineTests
     [InlineData(true)]
     public async Task ShouldDistinguishEmptyResponseDataGivenFrameFinality(bool finishWithEmptyFrame)
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         await using var worker = await rpc.RegisterWorkerAsync(Route, async (_, writer, ct) =>
         {
@@ -544,8 +616,10 @@ public sealed class InMemoryRpcDeadlineTests
         });
         var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
 
+        // Act
         var frames = await ReadFramesAsync(call).WaitAsync(HangGuard);
 
+        // Assert
         if (finishWithEmptyFrame)
         {
             Assert.Equal(new byte[] { 42 }, Assert.Single(frames).Body.ToArray());
@@ -564,6 +638,7 @@ public sealed class InMemoryRpcDeadlineTests
     [Fact]
     public async Task ShouldPreserveDispatchedRequestGivenCallerBufferReuseAfterCompletion()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -586,8 +661,11 @@ public sealed class InMemoryRpcDeadlineTests
         var buffer = new byte[] { 1 };
         var call = rpc.CallAsync(Route, buffer);
         buffer[0] = 2;
+
+        // Act
         var consumption = ReadFramesAsync(call);
 
+        // Assert
         try
         {
             var frames = await consumption.WaitAsync(HangGuard);

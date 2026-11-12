@@ -10,7 +10,8 @@ public sealed class HttpBindingShapeTests
     [Fact]
     public void NullableReferenceResultIsCarriedIntoGeneratedOpenApiMetadata()
     {
-        var generated = GeneratorCompilation.GeneratedSource("""
+        // Arrange
+        const string source = """
                                                              #nullable enable
                                                              using Cntryl.Portia;
                                                              using Microsoft.AspNetCore.Routing;
@@ -21,14 +22,19 @@ public sealed class HttpBindingShapeTests
                                                                  public static void Map(IEndpointRouteBuilder app)
                                                                      => app.MapPortiaPost<Query, NullableResult?>("/query");
                                                              }
-                                                             """, new RequestHttpBindingGenerator());
+                                                             """;
 
+        // Act
+        var generated = GeneratorCompilation.GeneratedSource(source, new RequestHttpBindingGenerator());
+
+        // Assert
         Assert.Contains("ResultIsNullable = true", generated, StringComparison.Ordinal);
     }
 
     [Fact]
     public void NullableAndEscapedHttpContractTypesCompileWithRuntimeMetadata()
     {
+        // Arrange
         const string source = """
                             #nullable enable
                             using System.Collections.Generic;
@@ -62,10 +68,14 @@ public sealed class HttpBindingShapeTests
         var generated = GeneratorCompilation.GeneratedSource(source, new RequestHttpBindingGenerator());
 
         _ = GeneratorCompilation.Compile(source, new RequestHttpBindingGenerator());
+
+        // Act
         var metadata = CSharpSyntaxTree.ParseText(generated).GetRoot().DescendantNodes()
             .OfType<ObjectCreationExpressionSyntax>().Single(node => node.Type.ToString().EndsWith("PortiaOpenApiOperation", StringComparison.Ordinal)
                 && node.ArgumentList?.Arguments[0].Expression is LiteralExpressionSyntax literal
                 && literal.Token.ValueText == "nullableValueRequest");
+
+        // Assert
         var resultType = Assert.IsType<TypeOfExpressionSyntax>(metadata.ArgumentList!.Arguments[1].Expression);
         Assert.Equal(["int", "?"], resultType.Type.DescendantTokens().Select(token => token.Text));
         Assert.True(metadata.ArgumentList.Arguments[2].Expression.IsKind(SyntaxKind.FalseLiteralExpression));
@@ -75,6 +85,7 @@ public sealed class HttpBindingShapeTests
     [Fact]
     public async Task GeneratedHttpMapsCommitConcurrencyToSafeTransientConflictWithoutRetry()
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
                                                     using System.Net.Http;
                                                     using System.Linq;
@@ -167,10 +178,12 @@ public sealed class HttpBindingShapeTests
                                                     """, new RegistrationCallInterceptorGenerator(),
             new RequestHttpBindingGenerator());
 
+        // Act
         var result = await (Task<(int Winner, int Conflict, string? Transient, string Body, int Attempts, int Commits,
                 int Validated)>)
             assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, null)!;
 
+        // Assert
         Assert.Equal(204, result.Winner);
         Assert.Equal(409, result.Conflict);
         Assert.Equal("true", result.Transient);
@@ -187,6 +200,7 @@ public sealed class HttpBindingShapeTests
     [Fact]
     public async Task HelperConfiguredBindersSupportOtherwiseUnbindableRequests()
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
                                                     using System.Net.Http;
                                                     using System.Text.Json.Serialization.Metadata;
@@ -256,14 +270,18 @@ public sealed class HttpBindingShapeTests
                                                     """, new RegistrationCallInterceptorGenerator(),
             new RequestHttpBindingGenerator());
 
+        // Act
         var result = await (Task<(int, int, string?, string?)>)assembly.GetType("Scenario")!.GetMethod("Run")!
             .Invoke(null, null)!;
+
+        // Assert
         Assert.Equal((204, 204, "method", "lambda"), result);
     }
 
     [Fact]
     public void ConfiguredUnbindableRequestWithoutOnBindFailsDuringMapping()
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
                                                     using Cntryl.Portia;
                                                     using Cntryl.Portia.Testing;
@@ -292,13 +310,17 @@ public sealed class HttpBindingShapeTests
                                                     }
                                                     """, new RequestHttpBindingGenerator());
 
+        // Act
         var message = (string)assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, null)!;
+
+        // Assert
         Assert.Equal("This request shape requires OnBind.", message);
     }
 
     [Fact]
     public async Task SupportedRequestRetainsDefaultBinderWhenConditionalOnBindIsNotInstalled()
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
                                                     using System.Net.Http;
                                                     using System.Text.Json.Serialization.Metadata;
@@ -345,7 +367,10 @@ public sealed class HttpBindingShapeTests
                                                     """, new RegistrationCallInterceptorGenerator(),
             new RequestHttpBindingGenerator());
 
+        // Act
         var result = await (Task<(int, string?)>)assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, null)!;
+
+        // Assert
         Assert.Equal((204, "default"), result);
     }
 
@@ -392,8 +417,14 @@ public sealed class HttpBindingShapeTests
     [Fact]
     public void StreamingConfigurationDoesNotExposeOnResult()
     {
-        Assert.DoesNotContain(typeof(PortiaStreamingEndpointConfiguration<object>).GetMethods(),
-            method => method.Name == "OnResult");
+        // Arrange
+        var configurationType = typeof(PortiaStreamingEndpointConfiguration<object>);
+
+        // Act
+        var methods = configurationType.GetMethods();
+
+        // Assert
+        Assert.DoesNotContain(methods, method => method.Name == "OnResult");
     }
 
     [Fact]
@@ -420,6 +451,7 @@ public sealed class HttpBindingShapeTests
     [Fact]
     public async Task ValidSimpleTryParseWinsOverInvalidProviderOverload()
     {
+        // Arrange
         var assembly = HttpConsumerScenario.Compile("""
                                                     public sealed record Scalar(string Text)
                                                     {
@@ -435,8 +467,10 @@ public sealed class HttpBindingShapeTests
                                                     """, "request.Value.Text",
             "app.MapPortiaPost<Binding, string>(\"/binding\");");
 
+        // Act
         var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding", """{"value":{"text":"json"}}""");
 
+        // Assert
         Assert.Equal(200, status);
         Assert.Equal("\"json\"", body);
     }
@@ -444,7 +478,8 @@ public sealed class HttpBindingShapeTests
     [Fact]
     public void InvalidTryParseShapeRemainsUnsupportedForQueryBinding()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                            using Cntryl.Portia;
                                                            using Microsoft.AspNetCore.Routing;
                                                            public enum SomeStyle { Default }
@@ -462,8 +497,12 @@ public sealed class HttpBindingShapeTests
                                                                public static void Map(IEndpointRouteBuilder app)
                                                                    => app.MapPortiaGet<Binding, string>("/binding");
                                                            }
-                                                           """, new RequestHttpBindingGenerator());
+                                                           """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA016");
         Assert.Contains("supported scalar TryParse", diagnostic.GetMessage(CultureInfo.InvariantCulture),
             StringComparison.Ordinal);
@@ -474,6 +513,7 @@ public sealed class HttpBindingShapeTests
     [InlineData("int Value", "route", "constant")]
     public void UnsupportedBindingsHaveActionableDiagnostics(string parameters, string route, string reason)
     {
+        // Arrange
         var source = $$"""
                        using Cntryl.Portia;
                        using Cntryl.Portia.Testing;
@@ -485,7 +525,11 @@ public sealed class HttpBindingShapeTests
                                => app.MapPortiaGet<Binding, string>({{route}});
                        }
                        """;
+
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA016");
         Assert.Contains(reason, diagnostic.GetMessage(CultureInfo.InvariantCulture),
             StringComparison.OrdinalIgnoreCase);
@@ -494,7 +538,8 @@ public sealed class HttpBindingShapeTests
     [Fact]
     public void ShouldReportDiagnosticGivenOptionalRouteTokenWhenMappingIsGenerated()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                            using Cntryl.Portia;
                                                            using Cntryl.Portia.Testing;
                                                            using Microsoft.AspNetCore.Routing;
@@ -503,7 +548,12 @@ public sealed class HttpBindingShapeTests
                                                            {
                                                                public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Binding, string>("/binding/{id?}");
                                                            }
-                                                           """, new RequestHttpBindingGenerator());
+                                                           """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA026");
         Assert.Contains("query parameter or separate endpoint", diagnostic.GetMessage(CultureInfo.InvariantCulture),
             StringComparison.Ordinal);
@@ -512,6 +562,7 @@ public sealed class HttpBindingShapeTests
     [Fact]
     public void ShouldReportDiagnosticGivenCollidingRequestTypeNamesWhenMappingsAreGenerated()
     {
+        // Arrange
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
                                                            using Cntryl.Portia.Testing;
@@ -527,7 +578,11 @@ public sealed class HttpBindingShapeTests
                                                                }
                                                            }
                                                            """, new RequestHttpBindingGenerator());
+
+        // Act
         var diagnosticsForCollision = diagnostics.Where(item => item.Id == "PORTIA027").ToArray();
+
+        // Assert
         Assert.Equal(2, diagnosticsForCollision.Length);
         Assert.All(diagnosticsForCollision, diagnostic => Assert.Contains("createOrder",
             diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal));
@@ -536,6 +591,7 @@ public sealed class HttpBindingShapeTests
     [Fact]
     public void ShouldReportDiagnosticGivenRepeatedRequestTypeWhenMappingsShareOneScope()
     {
+        // Arrange
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
                                                            using Cntryl.Portia.Testing;
@@ -551,7 +607,10 @@ public sealed class HttpBindingShapeTests
                                                            }
                                                            """, new RequestHttpBindingGenerator());
 
+        // Act
         var collisions = diagnostics.Where(item => item.Id == "PORTIA027").ToArray();
+
+        // Assert
         Assert.Equal(2, collisions.Length);
         Assert.All(collisions, diagnostic => Assert.Contains("refreshOrder",
             diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal));
@@ -567,7 +626,8 @@ public sealed class HttpBindingShapeTests
         // Whether an endpoint is described is a property of the endpoint, not of the order its
         // conventions happen to be written in. Detecting the exclusion only when it sits directly
         // on the mapping made a hard compile error depend on formatting.
-        var diagnostics = GeneratorCompilation.Diagnostics($$"""
+        // Arrange
+        var source = $$"""
                                                              using Cntryl.Portia;
                                                              using Cntryl.Portia.Testing;
                                                              using Microsoft.AspNetCore.Builder;
@@ -581,15 +641,20 @@ public sealed class HttpBindingShapeTests
                                                                      app.MapPortiaPost<RefreshOrder>("/orders/refresh"){{conventions}};
                                                                  }
                                                              }
-                                                             """, new RequestHttpBindingGenerator());
+                                                             """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA027");
     }
 
     [Fact]
     public void UnrelatedMappingMethodIsNeverIntercepted()
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using Cntryl.Portia;
                                                     using Cntryl.Portia.Testing;
                                                     public sealed record Binding(int Value) : IRequest<string>, ICallable;
@@ -601,18 +666,29 @@ public sealed class HttpBindingShapeTests
                                                     {
                                                         public static int Run() => new Unrelated().MapPortiaGet<Binding, string>("/binding");
                                                     }
-                                                    """, new RequestHttpBindingGenerator());
-        Assert.Equal(321, assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, null));
+                                                    """;
+
+        // Act
+        var assembly = GeneratorCompilation.Compile(source, new RequestHttpBindingGenerator());
+        var result = assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, null);
+
+        // Assert
+        Assert.Equal(321, result);
     }
 
     [Fact]
     public async Task ScalarParsingUsesInvariantCulture()
     {
+        // Arrange
         var assembly = HttpConsumerScenario.Compile(
             "public sealed record Binding(decimal Amount) : IRequest<string>, ICallable;",
             "request.Amount.ToString(CultureInfo.InvariantCulture)",
             "CultureInfo.CurrentCulture = new CultureInfo(\"fr-FR\"); app.MapPortiaGet<Binding, string>(\"/binding\");");
+
+        // Act
         var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding?amount=12.5");
+
+        // Assert
         Assert.Equal(200, status);
         Assert.Equal("\"12.5\"", body);
     }

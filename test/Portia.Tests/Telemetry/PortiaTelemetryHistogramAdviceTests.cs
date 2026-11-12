@@ -15,6 +15,7 @@ public sealed class PortiaTelemetryHistogramAdviceTests
     [Fact]
     public void ShouldAdviseBucketBoundariesForEveryPublishedDurationHistogram()
     {
+        // Arrange
         var advised = new List<string>();
         var unadvised = new List<string>();
 
@@ -31,8 +32,11 @@ public sealed class PortiaTelemetryHistogramAdviceTests
             (histogram.Advice?.HistogramBucketBoundaries is { Count: > 0 } ? advised : unadvised)
                 .Add(instrument.Name);
         };
+
+        // Act
         listener.Start();
 
+        // Assert
         Assert.NotEmpty(advised);
         Assert.True(unadvised.Count == 0,
             $"Histograms published without bucket boundaries: {string.Join(", ", unadvised.Order(StringComparer.Ordinal))}.");

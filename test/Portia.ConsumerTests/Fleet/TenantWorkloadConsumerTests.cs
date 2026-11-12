@@ -12,6 +12,7 @@ public sealed class TenantWorkloadConsumerTests
     [InlineData(true)]
     public async Task FaultedWorkloadRestartsUnlessRemovedAndRepeatedAddsDoNotDuplicate(bool removeDuringBackoff)
     {
+        // Arrange
         var clock = new ManualClock();
         var directory = new Directory();
         var services = ConsumerHost.CreateServices();
@@ -20,7 +21,11 @@ public sealed class TenantWorkloadConsumerTests
         _ = services.AddSingleton<State>();
         _ = services.AddScoped<Workload>();
         _ = services.AddPortiaMultiTenantRunner<Workload>();
+
+        // Act
         await using var provider = ConsumerHost.Build(services);
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>());
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         using var cancellation = new CancellationTokenSource();
@@ -58,6 +63,7 @@ public sealed class TenantWorkloadConsumerTests
     [Fact]
     public async Task TwoHostedWorkloadsSharingDirectoryObserveEveryLifecycleChange()
     {
+        // Arrange
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
@@ -69,7 +75,11 @@ public sealed class TenantWorkloadConsumerTests
         _ = services.AddPortiaMultiTenantRunner<Workload>();
         _ = services.AddPortiaMultiTenantRunner<SecondWorkload>();
         await using var provider = ConsumerHost.Build(services);
+
+        // Act
         var workers = provider.GetServices<IHostedService>().ToArray();
+
+        // Assert
         Assert.Equal(2, workers.Length);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         var store = provider.GetRequiredService<IEventStore>();

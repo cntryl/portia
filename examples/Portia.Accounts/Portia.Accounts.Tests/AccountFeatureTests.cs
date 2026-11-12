@@ -15,18 +15,24 @@ public sealed class AccountFeatureTests
     [Fact]
     public void ShouldRequireConfiguredTenantOutsideDevelopment()
     {
+        // Arrange
         var services = new ServiceCollection();
         var configuration = new ConfigurationBuilder().Build();
         var environment = new TestHostEnvironment(Environments.Production);
 
-        _ = Assert.Throws<InvalidOperationException>(() =>
+        // Act
+        var exception = Record.Exception(() =>
             services.AddAccountsApplication(configuration, environment));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(exception);
     }
 
     /// <summary>The local demo tenant remains convenient in Development.</summary>
     [Fact]
     public void ShouldDefaultTenantToDemoInDevelopment()
     {
+        // Arrange
         var services = new ServiceCollection();
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -36,16 +42,20 @@ public sealed class AccountFeatureTests
             .Build();
         var environment = new TestHostEnvironment(Environments.Development);
 
+        // Act
         _ = services.AddAccountsApplication(configuration, environment);
         using var provider = services.BuildServiceProvider();
+        var serves = provider.GetRequiredService<IAccountTenantScope>().Serves(new TenantId("demo"));
 
-        Assert.True(provider.GetRequiredService<IAccountTenantScope>().Serves(new TenantId("demo")));
+        // Assert
+        Assert.True(serves);
     }
 
     /// <summary>Authorization, behavior, guard, and handler run in the declared order.</summary>
     [Fact]
     public async Task ShouldRunAuthorizationBehaviorGuardAndHandlerInOrder()
     {
+        // Arrange
         var trace = new RecordingAccountLifecycle();
         await using var services = CreateServices(trace, available: true);
         var actor = AccountActor(AccountId);
@@ -59,14 +69,18 @@ public sealed class AccountFeatureTests
             .ExpectSuccess();
 
         trace.Clear();
-        await RequestScenario.For(services).GivenActor(actor)
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(services).GivenActor(actor)
             .When(new DepositFunds(Tenant, AccountId, 125))
             .ExpectAuthorized()
             .ExpectGuardPassed<AccountTenantGuard>()
             .ExpectGuardPassed<AccountOperationsGuard>()
             .ExpectHandled()
-            .ExpectSuccess();
+            .ExpectSuccess());
 
+        // Assert
+        Assert.Null(exception);
         Assert.Equal(["authorizer", "behavior.enter", "tenant.guard", "guard", "handler.deposit", "behavior.exit"],
             trace.Stages);
     }
@@ -75,17 +89,22 @@ public sealed class AccountFeatureTests
     [Fact]
     public async Task ShouldShortCircuitHandlerWhenOperationsArePaused()
     {
+        // Arrange
         var trace = new RecordingAccountLifecycle();
         await using var services = CreateServices(trace, available: false);
 
-        await RequestScenario.For(services).GivenActor(AccountActor(AccountId))
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(services)
+            .GivenActor(AccountActor(AccountId))
             .When(new DepositFunds(Tenant, AccountId, 125))
             .ExpectAuthorized()
             .ExpectGuardPassed<AccountTenantGuard>()
             .ExpectGuardFailed<AccountOperationsGuard>(RequestErrorKind.Conflict)
             .ExpectNotHandled()
-            .ExpectFailure(RequestErrorKind.Conflict);
+            .ExpectFailure(RequestErrorKind.Conflict));
 
+        // Assert
+        Assert.Null(exception);
         Assert.Equal(["authorizer", "behavior.enter", "tenant.guard", "guard", "behavior.exit"], trace.Stages);
     }
 
@@ -93,14 +112,19 @@ public sealed class AccountFeatureTests
     [Fact]
     public async Task ShouldShortCircuitBeforeBehaviorWhenActorDoesNotOwnAccount()
     {
+        // Arrange
         var trace = new RecordingAccountLifecycle();
         await using var services = CreateServices(trace, available: true);
 
-        await RequestScenario.For(services).GivenActor(AccountActor(Uuid.CreateVersion4()))
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(services)
+            .GivenActor(AccountActor(Uuid.CreateVersion4()))
             .When(new DepositFunds(Tenant, AccountId, 125))
             .ExpectDenied(RequestErrorKind.Forbidden)
-            .ExpectNotHandled();
+            .ExpectNotHandled());
 
+        // Assert
+        Assert.Null(exception);
         Assert.Equal(["authorizer"], trace.Stages);
     }
 
@@ -111,14 +135,19 @@ public sealed class AccountFeatureTests
     [Fact]
     public async Task ShouldDenyAccountWhenActorTenantDoesNotMatchRequestTenant()
     {
+        // Arrange
         var trace = new RecordingAccountLifecycle();
         await using var services = CreateServices(trace, available: true);
 
-        await RequestScenario.For(services).GivenActor(AccountActor(Tenant.Value, AccountId))
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(services)
+            .GivenActor(AccountActor(Tenant.Value, AccountId))
             .When(new DepositFunds(new TenantId("tenant-b"), AccountId, 125))
             .ExpectDenied(RequestErrorKind.Forbidden)
-            .ExpectNotHandled();
+            .ExpectNotHandled());
 
+        // Assert
+        Assert.Null(exception);
         Assert.Empty(trace.Stages);
     }
 
@@ -126,15 +155,20 @@ public sealed class AccountFeatureTests
     [Fact]
     public async Task ShouldRejectRequestsForTenantsOutsideTheConfiguredProjectorScope()
     {
+        // Arrange
         var trace = new RecordingAccountLifecycle();
         await using var services = CreateServices(trace, available: true);
 
-        await RequestScenario.For(services).GivenActor(RequestActor.System)
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(services)
+            .GivenActor(RequestActor.System)
             .When(new OpenAccount(new TenantId("tenant-b"), AccountId, 500))
             .ExpectGuardFailed<AccountTenantGuard>(RequestErrorKind.Validation)
             .ExpectNotHandled()
-            .ExpectFailure(RequestErrorKind.Validation);
+            .ExpectFailure(RequestErrorKind.Validation));
 
+        // Assert
+        Assert.Null(exception);
         Assert.Equal(["authorizer", "tenant.guard"], trace.Stages);
     }
 
@@ -142,10 +176,12 @@ public sealed class AccountFeatureTests
     [Fact]
     public async Task ShouldReadProjectedAccountThroughQueryHandler()
     {
+        // Arrange
         var trace = new RecordingAccountLifecycle();
         var readModel = new AccountReadModel(AccountId, 625);
         await using var services = CreateServices(trace, available: true, readModel);
 
+        // Act
         var result = await RequestScenario.For(services).GivenActor(AccountActor(AccountId))
             .When(new GetAccount(Tenant, AccountId))
             .ExpectAuthorized()
@@ -154,6 +190,7 @@ public sealed class AccountFeatureTests
             .ExpectHandled()
             .ExpectSuccess();
 
+        // Assert
         Assert.Equal(readModel, result.Value);
     }
 
@@ -161,11 +198,14 @@ public sealed class AccountFeatureTests
     [Fact]
     public void ShouldRejectInvalidDepositAndKeepBalanceUnchanged()
     {
+        // Arrange
         var scenario = new AggregateScenario<Account>(new Account(Tenant, AccountId))
             .Given(new AccountOpened(500));
 
+        // Act
         var result = scenario.WhenCommitOnSuccess(account => account.Deposit(0));
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Validation, result.Error!.Kind);
         Assert.Equal(500, scenario.Aggregate.BalanceCents);
@@ -176,15 +216,18 @@ public sealed class AccountFeatureTests
     [Fact]
     public async Task ShouldProjectOpeningAndDepositIntoReadModel()
     {
+        // Arrange
         var scenario = new ProjectorScenario(Tenant).Given(
             DomainEventSeed.Attach(new AccountOpened(500), AccountId, 1),
             DomainEventSeed.Attach(new FundsDeposited(125), AccountId, 2));
-
         var repository = new InMemoryAccountRepository(scenario.Store);
-        await scenario.RunAsync(new AccountProjector(repository));
 
-        Assert.Equal(new AccountReadModel(AccountId, 625),
-            await repository.GetAsync(Tenant, AccountId, default));
+        // Act
+        await scenario.RunAsync(new AccountProjector(repository));
+        var projected = await repository.GetAsync(Tenant, AccountId, default);
+
+        // Assert
+        Assert.Equal(new AccountReadModel(AccountId, 625), projected);
     }
 
     static ServiceProvider CreateServices(RecordingAccountLifecycle trace, bool available,

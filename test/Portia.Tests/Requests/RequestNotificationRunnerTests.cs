@@ -25,6 +25,7 @@ public sealed class RequestNotificationRunnerTests
     [InlineData(true, true, true)]
     public async Task ShouldExportCorrelatedActualNotificationOutcomeLogs(bool fault, bool ambient, bool schedule)
     {
+        // Arrange
         using var capture = new RunnerExportCapture();
         using var caller = ambient ? new Activity("unrelated-caller").Start() : null;
         using var busHost = TestRequestBus.Create(telemetryFailureActionHandler:
@@ -36,7 +37,11 @@ public sealed class RequestNotificationRunnerTests
             new RequestTraceContext(RunnerExportCapture.Parent), schedule ? RequestActor.System : null)).ToArray();
         var runner = new RequestNotificationRunner(new FakeRequestNotificationConsumer(notifications),
             RequestDeliveryScopes.Fixed(busHost.Bus, new TestRequestActorValidator("invalid-token")), capture.Logger<RequestNotificationRunner>());
+
+        // Act
         await runner.RunAsync();
+
+        // Assert
         Assert.Same(caller, Activity.Current);
         capture.AssertCorrelated(fault ? 1002 : 1004,
             fault ? Microsoft.Extensions.Logging.LogLevel.Error : Microsoft.Extensions.Logging.LogLevel.Warning,
@@ -51,6 +56,7 @@ public sealed class RequestNotificationRunnerTests
     [Fact]
     public async Task ShouldDispatchEveryDeliveredRequest()
     {
+        // Arrange
         var handler = new ChangeValueHandler();
         using var busHost = TestRequestBus.Create(handler);
         var bus = busHost.Bus;
@@ -65,8 +71,10 @@ public sealed class RequestNotificationRunnerTests
         var runner =
             new RequestNotificationRunner(consumer, RequestDeliveryScopes.Fixed(bus, new TestRequestActorValidator()));
 
+        // Act
         await runner.RunAsync();
 
+        // Assert
         Assert.Equal(3, handler.LastValue);
     }
 
@@ -78,6 +86,7 @@ public sealed class RequestNotificationRunnerTests
     [Fact]
     public async Task ShouldContinueAfterDispatchFailure()
     {
+        // Arrange
         var handler = new ChangeValueHandler();
         using var busHost = TestRequestBus.Create(handler);
         var bus = busHost.Bus;
@@ -90,8 +99,10 @@ public sealed class RequestNotificationRunnerTests
         var runner =
             new RequestNotificationRunner(consumer, RequestDeliveryScopes.Fixed(bus, new TestRequestActorValidator()));
 
+        // Act
         await runner.RunAsync();
 
+        // Assert
         Assert.Equal(2, handler.LastValue);
     }
 
@@ -104,6 +115,7 @@ public sealed class RequestNotificationRunnerTests
     [Fact]
     public async Task ShouldSkipDispatchWhenActorTokenFailsRevalidation()
     {
+        // Arrange
         var handler = new ChangeValueHandler();
         using var busHost = TestRequestBus.Create(handler);
         var bus = busHost.Bus;
@@ -114,8 +126,10 @@ public sealed class RequestNotificationRunnerTests
         var runner = new RequestNotificationRunner(consumer,
             RequestDeliveryScopes.Fixed(bus, new TestRequestActorValidator("expired-token")));
 
+        // Act
         await runner.RunAsync();
 
+        // Assert
         Assert.Null(handler.LastValue);
     }
 
@@ -126,6 +140,7 @@ public sealed class RequestNotificationRunnerTests
     [Fact]
     public async Task ShouldContinueAfterActorTokenRevalidationFailure()
     {
+        // Arrange
         var handler = new ChangeValueHandler();
         using var busHost = TestRequestBus.Create(handler);
         var bus = busHost.Bus;
@@ -138,8 +153,10 @@ public sealed class RequestNotificationRunnerTests
         var runner = new RequestNotificationRunner(consumer,
             RequestDeliveryScopes.Fixed(bus, new TestRequestActorValidator("expired-token")));
 
+        // Act
         await runner.RunAsync();
 
+        // Assert
         Assert.Equal(2, handler.LastValue);
     }
 
@@ -154,6 +171,7 @@ public sealed class RequestNotificationRunnerTests
     {
         // The listener is process-wide and other tests dispatch concurrently, so capture is
         // thread-safe and narrowed to the schedule transport, which only this test produces.
+        // Arrange
         var transports = new ConcurrentQueue<string>();
         using var listener = new ActivityListener
         {
@@ -183,8 +201,10 @@ public sealed class RequestNotificationRunnerTests
         var runner = new RequestNotificationRunner(consumer,
             RequestDeliveryScopes.Fixed(busHost.Bus, new TestRequestActorValidator()));
 
+        // Act
         await runner.RunAsync();
 
+        // Assert
         Assert.Equal(2, handler.LastValue);
         Assert.Equal([schedule.TransportName, schedule.TransportName], [.. transports]);
     }

@@ -14,6 +14,7 @@ public sealed partial class ComponentHostingTests
     [Fact]
     public async Task NotificationBackstopIsScheduledOnTheInjectedClock()
     {
+        // Arrange
         var pollInterval = TimeSpan.FromMinutes(10);
         var clock = new ManualClock();
         var changes = new Changes();
@@ -25,7 +26,11 @@ public sealed partial class ComponentHostingTests
         await using var provider = ConsumerHost.Build(services);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         var id = Uuid.CreateVersion4();
+
+        // Act
         await ConsumerHost.SeedAsync(provider, id);
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {

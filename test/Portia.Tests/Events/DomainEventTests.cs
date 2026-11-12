@@ -11,13 +11,17 @@ public sealed class DomainEventTests
     [Fact]
     public void ShouldThrowWhenMetadataAttachedMoreThanOnce()
     {
+        // Arrange
         var ev = new StubEvent();
+
+        // Act
         ev.AttachMetadata(new DomainEventMetadata(
             Uuid.CreateVersion4(),
             Uuid.CreateVersion4(),
             1,
             DateTimeOffset.UtcNow));
 
+        // Assert
         _ = Assert.Throws<InvalidOperationException>(() => ev.AttachMetadata(new DomainEventMetadata(
             Uuid.CreateVersion4(),
             Uuid.CreateVersion4(),
@@ -31,9 +35,14 @@ public sealed class DomainEventTests
     [Fact]
     public void ShouldThrowWhenMetadataReadBeforeAttached()
     {
+        // Arrange
         var ev = new StubEvent();
 
-        _ = Assert.Throws<InvalidOperationException>(() => ev.Metadata);
+        // Act
+        var exception = Record.Exception(() => ev.Metadata);
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(exception);
     }
 
     /// <summary>
@@ -43,13 +52,17 @@ public sealed class DomainEventTests
     [Fact]
     public void ShouldCompareEventsByPayloadIgnoringMetadata()
     {
+        // Arrange
         var attached = new ValueChanged(3);
+
+        // Act
         attached.AttachMetadata(new DomainEventMetadata(
             Uuid.CreateVersion4(),
             Uuid.CreateVersion4(),
             1,
             DateTimeOffset.UtcNow));
 
+        // Assert
         Assert.Equal(new ValueChanged(3), attached);
         Assert.Equal(new ValueChanged(3).GetHashCode(), attached.GetHashCode());
         Assert.NotEqual(new ValueChanged(4), attached);
@@ -63,6 +76,7 @@ public sealed class DomainEventTests
     [Fact]
     public void ShouldStartCopiedEventWithoutMetadata()
     {
+        // Arrange
         var attached = new ValueChanged(3);
         attached.AttachMetadata(new DomainEventMetadata(
             Uuid.CreateVersion4(),
@@ -70,8 +84,10 @@ public sealed class DomainEventTests
             1,
             DateTimeOffset.UtcNow));
 
+        // Act
         var copy = attached with { Value = 4 };
 
+        // Assert
         _ = Assert.Throws<InvalidOperationException>(() => copy.Metadata);
         copy.AttachMetadata(new DomainEventMetadata(
             Uuid.CreateVersion4(),

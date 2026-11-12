@@ -16,6 +16,7 @@ public sealed class McpScenarioTests
     [Fact]
     public async Task ShouldTerminateStdioChildAfterScenarioDisposal()
     {
+        // Arrange
         var host = GetStdioHostPath();
         var processId = 0;
         var options = new StdioClientTransportOptions
@@ -30,9 +31,11 @@ public sealed class McpScenarioTests
             }
         };
 
+        // Act
         await using (var scenario = await McpScenario.ConnectStdioAsync(options))
             _ = await scenario.ListTools().ExpectExactly("stdio.greetings.read");
 
+        // Assert
         Assert.True(Volatile.Read(ref processId) > 0, "The child process did not report its PID.");
         Assert.True(await WaitForProcessExitAsync(Volatile.Read(ref processId), TimeSpan.FromSeconds(5)),
             "Disposing the scenario left its stdio child process running.");
@@ -41,6 +44,7 @@ public sealed class McpScenarioTests
     [Fact]
     public async Task ShouldTerminateStdioChildWhenConnectionIsCanceled()
     {
+        // Arrange
         var started = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cancellation = new CancellationTokenSource();
         var options = new StdioClientTransportOptions
@@ -55,11 +59,13 @@ public sealed class McpScenarioTests
             }
         };
 
+        // Act
         async Task ConnectAsync()
         {
             await using var scenario = await McpScenario.ConnectStdioAsync(options, cancellation.Token);
         }
 
+        // Assert
         await Assert.ThrowsAnyAsync<OperationCanceledException>(ConnectAsync);
         var childProcessId = await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(5)),
@@ -69,6 +75,7 @@ public sealed class McpScenarioTests
     [Fact]
     public async Task ShouldTerminateStdioChildWhenInitializationFails()
     {
+        // Arrange
         var started = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         var observedProcessId = 0;
         var processIdFile = Path.Combine(Path.GetTempPath(), $"portia-mcp-{Guid.NewGuid():N}.pid");
@@ -97,7 +104,10 @@ public sealed class McpScenarioTests
             await using var scenario = await McpScenario.ConnectStdioAsync(options);
         }
 
+        // Act
         var childProcessId = 0;
+
+        // Assert
         try
         {
             var failure = await Assert.ThrowsAnyAsync<Exception>(ConnectAsync);
@@ -133,8 +143,13 @@ public sealed class McpScenarioTests
     [Fact]
     public void ShouldPreservePrimitiveSnapshotConstructionAndDeconstruction()
     {
+        // Arrange
         var resource = new McpResourceSnapshot("resource://one", "One", "text/plain", false);
+
+        // Act
         var (uri, name, mimeType, isTemplate) = resource;
+
+        // Assert
         Assert.Equal(("resource://one", "One", "text/plain", false), (uri, name, mimeType, isTemplate));
 
         var contents = new McpResourceContentSnapshot("resource://one", "text/plain", "content", null);
@@ -151,12 +166,17 @@ public sealed class McpScenarioTests
     [Fact]
     public async Task ShouldExerciseToolsResourcesAndPromptsThroughOwnedStdioScenario()
     {
+        // Arrange
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name
                             ?? throw new InvalidOperationException("Missing test configuration.");
         var host = Path.GetFullPath(
             $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll",
             AppContext.BaseDirectory);
+
+        // Act
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
+        // Assert
         await using (var scenario = await McpScenario.ConnectStdioAsync(new StdioClientTransportOptions
         {
             Command = "dotnet",
@@ -198,6 +218,7 @@ public sealed class McpScenarioTests
     [Fact]
     public async Task ShouldSnapshotCatalogAndExerciseRealDispatchFailures()
     {
+        // Arrange
         var postRequests = 0;
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -241,7 +262,11 @@ public sealed class McpScenarioTests
         using var http = app.GetTestClient();
         McpToolSnapshot greeting;
         McpCallSnapshot actor;
+
+        // Act
         McpCallSnapshot failure;
+
+        // Assert
         await using (var scenario = await McpScenario.ConnectAsync(http, new Uri("http://localhost/mcp")))
         {
             var tools = await scenario.ListTools().ExpectExactly(

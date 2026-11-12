@@ -22,8 +22,13 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false, 2, true)]
     public async Task FailedResultsStopDispatchAndResumeAtCommittedProgress(bool projection, int mode, bool transient)
     {
+        // Arrange
         var source = await SeedAsync();
+
+        // Act
         var state = new State { Error = RequestError.Conflict("private failure", transient) };
+
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => RunAsync(source, state, projection, mode));
 
         Assert.Same(state.Error, failure.Error);
@@ -52,8 +57,13 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false)]
     public async Task ThrownExceptionsRetainTheOriginalFailureAndSource(bool projection)
     {
+        // Arrange
         var original = new IOException("source service failed");
+
+        // Act
         var state = new State { Exception = original };
+
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await RunAsync(await SeedAsync(), state, projection, 1));
 
         Assert.Same(original, failure.InnerException);
@@ -68,9 +78,14 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false)]
     public async Task UninitializedResultsCannotAdvanceProgress(bool projection)
     {
+        // Arrange
         var state = new State { ReturnDefault = true };
-        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await RunAsync(await SeedAsync(), state, projection, 1));
 
+        // Act
+        var error = await Record.ExceptionAsync(async () => await RunAsync(await SeedAsync(), state, projection, 1));
+
+        // Assert
+        var failure = Assert.IsType<ProcessorFailureException>(error);
         Assert.IsType<InvalidOperationException>(failure.InnerException);
         Assert.Equal(ProcessorFailureStage.Handling, failure.Stage);
         Assert.Equal(ProjectionCheckpoint.Start, state.Checkpoint);
@@ -80,8 +95,13 @@ public sealed partial class ProcessorOutcomeTests
     [Fact]
     public async Task CleanupFailureCannotReplaceTheHandlerFailure()
     {
+        // Arrange
         var cleanup = new IOException("cleanup failed");
+
+        // Act
         var state = new State { Error = RequestError.Validation("bad event"), DisposeException = cleanup };
+
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await RunAsync(await SeedAsync(), state, true, 1));
 
         Assert.Same(state.Error, failure.Error);
@@ -94,8 +114,13 @@ public sealed partial class ProcessorOutcomeTests
     [Fact]
     public async Task CleanupAfterACommitReportsTheConfirmedCheckpoint()
     {
+        // Arrange
         var cleanup = new IOException("cleanup failed");
+
+        // Act
         var state = new State { DisposeException = cleanup };
+
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await RunAsync(await SeedAsync(), state, true, 1));
 
         Assert.Equal(ProcessorFailureStage.Disposing, failure.Stage);
@@ -110,10 +135,15 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false)]
     public async Task SourceReadFailuresCarryTheResumeCheckpoint(bool projection)
     {
+        // Arrange
         var original = new IOException("reader failed");
         var cleanup = new IOException("reader initialization cleanup failed");
         original.Data["Portia.CleanupException"] = cleanup;
+
+        // Act
         var state = new State { Checkpoint = new ProjectionCheckpoint(new EventCursor("previous")) };
+
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => RunAsync(new FailedReader(original), state, projection, 1));
 
         Assert.Same(original, failure.InnerException);
@@ -131,6 +161,7 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false, true)]
     public async Task HostedPermanentResultsStopImmediatelyAndTransientResultsRetry(bool projection, bool transient)
     {
+        // Arrange
         var state = new State { Projection = projection, Error = RequestError.Conflict("unavailable", transient) };
         var clock = new ManualClock();
         var services = new ServiceCollection();
@@ -142,7 +173,11 @@ public sealed partial class ProcessorOutcomeTests
             ? portia.AddProjector<GroupedProjection>("outcomes", WorkloadScope.Global)
             : portia.AddReactor<GroupedReaction>("outcomes", WorkloadScope.Global))
             .AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
@@ -195,6 +230,7 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false, false, 3)]
     public async Task HostedExceptionsRespectClassificationAndRetainTheCause(bool projection, bool transient, int kind)
     {
+        // Arrange
         Exception original = kind switch
         {
             1 => new ProviderException(transient),
@@ -213,7 +249,11 @@ public sealed partial class ProcessorOutcomeTests
             ? portia.AddProjector<GroupedProjection>("outcomes", WorkloadScope.Global, options => options.FailureAttemptLimit = 2)
             : portia.AddReactor<GroupedReaction>("outcomes", WorkloadScope.Global, options => options.FailureAttemptLimit = 2))
             .AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
@@ -239,10 +279,14 @@ public sealed partial class ProcessorOutcomeTests
     [Fact]
     public async Task TypedContextsShareMetadataOnlyWithinTheirTransaction()
     {
+        // Arrange
         var state = new State();
+
+        // Act
         _ = await new ProjectorRunner(await SeedAsync()).RunAsync(new GroupedProjection(state),
             ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxBatchSize = 2, RebuildId = "candidate" });
 
+        // Assert
         Assert.Equal(3, state.Contexts.Count);
         Assert.Same(state.Contexts[0].Batch, state.Contexts[1].Batch);
         Assert.NotSame(state.Contexts[1].Batch, state.Contexts[2].Batch);
@@ -263,6 +307,7 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false)]
     public async Task SourceCleanupCannotReplaceADeclaredFailure(bool projection)
     {
+        // Arrange
         var cleanup = new IOException("source cleanup failed");
         var transactionCleanup = new IOException("transaction cleanup failed");
         var state = new State
@@ -270,7 +315,11 @@ public sealed partial class ProcessorOutcomeTests
             Error = RequestError.Validation("bad event"),
             DisposeException = projection ? transactionCleanup : null
         };
+
+        // Act
         var source = new CleanupReader(await SeedAsync(), cleanup);
+
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => RunAsync(source, state, projection, 1));
 
         Assert.Same(state.Error, failure.Error);
@@ -288,9 +337,14 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false)]
     public async Task SourceCleanupAfterSuccessReportsConfirmedProgress(bool projection)
     {
+        // Arrange
         var cleanup = new IOException("source cleanup failed");
         var state = new State();
+
+        // Act
         var source = new CleanupReader(await SeedAsync(), cleanup);
+
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => RunAsync(source, state, projection, 1));
 
         Assert.Equal(ProcessorFailureStage.Disposing, failure.Stage);

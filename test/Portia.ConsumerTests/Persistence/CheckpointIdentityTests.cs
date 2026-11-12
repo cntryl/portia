@@ -8,6 +8,7 @@ public sealed class CheckpointIdentityTests
     [Fact]
     public async Task CheckpointIdentitiesResumeIndependentlyAcrossTenantsAndPatterns()
     {
+        // Arrange
         var store = new InMemoryProjectionCheckpointStore();
         var identities = new[]
         {
@@ -15,9 +16,13 @@ public sealed class CheckpointIdentityTests
             new CheckpointIdentity("same", EventStreamPattern.ForPattern("tenant-b", "orders")),
             new CheckpointIdentity("same", EventStreamPattern.ForPattern("tenant-a", "returns"))
         };
+
+        // Act
         for (var i = 0; i < identities.Length; i++)
             await store.SaveAsync(identities[i], new ProjectionCheckpoint(
                 new EventCursor(((ulong)i + 1).ToString(CultureInfo.InvariantCulture))));
+
+        // Assert
         for (var i = 0; i < identities.Length; i++)
             Assert.Equal(((ulong)i + 1).ToString(CultureInfo.InvariantCulture),
                 (await store.LoadAsync(identities[i])).Cursor.ToString());
@@ -28,6 +33,7 @@ public sealed class CheckpointIdentityTests
     [Fact]
     public async Task RebuildGenerationsResumeAndLeaveLiveDataUntouched()
     {
+        // Arrange
         var events = new InMemoryEventStore();
         var target = new Target();
         var pattern = EventStreamPattern.ForPattern("tenant", "orders");
@@ -49,7 +55,11 @@ public sealed class CheckpointIdentityTests
         var first = new CheckpointIdentity("same", pattern, "first");
         var second = new CheckpointIdentity("same", pattern, "second");
         await Pass(null);
+
+        // Act
         await Pass("first");
+
+        // Assert
         Assert.True(Assert.Single(target.Data[first]));
         await events.AppendAsync(stream, 1, [DomainEventSeed.Attach(new Declined("two"), id, 2)]);
         await Pass("first");
@@ -76,6 +86,7 @@ public sealed class CheckpointIdentityTests
     [Fact]
     public async Task PublicRunnerReloadsEachPatternAndResumesInterruptedRebuild()
     {
+        // Arrange
         var events = new InMemoryEventStore();
         var target = new Target();
         var patterns = new[]
@@ -103,7 +114,10 @@ public sealed class CheckpointIdentityTests
                 new ProjectionRunOptions { RebuildId = "interrupted", MaxBatchSize = 1 }, default);
         }
 
+        // Act
         target.FailCommitNumber = 2;
+
+        // Assert
         var diagnostic = await Assert.ThrowsAsync<ProcessorFailureException>(() => Pass(patterns[0]));
         Assert.IsType<IOException>(diagnostic.InnerException);
         Assert.Equal(ProcessorFailureStage.Committing, diagnostic.Stage);

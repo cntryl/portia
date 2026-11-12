@@ -18,6 +18,7 @@ public sealed class CompleteWorkflowTests
     [InlineData(true)]
     public async Task SameBusinessHandlerPersistsAcrossDirectHttpRpcAndQueueWithIndependentAudits(bool fitzStore)
     {
+        // Arrange
         var endpoints = GeneratorCompilation.Compile("""
                                                      using Cntryl.Portia;
                                                      using Cntryl.Portia.Testing;
@@ -70,7 +71,11 @@ public sealed class CompleteWorkflowTests
         await using var app = builder.Build();
         map(app);
         await app.StartAsync();
+
+        // Act
         var effects = app.Services.GetRequiredService<ConsumerHost.Effects>();
+
+        // Assert
         try
         {
             await using (var scope = app.Services.CreateAsyncScope())

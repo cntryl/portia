@@ -5,6 +5,7 @@ public sealed class AggregatePublicTestingTests
     [Fact]
     public void MetadataAndBusinessTestHelpersRequireNoInternalAccess()
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
                                                     using System;
                                                     using Cntryl.Portia;
@@ -27,7 +28,11 @@ public sealed class AggregatePublicTestingTests
                                                         }
                                                     }
                                                     """);
+
+        // Act
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<int>>();
+
+        // Assert
         Assert.Equal(21, run());
     }
 }

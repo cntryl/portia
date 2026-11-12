@@ -28,6 +28,7 @@ public sealed class TransportParityTests
     [InlineData("mcp-stdio")]
     public async Task ShouldPreserveTheSameApplicationPipelineAndCommittedEvents(string transportName)
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
@@ -76,7 +77,11 @@ public sealed class TransportParityTests
         var token = timeout.Token;
 
         var first = await ChangeAsync(new QualifiedChange(QualifiedObservations.Tenant, 1));
+
+        // Act
         var second = await ChangeAsync(new QualifiedChange(QualifiedObservations.Tenant, 2));
+
+        // Assert
         Assert.Equal(200, first.Status);
         Assert.Equal(200, second.Status);
         Assert.NotEqual(first.Reply!.ScopeId, second.Reply!.ScopeId);

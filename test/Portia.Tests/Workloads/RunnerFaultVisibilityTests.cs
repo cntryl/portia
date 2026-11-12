@@ -12,6 +12,7 @@ public sealed class RunnerFaultVisibilityTests
     [Fact]
     public void ShouldRecordBoundedMetricWithoutActivityGivenBackgroundFault()
     {
+        // Arrange
         var activities = new ConcurrentBag<Activity>();
         using var activityListener = new ActivityListener
         {
@@ -34,9 +35,11 @@ public sealed class RunnerFaultVisibilityTests
             measurements.Add((value, tags.ToArray())));
         meterListener.Start();
 
+        // Act
         PortiaTelemetry.RecordRunnerFault("QueueRunner", RunnerFaultStage.Execution,
             new InvalidOperationException("secret"));
 
+        // Assert
         Assert.Empty(activities);
         var (Value, Tags) = Assert.Single(measurements);
         Assert.Equal(1, Value);
@@ -50,6 +53,7 @@ public sealed class RunnerFaultVisibilityTests
     [Fact]
     public void ShouldNeverCreateActivitiesForNonRequestRuntimeLoops()
     {
+        // Arrange
         var activities = new ConcurrentBag<Activity>();
         using var listener = new ActivityListener
         {
@@ -64,9 +68,12 @@ public sealed class RunnerFaultVisibilityTests
         PortiaTelemetry.RecordWorkload("test.projector", "tenant", true);
         PortiaTelemetry.RecordFleetAssignment("worker-secret", "partition-secret", true);
         PortiaTelemetry.EventStoreFinished(PortiaTelemetry.StartTimestamp(), "read", "pattern", "success");
+
+        // Act
         PortiaTelemetry.ProcessorBatchFinished(PortiaTelemetry.StartTimestamp(), "test.projector", "projector",
             "success", 0);
 
+        // Assert
         Assert.Empty(activities);
     }
 

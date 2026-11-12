@@ -11,10 +11,13 @@ public sealed class FitzEventStreamPatternOffsetsTests
     [Fact]
     public void ShouldReturnTheResourceOffsetForResourceScope()
     {
+        // Arrange
         var pattern = EventStreamPattern.ForPattern("realm", "area", "resource");
 
+        // Act
         var offset = FitzEventStreamPatternOffsets.GetPatternOffset(pattern, 1, 2, 3);
 
+        // Assert
         Assert.Equal(1UL, offset);
     }
 
@@ -22,10 +25,13 @@ public sealed class FitzEventStreamPatternOffsetsTests
     [Fact]
     public void ShouldReturnTheAreaOffsetForAreaScope()
     {
+        // Arrange
         var pattern = EventStreamPattern.ForPattern("realm", "area");
 
+        // Act
         var offset = FitzEventStreamPatternOffsets.GetPatternOffset(pattern, 1, 2, 3);
 
+        // Assert
         Assert.Equal(2UL, offset);
     }
 
@@ -33,10 +39,13 @@ public sealed class FitzEventStreamPatternOffsetsTests
     [Fact]
     public void ShouldReturnTheRealmOffsetForRealmScope()
     {
+        // Arrange
         var pattern = EventStreamPattern.ForPattern("realm");
 
+        // Act
         var offset = FitzEventStreamPatternOffsets.GetPatternOffset(pattern, 1, 2, 3);
 
+        // Assert
         Assert.Equal(3UL, offset);
     }
 
@@ -44,9 +53,13 @@ public sealed class FitzEventStreamPatternOffsetsTests
     [Fact]
     public void ShouldMatchAStreamWhenEveryNonNullPatternSegmentEqualsIt()
     {
+        // Arrange
         var stream = new EventStreamAddress("realm", "area", "resource");
+
+        // Act
         var pattern = EventStreamPattern.ForPattern("realm", "area");
 
+        // Assert
         Assert.True(FitzEventStreamPatternOffsets.Matches(stream, pattern));
     }
 
@@ -54,9 +67,13 @@ public sealed class FitzEventStreamPatternOffsetsTests
     [Fact]
     public void ShouldNotMatchAStreamWhenAPatternSegmentDiffers()
     {
+        // Arrange
         var stream = new EventStreamAddress("realm", "area", "resource");
+
+        // Act
         var pattern = EventStreamPattern.ForPattern("realm", "other-area");
 
+        // Assert
         Assert.False(FitzEventStreamPatternOffsets.Matches(stream, pattern));
     }
 }

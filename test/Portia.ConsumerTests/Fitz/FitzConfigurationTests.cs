@@ -20,12 +20,16 @@ public sealed class FitzConfigurationTests
     [InlineData("/relative/ws")]
     public void EndpointMustBeAnAbsoluteWebSocketUri(string? endpoint)
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        var error = Assert.Throws<ArgumentException>(() =>
+        // Act
+        var error = Record.Exception(() =>
             services.AddPortia().AddFitz(Configuration(("Endpoint", endpoint))));
 
-        Assert.Contains("absolute ws:// or wss:// URI", error.Message, StringComparison.Ordinal);
+        // Assert
+        var invalid = Assert.IsType<ArgumentException>(error);
+        Assert.Contains("absolute ws:// or wss:// URI", invalid.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -33,10 +37,13 @@ public sealed class FitzConfigurationTests
     [InlineData("wss://broker.example/ws")]
     public void AcceptsEitherWebSocketScheme(string endpoint)
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration(("Endpoint", endpoint)));
 
+        // Assert
         Assert.Contains(services, item => item.ServiceType.Name == "FitzApplicationConnection");
     }
 
@@ -49,12 +56,16 @@ public sealed class FitzConfigurationTests
     [InlineData("Infinity")]
     public void StartupTimeoutMustBePositiveFiniteAndWithinAnHour(string seconds)
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        var error = Assert.Throws<ArgumentException>(() => services.AddPortia().AddFitz(
+        // Act
+        var error = Record.Exception(() => services.AddPortia().AddFitz(
             Configuration(("Endpoint", "ws://127.0.0.1:4090/ws"), ("StartupTimeoutSeconds", seconds))));
 
-        Assert.Contains("between zero and 3600 seconds", error.Message, StringComparison.Ordinal);
+        // Assert
+        var invalid = Assert.IsType<ArgumentException>(error);
+        Assert.Contains("between zero and 3600 seconds", invalid.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -63,11 +74,14 @@ public sealed class FitzConfigurationTests
     [InlineData("3600")]
     public void StartupTimeoutAcceptsAnyPositiveValueWithinAnHour(string seconds)
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(
             Configuration(("Endpoint", "ws://127.0.0.1:4090/ws"), ("StartupTimeoutSeconds", seconds)));
 
+        // Assert
         Assert.Contains(services, item => item.ServiceType.Name == "FitzApplicationConnection");
     }
 
@@ -79,32 +93,43 @@ public sealed class FitzConfigurationTests
     [InlineData("star*")]
     public void ApplicationNameMustBeAnExactRouteSegmentBecauseItBecomesTheFleetSelector(string name)
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        var error = Assert.Throws<ArgumentException>(() => services.AddPortia().AddFitz(
+        // Act
+        var error = Record.Exception(() => services.AddPortia().AddFitz(
             Configuration(("Endpoint", "ws://127.0.0.1:4090/ws"), ("ApplicationName", name))));
 
-        Assert.Contains("exact route segment", error.Message, StringComparison.Ordinal);
+        // Assert
+        var invalid = Assert.IsType<ArgumentException>(error);
+        Assert.Contains("exact route segment", invalid.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void ApplicationNameBecomesTheFleetMembershipSelector()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(
             Configuration(("Endpoint", "ws://127.0.0.1:4090/ws"), ("ApplicationName", "orders")));
 
+        // Assert
         Assert.Contains(services, item => item.ServiceType.Name == "FitzApplicationConnection");
     }
 
     [Fact]
     public void SecondFitzConnectionWithDifferentSettingsIsRejected()
     {
+        // Arrange
         var services = new ServiceCollection();
         var portia = services.AddPortia();
+
+        // Act
         _ = portia.AddFitz(Configuration(("Endpoint", "ws://127.0.0.1:4090/ws")));
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() =>
             portia.AddFitz(Configuration(("Endpoint", "ws://127.0.0.1:4091/ws"))));
 
@@ -114,23 +139,30 @@ public sealed class FitzConfigurationTests
     [Fact]
     public void RepeatingTheSameFitzConfigurationComposesOntoTheOneConnection()
     {
+        // Arrange
         var services = new ServiceCollection();
         var portia = services.AddPortia();
         _ = portia.AddFitz(Configuration(("Endpoint", "ws://127.0.0.1:4090/ws")));
         var count = services.Count(item => item.ServiceType.Name == "FitzApplicationConnection");
 
+        // Act
         _ = portia.AddFitz(Configuration(("Endpoint", "ws://127.0.0.1:4090/ws")));
 
+        // Assert
         Assert.Equal(count, services.Count(item => item.ServiceType.Name == "FitzApplicationConnection"));
     }
 
     [Fact]
     public void AnOwnedConnectionAndACallerSuppliedClientCannotBothOwnOneApplication()
     {
+        // Arrange
         var services = new ServiceCollection();
         var portia = services.AddPortia();
+
+        // Act
         _ = portia.AddFitz(Configuration(("Endpoint", "ws://127.0.0.1:4090/ws")));
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() =>
             portia.UseFitzClient(new Client(new ClientConfig(new Uri("ws://127.0.0.1:4090/ws"))), _ => { }));
 

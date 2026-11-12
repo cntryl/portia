@@ -18,6 +18,7 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
     [InlineData(true)]
     public async Task ShouldReportOwnedProjectorAndReactorProgressThroughPublicRpcClient(bool operationalPolicy)
     {
+        // Arrange
         await using var connection = await broker.CreateClientAsync();
         var application = "status-" + Uuid.CreateVersion4();
         var control = new StatusControl();
@@ -46,7 +47,11 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         var callerServices = new ServiceCollection();
         _ = callerServices.AddPortia().UseFitzClient(connection,
             fitz => fitz.DisableRequestWorkers().UseProcessorStatusRpc(application));
+
+        // Act
         await using var caller = callerServices.BuildServiceProvider();
+
+        // Assert
         Assert.DoesNotContain(caller.GetServices<IHostedService>(), service => service is PortiaWorkloadService);
         var client = caller.GetRequiredService<IProcessorStatusClient>();
         var worker = provider.GetServices<IHostedService>().OfType<PortiaWorkloadService>().Single();

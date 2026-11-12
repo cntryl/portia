@@ -10,6 +10,7 @@ public sealed class ContextSaveTests
     [InlineData(true)]
     public async Task FailedSaveFreezesAttributionAndRetryPreservesSerializedEvents(bool audit)
     {
+        // Arrange
         var store = new FailingStore();
         await using var provider = new ServiceCollection().BuildServiceProvider();
         var repository = new AggregateRepository(store);
@@ -19,6 +20,8 @@ public sealed class ContextSaveTests
                 "test"));
         var context = new RequestContext<DepositAccount>(new DepositAccount(id, 10), actor);
         var account = new Account(id);
+
+        // Act
         if (audit)
         {
             account.Audit(new Declined("declined"));
@@ -28,6 +31,7 @@ public sealed class ContextSaveTests
             account.Deposit(10);
         }
 
+        // Assert
         _ = await Assert.ThrowsAsync<IOException>(async () => await repository.SaveAsync(account, context));
         _ = Assert.Throws<InvalidOperationException>(() =>
         {
@@ -72,10 +76,15 @@ public sealed class ContextSaveTests
     [Fact]
     public async Task MissingContextCannotPersistEvents()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         var repository = new AggregateRepository(store);
         var account = new Account(Uuid.CreateVersion4());
+
+        // Act
         account.Deposit(1);
+
+        // Assert
         _ = await Assert.ThrowsAsync<ArgumentNullException>(async () => await repository.SaveAsync(account, null!));
         Assert.Equal(0UL, account.CommittedStreamPosition);
     }
@@ -83,6 +92,7 @@ public sealed class ContextSaveTests
     [Fact]
     public async Task CancelledSaveDoesNotFreezeAttribution()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         await using var provider = new ServiceCollection().BuildServiceProvider();
         var repository = new AggregateRepository(store);
@@ -90,7 +100,11 @@ public sealed class ContextSaveTests
         account.Deposit(3);
         var first = new RequestContext<DepositAccount>(new DepositAccount(account.Id, 3), RequestActor.System);
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         await cancellation.CancelAsync();
+
+        // Assert
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await repository.SaveAsync(account, first, cancellation.Token));
         var second = new RequestContext<DepositAccount>(first.Request, RequestActor.System);
@@ -102,6 +116,7 @@ public sealed class ContextSaveTests
     [Fact]
     public async Task ConflictingMetadataRejectsWholeBatchBeforeStampingOrAppending()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         var repository = new AggregateRepository(store);
         var account = new Account(Uuid.CreateVersion4(), new ConflictingFactory());
@@ -110,7 +125,11 @@ public sealed class ContextSaveTests
         account.Raise(first);
         account.Raise(second);
         var original = first.Metadata;
+
+        // Act
         var context = new RequestDispatchContext(RequestActor.System);
+
+        // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await repository.SaveAsync(account, context));
         Assert.Same(original, first.Metadata);

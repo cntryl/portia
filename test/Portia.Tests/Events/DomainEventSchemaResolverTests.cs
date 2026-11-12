@@ -16,13 +16,16 @@ public sealed class DomainEventSchemaResolverTests
     [Fact]
     public void ShouldResolveDirectlyWhenExactVersionIsRegistered()
     {
+        // Arrange
         var resolver = new DomainEventSchemaResolver(
             new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed"),
             new Dictionary<(string, int), IJsonDomainEventUpcaster>());
         var payload = new JsonObject { ["name"] = "Sprocket" };
 
+        // Act
         var (type, resolvedPayload) = resolver.Resolve("WidgetNamed", 1, payload);
 
+        // Assert
         Assert.Equal(typeof(WidgetNamed), type);
         Assert.Same(payload, resolvedPayload);
     }
@@ -34,6 +37,7 @@ public sealed class DomainEventSchemaResolverTests
     [Fact]
     public void ShouldWalkForwardThroughAnUpcasterUntilCatalogResolves()
     {
+        // Arrange
         var upcaster = new WidgetNamedToRenamedUpcaster();
         var resolver = new DomainEventSchemaResolver(
             new DomainEventTypeCatalog().Register<WidgetRenamed>(2, "WidgetNamed"),
@@ -41,8 +45,10 @@ public sealed class DomainEventSchemaResolverTests
             { [(upcaster.EventName, upcaster.FromVersion)] = upcaster });
         var payload = new JsonObject { ["name"] = "Sprocket" };
 
+        // Act
         var (type, resolvedPayload) = resolver.Resolve("WidgetNamed", 1, payload);
 
+        // Assert
         Assert.Equal(typeof(WidgetRenamed), type);
         var displayName = Assert.IsType<JsonValue>(resolvedPayload["display_name"], false);
         Assert.Equal("Sprocket", displayName.GetValue<string>());
@@ -54,10 +60,15 @@ public sealed class DomainEventSchemaResolverTests
     [Fact]
     public void ShouldThrowWhenNoRegistrationOrUpcasterCanResolveVersion()
     {
+        // Arrange
         var resolver = new DomainEventSchemaResolver(
             new DomainEventTypeCatalog().Register<WidgetRenamed>(2, "WidgetNamed"),
             new Dictionary<(string, int), IJsonDomainEventUpcaster>());
 
-        _ = Assert.Throws<InvalidOperationException>(() => resolver.Resolve("WidgetNamed", 1, []));
+        // Act
+        var exception = Record.Exception(() => resolver.Resolve("WidgetNamed", 1, []));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(exception);
     }
 }

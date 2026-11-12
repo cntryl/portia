@@ -36,11 +36,14 @@ public sealed class JwtRequestActorValidatorTests
     [Fact]
     public async Task ShouldValidateWellFormedToken()
     {
+        // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
         var token = CreateToken(DateTime.UtcNow.AddMinutes(5), "user-1");
 
+        // Act
         var result = await validator.ValidateAsync(token);
 
+        // Assert
         Assert.True(result.IsSuccess);
         var actor = result.Value;
         Assert.NotNull(actor);
@@ -54,12 +57,15 @@ public sealed class JwtRequestActorValidatorTests
     [Fact]
     public async Task ShouldMapInboundClaimsLikeJwtBearerByDefault()
     {
+        // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
         var token = CreateToken(DateTime.UtcNow.AddMinutes(5), "user-1",
             claims: new Dictionary<string, object> { ["unique_name"] = "alice", ["role"] = "admin" });
 
+        // Act
         var actor = (await validator.ValidateAsync(token)).Value;
 
+        // Assert
         Assert.Equal("alice", actor.Identity?.Name);
         Assert.Equal("user-1", actor.FindFirst(ClaimTypes.NameIdentifier)?.Value);
         Assert.True(actor.IsInRole("admin"));
@@ -69,12 +75,15 @@ public sealed class JwtRequestActorValidatorTests
     [Fact]
     public async Task ShouldKeepTokenClaimNamesWhenInboundMappingIsOff()
     {
+        // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters, mapInboundClaims: false);
         var token = CreateToken(DateTime.UtcNow.AddMinutes(5), "user-1",
             claims: new Dictionary<string, object> { ["role"] = "admin" });
 
+        // Act
         var actor = (await validator.ValidateAsync(token)).Value;
 
+        // Assert
         Assert.Equal("user-1", actor.FindFirst("sub")?.Value);
         Assert.Equal("admin", actor.FindFirst("role")?.Value);
     }
@@ -87,11 +96,14 @@ public sealed class JwtRequestActorValidatorTests
     [Fact]
     public async Task ShouldRejectExpiredToken()
     {
+        // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
         var token = CreateToken(DateTime.UtcNow.AddMinutes(-5), "user-1");
 
+        // Act
         var result = await validator.ValidateAsync(token);
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
@@ -103,6 +115,7 @@ public sealed class JwtRequestActorValidatorTests
     [Fact]
     public async Task ShouldRejectTokenSignedWithWrongKey()
     {
+        // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
         var wrongKey = new SymmetricSecurityKey(
         [
@@ -111,8 +124,10 @@ public sealed class JwtRequestActorValidatorTests
         ]);
         var token = CreateToken(DateTime.UtcNow.AddMinutes(5), "user-1", wrongKey);
 
+        // Act
         var result = await validator.ValidateAsync(token);
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
@@ -131,6 +146,7 @@ public sealed class JwtRequestActorValidatorTests
     [Fact]
     public async Task ShouldRejectRecentlyExpiredTokenEvenWhenCallerUsesDefaultClockSkew()
     {
+        // Arrange
         var parametersWithDefaultClockSkew = new TokenValidationParameters
         {
             ValidIssuer = "portia-tests",
@@ -146,8 +162,10 @@ public sealed class JwtRequestActorValidatorTests
         var validator = new JwtRequestActorValidator(parametersWithDefaultClockSkew);
         var token = CreateToken(DateTime.UtcNow.AddMinutes(-1), "user-1", notBefore: DateTime.UtcNow.AddMinutes(-10));
 
+        // Act
         var result = await validator.ValidateAsync(token);
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
@@ -161,6 +179,7 @@ public sealed class JwtRequestActorValidatorTests
     [Fact]
     public void ShouldNotMutateCallersOwnValidationParameters()
     {
+        // Arrange
         var callerOwned = new TokenValidationParameters
         {
             ValidIssuer = "portia-tests",
@@ -169,8 +188,10 @@ public sealed class JwtRequestActorValidatorTests
             ClockSkew = TimeSpan.FromMinutes(5)
         };
 
+        // Act
         _ = new JwtRequestActorValidator(callerOwned);
 
+        // Assert
         Assert.Equal(TimeSpan.FromMinutes(5), callerOwned.ClockSkew);
     }
 
@@ -184,10 +205,13 @@ public sealed class JwtRequestActorValidatorTests
     [InlineData("   ")]
     public async Task ShouldRejectMissingToken(string? token)
     {
+        // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
 
+        // Act
         var result = await validator.ValidateAsync(token);
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
@@ -199,10 +223,13 @@ public sealed class JwtRequestActorValidatorTests
     [Fact]
     public async Task ShouldRejectMalformedToken()
     {
+        // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
 
+        // Act
         var result = await validator.ValidateAsync("not-a-real-token");
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
@@ -215,11 +242,14 @@ public sealed class JwtRequestActorValidatorTests
     [Fact]
     public async Task ShouldNotDiscloseTokenValidationDiagnosticsToTheCaller()
     {
+        // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
         var token = CreateToken(DateTime.UtcNow.AddMinutes(-5), "user-1");
 
+        // Act
         var result = await validator.ValidateAsync(token);
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
         Assert.DoesNotContain("IDX", result.Error.Message, StringComparison.Ordinal);
@@ -230,11 +260,15 @@ public sealed class JwtRequestActorValidatorTests
     [Fact]
     public async Task ShouldObserveCancellation()
     {
+        // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
         var token = CreateToken(DateTime.UtcNow.AddMinutes(5), "user-1");
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         await cancellation.CancelAsync();
 
+        // Assert
         _ = await Assert.ThrowsAsync<OperationCanceledException>(async () =>
             await validator.ValidateAsync(token, cancellation.Token));
     }

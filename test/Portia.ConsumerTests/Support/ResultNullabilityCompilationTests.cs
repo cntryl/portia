@@ -9,10 +9,14 @@ public sealed class ResultNullabilityCompilationTests
     [Fact]
     public void ShouldPreserveNullableSuccessAndValueStateValidation()
     {
+        // Arrange
         var nullableSuccess = Result<string?>.Success(null);
         var failure = Result<string>.Failure(new RequestError(RequestErrorKind.NotFound, "missing"));
+
+        // Act
         Result<string> uninitialized = default;
 
+        // Assert
         Assert.True(nullableSuccess.IsSuccess);
         Assert.Null(nullableSuccess.Value);
         _ = Assert.Throws<InvalidOperationException>(() => failure.Value);
@@ -23,7 +27,8 @@ public sealed class ResultNullabilityCompilationTests
     [Fact]
     public void ShouldCompileNonNullableResultValueWithoutWarnings()
     {
-        var diagnostics = GeneratorCompilation.WarningsAsErrorsDiagnostics("""
+        // Arrange
+        const string source = """
                                                                            #nullable enable
                                                                            using Cntryl.Portia;
 
@@ -45,8 +50,12 @@ public sealed class ResultNullabilityCompilationTests
                                                                                    return result.Value;
                                                                                }
                                                                            }
-                                                                           """);
+                                                                           """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.WarningsAsErrorsDiagnostics(source);
+
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
@@ -54,7 +63,8 @@ public sealed class ResultNullabilityCompilationTests
     [Fact]
     public void ShouldReportNullableDereferenceForNullableResultValue()
     {
-        var diagnostics = GeneratorCompilation.WarningsAsErrorsDiagnostics("""
+        // Arrange
+        const string source = """
                                                                            #nullable enable
                                                                            using Cntryl.Portia;
 
@@ -68,8 +78,12 @@ public sealed class ResultNullabilityCompilationTests
                                                                                    return result.Value.Length;
                                                                                }
                                                                            }
-                                                                           """);
+                                                                           """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.WarningsAsErrorsDiagnostics(source);
+
+        // Assert
         Assert.Contains(diagnostics, diagnostic =>
             diagnostic.Id == "CS8602" && diagnostic.Severity == DiagnosticSeverity.Error);
     }

@@ -7,14 +7,17 @@ public sealed class FakeObjectStorageTests
     [Fact]
     public async Task ShouldVerifyAndIsolateObjectsByTenant()
     {
+        // Arrange
         var store = new FakeObjectStorage();
         var content = "immutable tenant content"u8.ToArray();
         var digest = Digest(content);
         var tenantA = new TenantId("tenant-a");
         var tenantB = new TenantId("tenant-b");
 
+        // Act
         await UploadAsync(store, tenantA, digest, content);
 
+        // Assert
         Assert.True(await store.HeadAndVerifyAsync(tenantA, digest));
         Assert.False(await store.HeadAndVerifyAsync(tenantB, digest));
         var download = await store.CreateDownloadAsync(tenantA, digest, TimeSpan.FromMinutes(3));
@@ -35,11 +38,15 @@ public sealed class FakeObjectStorageTests
     [Fact]
     public async Task ShouldRejectMismatchedContentAndRemoveFailedSession()
     {
+        // Arrange
         var store = new FakeObjectStorage();
         var expected = Digest("expected"u8.ToArray());
         var session = await store.CreateUploadAsync(new TenantId("tenant-a"), expected);
+
+        // Act
         var receipt = await store.AcceptPartAsync(session, 1, new MemoryStream("actual"u8.ToArray()));
 
+        // Assert
         await Assert.ThrowsAsync<InvalidDataException>(async () =>
             await store.CompleteUploadAsync(session, [receipt]));
 
@@ -77,10 +84,15 @@ public sealed class FakeObjectStorageTests
     [Fact]
     public async Task ShouldAbortSessionAndBoundSignedLifetimes()
     {
+        // Arrange
         var store = new FakeObjectStorage();
         var expected = Digest("content"u8.ToArray());
         var session = await store.CreateUploadAsync(new TenantId("tenant-a"), expected);
+
+        // Act
         var part = await store.SignPartAsync(session, 1, TimeSpan.FromMinutes(2));
+
+        // Assert
         Assert.True(part.ExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(2));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await store.SignPartAsync(session, 1, ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromTicks(1)));
@@ -97,18 +109,29 @@ public sealed class FakeObjectStorageTests
     [Fact]
     public void ShouldEnforceThe256MiBBoundary()
     {
+        // Arrange
         var digest = new string('a', 64);
-        Assert.Equal(ObjectStorageLimits.MaximumObjectLength, new ObjectDigest(digest, ObjectStorageLimits.MaximumObjectLength).Length);
-        Assert.Throws<ArgumentOutOfRangeException>(() => new ObjectDigest(digest, ObjectStorageLimits.MaximumObjectLength + 1));
-        Assert.Throws<ArgumentException>(() => new ObjectDigest("not-a-digest", 0));
+
+        // Act
+        var maximum = new ObjectDigest(digest, ObjectStorageLimits.MaximumObjectLength);
+        var tooLong = Record.Exception(() => new ObjectDigest(digest, ObjectStorageLimits.MaximumObjectLength + 1));
+        var badDigest = Record.Exception(() => new ObjectDigest("not-a-digest", 0));
+
+        // Assert
+        Assert.Equal(ObjectStorageLimits.MaximumObjectLength, maximum.Length);
+        _ = Assert.IsType<ArgumentOutOfRangeException>(tooLong);
+        _ = Assert.IsType<ArgumentException>(badDigest);
     }
 
     /// <summary>Runs the reusable provider conformance suite against the fake.</summary>
     [Fact]
     public async Task ShouldPassReusableStorageConformance()
     {
+        // Arrange
         var store = new FakeObjectStorage();
-        await ObjectStorageConformance.VerifyAsync(
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await ObjectStorageConformance.VerifyAsync(
             store,
             new TenantId("conformance-a"),
             new TenantId("conformance-b"),
@@ -116,7 +139,10 @@ public sealed class FakeObjectStorageTests
                 new ObjectUploadSession(part.UploadUri.AbsolutePath.Split('/')[1]),
                 part.PartNumber,
                 new MemoryStream(content.ToArray()),
-                ct));
+                ct)));
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>Matches S3's minimum size for every part except the final one, keeping the session open for corrected parts.</summary>
@@ -142,6 +168,7 @@ public sealed class FakeObjectStorageTests
     [Fact]
     public async Task ShouldCompleteParallelUploadsAndParts()
     {
+        // Arrange
         var store = new FakeObjectStorage();
         var tenant = new TenantId("tenant-a");
         var content = new byte[ObjectStorageLimits.MinimumNonfinalPartLength * 2 + 1];
@@ -154,7 +181,10 @@ public sealed class FakeObjectStorageTests
             return await store.AcceptPartAsync(session, partNumber, new MemoryStream(content, start, length));
         })));
 
+        // Act
         await store.CompleteUploadAsync(session, parts);
+
+        // Assert
         Assert.True(await store.HeadAndVerifyAsync(tenant, digest));
 
         var payloads = Enumerable.Range(0, 64).Select(index => BitConverter.GetBytes(index)).ToArray();
@@ -172,6 +202,7 @@ public sealed class FakeObjectStorageTests
     [Fact]
     public async Task ShouldRejectPartThatFinishesAfterAbort()
     {
+        // Arrange
         var store = new FakeObjectStorage();
         var session = await store.CreateUploadAsync(new TenantId("tenant-a"), Digest([1]));
         using var stream = new PausingStream([1]);
@@ -179,8 +210,11 @@ public sealed class FakeObjectStorageTests
 
         await stream.ReadStarted;
         await store.AbortUploadAsync(session);
+
+        // Act
         stream.Resume();
 
+        // Assert
         await Assert.ThrowsAsync<InvalidOperationException>(() => acceptance);
         Assert.Equal(0, store.ActiveUploadCount);
     }
@@ -189,6 +223,7 @@ public sealed class FakeObjectStorageTests
     [Fact]
     public async Task ShouldRetrySuccessfulCompletionWithoutCrossTenantOrReceiptConfusion()
     {
+        // Arrange
         var store = new FakeObjectStorage();
         var tenantA = new TenantId("tenant-a");
         var tenantB = new TenantId("tenant-b");
@@ -198,7 +233,11 @@ public sealed class FakeObjectStorageTests
         var receipt = await store.AcceptPartAsync(session, 1, new MemoryStream(content));
 
         await store.CompleteUploadAsync(session, [receipt]);
+
+        // Act
         await store.CompleteUploadAsync(session, [new ObjectPartReceipt(receipt.PartNumber, receipt.Token)]);
+
+        // Assert
         Assert.Equal(0, store.ActiveUploadCount);
         Assert.True(await store.HeadAndVerifyAsync(tenantA, digest));
 

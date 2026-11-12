@@ -12,6 +12,7 @@ public sealed class DeliveryScopeTests
     [InlineData(true)]
     public async Task EveryDeliveryOwnsScopeThroughNestedDispatchFailureAndCancellation(bool notification)
     {
+        // Arrange
         var requests = new[]
         {
             new ScopeRequest(Uuid.CreateVersion4()), new ScopeRequest(Uuid.CreateVersion4(), 1),
@@ -32,7 +33,10 @@ public sealed class DeliveryScopeTests
             _ = services.AddPortiaQueueRunner();
         }
 
+        // Act
         await using var provider = ConsumerHost.Build(services);
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         try
@@ -61,6 +65,7 @@ public sealed class DeliveryScopeTests
     [Fact]
     public async Task RpcServerResolvesFreshApplicationScopeForEveryCall()
     {
+        // Arrange
         var services = ConsumerHost.CreateServices();
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, ScopeValidator>();
@@ -72,7 +77,11 @@ public sealed class DeliveryScopeTests
         await using var provider = ConsumerHost.Build(services);
         var server = provider.GetRequiredService<FitzRpcRequestServer>();
         await using var registration = await server.RegisterAsync<ScopeRequest>();
+
+        // Act
         var sender = new FitzRemoteRequestSender(provider.GetRequiredService<IRpcClient>(), serializer, serializer);
+
+        // Assert
         for (var i = 0; i < 2; i++)
         {
             Assert.True(

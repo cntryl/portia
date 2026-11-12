@@ -13,11 +13,15 @@ public sealed class WorkerStartupRequirementTests
     [Fact]
     public async Task WorkersWithoutAnEventReaderFailBeforeServing()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global)
             .AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         using var host = builder.Build();
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
         Assert.Contains(nameof(IDomainEventReader), error.Message, StringComparison.Ordinal);
@@ -28,13 +32,17 @@ public sealed class WorkerStartupRequirementTests
     [Fact]
     public async Task PerTenantWorkersAlsoRequireATenantDirectory()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
         _ = builder.Services.AddPortia().AddProjector<TenantFirstProjector>("first-projector", WorkloadScope.PerTenant)
             .AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         using var host = builder.Build();
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
         Assert.Contains(nameof(ITenantDirectory), error.Message, StringComparison.Ordinal);
@@ -43,6 +51,7 @@ public sealed class WorkerStartupRequirementTests
     [Fact]
     public async Task GlobalWorkersDoNotRequireATenantDirectory()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
@@ -52,18 +61,33 @@ public sealed class WorkerStartupRequirementTests
             .AddWorkers().UseSingleProcessWorkloads();
         using var host = builder.Build();
 
-        await host.StartAsync();
-        await host.StopAsync();
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
+        {
+            await host.StartAsync();
+            await host.StopAsync();
+        });
+
+        // Assert
+        Assert.Null(error);
     }
 
     [Fact]
     public async Task AHostThatDeclaredNoComponentsRequiresNothing()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia().AddWorkers().UseSingleProcessWorkloads();
         using var host = builder.Build();
 
-        await host.StartAsync();
-        await host.StopAsync();
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
+        {
+            await host.StartAsync();
+            await host.StopAsync();
+        });
+
+        // Assert
+        Assert.Null(error);
     }
 }

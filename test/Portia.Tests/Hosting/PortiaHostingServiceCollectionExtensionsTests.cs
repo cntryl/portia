@@ -20,13 +20,17 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public void ShouldLeaveStartupSchedulesDormantWithoutWorkers()
     {
+        // Arrange
         var scheduler = new RecordingStartupScheduler();
         var services = new ServiceCollection();
         _ = services.AddSingleton<IRequestScheduler>(scheduler);
         _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
             new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), RequestActor.System);
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         Assert.DoesNotContain(provider.GetServices<IHostedService>(),
             service => service is RequestScheduleStartupService);
         Assert.Empty(scheduler.Requests);
@@ -36,6 +40,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldEnsureStartupSchedulesSequentiallyWhenWorkersStart()
     {
+        // Arrange
         var scheduler = new RecordingStartupScheduler();
         var services = new ServiceCollection();
         _ = services.AddSingleton<IRequestScheduler>(scheduler);
@@ -45,7 +50,11 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
             .AddRequestSchedule(new FitzHostedRequest(), new RequestScheduleSpec("0 1 * * *"),
                 new RequestRouteValues("second"), RequestActor.System)
             .AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is RequestScheduleStartupService);
 
@@ -58,11 +67,16 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldFailWorkerStartupWhenScheduleProviderIsMissing()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
                 new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), RequestActor.System)
             .AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is RequestScheduleStartupService);
 
@@ -75,13 +89,18 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldFailWorkerStartupGivenNonSystemScheduleActor()
     {
+        // Arrange
         var scheduler = new RecordingStartupScheduler();
         var services = new ServiceCollection();
         _ = services.AddSingleton<IRequestScheduler>(scheduler);
         _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
                 new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), new ClaimsPrincipal())
             .AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is RequestScheduleStartupService);
 
@@ -95,13 +114,18 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldFailWorkerStartupWhenSchedulePersistenceFails()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddSingleton<IRequestScheduler>(new RecordingStartupScheduler
         { Failure = new IOException("broker unavailable") });
         _ = services.AddPortia().AddRequestSchedule(new FitzHostedRequest(),
                 new RequestScheduleSpec("0 0 * * *"), new RequestRouteValues("tenant-123"), RequestActor.System)
             .AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is RequestScheduleStartupService);
 
@@ -114,10 +138,14 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldRequirePermissionEvaluatorForPermissionProtectedRequestsAtStartup()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddFrameworkTests();
+
+        // Act
         using var host = builder.Build();
 
+        // Assert
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
         Assert.StartsWith("IPermissionEvaluator is required by permission-protected request types: ",
@@ -136,32 +164,49 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldAcceptPermissionProtectedRequestsGivenPermissionEvaluatorAtStartup()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddFrameworkTests();
         _ = builder.Services.AddScoped<IPermissionEvaluator>(_ =>
             throw new InvalidOperationException("Startup must not resolve a scoped evaluator."));
         using var host = builder.Build();
 
-        await host.StartAsync();
-        await host.StopAsync();
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await host.StartAsync();
+            await host.StopAsync();
+        });
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>A composition without permission-protected requests has no permission-evaluator requirement.</summary>
     [Fact]
     public async Task ShouldNotRequirePermissionEvaluatorWithoutPermissionProtectedRequests()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia();
         using var host = builder.Build();
 
-        await host.StartAsync();
-        await host.StopAsync();
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await host.StartAsync();
+            await host.StopAsync();
+        });
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>A global workload must declare an exact realm rather than a tenant template.</summary>
     [Fact]
     public async Task ShouldRejectTenantTemplateForGlobalWorkloadAtStartup()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddSingleton<IDomainEventReader, InMemoryEventStore>();
         _ = builder.Services.AddSingleton(new TestProjector(new RecordingProjectionTarget(),
@@ -169,8 +214,11 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = builder.Services.AddPortia()
             .AddProjector<TestProjector>("orders", WorkloadScope.Global)
             .AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         using var host = builder.Build();
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
         Assert.Contains("ForPattern", error.Message, StringComparison.Ordinal);
@@ -180,6 +228,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldRejectExactPatternForPerTenantWorkloadAtStartup()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddSingleton<IDomainEventReader, InMemoryEventStore>();
         _ = builder.Services.AddSingleton<ITenantDirectory>(new HostingFakeTenantDirectory([]));
@@ -188,8 +237,11 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = builder.Services.AddPortia()
             .AddProjector<TestProjector>("orders", WorkloadScope.PerTenant)
             .AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         using var host = builder.Build();
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
         Assert.Contains("ForTenant", error.Message, StringComparison.Ordinal);
@@ -199,12 +251,16 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public void ShouldStageAllWorkerRegistrationsBeforeApplyingAny()
     {
+        // Arrange
         var services = new ServiceCollection();
         var portia = services.AddPortia()
             .ConfigureWorker("first", staged => staged.AddSingleton<StagedWorkerMarker>())
             .ConfigureWorker("broken", Throw);
+
+        // Act
         var before = services.Count;
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(portia.AddWorkers);
 
         Assert.Equal("broken worker", error.Message);
@@ -227,6 +283,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [InlineData(true)]
     public void ShouldKeepApplicationRegistrationsOverWorkerDefaults(bool declaredAfterActivation)
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddSingleton<IWorkerDefaultProbe, ApplicationProbe>();
         _ = services.AddHostedService<ProbeHostedService>();
@@ -240,8 +297,11 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         });
         if (!declaredAfterActivation)
             _ = portia.AddWorkers();
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         _ = Assert.IsType<ApplicationProbe>(provider.GetRequiredService<IWorkerDefaultProbe>());
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkerDefaultProbe));
         _ = Assert.Single(services, descriptor => descriptor.ImplementationType == typeof(ProbeHostedService));
@@ -254,13 +314,16 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public void ShouldKeepRegistrationsADeclarationMakesThroughTheApplicationCollection()
     {
+        // Arrange
         var services = new ServiceCollection();
         var portia = services.AddPortia();
         _ = portia.ConfigureWorker("coordination", _ => portia.UseSingleProcessWorkloads());
         _ = portia.ConfigureWorker("probe", _ => services.AddSingleton<IWorkerDefaultProbe, ApplicationProbe>());
 
+        // Act
         _ = portia.AddWorkers();
 
+        // Assert
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkloadCoordinator));
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkerDefaultProbe));
     }
@@ -269,10 +332,14 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public void ShouldRegisterOneCoordinatorWhenSingleProcessWorkloadsIsRepeated()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddPortia().UseSingleProcessWorkloads().AddWorkers();
+
+        // Act
         _ = services.AddPortia().UseSingleProcessWorkloads();
 
+        // Assert
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkloadCoordinator));
     }
 
@@ -280,12 +347,16 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldSkipJsonUpcasterPolicyForCustomSerializer()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddPortia().AddWorkers().UseSingleProcessWorkloads();
         _ = services.AddSingleton<IJsonDomainEventUpcaster>(new RecordingUpcaster(string.Empty, 0));
         _ = services.AddSingleton<IDomainEventSerializer>(new PassthroughDomainEventSerializer());
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         var validator = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is not BackgroundService);
         await validator.StartAsync(default);
@@ -297,11 +368,15 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldRejectInvalidUpcastersWithoutWorkers()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia();
         _ = builder.Services.AddSingleton<IJsonDomainEventUpcaster>(new RecordingUpcaster(string.Empty, 0));
+
+        // Act
         using var host = builder.Build();
 
+        // Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
         Assert.Contains("Invalid JSON domain-event upcaster registrations", exception.Message,
@@ -317,12 +392,16 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [InlineData(-1)]
     public void ShouldRejectNonPositiveReactorBatchSizeDuringRegistration(int maxBatchSize)
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+        // Act
+        var thrown = Record.Exception(() =>
             services.AddPortia().AddReactor<TestReactor>("TestReactor", WorkloadScope.Global,
                 o => o.Processing = new ProjectionRunOptions { MaxBatchSize = maxBatchSize }));
 
+        // Assert
+        var exception = Assert.IsType<ArgumentOutOfRangeException>(thrown);
         Assert.Equal(nameof(ProjectionRunOptions.MaxBatchSize), exception.ParamName);
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
@@ -334,6 +413,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldDispatchQueuedRequestWhenHostedServiceStarts()
     {
+        // Arrange
         var handler = new ChangeValueHandler();
         var services = new ServiceCollection();
         using var busHost = TestRequestBus.Create(handler);
@@ -342,8 +422,11 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton<IRequestActorValidator>(new TestRequestActorValidator());
         _ = services.AddSingleton<IQueuedRequestTerminalHandler>(new HostingTerminalHandler());
         _ = services.AddPortiaQueueRunner();
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await hostedService.StartAsync(default);
         await WaitUntilAsync(() => handler.LastValue == 42);
@@ -359,14 +442,18 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldRunScopedTenantWorkloadWhenHostedServiceStarts()
     {
+        // Arrange
         var state = new HostingWorkloadState();
         var services = new ServiceCollection();
         _ = services.AddSingleton<ITenantDirectory>(new HostingFakeTenantDirectory([new TenantId("acme")]));
         _ = services.AddSingleton(state);
         _ = services.AddScoped<HostingTenantWorkload>();
         _ = services.AddPortiaMultiTenantRunner<HostingTenantWorkload>();
+
+        // Act
         using var provider = services.BuildServiceProvider(true);
 
+        // Assert
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await hostedService.StartAsync(default);
         await WaitUntilAsync(() => state.StartedTenants.Count == 1);
@@ -384,6 +471,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldRunProjectorPassAndSaveCheckpointWhenHostedServiceStarts()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
@@ -398,8 +486,11 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
             .AddProjector<TestProjector>("test-projector", WorkloadScope.Global,
                 o => o.PollInterval = TimeSpan.FromMilliseconds(20))
             .AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await hostedService.StartAsync(default);
         await WaitUntilAsync(() => target.Projection.Value == 42);
@@ -418,6 +509,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldNotReplayCommittedProjectionBatchAfterLateCommitFailure()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
@@ -431,7 +523,11 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
             .AddProjector<TestProjector>("test-projector", WorkloadScope.Global,
                 o => o.PollInterval = TimeSpan.FromMilliseconds(10))
             .AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
 
         await hostedService.StartAsync(default);
@@ -453,6 +549,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldRetryCheckpointReloadWithoutReplayingFromStaleCheckpoint()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
@@ -464,8 +561,11 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton(new TestProjector(target));
         _ = services.AddPortia().AddProjector<TestProjector>("test-projector", WorkloadScope.Global,
             o => { o.PollInterval = TimeSpan.FromMilliseconds(10); }).AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await hostedService.StartAsync(default);
         var executeTask = hostedService.ExecuteTask

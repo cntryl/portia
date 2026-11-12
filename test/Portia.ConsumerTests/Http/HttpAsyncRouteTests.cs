@@ -5,6 +5,7 @@ public sealed class HttpAsyncRouteTests
     [Fact]
     public async Task AsyncDispatchUsesEndpointRouteValuesAndCarriedActorToken()
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
                                                     using System;
                                                     using System.Net.Http;
@@ -68,9 +69,13 @@ public sealed class HttpAsyncRouteTests
                                                     }
                                                     """, new RegistrationCallInterceptorGenerator(),
             new RequestHttpBindingGenerator());
+
+        // Act
         var result =
             await (Task<(int, string?, string?, string?, int)>)assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(
                 null, null)!;
+
+        // Assert
         Assert.Equal((202, "acme", "order17", "carried-token", 17), result);
     }
 }

@@ -11,10 +11,15 @@ public sealed class ScenarioDrainTests
     [InlineData(8193, true)]
     public async Task ShouldDrainBatchAndMixedHistories(int count, bool reaction)
     {
+        // Arrange
         var events = Enumerable.Range(0, count).Select(index => index % 2 == 0
             ? (DomainEvent)new UserCreated(Uuid.CreateVersion4()) : new ValueChanged(index)).ToArray();
         var expected = events.OfType<UserCreated>().Select(ev => ev.UserId).ToArray();
+
+        // Act
         var seen = new List<Uuid>();
+
+        // Assert
         if (reaction)
         {
             var scenario = new ReactorScenario().Given(events);
@@ -44,9 +49,14 @@ public sealed class ScenarioDrainTests
     [InlineData(true)]
     public async Task ShouldPropagateSuffixFailureAndKeepCommittedProgress(bool reaction)
     {
+        // Arrange
         var events = Enumerable.Range(0, 4097).Select(_ => (DomainEvent)new UserCreated(Uuid.CreateVersion4())).ToArray();
         var failure = new InvalidOperationException("suffix failed");
+
+        // Act
         var seen = new List<Uuid>();
+
+        // Assert
         if (reaction)
         {
             var scenario = new ReactorScenario().Given(events);
@@ -75,10 +85,15 @@ public sealed class ScenarioDrainTests
     [InlineData(true)]
     public async Task ShouldObserveCancellationBetweenPasses(bool reaction)
     {
+        // Arrange
         var ids = Enumerable.Range(0, 4097).Select(_ => Uuid.CreateVersion4()).ToArray();
         using var cancellation = new CancellationTokenSource();
         var seen = new List<Uuid>();
+
+        // Act
         var events = ids.Select(id => (DomainEvent)new UserCreated(id)).ToArray();
+
+        // Assert
         if (reaction)
         {
             var scenario = new ReactorScenario().Given(events);
@@ -120,9 +135,14 @@ public sealed class ScenarioDrainTests
     [InlineData(true)]
     public async Task ShouldObserveCancellationWithinPass(bool reaction)
     {
+        // Arrange
         var events = Enumerable.Range(0, 600).Select(_ => (DomainEvent)new UserCreated(Uuid.CreateVersion4())).ToArray();
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         var seen = new List<Uuid>();
+
+        // Assert
         if (reaction)
         {
             var scenario = new ReactorScenario().Given(events);

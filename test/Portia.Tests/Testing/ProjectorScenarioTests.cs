@@ -12,11 +12,16 @@ public sealed class ProjectorScenarioTests
     [InlineData(8193)]
     public async Task ShouldDrainHistoryAcrossBoundedPasses(int count)
     {
+        // Arrange
         var ids = Enumerable.Range(0, count).Select(_ => Uuid.CreateVersion4()).ToArray();
         var scenario = new ProjectorScenario().Given(ids.Select(id => (DomainEvent)new UserCreated(id)).ToArray());
         var users = new List<Uuid>();
         var projector = new WelcomeProjector(users, scenario.Store);
+
+        // Act
         await scenario.RunAsync(projector);
+
+        // Assert
         Assert.Equal(ids, users);
         var checkpoint = await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern));
         Assert.Equal(count.ToString(System.Globalization.CultureInfo.InvariantCulture), checkpoint.Cursor.ToString());
@@ -28,13 +33,16 @@ public sealed class ProjectorScenarioTests
     [Fact]
     public async Task ShouldProjectGivenEventsInOrder()
     {
+        // Arrange
         var first = Uuid.CreateVersion4();
         var second = Uuid.CreateVersion4();
         var users = new List<Uuid>();
         var scenario = new ProjectorScenario().Given(new UserCreated(first), new UserCreated(second));
 
+        // Act
         await scenario.RunAsync(new WelcomeProjector(users, scenario.Store));
 
+        // Assert
         Assert.Equal([first, second], users);
     }
 
@@ -42,6 +50,7 @@ public sealed class ProjectorScenarioTests
     [Fact]
     public async Task ShouldResumeFromCommittedCheckpoint()
     {
+        // Arrange
         var first = Uuid.CreateVersion4();
         var second = Uuid.CreateVersion4();
         var users = new List<Uuid>();
@@ -49,8 +58,11 @@ public sealed class ProjectorScenarioTests
         var projector = new WelcomeProjector(users, scenario.Store);
 
         await scenario.Given(new UserCreated(first)).RunAsync(projector);
+
+        // Act
         await scenario.Given(new UserCreated(second)).RunAsync(projector);
 
+        // Assert
         Assert.Equal([first, second], users);
     }
 
@@ -58,12 +70,15 @@ public sealed class ProjectorScenarioTests
     [Fact]
     public async Task ShouldRunTenantScopedProjector()
     {
+        // Arrange
         var user = Uuid.CreateVersion4();
         var users = new List<Uuid>();
         var scenario = new ProjectorScenario().Given(new UserCreated(user));
 
+        // Act
         await scenario.RunAsync(new WelcomeProjector(users, scenario.Store, EventStreamPattern.ForTenant("users")));
 
+        // Assert
         Assert.Equal([user], users);
     }
 
@@ -71,13 +86,16 @@ public sealed class ProjectorScenarioTests
     [Fact]
     public async Task ShouldRunProjectorUnderChosenTenant()
     {
+        // Arrange
         var tenant = new TenantId(Uuid.CreateVersion4().ToString());
         var users = new List<Uuid>();
         var scenario = new ProjectorScenario(tenant).Given(new UserCreated(Uuid.CreateVersion4()));
         var projector = new WelcomeProjector(users, scenario.Store, EventStreamPattern.ForTenant("users"));
 
+        // Act
         await scenario.RunAsync(projector);
 
+        // Assert
         Assert.Single(users);
         Assert.Equal(tenant.Value, projector.Pattern.Realm);
     }

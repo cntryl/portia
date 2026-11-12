@@ -16,6 +16,7 @@ public sealed class FriendCatalogTests
     public void ShouldResolveLocalGeneratedCatalogGivenFriendAssembly(bool friend, bool sharedNamespace,
         bool referencesSharedEvent)
     {
+        // Arrange
         var identity = Guid.NewGuid().ToString("N");
         var sourceAssembly = "Catalog.Source." + identity;
         var consumerAssembly = "Catalog.Consumer." + identity;
@@ -48,8 +49,10 @@ public sealed class FriendCatalogTests
             """, [MetadataReference.CreateFromImage(first.Image)]);
         var local = new DomainEventTypeCatalog();
 
+        // Act
         Register(second.Assembly, space + ".ConsumerComposition", local);
 
+        // Assert
         Assert.True(local.TryResolve("catalog.consumer.changed", 1, out var consumer));
         Assert.Equal(consumerAssembly, consumer!.Assembly.GetName().Name);
         Assert.False(local.TryResolve("catalog.shared.changed", 1, out _));
@@ -65,6 +68,7 @@ public sealed class FriendCatalogTests
     [InlineData(true)]
     public void ShouldRegisterEmptyCatalogGivenConditionalCall(bool create)
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
             #nullable enable
             using Cntryl.Portia;
@@ -78,14 +82,17 @@ public sealed class FriendCatalogTests
             }
             """, new DomainEventCatalogGenerator());
 
+        // Act
         var result = assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, [create]);
 
+        // Assert
         Assert.Equal(create, result is DomainEventTypeCatalog);
     }
 
     [Fact]
     public void ShouldPreserveCompiledLegacyCatalogGivenNewFriendConsumer()
     {
+        // Arrange
         var identity = Guid.NewGuid().ToString("N");
         var consumerAssembly = "Catalog.Legacy.Consumer." + identity;
         // This is the extension shape emitted by earlier generators. Its explicit static call
@@ -125,8 +132,11 @@ public sealed class FriendCatalogTests
         var catalog = new DomainEventTypeCatalog();
 
         Register(first.Assembly, "Shared.LegacyComposition", catalog);
+
+        // Act
         Register(second.Assembly, "Consumer.ConsumerComposition", catalog);
 
+        // Assert
         Assert.True(catalog.TryResolve("catalog.legacy.changed", 1, out _));
         Assert.True(catalog.TryResolve("catalog.current.changed", 1, out var current));
         Assert.Equal(consumerAssembly, current!.Assembly.GetName().Name);
@@ -135,7 +145,8 @@ public sealed class FriendCatalogTests
     [Fact]
     public void ShouldDiagnoseCatalogMethodGroupBeforeExecution()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
             using System;
             using Cntryl.Portia;
             public static class Scenario
@@ -143,8 +154,12 @@ public sealed class FriendCatalogTests
                 public static Func<DomainEventTypeCatalog> Bind(DomainEventTypeCatalog catalog)
                     => catalog.AddPortiaGeneratedDomainEvents;
             }
-            """, new DomainEventCatalogGenerator());
+            """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new DomainEventCatalogGenerator());
+
+        // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA019");
     }
 
@@ -153,25 +168,35 @@ public sealed class FriendCatalogTests
     [InlineData("catalog.AddPortiaGeneratedDomainEvents")]
     public void ShouldAllowCatalogNameofWithoutRegistration(string member)
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics($$"""
+        // Arrange
+        var source = $$"""
             using Cntryl.Portia;
             public static class Scenario
             {
                 public static string Name(DomainEventTypeCatalog catalog) => nameof({{member}});
             }
-            """, new DomainEventCatalogGenerator());
+            """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new DomainEventCatalogGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
     [Fact]
     public void ShouldExplainMissingGeneratorGivenCatalogEntryPoint()
     {
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            new DomainEventTypeCatalog().AddPortiaGeneratedDomainEvents());
+        // Arrange
+        var catalog = new DomainEventTypeCatalog();
 
-        Assert.Contains("did not intercept", error.Message, StringComparison.Ordinal);
-        Assert.Contains("analyzer assets", error.Message, StringComparison.Ordinal);
+        // Act
+        var error = Record.Exception(() => catalog.AddPortiaGeneratedDomainEvents());
+
+        // Assert
+        var invalid = Assert.IsType<InvalidOperationException>(error);
+        Assert.Contains("did not intercept", invalid.Message, StringComparison.Ordinal);
+        Assert.Contains("analyzer assets", invalid.Message, StringComparison.Ordinal);
     }
 
     static void Register(Assembly assembly, string composition, DomainEventTypeCatalog catalog) =>

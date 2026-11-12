@@ -10,7 +10,8 @@ public sealed class ConditionalRegistrationTests
     [InlineData("PortiaBuilder.AddRequestHandler")]
     public void ShouldAllowRegistrationNameofWithoutRegistration(string member)
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics($$"""
+        // Arrange
+        var source = $$"""
             using System.Threading;
             using System.Threading.Tasks;
             using Cntryl.Portia;
@@ -24,8 +25,12 @@ public sealed class ConditionalRegistrationTests
             {
                 public static string Name(PortiaBuilder app) => nameof({{member}});
             }
-            """, new RegistrationCallInterceptorGenerator());
+            """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
@@ -35,6 +40,7 @@ public sealed class ConditionalRegistrationTests
     [InlineData("null_receiver")]
     public void ShouldRegisterConcreteHandlerGivenConditionalReceiver(string form)
     {
+        // Arrange
         var call = form == "ordinary" ? "app!.AddRequestHandler<Handler>();" : "app?.AddRequestHandler<Handler>();";
         var receiver = form == "null_receiver" ? "null" : "new ServiceCollection().AddPortia()";
         var source = $$"""
@@ -61,8 +67,10 @@ public sealed class ConditionalRegistrationTests
         var assembly = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!;
 
+        // Act
         var error = Record.Exception(() => run.Invoke(null, null));
 
+        // Assert
         Assert.Null(error is TargetInvocationException invoked ? invoked.InnerException : error);
     }
 }

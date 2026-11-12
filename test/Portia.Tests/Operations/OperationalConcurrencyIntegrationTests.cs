@@ -9,13 +9,18 @@ public sealed class OperationalConcurrencyIntegrationTests(FitzBrokerFixture bro
     [Fact]
     public async Task ShouldFenceConcurrentOperationalWritersUsingRealFitzLocks()
     {
+        // Arrange
         await using var client = await broker.CreateClientAsync();
         var realm = "operations-concurrency-" + Uuid.CreateVersion4();
         var target = new OperationalTarget("reactor", $"stream://{realm}/events/*", OperationalScope.Global);
         var route = $"kv://{realm}/portia/checkpoints";
         var journal = new FitzOperationalStore(client.Kv, route);
+
+        // Act
         var state = new OperationalProcessorState(target, "reactor", Guid.NewGuid(), 1, null,
             new OperationalProcessingSettings(1, 1, 3, 1, 1), [], null, [], [], [], 0, DateTimeOffset.UtcNow);
+
+        // Assert
         Assert.True(await journal.CompareExchangeAsync(state, 0, Guid.Empty));
         var next = state with { Revision = 2, ConsecutiveFailures = 1 };
         await using (var competing = await client.Kv.BeginAsync(FitzKvCheckpoints.WorkloadRoute(route, target.Identity)))

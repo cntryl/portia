@@ -15,6 +15,7 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
     [Fact]
     public async Task ShouldDiagnoseApproveRetryAndVerifyRealProcessing()
     {
+        // Arrange
         await using var client = await broker.CreateClientAsync();
         var events = new FitzEventStore(client.Stream, TestJson.DomainSerializer(new DomainEventTypeCatalog()
             .Register<ValueChanged>(1, "test.value.changed")));
@@ -28,7 +29,10 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
             source[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregate, (ulong)i + 1, DateTimeOffset.UtcNow));
         await events.AppendAsync(new EventStreamAddress(realm, "source", aggregate.ToString()), 0, source);
 
+        // Act
         Guid previousOwner;
+
+        // Assert
         await using (var provider = Services(client, events, control, route).BuildServiceProvider())
         {
             var worker = provider.GetServices<IHostedService>().OfType<PortiaWorkloadService>().Single();

@@ -16,6 +16,7 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
     [InlineData(true, 1U)]
     public async Task ShouldExposeDeclaredBackpressureDuringWorkerCleanup(bool portia, uint maxConcurrency)
     {
+        // Arrange
         var endpoint = new Uri(Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT")
             ?? "ws://127.0.0.1:4090/ws");
         // Keep domain dispatch parallel enough to expose the independent per-worker limit on any CPU count.
@@ -30,7 +31,11 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
         var cleanup = new CleanupGate();
         RpcWorkerRegistration? registration = null;
         Task<int>? second = null;
+
+        // Act
         Func<Task<int>> call;
+
+        // Assert
         try
         {
             if (portia)

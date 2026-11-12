@@ -12,6 +12,7 @@ public sealed class ObservabilityContractTests
     [Fact]
     public void ShouldPublishExactMetricContract()
     {
+        // Arrange
         var units = new ConcurrentDictionary<string, string?>();
         using var listener = new MeterListener
         {
@@ -24,8 +25,11 @@ public sealed class ObservabilityContractTests
             }
         };
         listener.Start();
+
+        // Act
         _ = PortiaTelemetry.Meter;
 
+        // Assert
         Assert.Equal(
         [
             ("portia.aggregate.event.count", "{event}"),
@@ -56,12 +60,15 @@ public sealed class ObservabilityContractTests
     [Fact]
     public async Task ShouldEmitBoundedTelemetryGivenSuccessfulLocalDispatch()
     {
+        // Arrange
         using var activityListener = ListenToActivities(out var activities);
         using var meterListener = ListenToMeasurements(out var measurements);
         using var host = TestRequestBus.Create();
 
+        // Act
         _ = await host.Bus.SendAsync(new TelemetrySuccessAction(), RequestActor.System);
 
+        // Assert
         var activity = Assert.Single(activities,
             item => item.GetTagItem("portia.request.name") as string == nameof(TelemetrySuccessAction));
         Assert.Equal(PortiaTelemetry.ExecuteActivityName, activity.DisplayName);
@@ -81,9 +88,13 @@ public sealed class ObservabilityContractTests
     [Fact]
     public async Task ShouldRecordDenialOutcomeGivenStreamRejectedByAuthorization()
     {
+        // Arrange
         using var meterListener = ListenToMeasurements(out var measurements);
+
+        // Act
         using var host = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.DenyAll());
 
+        // Assert
         _ = await Assert.ThrowsAsync<RequestAuthorizationException>(async () =>
         {
             await foreach (var _ in host.Bus.StreamAsync(new TelemetryGuardedSequence(), RequestActor.Anonymous))
@@ -101,13 +112,17 @@ public sealed class ObservabilityContractTests
     [Fact]
     public void ShouldLinkNewTraceGivenScheduledDeliveryContext()
     {
+        // Arrange
         using var listener = ListenToActivities(out var activities);
         var propagated = new RequestTraceContext("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+
+        // Act
         using (PortiaTelemetry.StartProcess("Scheduled",
                    new ScheduleInvocation("schedule://hidden") { MessagingSystem = "fitz" }, propagated))
         {
         }
 
+        // Assert
         var activity = Assert.Single(activities,
             item => item.GetTagItem("portia.request.name") as string == "Scheduled");
         Assert.NotEqual(ActivityTraceId.CreateFromString("4bf92f3577b34da6a3ce929d0e0e4736"), activity.TraceId);

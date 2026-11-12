@@ -10,11 +10,16 @@ public sealed partial class OperationalExecutionTests
     [Fact]
     public async Task ShouldRecoverOriginalBatchWithoutDuplicatingEarlierEffect()
     {
+        // Arrange
         var journal = new FitzOperationalStore(new FakeKvClient(), "kv://test/operations/progress");
         var events = await EventsAsync();
         var effects = new Effects { Fail = true };
         var first = await SessionAsync(journal);
+
+        // Act
         var runner = new ReactorRunner(events) { Operations = first };
+
+        // Assert
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => runner.RunAsync(Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
         Assert.Single(effects.Ids);
         var failed = (await journal.ReadAsync(Target))!;
@@ -54,12 +59,17 @@ public sealed partial class OperationalExecutionTests
     [Fact]
     public async Task ShouldResolveLostReactorCommitAcknowledgementWithoutReplay()
     {
+        // Arrange
         var journal = new MemoryOperationalStore();
         var checkpoints = new LostAcknowledgement(journal);
         var session = await SessionAsync(journal);
         var effects = new Effects();
+
+        // Act
         _ = await new ReactorRunner(await EventsAsync()) { Operations = session }
             .RunAsync(Reactor(checkpoints, effects), ProjectionCheckpoint.Start);
+
+        // Assert
         Assert.Equal(2, effects.Executions.Count);
         Assert.Equal(1, checkpoints.Commits);
         Assert.Equal("committed", Assert.Single((await journal.ReadAsync(Target))!.Attempts).Outcome);
@@ -69,8 +79,13 @@ public sealed partial class OperationalExecutionTests
     [Fact]
     public async Task ShouldRejectChangedRecoverySourcesBeforeInvocation()
     {
+        // Arrange
         var journal = new MemoryOperationalStore();
+
+        // Act
         var first = await SessionAsync(journal);
+
+        // Assert
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await new ReactorRunner(await EventsAsync())
         { Operations = first }.RunAsync(Reactor(journal, new Effects { Fail = true }), ProjectionCheckpoint.Start).AsTask());
         var session = await SessionAsync(journal);
@@ -91,6 +106,7 @@ public sealed partial class OperationalExecutionTests
     [Fact]
     public async Task ShouldPreserveInterruptedAttemptsWhenAutomaticReplaySucceeds()
     {
+        // Arrange
         var journal = new MemoryOperationalStore();
         var events = await EventsAsync();
         var records = new List<DomainEventRecord>();
@@ -101,7 +117,11 @@ public sealed partial class OperationalExecutionTests
         var resumed = await SessionAsync(journal);
         var effects = new Effects();
         _ = await new ReactorRunner(events) { Operations = resumed }.RunAsync(Reactor(journal, effects), ProjectionCheckpoint.Start);
+
+        // Act
         var state = (await journal.ReadAsync(Target))!;
+
+        // Assert
         Assert.Equal("interrupted", state.Attempts.Single(a => a.Id == originalId).Outcome);
         Assert.Equal("committed", state.Attempts[^1].Outcome);
         Assert.NotEqual(interrupted.State.OwnerSession, state.OwnerSession);
@@ -111,9 +131,14 @@ public sealed partial class OperationalExecutionTests
     [Fact]
     public async Task ShouldPersistStartBeforeInvokingOutsideTransactions()
     {
+        // Arrange
         var client = new FakeKvClient();
         var journal = new FitzOperationalStore(client, "kv://test/operations/progress");
+
+        // Act
         var session = await SessionAsync(journal);
+
+        // Assert
         var effects = new Effects
         {
             Before = () =>
@@ -133,6 +158,7 @@ public sealed partial class OperationalExecutionTests
     [Fact]
     public async Task ShouldPauseInvocationWhileRequiredJournalIsUnavailable()
     {
+        // Arrange
         var journal = new MemoryOperationalStore();
         var clock = new ManualTestClock();
         var session = new OperationalSession(journal, new OperationalOptions(), new EmptyApplicationTopology(), clock);
@@ -141,7 +167,11 @@ public sealed partial class OperationalExecutionTests
         journal.Unavailable = true;
         var pending = new ReactorRunner(await EventsAsync()) { Operations = session }
             .RunAsync(Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask();
+
+        // Act
         var delay = await clock.WaitForDelayAsync();
+
+        // Assert
         Assert.Empty(effects.Executions);
         Assert.False(pending.IsCompleted);
         journal.Unavailable = false;
@@ -154,6 +184,7 @@ public sealed partial class OperationalExecutionTests
     [Fact]
     public async Task ShouldKeepDetachedTraceEvidenceOutOfTheNextAttempt()
     {
+        // Arrange
         var journal = new MemoryOperationalStore();
         var session = await SessionAsync(journal);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -177,8 +208,12 @@ public sealed partial class OperationalExecutionTests
                 }
             }
         };
+
+        // Act
         _ = await new ReactorRunner(await EventsAsync()) { Operations = session }.RunPassAsync(Reactor(journal, effects),
             ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxBatchSize = 1 });
+
+        // Assert
         Assert.Equal(2, session.State.Attempts.Count);
         Assert.All(session.State.Attempts, attempt =>
         {

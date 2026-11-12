@@ -6,10 +6,15 @@ public sealed partial class OperationalExecutionTests
     [Fact]
     public async Task ShouldInvalidateOtherQueuedRepairsWhenFailureIsResolved()
     {
+        // Arrange
         var journal = new MemoryOperationalStore();
         var events = await EventsAsync();
         var effects = new Effects { Fail = true };
+
+        // Act
         var session = await SessionAsync(journal);
+
+        // Assert
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events)
         { Operations = session }.RunAsync(Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
         var api = Api(journal);

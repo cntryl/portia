@@ -8,12 +8,16 @@ public sealed class ExplicitRegistrationConsumerTests
     [Fact]
     public async Task HostedStartupFailsWhenFeatureAssemblyGuardedHandlerHasNoPermissionEvaluator()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia();
         _ = builder.Services.AddSingleton<RequestHandlerRegistration>(
             new RequestRegistration<FeatureTwoRequest, FeatureTwoHandler, int>(_ => "features:two:read"));
+
+        // Act
         using var host = builder.Build();
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
         Assert.Contains(nameof(IPermissionEvaluator), error.Message, StringComparison.Ordinal);
@@ -23,7 +27,8 @@ public sealed class ExplicitRegistrationConsumerTests
     [Fact]
     public void StronglyTypedOutboundCallsInferEveryRequestTransportWithoutExplicitRegistration()
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using System.Linq;
                                                     using System.Threading.Tasks;
                                                     using Cntryl.Portia;
@@ -68,15 +73,21 @@ public sealed class ExplicitRegistrationConsumerTests
                                                                 && requests.Contains(typeof(ScheduleAccount));
                                                         }
                                                     }
-                                                    """, new RegistrationCallInterceptorGenerator());
+                                                    """;
+        var assembly = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
 
-        Assert.True(assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>()());
+        // Act
+        var passed = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>()();
+
+        // Assert
+        Assert.True(passed);
     }
 
     [Fact]
     public void SelectedHandlersAndAuthorizersRemainIndependent()
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using System;
                                                     using System.Linq;
                                                     using System.Security.Claims;
@@ -112,8 +123,14 @@ public sealed class ExplicitRegistrationConsumerTests
                                                             return services.Count == count && !services.Any(s => s.ServiceType == typeof(Unselected));
                                                         }
                                                     }
-                                                    """, new RegistrationCallInterceptorGenerator());
-        Assert.True(assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>()());
+                                                    """;
+        var assembly = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
+
+        // Act
+        var passed = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>()();
+
+        // Assert
+        Assert.True(passed);
     }
 
     [Theory]
@@ -121,6 +138,7 @@ public sealed class ExplicitRegistrationConsumerTests
     [InlineData(true)]
     public async Task BothFeaturesContributeDispatchEventsAndContractTransports(bool reverse)
     {
+        // Arrange
         var services = ConsumerHost.CreateServices();
         if (reverse)
         {
@@ -136,7 +154,11 @@ public sealed class ExplicitRegistrationConsumerTests
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
         { ValidateScopes = true, ValidateOnBuild = true });
         await using var scope = provider.CreateAsyncScope();
+
+        // Act
         var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
+
+        // Assert
         Assert.Equal(11, (await bus.SendAsync(new FeatureOneRequest(10), RequestActor.System)).Value);
         Assert.Equal(12, (await bus.SendAsync(new FeatureTwoRequest(10), RequestActor.System)).Value);
         var transports = provider.GetServices<RequestTransportRegistration>().ToArray();
@@ -156,6 +178,7 @@ public sealed class ExplicitRegistrationConsumerTests
     [Fact]
     public void ShouldFailWithoutPartialRegistrationGivenConflictingHandlersWhenRegistering()
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
                                                     using System;
                                                     using System.Threading;
@@ -182,13 +205,18 @@ public sealed class ExplicitRegistrationConsumerTests
                                                     }
                                                     """, new RegistrationCallInterceptorGenerator(),
             new PortiaServiceRegistrationGenerator());
+
+        // Act
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>();
+
+        // Assert
         Assert.True(run());
     }
 
     [Fact]
     public void ExplicitFeaturesComposeIdempotentlyThroughPublicApi()
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
                                                     using Cntryl.Portia;
                                                     using Cntryl.Portia.Testing;
@@ -208,7 +236,11 @@ public sealed class ExplicitRegistrationConsumerTests
                                                         }
                                                     }
                                                     """);
+
+        // Act
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<int>>();
+
+        // Assert
         Assert.Equal(0, run());
     }
 }

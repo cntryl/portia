@@ -11,6 +11,7 @@ public sealed class MixedWorkloadTests
     [Fact]
     public async Task MixedScopesIsolateProgressAndReconcileTenantsWithoutRestartingGlobalWork()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
@@ -41,7 +42,10 @@ public sealed class MixedWorkloadTests
                 [DomainEventSeed.Attach(new Deposited(i + 1), ids[i], 1)]);
         }
 
+        // Act
         await host.StartAsync();
+
+        // Assert
         try
         {
             var effects = host.Services.GetRequiredService<ConsumerHost.Effects>();

@@ -13,6 +13,7 @@ public sealed class SystemOperatorAccessTests
     [InlineData("roles")]
     public async Task ShouldDenyUnauthenticatedAdministratorRoleOnAMixedPrincipal(string roleClaimType)
     {
+        // Arrange
         var store = new ObservedStore();
         var topology = new ObservedTopology();
         var policy = new PermissivePolicy();
@@ -23,7 +24,11 @@ public sealed class SystemOperatorAccessTests
         var unauthenticatedAdministrator = new ClaimsIdentity(
             [new Claim(roleClaimType, TestOperationalAuthorizer.AdministratorRole)],
             null, ClaimTypes.Name, roleClaimType);
+
+        // Act
         var actor = new ClaimsPrincipal([ordinary, unauthenticatedAdministrator]);
+
+        // Assert
         Assert.True(ordinary.IsAuthenticated);
         Assert.False(unauthenticatedAdministrator.IsAuthenticated);
         Assert.True(actor.IsInRole(TestOperationalAuthorizer.AdministratorRole));
@@ -44,6 +49,7 @@ public sealed class SystemOperatorAccessTests
     [InlineData("roles")]
     public async Task ShouldAllowAuthenticatedSecondaryAdministratorIdentityWithCustomRoleClaims(string roleClaimType)
     {
+        // Arrange
         var topology = new ObservedTopology();
         var operations = PortiaOperations.Create(TestOperationalAuthorizer.Configuration(), new ObservedStore(),
             new OperationalOptions(), topology, new PermissivePolicy());
@@ -52,8 +58,10 @@ public sealed class SystemOperatorAccessTests
             "test", ClaimTypes.Name, roleClaimType);
         var actor = new ClaimsPrincipal([new ClaimsIdentity(), administrator]);
 
+        // Act
         var description = await operations.DescribeApplicationAsync(actor, OperationalScope.Global);
 
+        // Assert
         Assert.Equal("test", description.Coverage);
         Assert.Equal(1, topology.Reads);
     }
@@ -62,6 +70,7 @@ public sealed class SystemOperatorAccessTests
     [Fact]
     public async Task ShouldUseConfiguredAdministratorRoleWhenResolvedWithoutRegisteredClock()
     {
+        // Arrange
         var topology = new ObservedTopology();
         await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
         var services = new ServiceCollection();
@@ -70,7 +79,11 @@ public sealed class SystemOperatorAccessTests
         _ = services.AddSingleton<IOperationalAuthorizer, PermissivePolicy>();
         _ = services.AddPortia().UseFitzClient(client, fitz => fitz.DisableRequestWorkers().UseOperations(
             "kv://system-operator-tests/portia/checkpoints", options => options.QuiescedWorkerCutover = true));
+
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         Assert.Null(provider.GetService<TimeProvider>());
 
         var result = await provider.GetRequiredService<IPortiaOperations>()
@@ -84,10 +97,14 @@ public sealed class SystemOperatorAccessTests
     [Fact]
     public async Task ShouldDenyConfiguredAdministratorsWithoutExplicitOperationalPolicy()
     {
+        // Arrange
         var store = new ObservedStore();
+
+        // Act
         var operations = new PortiaOperations(TestOperationalAuthorizer.Configuration(), store,
             new OperationalOptions(), new ObservedTopology(), null, null);
 
+        // Assert
         _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
             await operations.ListIssuesAsync(TestOperationalAuthorizer.AdministratorActor(), OperationalScope.Global));
 
@@ -110,6 +127,7 @@ public sealed class SystemOperatorAccessTests
     [InlineData("verify")]
     public async Task ShouldRejectApplicationUsersEvenWhenOperationalPolicyAllowsEverything(string operation)
     {
+        // Arrange
         var store = new ObservedStore();
         var topology = new ObservedTopology();
         var policy = new PermissivePolicy();
@@ -118,7 +136,11 @@ public sealed class SystemOperatorAccessTests
             [new Claim(ClaimTypes.NameIdentifier, "application-user"),
                 new Claim(ClaimTypes.Role, "application-user-" + Environment.GetEnvironmentVariable("PORTIA_SYSTEM_ADMIN_ROLE"))], "test"));
         var target = new OperationalTarget("processor", "stream://realm/events/*", OperationalScope.Global);
+
+        // Act
         var id = Guid.NewGuid();
+
+        // Assert
         Assert.True(await policy.AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Approve));
 
         _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>

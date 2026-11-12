@@ -23,14 +23,18 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldResumeTenantMembershipFromDurableSnapshot()
     {
+        // Arrange
         var events = new InMemoryEventStore();
         await RegisterTenantAsync(events, "acme");
         await RegisterTenantAsync(events, "beta");
         var snapshots = new FitzKvTenantDirectorySnapshotStore(new FakeKvClient(), "kv://global/tenants/snapshots");
         var firstReader = new CountingEventReader(events);
+
+        // Act
         var first = TenantDirectorySnapshots.Create<TenantRegistered, TenantDeregistered>(firstReader,
             TenantRegistryPattern, GetTenantId, snapshots);
 
+        // Assert
         Assert.Equal(2, (await ReadActiveTenantsAsync(first)).Count);
         Assert.Equal(EventCursor.Start, firstReader.Cursors.Single());
 
@@ -52,11 +56,16 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldResumeWorkerCursorFromDurableSnapshot()
     {
+        // Arrange
         var events = new InMemoryEventStore();
         await RegisterTenantAsync(events, "acme");
         var snapshots = new FitzKvTenantDirectorySnapshotStore(new FakeKvClient(), "kv://global/tenants/snapshots");
+
+        // Act
         var first = TenantDirectorySnapshots.Create<TenantRegistered, TenantDeregistered>(events,
             TenantRegistryPattern, GetTenantId, snapshots);
+
+        // Assert
         await using (var cursor = await first.OpenCursorAsync())
             Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")),
                 await ReadOneAsync(cursor));
@@ -74,6 +83,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldBatchLiveRosterWritesAndReplayTheUnsavedTail()
     {
+        // Arrange
         var events = new InMemoryEventStore();
         await RegisterTenantAsync(events, "acme");
         var snapshots = new FitzKvTenantDirectorySnapshotStore(new FakeKvClient(), "kv://global/tenants/snapshots");
@@ -83,7 +93,10 @@ public sealed class MultiTenancyTests
         _ = await ReadOneAsync(cursor);
         var persisted = (await snapshots.LoadAsync(TenantRegistryPattern))!.Cursor;
 
+        // Act
         await RegisterTenantAsync(events, "beta");
+
+        // Assert
         Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("beta")),
             await ReadOneAsync(cursor));
         Assert.Equal(persisted, (await snapshots.LoadAsync(TenantRegistryPattern))!.Cursor);
@@ -107,6 +120,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldStartAlreadyRegisteredTenantAtStartup()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "acme");
         var directory = CreateDirectory(store);
@@ -125,8 +139,11 @@ public sealed class MultiTenancyTests
 
         await WaitUntilAsync(() => started.Contains(new TenantId("acme")));
         cts.Cancel();
+
+        // Act
         await AwaitRunAsync(run);
 
+        // Assert
         Assert.Contains(new TenantId("acme"), started);
     }
 
@@ -137,6 +154,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldStartTenantRegisteredWhileRunning()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         var directory = CreateDirectory(store);
         var runner = new MultiTenantRunner(directory);
@@ -156,8 +174,11 @@ public sealed class MultiTenancyTests
 
         await WaitUntilAsync(() => started.Contains(new TenantId("globex")));
         cts.Cancel();
+
+        // Act
         await AwaitRunAsync(run);
 
+        // Assert
         Assert.Contains(new TenantId("globex"), started);
     }
 
@@ -168,6 +189,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldStopTenantWhenDeregistered()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "initech");
         var directory = CreateDirectory(store);
@@ -205,8 +227,11 @@ public sealed class MultiTenancyTests
         await observedCancellation.Task;
 
         cts.Cancel();
+
+        // Act
         await AwaitRunAsync(run);
 
+        // Assert
         Assert.Contains(new TenantId("initech"), stopped);
     }
 
@@ -217,6 +242,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldStopEveryActiveTenantWhenRunCancelled()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "a");
         await RegisterTenantAsync(store, "b");
@@ -241,8 +267,11 @@ public sealed class MultiTenancyTests
 
         await WaitUntilAsync(() => started.Count == 2);
         cts.Cancel();
+
+        // Act
         await AwaitRunAsync(run);
 
+        // Assert
         Assert.Contains(new TenantId("a"), stopped);
         Assert.Contains(new TenantId("b"), stopped);
     }
@@ -251,6 +280,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldBoundTenantStopCallbackByShutdownToken()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "blocked");
         var runner = new MultiTenantRunner(CreateDirectory(store), new MultiTenantRunnerOptions { ShutdownGrace = TimeSpan.FromMilliseconds(50) });
@@ -275,8 +305,11 @@ public sealed class MultiTenancyTests
 
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         cts.Cancel();
+
+        // Act
         await run.WaitAsync(TimeSpan.FromSeconds(5));
 
+        // Assert
         Assert.True(stopEntered.Task.IsCompleted);
     }
 
@@ -284,6 +317,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldAllowTenantStopCallbackToCompleteWithinShutdownGrace()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "cooperative");
         var runner = new MultiTenantRunner(CreateDirectory(store), new MultiTenantRunnerOptions { ShutdownGrace = TimeSpan.FromSeconds(1) });
@@ -307,8 +341,11 @@ public sealed class MultiTenancyTests
 
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         cts.Cancel();
+
+        // Act
         await run.WaitAsync(TimeSpan.FromSeconds(5));
 
+        // Assert
         Assert.True(cleanupCompleted);
     }
 
@@ -321,6 +358,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldReturnCompleteActiveSnapshotAcrossRepeatedReads()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "acme");
         var directory = CreateDirectory(store);
@@ -330,8 +368,11 @@ public sealed class MultiTenancyTests
         await RegisterTenantAsync(store, "globex");
         var added = await ReadActiveTenantsAsync(directory);
         await DeregisterTenantAsync(store, "acme");
+
+        // Act
         var removed = await ReadActiveTenantsAsync(directory);
 
+        // Assert
         Assert.Equal([new TenantId("acme")], first);
         Assert.Equal([new TenantId("acme")], unchanged);
         Assert.Equal(2, added.Count);
@@ -350,6 +391,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldReconnectAfterTenantDirectoryWatchStreamFaults()
     {
+        // Arrange
         var directory = new FlakyWatchTenantDirectory();
         var runner = new MultiTenantRunner(directory);
         var started = new ConcurrentBag<TenantId>();
@@ -364,12 +406,19 @@ public sealed class MultiTenancyTests
             (_, _) => Task.CompletedTask,
             cts.Token);
 
+        // Act
         // The first watch stream throws as soon as it's subscribed to; a working runner
         // reconnects and picks up the tenant that arrives on the *second* attempt.
-        await WaitUntilAsync(() => started.Contains(new TenantId("recovered-after-reconnect")));
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await WaitUntilAsync(() => started.Contains(new TenantId("recovered-after-reconnect")));
+            cts.Cancel();
+            await AwaitRunAsync(run);
+        });
 
-        cts.Cancel();
-        await AwaitRunAsync(run);
+        // Assert
+        Assert.Null(exception);
+        Assert.Contains(new TenantId("recovered-after-reconnect"), started);
     }
 
     /// <summary>
@@ -384,6 +433,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldStopTenantOmittedFromSnapshotAfterWatchStreamOutage()
     {
+        // Arrange
         var directory = new OutageDuringWhichTenantWasRemovedDirectory();
         var runner = new MultiTenantRunner(directory);
         var started = new ConcurrentBag<TenantId>();
@@ -409,8 +459,11 @@ public sealed class MultiTenancyTests
         await WaitUntilAsync(() => stopped.Contains(new TenantId("acme")));
 
         cts.Cancel();
+
+        // Act
         await AwaitRunAsync(run);
 
+        // Assert
         Assert.Contains(new TenantId("acme"), started);
         Assert.Contains(new TenantId("acme"), stopped);
     }
@@ -424,14 +477,19 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldBackOffWhenWatchStreamCompletesCleanlyInsteadOfThrowing()
     {
+        // Arrange
         var directory = new CleanlyCompletingWatchDirectory();
         var clock = new WaitingClock();
         var runner = new MultiTenantRunner(directory, timeProvider: clock);
         using var cts = new CancellationTokenSource();
+
+        // Act
         var run = runner.RunAsync(
             (_, ct) => WaitForCancellationAsync(ct),
             (_, _) => Task.CompletedTask,
             cts.Token);
+
+        // Assert
         Assert.Equal(TimeSpan.FromSeconds(1), await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(5)));
         cts.Cancel();
         await AwaitRunAsync(run);
@@ -442,17 +500,21 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldPreferOneResumableCursorForTheRunnerLifetime()
     {
+        // Arrange
         var directory = new ResumableProbeDirectory();
         var clock = new WaitingClock();
         var runner = new MultiTenantRunner(directory, timeProvider: clock);
         var started = new TaskCompletionSource<TenantId>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         var run = runner.RunAsync((tenant, token) =>
         {
             _ = started.TrySetResult(tenant);
             return WaitForCancellationAsync(token);
         }, (_, _) => Task.CompletedTask, cancellation.Token);
 
+        // Assert
         Assert.Equal(new TenantId("cursor"), await started.Task.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Equal(TimeSpan.FromSeconds(1), await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Equal(1, directory.OpenCount);
@@ -468,6 +530,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldStopTenantRemovedWhileResumableCursorIsDisconnected()
     {
+        // Arrange
         var directory = new DisconnectingCursorDirectory();
         var clock = new ManualTestClock();
         var runner = new MultiTenantRunner(directory, timeProvider: clock);
@@ -486,7 +549,10 @@ public sealed class MultiTenancyTests
             return Task.CompletedTask;
         }, cancellation.Token);
 
+        // Act
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Assert
         Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
         directory.RemovedWhileDisconnected = true;
         clock.Advance(TimeSpan.FromSeconds(1));
@@ -502,12 +568,16 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldResumeCursorAtNextOffsetAndKeepSeparateCursorsIndependent()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "acme");
         var directory = CreateDirectory(store);
         await using var first = await directory.OpenCursorAsync();
+
+        // Act
         await using var second = await directory.OpenCursorAsync();
 
+        // Assert
         Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")),
             await ReadOneAsync(first));
         Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")),
@@ -529,6 +599,7 @@ public sealed class MultiTenancyTests
     [InlineData(false)]
     public async Task ShouldDiscoverTenantAfterPollIntervalWhenNotificationIsLost(bool useCursor)
     {
+        // Arrange
         var pollInterval = TimeSpan.FromSeconds(30);
         var clock = new ManualTestClock();
         var store = new InMemoryEventStore();
@@ -537,8 +608,12 @@ public sealed class MultiTenancyTests
             TenantRegistryPattern, GetTenantId, pollInterval, clock, new DroppingNotifier());
         await using var cursor = await directory.OpenCursorAsync();
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         await using var reader = (useCursor ? cursor.ReadAsync(cancellation.Token) : directory.WatchAsync(cancellation.Token))
             .GetAsyncEnumerator();
+
+        // Assert
         Assert.True(await reader.MoveNextAsync());
         Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")), reader.Current);
 
@@ -565,6 +640,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldRejectConcurrentEnumerationOfOneResumableCursor()
     {
+        // Arrange
         var clock = new WaitingClock();
         var store = new InMemoryEventStore();
         var directory = new EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(store,
@@ -574,8 +650,11 @@ public sealed class MultiTenancyTests
         await using var first = cursor.ReadAsync(cancellation.Token).GetAsyncEnumerator();
         var pending = first.MoveNextAsync().AsTask();
         _ = await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Act
         await using var second = cursor.ReadAsync(cancellation.Token).GetAsyncEnumerator();
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => second.MoveNextAsync().AsTask());
 
         Assert.Equal("A tenant directory cursor supports only one active enumeration.", error.Message);
@@ -587,6 +666,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldReleaseSubscriptionWhenCursorIsDisposedWhileSubscribing()
     {
+        // Arrange
         var source = new GatedCursorSource();
         var directory = new EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(source,
             TenantRegistryPattern, GetTenantId, notifier: source);
@@ -601,8 +681,11 @@ public sealed class MultiTenancyTests
             .WaitAsync(TimeSpan.FromSeconds(5));
         source.ReleaseRead();
         var error = await Record.ExceptionAsync(() => pending);
+
+        // Act
         await reader.DisposeAsync();
 
+        // Assert
         Assert.Same(pending, firstCompletion);
         _ = Assert.IsType<ObjectDisposedException>(error);
         Assert.Equal(1, source.DisposalCount);
@@ -612,11 +695,16 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldSubscribeBeforeReadingAndRecreateResumableCursorAfterFailure()
     {
+        // Arrange
         var source = new CursorSource();
         source.Add(new TenantRegistered("acme"));
         var directory = new EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(source,
             TenantRegistryPattern, GetTenantId, notifier: source);
+
+        // Act
         await using var cursor = await directory.OpenCursorAsync();
+
+        // Assert
         await using (var first = cursor.ReadAsync().GetAsyncEnumerator())
         {
             Assert.True(await first.MoveNextAsync());
@@ -643,6 +731,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldFaultNormalRemovalWhenWorkloadIgnoresCancellation()
     {
+        // Arrange
         var directory = new RemovalDirectory();
         var clock = new ManualTestClock();
         var timeout = TimeSpan.FromSeconds(5);
@@ -658,7 +747,11 @@ public sealed class MultiTenancyTests
         }, (_, _) => Task.CompletedTask);
 
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Act
         directory.Remove();
+
+        // Assert
         Assert.Equal(timeout, await clock.WaitForDelayAsync());
         clock.Advance(timeout);
         var error = await Assert.ThrowsAsync<TenantStopTimeoutException>(() => run);
@@ -671,6 +764,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldShareOneNormalRemovalDeadlineBetweenWorkloadAndStopCallback()
     {
+        // Arrange
         var directory = new RemovalDirectory();
         var clock = new ManualTestClock();
         var options = new MultiTenantRunnerOptions { TenantStopTimeout = TimeSpan.FromSeconds(5) };
@@ -698,7 +792,11 @@ public sealed class MultiTenancyTests
         });
 
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Act
         directory.Remove();
+
+        // Assert
         Assert.Equal(TimeSpan.FromSeconds(5), await clock.WaitForDelayAsync());
         Assert.Equal(TimeSpan.FromSeconds(3), await clock.WaitForDelayAsync());
         clock.Advance(TimeSpan.FromSeconds(3));
@@ -713,6 +811,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldNotReportHostCancellationDuringRemovalAsTenantTimeout()
     {
+        // Arrange
         var directory = new RemovalDirectory();
         var clock = new ManualTestClock();
         var runner = new MultiTenantRunner(directory, new MultiTenantRunnerOptions(), null, clock);
@@ -725,7 +824,11 @@ public sealed class MultiTenancyTests
         }, (_, _) => Task.CompletedTask, cancellation.Token);
 
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Act
         directory.Remove();
+
+        // Assert
         Assert.Equal(TimeSpan.FromSeconds(5), await clock.WaitForDelayAsync());
         cancellation.Cancel();
 
@@ -733,21 +836,34 @@ public sealed class MultiTenancyTests
     }
 
     /// <summary>Every configurable runner duration must be strictly positive.</summary>
-    [Fact]
-    public void ShouldRejectNonPositiveRunnerOptionDurations()
+    /// <param name="option">The runner option set to zero.</param>
+    [Theory]
+    [InlineData(nameof(MultiTenantRunnerOptions.RestartInterval))]
+    [InlineData(nameof(MultiTenantRunnerOptions.ShutdownGrace))]
+    [InlineData(nameof(MultiTenantRunnerOptions.TenantStopTimeout))]
+    public void ShouldRejectNonPositiveRunnerOptionDurations(string option)
     {
+        // Arrange
         var directory = new RemovalDirectory();
-        foreach (var configure in new Action<MultiTenantRunnerOptions>[]
-                 {
-                     options => options.RestartInterval = TimeSpan.Zero,
-                     options => options.ShutdownGrace = TimeSpan.Zero,
-                     options => options.TenantStopTimeout = TimeSpan.Zero
-                 })
+        var options = new MultiTenantRunnerOptions();
+        switch (option)
         {
-            var options = new MultiTenantRunnerOptions();
-            configure(options);
-            _ = Assert.Throws<ArgumentOutOfRangeException>(() => new MultiTenantRunner(directory, options));
+            case nameof(MultiTenantRunnerOptions.RestartInterval):
+                options.RestartInterval = TimeSpan.Zero;
+                break;
+            case nameof(MultiTenantRunnerOptions.ShutdownGrace):
+                options.ShutdownGrace = TimeSpan.Zero;
+                break;
+            default:
+                options.TenantStopTimeout = TimeSpan.Zero;
+                break;
         }
+
+        // Act
+        var exception = Record.Exception(() => new MultiTenantRunner(directory, options));
+
+        // Assert
+        _ = Assert.IsType<ArgumentOutOfRangeException>(exception);
     }
 
     static EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>

@@ -8,6 +8,7 @@ public sealed class OperationalTopologyTests
     [Fact]
     public void ShouldDescribeOnlyRegisteredCrossAssemblyProcessorsWithoutResolvingDependencies()
     {
+        // Arrange
         var services = new ServiceCollection();
         services.AddContracts();
         services.AddPortia()
@@ -18,7 +19,11 @@ public sealed class OperationalTopologyTests
         // These processors have unresolved application dependencies and Fitz is unreachable.
         // Describing generated registration metadata must require neither of them.
         using var provider = services.BuildServiceProvider();
+
+        // Act
         var topology = provider.GetRequiredService<IApplicationTopology>().Describe();
+
+        // Assert
         Assert.Equal(["first", "tenant"], topology.Processors.Select(p => p.Name));
         var remote = Assert.Single(topology.Requests, request => request.Request == typeof(FeatureOneRequest).FullName);
         Assert.StartsWith("unknown:", remote.Handler, StringComparison.Ordinal);

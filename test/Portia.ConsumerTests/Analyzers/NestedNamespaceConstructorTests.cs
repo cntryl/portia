@@ -17,6 +17,7 @@ public sealed class NestedNamespaceConstructorTests
     [InlineData("nested_generic")]
     public async Task ShouldPreserveConstructorQualificationGivenNestedMovedType(string form)
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location).Distinct(StringComparer.Ordinal)
@@ -41,8 +42,12 @@ public sealed class NestedNamespaceConstructorTests
             "global_nested" => "global::Old.Price.Key",
             _ => "Old.Price"
         };
+
+        // Act
         var dependent = document.Project.AddDocument("Use.cs",
             "namespace Client; public class Use { public " + qualifiedType + " Make() => new " + qualifiedType + "(); }");
+
+        // Assert
         Assert.True(workspace.TryApplyChanges(dependent.Project.Solution));
         document = workspace.CurrentSolution.GetDocument(document.Id)!;
         var before = (await document.Project.GetCompilationAsync())!;

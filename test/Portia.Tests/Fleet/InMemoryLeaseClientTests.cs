@@ -18,15 +18,18 @@ public sealed class InMemoryLeaseClientTests
     [Fact]
     public async Task ShouldRunCallbackAndRecordAcquisition()
     {
+        // Arrange
         var leases = new InMemoryLeaseClient();
         var ran = false;
 
+        // Act
         await leases.WithLeaseAsync("lease://portia/fleet/p", 30, _ =>
         {
             ran = true;
             return ValueTask.CompletedTask;
         });
 
+        // Assert
         Assert.True(ran);
         Assert.Equal(["lease://portia/fleet/p"], leases.Acquisitions);
     }

@@ -7,13 +7,17 @@ public sealed class FitzKvTenantDirectorySnapshotStoreTests
     [Fact]
     public async Task ShouldKeepNewerRosterWhenAStaleWriterTriesToSave()
     {
+        // Arrange
         var kv = new FakeKvClient();
         var store = new FitzKvTenantDirectorySnapshotStore(kv, "kv://global/tenants/snapshots");
         var pattern = EventStreamPattern.ForPattern("global", "tenants", "registry");
         var other = EventStreamPattern.ForPattern("global", "tenants", "other");
         var first = new TenantDirectorySnapshot(new EventCursor("1"), [new TenantId("acme")]);
+
+        // Act
         var second = new TenantDirectorySnapshot(new EventCursor("2"), [new TenantId("beta")]);
 
+        // Assert
         Assert.True(await store.TrySaveAsync(pattern, null, first));
         Assert.Equal(KvDurability.Buffered, kv.LastTransaction.Durability);
         Assert.True(await store.TrySaveAsync(pattern, first.Cursor, second));

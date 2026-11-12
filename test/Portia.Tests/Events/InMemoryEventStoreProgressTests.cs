@@ -10,14 +10,18 @@ public sealed class InMemoryEventStoreProgressTests
     [InlineData(null, null, 6UL)]
     public async Task ShouldReportExactScopeProgressIncludingAudits(string? area, string? resource, ulong head)
     {
+        // Arrange
         var store = new InMemoryEventStore();
         await AppendAsync(store, "tenant", "orders", "one", 3);
         await AppendAsync(store, "tenant", "orders", "two", 2);
         await AppendAsync(store, "tenant", "accounts", "one", 1);
         await AppendAsync(store, "other", "orders", "one", 4);
         var position = Cursor(1);
+
+        // Act
         var progress = await store.GetProgressAsync(EventStreamPattern.ForPattern("tenant", area, resource), position);
 
+        // Assert
         Assert.Equal(position, progress.Position);
         Assert.Equal(Cursor(head), progress.SourcePosition);
         Assert.Equal(head - 1, progress.PendingEvents);
@@ -33,9 +37,13 @@ public sealed class InMemoryEventStoreProgressTests
     [Fact]
     public async Task ShouldNotTreatACheckpointAheadOfTheSourceAsCaughtUp()
     {
+        // Arrange
         var store = new InMemoryEventStore();
+
+        // Act
         var progress = await store.GetProgressAsync(EventStreamPattern.ForPattern("tenant"), Cursor(5));
 
+        // Assert
         Assert.Equal(Cursor(0), progress.SourcePosition);
         Assert.Null(progress.PendingEvents);
         Assert.Null(progress.PendingEventsLowerBound);

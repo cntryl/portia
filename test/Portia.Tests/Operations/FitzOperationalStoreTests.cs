@@ -9,11 +9,16 @@ public sealed class FitzOperationalStoreTests
     [Fact]
     public async Task ShouldPreserveLegacyProgressAndRejectUnfencedWrites()
     {
+        // Arrange
         var client = new FakeKvClient();
         var old = new FitzKvCheckpointStore(client, "kv://test/state/progress", KvDurability.Sync);
         var checkpoint = new ProjectionCheckpoint(new EventCursor("opaque/not-a-number:99"));
         await old.SaveAsync(Target.Identity, checkpoint);
+
+        // Act
         var operations = new FitzOperationalStore(client, "kv://test/state/progress");
+
+        // Assert
         Assert.Equal(checkpoint, await operations.LoadAsync(Target.Identity));
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() => operations.SaveAsync(Target.Identity, ProjectionCheckpoint.Start).AsTask());
         Assert.Equal(checkpoint, await old.LoadAsync(Target.Identity));
@@ -23,6 +28,7 @@ public sealed class FitzOperationalStoreTests
     [Fact]
     public async Task ShouldCommitReceiptAndCheckpointTogetherOrNeither()
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new FitzOperationalStore(client, "kv://test/state/progress");
         var owner = Guid.NewGuid();
@@ -30,8 +36,12 @@ public sealed class FitzOperationalStoreTests
         var attempt = new OperationalAttempt(attemptId, owner, DateTimeOffset.UtcNow, null, "running", null,
             "opaque:next", [new OperationalSource("stream://tenant/orders/order", "event", 0, "opaque:next")], [],
             "unknown", new ApplicationTopology([], [], "unknown"));
+
+        // Act
         var state = new OperationalProcessorState(Target, "reactor", owner, 1, null,
             new OperationalProcessingSettings(1, 1, 3, 1, 1), [attempt], null, [], [], [], 0, DateTimeOffset.UtcNow);
+
+        // Assert
         Assert.True(await store.CompareExchangeAsync(state, 0, Guid.Empty));
         var next = state with
         {
@@ -57,12 +67,17 @@ public sealed class FitzOperationalStoreTests
     [Fact]
     public async Task ShouldDeriveIndependentResourcesForTenantJournals()
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new FitzOperationalStore(client, "kv://test/state/progress");
         _ = await store.ReadAsync(Target);
         var firstRoute = client.LastTransaction.Route;
         var other = Target with { Pattern = "stream://other/orders/*", Scope = OperationalScope.ForTenant(new TenantId("other")) };
+
+        // Act
         _ = await store.ReadAsync(other);
+
+        // Assert
         Assert.NotEqual(firstRoute, client.LastTransaction.Route);
         Assert.Equal(FitzKvCheckpoints.WorkloadRoute("kv://test/state/progress", Target.Identity), firstRoute);
     }

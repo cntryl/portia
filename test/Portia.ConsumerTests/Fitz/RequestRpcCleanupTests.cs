@@ -9,6 +9,7 @@ public sealed class RequestRpcCleanupTests
     [InlineData(true)]
     public async Task ShouldCleanupEveryWorkerGivenRegistrationOrDisposalFailureWhenRegistering(bool registrationFails)
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddSingleton<RequestHandlerRegistration>(
             new RequestRegistration<FeatureOneRequest, FeatureOneHandler, int>());
@@ -35,8 +36,12 @@ public sealed class RequestRpcCleanupTests
         }
 
         await using var provider = services.BuildServiceProvider();
+
+        // Act
         var server =
             new FitzRpcRequestServer(new InMemoryRpcClient(), provider.GetRequiredService<IServiceScopeFactory>());
+
+        // Assert
         if (registrationFails)
         {
             var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>

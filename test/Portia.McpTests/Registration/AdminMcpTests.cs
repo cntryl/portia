@@ -23,6 +23,7 @@ public sealed class AdminMcpTests
     [InlineData("tools/list")]
     public async Task ShouldDenyApplicationUsersBeforeAdministrativeDiscovery(string method)
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Configuration["PORTIA_SYSTEM_ADMIN_ROLE"] = AdministratorRole;
@@ -48,14 +49,17 @@ public sealed class AdminMcpTests
         };
         request.Headers.Accept.ParseAdd("application/json, text/event-stream");
 
+        // Act
         using var response = await app.GetTestClient().SendAsync(request);
 
+        // Assert
         Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
     public async Task ShouldDenyApplicationUsersBeforeReadingRepairApprovalBody()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Configuration["PORTIA_SYSTEM_ADMIN_ROLE"] = AdministratorRole;
@@ -76,8 +80,10 @@ public sealed class AdminMcpTests
         await app.StartAsync();
         using var content = new StringContent("invalid-json", System.Text.Encoding.UTF8, "application/json");
 
+        // Act
         using var response = await app.GetTestClient().PostAsync($"/admin/repairs/{Guid.NewGuid()}/approve", content);
 
+        // Assert
         Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Empty(store.State.Approvals);
     }
@@ -85,6 +91,7 @@ public sealed class AdminMcpTests
     [Fact]
     public async Task ShouldApproveExactPlanOnlyThroughSeparatelyAuthorizedHttpActor()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Configuration["PORTIA_SYSTEM_ADMIN_ROLE"] = AdministratorRole;
@@ -105,7 +112,11 @@ public sealed class AdminMcpTests
         await app.StartAsync();
         await using var agent = await ClientAsync(app, "/admin/mcp");
         var arguments = new Dictionary<string, object?> { ["scope"] = new Dictionary<string, object?> { ["tenant"] = null }, ["target"] = store.State.Target };
+
+        // Act
         var preview = await agent.CallToolAsync("preview_repair", arguments);
+
+        // Assert
         Assert.False(preview.IsError);
         using var plan = JsonDocument.Parse(Assert.IsType<TextContentBlock>(Assert.Single(preview.Content)).Text);
         var id = plan.RootElement.GetProperty("id").GetGuid();
@@ -129,6 +140,7 @@ public sealed class AdminMcpTests
     [InlineData(false)]
     public async Task ShouldIsolateCatalogsAndGuessedCallsInEitherRegistrationOrder(bool adminFirst)
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Configuration["PORTIA_SYSTEM_ADMIN_ROLE"] = AdministratorRole;
@@ -161,7 +173,11 @@ public sealed class AdminMcpTests
         await app.StartAsync();
         await using var admin = await ClientAsync(app, "/admin/mcp");
         await using var business = await ClientAsync(app, "/mcp");
+
+        // Act
         var adminTools = await admin.ListToolsAsync();
+
+        // Assert
         Assert.Equal(8, adminTools.Count);
         Assert.DoesNotContain(adminTools, t => t.Name.Contains("approve", StringComparison.Ordinal));
         var applicationTool = Assert.Single(await business.ListToolsAsync());
@@ -184,17 +200,23 @@ public sealed class AdminMcpTests
     [Fact]
     public void ShouldRejectSharedStatefulHttpConfiguration()
     {
+        // Arrange
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddPortia().AddAdminMcpHttp();
         services.Configure<HttpServerTransportOptions>(options => options.Stateless = false);
+
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         _ = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<HttpServerTransportOptions>>().Value);
     }
 
     [Fact]
     public async Task ShouldExcludeApplicationFallbackHandlersAndRawMethods()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Configuration["PORTIA_SYSTEM_ADMIN_ROLE"] = AdministratorRole;
@@ -228,7 +250,11 @@ public sealed class AdminMcpTests
         });
         app.MapPortiaAdminMcp().AllowAnonymous();
         await app.StartAsync();
+
+        // Act
         await using var admin = await ClientAsync(app, "/admin/mcp");
+
+        // Assert
         Assert.True((await admin.CallToolAsync("application_fallback")).IsError);
         _ = await Assert.ThrowsAsync<System.Net.Http.HttpRequestException>(async () => await admin.ReadResourceAsync("app://fallback"));
         _ = await Assert.ThrowsAsync<System.Net.Http.HttpRequestException>(async () => await admin.GetPromptAsync("application_prompt"));

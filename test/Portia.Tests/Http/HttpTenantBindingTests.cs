@@ -27,10 +27,13 @@ public sealed class HttpTenantBindingTests : IAsyncDisposable
     [Fact]
     public async Task ShouldBindTenantFromRoute()
     {
+        // Arrange
         var client = await StartAsync();
 
+        // Act
         using var response = await client.PostAsJsonAsync("/tenants/acme/probe", new { name = "savings" });
 
+        // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("acme:savings", await response.Content.ReadFromJsonAsync<string>());
     }
@@ -39,10 +42,13 @@ public sealed class HttpTenantBindingTests : IAsyncDisposable
     [Fact]
     public async Task ShouldRejectMalformedTenantInRoute()
     {
+        // Arrange
         var client = await StartAsync();
 
+        // Act
         using var response = await client.PostAsJsonAsync("/tenants/a*b/probe", new { name = "savings" });
 
+        // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -55,10 +61,13 @@ public sealed class HttpTenantBindingTests : IAsyncDisposable
     [InlineData("{tenant}", HttpStatusCode.BadRequest)]
     public async Task ShouldBindTenantFromBody(string tenant, HttpStatusCode expected)
     {
+        // Arrange
         var client = await StartAsync();
 
+        // Act
         using var response = await client.PostAsJsonAsync("/probe", new { tenant, name = "savings" });
 
+        // Assert
         Assert.Equal(expected, response.StatusCode);
     }
 
@@ -66,12 +75,16 @@ public sealed class HttpTenantBindingTests : IAsyncDisposable
     [Fact]
     public async Task ShouldDescribeTenantAsString()
     {
+        // Arrange
         var client = await StartAsync();
 
         using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
 
+        // Act
         var routed = document.RootElement.GetProperty("paths").GetProperty("/tenants/{tenant}/probe")
             .GetProperty("post");
+
+        // Assert
         var parameter = Assert.Single(routed.GetProperty("parameters").EnumerateArray(),
             item => item.GetProperty("name").GetString() == "tenant");
         Assert.Equal("string", parameter.GetProperty("schema").GetProperty("type").GetString());

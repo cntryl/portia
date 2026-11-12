@@ -13,9 +13,13 @@ public sealed partial class CassieProjectionMisuseTests
     [Fact]
     public async Task ShouldClassifyQueryReadsDuringABatchAsPermanent()
     {
+        // Arrange
         var activity = new CassieProjectionActivityGate();
+
+        // Act
         await activity.EnterBatchAsync(default);
 
+        // Assert
         var misuse = Assert.Throws<NotSupportedException>(() => activity.EnterRead());
 
         Assert.False(Diagnose(misuse).IsTransient);
@@ -25,9 +29,13 @@ public sealed partial class CassieProjectionMisuseTests
     [Fact]
     public async Task ShouldClassifyOverlappingBatchesAsPermanent()
     {
+        // Arrange
         var activity = new CassieProjectionActivityGate();
+
+        // Act
         await activity.EnterBatchAsync(default);
 
+        // Assert
         var misuse = await Assert.ThrowsAsync<NotSupportedException>(() => activity.EnterBatchAsync(default).AsTask());
 
         Assert.False(Diagnose(misuse).IsTransient);
@@ -37,10 +45,14 @@ public sealed partial class CassieProjectionMisuseTests
     [Fact]
     public async Task ShouldClassifyWritesOutsideABatchAsPermanent()
     {
+        // Arrange
         await using var source = new CassieDataSource(UnreachableServer);
         using var database = new CassieProjectionDatabase(source);
+
+        // Act
         await using var repository = new ProbeRepository(database, "Probe");
 
+        // Assert
         var misuse = Assert.Throws<NotSupportedException>(() => repository.Write());
 
         Assert.False(Diagnose(misuse).IsTransient);
@@ -50,13 +62,18 @@ public sealed partial class CassieProjectionMisuseTests
     [Fact]
     public async Task ShouldRejectRepositoryNamedForAnotherProjectorAtStartup()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddSingleton<IDomainEventReader>(new InMemoryEventStore());
         _ = services.AddScoped(sp => new ProbeRepository(sp.GetRequiredService<CassieProjectionDatabase>(), "SomethingElse"));
         _ = services.AddPortia().AddCassie(UnreachableServer)
             .AddCassieProjection<ProbeProjector, ProbeRepository>("Probe", WorkloadScope.Global)
             .AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         await using var provider = services.BuildServiceProvider();
+
+        // Assert
         var worker = Assert.IsAssignableFrom<IHostedLifecycleService>(
             Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>()));
 

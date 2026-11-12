@@ -18,6 +18,7 @@ public sealed class TelemetryCompletionTests
     [InlineData(true, "canceled")]
     public async Task ShouldCompleteAuthorizationGivenCancellation(bool requested, string expectedOutcome)
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
         using var cancellation = new CancellationTokenSource();
         var failure = new AuthorizationFailure(cancellation, requested);
@@ -28,8 +29,11 @@ public sealed class TelemetryCompletionTests
             .AddSingleton<AuthorizationProbeHandler>()
             .AddSingleton<CancelingAuthorizer>()
             .BuildServiceProvider();
+
+        // Act
         var bus = new RequestBus(services, new RequestRegistry([handler], [authorizer], [], []));
 
+        // Assert
         _ = await Assert.ThrowsAsync<OperationCanceledException>(() => bus.DispatchAsync(
             new AuthorizationProbe(), bus.CreateContext(RequestActor.System), cancellation.Token).AsTask());
 
@@ -44,12 +48,15 @@ public sealed class TelemetryCompletionTests
     [InlineData(true, "conflict")]
     public async Task ShouldRecordGuardDurationWithComponentNameAndOutcome(bool fails, string expectedOutcome)
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
         var bus = GuardBus(new GuardBehavior(fails ? GuardAction.Conflict : GuardAction.Pass),
             new RequestGuardRegistration<GuardTelemetryProbe, TelemetryOutcomeGuard>());
 
+        // Act
         _ = await bus.DispatchAsync(new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System));
 
+        // Assert
         Assert.Equal(expectedOutcome, measurements.SingleOutcome("portia.guard.duration",
             "portia.component.name", nameof(TelemetryOutcomeGuard)));
     }
@@ -62,11 +69,15 @@ public sealed class TelemetryCompletionTests
     [InlineData(true, "canceled")]
     public async Task ShouldCompleteGuardTelemetryGivenCancellation(bool requested, string expectedOutcome)
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         var bus = GuardBus(new GuardBehavior(GuardAction.Cancel, cancellation, requested),
             new RequestGuardRegistration<GuardTelemetryProbe, TelemetryCancelingGuard>());
 
+        // Assert
         _ = await Assert.ThrowsAsync<OperationCanceledException>(() => bus.DispatchAsync(
             new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System), cancellation.Token).AsTask());
 
@@ -78,10 +89,14 @@ public sealed class TelemetryCompletionTests
     [Fact]
     public async Task ShouldRecordFaultGuardTelemetryGivenUninitializedResult()
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
+
+        // Act
         var bus = GuardBus(new GuardBehavior(GuardAction.Uninitialized),
             new RequestGuardRegistration<GuardTelemetryProbe, TelemetryUninitializedGuard>());
 
+        // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() => bus.DispatchAsync(
             new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System)).AsTask());
 
@@ -93,13 +108,16 @@ public sealed class TelemetryCompletionTests
     [Fact]
     public async Task ShouldNotRecordGuardTelemetryForGuardsAfterFirstFailure()
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
         var bus = GuardBus(new GuardBehavior(GuardAction.Conflict),
             new RequestGuardRegistration<GuardTelemetryProbe, TelemetryOutcomeGuard>(),
             new RequestGuardRegistration<GuardTelemetryProbe, TelemetrySkippedGuard>());
 
+        // Act
         _ = await bus.DispatchAsync(new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System));
 
+        // Assert
         Assert.Equal("conflict", measurements.SingleOutcome("portia.guard.duration",
             "portia.component.name", nameof(TelemetryOutcomeGuard)));
         Assert.Equal(0, measurements.Count("portia.guard.duration", "portia.component.name",
@@ -110,16 +128,20 @@ public sealed class TelemetryCompletionTests
     [Fact]
     public async Task ShouldRecordStreamGuardFailureAsRequestOutcome()
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
         var services = new ServiceCollection()
             .AddSingleton(new GuardBehavior(GuardAction.Conflict))
             .AddSingleton<GuardTelemetryStreamHandler>()
             .AddSingleton<TelemetryStreamGuard>()
             .BuildServiceProvider();
+
+        // Act
         var bus = new RequestBus(services, new RequestRegistry(
             [new StreamRequestRegistration<GuardTelemetryStream, GuardTelemetryStreamHandler, int>()], [], [],
             [new RequestGuardRegistration<GuardTelemetryStream, TelemetryStreamGuard>()], []));
 
+        // Assert
         _ = await Assert.ThrowsAsync<RequestGuardException>(async () =>
         {
             await foreach (var _ in bus.DispatchStreamAsync(new GuardTelemetryStream(),
@@ -138,14 +160,18 @@ public sealed class TelemetryCompletionTests
     [Fact]
     public async Task ShouldRecordCommitConcurrencyAsRequestConflict()
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
         var handler = new ConcurrencyTelemetryHandler();
         var services = new ServiceCollection()
             .AddSingleton(handler)
             .BuildServiceProvider();
+
+        // Act
         var bus = new RequestBus(services, new RequestRegistry(
             [new RequestRegistration<ConcurrencyTelemetryProbe, ConcurrencyTelemetryHandler>()], [], [], []));
 
+        // Assert
         var error = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() => bus.DispatchAsync(
             new ConcurrencyTelemetryProbe(), bus.CreateContext(RequestActor.System)).AsTask());
 
@@ -162,6 +188,7 @@ public sealed class TelemetryCompletionTests
     [InlineData(true)]
     public async Task ShouldRecordStreamCommitConcurrencyAsRequestConflict(bool onDispose)
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
         using var listener = ListenToActivities(out var stopped);
         var services = new ServiceCollection()
@@ -172,7 +199,10 @@ public sealed class TelemetryCompletionTests
             [new StreamRequestRegistration<ConcurrencyTelemetryStream, ConcurrencyTelemetryStreamHandler, int>()],
             [], [], [], []));
 
+        // Act
         var observed = 0;
+
+        // Assert
         var error = await Assert.ThrowsAsync<EventStreamConcurrencyException>(async () =>
         {
             await foreach (var _ in bus.DispatchStreamAsync(new ConcurrencyTelemetryStream(),
@@ -206,16 +236,20 @@ public sealed class TelemetryCompletionTests
     [InlineData(true, "fault")]
     public async Task ShouldRecordStreamStoppedEarlyByConsumerAsCanceled(bool disposeFails, string expectedOutcome)
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
         using var listener = ListenToActivities(out var stopped);
         var services = new ServiceCollection()
             .AddSingleton(new EarlyStopBehavior(disposeFails))
             .AddSingleton<EarlyStopTelemetryStreamHandler>()
             .BuildServiceProvider();
+
+        // Act
         var bus = new RequestBus(services, new RequestRegistry(
             [new StreamRequestRegistration<EarlyStopTelemetryStream, EarlyStopTelemetryStreamHandler, int>()],
             [], [], [], []));
 
+        // Assert
         if (disposeFails)
             _ = await Assert.ThrowsAsync<InvalidOperationException>(TakeFirstAsync);
         else
@@ -260,6 +294,7 @@ public sealed class TelemetryCompletionTests
     [InlineData("dispose", true, true)]
     public async Task ShouldClassifyTheActualDispatchFailure(string shape, bool cancel, bool cancellationException)
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
         using var listener = ListenToActivities(out var stopped);
         using var cancellation = new CancellationTokenSource();
@@ -273,6 +308,8 @@ public sealed class TelemetryCompletionTests
                 new StreamRequestRegistration<FailureStream, FailureStreamHandler, int>()],
             shape == "preflight" ? [new RequestAuthorizerRegistration<FailureStream, FailureStreamAuthorizer>()] : [],
             [], [], []));
+
+        // Act
         var exception = await Record.ExceptionAsync(async () =>
         {
             var context = bus.CreateContext(RequestActor.System);
@@ -287,6 +324,8 @@ public sealed class TelemetryCompletionTests
                         break;
                 }
         });
+
+        // Assert
         Assert.Same(failure.Exception, exception);
         var expected = cancel && cancellationException ? "canceled" : "fault";
         Assert.Equal(expected, measurements.SingleOutcome("portia.request.duration"));
@@ -374,9 +413,13 @@ public sealed class TelemetryCompletionTests
     [Fact]
     public async Task ShouldReportFaultGivenUnrequestedAggregateCancellation()
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
+
+        // Act
         var repository = new AggregateRepository(new CancelingEventStore());
 
+        // Assert
         _ = await Assert.ThrowsAsync<OperationCanceledException>(() =>
             repository.HydrateAsync(new TestAggregate(Uuid.CreateVersion4())).AsTask());
 
@@ -387,10 +430,14 @@ public sealed class TelemetryCompletionTests
     [Fact]
     public async Task ShouldReportFaultGivenUnrequestedProjectorCancellation()
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
         var source = await SourceWithOneEventAsync();
+
+        // Act
         var runner = new ProjectorRunner(source);
 
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => runner.RunAsync(
             new CancelingProjector(), ProjectionCheckpoint.Start).AsTask());
         Assert.IsType<OperationCanceledException>(failure.InnerException);
@@ -402,10 +449,14 @@ public sealed class TelemetryCompletionTests
     [Fact]
     public async Task ShouldReportFaultGivenUnrequestedReactorCancellation()
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
         var source = await SourceWithOneEventAsync();
+
+        // Act
         var runner = new ReactorRunner(source);
 
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => runner.RunAsync(
             new CancelingReactor(), ProjectionCheckpoint.Start).AsTask());
         Assert.IsType<OperationCanceledException>(failure.InnerException);
@@ -423,15 +474,19 @@ public sealed class TelemetryCompletionTests
     [InlineData("reactor")]
     public async Task ShouldRecordLagAndEventCountOnlyForCommittedBatch(string runner)
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
         var source = await SourceWithOneEventAsync();
         var component = $"telemetry.flaky-{runner}";
         var projector = new FlakyProjector(component);
         var reactor = new FlakyReactor(component);
+
+        // Act
         Func<Task> pass = runner == "projector"
             ? () => new ProjectorRunner(source).RunAsync(projector, ProjectionCheckpoint.Start).AsTask()
             : () => new ReactorRunner(source).RunAsync(reactor, ProjectionCheckpoint.Start).AsTask();
 
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(pass);
         Assert.IsType<InvalidOperationException>(failure.InnerException);
 
@@ -453,6 +508,7 @@ public sealed class TelemetryCompletionTests
     [InlineData("dispose", false)]
     public async Task ShouldCompleteFitzAppendTelemetryGivenFailure(string failureStage, bool cancelBeforeFailure)
     {
+        // Arrange
         using var measurements = new OutcomeMeasurements();
         using var cancellation = new CancellationTokenSource();
         var streams = new FailingAppendStreams(failureStage, cancellation, cancelBeforeFailure);
@@ -463,9 +519,11 @@ public sealed class TelemetryCompletionTests
         var ev = new ValueChanged(1);
         ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), id, 1, DateTimeOffset.UtcNow));
 
+        // Act
         Task Append() => store.AppendAsync(
             new EventStreamAddress("test", "telemetry", id.ToString()), 0, [ev], cancellation.Token).AsTask();
 
+        // Assert
         if (failureStage == "dispose")
             await Append();
         else

@@ -17,11 +17,14 @@ public sealed class ReactorContextTests
     [Fact]
     public void ShouldExposeTheTriggeringEventAndItsSystemExecution()
     {
+        // Arrange
         var record = Record(out var ev);
         var execution = new ReactionExecutionContext(record, RequestActor.System);
 
+        // Act
         var context = new ReactorContext<ValueChanged>(ev, record, execution);
 
+        // Assert
         Assert.Same(ev, context.Trigger);
         Assert.Same(record, context.Source);
         Assert.Equal(ev.Metadata.EventId, context.CauseId);
@@ -36,12 +39,16 @@ public sealed class ReactorContextTests
     [Fact]
     public void ShouldRejectATriggerThatIsNotTheRecordsOwnEvent()
     {
+        // Arrange
         var record = Record(out _);
         var stranger = new ValueChanged(99);
         stranger.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), record.Event.Metadata.AggregateId, 2,
             DateTimeOffset.UtcNow));
+
+        // Act
         var execution = new ReactionExecutionContext(record, RequestActor.System);
 
+        // Assert
         var error = Assert.Throws<ArgumentException>(() =>
             new ReactorContext<ValueChanged>(stranger, record, execution));
 
@@ -56,10 +63,14 @@ public sealed class ReactorContextTests
     [Fact]
     public void ShouldRejectAnExecutionCausedByADifferentEvent()
     {
+        // Arrange
         var record = Record(out var ev);
         var other = Record(out _);
+
+        // Act
         var execution = new ReactionExecutionContext(other, RequestActor.System);
 
+        // Assert
         var error = Assert.Throws<ArgumentException>(() =>
             new ReactorContext<ValueChanged>(ev, record, execution));
 
@@ -74,10 +85,14 @@ public sealed class ReactorContextTests
     [Fact]
     public void ShouldRejectAnExecutionThatIsNotASystemPrincipal()
     {
+        // Arrange
         var record = Record(out var ev);
         var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "alice")], "jwt"));
+
+        // Act
         var execution = new UserExecution(record, user);
 
+        // Assert
         var error = Assert.Throws<ArgumentException>(() => new ReactorContext<ValueChanged>(ev, record, execution));
 
         Assert.Contains("system principal", error.Message, StringComparison.Ordinal);
@@ -90,11 +105,16 @@ public sealed class ReactorContextTests
     [InlineData(false)]
     public void ShouldRejectAMissingRecordOrExecution(bool missingRecord)
     {
+        // Arrange
         var record = Record(out var ev);
 
-        _ = Assert.Throws<ArgumentNullException>(() => missingRecord
+        // Act
+        var exception = Xunit.Record.Exception(() => missingRecord
             ? new ReactorContext<ValueChanged>(ev, null!, new ReactionExecutionContext(record, RequestActor.System))
             : new ReactorContext<ValueChanged>(ev, record, null!));
+
+        // Assert
+        _ = Assert.IsType<ArgumentNullException>(exception);
     }
 
     static DomainEventRecord Record(out ValueChanged ev)

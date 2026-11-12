@@ -13,6 +13,7 @@ public sealed class AggregateSaveConcurrencyTests
     [InlineData("save")]
     public async Task RejectsConcurrentEmissionOrSave(string operation)
     {
+        // Arrange
         var store = new ControlledStore { BlockFirstAppend = true };
         await using var provider = CreateProvider(store);
         await using var scope = provider.CreateAsyncScope();
@@ -24,7 +25,11 @@ public sealed class AggregateSaveConcurrencyTests
             aggregate.Deposit(1);
 
         var saving = repository.SaveAsync(aggregate, _saveContext).AsTask();
+
+        // Act
         await store.Entered.Task;
+
+        // Assert
         try
         {
             _ = operation == "save"
@@ -49,6 +54,7 @@ public sealed class AggregateSaveConcurrencyTests
     [InlineData(true)]
     public async Task FailedSavePreservesPayloadIdentityVersionAndKind(bool audit)
     {
+        // Arrange
         var store = new ControlledStore { FailAppend = true };
         await using var provider = CreateProvider(store);
         await using var scope = provider.CreateAsyncScope();
@@ -61,7 +67,10 @@ public sealed class AggregateSaveConcurrencyTests
         else
             aggregate.Raise(payload);
 
+        // Act
         var metadata = payload.Metadata;
+
+        // Assert
         _ = await Assert.ThrowsAsync<IOException>(() => repository.SaveAsync(aggregate, _saveContext).AsTask());
         Assert.Same(payload, Assert.Single(audit ? scenario.PendingAudits : scenario.PendingEvents));
         Assert.Equal(metadata, payload.Metadata with
@@ -98,11 +107,16 @@ public sealed class AggregateSaveConcurrencyTests
     [Fact]
     public async Task EmptySaveDoesNotAppend()
     {
+        // Arrange
         var store = new ControlledStore { FailAppend = true };
         await using var provider = CreateProvider(store);
         await using var scope = provider.CreateAsyncScope();
+
+        // Act
         await scope.ServiceProvider.Aggregates()
             .SaveAsync(new Account(Uuid.CreateVersion4()), _saveContext);
+
+        // Assert
         Assert.Equal(0, store.AppendCalls);
     }
 

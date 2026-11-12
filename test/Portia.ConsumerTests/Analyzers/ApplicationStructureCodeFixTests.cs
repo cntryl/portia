@@ -17,10 +17,15 @@ public sealed class ApplicationStructureCodeFixTests
     [InlineData(true, true)]
     public async Task ShouldRegenerateConstructorReferencesGivenNamespaceFix(bool fixAll, bool blockNamespace)
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         var source = blockNamespace ? "namespace Old { public sealed record Price(string Value); }"
             : "namespace Old; public sealed record Price(string Value);";
+
+        // Act
         var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs", source);
+
+        // Assert
         Assert.True(workspace.TryApplyChanges(document.Project.AddAnalyzerReference(new GeneratedConstructorReference()).Solution));
         document = workspace.CurrentSolution.GetDocument(document.Id)!;
         Assert.Single(await document.Project.GetSourceGeneratedDocumentsAsync());
@@ -71,6 +76,7 @@ public sealed class ApplicationStructureCodeFixTests
     [Fact]
     public async Task ShouldAllowMatchingDestinationNameInAnotherProject()
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Wrong.cs",
             "namespace Shop.Core.Features.Orders.Values; public record Price;");
@@ -79,8 +85,12 @@ public sealed class ApplicationStructureCodeFixTests
         document = workspace.CurrentSolution.GetDocument(document.Id)!;
         var diagnostics = await DiagnosticsAsync(document, new ApplicationStructureAnalyzer());
         var actions = new List<CodeAction>();
+
+        // Act
         await new ApplicationStructureCodeFixProvider().RegisterCodeFixesAsync(new CodeFixContext(document,
             diagnostics.Single(item => item.Id == "PORTIA201"), (action, _) => actions.Add(action), CancellationToken.None));
+
+        // Assert
         var solution = await ApplyAsync(Assert.Single(actions));
         Assert.Equal("Price.cs", solution.GetDocument(document.Id)!.Name);
     }
@@ -91,13 +101,18 @@ public sealed class ApplicationStructureCodeFixTests
     [InlineData(FixAllScope.Solution)]
     public async Task ShouldSplitEveryTopLevelTypeGivenFixAll(FixAllScope scope)
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         const string source = "namespace Shop.Core.Features.Orders.Values; public record Price { private class Fixture; } public record Currency; public record Tax;";
         var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs", source);
         var provider = new ApplicationStructureCodeFixProvider();
         var context = new FixAllContext(document, provider, scope, "Portia.MoveApplicationType", ["PORTIA200"],
             new StructureDiagnosticProvider(), CancellationToken.None);
+
+        // Act
         var action = await provider.GetFixAllProvider()!.GetFixAsync(context);
+
+        // Assert
         Assert.NotNull(action);
         var solution = await ApplyAsync(action);
         var project = solution.GetProject(document.Project.Id)!;
@@ -114,12 +129,17 @@ public sealed class ApplicationStructureCodeFixTests
     [InlineData(FixAllScope.Solution)]
     public async Task ShouldRenameEveryMisnamedFileGivenFixAll(FixAllScope scope)
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         var first = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Page.cs",
             "namespace Shop.Core.Features.Orders.Values; public record Page<T>(T Value);");
+
+        // Act
         var second = first.Project.AddDocument("Pair.cs",
             "namespace Shop.Core.Features.Orders.Values; public record Pair<T, U>(T First, U Second);",
             first.Folders, "/workspace/Shop.Core/Features/Orders/Values/Pair.cs");
+
+        // Assert
         Assert.True(workspace.TryApplyChanges(second.Project.Solution));
         first = workspace.CurrentSolution.GetDocument(first.Id)!;
         var provider = new ApplicationStructureCodeFixProvider();
@@ -153,10 +173,15 @@ public sealed class ApplicationStructureCodeFixTests
     [InlineData(FixAllScope.Solution)]
     public async Task ShouldSyncNamespacesGivenFixAll(FixAllScope scope)
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         var first = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs", "namespace Old; public record Price;");
+
+        // Act
         var second = first.Project.AddDocument("Currency.cs", "namespace Old; public record Currency;", first.Folders,
             "/workspace/Shop.Core/Features/Orders/Values/Currency.cs");
+
+        // Assert
         Assert.True(workspace.TryApplyChanges(second.Project.Solution));
         first = workspace.CurrentSolution.GetDocument(first.Id)!;
         var provider = new ApplicationStructureCodeFixProvider();
@@ -406,11 +431,15 @@ public sealed class ApplicationStructureCodeFixTests
     [InlineData("#pragma warning disable CS1591\n")]
     public async Task ShouldPreserveSimpleFileDirectiveGivenSplit(string directive)
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         var source = directive + "namespace Shop.Core.Features.Orders.Values; public record Price; public record Currency;";
         var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs", source);
 
+        // Act
         var (actions, _) = await ActionsAsync(document, "PORTIA200");
+
+        // Assert
         var solution = await ApplyAsync(Assert.Single(actions));
 
         var moved = Assert.Single(solution.GetProject(document.Project.Id)!.Documents, item => item.Name == "Currency.cs");
@@ -442,8 +471,13 @@ public sealed class ApplicationStructureCodeFixTests
     [Fact]
     public async Task ShouldDeclineSplitGivenDestinationFileOutsideSolution()
     {
+        // Arrange
         var directory = Path.Combine(Path.GetTempPath(), "portia-codefix-" + Guid.NewGuid().ToString("N"));
+
+        // Act
         Directory.CreateDirectory(directory);
+
+        // Assert
         try
         {
             await File.WriteAllTextAsync(Path.Combine(directory, "Currency.cs"), "public record Existing;");
@@ -474,8 +508,13 @@ public sealed class ApplicationStructureCodeFixTests
     [InlineData("PORTIA201", "Wrong.cs", "namespace Shop.Core.Features.Orders.Values; public record Currency;")]
     public async Task ShouldDeclineFileActionGivenDestinationDirectory(string id, string filename, string source)
     {
+        // Arrange
         var directory = Path.Combine(Path.GetTempPath(), "portia-codefix-" + Guid.NewGuid().ToString("N"));
+
+        // Act
         Directory.CreateDirectory(Path.Combine(directory, "Currency.cs"));
+
+        // Assert
         try
         {
             using var workspace = new AdhocWorkspace();
@@ -502,10 +541,15 @@ public sealed class ApplicationStructureCodeFixTests
     [Fact]
     public async Task ShouldBeIdempotentAfterSplittingTypes()
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs",
             "namespace Shop.Core.Features.Orders.Values; public record Price; public record Currency;");
+
+        // Act
         var (actions, _) = await ActionsAsync(document, "PORTIA200");
+
+        // Assert
         var once = await ApplyAsync(Assert.Single(actions));
 
         var remaining = once.GetDocument(document.Id)!;
@@ -517,12 +561,15 @@ public sealed class ApplicationStructureCodeFixTests
     [Fact]
     public async Task ShouldNotReportPartialTypeDeclarationsAsMultipleTypes()
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs",
             "namespace Shop.Core.Features.Orders.Values; public partial record Price; public partial record Price;");
 
+        // Act
         var diagnostics = await DiagnosticsAsync(document, new ApplicationStructureAnalyzer());
 
+        // Assert
         Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA200");
         await AssertCompilesAsync(document.Project);
     }
@@ -530,12 +577,15 @@ public sealed class ApplicationStructureCodeFixTests
     [Fact]
     public async Task ShouldSplitSeparateTypeGivenPartialDeclarationGroup()
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         var document = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Price.cs",
             "namespace Shop.Core.Features.Orders.Values; public partial record Price; public partial record Price; public record Currency;");
 
+        // Act
         var (actions, diagnostic) = await ActionsAsync(document, "PORTIA200");
 
+        // Assert
         Assert.Equal("Currency", diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan));
         var solution = await ApplyAsync(Assert.Single(actions));
         var project = solution.GetProject(document.Project.Id)!;
@@ -548,11 +598,16 @@ public sealed class ApplicationStructureCodeFixTests
     [Fact]
     public async Task ShouldLeaveRenameCycleUnchangedGivenFixAll()
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         var first = AddDocument(workspace, "Shop.Core", "Features/Orders/Values/Bar.cs",
             "namespace Shop.Core.Features.Orders.Values; public record Foo;");
+
+        // Act
         var second = first.Project.AddDocument("Foo.cs", "namespace Shop.Core.Features.Orders.Values; public record Bar;",
             first.Folders, "/workspace/Shop.Core/Features/Orders/Values/Foo.cs");
+
+        // Assert
         Assert.True(workspace.TryApplyChanges(second.Project.Solution));
         first = workspace.CurrentSolution.GetDocument(first.Id)!;
         var provider = new ApplicationStructureCodeFixProvider();

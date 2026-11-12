@@ -16,6 +16,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     [Fact]
     public async Task ShouldRunWorkloadDeclaredBeforeStart()
     {
+        // Arrange
         var coordinator = new SingleProcessWorkloadCoordinator(TimeSpan.FromMilliseconds(10));
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var lifetime = new CancellationTokenSource();
@@ -31,7 +32,11 @@ public sealed class SingleProcessWorkloadCoordinatorTests
             lifetime.Token);
 
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Act
         await lifetime.CancelAsync();
+
+        // Assert
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
     }
 
@@ -42,6 +47,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     [Fact]
     public async Task ShouldStartWorkloadThatAppearsAfterStartAndCancelOneThatDisappears()
     {
+        // Arrange
         var coordinator = new SingleProcessWorkloadCoordinator(TimeSpan.FromMilliseconds(10));
         var declared = new ConcurrentDictionary<WorkloadIdentity, bool> { [new WorkloadIdentity("first")] = true };
         var running = new ConcurrentDictionary<string, bool>();
@@ -77,7 +83,11 @@ public sealed class SingleProcessWorkloadCoordinatorTests
 
         // ...and then goes away. Its callback must be cancelled and awaited.
         _ = declared.TryRemove(second, out _);
+
+        // Act
         await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Assert
         Assert.False(running["second"]);
         Assert.True(running["first"]);
 
@@ -93,6 +103,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     [Fact]
     public async Task ShouldSurfaceEveryFaultAndReleaseRemainingWorkloadsWhenWorkloadsFaultTogether()
     {
+        // Arrange
         var coordinator = new SingleProcessWorkloadCoordinator(TimeSpan.FromMilliseconds(10));
         var running = new ConcurrentDictionary<string, bool>();
         var fault = new TaskCompletionSource();
@@ -120,9 +131,12 @@ public sealed class SingleProcessWorkloadCoordinatorTests
             });
 
         await WaitUntilAsync(() => running.Count == 3);
+
         // Completes both faulting callbacks synchronously, before the next reconcile observes either.
+        // Act
         fault.SetResult();
 
+        // Assert
         var error = await Assert.ThrowsAsync<AggregateException>(() => run.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Equal(["fault a", "fault b"],
             error.InnerExceptions.Select(inner => inner.Message).Order(StringComparer.Ordinal));
@@ -139,6 +153,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     public async Task ShouldUseRegistrationNameAsHostedComponentCheckpointIdentity(string? workloadName,
         string expected)
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var store = new InMemoryEventStore();
         await store.AppendAsync(new EventStreamAddress("test", "projectors", id.ToString()),
@@ -151,8 +166,11 @@ public sealed class SingleProcessWorkloadCoordinatorTests
         _ = services.AddSingleton(new NamedProjector(target));
         _ = services.AddPortia().AddProjector<NamedProjector>(workloadName ?? "declared-projection-name",
             WorkloadScope.Global, o => { o.PollInterval = TimeSpan.FromMilliseconds(10); }).AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await worker.StartAsync(default);
         await WaitUntilAsync(() => target.Projection.Value == 7);

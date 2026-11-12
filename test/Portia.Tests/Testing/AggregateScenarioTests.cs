@@ -10,10 +10,15 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldReplayBareEventsAsHistory()
     {
-        var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()))
+        // Arrange
+        var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
+
+        // Act
+        _ = scenario
             .Given(new ValueChanged(3), new ValueIncremented(4))
             .Given(new ValueIncremented(1));
 
+        // Assert
         Assert.Equal(8, scenario.Aggregate.Value);
         Assert.Equal(3UL, scenario.Aggregate.Version);
         Assert.Equal(3UL, scenario.CommittedEventCount);
@@ -24,12 +29,15 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldReplaySeededEventsUnchanged()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var eventId = Uuid.CreateVersion4();
         var seeded = DomainEventSeed.Attach(new ValueChanged(3), id, 1, eventId: eventId);
 
+        // Act
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(id)).Given(seeded);
 
+        // Assert
         Assert.Equal(3, scenario.Aggregate.Value);
         Assert.Equal(eventId, seeded.Metadata.EventId);
     }
@@ -38,15 +46,18 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldKeepRaisedEventsWhenOperationCommits()
     {
+        // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()))
             .Given(new ValueChanged(3));
 
+        // Act
         var result = scenario.When(aggregate =>
         {
             aggregate.ChangeValue(5);
             return AggregateOutcome.Commit(Result.Success);
         });
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal([new ValueChanged(5)], scenario.PendingEvents);
     }
@@ -55,14 +66,17 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldDropRaisedEventsWhenOperationDiscards()
     {
+        // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
 
+        // Act
         var result = scenario.When(aggregate =>
         {
             aggregate.ChangeValue(5);
             return AggregateOutcome.CommitOnSuccess(Result.Failure(new RequestError(RequestErrorKind.Conflict, "taken")));
         });
 
+        // Assert
         Assert.Equal(RequestErrorKind.Conflict, result.Error!.Kind);
         Assert.Empty(scenario.PendingEvents);
     }
@@ -71,14 +85,17 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldReturnValueAndKeepAuditsWhenOperationCommits()
     {
+        // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
 
+        // Act
         var result = scenario.When(aggregate =>
         {
             aggregate.Audit("checked");
             return AggregateOutcome.Commit(Result<int>.Success(aggregate.Value));
         });
 
+        // Assert
         Assert.Equal(0, result.Value);
         Assert.Equal([new ValueAudited("checked")], scenario.PendingAudits);
     }
@@ -90,6 +107,7 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldSaveCommittedOperationBeforeNextOperation()
     {
+        // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
         _ = scenario.When(aggregate =>
         {
@@ -97,12 +115,14 @@ public sealed class AggregateScenarioTests
             return AggregateOutcome.Commit(Result.Success);
         });
 
+        // Act
         _ = scenario.When(aggregate =>
         {
             aggregate.ChangeValue(5);
             return AggregateOutcome.Commit(Result.Success);
         });
 
+        // Assert
         Assert.Empty(scenario.PendingAudits);
         Assert.Equal([new ValueChanged(5)], scenario.PendingEvents);
         Assert.Equal(0UL, scenario.CommittedEventCount);
@@ -112,6 +132,7 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldAcceptHistoryAfterCommittedOperation()
     {
+        // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
         _ = scenario.When(aggregate =>
         {
@@ -119,8 +140,10 @@ public sealed class AggregateScenarioTests
             return AggregateOutcome.Commit(Result.Success);
         });
 
+        // Act
         _ = scenario.Given(new ValueIncremented(2));
 
+        // Assert
         Assert.Equal(7, scenario.Aggregate.Value);
         Assert.Equal(2UL, scenario.CommittedEventCount);
     }
@@ -132,31 +155,40 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldDiscardWhatAThrowingOperationRaised()
     {
+        // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
-
-        _ = Assert.Throws<DivideByZeroException>(() => scenario.When(aggregate =>
+        var throwing = Record.Exception(() => scenario.When(aggregate =>
         {
             aggregate.ChangeValue(5);
             throw new DivideByZeroException();
         }));
+        var pendingAfterThrow = scenario.PendingEvents.ToList();
 
-        Assert.Empty(scenario.PendingEvents);
-        _ = Assert.Throws<InvalidOperationException>(() => scenario.When(aggregate =>
+        // Act
+        var further = Record.Exception(() => scenario.When(aggregate =>
         {
             aggregate.ChangeValue(6);
             return AggregateOutcome.Commit(Result.Success);
         }));
+
+        // Assert
+        _ = Assert.IsType<DivideByZeroException>(throwing);
+        Assert.Empty(pendingAfterThrow);
+        _ = Assert.IsType<InvalidOperationException>(further);
     }
 
     /// <summary>What a direct call on the aggregate raised is saved before the next history, like a committed When.</summary>
     [Fact]
     public void ShouldSaveDirectCallsBeforeFurtherHistory()
     {
+        // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
         scenario.Aggregate.ChangeValue(5);
 
+        // Act
         _ = scenario.Given(new ValueIncremented(2));
 
+        // Assert
         Assert.Equal(7, scenario.Aggregate.Value);
         Assert.Equal(2UL, scenario.CommittedEventCount);
     }
@@ -165,23 +197,31 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldThrowWhenOperationReturnsUninitializedOutcome()
     {
+        // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
 
-        _ = Assert.Throws<InvalidOperationException>(() => scenario.When(_ => default(AggregateOutcome)));
+        // Act
+        var exception = Record.Exception(() => scenario.When(_ => default(AggregateOutcome)));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(exception);
     }
 
     /// <summary>The shortcut commits a successful result and retains its raised event.</summary>
     [Fact]
     public void ShouldCommitSuccessfulResultThroughShortcut()
     {
+        // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
 
+        // Act
         var result = scenario.WhenCommitOnSuccess(aggregate =>
         {
             aggregate.ChangeValue(5);
             return Result.Success;
         });
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal([new ValueChanged(5)], scenario.PendingEvents);
     }
@@ -190,14 +230,17 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldDiscardFailedValueResultThroughShortcut()
     {
+        // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
 
+        // Act
         var result = scenario.WhenCommitOnSuccess(aggregate =>
         {
             aggregate.ChangeValue(5);
             return Result<int>.Failure(new RequestError(RequestErrorKind.Conflict, "taken"));
         });
 
+        // Assert
         Assert.Equal(RequestErrorKind.Conflict, result.Error!.Kind);
         Assert.Empty(scenario.PendingEvents);
         _ = Assert.Throws<InvalidOperationException>(() => scenario.WhenCommitOnSuccess(aggregate =>
@@ -211,14 +254,17 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldReturnSuccessfulValueThroughShortcut()
     {
+        // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
 
+        // Act
         var result = scenario.WhenCommitOnSuccess(aggregate =>
         {
             aggregate.Audit("checked");
             return Result<int>.Success(aggregate.Value);
         });
 
+        // Assert
         Assert.Equal(0, result.Value);
         Assert.Equal([new ValueAudited("checked")], scenario.PendingAudits);
     }

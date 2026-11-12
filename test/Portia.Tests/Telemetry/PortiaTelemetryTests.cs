@@ -21,11 +21,14 @@ public sealed class PortiaTelemetryTests
     [Fact]
     public async Task ShouldRecordSuccessfulActivity()
     {
+        // Arrange
         using var listener = Listen(out var activities);
         using var busHost = TestRequestBus.Create();
         var bus = busHost.Bus;
 
+        // Act
         _ = await bus.SendAsync(new TelemetrySuccessAction(), RequestActor.System);
+
 
         // The listener is process-wide (ActivitySource is a static, shared instance) and every
         // request type below is otherwise unused elsewhere in this test project, specifically so
@@ -33,6 +36,7 @@ public sealed class PortiaTelemetryTests
         // land in this test's own capture list — filtering by tag alone isn't enough for that,
         // since a shared request type (e.g. GetValue) really can be dispatched by another test
         // file at the same moment this listener is active.
+        // Assert
         var activity = Assert.Single(activities,
             a => a.GetTagItem("portia.request.name") as string == "TelemetrySuccessAction");
         Assert.Equal(PortiaTelemetry.ExecuteActivityName, activity.DisplayName);
@@ -47,12 +51,15 @@ public sealed class PortiaTelemetryTests
     [Fact]
     public async Task ShouldRecordHandlerFailureAsErrorStatus()
     {
+        // Arrange
         using var listener = Listen(out var activities);
         using var busHost = TestRequestBus.Create();
         var bus = busHost.Bus;
 
+        // Act
         _ = await bus.SendAsync(new TelemetryFailureAction(), RequestActor.System);
 
+        // Assert
         var activity = Assert.Single(activities,
             a => a.GetTagItem("portia.request.name") as string == "TelemetryFailureAction");
         Assert.Equal("validation", activity.GetTagItem("portia.outcome"));
@@ -69,12 +76,15 @@ public sealed class PortiaTelemetryTests
     [Fact]
     public async Task ShouldRecordPermissionDenialAsErrorStatus()
     {
+        // Arrange
         using var listener = Listen(out var activities);
         using var busHost = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.DenyAll());
         var bus = busHost.Bus;
 
+        // Act
         _ = await bus.SendAsync(new TelemetryGuardedAction(), RequestActor.Anonymous);
 
+        // Assert
         var activity = Assert.Single(activities,
             a => a.GetTagItem("portia.request.name") as string == "TelemetryGuardedAction");
         Assert.Equal("forbidden", activity.GetTagItem("portia.outcome"));
@@ -88,19 +98,23 @@ public sealed class PortiaTelemetryTests
     [Fact]
     public async Task ShouldRecordActivityForStreamedRequest()
     {
+        // Arrange
         using var listener = Listen(out var activities);
         using var busHost = TestRequestBus.Create();
         var bus = busHost.Bus;
 
         var items = new List<int>();
 
+
         // The activity only stops (and lands in `activities`, since Listen captures on
         // ActivityStopped) once the whole iterator completes — `using var activity` inside an
         // async iterator disposes on iterator completion/disposal, not on the first yield — so
         // nothing is captured until after this loop finishes.
+        // Act
         await foreach (var item in bus.StreamAsync(new TelemetrySequence(), RequestActor.System))
             items.Add(item);
 
+        // Assert
         Assert.Equal([1, 2, 3], items);
         _ = Assert.Single(activities,
             a => a.GetTagItem("portia.request.name") as string == "TelemetrySequence");

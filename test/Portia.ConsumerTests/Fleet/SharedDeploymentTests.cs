@@ -15,6 +15,7 @@ public sealed class SharedDeploymentTests
     [Fact]
     public async Task SharedApplicationStartsListenersOnlyInWorkerAndKeepsExternalClientAlive()
     {
+        // Arrange
         await using var client = await ConsumerBroker.ConnectAsync();
         var id = Uuid.CreateVersion4();
         var secondId = Uuid.CreateVersion4();
@@ -22,7 +23,11 @@ public sealed class SharedDeploymentTests
         var apiBuilder = Host.CreateApplicationBuilder();
         _ = Shared(apiBuilder.Services, client, effects, id);
         using var api = apiBuilder.Build();
+
+        // Act
         await api.StartAsync();
+
+        // Assert
         try
         {
             var publisher = api.Services.GetRequiredService<IRequestQueuePublisher>();
@@ -68,6 +73,7 @@ public sealed class SharedDeploymentTests
     [Fact]
     public async Task OwnedConfigurationConnectsBeforeHostStartsAndSupportsPersistence()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -76,7 +82,11 @@ public sealed class SharedDeploymentTests
         _ = builder.Services.AddContracts();
         _ = builder.Services.AddPortia().AddFitz(configuration);
         using var host = builder.Build();
+
+        // Act
         await host.StartAsync();
+
+        // Assert
         try
         {
             await using var scope = host.Services.CreateAsyncScope();
@@ -98,13 +108,18 @@ public sealed class SharedDeploymentTests
     [Fact]
     public async Task ShouldFailBeforeConnectingGivenMissingActorValidatorWhenStartingDefaultFitzWorkers()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddAccounts();
         _ = builder.Services.AddPortia()
             .AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), fitz => fitz.UseFleet(
                 new FleetRunOptions { MembershipSelector = "lease://validation/actors/*" }))
             .AddWorkers();
+
+        // Act
         using var host = builder.Build();
+
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
         Assert.Contains(nameof(IRequestActorValidator), error.Message, StringComparison.Ordinal);
     }
@@ -112,6 +127,7 @@ public sealed class SharedDeploymentTests
     [Fact]
     public async Task MissingTenantDirectoryFailsBeforeAttemptingConnection()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
@@ -121,7 +137,11 @@ public sealed class SharedDeploymentTests
             .AddFitz(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")), fitz => fitz.UseFleet(
                 new FleetRunOptions { MembershipSelector = "lease://validation/tenants/*" }))
             .AddWorkers();
+
+        // Act
         using var host = builder.Build();
+
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
         Assert.Contains(nameof(ITenantDirectory), error.Message, StringComparison.Ordinal);
     }

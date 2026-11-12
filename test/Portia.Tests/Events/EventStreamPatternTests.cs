@@ -22,8 +22,11 @@ public sealed class EventStreamPatternTests
         string? resource,
         string expected)
     {
+        // Arrange
+        // Act
         var pattern = EventStreamPattern.ForPattern(realm, area, resource);
 
+        // Assert
         Assert.Equal(expected, pattern.ToString());
     }
 
@@ -37,8 +40,12 @@ public sealed class EventStreamPatternTests
     [InlineData(" ")]
     public void ShouldRejectMissingRealm(string? realm)
     {
-        var exception = Assert.ThrowsAny<ArgumentException>(() => EventStreamPattern.ForPattern(realm!));
+        // Arrange
+        // Act
+        var thrown = Record.Exception(() => EventStreamPattern.ForPattern(realm!));
 
+        // Assert
+        var exception = Assert.IsAssignableFrom<ArgumentException>(thrown);
         Assert.Equal("realm", exception.ParamName);
     }
 
@@ -46,9 +53,13 @@ public sealed class EventStreamPatternTests
     [Fact]
     public void ShouldRejectResourceWithoutArea()
     {
-        var exception = Assert.Throws<ArgumentException>(() =>
+        // Arrange
+        // Act
+        var thrown = Record.Exception(() =>
             EventStreamPattern.ForPattern("sales", null, "orders"));
 
+        // Assert
+        var exception = Assert.IsType<ArgumentException>(thrown);
         Assert.Equal("resource", exception.ParamName);
     }
 
@@ -56,22 +67,39 @@ public sealed class EventStreamPatternTests
     [Fact]
     public void ShouldCreateOnlyExplicitTenantTemplates()
     {
+        // Arrange
+        // Act
         var template = EventStreamPattern.ForTenant("orders");
 
+        // Assert
         Assert.True(template.IsTenantTemplate);
         Assert.Equal("stream://{tenant}/orders/*", template.ToString());
-        Assert.Throws<ArgumentException>(() => EventStreamPattern.ForPattern("{tenant}", "orders"));
+    }
+
+    /// <summary>The internal tenant placeholder cannot be supplied as an ordinary realm.</summary>
+    [Fact]
+    public void ShouldRejectTenantPlaceholderRealmGivenForPattern()
+    {
+        // Arrange
+        // Act
+        var exception = Record.Exception(() => EventStreamPattern.ForPattern("{tenant}", "orders"));
+
+        // Assert
+        _ = Assert.IsType<ArgumentException>(exception);
     }
 
     /// <summary>Binding occurs before the exact pattern is used for checkpoint identity or reads.</summary>
     [Fact]
     public void ShouldBindTenantTemplateToTheWorkloadTenant()
     {
+        // Arrange
         var projector = new TestProjector(new RecordingProjectionTarget(),
             EventStreamPattern.ForTenant("orders"));
 
+        // Act
         projector.BindWorkload(new WorkloadIdentity("orders", new TenantId("acme")), null);
 
+        // Assert
         Assert.False(projector.Pattern.IsTenantTemplate);
         Assert.Equal("stream://acme/orders/*", projector.Pattern.ToString());
     }
@@ -92,8 +120,14 @@ public sealed class EventStreamPatternTests
     [InlineData("{tenant}")]
     public void ShouldRejectTenantIdThatIsNotARealmSegment(string? value)
     {
-        _ = Assert.ThrowsAny<ArgumentException>(() => new TenantId(value!));
-        _ = Assert.ThrowsAny<ArgumentException>(() => new TenantId("acme") with { Value = value! });
+        // Arrange
+        // Act
+        var constructed = Record.Exception(() => new TenantId(value!));
+        var replaced = Record.Exception(() => new TenantId("acme") with { Value = value! });
+
+        // Assert
+        _ = Assert.IsAssignableFrom<ArgumentException>(constructed);
+        _ = Assert.IsAssignableFrom<ArgumentException>(replaced);
     }
 
     /// <summary>An uninitialized tenant ID still formats as a string, as its non-nullable signature promises.</summary>
@@ -104,13 +138,17 @@ public sealed class EventStreamPatternTests
     [Fact]
     public async Task ShouldRejectManualRunOfUnboundTenantTemplate()
     {
+        // Arrange
         var projector = new TestProjector(new RecordingProjectionTarget(),
             EventStreamPattern.ForTenant("orders"));
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        // Act
+        var thrown = await Record.ExceptionAsync(() =>
             new ProjectorRunner(new InMemoryEventStore())
                 .RunAsync(projector, ProjectionCheckpoint.Start).AsTask());
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("unbound tenant stream template", error.Message, StringComparison.Ordinal);
     }
 
@@ -118,12 +156,16 @@ public sealed class EventStreamPatternTests
     [Fact]
     public void ShouldRejectBindingExactPatternToTenantWorkload()
     {
+        // Arrange
         var projector = new TestProjector(new RecordingProjectionTarget(),
             EventStreamPattern.ForPattern("placeholder", "orders"));
 
-        var error = Assert.Throws<InvalidOperationException>(() =>
+        // Act
+        var thrown = Record.Exception(() =>
             projector.BindWorkload(new WorkloadIdentity("orders", new TenantId("acme")), null));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("Only an unbound tenant stream template", error.Message, StringComparison.Ordinal);
     }
 }

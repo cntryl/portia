@@ -9,6 +9,7 @@ public sealed class FitzEventStoreProgressIntegrationTests(FitzBrokerFixture bro
     [Fact]
     public async Task ShouldReportRealFitzProgressWithoutAdvancingOrChangingTheSource()
     {
+        // Arrange
         await using var client = await broker.CreateClientAsync();
         var realm = "progress-" + Uuid.CreateVersion4();
         var first = new EventStreamAddress(realm, "orders", "one");
@@ -25,12 +26,15 @@ public sealed class FitzEventStoreProgressIntegrationTests(FitzBrokerFixture bro
         await store.AppendAsync(second, 0,
             [DomainEventSeed.Attach(new ValueChanged(3), Uuid.CreateVersion4(), 1)]);
 
+        // Act
         var patterns = new[]
         {
             EventStreamPattern.ForPattern(realm),
             EventStreamPattern.ForPattern(realm, "orders"),
             EventStreamPattern.ForPattern(realm, "orders", "one")
         };
+
+        // Assert
         foreach (var pattern in patterns)
         {
             var records = await ReadAsync(store, pattern);

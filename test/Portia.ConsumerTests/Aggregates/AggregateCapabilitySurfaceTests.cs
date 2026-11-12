@@ -9,13 +9,19 @@ public sealed class AggregateCapabilitySurfaceTests
     [Fact]
     public void ShouldExposeOnlyReaderWriterAndExecutor()
     {
+        // Arrange
         var abstractions = typeof(IAggregateReader).Assembly;
 
+        // Act
+        var combinedRepository = abstractions.GetType("Cntryl.Portia.IAggregateRepository", false);
+        var exportedTypes = typeof(RequestBus).Assembly.GetExportedTypes();
+
+        // Assert
         Assert.True(typeof(IAggregateReader).IsPublic);
         Assert.True(typeof(IAggregateWriter).IsPublic);
         Assert.True(typeof(IAggregateExecutor).IsPublic);
-        Assert.Null(abstractions.GetType("Cntryl.Portia.IAggregateRepository", false));
-        Assert.DoesNotContain(typeof(RequestBus).Assembly.GetExportedTypes(),
+        Assert.Null(combinedRepository);
+        Assert.DoesNotContain(exportedTypes,
             type => type.Name.Contains("AggregateRepository", StringComparison.Ordinal));
     }
 }

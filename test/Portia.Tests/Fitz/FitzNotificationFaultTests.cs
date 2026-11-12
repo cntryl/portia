@@ -69,6 +69,7 @@ public sealed class FitzNotificationFaultTests
     [InlineData(true)]
     public async Task ShouldRetryTransientScheduledValidationWithInjectedClockAndFreshScopes(bool throws)
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var payload = ScheduledPayload(serializer);
         var tracker = new ValidatorTracker { ThrowFirst = throws, FailFirstTransiently = !throws };
@@ -83,7 +84,10 @@ public sealed class FitzNotificationFaultTests
             provider.GetRequiredService<IServiceScopeFactory>(), clock);
         await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
 
+        // Act
         var move = enumerator.MoveNextAsync().AsTask();
+
+        // Assert
         Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
         Assert.Equal(1, tracker.Disposed);
         clock.Advance(TimeSpan.FromSeconds(1));
@@ -99,6 +103,7 @@ public sealed class FitzNotificationFaultTests
     [Fact]
     public async Task ShouldCancelScheduledValidatorRetry()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var tracker = new ValidatorTracker { AlwaysTransient = true };
         var services = new ServiceCollection();
@@ -113,7 +118,10 @@ public sealed class FitzNotificationFaultTests
         using var cancellation = new CancellationTokenSource();
         await using var enumerator = consumer.ReadAsync(cancellation.Token).GetAsyncEnumerator();
 
+        // Act
         var move = enumerator.MoveNextAsync().AsTask();
+
+        // Assert
         Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
         await cancellation.CancelAsync();
 
@@ -125,6 +133,7 @@ public sealed class FitzNotificationFaultTests
     [Fact]
     public async Task ShouldKeepRetryingScheduledValidationUntilTheValidatorRecovers()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var tracker = new ValidatorTracker { TransientAttempts = 3 };
         var services = new ServiceCollection();
@@ -138,7 +147,10 @@ public sealed class FitzNotificationFaultTests
             provider.GetRequiredService<IServiceScopeFactory>(), clock);
         await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
 
+        // Act
         var move = enumerator.MoveNextAsync().AsTask();
+
+        // Assert
         Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
         clock.Advance(TimeSpan.FromSeconds(1));
         Assert.Equal(TimeSpan.FromSeconds(2), await clock.WaitForDelayAsync());
@@ -156,6 +168,7 @@ public sealed class FitzNotificationFaultTests
     [Fact]
     public async Task ShouldCapScheduledValidationBackoffAndCancel()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var tracker = new ValidatorTracker { AlwaysTransient = true };
         var services = new ServiceCollection();
@@ -170,7 +183,10 @@ public sealed class FitzNotificationFaultTests
         using var cancellation = new CancellationTokenSource();
         await using var enumerator = consumer.ReadAsync(cancellation.Token).GetAsyncEnumerator();
 
+        // Act
         var move = enumerator.MoveNextAsync().AsTask();
+
+        // Assert
         foreach (var seconds in new[] { 1, 2, 4, 8, 16 })
         {
             Assert.Equal(TimeSpan.FromSeconds(seconds), await clock.WaitForDelayAsync());
@@ -190,6 +206,7 @@ public sealed class FitzNotificationFaultTests
     [Fact]
     public async Task ShouldDeliverLaterScheduledFiringWhileEarlierFiringWaitsToRetryValidation()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var tracker = new ValidatorTracker { FailFirstTransiently = true };
         var services = new ServiceCollection();
@@ -201,8 +218,11 @@ public sealed class FitzNotificationFaultTests
             serializer, "schedule://test/shared/action/run",
             TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)),
             provider.GetRequiredService<IServiceScopeFactory>(), clock);
+
+        // Act
         await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
 
+        // Assert
         Assert.True(await enumerator.MoveNextAsync());
         Assert.Equal(2, tracker.Attempts);
         Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
@@ -218,6 +238,7 @@ public sealed class FitzNotificationFaultTests
     [Fact]
     public async Task ShouldNotValidateActorForMalformedScheduledRequestEnvelope()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var payload = JsonSerializer.SerializeToUtf8Bytes(
             new FitzScheduledRequestEnvelope(1, "scheduler", "portia", [123]),
@@ -232,7 +253,10 @@ public sealed class FitzNotificationFaultTests
             TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)),
             provider.GetRequiredService<IServiceScopeFactory>(), new ManualTestClock());
 
+        // Act
         await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+
+        // Assert
         Assert.False(await enumerator.MoveNextAsync());
         Assert.Equal(0, tracker.Attempts);
     }
@@ -241,6 +265,7 @@ public sealed class FitzNotificationFaultTests
     [Fact]
     public async Task ShouldDropNonTransientScheduledValidatorRejection()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var tracker = new ValidatorTracker { AlwaysRejected = true };
         var services = new ServiceCollection();
@@ -252,8 +277,10 @@ public sealed class FitzNotificationFaultTests
             TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)),
             provider.GetRequiredService<IServiceScopeFactory>(), new ManualTestClock());
 
+        // Act
         await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
 
+        // Assert
         Assert.False(await enumerator.MoveNextAsync());
         Assert.Equal(1, tracker.Disposed);
     }
@@ -262,6 +289,7 @@ public sealed class FitzNotificationFaultTests
     [Fact]
     public async Task ShouldResolveAndDisposeDistinctScopedValidatorsForScheduledNotifications()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var request = serializer.Serialize(new UniversalAction(1), null, RequestMetadata.Create(), null);
         var payload = JsonSerializer.SerializeToUtf8Bytes(
@@ -278,9 +306,12 @@ public sealed class FitzNotificationFaultTests
             provider.GetRequiredService<IServiceScopeFactory>(), TimeProvider.System);
 
         var delivered = 0;
+
+        // Act
         await foreach (var _ in consumer.ReadAsync())
             delivered++;
 
+        // Assert
         Assert.Equal(2, delivered);
         Assert.Equal(2, tracker.Instances.Count);
         Assert.Equal(2, tracker.Instances.Distinct().Count());
@@ -291,10 +322,14 @@ public sealed class FitzNotificationFaultTests
     [Fact]
     public async Task ShouldReportLegacyScheduleEntriesAsAValidationFault()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
+
+        // Act
         var legacy = serializer.Serialize(new UniversalAction(1), "legacy-bearer-token", RequestMetadata.Create(),
             null);
 
+        // Assert
         Assert.Equal([("unknown", "schedule", "lost")], await DrainAsync(serializer, legacy));
     }
 
@@ -302,12 +337,16 @@ public sealed class FitzNotificationFaultTests
     [Fact]
     public async Task ShouldReportAnIncompleteSystemIdentityAsAValidationFault()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var request = serializer.Serialize(new UniversalAction(1), null, RequestMetadata.Create(), null);
+
+        // Act
         var payload = JsonSerializer.SerializeToUtf8Bytes(
             new FitzScheduledRequestEnvelope(1, "   ", "Portia", request.ToArray()),
             FitzJsonContext.Default.FitzScheduledRequestEnvelope);
 
+        // Assert
         Assert.Equal([("unknown", "schedule", "lost")], await DrainAsync(serializer, payload));
     }
 
@@ -318,8 +357,11 @@ public sealed class FitzNotificationFaultTests
     [Fact]
     public void ShouldNameTheRouteAndRemedyInTheLegacyScheduleDiagnostic()
     {
+        // Arrange
+        // Act
         var exception = new LegacyScheduledRequestException("schedule://test/shared/action/run");
 
+        // Assert
         Assert.Contains("Cancel and recreate", exception.Message, StringComparison.Ordinal);
         Assert.Contains("schedule://test/shared/action/run", exception.Message, StringComparison.Ordinal);
     }

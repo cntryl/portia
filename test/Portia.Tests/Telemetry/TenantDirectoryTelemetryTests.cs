@@ -16,6 +16,7 @@ public sealed class TenantDirectoryTelemetryTests
     [Fact]
     public async Task ShouldMeasureCompleteSnapshotReplayWithoutTenantIdentityTags()
     {
+        // Arrange
         var clock = new ManualTestClock();
         var source = new TimedReader(clock);
         source.Add(new TenantRegistered("acme"));
@@ -25,9 +26,11 @@ public sealed class TenantDirectoryTelemetryTests
         var directory = CreateDirectory(source, clock);
         var tenants = new List<TenantId>();
 
+        // Act
         await foreach (var tenant in directory.GetActiveTenantsAsync())
             tenants.Add(tenant);
 
+        // Assert
         Assert.Equal([new TenantId("globex")], tenants);
         AssertMeasurement(measurements, "portia.tenant_directory.operation.duration", 3, "snapshot", "replay");
         AssertMeasurement(measurements, "portia.tenant_directory.event.count", 3, "snapshot", "replay");
@@ -41,14 +44,18 @@ public sealed class TenantDirectoryTelemetryTests
     [Fact]
     public async Task ShouldDistinguishLegacyWatchReplayFromCatchUp()
     {
+        // Arrange
         var clock = new ManualTestClock();
         var source = new TimedReader(clock);
         source.Add(new TenantRegistered("acme"));
         using var listener = Listen(out var measurements);
         var directory = CreateDirectory(source, clock);
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         await using var changes = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
 
+        // Assert
         Assert.True(await changes.MoveNextAsync());
         Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")),
             changes.Current);
@@ -75,6 +82,7 @@ public sealed class TenantDirectoryTelemetryTests
     [Fact]
     public async Task ShouldMeasureCursorReplayAndCatchUpWithoutConsumerBackpressure()
     {
+        // Arrange
         var clock = new ManualTestClock();
         var source = new TimedReader(clock);
         source.Add(new TenantRegistered("acme"));
@@ -82,8 +90,11 @@ public sealed class TenantDirectoryTelemetryTests
         var directory = CreateDirectory(source, clock);
         using var cancellation = new CancellationTokenSource();
         await using var cursor = await directory.OpenCursorAsync(cancellation.Token);
+
+        // Act
         await using var changes = cursor.ReadAsync(cancellation.Token).GetAsyncEnumerator();
 
+        // Assert
         Assert.True(await changes.MoveNextAsync());
         Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")),
             changes.Current);
@@ -114,6 +125,7 @@ public sealed class TenantDirectoryTelemetryTests
     [Fact]
     public async Task ShouldReportPartialCursorReplayProgressGivenReaderFault()
     {
+        // Arrange
         var clock = new ManualTestClock();
         var source = new TimedReader(clock);
         source.Add(new TenantRegistered("acme"));
@@ -122,8 +134,11 @@ public sealed class TenantDirectoryTelemetryTests
         using var listener = Listen(out var measurements);
         var directory = CreateDirectory(source, clock);
         await using var cursor = await directory.OpenCursorAsync();
+
+        // Act
         await using var changes = cursor.ReadAsync().GetAsyncEnumerator();
 
+        // Assert
         _ = await Assert.ThrowsAsync<IOException>(() => changes.MoveNextAsync().AsTask());
 
         AssertMeasurement(measurements, "portia.tenant_directory.operation.duration", 1, "cursor", "replay",

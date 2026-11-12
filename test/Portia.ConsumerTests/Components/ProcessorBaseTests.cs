@@ -10,11 +10,16 @@ public sealed class ProcessorBaseTests
     [InlineData(true)]
     public async Task InjectedRepositoryCommitsDataAndProgressAtTheSelectedBoundary(bool batch)
     {
+        // Arrange
         var events = await Seed();
         var repository = new Repository();
         Projector projector = batch ? new BatchAccounts(repository) : new Accounts(repository);
         var runner = new ProjectorRunner(events);
+
+        // Act
         _ = await runner.RunAsync(projector, ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxBatchSize = 2 });
+
+        // Assert
         Assert.Equal(6, repository.Value);
         Assert.Equal(batch ? new ulong[] { 2, 3 } : [1, 2, 3], repository.Commits);
         Assert.Equal(batch ? 2 : 3, repository.Disposals);
@@ -24,9 +29,14 @@ public sealed class ProcessorBaseTests
     [Fact]
     public async Task FailedBatchRollsBackAndResumesFromTheRepositoryCheckpoint()
     {
+        // Arrange
         var events = await Seed();
         var repository = new Repository { Fail = true };
+
+        // Act
         var runner = new ProjectorRunner(events);
+
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
             runner.RunAsync(new BatchAccounts(repository), ProjectionCheckpoint.Start).AsTask());
         Assert.IsType<InvalidOperationException>(failure.InnerException);
@@ -43,13 +53,18 @@ public sealed class ProcessorBaseTests
     [Fact]
     public void RegistrationNeedsOnlyTheApplicationRepository()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddScoped<Repository>();
         _ = services.AddSingleton<IDomainEventReader, InMemoryEventStore>();
         _ = services.AddPortia().AddProjector<BatchAccounts>("BatchAccounts", WorkloadScope.Global);
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions
         { ValidateScopes = true, ValidateOnBuild = true });
+
+        // Act
         using var scope = provider.CreateScope();
+
+        // Assert
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<BatchAccounts>());
     }
 
@@ -58,10 +73,15 @@ public sealed class ProcessorBaseTests
     [InlineData(true)]
     public async Task ReactionsOwnTheirCheckpointsAndKeepPerEventCausality(bool batch)
     {
+        // Arrange
         var events = await Seed();
         var repository = new ReactionRepository();
         Reactor reactor = batch ? new BatchReaction(repository) : new Reaction(repository);
+
+        // Act
         _ = await new ReactorRunner(events).RunAsync(reactor, ProjectionCheckpoint.Start, 2);
+
+        // Assert
         Assert.Equal(batch ? new ulong[] { 2, 3 } : [1, 2, 3], repository.Commits);
         Assert.Equal(3, repository.Contexts.Select(c => c.ExecutionId).Distinct().Count());
         Assert.All(repository.Contexts, context =>
@@ -76,10 +96,15 @@ public sealed class ProcessorBaseTests
     [InlineData(true)]
     public async Task FailedReactionCheckpointReplaysEffectsButNeverAdvancesProgress(bool batch)
     {
+        // Arrange
         var events = await Seed();
         var repository = new ReactionRepository { FailSave = true };
         Reactor reactor = batch ? new BatchReaction(repository) : new Reaction(repository);
+
+        // Act
         var runner = new ReactorRunner(events);
+
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
             runner.RunAsync(reactor, ProjectionCheckpoint.Start, 2).AsTask());
         Assert.IsType<IOException>(failure.InnerException);
@@ -96,9 +121,14 @@ public sealed class ProcessorBaseTests
     [Fact]
     public async Task CancellationDiscardsBufferedWritesAndDoesNotCommitCheckpoint()
     {
+        // Arrange
         using var cancellation = new CancellationTokenSource();
         var repository = new Repository { OnAdd = cancellation.Cancel };
+
+        // Act
         var runner = new ProjectorRunner(await Seed());
+
+        // Assert
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             runner.RunAsync(new BatchAccounts(repository), ProjectionCheckpoint.Start, ct: cancellation.Token)
                 .AsTask());

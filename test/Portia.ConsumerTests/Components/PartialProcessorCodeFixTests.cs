@@ -11,6 +11,7 @@ public sealed class PartialProcessorCodeFixTests
     [Fact]
     public async Task AddsPartialWithoutDisturbingExistingModifiersOrTrivia()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               public sealed record Changed : DomainEvent;
@@ -19,8 +20,10 @@ public sealed class PartialProcessorCodeFixTests
                                   : Projector(null!, EventStreamPattern.ForPattern("events")), IProjectorHandler<Changed>;
                               """;
 
+        // Act
         var corrected = await ApplyAllAsync(source);
 
+        // Assert
         Assert.Contains("// processor documentation", corrected, StringComparison.Ordinal);
         Assert.Contains("public /* retained */ sealed partial class Projection", corrected, StringComparison.Ordinal);
         Assert.DoesNotContain(GeneratorCompilation.Diagnostics(corrected,
@@ -37,13 +40,17 @@ public sealed class PartialProcessorCodeFixTests
     public async Task ModifierFreeDeclarationPreservesTriviaOnItsActualFirstToken(string declaration,
         string expected)
     {
-        var corrected = await ApplyAllAsync("using Cntryl.Portia;\npublic sealed record Changed : DomainEvent;\n" +
-                                            declaration.Replace(";", ", IProjectorHandler<Changed>;"));
+        // Arrange
+        var source = "using Cntryl.Portia;\npublic sealed record Changed : DomainEvent;\n" +
+                     declaration.Replace(";", ", IProjectorHandler<Changed>;");
 
+        // Act
+        var corrected = await ApplyAllAsync(source);
+        var diagnostics = GeneratorCompilation.Diagnostics(corrected, new ProjectorReactorEventDispatcherGenerator());
+
+        // Assert
         Assert.Contains(expected, corrected, StringComparison.Ordinal);
-        Assert.DoesNotContain(GeneratorCompilation.Diagnostics(corrected,
-                new ProjectorReactorEventDispatcherGenerator()),
-            diagnostic => diagnostic.Severity == DiagnosticSeverity.Warning);
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Warning);
     }
 
     [Theory]
@@ -52,6 +59,7 @@ public sealed class PartialProcessorCodeFixTests
     [InlineData(FixAllScope.Solution)]
     public async Task FixAllCorrectsProjectorAndReactorAndLeavesGeneratedOutputCompilable(FixAllScope scope)
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               using System.Threading;
@@ -69,8 +77,10 @@ public sealed class PartialProcessorCodeFixTests
                               }
                               """;
 
+        // Act
         var corrected = await ApplyFixAllAsync(source, scope, "Portia.MakeProcessorPartial");
 
+        // Assert
         Assert.Contains("public sealed partial class Projection", corrected, StringComparison.Ordinal);
         Assert.Contains("internal partial class Reaction", corrected, StringComparison.Ordinal);
         Assert.DoesNotContain(GeneratorCompilation.Diagnostics(corrected,
@@ -83,6 +93,7 @@ public sealed class PartialProcessorCodeFixTests
     [Fact]
     public async Task MakesEveryEnclosingTypeOfANestedProcessorPartial()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               using System.Threading;
@@ -102,8 +113,10 @@ public sealed class PartialProcessorCodeFixTests
                               }
                               """;
 
+        // Act
         var corrected = await ApplyAllAsync(source, "PORTIA015");
 
+        // Assert
         Assert.Contains("public static partial class Outer", corrected, StringComparison.Ordinal);
         Assert.Contains("    // nested\n    internal sealed partial class Middle", corrected, StringComparison.Ordinal);
         Assert.DoesNotContain(GeneratorCompilation.Diagnostics(corrected,
@@ -114,6 +127,7 @@ public sealed class PartialProcessorCodeFixTests
     [Fact]
     public async Task OffersNoPartialFixForAnUnsupportedShapeItCannotRepair()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               using System.Threading;
@@ -129,7 +143,11 @@ public sealed class PartialProcessorCodeFixTests
                               }
                               """;
 
-        Assert.Empty(await ActionsAsync(source, "PORTIA015"));
+        // Act
+        var actions = await ActionsAsync(source, "PORTIA015");
+
+        // Assert
+        Assert.Empty(actions);
     }
 
     [Theory]
@@ -138,6 +156,7 @@ public sealed class PartialProcessorCodeFixTests
     [InlineData(FixAllScope.Solution)]
     public async Task FixAllRepairsSharedNestedContainers(FixAllScope scope)
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               using System.Threading;
@@ -159,7 +178,11 @@ public sealed class PartialProcessorCodeFixTests
                                   }
                               }
                               """;
+
+        // Act
         var corrected = await ApplyFixAllAsync(source, scope, "Portia.MakeContainersPartial");
+
+        // Assert
         Assert.Contains("// shared parent", corrected, StringComparison.Ordinal);
         Assert.Contains("public static partial class Outer", corrected, StringComparison.Ordinal);
         Assert.Contains("internal partial class Middle", corrected, StringComparison.Ordinal);

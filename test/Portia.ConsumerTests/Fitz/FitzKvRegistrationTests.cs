@@ -22,10 +22,13 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void FitzPublishesItsKvClientForApplicationRepositories()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration());
 
+        // Assert
         var descriptor = Assert.Single(services, item => item.ServiceType == typeof(IKvClient));
         Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
     }
@@ -38,10 +41,13 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void FitzPublishesItsStreamClientForApplicationReaders()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration());
 
+        // Assert
         var descriptor = Assert.Single(services, item => item.ServiceType == typeof(IStreamClient));
         Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
     }
@@ -53,10 +59,13 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void ReactorCheckpointsAreNotRegisteredWithoutSelection()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration());
 
+        // Assert
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(IProjectionCheckpointStore));
     }
 
@@ -67,11 +76,14 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void SelectingKvTenantSnapshotsRegistersTheDurableStore()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration(),
             builder => builder.UseKvTenantSnapshots("kv://accounts/tenants/snapshots"));
 
+        // Assert
         var descriptor = Assert.Single(services, item => item.ServiceType == typeof(ITenantDirectorySnapshotStore));
         Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(IProjectionCheckpointStore));
@@ -81,20 +93,28 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void ConflictingTenantSnapshotRoutesAreRejected()
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        _ = Assert.Throws<InvalidOperationException>(() => services.AddPortia().AddFitz(Configuration(), builder =>
+        // Act
+        var error = Record.Exception(() => services.AddPortia().AddFitz(Configuration(), builder =>
             builder.UseKvTenantSnapshots("kv://accounts/tenants/snapshots")
                 .UseKvTenantSnapshots("kv://accounts/tenants/other")));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(error);
     }
 
     [Fact]
     public void SelectingKvCheckpointsRegistersTheDurableStore()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration(), builder => builder.UseKvCheckpoints(Route));
 
+        // Assert
         var descriptor = Assert.Single(services, item => item.ServiceType == typeof(IProjectionCheckpointStore));
         Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
     }
@@ -109,12 +129,16 @@ public sealed class FitzKvRegistrationTests
     [InlineData("kv://accounts/*/checkpoints")]
     public void CheckpointRouteMustBeAnExactThreeSegmentKvRoute(string route)
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        var error = Assert.Throws<ArgumentException>(() =>
+        // Act
+        var error = Record.Exception(() =>
             services.AddPortia().AddFitz(Configuration(), builder => builder.UseKvCheckpoints(route)));
 
-        Assert.Contains("kv://{realm}/{area}/{resource}", error.Message, StringComparison.Ordinal);
+        // Assert
+        var invalid = Assert.IsType<ArgumentException>(error);
+        Assert.Contains("kv://{realm}/{area}/{resource}", invalid.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -124,24 +148,31 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void RepeatingTheSameCheckpointRouteIsIdempotent()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration(), builder =>
             builder.UseKvCheckpoints(Route).UseKvCheckpoints(Route));
 
+        // Assert
         _ = Assert.Single(services, item => item.ServiceType == typeof(IProjectionCheckpointStore));
     }
 
     [Fact]
     public void ConflictingCheckpointRoutesAreRejected()
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        var error = Assert.Throws<InvalidOperationException>(() =>
+        // Act
+        var error = Record.Exception(() =>
             services.AddPortia().AddFitz(Configuration(), builder =>
                 builder.UseKvCheckpoints(Route).UseKvCheckpoints("kv://accounts/progress/other")));
 
-        Assert.Contains("conflicting Fitz KV checkpoint routes", error.Message, StringComparison.Ordinal);
+        // Assert
+        var invalid = Assert.IsType<InvalidOperationException>(error);
+        Assert.Contains("conflicting Fitz KV checkpoint routes", invalid.Message, StringComparison.Ordinal);
     }
 
     static IConfiguration Configuration() =>

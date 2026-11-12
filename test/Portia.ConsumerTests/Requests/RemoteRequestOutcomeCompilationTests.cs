@@ -12,28 +12,46 @@ public sealed class RemoteRequestOutcomeCompilationTests
     [Fact]
     public async Task ShouldCompileExhaustiveSwitchForNoResultOutcomes()
     {
+        // Arrange
         var describe = await CompileSwitchAsync<RemoteRequestOutcome>(resultBearing: false);
 
-        Assert.Equal("completed", describe(new RemoteRequestOutcome.Completed(Result.Success)));
-        Assert.Equal("rejected:business rejected", describe(new RemoteRequestOutcome.Completed(
-            Result.Failure(RequestError.Conflict("business rejected")))));
-        Assert.Equal("NotDispatched", describe(new RemoteRequestOutcome.NotDispatched()));
-        Assert.Equal("CancellationForwarded", describe(new RemoteRequestOutcome.CancellationForwarded()));
-        Assert.Equal("OutcomeUnknown", describe(new RemoteRequestOutcome.OutcomeUnknown()));
+        // Act
+        var completed = describe(new RemoteRequestOutcome.Completed(Result.Success));
+        var rejected = describe(new RemoteRequestOutcome.Completed(
+            Result.Failure(RequestError.Conflict("business rejected"))));
+        var notDispatched = describe(new RemoteRequestOutcome.NotDispatched());
+        var cancellationForwarded = describe(new RemoteRequestOutcome.CancellationForwarded());
+        var outcomeUnknown = describe(new RemoteRequestOutcome.OutcomeUnknown());
+
+        // Assert
+        Assert.Equal("completed", completed);
+        Assert.Equal("rejected:business rejected", rejected);
+        Assert.Equal("NotDispatched", notDispatched);
+        Assert.Equal("CancellationForwarded", cancellationForwarded);
+        Assert.Equal("OutcomeUnknown", outcomeUnknown);
     }
 
     /// <summary>The generic cases retain result payloads and distinguish unresolved transport outcomes.</summary>
     [Fact]
     public async Task ShouldCompileExhaustiveSwitchForResultOutcomes()
     {
+        // Arrange
         var describe = await CompileSwitchAsync<RemoteRequestOutcome<int>>(resultBearing: true);
 
-        Assert.Equal("completed:42", describe(new RemoteRequestOutcome<int>.Completed(Result<int>.Success(42))));
-        Assert.Equal("rejected:business rejected", describe(new RemoteRequestOutcome<int>.Completed(
-            Result<int>.Failure(RequestError.Conflict("business rejected")))));
-        Assert.Equal("NotDispatched", describe(new RemoteRequestOutcome<int>.NotDispatched()));
-        Assert.Equal("CancellationForwarded", describe(new RemoteRequestOutcome<int>.CancellationForwarded()));
-        Assert.Equal("OutcomeUnknown", describe(new RemoteRequestOutcome<int>.OutcomeUnknown()));
+        // Act
+        var completed = describe(new RemoteRequestOutcome<int>.Completed(Result<int>.Success(42)));
+        var rejected = describe(new RemoteRequestOutcome<int>.Completed(
+            Result<int>.Failure(RequestError.Conflict("business rejected"))));
+        var notDispatched = describe(new RemoteRequestOutcome<int>.NotDispatched());
+        var cancellationForwarded = describe(new RemoteRequestOutcome<int>.CancellationForwarded());
+        var outcomeUnknown = describe(new RemoteRequestOutcome<int>.OutcomeUnknown());
+
+        // Assert
+        Assert.Equal("completed:42", completed);
+        Assert.Equal("rejected:business rejected", rejected);
+        Assert.Equal("NotDispatched", notDispatched);
+        Assert.Equal("CancellationForwarded", cancellationForwarded);
+        Assert.Equal("OutcomeUnknown", outcomeUnknown);
     }
 
     /// <summary>A consumer cannot accidentally omit the unknown case while compiling with warnings as errors.</summary>
@@ -42,8 +60,13 @@ public sealed class RemoteRequestOutcomeCompilationTests
     [InlineData(true)]
     public async Task ShouldRequireExplicitUnknownOutcomeCase(bool resultBearing)
     {
-        using var compiled = await CompileAsync(resultBearing, includeUnknown: false);
+        // Arrange
+        const bool includeUnknown = false;
 
+        // Act
+        using var compiled = await CompileAsync(resultBearing, includeUnknown);
+
+        // Assert
         Assert.NotEqual(0, compiled.ExitCode);
         Assert.Contains("error CS", compiled.Output, StringComparison.Ordinal);
         Assert.Contains("OutcomeUnknown", compiled.Output, StringComparison.Ordinal);

@@ -13,6 +13,7 @@ public sealed class ProjectorTests
     [Fact]
     public async Task ShouldDispatchHandlersThroughSameProjection()
     {
+        // Arrange
         var projector = new TestProjector(new RecordingProjectionTarget());
         var projection = ((ITestProjectionRepository)projector.Store).Projection;
         var stream = new EventStreamAddress("test", "projectors", "one");
@@ -21,9 +22,12 @@ public sealed class ProjectorTests
         var context = new ProjectorContext(new CheckpointIdentity(projector.Name, projector.Pattern));
 
         await projector.ProjectAsync([new DomainEventRecord(stream, first, 0, new EventCursor("1"))], context, default);
+
+        // Act
         await projector.ProjectAsync([new DomainEventRecord(stream, second, 1, new EventCursor("2"))], context,
             default);
 
+        // Assert
         Assert.Equal(42, projection.Value);
         Assert.Equal(2, projection.HandlerCount);
         Assert.Equal(1, projection.LoadCount);
@@ -35,6 +39,7 @@ public sealed class ProjectorTests
     [Fact]
     public async Task ShouldCommitBoundedBatchesAndAdvanceCheckpointWhenRun()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
@@ -47,11 +52,13 @@ public sealed class ProjectorTests
         var projector = new TestProjector(target);
         var runner = new ProjectorRunner(store);
 
+        // Act
         var checkpoint = await runner.RunAsync(
             projector,
             ProjectionCheckpoint.Start,
             new ProjectionRunOptions { MaxBatchSize = 2, RebuildId = "rebuild-1" });
 
+        // Assert
         Assert.Equal(42, target.Projection.Value);
         Assert.Equal("3", checkpoint.Cursor.ToString());
         Assert.Equal([2UL, 3UL], target.CommittedOffsets);
@@ -62,6 +69,7 @@ public sealed class ProjectorTests
     [Fact]
     public async Task ShouldBoundPassWithoutReadingAheadAndResume()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
@@ -76,8 +84,11 @@ public sealed class ProjectorTests
         var options = new ProjectionRunOptions { MaxBatchSize = 8, MaxEventsPerPass = 2 };
 
         var first = await runner.RunAsync(projector, ProjectionCheckpoint.Start, options);
+
+        // Act
         var second = await runner.RunAsync(projector, first, options);
 
+        // Assert
         Assert.Equal("2", first.Cursor.ToString());
         Assert.Equal("3", second.Cursor.ToString());
         Assert.Equal([2UL, 3UL], target.CommittedOffsets);
@@ -88,6 +99,7 @@ public sealed class ProjectorTests
     [Fact]
     public async Task ShouldCommitPartialBatchAtNonDivisiblePassBudgetAndResume()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
@@ -105,8 +117,11 @@ public sealed class ProjectorTests
         var options = new ProjectionRunOptions { MaxBatchSize = 3, MaxEventsPerPass = 5 };
 
         var first = await runner.RunAsync(projector, ProjectionCheckpoint.Start, options);
+
+        // Act
         var second = await runner.RunAsync(projector, first, options);
 
+        // Assert
         Assert.Equal("5", first.Cursor.ToString());
         Assert.Equal("6", second.Cursor.ToString());
         Assert.Equal([3UL, 5UL, 6UL], target.CommittedOffsets);
@@ -117,14 +132,17 @@ public sealed class ProjectorTests
     [Fact]
     public async Task ShouldNotContinueImmediatelyWhenBudgetExhaustionMakesNoProgress()
     {
+        // Arrange
         var stream = new EventStreamAddress("test", "projectors", "stale");
         var record = new DomainEventRecord(stream, Committed(new ValueChanged(40), 1), 0, new EventCursor("1"));
         var runner = new ProjectorRunner(new StaleOffsetEventReader(record));
         var projector = new TestProjector(new RecordingProjectionTarget());
 
+        // Act
         var result = await runner.RunPassAsync(projector, new ProjectionCheckpoint(new EventCursor("1")),
             new ProjectionRunOptions { MaxEventsPerPass = 1 });
 
+        // Assert
         Assert.False(result.ContinueImmediately);
         Assert.Equal("1", result.Checkpoint.Cursor.ToString());
     }
@@ -133,8 +151,13 @@ public sealed class ProjectorTests
     [Fact]
     public async Task ShouldRejectNonPositivePassBudget()
     {
+        // Arrange
         var runner = new ProjectorRunner(new InMemoryEventStore());
+
+        // Act
         var projector = new TestProjector(new RecordingProjectionTarget());
+
+        // Assert
         _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => runner.RunAsync(projector,
             ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxEventsPerPass = 0 }).AsTask());
     }
@@ -147,14 +170,17 @@ public sealed class ProjectorTests
     [Fact]
     public async Task ShouldSkipUnhandledEventType()
     {
+        // Arrange
         var projector = new TestProjector(new RecordingProjectionTarget());
         var projection = ((ITestProjectionRepository)projector.Store).Projection;
         var stream = new EventStreamAddress("test", "projectors", "one");
         var ev = Committed(new ValueAudited("unhandled"), 1);
 
+        // Act
         await projector.ProjectAsync([new DomainEventRecord(stream, ev, 0, new EventCursor("1"))],
             new ProjectorContext(new CheckpointIdentity(projector.Name, projector.Pattern)), default);
 
+        // Assert
         Assert.Equal(0, projection.Value);
         Assert.Equal(0, projection.HandlerCount);
     }

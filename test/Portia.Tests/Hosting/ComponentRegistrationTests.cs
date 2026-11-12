@@ -15,6 +15,7 @@ public sealed class ComponentRegistrationTests
     [Fact]
     public void ShouldResolveRequestBusAfterExplicitRegistration()
     {
+        // Arrange
         var services = new ServiceCollection();
         // A permission-guarded request exists somewhere in this compilation (see
         // RequestAuthorizationTests), so the generated bus needs an IPermissionEvaluator too —
@@ -24,8 +25,10 @@ public sealed class ComponentRegistrationTests
         _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
 
+        // Act
         var bus = provider.GetRequiredService<IRequestBus>();
 
+        // Assert
         Assert.NotNull(bus);
     }
 
@@ -35,13 +38,16 @@ public sealed class ComponentRegistrationTests
     [Fact]
     public void ShouldResolveReactorAfterExplicitRegistration()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddSingleton(new RecordingAggregateRepository());
         _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
 
+        // Act
         var reactor = provider.GetRequiredService<TestReactor>();
 
+        // Assert
         Assert.NotNull(reactor);
     }
 
@@ -51,13 +57,16 @@ public sealed class ComponentRegistrationTests
     [Fact]
     public void ShouldResolveProjectorAfterExplicitRegistration()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddSingleton<ITestProjectionRepository>(new UnusedProjectionTarget());
         _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
 
+        // Act
         var projector = provider.GetRequiredService<TestProjector>();
 
+        // Assert
         Assert.NotNull(projector);
     }
 
@@ -68,11 +77,15 @@ public sealed class ComponentRegistrationTests
     [Fact]
     public void ShouldResolveReactorThroughReactorRegistration()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddSingleton(new RecordingAggregateRepository());
         _ = services.AddFrameworkTests();
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         var registration = Assert.Single(provider.GetServices<ReactorRegistration>(),
             r => r.ReactorType == typeof(TestReactor));
         var reactor = registration.Resolve(provider);
@@ -87,6 +100,7 @@ public sealed class ComponentRegistrationTests
     [Fact]
     public async Task ShouldRunProjectorThroughProjectorRegistration()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
@@ -98,8 +112,11 @@ public sealed class ComponentRegistrationTests
         _ = services.AddSingleton<ITestProjectionRepository>(target);
         _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
+
+        // Act
         var runner = new ProjectorRunner(store);
 
+        // Assert
         var registration = Assert.Single(provider.GetServices<ProjectorRegistration>(),
             r => r.ProjectorType == typeof(TestProjector));
         _ = await registration.Run(runner, provider, ProjectionCheckpoint.Start, null, default);
@@ -114,13 +131,17 @@ public sealed class ComponentRegistrationTests
     [Fact]
     public void ShouldRegisterTransportIdsMatchingDeclaredMarkers()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddSingleton(new RecordingAggregateRepository());
         _ = services.AddSingleton<ITestProjectionRepository>(new UnusedProjectionTarget());
         _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
+
+        // Act
         var registrations = provider.GetServices<RequestTransportRegistration>().ToList();
 
+        // Assert
         var createUser = Assert.Single(registrations, r => r.RequestType == typeof(CreateUser));
         Assert.True(createUser.Transports.SetEquals([RequestTransportId.Callable]));
         Assert.Equal("*", createUser.Route.Realm);
@@ -157,9 +178,13 @@ public sealed class ComponentRegistrationTests
     [Fact]
     public void ShouldRejectARegistrationWithoutAValidTransport()
     {
+        // Arrange
         var route = new RequestRouteAttribute("test", "requests", "probe", "run");
+
+        // Act
         var discriminator = new DiscriminatorAttribute("test.request.probe");
 
+        // Assert
         _ = Assert.Throws<ArgumentException>(() => new RequestTransportRegistration(
             typeof(CreateUser), [default], route, discriminator));
     }

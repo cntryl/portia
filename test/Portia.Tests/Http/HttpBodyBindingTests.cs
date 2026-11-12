@@ -15,11 +15,14 @@ public sealed class HttpBodyBindingTests
     [Fact]
     public void ShouldBindTheFirstCaseInsensitiveBodyPropertyMatch()
     {
+        // Arrange
         var options = new JsonSerializerOptions(TestJson.Options()) { PropertyNameCaseInsensitive = true };
         using var body = JsonDocument.Parse("""{"NAME":"first","nAmE":"second"}""");
 
+        // Act
         var bound = PortiaHttpBinding.ReadBody(body.RootElement, options, "name", false, false, string.Empty);
 
+        // Assert
         Assert.Equal("first", bound);
     }
 
@@ -31,6 +34,7 @@ public sealed class HttpBodyBindingTests
     [Fact]
     public async Task ShouldNotReserveBufferCapacityForAnUnsentDeclaredContentLength()
     {
+        // Arrange
         const long declared = 8L * 1024 * 1024;
         await using var provider = new ServiceCollection().AddFrameworkTests()
             .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
@@ -47,8 +51,11 @@ public sealed class HttpBodyBindingTests
         var before = GC.GetAllocatedBytesForCurrentThread();
         (await PortiaHttpBinding.ReadJsonBodyAsync(Context(scope, declared), false, CancellationToken.None))
             .Dispose();
+
+        // Act
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
+        // Assert
         Assert.True(allocated < declared / 8,
             $"Reading a 2-byte body that declared {declared} bytes allocated {allocated} bytes.");
     }

@@ -18,6 +18,7 @@ public sealed class RunnerClockTests
     [Fact]
     public async Task ShouldBoundMultiTenantShutdownGraceWithTheInjectedClock()
     {
+        // Arrange
         var grace = TimeSpan.FromMinutes(10);
         var clock = new ManualTestClock();
         var runner = new MultiTenantRunner(new SingleTenantDirectory(),
@@ -31,7 +32,11 @@ public sealed class RunnerClockTests
         }, (_, _) => Task.CompletedTask, lifetime.Token);
 
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Act
         lifetime.Cancel();
+
+        // Assert
         Assert.Equal(grace, await clock.WaitForDelayAsync());
         clock.Advance(grace);
 
@@ -46,6 +51,7 @@ public sealed class RunnerClockTests
     [Fact]
     public async Task ShouldBoundPartitionTerminationWithTheInjectedClock()
     {
+        // Arrange
         const string partition = "lease://portia/fleet/stuck";
         var timeout = TimeSpan.FromMinutes(10);
         var clock = new ManualTestClock();
@@ -66,7 +72,11 @@ public sealed class RunnerClockTests
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         lifetime.Cancel();
         await WaitForScheduledAsync(clock, timeout);
+
+        // Act
         clock.Advance(timeout);
+
+        // Assert
         var fault = await Assert.ThrowsAsync<FleetPartitionTerminationTimeoutException>(() =>
             run.WaitAsync(TimeSpan.FromSeconds(5)));
 

@@ -35,6 +35,7 @@ public sealed class FitzKvProjectionStoreTests
     public async Task ShouldCleanUpAndRemainReusableWhenBeginValidationFails(string failureKind,
         bool cleanupFails)
     {
+        // Arrange
         var original = new IOException("checkpoint read failed");
         using var cancellation = new CancellationTokenSource();
         var client = new FakeKvClient();
@@ -68,7 +69,10 @@ public sealed class FitzKvProjectionStoreTests
             client.DisposeFailure = new IOException("dispose failed");
         }
 
+        // Act
         Exception error;
+
+        // Assert
         if (failureKind == "read")
         {
             error = await Assert.ThrowsAsync<IOException>(async () =>
@@ -121,6 +125,7 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldReloadStartAfterResetBatch()
     {
+        // Arrange
         var client = new FakeKvClient();
         const string route = "kv://portia/state/orders";
         var store = new TotalsRepository(client, route);
@@ -128,8 +133,12 @@ public sealed class FitzKvProjectionStoreTests
         await using (var batch =
                      await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
             await batch.CommitAsync(progress);
+
+        // Act
         await using (var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, progress)))
             await batch.CommitAsync(ProjectionCheckpoint.Start);
+
+        // Assert
         Assert.Equal(ProjectionCheckpoint.Start, await new FitzKvCheckpointStore(client, route).LoadAsync(Identity));
         var fresh = new TotalsRepository(client, route);
         Assert.Equal(ProjectionCheckpoint.Start, await fresh.LoadCheckpointAsync(Identity));
@@ -146,9 +155,13 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldCommitRepositoryWritesAndCheckpointInOneTransaction()
     {
+        // Arrange
         var client = new FakeKvClient();
+
+        // Act
         var store = new TotalsRepository(client, "kv://portia/state/orders");
 
+        // Assert
         await using (var batch =
                      await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
         {
@@ -167,6 +180,7 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldAcceptLegacyCheckpointAndRewriteItOnCommit()
     {
+        // Arrange
         var client = new FakeKvClient();
         var legacy = new byte[sizeof(ulong)];
         BinaryPrimitives.WriteUInt64BigEndian(legacy, 8);
@@ -174,10 +188,12 @@ public sealed class FitzKvProjectionStoreTests
         client.Committed[Encoding.UTF8.GetString(key.Span)] = legacy;
         var store = new TotalsRepository(client, "kv://portia/state/orders");
 
+        // Act
         await using (var batch = await store.BeginAsync(new ProjectionBatchContext(
                          Identity, new ProjectionCheckpoint(new EventCursor("8")))))
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("opaque-next")));
 
+        // Assert
         Assert.Equal(new ProjectionCheckpoint(new EventCursor("opaque-next")),
             await store.LoadCheckpointAsync(Identity));
         Assert.Equal("portia-checkpoint-v1\0opaque-next", Encoding.UTF8.GetString(client.Read(key)!));
@@ -190,12 +206,15 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldRollBackWhenBatchIsDisposedWithoutCommitting()
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
 
+        // Act
         await using (await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
             await store.AddAsync("total", 12);
 
+        // Assert
         Assert.Equal(1, client.LastTransaction.Rollbacks);
         Assert.Equal(0, client.LastTransaction.Commits);
         Assert.Equal(1, client.LastTransaction.Disposals);
@@ -210,13 +229,16 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldNotRollBackAfterACommittedBatchIsDisposed()
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
 
+        // Act
         await using (var batch =
                      await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
 
+        // Assert
         Assert.Equal(0, client.LastTransaction.Rollbacks);
         Assert.Equal(1, client.LastTransaction.Commits);
         Assert.Equal(1, client.LastTransaction.Disposals);
@@ -230,13 +252,17 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldTranslateIsolationConflictToProjectionConcurrencyException()
     {
+        // Arrange
         var conflict = new KvException("conflict", "TX_CONFLICT", domainCode: FitzErrorCodes.KvIsolationConflict);
         var client = new FakeKvClient { CommitFailure = conflict };
         var store = new TotalsRepository(client, "kv://portia/state/orders");
         await using var batch =
             await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+
+        // Act
         await store.AddAsync("total", 12);
 
+        // Assert
         var error = await Assert.ThrowsAsync<ProjectionConcurrencyException>(async () =>
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1"))));
 
@@ -253,11 +279,15 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldRethrowNonConflictCommitFailureAndRollBackOnce()
     {
+        // Arrange
         var failure = new KvException("backend down", "KV_BACKEND", domainCode: FitzErrorCodes.KvBackendError);
         var client = new FakeKvClient { CommitFailure = failure };
         var store = new TotalsRepository(client, "kv://portia/state/orders");
+
+        // Act
         var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
 
+        // Assert
         var error = await Assert.ThrowsAsync<KvException>(async () =>
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1"))));
         await batch.DisposeAsync();
@@ -274,12 +304,16 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldPreserveCommitFailureWhenRollbackAlsoFails()
     {
+        // Arrange
         var failure = new KvException("commit failed", "KV_BACKEND", domainCode: FitzErrorCodes.KvBackendError);
         var client = new FakeKvClient { CommitFailure = failure, RollbackFailure = new IOException("rollback failed") };
         var store = new TotalsRepository(client, "kv://portia/state/orders");
+
+        // Act
         await using var batch =
             await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
 
+        // Assert
         var error = await Assert.ThrowsAsync<KvException>(async () =>
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1"))));
 
@@ -293,10 +327,13 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldLoadStartWhenNothingHasBeenSaved()
     {
+        // Arrange
         var client = new FakeKvClient();
 
+        // Act
         var checkpoint = await new TotalsRepository(client, "kv://portia/state/orders").LoadCheckpointAsync(Identity);
 
+        // Assert
         Assert.Equal(ProjectionCheckpoint.Start, checkpoint);
         Assert.Equal(KvMode.ReadOnly, client.LastTransaction.Mode);
     }
@@ -308,6 +345,7 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldCommitRebuildGenerationWithoutDisturbingLiveCheckpoint()
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
         var rebuild = new CheckpointIdentity(
@@ -316,10 +354,12 @@ public sealed class FitzKvProjectionStoreTests
                          ProjectionCheckpoint.Start)))
             await live.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")));
 
+        // Act
         await using (var batch =
                      await store.BeginAsync(new ProjectionBatchContext(rebuild, ProjectionCheckpoint.Start)))
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("7")));
 
+        // Assert
         Assert.Equal(new ProjectionCheckpoint(new EventCursor("2")), await store.LoadCheckpointAsync(Identity));
         Assert.Equal(new ProjectionCheckpoint(new EventCursor("7")), await store.LoadCheckpointAsync(rebuild));
     }
@@ -332,11 +372,15 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldRejectASecondBatchWhileOneIsOpen()
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
+
+        // Act
         await using var batch =
             await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)));
 
@@ -351,17 +395,20 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldAcceptAnotherBatchAfterThePreviousOneIsDisposed()
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
         await using (var first =
                      await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
             await first.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
 
+        // Act
         await using (var second =
                      await store.BeginAsync(new ProjectionBatchContext(Identity,
                          new ProjectionCheckpoint(new EventCursor("1")))))
             await second.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")));
 
+        // Assert
         Assert.Equal(2, client.Transactions.Count);
         Assert.Equal(new ProjectionCheckpoint(new EventCursor("2")), await store.LoadCheckpointAsync(Identity));
     }
@@ -384,14 +431,16 @@ public sealed class FitzKvProjectionStoreTests
     [InlineData("kv://portia/state/check points")]
     public void ShouldRejectMissingClientOrMalformedRoute(string? route)
     {
-        if (route is null)
-        {
-            _ = Assert.Throws<ArgumentNullException>(() => new TotalsRepository(null!, "kv://portia/state/orders"));
-        }
-        else
-        {
-            _ = Assert.Throws<ArgumentException>(() => new TotalsRepository(new FakeKvClient(), route));
-        }
+        // Arrange
+        var expected = route is null ? typeof(ArgumentNullException) : typeof(ArgumentException);
+
+        // Act
+        var exception = Record.Exception(() => route is null
+            ? new TotalsRepository(null!, "kv://portia/state/orders")
+            : new TotalsRepository(new FakeKvClient(), route));
+
+        // Assert
+        Assert.IsType(expected, exception);
     }
 
     /// <summary>
@@ -403,9 +452,13 @@ public sealed class FitzKvProjectionStoreTests
     [InlineData(true)]
     public async Task ShouldRejectMissingArgumentBeforeOpeningATransaction(bool beginning)
     {
+        // Arrange
         var client = new FakeKvClient();
+
+        // Act
         var store = new TotalsRepository(client, "kv://portia/state/orders");
 
+        // Assert
         _ = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
         {
             if (beginning)
@@ -429,6 +482,7 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldRouteEachWorkloadToItsOwnFitzKvResource()
     {
+        // Arrange
         var client = new FakeKvClient();
         CheckpointIdentity[] workloads =
         [
@@ -445,7 +499,10 @@ public sealed class FitzKvProjectionStoreTests
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
         }
 
+        // Act
         var routes = client.Transactions.Select(tx => tx.Route).Distinct().ToArray();
+
+        // Assert
         Assert.Equal(workloads.Length, routes.Length);
         Assert.All(routes, route => Assert.StartsWith("kv://portia/state/orders-", route, StringComparison.Ordinal));
     }
@@ -457,15 +514,23 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldBeginOneTenantsBatchWhileAnotherTenantsBatchIsOpen()
     {
+        // Arrange
         var client = new FakeKvClient();
         var tenantA = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-a", "orders"));
         var tenantB = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-b", "orders"));
         await using var open = await new TotalsRepository(client, "kv://portia/state/orders")
             .BeginAsync(new ProjectionBatchContext(tenantA, ProjectionCheckpoint.Start));
 
-        await using var other = await new TotalsRepository(client, "kv://portia/state/orders")
-            .BeginAsync(new ProjectionBatchContext(tenantB, ProjectionCheckpoint.Start));
-        await other.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await using var other = await new TotalsRepository(client, "kv://portia/state/orders")
+                .BeginAsync(new ProjectionBatchContext(tenantB, ProjectionCheckpoint.Start));
+            await other.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+        });
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>
@@ -476,6 +541,7 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldReadWhereTheProjectorWroteWithoutTakingItsWriteLock()
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
         var identity = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-a", "orders"));
@@ -485,8 +551,10 @@ public sealed class FitzKvProjectionStoreTests
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
         }
 
+        // Act
         var total = await store.ReadTotalAsync("tenant-a", "widgets");
 
+        // Assert
         Assert.Equal("12", total);
         Assert.Equal(client.Transactions[0].Route, client.LastTransaction.Route);
         Assert.Equal(KvMode.ReadOnly, client.LastTransaction.Mode);
@@ -499,6 +567,7 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldReadEachRealmFromItsOwnResource()
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
         var tenantB = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-b", "orders"));
@@ -507,8 +576,11 @@ public sealed class FitzKvProjectionStoreTests
 
         _ = await store.ReadTotalAsync("tenant-a", "widgets");
         var tenantARoute = client.LastTransaction.Route;
+
+        // Act
         _ = await store.ReadTotalAsync("tenant-b", "widgets");
 
+        // Assert
         Assert.NotEqual(client.Transactions[0].Route, tenantARoute);
         Assert.Equal(client.Transactions[0].Route, client.LastTransaction.Route);
     }
@@ -522,10 +594,14 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldRejectAQueryReadWhileABatchIsOpen()
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
+
+        // Act
         await using var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.ReadTotalAsync("tenant", "widgets"));
 
@@ -544,10 +620,14 @@ public sealed class FitzKvProjectionStoreTests
     [InlineData(true)]
     public async Task ShouldRejectAWorkloadForAnotherProjector(bool beginning)
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
+
+        // Act
         var other = new CheckpointIdentity("Shop.OrdersProjector", EventStreamPattern.ForPattern("tenant", "orders"));
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             if (beginning)
@@ -569,14 +649,21 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldRejectBlankComponentNameOrRealm()
     {
-        _ = Assert.Throws<ArgumentException>(() =>
-            new TotalsRepository(new FakeKvClient(), "kv://portia/state/orders", " "));
-        _ = Assert.Throws<ArgumentNullException>(() =>
-            new TotalsRepository(new FakeKvClient(), "kv://portia/state/orders", null!));
-
+        // Arrange
         var client = new FakeKvClient();
-        _ = await Assert.ThrowsAsync<ArgumentException>(async () =>
+
+        // Act
+        var blank = Record.Exception(() =>
+            new TotalsRepository(new FakeKvClient(), "kv://portia/state/orders", " "));
+        var missing = Record.Exception(() =>
+            new TotalsRepository(new FakeKvClient(), "kv://portia/state/orders", null!));
+        var read = await Record.ExceptionAsync(async () =>
             await new TotalsRepository(client, "kv://portia/state/orders").ReadTotalAsync(" ", "widgets"));
+
+        // Assert
+        _ = Assert.IsType<ArgumentException>(blank);
+        _ = Assert.IsType<ArgumentNullException>(missing);
+        _ = Assert.IsType<ArgumentException>(read);
         Assert.Empty(client.Transactions);
     }
 

@@ -7,12 +7,15 @@ public sealed class CassieProjectionActivityGateTests
     [Fact]
     public async Task ShouldWaitForOpenReadConnectionsBeforeStartingBatch()
     {
+        // Arrange
         var activity = new CassieProjectionActivityGate();
         var firstRead = activity.EnterRead();
         var secondRead = activity.EnterRead();
 
+        // Act
         var begin = activity.EnterBatchAsync(default).AsTask();
 
+        // Assert
         Assert.False(begin.IsCompleted);
         Assert.Throws<NotSupportedException>(() => activity.EnterRead());
         firstRead.Dispose();

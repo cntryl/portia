@@ -13,6 +13,7 @@ public sealed class DomainEventCatalogShapeTests
     [Fact]
     public void ShouldNotEmitCatalogRegistrationForAGenericDomainEvent()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
 
@@ -23,8 +24,10 @@ public sealed class DomainEventCatalogShapeTests
                               public sealed record ClosedEvent : DomainEvent;
                               """;
 
+        // Act
         var generated = GeneratorCompilation.GeneratedSource(source, new DomainEventCatalogGenerator());
 
+        // Assert
         Assert.Contains("ClosedEvent", generated, StringComparison.Ordinal);
         Assert.DoesNotContain("GenericEvent", generated, StringComparison.Ordinal);
     }

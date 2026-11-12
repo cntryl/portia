@@ -10,10 +10,15 @@ public sealed partial class OperationalProjectionTests
     [Fact]
     public async Task ShouldResumeConfirmedProjectionWithoutReplayingCleanupFailure()
     {
+        // Arrange
         var journal = new MemoryOperationalStore();
         var native = new NativeStore { FailDispose = true };
         var session = await SessionAsync(journal, ProjectionCheckpoint.Start);
+
+        // Act
         var events = await OperationalExecutionTests.EventsAsync();
+
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events)
         { Operations = session }.RunAsync(new ProbeProjector(native), ProjectionCheckpoint.Start).AsTask());
         Assert.Equal(ProcessorFailureStage.Disposing, failure.Stage);
@@ -37,6 +42,7 @@ public sealed partial class OperationalProjectionTests
     [Fact]
     public async Task ShouldReloadAuthoritativeProgressAfterLostProjectionConfirmation()
     {
+        // Arrange
         var journal = new MemoryOperationalStore();
         var native = new NativeStore();
         var committed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -46,7 +52,11 @@ public sealed partial class OperationalProjectionTests
         using var interrupted = new CancellationTokenSource();
         var pending = new ProjectorRunner(events) { Operations = session }
             .RunAsync(new ProbeProjector(native), ProjectionCheckpoint.Start, ct: interrupted.Token).AsTask();
+
+        // Act
         await committed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Assert
         Assert.Equal(0, native.OpenTransactions);
         Assert.False(pending.IsCompleted);
         await interrupted.CancelAsync();

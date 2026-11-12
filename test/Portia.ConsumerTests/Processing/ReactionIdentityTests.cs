@@ -9,6 +9,7 @@ public sealed class ReactionIdentityTests
     [InlineData(true)]
     public async Task TriggerActorDoesNotAuthorizeReactionAndSystemIdentityIsConfigurable(bool userPrincipal)
     {
+        // Arrange
         var store = new InMemoryEventStore();
         var id = Uuid.CreateVersion4();
         var source = new Deposited(1);
@@ -23,7 +24,11 @@ public sealed class ReactionIdentityTests
             : RequestActor.CreateSystem("billing", "services");
         var reactor = new RecordingReactor();
         var clock = new Clock();
+
+        // Act
         var runner = new ReactorRunner(store, new PrincipalProvider(actor), clock);
+
+        // Assert
         if (userPrincipal)
         {
             _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>

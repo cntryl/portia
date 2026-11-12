@@ -20,11 +20,14 @@ public sealed class PortiaTelemetryLoggerFallbackTests
     [Fact]
     public void ShouldLogFaultWhenNoActivityListenerIsAttached()
     {
+        // Arrange
         var logger = new CapturingLogger();
         var exception = new InvalidOperationException("boom");
 
+        // Act
         PortiaTelemetry.RecordRunnerFault("TestRunner", RunnerFaultStage.Execution, exception, logger);
 
+        // Assert
         var entry = Assert.Single(logger.Entries);
         Assert.Equal(LogLevel.Error, entry.Level);
         Assert.Equal(1002, entry.EventId.Id);
@@ -46,13 +49,17 @@ public sealed class PortiaTelemetryLoggerFallbackTests
     [Fact]
     public void ShouldUseStableEventIdsAndLevelsWithoutRoutesOrBusinessMessages()
     {
+        // Arrange
         var logger = new CapturingLogger();
 
         PortiaTelemetry.RecordFleetAssignment("worker-secret", "lease://secret/partition", true, logger);
         PortiaTelemetry.RecordWorkload("test.projector", "tenant", true, logger);
         PortiaTelemetry.RecordLostDelivery("test.request", "notice", logger);
+
+        // Act
         PortiaTelemetry.RecordTerminalDelivery("test.request", "queue", logger);
 
+        // Assert
         Assert.Equal(
         [
             (1001, LogLevel.Debug),

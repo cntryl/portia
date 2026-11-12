@@ -12,6 +12,7 @@ public sealed class FitzCombinedWorkerFailureTests(FitzBrokerFixture broker)
     [InlineData(true)]
     public async Task ShouldFaultCombinedHostWhenTerminalObserverFails(bool withHealthyNoticeListener)
     {
+        // Arrange
         await using var client = await broker.CreateClientAsync();
         var resource = "pass2-host-fatal-" + Uuid.CreateVersion4();
         var descriptor = new RequestTransportRegistration(typeof(UniversalAction),
@@ -41,10 +42,13 @@ public sealed class FitzCombinedWorkerFailureTests(FitzBrokerFixture broker)
             provider.GetRequiredService<IServiceScopeFactory>(),
             provider.GetRequiredService<IServiceProviderIsService>(), [], catalog, serializer);
         var publisher = new FitzRequestQueuePublisher(client.Queue, serializer, catalog);
+
         // Missing credentials exercise an ordinary terminal actor-validation failure. The observer's
         // exception must escape to the host, regardless of other listeners running alongside it.
+        // Act
         await publisher.EnqueueAsync(new UniversalAction(7), RequestRouteValues.None, null);
 
+        // Assert
         try
         {
             await worker.StartAsync(default);

@@ -30,6 +30,7 @@ public sealed class McpLifecycleQualificationTests
     [InlineData("prompt", "2025-11-25", true)]
     public async Task ShouldCancelMinimalSdkStdioHandler(string primitive, string revision, bool explicitNotification)
     {
+        // Arrange
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var evidence = Path.Combine(Path.GetTempPath(), $"portia-sdk-cancellation-{primitive}-{revision}-{explicitNotification}-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(evidence);
@@ -48,7 +49,11 @@ public sealed class McpLifecycleQualificationTests
         var request = File.ReadAllLines(Path.Combine(evidence, "ingress.tsv"))
             .Select(line => line.Split('\t')).Single(fields => fields.Length == 3 && fields[0] == "request"
                 && fields[2] is "tools/call" or "resources/read" or "prompts/get");
+
+        // Act
         await cancellation.CancelAsync();
+
+        // Assert
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await operation);
         if (explicitNotification)
             await client.SendMessageAsync(new JsonRpcNotification
@@ -91,11 +96,16 @@ public sealed class McpLifecycleQualificationTests
     [Fact]
     public async Task ShouldPreserveHttpConfigurationWhileOwningOperationScopes()
     {
+        // Arrange
         var services = new ServiceCollection();
         services.AddLogging();
         using var cancellation = new CancellationTokenSource();
         var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+
+        // Act
         var calls = 0;
+
+        // Assert
         _ = QualifiedApplication.Add(services).AddMcpTool<QualifiedRead>().AddMcpHttp(options =>
             options.ConfigureSessionOptions = (actualContext, serverOptions, token) =>
             {
@@ -146,6 +156,7 @@ public sealed class McpLifecycleQualificationTests
     public async Task ShouldPropagateCancellationAndSanitizeDeadlinesOnBothTransports(string transportName,
         string primitive, bool deadline, bool explicitNotification, string revision)
     {
+        // Arrange
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var token = timeout.Token;
         var builder = WebApplication.CreateBuilder();
@@ -174,7 +185,11 @@ public sealed class McpLifecycleQualificationTests
         await using var client = await ConnectAsync();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
         var operation = InvokeWaitAsync(cancellation.Token);
+
+        // Act
         await PollAsync(async () => (await StateAsync()).WaitStarted == 1);
+
+        // Assert
         if (deadline)
         {
             var error = await Record.ExceptionAsync(async () => await operation);

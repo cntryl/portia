@@ -28,14 +28,18 @@ public sealed class RequestDispatchAllocationTests
     [OptimizedBuildFact]
     public void ShouldStayWithinMeasuredSteadyStateDispatchBudgets()
     {
+        // Arrange
         using var host = TestRequestBus.Create();
         var context = host.Bus.CreateContext(new ClaimsPrincipal(new ClaimsIdentity()));
         var action = new AllocationProbeAction();
         var query = new AllocationProbeQuery();
 
         var noResultBytes = Measure(() => host.Bus.DispatchAsync(action, context));
+
+        // Act
         var resultBytes = Measure(() => host.Bus.DispatchAsync(query, context));
 
+        // Assert
         Assert.True(noResultBytes <= BudgetBytes,
             $"No-result dispatch allocated {noResultBytes} B/call against a {BudgetBytes} B/call budget.");
         Assert.True(resultBytes <= BudgetBytes,

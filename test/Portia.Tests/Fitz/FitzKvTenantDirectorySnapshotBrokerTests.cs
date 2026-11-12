@@ -9,13 +9,17 @@ public sealed class FitzKvTenantDirectorySnapshotBrokerTests(FitzBrokerFixture b
     [Fact]
     public async Task ShouldRoundTripAndIsolateLifecyclePatterns()
     {
+        // Arrange
         await using var client = await broker.CreateClientAsync();
         var route = "kv://portia-integration/tenants/s" + Uuid.CreateVersion4().ToGuid().ToString("N");
         var pattern = EventStreamPattern.ForPattern("global", "tenants", "registry");
         var other = EventStreamPattern.ForPattern("global", "tenants", "other");
         var saved = new TenantDirectorySnapshot(new EventCursor("42"), [new TenantId("acme")]);
+
+        // Act
         var writer = new FitzKvTenantDirectorySnapshotStore(client.Kv, route);
 
+        // Assert
         Assert.True(await writer.TrySaveAsync(pattern, null, saved));
 
         var reader = new FitzKvTenantDirectorySnapshotStore(client.Kv, route);

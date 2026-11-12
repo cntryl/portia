@@ -9,6 +9,7 @@ public sealed class ComponentCompilationTests
     [InlineData(false, true, "class")]
     public async Task GlobalNestedAndPartialComponentsCompileAndExecute(bool nested, bool partial, string containerKind)
     {
+        // Arrange
         var components = """
                          public partial class Watcher : Reactor, IReactorHandler<Ev>
                          {
@@ -74,7 +75,11 @@ public sealed class ComponentCompilationTests
                                                                          }
                                                                          """,
             new ProjectorReactorEventDispatcherGenerator());
+
+        // Act
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<int>>>();
+
+        // Assert
         Assert.Equal(2, await run());
     }
 }

@@ -29,6 +29,7 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
     [InlineData("yml", true)]
     public async Task ShouldDescribeTenantCollectionElementsAsStrings(string format, bool dictionary)
     {
+        // Arrange
         var builder = CreateBuilder();
         _ = builder.Services.AddPortia().AddHttp()
             .AddRequestHandler<OpenApiTenantCollectionHandler>();
@@ -42,7 +43,11 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
             """{"payload":{"items":["acme"],"values":{"first":"globex"},"nullable_items":["acme",null],"nullable_values":{"first":"globex","second":null}}}""",
             Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
+
+        // Act
         using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        // Assert
         Assert.Equal("acme", actual.RootElement.GetProperty("items")[0].GetString());
         Assert.Equal("globex", actual.RootElement.GetProperty("values").GetProperty("first").GetString());
         Assert.Equal(JsonValueKind.Null, actual.RootElement.GetProperty("nullable_items")[1].ValueKind);
@@ -71,6 +76,7 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
     [InlineData("yml")]
     public async Task ShouldDescribeConvertedDictionaryValuesGivenDictionaryContract(string format)
     {
+        // Arrange
         var builder = CreateBuilder();
         _ = builder.Services.AddPortia().AddHttp(options =>
                 options.OpenApiSchemaType = type => type == typeof(OpenApiTraversalCollection)
@@ -87,7 +93,11 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
             """{"payload":{"first":[{"item_id":"root","next":{"item_id":"child"}}],"second":[{"item_id":"sibling"}]}}""",
             Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
+
+        // Act
         using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        // Assert
         Assert.Equal("child", actual.RootElement.GetProperty("first")[0].GetProperty("next").GetProperty("item_id").GetString());
         Assert.Equal("sibling", actual.RootElement.GetProperty("second")[0].GetProperty("item_id").GetString());
 
@@ -108,6 +118,7 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
     [InlineData("yml")]
     public async Task ShouldDescribeConvertedVariantPropertiesGivenPolymorphicContract(string format)
     {
+        // Arrange
         var builder = CreateBuilder();
         _ = builder.Services.AddPortia().AddHttp(options =>
                 options.OpenApiSchemaType = type => type == typeof(OpenApiTraversalCollection)
@@ -124,7 +135,11 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
             """{"payload":{"kind":"collection","items":[{"item_id":"variant","next":{"item_id":"nested"}}],"groups":{"first":[{"item_id":"group"}]},"batches":[[{"item_id":"batch"}]]}}""",
             Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
+
+        // Act
         using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        // Assert
         Assert.Equal("collection", actual.RootElement.GetProperty("kind").GetString());
         Assert.Equal("nested", actual.RootElement.GetProperty("items")[0].GetProperty("next").GetProperty("item_id").GetString());
         Assert.Equal("group", actual.RootElement.GetProperty("groups").GetProperty("first")[0].GetProperty("item_id").GetString());
@@ -156,6 +171,7 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
     [InlineData("yml")]
     public async Task ShouldDescribeNullableConvertedValuesGivenUnderlyingTypeMapping(string format)
     {
+        // Arrange
         var builder = CreateBuilder();
         _ = builder.Services.AddPortia().AddHttp(options =>
                 options.OpenApiSchemaType = type => type == typeof(OpenApiTraversalCount) ? typeof(long) : null)
@@ -164,8 +180,11 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaPost<OpenApiNullableTraversalRequest, OpenApiTraversalCounts>("/nullable-traversal");
         await _app.StartAsync();
+
+        // Act
         using var client = _app.GetTestClient();
 
+        // Assert
         foreach (var optional in new[] { "43", "null" })
         {
             using var response = await client.PostAsync("/nullable-traversal", new StringContent(
@@ -203,6 +222,7 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
     [InlineData("yml")]
     public async Task ShouldDescribeRecursiveConvertedArraysGivenEscapedPropertyName(string format)
     {
+        // Arrange
         var builder = CreateBuilder();
         _ = builder.Services.AddPortia().AddHttp(options =>
             {
@@ -224,7 +244,11 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
         using var response = await client.PostAsync("/recursive-traversal", new StringContent(
             """{"payload":{"a~/b":[[],[[]],null]}}""", Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
+
+        // Act
         using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        // Assert
         Assert.Equal("[[],[[]],null]", actual.RootElement.GetRawText());
 
         var serialized = await client.GetStringAsync("/openapi/v1." + format);

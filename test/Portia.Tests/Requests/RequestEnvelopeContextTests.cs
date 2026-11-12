@@ -14,12 +14,17 @@ public sealed class RequestEnvelopeContextTests
     [Fact]
     public void ShouldPreserveLogicalIdentityWithoutReceiverStateWhenDeserializingEnvelope()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
         var parent = new RequestContext<EnvelopeCommand>(new EnvelopeCommand(1), RequestActor.System);
         var metadata = RequestMetadata.FromParent(parent);
         var bytes = serializer.Serialize(new EnvelopeCommand(2), "opaque-token", metadata, null);
         var first = serializer.DeserializeEnvelope(bytes);
+
+        // Act
         var second = serializer.DeserializeEnvelope(bytes);
+
+        // Assert
         Assert.Equal(metadata, first.Metadata);
         Assert.Equal(first.Metadata, second.Metadata);
         Assert.Equal("opaque-token", first.ActorToken);
@@ -36,11 +41,16 @@ public sealed class RequestEnvelopeContextTests
     [Fact]
     public void ShouldRoundTripOnlyW3CFieldsGivenTraceContextWhenSerializingEnvelope()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
         var trace = new RequestTraceContext("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", "vendor=value");
 
         var bytes = serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), trace);
+
+        // Act
         var envelope = serializer.DeserializeEnvelope(bytes);
+
+        // Assert
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(bytes.Span));
 
         Assert.Equal(trace, envelope.TraceContext);
@@ -56,13 +66,19 @@ public sealed class RequestEnvelopeContextTests
     [Fact]
     public void ShouldRejectEnvelopeWithoutVersionOrMetadata()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(
             serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), null).Span));
         _ = json.Remove("metadata");
         _ = json.Remove("version");
-        _ = Assert.Throws<InvalidOperationException>(() =>
+
+        // Act
+        var exception = Record.Exception(() =>
             serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes(json.ToJsonString())));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(exception);
     }
 
     /// <summary>
@@ -77,6 +93,7 @@ public sealed class RequestEnvelopeContextTests
     [InlineData(true)]
     public void ShouldRejectUnsupportedEnvelopeVersionOrEmptyRequestIdentity(bool unsupportedVersion)
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(
             serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), null).Span));
@@ -90,8 +107,13 @@ public sealed class RequestEnvelopeContextTests
             metadata["request_id"] = Uuid.Empty.ToString();
         }
 
-        _ = Assert.ThrowsAny<Exception>(() =>
+
+        // Act
+        var exception = Record.Exception(() =>
             serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes(json.ToJsonString())));
+
+        // Assert
+        Assert.NotNull(exception);
     }
 
     /// <summary>A request used only by these envelope tests.</summary>

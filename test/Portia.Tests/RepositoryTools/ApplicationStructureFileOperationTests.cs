@@ -13,6 +13,7 @@ public sealed class ApplicationStructureFileOperationTests
     [Fact]
     public void ShouldRegisterOnlyTheFileCreatedWithCreateNew()
     {
+        // Arrange
         var directory = CreateTemporaryDirectory();
         try
         {
@@ -22,9 +23,11 @@ public sealed class ApplicationStructureFileOperationTests
             var candidates = new Queue<string>([collisionPath, createdPath]);
             var registeredPaths = new List<string>();
 
+            // Act
             using (var stream = ApplicationStructureCommand.CreateStagedFile(candidates.Dequeue, registeredPaths.Add))
                 stream.Write([0x2A]);
 
+            // Assert
             Assert.Equal([createdPath], registeredPaths);
             Assert.Equal("owned by another process", File.ReadAllText(collisionPath));
             Assert.Equal(new byte[] { 0x2A }, File.ReadAllBytes(createdPath));
@@ -39,6 +42,7 @@ public sealed class ApplicationStructureFileOperationTests
     [Fact]
     public void ShouldMoveToAnotherBackupPathWhenAConcurrentCollisionAppears()
     {
+        // Arrange
         var directory = CreateTemporaryDirectory();
         try
         {
@@ -49,8 +53,10 @@ public sealed class ApplicationStructureFileOperationTests
             File.WriteAllText(collisionPath, "owned by another process");
             var candidates = new Queue<string>([collisionPath, backupPath]);
 
+            // Act
             var movedPath = ApplicationStructureCommand.MoveToUniqueBackup(sourcePath, candidates.Dequeue);
 
+            // Assert
             Assert.Equal(backupPath, movedPath);
             Assert.False(File.Exists(sourcePath));
             Assert.Equal("original source", File.ReadAllText(backupPath));

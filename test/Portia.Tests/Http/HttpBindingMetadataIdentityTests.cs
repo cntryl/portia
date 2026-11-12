@@ -13,6 +13,7 @@ public sealed class HttpBindingMetadataIdentityTests
     [Fact]
     public void ShouldPreserveConstructorMemberIdentityGivenRenamedJsonProperties()
     {
+        // Arrange
         var resolver = new DefaultJsonTypeInfoResolver();
         resolver.Modifiers.Add(info =>
         {
@@ -26,9 +27,12 @@ public sealed class HttpBindingMetadataIdentityTests
 
         var first = PortiaHttpBinding.ReadBody<ReorderedBinding, int>(body.RootElement, options,
             0, "A", "a", false, false, 0);
+
+        // Act
         var second = PortiaHttpBinding.ReadBody<ReorderedBinding, int>(body.RootElement, options,
             1, "B", "b", false, false, 0);
 
+        // Assert
         Assert.Equal(11, first);
         Assert.Equal(22, second);
     }
@@ -37,6 +41,7 @@ public sealed class HttpBindingMetadataIdentityTests
     [Fact]
     public void ShouldUseMemberIdentityGivenSwappedWireNames()
     {
+        // Arrange
         var resolver = new DefaultJsonTypeInfoResolver();
         resolver.Modifiers.Add(info =>
         {
@@ -45,8 +50,11 @@ public sealed class HttpBindingMetadataIdentityTests
                     property.Name = property.Name == "a" ? "b" : "a";
         });
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = resolver };
+
+        // Act
         using var body = JsonDocument.Parse("{\"a\":22,\"b\":11}");
 
+        // Assert
         Assert.Equal(11, PortiaHttpBinding.ReadBody<ReorderedBinding, int>(body.RootElement, options,
             0, "a", "a", false, false, 0));
         Assert.Equal(22, PortiaHttpBinding.ReadBody<ReorderedBinding, int>(body.RootElement, options,
@@ -57,6 +65,7 @@ public sealed class HttpBindingMetadataIdentityTests
     [Fact]
     public void ShouldUseDeclaredMemberIdentityGivenDifferentJsonConstructorOrder()
     {
+        // Arrange
         var resolver = new DefaultJsonTypeInfoResolver();
         resolver.Modifiers.Add(info =>
         {
@@ -65,8 +74,11 @@ public sealed class HttpBindingMetadataIdentityTests
                     property.Name = "wire_" + property.Name;
         });
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = resolver };
+
+        // Act
         using var body = JsonDocument.Parse("{\"wire_a\":11}");
 
+        // Assert
         Assert.True(PortiaHttpBinding.HasBodyMember<AlternateConstructorBinding, long>(body.RootElement, options,
             0, "a", "a"));
         Assert.Equal(11L, PortiaHttpBinding.ReadBody<AlternateConstructorBinding, long>(body.RootElement, options,
@@ -79,9 +91,13 @@ public sealed class HttpBindingMetadataIdentityTests
     [Fact]
     public void ShouldPreserveLegacyBodyLookupGivenDifferentJsonConstructorOrder()
     {
+        // Arrange
         var options = RenamedLegacyOptions<LegacyConstructorBinding>();
+
+        // Act
         using var body = JsonDocument.Parse("{\"wire_a\":11}");
 
+        // Assert
         Assert.True(PortiaHttpBinding.HasBodyMember<LegacyConstructorBinding, int>(body.RootElement, options,
             0, "a"));
     }
@@ -90,9 +106,13 @@ public sealed class HttpBindingMetadataIdentityTests
     [Fact]
     public void ShouldRejectLegacyRoutedBodyConflictGivenDifferentJsonConstructorOrder()
     {
+        // Arrange
         var options = RenamedLegacyOptions<LegacyConstructorBinding>();
+
+        // Act
         using var body = JsonDocument.Parse("{\"wire_a\":999,\"wire_b\":11}");
 
+        // Assert
         Assert.Throws<BadHttpRequestException>(() =>
             PortiaHttpBinding.ValidateRoutedBody<LegacyConstructorBinding, int>(body.RootElement, options,
                 0, "a", 11));
@@ -102,10 +122,14 @@ public sealed class HttpBindingMetadataIdentityTests
     [Fact]
     public void ShouldPreserveLegacyAliasAndConverterGivenRenamedMetadata()
     {
+        // Arrange
         var options = RenamedLegacyOptions<AliasedLegacyBinding>();
         using var body = JsonDocument.Parse("{\"wire_alias_a\":\"0x10\"}");
+
+        // Act
         using var conflict = JsonDocument.Parse("{\"wire_alias_a\":\"0x20\"}");
 
+        // Assert
         Assert.True(PortiaHttpBinding.HasBodyMember<AliasedLegacyBinding, int>(body.RootElement, options,
             0, "alias_a"));
         PortiaHttpBinding.ValidateRoutedBody<AliasedLegacyBinding, int>(body.RootElement, options,
@@ -119,6 +143,7 @@ public sealed class HttpBindingMetadataIdentityTests
     [Fact]
     public void ShouldRejectUnidentifiableConstructorMemberGivenReplacedMetadata()
     {
+        // Arrange
         var resolver = new DefaultJsonTypeInfoResolver();
         resolver.Modifiers.Add(info =>
         {
@@ -128,8 +153,11 @@ public sealed class HttpBindingMetadataIdentityTests
             info.Properties.Add(info.CreateJsonPropertyInfo(typeof(int), "unrelated"));
         });
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = resolver };
+
+        // Act
         using var body = JsonDocument.Parse("{\"unrelated\":22}");
 
+        // Assert
         Assert.Throws<InvalidOperationException>(() => PortiaHttpBinding.ReadBody<ReorderedBinding, int>(
             body.RootElement, options, 0, "a", "a", false, false, 0));
     }
@@ -138,6 +166,7 @@ public sealed class HttpBindingMetadataIdentityTests
     [Fact]
     public void ShouldUseDeclaredMemberIdentityGivenParameterlessJsonConstructor()
     {
+        // Arrange
         var resolver = new DefaultJsonTypeInfoResolver();
         resolver.Modifiers.Add(info =>
         {
@@ -146,8 +175,11 @@ public sealed class HttpBindingMetadataIdentityTests
                     property.Name = "wire_" + property.Name;
         });
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = resolver };
+
+        // Act
         using var body = JsonDocument.Parse("{\"wire_a\":11,\"wire_b\":22}");
 
+        // Assert
         Assert.Equal(11, PortiaHttpBinding.ReadBody<ParameterlessJsonBinding, int>(body.RootElement, options,
             0, "a", "a", false, false, 0));
         Assert.Equal(22, PortiaHttpBinding.ReadBody<ParameterlessJsonBinding, int>(body.RootElement, options,
@@ -158,9 +190,13 @@ public sealed class HttpBindingMetadataIdentityTests
     [Fact]
     public void ShouldPreserveMemberConverterGivenSourceGeneratedReorderedMetadata()
     {
+        // Arrange
         var options = HttpMemberMetadataJsonContext.Default.Options;
+
+        // Act
         using var body = JsonDocument.Parse("{\"first\":\"0x10\",\"second\":32}");
 
+        // Assert
         Assert.Equal(16, PortiaHttpBinding.ReadBody<HttpMemberMetadataBinding, int>(body.RootElement, options,
             0, "First", "first", false, false, 0));
         Assert.Equal(32, PortiaHttpBinding.ReadBody<HttpMemberMetadataBinding, int>(body.RootElement, options,

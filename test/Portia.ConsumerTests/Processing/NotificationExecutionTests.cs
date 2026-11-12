@@ -12,6 +12,7 @@ public sealed class NotificationExecutionTests
     [Fact]
     public async Task EnsuredScheduleDefinitionsAreStableAndContainNoTraceContext()
     {
+        // Arrange
         static async Task<(string Route, byte[] Body)> EnsureAsync()
         {
             var wire = new Wire();
@@ -23,8 +24,11 @@ public sealed class NotificationExecutionTests
         }
 
         var first = await EnsureAsync();
+
+        // Act
         var second = await EnsureAsync();
 
+        // Assert
         Assert.Equal("schedule://context/work/actual/execute", first.Route);
         Assert.Equal(first.Body, second.Body);
         Assert.DoesNotContain("trace", Encoding.UTF8.GetString(first.Body), StringComparison.OrdinalIgnoreCase);
@@ -42,13 +46,18 @@ public sealed class NotificationExecutionTests
     [InlineData(true)]
     public async Task NotificationDispatchUsesConcreteRouteAndScheduleFiringsHaveIndependentIdentities(bool scheduled)
     {
+        // Arrange
         var serializer = ConsumerJson.CreateSerializer();
         var parent =
             new RequestContext<BrokerExecutionContextTests.Command>(new BrokerExecutionContextTests.Command(1),
                 RequestActor.System);
         var routeValues = new RequestRouteValues(Resource: "actual");
         var wire = new Wire();
+
+        // Act
         IRequestNotificationConsumer consumer;
+
+        // Assert
         if (scheduled)
         {
             _ = await new FitzRequestScheduler(wire, serializer).ScheduleAsync(
@@ -102,10 +111,14 @@ public sealed class NotificationExecutionTests
     [Fact]
     public async Task SchedulerRejectsUserIdentityBeforePersistingAnything()
     {
+        // Arrange
         var wire = new Wire();
+
+        // Act
         var user = new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim(ClaimTypes.NameIdentifier, "alice", ClaimValueTypes.String, "accounts")], "jwt"));
 
+        // Assert
         _ = await Assert.ThrowsAsync<ArgumentException>(() =>
             new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer())
                 .ScheduleAsync(new BrokerExecutionContextTests.Command(2), new RequestScheduleSpec("0 0 * * *"),
@@ -117,6 +130,7 @@ public sealed class NotificationExecutionTests
     [Fact]
     public async Task FiredSchedulePreservesStableWireName()
     {
+        // Arrange
         var serializer = ConsumerJson.CreateSerializer();
         var wire = new Wire();
         _ = await new FitzRequestScheduler(wire, serializer).ScheduleAsync(
@@ -127,8 +141,11 @@ public sealed class NotificationExecutionTests
         var consumer = new FitzScheduledRequestConsumer(
             wire, serializer, "schedule://context/work/*/execute", ConsumerJson.Catalog(),
             new AllowScheduledRequestActorValidator());
+
+        // Act
         await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
 
+        // Assert
         Assert.True(await enumerator.MoveNextAsync());
         Assert.Equal("consumer.context.command", enumerator.Current.Name);
     }
@@ -141,6 +158,7 @@ public sealed class NotificationExecutionTests
     [InlineData(1, "scheduler", "   ")]
     public async Task FiredScheduleWithoutACompleteSystemIdentityIsRejected(int version, string subject, string issuer)
     {
+        // Arrange
         var serializer = ConsumerJson.CreateSerializer();
         var wire = new Wire();
         var request = serializer.Serialize(new BrokerExecutionContextTests.Command(2), null,
@@ -149,16 +167,21 @@ public sealed class NotificationExecutionTests
             new { version, system_subject = subject, system_issuer = issuer, request_envelope = request.ToArray() }));
         var consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute",
             ConsumerJson.Catalog(), new AllowScheduledRequestActorValidator());
+
+        // Act
         await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+
 
         // The entry is dropped rather than dispatched, and dropping it does not end the
         // subscription; the recorded runner fault carries why (see FitzNotificationFaultTests).
+        // Assert
         Assert.False(await enumerator.MoveNextAsync());
     }
 
     [Fact]
     public async Task LegacyBearerTokenScheduleRequiresDrainAndRecreation()
     {
+        // Arrange
         var serializer = ConsumerJson.CreateSerializer();
         var wire = new Wire();
         await wire.PublishAsync("schedule://context/work/actual/execute",
@@ -166,10 +189,14 @@ public sealed class NotificationExecutionTests
                 RequestMetadata.Create(), null));
         var consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute",
             ConsumerJson.Catalog(), new AllowScheduledRequestActorValidator());
+
+        // Act
         await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+
 
         // A legacy entry is never dispatched, and one of them no longer stops every other
         // schedule on the route; FitzNotificationFaultTests covers the reported diagnostic.
+        // Assert
         Assert.False(await enumerator.MoveNextAsync());
     }
 
@@ -179,14 +206,17 @@ public sealed class NotificationExecutionTests
     public async Task DeliveryModeIsCarriedToTheBrokerUntranslated(RequestScheduleDeliveryMode requested,
         ScheduleDeliveryMode expected)
     {
+        // Arrange
         var wire = new Wire();
 
+        // Act
         var id = await new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).ScheduleAsync(
             new BrokerExecutionContextTests.Command(2),
             new RequestScheduleSpec("0 0 * * *", requested),
             new RequestRouteValues(Resource: "actual"),
             RequestActor.CreateSystem("scheduler"));
 
+        // Assert
         Assert.Equal(expected, wire.Mode);
         Assert.Equal("schedule", id);
     }
@@ -194,36 +224,45 @@ public sealed class NotificationExecutionTests
     [Fact]
     public async Task UndefinedDeliveryModeIsRejectedBeforePersistingAnything()
     {
+        // Arrange
         var wire = new Wire();
 
-        _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+        // Act
+        var error = await Record.ExceptionAsync(() =>
             new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).ScheduleAsync(
                 new BrokerExecutionContextTests.Command(2),
                 new RequestScheduleSpec("0 0 * * *", (RequestScheduleDeliveryMode)42),
                 new RequestRouteValues(Resource: "actual"),
                 RequestActor.CreateSystem("scheduler")).AsTask());
 
+        // Assert
+        _ = Assert.IsType<ArgumentOutOfRangeException>(error);
         Assert.True(wire.Body.IsEmpty);
     }
 
     [Fact]
     public async Task ScheduleWithoutABrokerIdentityFailsInsteadOfReturningNothingToCancelWith()
     {
+        // Arrange
         var wire = new Wire { ReturnNoIdentity = true };
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        // Act
+        var error = await Record.ExceptionAsync(() =>
             new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).ScheduleAsync(
                 new BrokerExecutionContextTests.Command(2),
                 new RequestScheduleSpec("0 0 * * *"),
                 new RequestRouteValues(Resource: "actual"),
                 RequestActor.CreateSystem("scheduler")).AsTask());
 
-        Assert.Contains("did not return an identity", error.Message, StringComparison.Ordinal);
+        // Assert
+        var invalid = Assert.IsType<InvalidOperationException>(error);
+        Assert.Contains("did not return an identity", invalid.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task CancellingAScheduleForwardsTheBrokerIdentityItWasCreatedWith()
     {
+        // Arrange
         var wire = new Wire();
         var scheduler = new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer());
         var id = await scheduler.ScheduleAsync(
@@ -232,8 +271,10 @@ public sealed class NotificationExecutionTests
             new RequestRouteValues(Resource: "actual"),
             RequestActor.CreateSystem("scheduler"));
 
+        // Act
         await scheduler.CancelAsync(id);
 
+        // Assert
         Assert.Equal(id, Assert.Single(wire.Cancellations));
     }
 
@@ -243,11 +284,15 @@ public sealed class NotificationExecutionTests
     [InlineData("   ")]
     public async Task CancellingWithoutAScheduleIdentityIsRejectedBeforeReachingTheBroker(string? scheduleId)
     {
+        // Arrange
         var wire = new Wire();
 
-        _ = await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+        // Act
+        var error = await Record.ExceptionAsync(() =>
             new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).CancelAsync(scheduleId!).AsTask());
 
+        // Assert
+        _ = Assert.IsAssignableFrom<ArgumentException>(error);
         Assert.Empty(wire.Cancellations);
     }
 

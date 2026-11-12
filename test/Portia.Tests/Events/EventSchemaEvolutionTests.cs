@@ -15,12 +15,15 @@ public sealed class EventSchemaEvolutionTests
     [Fact]
     public void ShouldRoundTripEventWithDefaultSchemaIdentity()
     {
+        // Arrange
         var serializer =
             TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed"));
         var original = Committed(new WidgetNamed("Sprocket"));
 
+        // Act
         var deserialized = serializer.Deserialize(serializer.Serialize(original));
 
+        // Assert
         var widget = Assert.IsType<WidgetNamed>(deserialized);
         Assert.Equal("Sprocket", widget.Name);
         Assert.Equal(original.Metadata.EventId, widget.Metadata.EventId);
@@ -34,6 +37,7 @@ public sealed class EventSchemaEvolutionTests
     [Fact]
     public void ShouldUpcastEventWhenOnlyLaterSchemaVersionIsRegistered()
     {
+        // Arrange
         var writer = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed"));
         var stored = writer.Serialize(Committed(new WidgetNamed("Sprocket")));
 
@@ -41,8 +45,10 @@ public sealed class EventSchemaEvolutionTests
             new DomainEventTypeCatalog().Register<WidgetRenamed>(2, "WidgetNamed"),
             [new WidgetNamedToRenamedUpcaster()]);
 
+        // Act
         var deserialized = reader.Deserialize(stored);
 
+        // Assert
         var widget = Assert.IsType<WidgetRenamed>(deserialized);
         Assert.Equal("Sprocket", widget.DisplayName);
     }
@@ -55,6 +61,7 @@ public sealed class EventSchemaEvolutionTests
     [Fact]
     public void ShouldResolveDirectlyWhenExactSchemaVersionIsStillRegistered()
     {
+        // Arrange
         var v1Writer =
             TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<OrderPlacedV1>(1, "OrderPlaced"));
         var v2Writer =
@@ -62,10 +69,12 @@ public sealed class EventSchemaEvolutionTests
         var storedV1 = v1Writer.Serialize(Committed(new OrderPlacedV1(100)));
         var storedV2 = v2Writer.Serialize(Committed(new OrderPlacedV2(100, "USD")));
 
+        // Act
         var reader = TestJson.DomainSerializer(
             new DomainEventTypeCatalog().Register<OrderPlacedV1>(1, "OrderPlaced")
                 .Register<OrderPlacedV2>(2, "OrderPlaced"));
 
+        // Assert
         var deserializedV1 = Assert.IsType<OrderPlacedV1>(reader.Deserialize(storedV1));
         var deserializedV2 = Assert.IsType<OrderPlacedV2>(reader.Deserialize(storedV2));
         Assert.Equal(100, deserializedV1.AmountCents);
@@ -80,11 +89,14 @@ public sealed class EventSchemaEvolutionTests
     [Fact]
     public void ShouldThrowWhenNoRegistrationOrUpcasterCanResolveStoredVersion()
     {
+        // Arrange
         var writer = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed"));
         var stored = writer.Serialize(Committed(new WidgetNamed("Sprocket")));
 
+        // Act
         var reader = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetRenamed>(2, "WidgetNamed"));
 
+        // Assert
         var exception = Assert.Throws<InvalidOperationException>(() => reader.Deserialize(stored));
         Assert.Contains("WidgetNamed", exception.Message, StringComparison.Ordinal);
     }
@@ -103,12 +115,15 @@ public sealed class EventSchemaEvolutionTests
     [Fact]
     public void ShouldValidateCompleteMultiHopChainWithoutExecutingUpcasters()
     {
+        // Arrange
         var first = new RecordingUpcaster("WidgetNamed", 1);
         var second = new RecordingUpcaster("WidgetNamed", 2);
 
+        // Act
         _ = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetRenamed>(3, "WidgetNamed"),
             [first, second]);
 
+        // Assert
         Assert.False(first.Executed);
         Assert.False(second.Executed);
     }
@@ -117,9 +132,13 @@ public sealed class EventSchemaEvolutionTests
     [Fact]
     public void ShouldReportAllMissingUpcasterTransitions()
     {
-        var exception = Assert.Throws<InvalidOperationException>(() => TestJson.DomainSerializer(
+        // Arrange
+        // Act
+        var thrown = Record.Exception(() => TestJson.DomainSerializer(
             new DomainEventTypeCatalog(), [new RecordingUpcaster("Zulu", 3), new RecordingUpcaster("Alpha", 1)]));
 
+        // Assert
+        var exception = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("Alpha' is missing an upcaster from schema version 2", exception.Message,
             StringComparison.Ordinal);
         Assert.Contains("Zulu' is missing an upcaster from schema version 4", exception.Message,
@@ -144,8 +163,13 @@ public sealed class EventSchemaEvolutionTests
     [InlineData("WidgetNamed", int.MaxValue)]
     public void ShouldRejectInvalidUpcasterIdentity(string name, int version)
     {
-        var exception = Assert.Throws<InvalidOperationException>(() => TestJson.DomainSerializer(
+        // Arrange
+        // Act
+        var thrown = Record.Exception(() => TestJson.DomainSerializer(
             new DomainEventTypeCatalog(), [new RecordingUpcaster(name, version)]));
+
+        // Assert
+        var exception = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("Invalid JSON domain-event upcaster registrations", exception.Message,
             StringComparison.Ordinal);
     }

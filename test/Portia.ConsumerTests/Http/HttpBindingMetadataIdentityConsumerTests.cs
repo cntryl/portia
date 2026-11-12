@@ -7,6 +7,7 @@ public sealed class HttpBindingMetadataIdentityConsumerTests
     [InlineData(true)]
     public async Task ShouldPreserveConstructorMemberIdentityGivenRenamedJsonProperties(bool recordStruct)
     {
+        // Arrange
         var declaration = recordStruct
             ? """
               public readonly record struct Binding(
@@ -40,8 +41,10 @@ public sealed class HttpBindingMetadataIdentityConsumerTests
                 });
             """);
 
+        // Act
         var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding", "{\"wire_a\":11,\"wire_b\":22}");
 
+        // Assert
         Assert.Equal(200, status);
         Assert.Equal("\"11,22\"", body);
     }

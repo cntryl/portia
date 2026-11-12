@@ -13,6 +13,7 @@ public sealed class InMemoryRpcClientTests
     public async Task ShouldExposeCompletionAndBudgetThroughTheFitzInterface()
     {
 #pragma warning disable CA1859 // Exercise the shipped Fitz interface as a consumer would.
+        // Arrange
         IRpcClient rpc = new InMemoryRpcClient();
 #pragma warning restore CA1859
         TimeSpan? receivedBudget = null;
@@ -21,7 +22,11 @@ public sealed class InMemoryRpcClientTests
             receivedBudget = request.RemainingTime;
             return ValueTask.CompletedTask;
         });
+
+        // Act
         var call = rpc.CallAsync("rpc://test", ReadOnlyMemory<byte>.Empty, TimeSpan.FromMinutes(1));
+
+        // Assert
         Assert.False(call.Cancellation.IsCompleted);
         await foreach (var _ in call)
         {
@@ -36,6 +41,7 @@ public sealed class InMemoryRpcClientTests
     public async Task ShouldCancelWorkerWhenTheCallBudgetExpires()
     {
 #pragma warning disable CA1859 // Exercise the shipped Fitz interface as a consumer would.
+        // Arrange
         IRpcClient rpc = new InMemoryRpcClient();
 #pragma warning restore CA1859
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -44,7 +50,11 @@ public sealed class InMemoryRpcClientTests
             started.SetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
         });
+
+        // Act
         var call = rpc.CallAsync("rpc://test", ReadOnlyMemory<byte>.Empty, TimeSpan.FromSeconds(1));
+
+        // Assert
         var failure = Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
         {
             await foreach (var _ in call)
@@ -68,6 +78,7 @@ public sealed class InMemoryRpcClientTests
     [InlineData("rpc://tenant-a/orders/place/run")]
     public async Task ShouldRouteAConcreteCallToAMatchingPattern(string pattern)
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         string? received = null;
         await using var worker = await rpc.RegisterWorkerAsync(pattern, (request, _, _) =>
@@ -76,10 +87,12 @@ public sealed class InMemoryRpcClientTests
             return ValueTask.CompletedTask;
         });
 
+        // Act
         await foreach (var _ in rpc.CallAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty))
         {
         }
 
+        // Assert
         Assert.Equal("rpc://tenant-a/orders/place/run", received);
     }
 
@@ -94,9 +107,13 @@ public sealed class InMemoryRpcClientTests
     [InlineData("queue://*/orders/place/run")]
     public async Task ShouldNotRouteACallToANonMatchingPattern(string pattern)
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
+
+        // Act
         await using var worker = await rpc.RegisterWorkerAsync(pattern, (_, _, _) => ValueTask.CompletedTask);
 
+        // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await foreach (var _ in rpc.CallAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty))
@@ -111,6 +128,7 @@ public sealed class InMemoryRpcClientTests
     [Fact]
     public async Task ShouldKeepTheReplacingWorkerWhenASupersededRegistrationIsDisposed()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
         var calls = 0;
         var superseded = await rpc.RegisterWorkerAsync("rpc://tenant-a/orders/place/run",
@@ -122,10 +140,13 @@ public sealed class InMemoryRpcClientTests
         });
 
         await superseded.DisposeAsync();
+
+        // Act
         await foreach (var _ in rpc.CallAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty))
         {
         }
 
+        // Assert
         Assert.Equal(1, calls);
     }
 
@@ -136,8 +157,11 @@ public sealed class InMemoryRpcClientTests
     [Fact]
     public async Task ShouldRegisterAndCallConcurrently()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
-        await Parallel.ForAsync(0, 2000, async (index, ct) =>
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => Parallel.ForAsync(0, 2000, async (index, ct) =>
         {
             var pattern = $"rpc://tenant/area/resource-{index}/run";
             var registration = await rpc.RegisterWorkerAsync(pattern, (_, _, _) => ValueTask.CompletedTask,
@@ -148,6 +172,9 @@ public sealed class InMemoryRpcClientTests
             }
 
             await registration.DisposeAsync();
-        });
+        }));
+
+        // Assert
+        Assert.Null(exception);
     }
 }

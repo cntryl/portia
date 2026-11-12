@@ -159,9 +159,15 @@ public sealed class ConformanceRejectionTests
     [InlineData(StoreDefect.LosesConcurrentAppendRace, "exactly one must win")]
     public async Task ShouldRejectEventStoreProbeGivenOneBrokenInvariant(StoreDefect defect, string expected)
     {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            EventStoreConformance.VerifyAsync(new DefectiveEventStoreProbe(defect)).AsTask());
+        // Arrange
+        var probe = new DefectiveEventStoreProbe(defect);
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            EventStoreConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains(expected, exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -175,8 +181,15 @@ public sealed class ConformanceRejectionTests
     [InlineData(StoreDefect.CorruptsCursorPayload, "payload")]
     public async Task ShouldRejectCorruptedOriginalRecords(StoreDefect defect, string expected)
     {
-        var error = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            EventStoreConformance.VerifyAsync(new DefectiveEventStoreProbe(defect)).AsTask());
+        // Arrange
+        var probe = new DefectiveEventStoreProbe(defect);
+
+        // Act
+        var error = await Record.ExceptionAsync(() =>
+            EventStoreConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(error);
         Assert.Contains(expected, error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -193,8 +206,15 @@ public sealed class ConformanceRejectionTests
     [InlineData("IsAudit")]
     public async Task ShouldRejectRewriteOfEachOriginalMetadataMember(string member)
     {
-        var error = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            EventStoreConformance.VerifyAsync(new DefectiveEventStoreProbe(StoreDefect.RewritesMetadata, member)).AsTask());
+        // Arrange
+        var probe = new DefectiveEventStoreProbe(StoreDefect.RewritesMetadata, member);
+
+        // Act
+        var error = await Record.ExceptionAsync(() =>
+            EventStoreConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(error);
         Assert.Contains(member == "AggregateVersion" ? "aggregate version" : "metadata", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -203,8 +223,17 @@ public sealed class ConformanceRejectionTests
     ///     rejection above is evidence of the injected defect rather than of the harness itself.
     /// </summary>
     [Fact]
-    public async Task ShouldAcceptEventStoreProbeWithNoInjectedDefect() =>
-        await EventStoreConformance.VerifyAsync(new DefectiveEventStoreProbe(StoreDefect.None));
+    public async Task ShouldAcceptEventStoreProbeWithNoInjectedDefect()
+    {
+        // Arrange
+        var probe = new DefectiveEventStoreProbe(StoreDefect.None);
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await EventStoreConformance.VerifyAsync(probe));
+
+        // Assert
+        Assert.Null(exception);
+    }
 
     /// <summary>
     ///     Verifies that the reaction-deduplication suite rejects each way a guard can fail to suppress a
@@ -222,9 +251,15 @@ public sealed class ConformanceRejectionTests
     public async Task ShouldRejectDeduplicationProbeGivenOneBrokenGuarantee(DeduplicationDefect defect,
         string expected)
     {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            ReactionDeduplicationConformance.VerifyAsync(new DefectiveDeduplicationProbe(defect)).AsTask());
+        // Arrange
+        var probe = new DefectiveDeduplicationProbe(defect);
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            ReactionDeduplicationConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains(expected, exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -232,9 +267,17 @@ public sealed class ConformanceRejectionTests
     ///     Verifies the positive control for the deduplication table: an intact guard passes.
     /// </summary>
     [Fact]
-    public async Task ShouldAcceptDeduplicationProbeWithNoInjectedDefect() =>
-        await ReactionDeduplicationConformance.VerifyAsync(
-            new DefectiveDeduplicationProbe(DeduplicationDefect.None));
+    public async Task ShouldAcceptDeduplicationProbeWithNoInjectedDefect()
+    {
+        // Arrange
+        var probe = new DefectiveDeduplicationProbe(DeduplicationDefect.None);
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await ReactionDeduplicationConformance.VerifyAsync(probe));
+
+        // Assert
+        Assert.Null(exception);
+    }
 
     /// <summary>
     ///     Verifies that the projection-store suite rejects a probe whose live and rebuild identities do
@@ -249,9 +292,15 @@ public sealed class ConformanceRejectionTests
     public async Task ShouldRejectProjectionProbeGivenMismatchedLiveAndRebuildIdentities(string? rebuildId,
         string component)
     {
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            ProjectionStoreConformance.VerifyAsync(new MismatchedIdentityProbe(rebuildId, component)).AsTask());
+        // Arrange
+        var probe = new MismatchedIdentityProbe(rebuildId, component);
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ArgumentException>(exception);
         Assert.Contains("matching live and rebuild identities", exception.Message, StringComparison.Ordinal);
     }
 
@@ -262,11 +311,15 @@ public sealed class ConformanceRejectionTests
     [Fact]
     public async Task ShouldRejectProjectionProbeGivenConflictDiscardsTheWinner()
     {
+        // Arrange
         using var probe = new ShapedProjectionProbe(ProjectionStoreShape.DiscardsWinner);
 
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
             ProjectionStoreConformance.VerifyAsync(probe).AsTask());
 
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("stale checkpoint conflict", exception.Message, StringComparison.Ordinal);
     }
 
@@ -278,11 +331,15 @@ public sealed class ConformanceRejectionTests
     [Fact]
     public async Task ShouldRejectProjectionProbeGivenCheckpointComparedOnlyWhenBatchOpens()
     {
+        // Arrange
         using var probe = new ShapedProjectionProbe(ProjectionStoreShape.ChecksCheckpointOnlyAtBegin);
 
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
             ProjectionStoreConformance.VerifyAsync(probe).AsTask());
 
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("stale projection checkpoint was allowed to commit", exception.Message,
             StringComparison.Ordinal);
     }
@@ -294,9 +351,13 @@ public sealed class ConformanceRejectionTests
     [Fact]
     public async Task ShouldAcceptProjectionProbeGivenBatchOpenWaitsForAnExclusiveLock()
     {
+        // Arrange
         using var probe = new ShapedProjectionProbe(ProjectionStoreShape.LocksAtBegin);
+
+        // Act
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
+        // Assert
         await ProjectionStoreConformance.VerifyAsync(probe, timeout.Token);
     }
 
@@ -307,11 +368,15 @@ public sealed class ConformanceRejectionTests
     [Fact]
     public async Task ShouldRejectProjectionProbeGivenCheckpointsIgnoreThePattern()
     {
+        // Arrange
         using var probe = new ShapedProjectionProbe(ProjectionStoreShape.KeysByComponentAndGeneration);
 
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
             ProjectionStoreConformance.VerifyAsync(probe).AsTask());
 
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("independent identity", exception.Message, StringComparison.Ordinal);
     }
 
@@ -322,11 +387,15 @@ public sealed class ConformanceRejectionTests
     [Fact]
     public async Task ShouldRejectProjectionProbeGivenCheckpointsIgnoreTheResource()
     {
+        // Arrange
         using var probe = new ShapedProjectionProbe(ProjectionStoreShape.KeysWithoutResource);
 
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
             ProjectionStoreConformance.VerifyAsync(probe).AsTask());
 
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("independent identity", exception.Message, StringComparison.Ordinal);
     }
 

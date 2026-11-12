@@ -35,11 +35,15 @@ public sealed class ServerSentEventTests : IAsyncDisposable
     [Fact]
     public async Task ShouldFrameEachLineOfAMultiLinePayloadSeparately()
     {
+        // Arrange
         var client = await StartAsync(TimeSpan.FromSeconds(30));
 
         using var response = await client.GetAsync("/events", HttpCompletionOption.ResponseHeadersRead);
+
+        // Act
         var body = await ReadUntilAsync(response, "fourth\n\n");
 
+        // Assert
         Assert.Contains("data: first\ndata: second\ndata: third\ndata: fourth\n\n", body, StringComparison.Ordinal);
     }
 
@@ -50,11 +54,15 @@ public sealed class ServerSentEventTests : IAsyncDisposable
     [Fact]
     public async Task ShouldSendKeepAliveCommentsWhileTheStreamIsIdle()
     {
+        // Arrange
         var client = await StartAsync(TimeSpan.FromMilliseconds(50));
 
         using var response = await client.GetAsync("/events", HttpCompletionOption.ResponseHeadersRead);
+
+        // Act
         var body = await ReadUntilAsync(response, ":\n\n");
 
+        // Assert
         Assert.Contains(":\n\n", body, StringComparison.Ordinal);
     }
 
@@ -62,12 +70,16 @@ public sealed class ServerSentEventTests : IAsyncDisposable
     [Fact]
     public async Task ShouldNotSendKeepAliveCommentsWhenDisabled()
     {
+        // Arrange
         var client = await StartAsync(null);
 
         using var response = await client.GetAsync("/events", HttpCompletionOption.ResponseHeadersRead);
         var body = await ReadUntilAsync(response, "fourth");
+
+        // Act
         await Task.Delay(200);
 
+        // Assert
         Assert.DoesNotContain(":\n\n", body, StringComparison.Ordinal);
     }
 
@@ -80,6 +92,7 @@ public sealed class ServerSentEventTests : IAsyncDisposable
     [InlineData(true)]
     public async Task ShouldStopAnIdleSourceWhenAKeepAliveWriteFails(bool throwingCallback)
     {
+        // Arrange
         var services = new ServiceCollection()
             .AddKeyedSingleton(PortiaServiceKeys.Json,
                 new JsonSerializerOptions { TypeInfoResolver = new DefaultJsonTypeInfoResolver() })
@@ -87,8 +100,11 @@ public sealed class ServerSentEventTests : IAsyncDisposable
         await using var provider = services.BuildServiceProvider();
         var context = new DefaultHttpContext { RequestServices = provider };
         context.Response.Body = new FailingAfterFirstWriteStream();
+
+        // Act
         var stopped = new StrongBox<bool>();
 
+        // Assert
         _ = await Assert.ThrowsAsync<IOException>(() =>
             PortiaStreamResults.Sse(IdleAfterFirstItem(stopped, throwingCallback)).ExecuteAsync(context));
 

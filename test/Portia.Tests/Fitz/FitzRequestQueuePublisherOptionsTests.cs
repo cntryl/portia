@@ -12,6 +12,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     [InlineData(4, null)]
     public async Task ShouldForwardNativeDelayAndLifetimeWithoutChangingEnvelope(int seconds, int? hours)
     {
+        // Arrange
         var queue = new PublicationQueue();
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         IRequestQueuePublisher publisher = new FitzRequestQueuePublisher(queue, serializer);
@@ -19,8 +20,10 @@ public sealed class FitzRequestQueuePublisherOptionsTests
         var metadata = new RequestMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), Uuid.CreateVersion4());
         var options = new RequestQueueOptions(TimeSpan.FromSeconds(seconds), hours is { } value ? (uint)value : null);
 
+        // Act
         await publisher.EnqueueWithOptionsAsync(request, RequestRouteValues.None, "actor-token", metadata, options, default);
 
+        // Assert
         Assert.Equal("queue://test/shared/action", queue.Route);
         Assert.Equal(new QueueEnqueueOptions(options.Delay, options.TtlHours), queue.Options);
         Assert.Equal(1, queue.Accepted);
@@ -35,14 +38,17 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     [Fact]
     public async Task ShouldPreserveTypedOperationIdentityWhenPublishingWithOptions()
     {
+        // Arrange
         var queue = new PublicationQueue();
         var serializer = TestJson.Serializer(typeof(RequestIdentityTests.IdentifiedCommand));
         IRequestQueuePublisher publisher = new FitzRequestQueuePublisher(queue, serializer);
         var request = new RequestIdentityTests.IdentifiedCommand(Uuid.CreateVersion4());
 
+        // Act
         await publisher.EnqueueWithOptionsAsync(request, RequestRouteValues.None, "actor-token",
             new RequestQueueOptions(TtlHours: 1));
 
+        // Assert
         Assert.Equal(request.CommandId, serializer.DeserializeEnvelope(queue.Body).Metadata.RequestId);
     }
 
@@ -50,6 +56,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     [Fact]
     public async Task ShouldPreserveParentContextWhenPublishingWithOptions()
     {
+        // Arrange
         var queue = new PublicationQueue();
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         IRequestQueuePublisher publisher = new FitzRequestQueuePublisher(queue, serializer);
@@ -58,7 +65,10 @@ public sealed class FitzRequestQueuePublisherOptionsTests
         await publisher.EnqueueWithOptionsAsync(new UniversalAction(2), RequestRouteValues.None, "actor-token", parent,
             new RequestQueueOptions(TimeSpan.FromSeconds(2), 1));
 
+        // Act
         var metadata = serializer.DeserializeEnvelope(queue.Body).Metadata;
+
+        // Assert
         Assert.Equal(parent.CorrelationId, metadata.CorrelationId);
         Assert.Equal(parent.CauseId, metadata.CausationId);
         Assert.NotEqual(parent.RequestId, metadata.RequestId);
@@ -71,9 +81,13 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     [InlineData(0, 0)]
     public async Task ShouldRejectInvalidOptionsBeforeTouchingQueue(int milliseconds, int hours)
     {
+        // Arrange
         var queue = new PublicationQueue();
+
+        // Act
         IRequestQueuePublisher publisher = new FitzRequestQueuePublisher(queue, TestJson.Serializer(typeof(UniversalAction)));
 
+        // Assert
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await publisher.EnqueueWithOptionsAsync(new UniversalAction(1), RequestRouteValues.None, null,
                 new RequestQueueOptions(TimeSpan.FromMilliseconds(milliseconds), (uint)hours)));
@@ -86,11 +100,15 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     [Fact]
     public async Task ShouldLeavePublicationUndispatchedWhenAlreadyCancelled()
     {
+        // Arrange
         var queue = new PublicationQueue();
         IRequestQueuePublisher publisher = new FitzRequestQueuePublisher(queue, TestJson.Serializer(typeof(UniversalAction)));
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         cancellation.Cancel();
 
+        // Assert
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await publisher.EnqueueWithOptionsAsync(new UniversalAction(1), RequestRouteValues.None, null,
                 new RequestQueueOptions(TtlHours: 1), cancellation.Token));
@@ -103,9 +121,13 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     [Fact]
     public async Task ShouldPropagateUnavailableNativeCapabilityWithoutPublicationFallback()
     {
+        // Arrange
         var queue = new PublicationQueue { SupportsLifetime = false };
+
+        // Act
         IRequestQueuePublisher publisher = new FitzRequestQueuePublisher(queue, TestJson.Serializer(typeof(UniversalAction)));
 
+        // Assert
         await Assert.ThrowsAsync<NotSupportedException>(async () =>
             await publisher.EnqueueWithOptionsAsync(new UniversalAction(1), RequestRouteValues.None, null,
                 new RequestQueueOptions(TtlHours: 1)));
@@ -119,11 +141,14 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     [Fact]
     public async Task ShouldKeepLegacyEnqueueOnExistingNativePath()
     {
+        // Arrange
         var queue = new PublicationQueue();
         IRequestQueuePublisher publisher = new FitzRequestQueuePublisher(queue, TestJson.Serializer(typeof(UniversalAction)));
 
+        // Act
         await publisher.EnqueueAsync(new UniversalAction(1), RequestRouteValues.None, null);
 
+        // Assert
         Assert.Equal(1, queue.LegacyCalls);
         Assert.Equal(0, queue.OptionCalls);
         Assert.Equal(1, queue.Accepted);
@@ -133,13 +158,16 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     [Fact]
     public async Task ShouldAllowDefaultOptionsOnLegacyPublisherWithoutDroppingLogicalMetadata()
     {
+        // Arrange
         var implementation = new LegacyPublisher();
         IRequestQueuePublisher publisher = implementation;
         var metadata = RequestMetadata.Create();
 
+        // Act
         await publisher.EnqueueWithOptionsAsync(new UniversalAction(1), RequestRouteValues.None, null, metadata,
             new RequestQueueOptions(TimeSpan.Zero), default);
 
+        // Assert
         Assert.Equal(1, implementation.Calls);
         Assert.Equal(metadata, implementation.Metadata);
     }
@@ -150,9 +178,13 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     [InlineData(0, 1)]
     public async Task ShouldRejectNondefaultOptionsOnLegacyPublisher(int seconds, int? hours)
     {
+        // Arrange
         var implementation = new LegacyPublisher();
+
+        // Act
         IRequestQueuePublisher publisher = implementation;
 
+        // Assert
         await Assert.ThrowsAsync<NotSupportedException>(async () =>
             await publisher.EnqueueWithOptionsAsync(new UniversalAction(1), RequestRouteValues.None, null,
                 new RequestQueueOptions(TimeSpan.FromSeconds(seconds), hours is { } value ? (uint)value : null)));

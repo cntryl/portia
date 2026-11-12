@@ -12,13 +12,17 @@ public sealed class ManualReactorRebuildTests
     [InlineData(true)]
     public async Task ShouldRejectRebuildGenerationBeforeReadingOrApplyingEffects(bool batch)
     {
+        // Arrange
         var reader = new RecordingReader();
         var checkpoints = new RecordingCheckpoints();
         var effects = new List<Uuid>();
+
+        // Act
         Reactor reactor = batch
             ? new RecordingBatchReactor(checkpoints, effects)
             : new RecordingReactor(checkpoints, effects);
 
+        // Assert
         _ = await Assert.ThrowsAsync<ArgumentException>(() => new ReactorRunner(reader).RunPassAsync(
             reactor, ProjectionCheckpoint.Start, new ProjectionRunOptions { RebuildId = "candidate" }).AsTask());
 
@@ -34,6 +38,7 @@ public sealed class ManualReactorRebuildTests
     [InlineData(true)]
     public async Task ShouldHandleLiveEventsWithoutRebuildGeneration(bool batch)
     {
+        // Arrange
         var reader = new RecordingReader();
         var checkpoints = new RecordingCheckpoints();
         var effects = new List<Uuid>();
@@ -41,9 +46,11 @@ public sealed class ManualReactorRebuildTests
             ? new RecordingBatchReactor(checkpoints, effects)
             : new RecordingReactor(checkpoints, effects);
 
+        // Act
         var checkpoint = await new ReactorRunner(reader).RunPassAsync(
             reactor, ProjectionCheckpoint.Start, ProjectionRunOptions.Default);
 
+        // Assert
         Assert.Equal(1, reader.Reads);
         _ = Assert.Single(effects);
         Assert.Equal(1, checkpoints.Writes);

@@ -7,11 +7,14 @@ public sealed class FitzWorkerSupervisionTests
     [Fact]
     public async Task ShouldAwaitHealthyListenerCleanupBeforePropagatingFatalFailure()
     {
+        // Arrange
         var expected = new TerminalHandlerFailureException(new IOException("terminal observer failed"));
         var fail = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cleanupFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Act
         var run = FitzApplicationWorkers.SuperviseAsync([
             async _ =>
             {
@@ -33,6 +36,7 @@ public sealed class FitzWorkerSupervisionTests
             }
         ], default);
 
+        // Assert
         try
         {
             fail.TrySetResult();
@@ -65,9 +69,12 @@ public sealed class FitzWorkerSupervisionTests
     [Fact]
     public async Task ShouldPreserveFatalAndSiblingCleanupFailures()
     {
+        // Arrange
         var expected = new TerminalHandlerFailureException(new IOException("terminal observer failed"));
         var fail = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         CancellationTokenRegistration callback = default;
+
+        // Act
         var run = FitzApplicationWorkers.SuperviseAsync([
             async _ =>
             {
@@ -93,6 +100,7 @@ public sealed class FitzWorkerSupervisionTests
             }
         ], default);
 
+        // Assert
         try
         {
             fail.TrySetResult();
@@ -114,13 +122,17 @@ public sealed class FitzWorkerSupervisionTests
     [Fact]
     public async Task ShouldCompleteNormallyAfterHostCancellation()
     {
+        // Arrange
         var stopped = 0;
         using var lifetime = new CancellationTokenSource();
         var run = FitzApplicationWorkers.SuperviseAsync([ListenAsync, ListenAsync], lifetime.Token);
 
         await lifetime.CancelAsync();
+
+        // Act
         await run.WaitAsync(TimeSpan.FromSeconds(5));
 
+        // Assert
         Assert.Equal(2, stopped);
 
         async Task ListenAsync(CancellationToken token)
@@ -140,8 +152,11 @@ public sealed class FitzWorkerSupervisionTests
     [Fact]
     public async Task ShouldObserveEarlierListenersWhenStartupThrows()
     {
+        // Arrange
         var stopped = false;
         var expected = new QueueConfigurationException("invalid listener configuration");
+
+        // Act
         var run = FitzApplicationWorkers.SuperviseAsync([
             async token =>
             {
@@ -157,6 +172,7 @@ public sealed class FitzWorkerSupervisionTests
             _ => throw expected
         ], default);
 
+        // Assert
         var error = await Assert.ThrowsAsync<QueueConfigurationException>(() => run.WaitAsync(TimeSpan.FromSeconds(5)));
 
         Assert.Same(expected, error);

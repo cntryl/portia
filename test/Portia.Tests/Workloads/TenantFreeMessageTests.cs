@@ -12,10 +12,13 @@ public sealed class TenantFreeMessageTests
     [Fact]
     public void ShouldOmitTenantGivenWorkloadFailure()
     {
+        // Arrange
         var identity = new WorkloadIdentity("orders", new TenantId(Tenant));
 
+        // Act
         var ex = new WorkloadFailureException(identity, 3, new InvalidOperationException("pass failed"));
 
+        // Assert
         Assert.DoesNotContain(Tenant, ex.Message, StringComparison.Ordinal);
         Assert.Contains("orders", ex.Message, StringComparison.Ordinal);
         Assert.Contains("3", ex.Message, StringComparison.Ordinal);
@@ -26,8 +29,13 @@ public sealed class TenantFreeMessageTests
     [Fact]
     public void ShouldOmitTenantGivenTenantStopTimeout()
     {
-        var ex = new TenantStopTimeoutException(new TenantId(Tenant), TimeSpan.FromSeconds(5));
+        // Arrange
+        var tenant = new TenantId(Tenant);
 
+        // Act
+        var ex = new TenantStopTimeoutException(tenant, TimeSpan.FromSeconds(5));
+
+        // Assert
         Assert.DoesNotContain(Tenant, ex.Message, StringComparison.Ordinal);
         Assert.Contains(TimeSpan.FromSeconds(5).ToString(), ex.Message, StringComparison.Ordinal);
         Assert.Equal(new TenantId(Tenant), ex.TenantId);
@@ -37,10 +45,14 @@ public sealed class TenantFreeMessageTests
     [Fact]
     public void ShouldOmitTenantGivenReactorRebound()
     {
+        // Arrange
         var reactor = new TestReactor(new RecordingAggregateRepository(),
             pattern: EventStreamPattern.ForTenant("reactors"));
+
+        // Act
         reactor.BindWorkload(new WorkloadIdentity("test-reactor", new TenantId(Tenant)), null);
 
+        // Assert
         var ex = Assert.Throws<InvalidOperationException>(() =>
             reactor.BindWorkload(new WorkloadIdentity("test-reactor", new TenantId("other-secret")), null));
 
@@ -53,9 +65,13 @@ public sealed class TenantFreeMessageTests
     [Fact]
     public void ShouldOmitTenantGivenProjectorRebound()
     {
+        // Arrange
         var projector = new TestProjector(new RecordingProjectionTarget(), EventStreamPattern.ForTenant("orders"));
+
+        // Act
         projector.BindWorkload(new WorkloadIdentity("orders", new TenantId(Tenant)), null);
 
+        // Assert
         var ex = Assert.Throws<InvalidOperationException>(() =>
             projector.BindWorkload(new WorkloadIdentity("orders", new TenantId("other-secret")), null));
 
@@ -68,8 +84,14 @@ public sealed class TenantFreeMessageTests
     [Fact]
     public void ShouldOmitRouteGivenMalformedStreamRoute()
     {
-        var ex = Assert.Throws<FormatException>(() => EventStreamAddress.Parse($"stream://{Tenant}/orders"));
+        // Arrange
+        var route = $"stream://{Tenant}/orders";
 
+        // Act
+        var exception = Record.Exception(() => EventStreamAddress.Parse(route));
+
+        // Assert
+        var ex = Assert.IsType<FormatException>(exception);
         Assert.DoesNotContain(Tenant, ex.Message, StringComparison.Ordinal);
     }
 
@@ -77,11 +99,15 @@ public sealed class TenantFreeMessageTests
     [Fact]
     public void ShouldOmitAggregateIdsGivenForeignEvent()
     {
+        // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4());
         var foreignId = Uuid.CreateVersion4();
         var ev = new ValueChanged(42);
+
+        // Act
         ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), foreignId, 1, DateTimeOffset.UtcNow));
 
+        // Assert
         var ex = Assert.Throws<InvalidOperationException>(() => aggregate.Load([ev]));
 
         Assert.DoesNotContain(aggregate.Id.ToString(), ex.Message, StringComparison.OrdinalIgnoreCase);

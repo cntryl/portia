@@ -35,17 +35,28 @@ public sealed partial class DocumentationContractTests
     [Fact]
     public void WorkloadContractsExposeLeaseLifetimeWithoutPortiaFencingProtocol()
     {
-        Assert.Null(typeof(WorkloadContext).GetProperty("FencingToken"));
-        Assert.DoesNotContain(typeof(WorkloadContext).Assembly.GetExportedTypes(),
-            type => type.Name.Contains("Fencing", StringComparison.Ordinal));
-        Assert.Equal([typeof(string), typeof(CancellationToken)],
-            typeof(IPartitionWorkload).GetMethod(nameof(IPartitionWorkload.RunAsync))!
-                .GetParameters().Select(parameter => parameter.ParameterType));
+        // Arrange
+        var contextType = typeof(WorkloadContext);
+
+        // Act
+        var fencingToken = contextType.GetProperty("FencingToken");
+        var exportedTypes = contextType.Assembly.GetExportedTypes();
+        var runParameters = typeof(IPartitionWorkload).GetMethod(nameof(IPartitionWorkload.RunAsync))!
+            .GetParameters().Select(parameter => parameter.ParameterType);
+
+        // Assert
+        Assert.Null(fencingToken);
+        Assert.DoesNotContain(exportedTypes, type => type.Name.Contains("Fencing", StringComparison.Ordinal));
+        Assert.Equal([typeof(string), typeof(CancellationToken)], runParameters);
     }
 
     [Fact]
     public void MaintainedMarkdownHasValidLocalLinks()
     {
+        // Arrange
+        var missing = new List<string>();
+
+        // Act
         foreach (var relative in Maintained)
         {
             var source = File.ReadAllText(Path.Combine(Root, relative));
@@ -58,15 +69,21 @@ public sealed partial class DocumentationContractTests
                 }
 
                 var path = target.Split('#')[0];
-                Assert.True(File.Exists(Path.GetFullPath(path, Path.GetDirectoryName(Path.Combine(Root, relative))!)),
-                    $"{relative} links to missing file '{target}'.");
+                if (!File.Exists(Path.GetFullPath(path, Path.GetDirectoryName(Path.Combine(Root, relative))!)))
+                {
+                    missing.Add($"{relative} links to missing file '{target}'.");
+                }
             }
         }
+
+        // Assert
+        Assert.Empty(missing);
     }
 
     [Fact]
     public void AnalyzerManifestsListEveryCompilerDiagnostic()
     {
+        // Arrange
         var declared = DiagnosticSourceDirectories
             .SelectMany(directory => Directory.EnumerateFiles(Path.Combine(Root, directory), "*.cs",
                 SearchOption.AllDirectories))
@@ -74,16 +91,26 @@ public sealed partial class DocumentationContractTests
                 StringComparison.Ordinal))
             .SelectMany(path => DiagnosticId().Matches(File.ReadAllText(path)).Select(match => match.Value))
             .ToHashSet(StringComparer.Ordinal);
+
+        // Act
         var documented = DiagnosticReleaseManifests
             .SelectMany(path => DiagnosticId().Matches(File.ReadAllText(Path.Combine(Root, path))))
             .Select(match => match.Value).ToHashSet(StringComparer.Ordinal);
+
+        // Assert
         Assert.Subset(documented, declared);
     }
 
     [Fact]
     public void MaintainedDocumentationRejectsLegacyContracts()
     {
-        var text = string.Join('\n', Maintained.Select(path => File.ReadAllText(Path.Combine(Root, path))));
+        // Arrange
+        var paths = Maintained.Select(path => Path.Combine(Root, path)).ToArray();
+
+        // Act
+        var text = string.Join('\n', paths.Select(path => File.ReadAllText(path)));
+
+        // Assert
         Assert.DoesNotContain(".AddWorker()", text, StringComparison.Ordinal);
         Assert.DoesNotContain("EventSchema.For", text, StringComparison.Ordinal);
         Assert.DoesNotContain("DeserializeRequest", text, StringComparison.Ordinal);
@@ -101,39 +128,57 @@ public sealed partial class DocumentationContractTests
     [Fact]
     public void EveryProductProjectGeneratesXmlDocumentation()
     {
-        foreach (var project in Directory.EnumerateDirectories(Path.Combine(Root, "src"), "Portia.*")
-                     .Where(path => !path.EndsWith(".Generators", StringComparison.Ordinal)
-                                    && !path.EndsWith("Portia.Analyzers", StringComparison.Ordinal)
-                                    && !path.EndsWith("Portia.CodeFixes", StringComparison.Ordinal)))
-        {
-            var name = Path.GetFileName(project);
-            Assert.True(File.Exists(Path.Combine(project, "bin/Release/net11.0", name + ".xml")),
-                $"Generated XML documentation is missing for {name}.");
-        }
+        // Arrange
+        var projects = Directory.EnumerateDirectories(Path.Combine(Root, "src"), "Portia.*")
+            .Where(path => !path.EndsWith(".Generators", StringComparison.Ordinal)
+                           && !path.EndsWith("Portia.Analyzers", StringComparison.Ordinal)
+                           && !path.EndsWith("Portia.CodeFixes", StringComparison.Ordinal))
+            .ToArray();
+
+        // Act
+        var missing = projects
+            .Select(project => (Project: project, Name: Path.GetFileName(project)))
+            .Where(item => !File.Exists(Path.Combine(item.Project, "bin/Release/net11.0", item.Name + ".xml")))
+            .Select(item => $"Generated XML documentation is missing for {item.Name}.")
+            .ToArray();
+
+        // Assert
+        Assert.Empty(missing);
     }
 
     [Fact]
     public void GeneratedXmlContainsNewPublicSafetyContracts()
     {
-        AssertXmlMembers("Portia.Abstractions",
-            "T:Cntryl.Portia.ReactionCommandFailedException");
-        AssertXmlMembers("Portia.Fitz",
-            "T:Cntryl.Portia.FleetPartitionTerminationTimeoutException",
-            "P:Cntryl.Portia.FleetRunOptions.PartitionStopTimeout");
-        AssertXmlMembers("Portia.Testing",
-            "T:Cntryl.Portia.Testing.ProjectionStoreConformance",
-            "T:Cntryl.Portia.Testing.ReactionDeduplicationConformance",
-            "T:Cntryl.Portia.Testing.ConformanceViolationException",
-            "T:Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe",
-            "T:Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceWorker",
-            "T:Cntryl.Portia.Testing.WorkloadCoordinatorConformance");
-    }
+        // Arrange
+        (string Project, string[] Members)[] expected =
+        [
+            ("Portia.Abstractions", ["T:Cntryl.Portia.ReactionCommandFailedException"]),
+            ("Portia.Fitz",
+            [
+                "T:Cntryl.Portia.FleetPartitionTerminationTimeoutException",
+                "P:Cntryl.Portia.FleetRunOptions.PartitionStopTimeout"
+            ]),
+            ("Portia.Testing",
+            [
+                "T:Cntryl.Portia.Testing.ProjectionStoreConformance",
+                "T:Cntryl.Portia.Testing.ReactionDeduplicationConformance",
+                "T:Cntryl.Portia.Testing.ConformanceViolationException",
+                "T:Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceProbe",
+                "T:Cntryl.Portia.Testing.IWorkloadCoordinatorConformanceWorker",
+                "T:Cntryl.Portia.Testing.WorkloadCoordinatorConformance"
+            ])
+        ];
 
-    static void AssertXmlMembers(string project, params string[] expected)
-    {
-        var xml = File.ReadAllText(Path.Combine(Root, "src", project, "bin/Release/net11.0", project + ".xml"));
-        foreach (var member in expected)
-            Assert.Contains($"name=\"{member}\"", xml, StringComparison.Ordinal);
+        // Act
+        var documentation = expected.Select(item => (item.Members, Xml: File.ReadAllText(
+            Path.Combine(Root, "src", item.Project, "bin/Release/net11.0", item.Project + ".xml")))).ToArray();
+
+        // Assert
+        foreach (var (members, xml) in documentation)
+        {
+            foreach (var member in members)
+                Assert.Contains($"name=\"{member}\"", xml, StringComparison.Ordinal);
+        }
     }
 
     static string FindRoot()

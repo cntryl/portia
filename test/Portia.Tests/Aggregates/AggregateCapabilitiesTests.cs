@@ -13,11 +13,14 @@ public sealed class AggregateCapabilitiesTests
     [Fact]
     public async Task ShouldExposeReaderWriterAndExecutorCapabilities()
     {
+        // Arrange
         await using var provider = Provider();
         await using var scope = provider.CreateAsyncScope();
 
+        // Act
         var capabilities = scope.ServiceProvider.Aggregates();
 
+        // Assert
         Assert.IsAssignableFrom<IAggregateReader>(capabilities);
         Assert.IsAssignableFrom<IAggregateWriter>(capabilities);
         Assert.IsAssignableFrom<IAggregateExecutor>(capabilities);
@@ -27,6 +30,7 @@ public sealed class AggregateCapabilitiesTests
     [Fact]
     public async Task ShouldHydrateStateCommittedThroughExecutor()
     {
+        // Arrange
         await using var provider = Provider();
         var id = Uuid.CreateVersion4();
 
@@ -41,8 +45,11 @@ public sealed class AggregateCapabilitiesTests
         }
 
         await using var reading = provider.CreateAsyncScope();
+
+        // Act
         var hydrated = await reading.ServiceProvider.Aggregates().HydrateAsync(new TestAggregate(id));
 
+        // Assert
         Assert.Equal(5, hydrated.Value);
     }
 
@@ -50,6 +57,7 @@ public sealed class AggregateCapabilitiesTests
     [Fact]
     public async Task ShouldHydrateStateSavedThroughItself()
     {
+        // Arrange
         await using var provider = Provider();
         var id = Uuid.CreateVersion4();
 
@@ -62,8 +70,11 @@ public sealed class AggregateCapabilitiesTests
         }
 
         await using var reading = provider.CreateAsyncScope();
+
+        // Act
         var hydrated = await reading.ServiceProvider.Aggregates().HydrateAsync(new TestAggregate(id));
 
+        // Assert
         Assert.Equal(9, hydrated.Value);
     }
 

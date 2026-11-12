@@ -11,6 +11,7 @@ public sealed class TenantCleanupTests
     [InlineData(true)]
     public async Task CleanupFaultsDoNotAbandonOtherTenantsOrDirectory(bool removeFirst)
     {
+        // Arrange
         var directory = new Directory();
         using var cancellation = new CancellationTokenSource();
         var started = new ConcurrentDictionary<TenantId, CancellationToken>();
@@ -32,7 +33,11 @@ public sealed class TenantCleanupTests
             _ = stopped.AddOrUpdate(tenant, 1, (_, count) => count + 1);
             throw new IOException("Stop callback failed");
         }, cancellation.Token);
+
+        // Act
         await allStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Assert
         if (removeFirst)
         {
             await directory.Changes.Writer.WriteAsync(new TenantLifecycleChange(TenantLifecycleChangeKind.Removed,

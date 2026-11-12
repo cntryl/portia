@@ -17,6 +17,7 @@ public sealed class JsonContextIncrementalTests
     [Fact]
     public void ShouldReuseSharedRegistrationsGivenUnchangedReferencedContexts()
     {
+        // Arrange
         var options = Options();
         var unrelated = CSharpSyntaxTree.ParseText("public static class Unrelated { public static int Value() => 1; }",
             options, "Unrelated.cs");
@@ -32,7 +33,11 @@ public sealed class JsonContextIncrementalTests
         driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(unrelated, edited));
 
         AssertReasons(driver, "PortiaReferencedJsonContexts", IncrementalStepRunReason.Unchanged);
+
+        // Act
         AssertReasons(driver, "PortiaSharedRegistrations", IncrementalStepRunReason.Cached);
+
+        // Assert
         Assert.Equal(original, Generated(driver));
         Assert.Contains("global::Contracts.FirstFactory.Create(options)", original, StringComparison.Ordinal);
     }
@@ -40,11 +45,16 @@ public sealed class JsonContextIncrementalTests
     [Fact]
     public void ShouldRefreshSharedRegistrationsGivenReplacedContextFactory()
     {
+        // Arrange
         var options = Options();
         var reference = ContextReference("FirstFactory");
         var compilation = Compilation(options,
             CSharpSyntaxTree.ParseText("public sealed class Unrelated;", options, "Unrelated.cs"), reference);
+
+        // Act
         var driver = Driver(options).RunGenerators(compilation);
+
+        // Assert
         Assert.Contains("global::Contracts.FirstFactory.Create(options)", Generated(driver), StringComparison.Ordinal);
 
         driver = driver.RunGenerators(compilation.ReplaceReference(reference, ContextReference("SecondFactory")));

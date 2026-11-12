@@ -9,6 +9,7 @@ public sealed class ApplicationFleetTests
     [Fact]
     public async Task WorkerReplicasHandOffLeasedComponentWithoutConcurrentExecution()
     {
+        // Arrange
         await using var firstClient = await ConsumerBroker.ConnectAsync();
         await using var secondClient = await ConsumerBroker.ConnectAsync();
         var store = new InMemoryEventStore();
@@ -19,7 +20,11 @@ public sealed class ApplicationFleetTests
         var realm = "app-" + id;
         using var first = Build(firstClient, "a", realm, store, probe);
         using var second = Build(secondClient, "b", realm, store, probe);
+
+        // Act
         await first.StartAsync();
+
+        // Assert
         try
         {
             await Until(() => probe.Owner == "a");

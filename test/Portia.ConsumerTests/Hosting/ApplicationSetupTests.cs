@@ -5,7 +5,8 @@ public sealed class ApplicationSetupTests
     [Fact]
     public async Task ApplicationHydratesCallerConstructedAggregateWithoutFactory()
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using System.Threading.Tasks;
                                                     using Cntryl.Portia;
                                                     using Cntryl.Portia.Testing;
@@ -26,14 +27,22 @@ public sealed class ApplicationSetupTests
                                                             if (!object.ReferenceEquals(account, await reader.HydrateAsync(account))) throw new System.Exception("Hydration replaced the caller instance");
                                                         }
                                                     }
-                                                    """);
-        await assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task>>()();
+                                                    """;
+        var assembly = GeneratorCompilation.Compile(source);
+        var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task>>();
+
+        // Act
+        var error = await Record.ExceptionAsync(run);
+
+        // Assert
+        Assert.Null(error);
     }
 
     [Fact]
     public void SharedSetupOnlyActivatesWorkersInWorkerHost()
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using System;
                                                     using System.Threading;
                                                     using System.Threading.Tasks;
@@ -62,7 +71,14 @@ public sealed class ApplicationSetupTests
                                                             if (System.Linq.Enumerable.Count(System.Linq.Enumerable.OfType<Worker>(workerProvider.GetServices<IHostedService>())) != 1) throw new Exception("Worker not activated exactly once");
                                                         }
                                                     }
-                                                    """);
-        assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Action>()();
+                                                    """;
+        var assembly = GeneratorCompilation.Compile(source);
+        var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Action>();
+
+        // Act
+        var error = Record.Exception(run.Invoke);
+
+        // Assert
+        Assert.Null(error);
     }
 }

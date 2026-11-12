@@ -17,6 +17,7 @@ public sealed class OpenTelemetryIntegrationTests
     [Fact]
     public void ShouldExportAllSignalsAndRemainIdempotent()
     {
+        // Arrange
         var activities = new List<Activity>();
         var metrics = new List<Metric>();
         var logs = new List<LogRecord>();
@@ -25,7 +26,11 @@ public sealed class OpenTelemetryIntegrationTests
         var telemetry = services.AddOpenTelemetry();
         _ = telemetry.WithPortia();
         var registeredServices = services.Count;
+
+        // Act
         _ = telemetry.WithPortia();
+
+        // Assert
         Assert.Equal(registeredServices, services.Count);
         _ = telemetry
             .WithTracing(tracing => tracing.AddInMemoryExporter(activities))
@@ -62,6 +67,7 @@ public sealed class OpenTelemetryIntegrationTests
     [Fact]
     public void ShouldKeepOpenTelemetryReferencesOutOfCorePackages()
     {
+        // Arrange
         var directory = Path.GetDirectoryName(typeof(PortiaTelemetry).Assembly.Location)!;
         var packageAssemblies = new[]
         {
@@ -69,9 +75,11 @@ public sealed class OpenTelemetryIntegrationTests
             "Portia.Jwt", "Portia.Telemetry", "Portia.Testing"
         };
 
+        // Act
         var referencing = packageAssemblies.Where(name => ReferencesOpenTelemetry(Path.Combine(directory,
             name + ".dll"))).ToArray();
 
+        // Assert
         Assert.Equal(["Portia.Telemetry"], referencing);
     }
 
