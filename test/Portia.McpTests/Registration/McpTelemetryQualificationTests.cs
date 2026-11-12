@@ -140,6 +140,7 @@ public sealed class McpTelemetryQualificationTests
     [InlineData("prompt", "Prompt unavailable.")]
     public async Task ShouldSanitizeMcpExceptionsThrownByPrimitiveDelegates(string primitive, string safeMessage)
     {
+        // Arrange
         var resourceFailure = new McpException("sensitive resource projection failure");
         var promptFailure = new McpException("sensitive prompt render failure");
         var builder = WebApplication.CreateBuilder();
@@ -163,6 +164,8 @@ public sealed class McpTelemetryQualificationTests
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient());
         await using var client = await McpClient.CreateAsync(transport);
+
+        // Act
         var error = await Record.ExceptionAsync(async () =>
         {
             if (primitive == "resource")
@@ -170,6 +173,8 @@ public sealed class McpTelemetryQualificationTests
             else
                 _ = await client.GetPromptAsync("telemetry-render");
         });
+
+        // Assert
         Assert.NotNull(error);
         Assert.Contains(safeMessage, error.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("sensitive", error.Message, StringComparison.Ordinal);
