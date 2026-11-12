@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
@@ -166,9 +167,21 @@ static class ApplicationStructureCommand
     static async Task<MSBuildWorkspace> OpenWorkspaceAsync(string solutionPath, CancellationToken cancellationToken)
     {
         var workspace = MSBuildWorkspace.Create();
+        var loadFailures = new ConcurrentQueue<WorkspaceDiagnostic>();
+        using var workspaceFailedRegistration = workspace.RegisterWorkspaceFailedHandler(args =>
+        {
+            if (args.Diagnostic.Kind == WorkspaceDiagnosticKind.Failure)
+                loadFailures.Enqueue(args.Diagnostic);
+        });
         try
         {
             _ = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (!loadFailures.IsEmpty)
+            {
+                var diagnostics = loadFailures.Select(diagnostic => $"- {diagnostic.Message}");
+                throw new InvalidOperationException($"MSBuildWorkspace reported project load failures for '{solutionPath}'. " +
+                    "The CLI will not analyze or modify a partial solution:\n" + string.Join(Environment.NewLine, diagnostics));
+            }
             return workspace;
         }
         catch

@@ -60,6 +60,31 @@ dotnet run --project "$portia_root/eng/Portia.RepositoryTools/Portia.RepositoryT
   > "$portia_globbed/idempotence.log" 2>&1
 rg -q 'No PORTIA200 or PORTIA201 fixes are needed\.' "$portia_globbed/idempotence.log"
 
+portia_workspace_failure="$portia_output/workspace-failure"
+write_fixture "$portia_workspace_failure" ""
+dotnet restore "$portia_workspace_failure/PortiaStructureSmoke.slnx" > "$portia_workspace_failure/restore.log" 2>&1
+mkdir "$portia_workspace_failure/Broken"
+printf '<Project>\n' > "$portia_workspace_failure/Broken/Bad.csproj"
+cat > "$portia_workspace_failure/PortiaStructureSmoke.slnx" <<'EOF'
+<Solution>
+  <Project Path="Shop.Core.csproj" />
+  <Project Path="Broken/Bad.csproj" />
+</Solution>
+EOF
+if dotnet run --project "$portia_root/eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj" \
+  --configuration Release --no-build -- fix-application-structure --solution "$portia_workspace_failure/PortiaStructureSmoke.slnx" \
+  > "$portia_workspace_failure/fix.log" 2>&1; then
+  echo 'The CLI accepted a partially loaded solution after a project load failure.' >&2
+  exit 1
+fi
+test -f "$portia_workspace_failure/Features/Orders/Values/Wrong.cs"
+test ! -e "$portia_workspace_failure/Features/Orders/Values/Price.cs"
+test ! -e "$portia_workspace_failure/Features/Orders/Values/Currency.cs"
+rg -q 'MSBuildWorkspace reported project load failures' "$portia_workspace_failure/fix.log"
+rg -q 'Broken/Bad.csproj' "$portia_workspace_failure/fix.log"
+rg -q 'project file could not be loaded' "$portia_workspace_failure/fix.log"
+! find "$portia_workspace_failure" -name '.portia-stage-*' -o -name '.portia-backup-*' | rg .
+
 portia_explicit="$portia_output/explicit"
 write_fixture "$portia_explicit" "<EnableDefaultCompileItems>false</EnableDefaultCompileItems>"
 dotnet restore "$portia_explicit/PortiaStructureSmoke.slnx" > "$portia_explicit/restore.log" 2>&1
@@ -120,4 +145,4 @@ test ! -e "$portia_build_failure/Features/Orders/Values/Price.cs"
 test ! -e "$portia_build_failure/Features/Orders/Values/Currency.cs"
 rg -q 'public sealed record Currency' "$portia_build_failure/Features/Orders/Values/Wrong.cs"
 
-echo 'Qualified PORTIA200 split and PORTIA201 rename through the Portia CLI; default globs, explicit Compile rollback/collision, destination collision refusal, build-failure rollback, and second-pass idempotence passed.'
+echo 'Qualified PORTIA200/201 file operations through the Portia CLI; project-load failures, default globs, explicit Compile rollback/collision, destination collision refusal, build-failure rollback, and second-pass idempotence passed.'
