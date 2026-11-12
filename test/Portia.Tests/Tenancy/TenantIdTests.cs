@@ -14,10 +14,19 @@ public sealed class TenantIdTests
     [Fact]
     public void ShouldParseWellFormedSegment()
     {
-        Assert.True(TenantId.TryParse("acme", CultureInfo.InvariantCulture, out var parsed));
+        // Arrange
+        const string text = "acme";
+
+        // Act
+        var tried = TenantId.TryParse(text, CultureInfo.InvariantCulture, out var parsed);
+        var fromString = TenantId.Parse(text, CultureInfo.InvariantCulture);
+        var fromSpan = TenantId.Parse(text.AsSpan(), CultureInfo.InvariantCulture);
+
+        // Assert
+        Assert.True(tried);
         Assert.Equal(new TenantId("acme"), parsed);
-        Assert.Equal(new TenantId("acme"), TenantId.Parse("acme", CultureInfo.InvariantCulture));
-        Assert.Equal(new TenantId("acme"), TenantId.Parse("acme".AsSpan(), CultureInfo.InvariantCulture));
+        Assert.Equal(new TenantId("acme"), fromString);
+        Assert.Equal(new TenantId("acme"), fromSpan);
     }
 
     /// <summary>Text that cannot be a realm segment fails to parse instead of throwing.</summary>
@@ -30,16 +39,34 @@ public sealed class TenantIdTests
     [InlineData("{tenant}")]
     public void ShouldRejectMalformedSegment(string text)
     {
-        Assert.False(TenantId.TryParse(text, CultureInfo.InvariantCulture, out var parsed));
+        // Arrange
+        // The rejected text arrives as the theory argument.
+
+        // Act
+        var triedString = TenantId.TryParse(text, CultureInfo.InvariantCulture, out var parsed);
+        var triedSpan = TenantId.TryParse(text.AsSpan(), CultureInfo.InvariantCulture, out _);
+        var exception = Record.Exception(() => TenantId.Parse(text, CultureInfo.InvariantCulture));
+
+        // Assert
+        Assert.False(triedString);
         Assert.Equal(default, parsed);
-        Assert.False(TenantId.TryParse(text.AsSpan(), CultureInfo.InvariantCulture, out _));
-        _ = Assert.Throws<FormatException>(() => TenantId.Parse(text, CultureInfo.InvariantCulture));
+        Assert.False(triedSpan);
+        _ = Assert.IsType<FormatException>(exception);
     }
 
     /// <summary>A null string fails to parse without throwing.</summary>
     [Fact]
-    public void ShouldRejectNullText() =>
-        Assert.False(TenantId.TryParse(null, CultureInfo.InvariantCulture, out _));
+    public void ShouldRejectNullText()
+    {
+        // Arrange
+        string? text = null;
+
+        // Act
+        var tried = TenantId.TryParse(text, CultureInfo.InvariantCulture, out _);
+
+        // Assert
+        Assert.False(tried);
+    }
 
     /// <summary>The tenant formats as its bare value, including through the span API.</summary>
     [Fact]
@@ -63,22 +90,45 @@ public sealed class TenantIdTests
     [Fact]
     public void ShouldSerializeAsPlainString()
     {
-        Assert.Equal("\"acme\"", JsonSerializer.Serialize(new TenantId("acme")));
-        Assert.Equal(new TenantId("acme"), JsonSerializer.Deserialize<TenantId>("\"acme\""));
+        // Arrange
+        var tenant = new TenantId("acme");
+
+        // Act
+        var json = JsonSerializer.Serialize(tenant);
+        var deserialized = JsonSerializer.Deserialize<TenantId>("\"acme\"");
+
+        // Assert
+        Assert.Equal("\"acme\"", json);
+        Assert.Equal(new TenantId("acme"), deserialized);
     }
 
     /// <summary>A JSON string that is not a realm segment is a JSON error, not an argument error.</summary>
     [Fact]
-    public void ShouldRejectMalformedJsonString() =>
-        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<TenantId>("\"a/b\""));
+    public void ShouldRejectMalformedJsonString()
+    {
+        // Arrange
+        const string json = "\"a/b\"";
+
+        // Act
+        var exception = Record.Exception(() => JsonSerializer.Deserialize<TenantId>(json));
+
+        // Assert
+        _ = Assert.IsType<JsonException>(exception);
+    }
 
     /// <summary>A tenant can key a JSON dictionary.</summary>
     [Fact]
     public void ShouldRoundTripAsDictionaryKey()
     {
-        var json = JsonSerializer.Serialize(new Dictionary<TenantId, int> { [new TenantId("acme")] = 1 });
+        // Arrange
+        var dictionary = new Dictionary<TenantId, int> { [new TenantId("acme")] = 1 };
 
+        // Act
+        var json = JsonSerializer.Serialize(dictionary);
+        var roundTripped = JsonSerializer.Deserialize<Dictionary<TenantId, int>>(json);
+
+        // Assert
         Assert.Equal("""{"acme":1}""", json);
-        Assert.Equal(1, JsonSerializer.Deserialize<Dictionary<TenantId, int>>(json)![new TenantId("acme")]);
+        Assert.Equal(1, roundTripped![new TenantId("acme")]);
     }
 }

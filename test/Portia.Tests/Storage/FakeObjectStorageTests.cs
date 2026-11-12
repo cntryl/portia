@@ -109,18 +109,29 @@ public sealed class FakeObjectStorageTests
     [Fact]
     public void ShouldEnforceThe256MiBBoundary()
     {
+        // Arrange
         var digest = new string('a', 64);
-        Assert.Equal(ObjectStorageLimits.MaximumObjectLength, new ObjectDigest(digest, ObjectStorageLimits.MaximumObjectLength).Length);
-        Assert.Throws<ArgumentOutOfRangeException>(() => new ObjectDigest(digest, ObjectStorageLimits.MaximumObjectLength + 1));
-        Assert.Throws<ArgumentException>(() => new ObjectDigest("not-a-digest", 0));
+
+        // Act
+        var maximum = new ObjectDigest(digest, ObjectStorageLimits.MaximumObjectLength);
+        var tooLong = Record.Exception(() => new ObjectDigest(digest, ObjectStorageLimits.MaximumObjectLength + 1));
+        var badDigest = Record.Exception(() => new ObjectDigest("not-a-digest", 0));
+
+        // Assert
+        Assert.Equal(ObjectStorageLimits.MaximumObjectLength, maximum.Length);
+        _ = Assert.IsType<ArgumentOutOfRangeException>(tooLong);
+        _ = Assert.IsType<ArgumentException>(badDigest);
     }
 
     /// <summary>Runs the reusable provider conformance suite against the fake.</summary>
     [Fact]
     public async Task ShouldPassReusableStorageConformance()
     {
+        // Arrange
         var store = new FakeObjectStorage();
-        await ObjectStorageConformance.VerifyAsync(
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await ObjectStorageConformance.VerifyAsync(
             store,
             new TenantId("conformance-a"),
             new TenantId("conformance-b"),
@@ -128,7 +139,10 @@ public sealed class FakeObjectStorageTests
                 new ObjectUploadSession(part.UploadUri.AbsolutePath.Split('/')[1]),
                 part.PartNumber,
                 new MemoryStream(content.ToArray()),
-                ct));
+                ct)));
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>Matches S3's minimum size for every part except the final one, keeping the session open for corrected parts.</summary>

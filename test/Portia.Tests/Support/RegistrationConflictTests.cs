@@ -18,13 +18,18 @@ public sealed class RegistrationConflictTests
     [Fact]
     public void ShouldRejectTwoHandlersForOneRequestAtRegistryComposition()
     {
-        var error = Assert.Throws<InvalidOperationException>(() => new RequestRegistry(
-            [
-                new RequestRegistration<UniversalAction, UniversalActionHandler>(),
-                new RequestRegistration<UniversalAction, SecondUniversalActionHandler>()
-            ],
-            [], [], []));
+        // Arrange
+        RequestHandlerRegistration[] handlers =
+        [
+            new RequestRegistration<UniversalAction, UniversalActionHandler>(),
+            new RequestRegistration<UniversalAction, SecondUniversalActionHandler>()
+        ];
 
+        // Act
+        var error = Record.Exception(() => new RequestRegistry(handlers, [], [], []));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(error);
         Assert.Contains("conflicting handlers", error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(UniversalActionHandler), error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(SecondUniversalActionHandler), error.Message, StringComparison.Ordinal);
@@ -37,13 +42,16 @@ public sealed class RegistrationConflictTests
     [Fact]
     public void ShouldRejectTypeRegisteredAsBothAuthorizerAndGuard()
     {
-        var error = Assert.Throws<InvalidOperationException>(() => new RequestRegistry(
-            [new RequestRegistration<UniversalAction, UniversalActionHandler>()],
-            [new RequestAuthorizerRegistration<UniversalAction, DualRoleComponent>()],
-            [],
-            [new RequestGuardRegistration<UniversalAction, DualRoleComponent>()],
-            []));
+        // Arrange
+        var handlers = new[] { new RequestRegistration<UniversalAction, UniversalActionHandler>() };
+        var authorizers = new[] { new RequestAuthorizerRegistration<UniversalAction, DualRoleComponent>() };
+        var guards = new[] { new RequestGuardRegistration<UniversalAction, DualRoleComponent>() };
 
+        // Act
+        var error = Record.Exception(() => new RequestRegistry(handlers, authorizers, [], guards, []));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(error);
         Assert.Contains(typeof(DualRoleComponent).FullName!, error.Message, StringComparison.Ordinal);
         Assert.Contains("request authorizer", error.Message, StringComparison.Ordinal);
         Assert.Contains("request guard", error.Message, StringComparison.Ordinal);
@@ -56,13 +64,17 @@ public sealed class RegistrationConflictTests
     [Fact]
     public void ShouldAcceptOneHandlerRegisteredTwice()
     {
-        var registry = new RequestRegistry(
-            [
-                new RequestRegistration<UniversalAction, UniversalActionHandler>(),
-                new RequestRegistration<UniversalAction, UniversalActionHandler>()
-            ],
-            [], [], []);
+        // Arrange
+        RequestHandlerRegistration[] handlers =
+        [
+            new RequestRegistration<UniversalAction, UniversalActionHandler>(),
+            new RequestRegistration<UniversalAction, UniversalActionHandler>()
+        ];
 
+        // Act
+        var registry = new RequestRegistry(handlers, [], [], []);
+
+        // Assert
         Assert.NotNull(registry);
     }
 
@@ -138,10 +150,15 @@ public sealed class RegistrationConflictTests
     [Fact]
     public void ShouldRejectUndefinedAuthorizationStageAtRegistryComposition()
     {
-        var error = Assert.Throws<ArgumentOutOfRangeException>(() => new RequestRegistry([],
-            [new RequestAuthorizerRegistration<UniversalAction, UniversalActionAuthorizer>((AuthorizationStage)42)],
-            [], []));
+        // Arrange
+        RequestAuthorizerRegistration[] authorizers =
+            [new RequestAuthorizerRegistration<UniversalAction, UniversalActionAuthorizer>((AuthorizationStage)42)];
 
+        // Act
+        var error = Record.Exception(() => new RequestRegistry([], authorizers, [], []));
+
+        // Assert
+        _ = Assert.IsType<ArgumentOutOfRangeException>(error);
         Assert.Contains("defined authorization stage", error.Message, StringComparison.Ordinal);
     }
 
@@ -205,14 +222,19 @@ public sealed class RegistrationConflictTests
     [Fact]
     public void ShouldRejectConflictingAuthorizerStagesAtRegistryComposition()
     {
-        var error = Assert.Throws<InvalidOperationException>(() => new RequestRegistry([],
-            [
-                new RequestAuthorizerRegistration<UniversalAction, UniversalActionAuthorizer>(
-                    AuthorizationStage.Principal),
-                new RequestAuthorizerRegistration<UniversalAction, UniversalActionAuthorizer>()
-            ],
-            [], []));
+        // Arrange
+        RequestAuthorizerRegistration[] authorizers =
+        [
+            new RequestAuthorizerRegistration<UniversalAction, UniversalActionAuthorizer>(
+                AuthorizationStage.Principal),
+            new RequestAuthorizerRegistration<UniversalAction, UniversalActionAuthorizer>()
+        ];
 
+        // Act
+        var error = Record.Exception(() => new RequestRegistry([], authorizers, [], []));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(error);
         Assert.Contains("conflicting stages", error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(UniversalActionAuthorizer), error.Message, StringComparison.Ordinal);
     }
@@ -255,12 +277,18 @@ public sealed class RegistrationConflictTests
     [Fact]
     public void ShouldRejectConflictingBehaviorOrdersAtRegistryComposition()
     {
-        var error = Assert.Throws<InvalidOperationException>(() => new RequestRegistry([], [],
+        // Arrange
+        RequestPipelineBehaviorRegistration[] behaviors =
         [
             new RequestPipelineBehaviorRegistration<UniversalAction, CountingBehavior>(1),
             new RequestPipelineBehaviorRegistration<UniversalAction, CountingBehavior>(2)
-        ], []));
+        ];
 
+        // Act
+        var error = Record.Exception(() => new RequestRegistry([], [], behaviors, []));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(error);
         Assert.Contains("conflicting orders", error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(CountingBehavior), error.Message, StringComparison.Ordinal);
     }

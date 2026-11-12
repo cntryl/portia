@@ -69,13 +69,17 @@ public sealed class ReactorScenarioTests
     [Fact]
     public async Task ShouldFailReactionWhenScriptedRequestFails()
     {
+        // Arrange
         var scenario = new ReactorScenario()
             .Given(new UserCreated(Uuid.CreateVersion4()))
             .RespondTo<SendWelcomeEmail>(Result.Failure(new RequestError(RequestErrorKind.Conflict, "already welcomed")));
 
-        var error = await Assert.ThrowsAsync<ProcessorFailureException>(async () =>
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
             await scenario.RunAsync(new WelcomeReactor(scenario.Requests)));
 
+        // Assert
+        var error = Assert.IsType<ProcessorFailureException>(exception);
         Assert.Equal(RequestErrorKind.Conflict, error.Error!.Kind);
         _ = Assert.Single(scenario.SentRequests);
     }
@@ -85,8 +89,17 @@ public sealed class ReactorScenarioTests
     ///     such a script would silently never apply.
     /// </summary>
     [Fact]
-    public void ShouldRejectScriptForNonConcreteRequestType() =>
-        _ = Assert.Throws<ArgumentException>(() => new ReactorScenario().RespondTo<IRequest>(Result.Success));
+    public void ShouldRejectScriptForNonConcreteRequestType()
+    {
+        // Arrange
+        var scenario = new ReactorScenario();
+
+        // Act
+        var exception = Record.Exception(() => scenario.RespondTo<IRequest>(Result.Success));
+
+        // Assert
+        _ = Assert.IsType<ArgumentException>(exception);
+    }
 
     /// <summary>Running again redelivers the same events, so replay tolerance is testable without a failure.</summary>
     [Fact]
@@ -142,8 +155,17 @@ public sealed class ReactorScenarioTests
 
     /// <summary>The optional tenant cannot be the uninitialized value of the tenant struct.</summary>
     [Fact]
-    public void ShouldRejectUninitializedTenant() =>
-        _ = Assert.ThrowsAny<ArgumentException>(() => new ReactorScenario(default));
+    public void ShouldRejectUninitializedTenant()
+    {
+        // Arrange
+        var tenant = default(TenantId);
+
+        // Act
+        var exception = Record.Exception(() => new ReactorScenario(tenant));
+
+        // Assert
+        _ = Assert.IsAssignableFrom<ArgumentException>(exception);
+    }
 
     /// <summary>Seeded events reach the reactor with the metadata the test attached.</summary>
     [Fact]

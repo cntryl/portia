@@ -391,6 +391,7 @@ public sealed class MultiTenancyTests
     [Fact]
     public async Task ShouldReconnectAfterTenantDirectoryWatchStreamFaults()
     {
+        // Arrange
         var directory = new FlakyWatchTenantDirectory();
         var runner = new MultiTenantRunner(directory);
         var started = new ConcurrentBag<TenantId>();
@@ -405,12 +406,19 @@ public sealed class MultiTenancyTests
             (_, _) => Task.CompletedTask,
             cts.Token);
 
+        // Act
         // The first watch stream throws as soon as it's subscribed to; a working runner
         // reconnects and picks up the tenant that arrives on the *second* attempt.
-        await WaitUntilAsync(() => started.Contains(new TenantId("recovered-after-reconnect")));
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await WaitUntilAsync(() => started.Contains(new TenantId("recovered-after-reconnect")));
+            cts.Cancel();
+            await AwaitRunAsync(run);
+        });
 
-        cts.Cancel();
-        await AwaitRunAsync(run);
+        // Assert
+        Assert.Null(exception);
+        Assert.Contains(new TenantId("recovered-after-reconnect"), started);
     }
 
     /// <summary>
@@ -828,21 +836,34 @@ public sealed class MultiTenancyTests
     }
 
     /// <summary>Every configurable runner duration must be strictly positive.</summary>
-    [Fact]
-    public void ShouldRejectNonPositiveRunnerOptionDurations()
+    /// <param name="option">The runner option set to zero.</param>
+    [Theory]
+    [InlineData(nameof(MultiTenantRunnerOptions.RestartInterval))]
+    [InlineData(nameof(MultiTenantRunnerOptions.ShutdownGrace))]
+    [InlineData(nameof(MultiTenantRunnerOptions.TenantStopTimeout))]
+    public void ShouldRejectNonPositiveRunnerOptionDurations(string option)
     {
+        // Arrange
         var directory = new RemovalDirectory();
-        foreach (var configure in new Action<MultiTenantRunnerOptions>[]
-                 {
-                     options => options.RestartInterval = TimeSpan.Zero,
-                     options => options.ShutdownGrace = TimeSpan.Zero,
-                     options => options.TenantStopTimeout = TimeSpan.Zero
-                 })
+        var options = new MultiTenantRunnerOptions();
+        switch (option)
         {
-            var options = new MultiTenantRunnerOptions();
-            configure(options);
-            _ = Assert.Throws<ArgumentOutOfRangeException>(() => new MultiTenantRunner(directory, options));
+            case nameof(MultiTenantRunnerOptions.RestartInterval):
+                options.RestartInterval = TimeSpan.Zero;
+                break;
+            case nameof(MultiTenantRunnerOptions.ShutdownGrace):
+                options.ShutdownGrace = TimeSpan.Zero;
+                break;
+            default:
+                options.TenantStopTimeout = TimeSpan.Zero;
+                break;
         }
+
+        // Act
+        var exception = Record.Exception(() => new MultiTenantRunner(directory, options));
+
+        // Assert
+        _ = Assert.IsType<ArgumentOutOfRangeException>(exception);
     }
 
     static EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>

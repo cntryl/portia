@@ -36,26 +36,35 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldPassWhenGuardFailsWithExpectedKindAndRequestIsNotHandled()
     {
+        // Arrange
         await using var provider = Provider(RequestErrorKind.Conflict);
 
-        await RequestScenario.For(provider)
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(provider)
             .GivenActor(Member)
             .When(new ScenarioCommand())
             .ExpectAuthorized()
             .ExpectGuardFailed<SlugGuard>(RequestErrorKind.Conflict)
             .ExpectNotHandled()
-            .ExpectFailure(RequestErrorKind.Conflict);
+            .ExpectFailure(RequestErrorKind.Conflict));
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>An unmet expectation names what was expected and shows the observed lifecycle.</summary>
     [Fact]
     public async Task ShouldReportLifecycleTraceWhenExpectHandledButGuardFails()
     {
+        // Arrange
         await using var provider = Provider(RequestErrorKind.Conflict);
 
-        var error = await Assert.ThrowsAsync<ScenarioExpectationException>(async () =>
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand()).ExpectHandled());
 
+        // Assert
+        _ = Assert.IsType<ScenarioExpectationException>(error);
         Assert.Contains(nameof(ScenarioCommandHandler), error.Message, StringComparison.Ordinal);
         Assert.Contains(
             $"authorizer {nameof(ScenarioAuthorizer)} -> behavior {nameof(ScenarioBehavior)} -> guard {nameof(SlugGuard)}",
@@ -67,37 +76,51 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldReportDeniedWhenAuthorizerRejects()
     {
+        // Arrange
         await using var provider = Provider();
 
-        await RequestScenario.For(provider)
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(provider)
             .GivenActor(RequestActor.Anonymous)
             .When(new ScenarioCommand())
             .ExpectDenied(RequestErrorKind.Forbidden)
-            .ExpectNotHandled();
+            .ExpectNotHandled());
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>A permission rejection is a denial too.</summary>
     [Fact]
     public async Task ShouldReportDeniedWhenPermissionEvaluatorRejects()
     {
+        // Arrange
         await using var provider = Provider(permissions: TestPermissionEvaluator.DenyAll());
 
-        await RequestScenario.For(provider)
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(provider)
             .GivenActor(Member)
             .When(new ScenarioPermissionCommand())
             .ExpectDenied(RequestErrorKind.Forbidden)
-            .ExpectNotHandled();
+            .ExpectNotHandled());
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>A guard that fails with Forbidden is a guard failure, not an authorization denial.</summary>
     [Fact]
     public async Task ShouldNotTreatForbiddenGuardFailureAsDenied()
     {
+        // Arrange
         await using var provider = Provider(RequestErrorKind.Forbidden);
 
-        var error = await Assert.ThrowsAsync<ScenarioExpectationException>(async () =>
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand()).ExpectDenied());
 
+        // Assert
+        _ = Assert.IsType<ScenarioExpectationException>(error);
         Assert.Contains("denied", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -105,12 +128,16 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldFailExpectAuthorizedWhenNothingWasConsulted()
     {
+        // Arrange
         await using var provider = Provider();
 
-        var error = await Assert.ThrowsAsync<ScenarioExpectationException>(async () =>
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioOpenCommand())
                 .ExpectAuthorized());
 
+        // Assert
+        _ = Assert.IsType<ScenarioExpectationException>(error);
         Assert.Contains("authoriz", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -125,12 +152,12 @@ public sealed class RequestScenarioTests
         var result = await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioQuery())
             .ExpectHandled()
             .ExpectSuccess(42);
-
-        // Assert
-        var mismatch = await Assert.ThrowsAsync<ScenarioExpectationException>(async () =>
+        var mismatch = await Record.ExceptionAsync(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioQuery()).ExpectSuccess(7));
 
+        // Assert
         Assert.Equal(42, result.Value);
+        _ = Assert.IsType<ScenarioExpectationException>(mismatch);
         Assert.Contains("42", mismatch.Message, StringComparison.Ordinal);
     }
 
@@ -164,34 +191,47 @@ public sealed class RequestScenarioTests
 
         // Act
         var result = await failing;
+        var extendedException = await Record.ExceptionAsync(async () => await extended);
 
         // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Conflict, result.Error.Kind);
-        await Assert.ThrowsAsync<ScenarioExpectationException>(async () => await extended);
+        _ = Assert.IsType<ScenarioExpectationException>(extendedException);
     }
 
     /// <summary>The scenario and its actor are immutable too.</summary>
     [Fact]
     public async Task ShouldKeepBaseScenarioUnchangedWhenGivenActor()
     {
+        // Arrange
         await using var provider = Provider();
         var scenario = RequestScenario.For(provider);
 
-        await scenario.GivenActor(Member).When(new ScenarioCommand()).ExpectAuthorized().ExpectHandled();
-        await scenario.When(new ScenarioCommand()).ExpectDenied(RequestErrorKind.Forbidden);
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await scenario.GivenActor(Member).When(new ScenarioCommand()).ExpectAuthorized().ExpectHandled();
+            await scenario.When(new ScenarioCommand()).ExpectDenied(RequestErrorKind.Forbidden);
+        });
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>A guard expectation for a guard that cannot apply to the request says so.</summary>
     [Fact]
     public async Task ShouldRejectGuardExpectationForGuardNotApplicableToRequest()
     {
+        // Arrange
         await using var provider = Provider();
 
-        var error = await Assert.ThrowsAsync<ScenarioExpectationException>(async () =>
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand())
                 .ExpectGuardPassed<OpenCommandGuard>());
 
+        // Assert
+        _ = Assert.IsType<ScenarioExpectationException>(error);
         Assert.Contains($"{nameof(OpenCommandGuard)} is not a guard registered for {nameof(ScenarioCommand)}",
             error.Message, StringComparison.Ordinal);
     }
@@ -217,13 +257,17 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldReportAllUnmetExpectationsTogether()
     {
+        // Arrange
         await using var provider = Provider(RequestErrorKind.Conflict);
 
-        var error = await Assert.ThrowsAsync<ScenarioExpectationException>(async () =>
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand())
                 .ExpectHandled()
                 .ExpectSuccess());
 
+        // Assert
+        _ = Assert.IsType<ScenarioExpectationException>(error);
         Assert.Contains("2 expectation", error.Message, StringComparison.Ordinal);
     }
 
@@ -231,11 +275,16 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldPropagateDispatchException()
     {
+        // Arrange
         await using var provider = Provider();
 
-        _ = await Assert.ThrowsAsync<DivideByZeroException>(async () =>
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioExplodingCommand())
                 .ExpectHandled());
+
+        // Assert
+        _ = Assert.IsType<DivideByZeroException>(exception);
     }
 
     /// <summary>Pipeline behaviors run between authorization and guards, and count as proceeding past authorization.</summary>
@@ -258,11 +307,15 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldRequireRequestRegistry()
     {
+        // Arrange
         await using var provider = new ServiceCollection().BuildServiceProvider();
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
             await RequestScenario.For(provider).When(new ScenarioCommand()).ExpectHandled());
 
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(error);
         Assert.Contains(nameof(RequestRegistry), error.Message, StringComparison.Ordinal);
     }
 
@@ -305,11 +358,17 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldReportConcurrencyConflictAsConflictFailure()
     {
+        // Arrange
         await using var provider = Provider();
 
-        await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioConflictCommand())
-            .ExpectHandled()
-            .ExpectFailure(RequestErrorKind.Conflict);
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioConflictCommand())
+                .ExpectHandled()
+                .ExpectFailure(RequestErrorKind.Conflict));
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>
@@ -319,11 +378,16 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldPropagateDenialRaisedInsideStreamHandler()
     {
+        // Arrange
         await using var provider = Provider();
 
-        _ = await Assert.ThrowsAsync<RequestAuthorizationException>(async () =>
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioNestedDenialStream())
                 .ExpectFailure(RequestErrorKind.Forbidden));
+
+        // Assert
+        _ = Assert.IsType<RequestAuthorizationException>(exception);
     }
 
     /// <summary>Discarded immutable assertions are not executed; retaining them makes the failure observable.</summary>
@@ -379,8 +443,14 @@ public sealed class RequestScenarioTests
     [InlineData(-1)]
     public void ShouldRejectInvalidStreamLimits(int limit)
     {
+        // Arrange
         using var provider = Provider();
-        Assert.Throws<ArgumentOutOfRangeException>(() => RequestScenario.For(provider).When(new ScenarioStream(), limit));
+
+        // Act
+        var exception = Record.Exception(() => RequestScenario.For(provider).When(new ScenarioStream(), limit));
+
+        // Assert
+        _ = Assert.IsType<ArgumentOutOfRangeException>(exception);
         Assert.Empty(provider.GetRequiredService<ScenarioLog>().Scopes);
     }
 

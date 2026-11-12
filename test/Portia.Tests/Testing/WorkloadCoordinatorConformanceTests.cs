@@ -7,16 +7,31 @@ public sealed class WorkloadCoordinatorConformanceTests
 {
     /// <summary>A shared exclusive owner registry satisfies the black-box contract.</summary>
     [Fact]
-    public async Task ShouldAcceptExclusiveCoordinator() =>
-        await WorkloadCoordinatorConformance.VerifyAsync(new SharedProbe(false));
+    public async Task ShouldAcceptExclusiveCoordinator()
+    {
+        // Arrange
+        var probe = new SharedProbe(false);
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await WorkloadCoordinatorConformance.VerifyAsync(probe));
+
+        // Assert
+        Assert.Null(exception);
+    }
 
     /// <summary>Independent workers that both claim every workload are rejected.</summary>
     [Fact]
     public async Task ShouldRejectDuplicateOwners()
     {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            WorkloadCoordinatorConformance.VerifyAsync(new SharedProbe(true)).AsTask());
+        // Arrange
+        var probe = new SharedProbe(true);
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            WorkloadCoordinatorConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("concurrent owners", exception.Message, StringComparison.Ordinal);
     }
 
@@ -24,9 +39,15 @@ public sealed class WorkloadCoordinatorConformanceTests
     [Fact]
     public async Task ShouldRejectMissingTakeover()
     {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            WorkloadCoordinatorConformance.VerifyAsync(new MissingTakeoverProbe()).AsTask());
+        // Arrange
+        var probe = new MissingTakeoverProbe();
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            WorkloadCoordinatorConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("take over", exception.Message, StringComparison.Ordinal);
     }
 
@@ -34,9 +55,15 @@ public sealed class WorkloadCoordinatorConformanceTests
     [Fact]
     public async Task ShouldRejectOverlapDuringTakeover()
     {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            WorkloadCoordinatorConformance.VerifyAsync(new SharedProbe(false, true)).AsTask());
+        // Arrange
+        var probe = new SharedProbe(false, true);
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            WorkloadCoordinatorConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("concurrent owners", exception.Message, StringComparison.Ordinal);
     }
 
@@ -44,10 +71,16 @@ public sealed class WorkloadCoordinatorConformanceTests
     [Fact]
     public async Task ShouldRejectStoppedRetainedWorkload()
     {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            WorkloadCoordinatorConformance.VerifyAsync(
-                new ReconciliationFailureProbe(ReconciliationFailure.DropRetained)).AsTask());
+        // Arrange
+        var probe = new ReconciliationFailureProbe(ReconciliationFailure.DropRetained);
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            WorkloadCoordinatorConformance.VerifyAsync(
+                probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("Unchanged reconciliation", exception.Message, StringComparison.Ordinal);
     }
 
@@ -55,10 +88,16 @@ public sealed class WorkloadCoordinatorConformanceTests
     [Fact]
     public async Task ShouldRejectReacquiredRevokedWorkload()
     {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            WorkloadCoordinatorConformance.VerifyAsync(
-                new ReconciliationFailureProbe(ReconciliationFailure.ReacquireRevoked)).AsTask());
+        // Arrange
+        var probe = new ReconciliationFailureProbe(ReconciliationFailure.ReacquireRevoked);
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            WorkloadCoordinatorConformance.VerifyAsync(
+                probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("reacquired", exception.Message, StringComparison.Ordinal);
     }
 
@@ -66,9 +105,15 @@ public sealed class WorkloadCoordinatorConformanceTests
     [Fact]
     public async Task ShouldReportMissingInitialAcquisition()
     {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            WorkloadCoordinatorConformance.VerifyAsync(new NoStartProbe()).AsTask());
+        // Arrange
+        var probe = new NoStartProbe();
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            WorkloadCoordinatorConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("No worker acquired", exception.Message, StringComparison.Ordinal);
     }
 
@@ -76,12 +121,17 @@ public sealed class WorkloadCoordinatorConformanceTests
     [Fact]
     public async Task ShouldBoundCancellationCleanup()
     {
+        // Arrange
         var verification = WorkloadCoordinatorConformance.VerifyAsync(new IgnoringCancellationProbe()).AsTask();
         // The probe still enforces its 500 ms convergence limit. This independent hang watchdog
         // needs scheduler headroom on loaded runners; its timeout must never count as conformance.
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
+
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
             verification.WaitAsync(TimeSpan.FromSeconds(10)));
 
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("shutdown", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -89,9 +139,15 @@ public sealed class WorkloadCoordinatorConformanceTests
     [Fact]
     public async Task ShouldPreservePrimaryViolationWhenCleanupAlsoFails()
     {
-        var exception = await Assert.ThrowsAsync<ConformanceViolationException>(() =>
-            WorkloadCoordinatorConformance.VerifyAsync(new IgnoringCancellationProbe(true)).AsTask());
+        // Arrange
+        var probe = new IgnoringCancellationProbe(true);
 
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            WorkloadCoordinatorConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        _ = Assert.IsType<ConformanceViolationException>(exception);
         Assert.Contains("concurrent owners", exception.Message, StringComparison.Ordinal);
     }
 

@@ -66,13 +66,19 @@ public sealed class RequestEnvelopeContextTests
     [Fact]
     public void ShouldRejectEnvelopeWithoutVersionOrMetadata()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(
             serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), null).Span));
         _ = json.Remove("metadata");
         _ = json.Remove("version");
-        _ = Assert.Throws<InvalidOperationException>(() =>
+
+        // Act
+        var exception = Record.Exception(() =>
             serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes(json.ToJsonString())));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(exception);
     }
 
     /// <summary>
@@ -87,6 +93,7 @@ public sealed class RequestEnvelopeContextTests
     [InlineData(true)]
     public void ShouldRejectUnsupportedEnvelopeVersionOrEmptyRequestIdentity(bool unsupportedVersion)
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(
             serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), null).Span));
@@ -100,8 +107,13 @@ public sealed class RequestEnvelopeContextTests
             metadata["request_id"] = Uuid.Empty.ToString();
         }
 
-        _ = Assert.ThrowsAny<Exception>(() =>
+
+        // Act
+        var exception = Record.Exception(() =>
             serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes(json.ToJsonString())));
+
+        // Assert
+        Assert.NotNull(exception);
     }
 
     /// <summary>A request used only by these envelope tests.</summary>

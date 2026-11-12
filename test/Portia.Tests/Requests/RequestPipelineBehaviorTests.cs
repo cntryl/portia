@@ -114,13 +114,17 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldNameOwnerOfUninitializedResult()
     {
+        // Arrange
         using var provider = Provider([], new RequestRegistration<InvalidPipelineAction, InvalidPipelineHandler>());
+        var handlerName = typeof(InvalidPipelineHandler).FullName;
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
             await provider.GetRequiredService<IRequestBus>()
                 .SendAsync(new InvalidPipelineAction(), RequestActor.System));
 
-        var handlerName = typeof(InvalidPipelineHandler).FullName;
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(error);
         Assert.NotNull(handlerName);
         Assert.Contains(handlerName, error.Message, StringComparison.Ordinal);
     }
@@ -585,20 +589,31 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public void ShouldExposeStableBuiltInAndCustomTransportNames()
     {
-        Assert.Equal("local", new DirectInvocation().TransportName);
-        Assert.Equal("http", new HttpInvocation("GET", "/x", "/x", "x").TransportName);
-        Assert.Equal("rpc", new RpcInvocation("x").TransportName);
-        Assert.Equal("queue", new QueueInvocation("x", 1).TransportName);
-        Assert.Equal("notice", new NoticeInvocation("x").TransportName);
-        Assert.Equal("schedule", new ScheduleInvocation("x").TransportName);
-        Assert.Equal("custom", new CustomInvocation().TransportName);
-        Assert.Equal(RequestTraceRelationship.Parent, new DirectInvocation().TraceRelationship);
-        Assert.Equal(RequestTraceRelationship.Parent, new HttpInvocation("GET", "/x", "/x", "x").TraceRelationship);
-        Assert.Equal(RequestTraceRelationship.Parent, new RpcInvocation("x").TraceRelationship);
-        Assert.Equal(RequestTraceRelationship.Link, new QueueInvocation("x", 1).TraceRelationship);
-        Assert.Equal(RequestTraceRelationship.Link, new NoticeInvocation("x").TraceRelationship);
-        Assert.Equal(RequestTraceRelationship.Link, new ScheduleInvocation("x").TraceRelationship);
-        Assert.Null(new DirectInvocation().MessagingSystem);
+        // Arrange
+        RequestInvocation[] invocations =
+        [
+            new DirectInvocation(),
+            new HttpInvocation("GET", "/x", "/x", "x"),
+            new RpcInvocation("x"),
+            new QueueInvocation("x", 1),
+            new NoticeInvocation("x"),
+            new ScheduleInvocation("x"),
+            new CustomInvocation(),
+        ];
+
+        // Act
+        var names = invocations.Select(invocation => invocation.TransportName).ToArray();
+        var relationships = invocations.Take(6).Select(invocation => invocation.TraceRelationship).ToArray();
+        var messagingSystem = invocations[0].MessagingSystem;
+
+        // Assert
+        Assert.Equal(["local", "http", "rpc", "queue", "notice", "schedule", "custom"], names);
+        Assert.Equal(
+        [
+            RequestTraceRelationship.Parent, RequestTraceRelationship.Parent, RequestTraceRelationship.Parent,
+            RequestTraceRelationship.Link, RequestTraceRelationship.Link, RequestTraceRelationship.Link,
+        ], relationships);
+        Assert.Null(messagingSystem);
     }
 
     static ServiceProvider Provider(List<string> calls, RequestHandlerRegistration handler,

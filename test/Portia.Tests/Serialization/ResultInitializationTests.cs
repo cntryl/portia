@@ -19,12 +19,16 @@ public sealed class ResultInitializationTests
     [InlineData("Error")]
     public void ShouldThrowForEveryMemberOfAnUninitializedResult(string member)
     {
+        // Arrange
         var result = default(Result);
 
-        var error = Assert.Throws<InvalidOperationException>(() => _ = member == "IsSuccess"
+        // Act
+        var error = Record.Exception(() => _ = member == "IsSuccess"
             ? result.IsSuccess
             : result.Error is not null);
 
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(error);
         Assert.Equal("The result is uninitialized.", error.Message);
     }
 
@@ -39,15 +43,19 @@ public sealed class ResultInitializationTests
     [InlineData("Error")]
     public void ShouldThrowForEveryMemberOfAnUninitializedResultWithValue(string member)
     {
+        // Arrange
         var result = default(Result<int>);
 
-        var error = Assert.Throws<InvalidOperationException>(() => _ = member switch
+        // Act
+        var error = Record.Exception(() => _ = member switch
         {
             "IsSuccess" => result.IsSuccess,
             "Value" => result.Value != 0,
             _ => result.Error is not null
         });
 
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(error);
         Assert.Equal("The result is uninitialized.", error.Message);
     }
 
@@ -59,10 +67,14 @@ public sealed class ResultInitializationTests
     [Fact]
     public void ShouldDistinguishAFailedResultFromAnUninitializedOne()
     {
+        // Arrange
         var result = Result<int>.Failure(new RequestError(RequestErrorKind.Validation, "no"));
 
-        var error = Assert.Throws<InvalidOperationException>(() => _ = result.Value);
+        // Act
+        var error = Record.Exception(() => _ = result.Value);
 
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(error);
         Assert.Equal("A failed result has no value.", error.Message);
     }
 
@@ -73,18 +85,48 @@ public sealed class ResultInitializationTests
     [Fact]
     public void ShouldAnswerNormallyForResultsBuiltThroughTheFactories()
     {
-        Assert.True(Result.Success.IsSuccess);
-        Assert.Null(Result.Success.Error);
-        Assert.Equal(7, Result<int>.Success(7).Value);
-        Assert.Null(Result<string?>.Success(null).Value);
-        Assert.False(Result.Failure(new RequestError(RequestErrorKind.Validation, "no")).IsSuccess);
+        // Arrange
+        var error = new RequestError(RequestErrorKind.Validation, "no");
+
+        // Act
+        var success = Result.Success;
+        var valueSuccess = Result<int>.Success(7);
+        var nullSuccess = Result<string?>.Success(null);
+        var failure = Result.Failure(error);
+
+        // Assert
+        Assert.True(success.IsSuccess);
+        Assert.Null(success.Error);
+        Assert.Equal(7, valueSuccess.Value);
+        Assert.Null(nullSuccess.Value);
+        Assert.False(failure.IsSuccess);
     }
 
     /// <summary>Verifies that a failure cannot be built without describing itself.</summary>
     [Fact]
-    public void ShouldRejectAFailureWithNoError()
+    public void ShouldRejectFailureWithNoErrorGivenNoResultOutcome()
     {
-        _ = Assert.Throws<ArgumentNullException>(() => Result.Failure(null!));
-        _ = Assert.Throws<ArgumentNullException>(() => Result<int>.Failure(null!));
+        // Arrange
+        RequestError? error = null;
+
+        // Act
+        var exception = Record.Exception(() => Result.Failure(error!));
+
+        // Assert
+        _ = Assert.IsType<ArgumentNullException>(exception);
+    }
+
+    /// <summary>Verifies that a result-bearing failure cannot be built without describing itself.</summary>
+    [Fact]
+    public void ShouldRejectFailureWithNoErrorGivenResultWithValue()
+    {
+        // Arrange
+        RequestError? error = null;
+
+        // Act
+        var exception = Record.Exception(() => Result<int>.Failure(error!));
+
+        // Assert
+        _ = Assert.IsType<ArgumentNullException>(exception);
     }
 }

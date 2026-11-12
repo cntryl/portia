@@ -10,10 +10,15 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldReplayBareEventsAsHistory()
     {
-        var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()))
+        // Arrange
+        var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
+
+        // Act
+        _ = scenario
             .Given(new ValueChanged(3), new ValueIncremented(4))
             .Given(new ValueIncremented(1));
 
+        // Assert
         Assert.Equal(8, scenario.Aggregate.Value);
         Assert.Equal(3UL, scenario.Aggregate.Version);
         Assert.Equal(3UL, scenario.CommittedEventCount);
@@ -150,20 +155,26 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldDiscardWhatAThrowingOperationRaised()
     {
+        // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
-
-        _ = Assert.Throws<DivideByZeroException>(() => scenario.When(aggregate =>
+        var throwing = Record.Exception(() => scenario.When(aggregate =>
         {
             aggregate.ChangeValue(5);
             throw new DivideByZeroException();
         }));
+        var pendingAfterThrow = scenario.PendingEvents.ToList();
 
-        Assert.Empty(scenario.PendingEvents);
-        _ = Assert.Throws<InvalidOperationException>(() => scenario.When(aggregate =>
+        // Act
+        var further = Record.Exception(() => scenario.When(aggregate =>
         {
             aggregate.ChangeValue(6);
             return AggregateOutcome.Commit(Result.Success);
         }));
+
+        // Assert
+        _ = Assert.IsType<DivideByZeroException>(throwing);
+        Assert.Empty(pendingAfterThrow);
+        _ = Assert.IsType<InvalidOperationException>(further);
     }
 
     /// <summary>What a direct call on the aggregate raised is saved before the next history, like a committed When.</summary>
@@ -186,9 +197,14 @@ public sealed class AggregateScenarioTests
     [Fact]
     public void ShouldThrowWhenOperationReturnsUninitializedOutcome()
     {
+        // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
 
-        _ = Assert.Throws<InvalidOperationException>(() => scenario.When(_ => default(AggregateOutcome)));
+        // Act
+        var exception = Record.Exception(() => scenario.When(_ => default(AggregateOutcome)));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(exception);
     }
 
     /// <summary>The shortcut commits a successful result and retains its raised event.</summary>

@@ -13,16 +13,32 @@ public sealed class FixedTenantDirectoryTests
     [Fact]
     public async Task ShouldReportConfiguredTenants()
     {
+        // Arrange
         var directory = new FixedTenantDirectory(new TenantId("acme"), new TenantId("beta"));
+        var empty = new FixedTenantDirectory();
 
-        Assert.Equal([new TenantId("acme"), new TenantId("beta")], await directory.GetActiveTenantsAsync().ToListAsync());
-        Assert.Empty(await new FixedTenantDirectory().GetActiveTenantsAsync().ToListAsync());
+        // Act
+        var tenants = await directory.GetActiveTenantsAsync().ToListAsync();
+        var emptyTenants = await empty.GetActiveTenantsAsync().ToListAsync();
+
+        // Assert
+        Assert.Equal([new TenantId("acme"), new TenantId("beta")], tenants);
+        Assert.Empty(emptyTenants);
     }
 
     /// <summary>A tenant listed twice is a configuration mistake, not two workloads.</summary>
     [Fact]
-    public void ShouldRejectDuplicateTenants() =>
-        Assert.Throws<ArgumentException>(() => new FixedTenantDirectory(new TenantId("acme"), new TenantId("acme")));
+    public void ShouldRejectDuplicateTenants()
+    {
+        // Arrange
+        var tenant = new TenantId("acme");
+
+        // Act
+        var exception = Record.Exception(() => new FixedTenantDirectory(tenant, tenant));
+
+        // Assert
+        _ = Assert.IsType<ArgumentException>(exception);
+    }
 
     /// <summary>The watch stays open until cancelled and ends through cancellation, never on its own.</summary>
     [Fact]

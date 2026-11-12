@@ -20,9 +20,12 @@ public sealed class RequestTransportMarkerTests
         IRemoteRequestSender sender = implementation;
         var request = new RequestIdentityTests.IdentifiedCommand(Uuid.CreateVersion4());
 
-        // Act and Assert
-        _ = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
             await sender.SendAsync(request, new RequestRouteValues(), null, (IExecutionContext)null!));
+
+        // Assert
+        _ = Assert.IsType<ArgumentNullException>(exception);
         Assert.Null(implementation.LastMetadata);
     }
 
@@ -37,22 +40,28 @@ public sealed class RequestTransportMarkerTests
         var scheduler = new FakeRequestScheduler();
         var request = new RequestIdentityTests.IdentifiedCommand(Uuid.CreateVersion4());
         var route = new RequestRouteValues();
-
-        // Act and Assert
-        _ = await ((IRemoteRequestSender)remote).SendAsync(request, route, null);
-        Assert.Equal(request.CommandId, remote.LastMetadata!.RequestId);
-        _ = await ((IRemoteRequestSender)remote).SendWithOutcomeAsync(request, route, null);
-        Assert.Equal(request.CommandId, remote.LastMetadata!.RequestId);
         var query = new RequestIdentityTests.IdentifiedQuery(Uuid.CreateVersion4());
+
+        // Act
+        _ = await ((IRemoteRequestSender)remote).SendAsync(request, route, null);
+        var sendId = remote.LastMetadata!.RequestId;
+        _ = await ((IRemoteRequestSender)remote).SendWithOutcomeAsync(request, route, null);
+        var sendWithOutcomeId = remote.LastMetadata!.RequestId;
         _ = await ((IRemoteRequestSender)remote).SendAsync<RequestIdentityTests.IdentifiedQuery, Uuid>(query, route, null);
-        Assert.Equal(query.CommandId, remote.LastMetadata!.RequestId);
+        var queryId = remote.LastMetadata!.RequestId;
         _ = await ((IRemoteRequestSender)remote).SendWithOutcomeAsync<RequestIdentityTests.IdentifiedQuery, Uuid>(query, route, null);
-        Assert.Equal(query.CommandId, remote.LastMetadata!.RequestId);
+        var queryWithOutcomeId = remote.LastMetadata!.RequestId;
         await ((IRequestQueuePublisher)queue).EnqueueAsync(request, route, null);
-        Assert.Equal(request.CommandId, queue.LastMetadata!.RequestId);
         await ((INoticeRequestSender)notice).PublishAsync(request, route, null);
         _ = await ((IRequestScheduler)scheduler).ScheduleAsync(request, new RequestScheduleSpec("* * * * *"),
             route, RequestActor.System);
+
+        // Assert
+        Assert.Equal(request.CommandId, sendId);
+        Assert.Equal(request.CommandId, sendWithOutcomeId);
+        Assert.Equal(query.CommandId, queryId);
+        Assert.Equal(query.CommandId, queryWithOutcomeId);
+        Assert.Equal(request.CommandId, queue.LastMetadata!.RequestId);
         Assert.Equal(request.CommandId, notice.LastMetadata!.RequestId);
         Assert.Equal(request.CommandId, scheduler.LastMetadata!.RequestId);
     }

@@ -10,8 +10,13 @@ public sealed class StoreFixtureTests
     [Fact]
     public async Task ShouldDefaultToInMemoryEventStore()
     {
+        // Arrange
+        // The fixture is built with no store supplied.
+
+        // Act
         await using var fixture = new StoreFixture();
 
+        // Assert
         Assert.IsType<InMemoryEventStore>(fixture.Store);
     }
 
@@ -73,8 +78,13 @@ public sealed class StoreFixtureTests
     [Fact]
     public async Task ShouldResolveAggregateExecutorFromServices()
     {
+        // Arrange
         await using var fixture = new StoreFixture();
 
-        Assert.NotNull(fixture.Services.GetService(typeof(IAggregateExecutor)));
+        // Act
+        var executor = fixture.Services.GetService(typeof(IAggregateExecutor));
+
+        // Assert
+        Assert.NotNull(executor);
     }
 }

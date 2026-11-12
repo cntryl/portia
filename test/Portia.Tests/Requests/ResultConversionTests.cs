@@ -18,8 +18,13 @@ public sealed class ResultConversionTests
     [InlineData(RequestErrorKind.Conflict)]
     public void ShouldCreateErrorOfRequestedKind(RequestErrorKind kind)
     {
-        var error = Create(kind, "The operation was rejected.");
+        // Arrange
+        const string message = "The operation was rejected.";
 
+        // Act
+        var error = Create(kind, message);
+
+        // Assert
         Assert.Equal(kind, error.Kind);
         Assert.Equal("The operation was rejected.", error.Message);
         Assert.False(error.IsTransient);
@@ -29,15 +34,29 @@ public sealed class ResultConversionTests
     [Fact]
     public void ShouldCarryTransientFlagThroughFactory()
     {
-        var error = RequestError.Conflict("Operations are paused.", isTransient: true);
+        // Arrange
+        const string message = "Operations are paused.";
 
+        // Act
+        var error = RequestError.Conflict(message, isTransient: true);
+
+        // Assert
         Assert.True(error.IsTransient);
     }
 
     /// <summary>A factory applies the same message rule as the constructor.</summary>
     [Fact]
-    public void ShouldRejectBlankMessageFromFactory() =>
-        Assert.Throws<ArgumentException>(() => RequestError.Validation(" "));
+    public void ShouldRejectBlankMessageFromFactory()
+    {
+        // Arrange
+        const string blank = " ";
+
+        // Act
+        var exception = Record.Exception(() => RequestError.Validation(blank));
+
+        // Assert
+        _ = Assert.IsType<ArgumentException>(exception);
+    }
 
     /// <summary>An error converts to a failed no-value result carrying that same error.</summary>
     [Fact]
@@ -73,8 +92,13 @@ public sealed class ResultConversionTests
     [Fact]
     public void ShouldConvertValueToSuccessfulResult()
     {
-        Result<string> result = "savings";
+        // Arrange
+        const string value = "savings";
 
+        // Act
+        Result<string> result = value;
+
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal("savings", result.Value);
     }
@@ -83,8 +107,17 @@ public sealed class ResultConversionTests
     [Fact]
     public void ShouldReturnEitherSideFromOneMethod()
     {
-        Assert.True(Open(amount: 5).IsSuccess);
-        Assert.Equal(RequestErrorKind.Validation, Open(amount: -1).Error!.Kind);
+        // Arrange
+        const int validAmount = 5;
+        const int invalidAmount = -1;
+
+        // Act
+        var success = Open(validAmount);
+        var failure = Open(invalidAmount);
+
+        // Assert
+        Assert.True(success.IsSuccess);
+        Assert.Equal(RequestErrorKind.Validation, failure.Error!.Kind);
     }
 
     static Result<int> Open(int amount) => amount < 0

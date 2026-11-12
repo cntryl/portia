@@ -29,8 +29,13 @@ public sealed class TenantFreeMessageTests
     [Fact]
     public void ShouldOmitTenantGivenTenantStopTimeout()
     {
-        var ex = new TenantStopTimeoutException(new TenantId(Tenant), TimeSpan.FromSeconds(5));
+        // Arrange
+        var tenant = new TenantId(Tenant);
 
+        // Act
+        var ex = new TenantStopTimeoutException(tenant, TimeSpan.FromSeconds(5));
+
+        // Assert
         Assert.DoesNotContain(Tenant, ex.Message, StringComparison.Ordinal);
         Assert.Contains(TimeSpan.FromSeconds(5).ToString(), ex.Message, StringComparison.Ordinal);
         Assert.Equal(new TenantId(Tenant), ex.TenantId);
@@ -79,8 +84,14 @@ public sealed class TenantFreeMessageTests
     [Fact]
     public void ShouldOmitRouteGivenMalformedStreamRoute()
     {
-        var ex = Assert.Throws<FormatException>(() => EventStreamAddress.Parse($"stream://{Tenant}/orders"));
+        // Arrange
+        var route = $"stream://{Tenant}/orders";
 
+        // Act
+        var exception = Record.Exception(() => EventStreamAddress.Parse(route));
+
+        // Assert
+        var ex = Assert.IsType<FormatException>(exception);
         Assert.DoesNotContain(Tenant, ex.Message, StringComparison.Ordinal);
     }
 

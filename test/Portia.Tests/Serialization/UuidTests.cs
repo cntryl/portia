@@ -18,8 +18,13 @@ public sealed class UuidTests
     [Fact]
     public void ShouldCreateKnownVersion5UuidForDnsName()
     {
-        var uuid = Uuid.CreateVersion5(Uuid.DnsNamespace, "www.widgets.com");
+        // Arrange
+        const string name = "www.widgets.com";
 
+        // Act
+        var uuid = Uuid.CreateVersion5(Uuid.DnsNamespace, name);
+
+        // Assert
         Assert.Equal("21f7f8de-8051-5b89-8680-0195ef798b6a", uuid.ToString());
         Assert.Equal(5, uuid.Version);
     }
@@ -99,8 +104,13 @@ public sealed class UuidTests
     [Fact]
     public void ShouldCreateVersion4Uuid()
     {
+        // Arrange
+        // No setup: version 4 generation takes no inputs.
+
+        // Act
         var uuid = Uuid.CreateVersion4();
 
+        // Assert
         Assert.NotEqual(Uuid.Empty, uuid);
         Assert.Equal(4, uuid.Version);
     }
@@ -111,10 +121,17 @@ public sealed class UuidTests
     [Fact]
     public void ShouldRoundTripCanonicalUuidText()
     {
-        var uuid = Uuid.Parse(CanonicalText, CultureInfo.InvariantCulture);
+        // Arrange
+        const string text = CanonicalText;
 
-        Assert.Equal(CanonicalText, uuid.ToString());
-        Assert.True(Uuid.TryParse(CanonicalText, out var parsed));
+        // Act
+        var uuid = Uuid.Parse(text, CultureInfo.InvariantCulture);
+        var formatted = uuid.ToString();
+        var tried = Uuid.TryParse(text, out var parsed);
+
+        // Assert
+        Assert.Equal(CanonicalText, formatted);
+        Assert.True(tried);
         Assert.Equal(uuid, parsed);
     }
 
@@ -143,11 +160,20 @@ public sealed class UuidTests
     [Fact]
     public void ShouldRejectInvalidInputThroughGenericParsingContracts()
     {
-        _ = Assert.Throws<FormatException>(() => Parse<Uuid>("not-a-uuid"));
-        _ = Assert.Throws<FormatException>(() => ParseSpan<Uuid>("not-a-uuid"));
+        // Arrange
+        const string invalid = "not-a-uuid";
 
-        Assert.False(TryParse<Uuid>("not-a-uuid", out var fromString));
-        Assert.False(TryParseSpan<Uuid>("not-a-uuid", out var fromSpan));
+        // Act
+        var parseError = Record.Exception(() => Parse<Uuid>(invalid));
+        var parseSpanError = Record.Exception(() => ParseSpan<Uuid>(invalid));
+        var triedString = TryParse<Uuid>(invalid, out var fromString);
+        var triedSpan = TryParseSpan<Uuid>(invalid, out var fromSpan);
+
+        // Assert
+        _ = Assert.IsType<FormatException>(parseError);
+        _ = Assert.IsType<FormatException>(parseSpanError);
+        Assert.False(triedString);
+        Assert.False(triedSpan);
         Assert.Equal(Uuid.Empty, fromString);
         Assert.Equal(Uuid.Empty, fromSpan);
     }
@@ -198,8 +224,13 @@ public sealed class UuidTests
     [Fact]
     public void ShouldReturnEmptyUuidWhenTryParseFails()
     {
-        var parsed = Uuid.TryParse("not-a-uuid", out var uuid);
+        // Arrange
+        const string invalid = "not-a-uuid";
 
+        // Act
+        var parsed = Uuid.TryParse(invalid, out var uuid);
+
+        // Assert
         Assert.False(parsed);
         Assert.Equal(Uuid.Empty, uuid);
     }
@@ -230,8 +261,13 @@ public sealed class UuidTests
     [Fact]
     public void ShouldDeserializeFromCanonicalString()
     {
-        var deserialized = JsonSerializer.Deserialize<Uuid>("\"21f7f8de-8051-5b89-8680-0195ef798b6a\"");
+        // Arrange
+        const string json = "\"21f7f8de-8051-5b89-8680-0195ef798b6a\"";
 
+        // Act
+        var deserialized = JsonSerializer.Deserialize<Uuid>(json);
+
+        // Assert
         Assert.Equal(Uuid.Parse("21f7f8de-8051-5b89-8680-0195ef798b6a", CultureInfo.InvariantCulture), deserialized);
     }
 
@@ -244,8 +280,14 @@ public sealed class UuidTests
     [Fact]
     public void ShouldThrowWhenDeserializingInvalidUuidString()
     {
-        _ = Assert.Throws<JsonException>(() =>
-            JsonSerializer.Deserialize<Uuid>("\"not-a-uuid\""));
+        // Arrange
+        const string json = "\"not-a-uuid\"";
+
+        // Act
+        var exception = Record.Exception(() => JsonSerializer.Deserialize<Uuid>(json));
+
+        // Assert
+        _ = Assert.IsType<JsonException>(exception);
     }
 
     /// <summary>A UUID-keyed dictionary round-trips with each key in its canonical string form.</summary>
@@ -267,8 +309,17 @@ public sealed class UuidTests
 
     /// <summary>A key that is not a UUID fails as JSON rather than becoming <see cref="Uuid.Empty" />.</summary>
     [Fact]
-    public void ShouldThrowWhenDeserializingInvalidUuidKey() =>
-        _ = Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<Dictionary<Uuid, int>>("{\"x\":1}"));
+    public void ShouldThrowWhenDeserializingInvalidUuidKey()
+    {
+        // Arrange
+        const string json = "{\"x\":1}";
+
+        // Act
+        var exception = Record.Exception(() => JsonSerializer.Deserialize<Dictionary<Uuid, int>>(json));
+
+        // Assert
+        _ = Assert.IsType<JsonException>(exception);
+    }
 
     static T Parse<T>(string value) where T : IParsable<T> =>
         T.Parse(value, CultureInfo.InvariantCulture);

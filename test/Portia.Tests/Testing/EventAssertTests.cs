@@ -9,13 +9,19 @@ public sealed class EventAssertTests
     [Fact]
     public void ShouldCompareCollectionsAndNestedRecordsIgnoringMetadata()
     {
+        // Arrange
         var expected = new CriteriaRevised(["one", "two"], new RevisionDetails(["a", "b"]));
         var actual = DomainEventSeed.Attach(
             new CriteriaRevised(["one", "two"], new RevisionDetails(["a", "b"])),
             Uuid.CreateVersion4(), 1);
 
-        EventAssert.Equal(expected, actual);
-        EventAssert.Equal([expected], [actual]);
+        // Act
+        var single = Record.Exception(() => EventAssert.Equal(expected, actual));
+        var sequence = Record.Exception(() => EventAssert.Equal([expected], [actual]));
+
+        // Assert
+        Assert.Null(single);
+        Assert.Null(sequence);
     }
 
     /// <summary>A mismatch reports the property and collection index for diagnosis.</summary>
@@ -38,10 +44,16 @@ public sealed class EventAssertTests
     [Fact]
     public void ShouldRejectDifferentEventTypesAndSequenceLengths()
     {
+        // Arrange
         var revised = new CriteriaRevised(["one"], new RevisionDetails(["a"]));
 
-        _ = Assert.Throws<InvalidOperationException>(() => EventAssert.Equal(revised, new ValueChanged(1)));
-        _ = Assert.Throws<InvalidOperationException>(() => EventAssert.Equal([revised], Array.Empty<DomainEvent>()));
+        // Act
+        var differentType = Record.Exception(() => EventAssert.Equal(revised, new ValueChanged(1)));
+        var differentLength = Record.Exception(() => EventAssert.Equal([revised], Array.Empty<DomainEvent>()));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(differentType);
+        _ = Assert.IsType<InvalidOperationException>(differentLength);
     }
 
     /// <summary>A sequence mismatch names the event index and payload path.</summary>
@@ -65,10 +77,15 @@ public sealed class EventAssertTests
     [Fact]
     public void ShouldCompareNestedRecordStructCollections()
     {
+        // Arrange
         var expected = new StructuredRevision(new RevisionStruct(["a", "b"]));
         var actual = new StructuredRevision(new RevisionStruct(["a", "b"]));
 
-        EventAssert.Equal(expected, actual);
+        // Act
+        var exception = Record.Exception(() => EventAssert.Equal(expected, actual));
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>Fields participate alongside properties at both event and nested payload levels.</summary>
@@ -92,8 +109,19 @@ public sealed class EventAssertTests
     [Fact]
     public void ShouldIgnoreStaticMembersIndexersAndNonPublicGetters()
     {
-        EventAssert.Equal(new MixedFields(1) { Extra = 2 }, new MixedFields(1) { Extra = 2 });
-        EventAssert.Equal(new NestedFields(new FieldValue { Extra = 2 }), new NestedFields(new FieldValue { Extra = 2 }));
+        // Arrange
+        var mixed = new MixedFields(1) { Extra = 2 };
+        var otherMixed = new MixedFields(1) { Extra = 2 };
+        var nested = new NestedFields(new FieldValue { Extra = 2 });
+        var otherNested = new NestedFields(new FieldValue { Extra = 2 });
+
+        // Act
+        var mixedException = Record.Exception(() => EventAssert.Equal(mixed, otherMixed));
+        var nestedException = Record.Exception(() => EventAssert.Equal(nested, otherNested));
+
+        // Assert
+        Assert.Null(mixedException);
+        Assert.Null(nestedException);
     }
 
     sealed record MixedFields(int Id) : DomainEvent
