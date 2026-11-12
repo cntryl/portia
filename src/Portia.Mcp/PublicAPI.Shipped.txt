@@ -122,3 +122,9 @@ static Cntryl.Portia.McpResourceInvocation.operator ==(Cntryl.Portia.McpResource
 static Cntryl.Portia.PortiaMcpApplicationExtensions.AddMcpPrompt<TRequest, TOut>(this Cntryl.Portia.PortiaBuilder! application, string! name, System.Func<System.Collections.Generic.IReadOnlyDictionary<string!, string!>!, TRequest>! bind, System.Func<TOut, System.Collections.Generic.IReadOnlyList<Cntryl.Portia.McpPromptMessage!>!>! render, System.Action<Cntryl.Portia.McpPromptOptions!>! configure) -> Cntryl.Portia.PortiaBuilder!
 static Cntryl.Portia.PortiaMcpApplicationExtensions.AddMcpResource<TRequest, TOut>(this Cntryl.Portia.PortiaBuilder! application, string! uriTemplate, System.Func<System.Collections.Generic.IReadOnlyDictionary<string!, string!>!, TRequest>! bind, System.Action<Cntryl.Portia.McpResourceOptions<TOut>!>! configure) -> Cntryl.Portia.PortiaBuilder!
 static Cntryl.Portia.PortiaMcpApplicationExtensions.ConfigureMcpLimits(this Cntryl.Portia.PortiaBuilder! application, System.Action<Cntryl.Portia.McpLimits!>! configure) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.McpEntryOptions.DescribedAs(string! description) -> Cntryl.Portia.McpEntryOptions!
+Cntryl.Portia.McpEntryOptions.Titled(string! title) -> Cntryl.Portia.McpEntryOptions!
+Cntryl.Portia.McpPromptOptions.Optional(string! name, string! description) -> void
+Cntryl.Portia.McpPromptOptions.Required(string! name, string! description) -> void
+Cntryl.Portia.McpResourceOptions<TOut>.Named(string! name) -> Cntryl.Portia.McpResourceOptions<TOut>!
+Cntryl.Portia.McpToolOptions.DescribeProperty(string! propertyName, string! description, string? jsonName = null) -> Cntryl.Portia.McpToolOptions!

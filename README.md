@@ -138,6 +138,7 @@ See [application setup](docs/application-setup.md) and [Fitz upgrade notes](docs
 - [NativeAOT](docs/native-aot.md): trimming and source-generated JSON setup
 - [Model Context Protocol](docs/mcp.md): request-backed tools, resources, and prompts over stdio and Streamable HTTP
 - [Migrating to Portia 0.4](docs/migration-0.4.md): JSON ownership, tenant templates, and MCP tests
+- [Portia 0.11.1 migration notes](docs/migration-0.11.1.md): stateless MCP HTTP, object storage completion outcomes, and Abstractions references
 - [Portia 0.11.0 migration notes](docs/migration-0.11.0.md): .NET 11, Fitz 4.1, JSON, and compiler updates
 - [Portia 0.10.0 migration notes](docs/migration-0.10.0.md): operator access, processor inspection, typed outcomes, and Fitz 4
 - [Portia 0.8 migration notes](docs/migration-0.8.md): Fitz 2.0 compatibility and queue persistence

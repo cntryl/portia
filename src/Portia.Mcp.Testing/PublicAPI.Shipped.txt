@@ -96,3 +96,50 @@ static Cntryl.Portia.Testing.McpResourceContentSnapshot.operator !=(Cntryl.Porti
 static Cntryl.Portia.Testing.McpResourceContentSnapshot.operator ==(Cntryl.Portia.Testing.McpResourceContentSnapshot? left, Cntryl.Portia.Testing.McpResourceContentSnapshot? right) -> bool
 static Cntryl.Portia.Testing.McpResourceSnapshot.operator !=(Cntryl.Portia.Testing.McpResourceSnapshot? left, Cntryl.Portia.Testing.McpResourceSnapshot? right) -> bool
 static Cntryl.Portia.Testing.McpResourceSnapshot.operator ==(Cntryl.Portia.Testing.McpResourceSnapshot? left, Cntryl.Portia.Testing.McpResourceSnapshot? right) -> bool
+Cntryl.Portia.Testing.McpCallExpectations.ExpectResult<T>(System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>! typeInfo, System.Action<T>! inspect) -> Cntryl.Portia.Testing.McpCallExpectations!
+Cntryl.Portia.Testing.McpPromptGetExpectations
+Cntryl.Portia.Testing.McpPromptGetExpectations.GetAwaiter() -> System.Runtime.CompilerServices.TaskAwaiter<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpPromptMessageSnapshot!>!>
+Cntryl.Portia.Testing.McpPromptGetExpectations.Inspect(System.Action<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpPromptMessageSnapshot!>!>! inspect) -> Cntryl.Portia.Testing.McpPromptGetExpectations!
+Cntryl.Portia.Testing.McpPromptListExpectations
+Cntryl.Portia.Testing.McpPromptListExpectations.ExpectExactly(params string![]! names) -> Cntryl.Portia.Testing.McpPromptListExpectations!
+Cntryl.Portia.Testing.McpPromptListExpectations.GetAwaiter() -> System.Runtime.CompilerServices.TaskAwaiter<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpPromptSnapshot!>!>
+Cntryl.Portia.Testing.McpPromptListExpectations.Inspect(System.Action<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpPromptSnapshot!>!>! inspect) -> Cntryl.Portia.Testing.McpPromptListExpectations!
+Cntryl.Portia.Testing.McpPromptSnapshot.ArgumentDescriptions.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string?>!
+Cntryl.Portia.Testing.McpPromptSnapshot.ArgumentDescriptions.init -> void
+Cntryl.Portia.Testing.McpPromptSnapshot.Description.get -> string?
+Cntryl.Portia.Testing.McpPromptSnapshot.Description.init -> void
+Cntryl.Portia.Testing.McpPromptSnapshot.Metadata.get -> System.Text.Json.JsonElement?
+Cntryl.Portia.Testing.McpPromptSnapshot.Metadata.init -> void
+Cntryl.Portia.Testing.McpPromptSnapshot.Title.get -> string?
+Cntryl.Portia.Testing.McpPromptSnapshot.Title.init -> void
+Cntryl.Portia.Testing.McpResourceContentSnapshot.Metadata.get -> System.Text.Json.JsonElement?
+Cntryl.Portia.Testing.McpResourceContentSnapshot.Metadata.init -> void
+Cntryl.Portia.Testing.McpResourceContentSnapshot.TimeToLive.get -> System.TimeSpan?
+Cntryl.Portia.Testing.McpResourceContentSnapshot.TimeToLive.init -> void
+Cntryl.Portia.Testing.McpResourceContentSnapshot.CacheScope.get -> ModelContextProtocol.Protocol.CacheScope?
+Cntryl.Portia.Testing.McpResourceContentSnapshot.CacheScope.init -> void
+Cntryl.Portia.Testing.McpResourceListExpectations
+Cntryl.Portia.Testing.McpResourceListExpectations.ExpectExactly(params string![]! identities) -> Cntryl.Portia.Testing.McpResourceListExpectations!
+Cntryl.Portia.Testing.McpResourceListExpectations.GetAwaiter() -> System.Runtime.CompilerServices.TaskAwaiter<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpResourceSnapshot!>!>
+Cntryl.Portia.Testing.McpResourceListExpectations.Inspect(System.Action<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpResourceSnapshot!>!>! inspect) -> Cntryl.Portia.Testing.McpResourceListExpectations!
+Cntryl.Portia.Testing.McpResourceReadExpectations
+Cntryl.Portia.Testing.McpResourceReadExpectations.GetAwaiter() -> System.Runtime.CompilerServices.TaskAwaiter<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpResourceContentSnapshot!>!>
+Cntryl.Portia.Testing.McpResourceReadExpectations.Inspect(System.Action<System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.McpResourceContentSnapshot!>!>! inspect) -> Cntryl.Portia.Testing.McpResourceReadExpectations!
+Cntryl.Portia.Testing.McpResourceSnapshot.Annotations.get -> System.Text.Json.JsonElement?
+Cntryl.Portia.Testing.McpResourceSnapshot.Annotations.init -> void
+Cntryl.Portia.Testing.McpResourceSnapshot.Description.get -> string?
+Cntryl.Portia.Testing.McpResourceSnapshot.Description.init -> void
+Cntryl.Portia.Testing.McpResourceSnapshot.Metadata.get -> System.Text.Json.JsonElement?
+Cntryl.Portia.Testing.McpResourceSnapshot.Metadata.init -> void
+Cntryl.Portia.Testing.McpResourceSnapshot.Title.get -> string?
+Cntryl.Portia.Testing.McpResourceSnapshot.Title.init -> void
+Cntryl.Portia.Testing.McpPromptMessageSnapshot.Metadata.get -> System.Text.Json.JsonElement?
+Cntryl.Portia.Testing.McpPromptMessageSnapshot.Metadata.init -> void
+Cntryl.Portia.Testing.McpPromptMessageSnapshot.ContentMetadata.get -> System.Text.Json.JsonElement?
+Cntryl.Portia.Testing.McpPromptMessageSnapshot.ContentMetadata.init -> void
+Cntryl.Portia.Testing.McpScenario.GetPrompt(string! name, System.Collections.Generic.IReadOnlyDictionary<string!, object?>? arguments = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Cntryl.Portia.Testing.McpPromptGetExpectations!
+Cntryl.Portia.Testing.McpScenario.ListPrompts(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Cntryl.Portia.Testing.McpPromptListExpectations!
+Cntryl.Portia.Testing.McpScenario.ListResourceTemplates(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Cntryl.Portia.Testing.McpResourceListExpectations!
+Cntryl.Portia.Testing.McpScenario.ListResources(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Cntryl.Portia.Testing.McpResourceListExpectations!
+Cntryl.Portia.Testing.McpScenario.ReadResource(string! uri, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Cntryl.Portia.Testing.McpResourceReadExpectations!
+static Cntryl.Portia.Testing.McpScenario.ConnectStdioAsync(ModelContextProtocol.Client.StdioClientTransportOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Testing.McpScenario!>
