@@ -64,6 +64,11 @@ jobs:
       - name: Qualify MCP payload sizes over HTTP and stdio
         run: dotnet run --project bench/Portia.Benchmarks/Portia.Benchmarks.csproj --configuration Release --no-build -- --mcp-protocol-payload-qualification
 
+      - name: Validate M5 MCP lookup supplement report
+        run: |
+          python3 bench/Portia.Benchmarks/Mcp/summarize_mcp_lookup_supplement.py docs/qualification/mcp-lookup-position-2026-11-12/raw.jsonl
+          git diff --exit-code -- docs/qualification/mcp-lookup-position-2026-11-12/README.md
+
       - name: Test solution
         run: >-
           dotnet test Portia.slnx

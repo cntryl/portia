@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -33,9 +34,15 @@ public static class McpProtocolQualification
     static readonly ClaimsPrincipal Actor = new(new ClaimsIdentity(
         [new Claim(ClaimTypes.NameIdentifier, "mcp-benchmark")], "benchmark"));
 
-    /// <summary>Runs the full campaign, or a short diagnostic sample, and writes JSONL evidence.</summary>
+    /// <summary>Runs an MCP qualification campaign and writes JSONL evidence.</summary>
     public static async Task RunAsync(string runMode, string outputPath)
     {
+        if (string.Equals(runMode, "lookup-position-supplement", StringComparison.Ordinal))
+        {
+            await RunLookupPositionSupplementAsync(outputPath).ConfigureAwait(false);
+            return;
+        }
+
         var full = string.Equals(runMode, "full", StringComparison.Ordinal);
         if (!full && !string.Equals(runMode, "diagnostic", StringComparison.Ordinal))
             throw new ArgumentException("Run mode must be 'full' or 'diagnostic'.", nameof(runMode));
@@ -191,8 +198,199 @@ public static class McpProtocolQualification
         })).ConfigureAwait(false);
     }
 
+    /// <summary>Measures first and last resource/prompt lookups over real MCP clients on both transports.</summary>
+    static async Task RunLookupPositionSupplementAsync(string outputPath)
+    {
+        const int payloadBytes = 4096;
+        const string expectedMcpSourceTree = "dcfa4715f2aede74df0a604d98c8f1138d643c4b";
+        var root = FindRepositoryRoot();
+        var mcpSourceTree = await CommandOutputAsync("git", root, "rev-parse", "HEAD:src/Portia.Mcp/")
+            .ConfigureAwait(false);
+        if (!string.Equals(mcpSourceTree, expectedMcpSourceTree, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The M5 lookup-position supplement requires the pre-optimization " +
+                $"Portia.Mcp source tree {expectedMcpSourceTree}; current tree is {mcpSourceTree}. " +
+                "Run it from the documented 3525d305 baseline with only benchmark-source changes.");
+        }
+
+        var plan = new CampaignPlan(10, 30, 50);
+        var fullOutputPath = Path.GetFullPath(outputPath);
+        var metadata = await MetadataAsync("lookup-position-supplement", plan).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty((string?)metadata["sourceTreeStatus"]))
+            throw new InvalidOperationException("The M5 lookup-position supplement requires a clean, committed " +
+                "benchmark-only patch before measurement.");
+
+        metadata["expectedMcpSourceTree"] = expectedMcpSourceTree;
+        metadata["mcpSourceTree"] = mcpSourceTree;
+        metadata["benchmarkProjectTree"] = await CommandOutputAsync("git", root,
+            "rev-parse", "HEAD:bench/Portia.Benchmarks/").ConfigureAwait(false);
+        metadata["dependencyAssetsSha256"] = await Sha256FileAsync(Path.Combine(root,
+            "bench/Portia.Benchmarks/obj/project.assets.json")).ConfigureAwait(false);
+        metadata["dependencyInputSha256"] = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Directory.Build.props"] = await Sha256FileAsync(Path.Combine(root, "Directory.Build.props"))
+                .ConfigureAwait(false),
+            ["Directory.Packages.props"] = await Sha256FileAsync(Path.Combine(root, "Directory.Packages.props"))
+                .ConfigureAwait(false),
+            ["bench/Directory.Build.props"] = await Sha256FileAsync(Path.Combine(root, "bench/Directory.Build.props"))
+                .ConfigureAwait(false),
+            ["src/Directory.Build.props"] = await Sha256FileAsync(Path.Combine(root, "src/Directory.Build.props"))
+                .ConfigureAwait(false),
+            ["bench/Portia.Benchmarks/Portia.Benchmarks.csproj"] = await Sha256FileAsync(Path.Combine(root,
+                "bench/Portia.Benchmarks/Portia.Benchmarks.csproj")).ConfigureAwait(false),
+            ["global.json"] = await Sha256FileAsync(Path.Combine(root, "global.json")).ConfigureAwait(false)
+        };
+        metadata["workload"] = new
+        {
+            transports = new[] { "Streamable HTTP over loopback Kestrel", "SDK-controlled stdio child process" },
+            catalogSizes = CatalogSizes,
+            telemetryModes = new[] { "disabled" },
+            payloadBytes,
+            resourceLookups = new[]
+            {
+                new { operation = "read-resource-fixed-json", uri = "benchmark://fixed/lookup" },
+                new { operation = "read-resource-template-first-json", uri = "benchmark://resource/0000/4096" },
+                new { operation = "read-resource-template-last-json", uri = "benchmark://resource/{catalogSize-1:D4}/4096" }
+            },
+            promptLookups = new[]
+            {
+                new { operation = "get-prompt-first", name = "benchmark_prompt_0000" },
+                new { operation = "get-prompt-last", name = "benchmark_prompt_{catalogSize-1:D4}" }
+            },
+            fixedResourceRegistration = "Appended after all resource templates.",
+            controls = new[] { "First matching resource template", "First prompt" }
+        };
+        metadata["baselineRelationship"] = new
+        {
+            existingM5Controls = new[]
+            {
+                "First matching JSON resource template",
+                "First prompt"
+            },
+            supplementalCases = new[]
+            {
+                "Fixed JSON resource",
+                "Final matching JSON resource template",
+                "Final prompt"
+            },
+            omittedM5Workloads = new[]
+            {
+                "Telemetry modes other than disabled",
+                "256-byte and 65536-byte payloads",
+                "Text and binary resource formats",
+                "Tool calls, startup, discovery, and direct/REST controls"
+            },
+            scope = "Lookup-position subset; this is not a replacement for the full M5 campaign."
+        };
+        metadata["methodology"] = new
+        {
+            startup = "HTTP host startup and MCP client initialization occur before measurement.",
+            stdioStartup = "The official SDK launches and initializes a separate stdio server before measurement.",
+            latency = "Each timer covers only one awaited MCP client call. Result and payload validation runs after the timer stops; all raw samples are retained.",
+            throughput = "The sequential 50-call batch is timed; returned results are validated after the batch timer stops.",
+            allocations = "Process-wide managed bytes during the separate throughput batch divided by calls; HTTP includes client and in-process server, while stdio measures the parent client process.",
+            telemetry = "Disabled for both transports; no exporter is configured or awaited."
+        };
+
+        Directory.CreateDirectory(Path.GetDirectoryName(fullOutputPath)!);
+        await using var output = new StreamWriter(fullOutputPath, false, new UTF8Encoding(false));
+        output.AutoFlush = true;
+        await output.WriteLineAsync(JsonSerializer.Serialize(metadata)).ConfigureAwait(false);
+
+        foreach (var catalogSize in CatalogSizes)
+        {
+            await using (var server = await McpBenchmarkServer.StartHttpAsync(
+                catalogSize, "disabled", includeFixedLookupResource: true).ConfigureAwait(false))
+            await using (var client = await McpBenchmarkClient.ConnectHttpAsync(server.Endpoint).ConfigureAwait(false))
+            {
+                await MeasureLookupPositionOperationsAsync(output, server, client, "http", catalogSize,
+                    payloadBytes, plan).ConfigureAwait(false);
+            }
+
+            await using (var client = await McpBenchmarkClient.ConnectStdioAsync(
+                catalogSize, "disabled", includeFixedLookupResource: true).ConfigureAwait(false))
+            {
+                await MeasureLookupPositionOperationsAsync(output, null, client, "stdio", catalogSize,
+                    payloadBytes, plan).ConfigureAwait(false);
+            }
+        }
+
+        await output.WriteLineAsync(JsonSerializer.Serialize(new
+        {
+            recordType = "complete",
+            completedUtc = DateTimeOffset.UtcNow,
+            outputPath = fullOutputPath,
+            mode = "lookup-position-supplement",
+            configurations = CatalogSizes.Length * 2 * 5
+        })).ConfigureAwait(false);
+    }
+
+    static async Task MeasureLookupPositionOperationsAsync(StreamWriter output, McpBenchmarkServer? server,
+        McpBenchmarkClient client, string transport, int catalogSize, int payloadBytes, CampaignPlan plan)
+    {
+        var firstTemplateUri = $"benchmark://resource/0000/{payloadBytes.ToString(CultureInfo.InvariantCulture)}";
+        var lastTemplateUri = $"benchmark://resource/{catalogSize - 1:D4}/{payloadBytes.ToString(CultureInfo.InvariantCulture)}";
+        var firstPromptName = "benchmark_prompt_0000";
+        var lastPromptName = $"benchmark_prompt_{catalogSize - 1:D4}";
+
+        await WriteLookupMeasuredAsync(output, server, transport, catalogSize, "read-resource-fixed-json", payloadBytes,
+            () => client.ReadResourceForLookupAsync("benchmark://fixed/lookup"),
+            result => ValidateJsonResourceLookup(result, payloadBytes, transport, "fixed resource"), plan)
+            .ConfigureAwait(false);
+        await WriteLookupMeasuredAsync(output, server, transport, catalogSize, "read-resource-template-first-json", payloadBytes,
+            () => client.ReadResourceForLookupAsync(firstTemplateUri),
+            result => ValidateJsonResourceLookup(result, payloadBytes, transport, "first resource template"), plan)
+            .ConfigureAwait(false);
+        await WriteLookupMeasuredAsync(output, server, transport, catalogSize, "read-resource-template-last-json", payloadBytes,
+            () => client.ReadResourceForLookupAsync(lastTemplateUri),
+            result => ValidateJsonResourceLookup(result, payloadBytes, transport, "last resource template"), plan)
+            .ConfigureAwait(false);
+        await WriteLookupMeasuredAsync(output, server, transport, catalogSize, "get-prompt-first", payloadBytes,
+            () => client.GetPromptForLookupAsync(firstPromptName, payloadBytes),
+            result => ValidatePromptLookup(result, payloadBytes, transport, "first prompt"), plan)
+            .ConfigureAwait(false);
+        await WriteLookupMeasuredAsync(output, server, transport, catalogSize, "get-prompt-last", payloadBytes,
+            () => client.GetPromptForLookupAsync(lastPromptName, payloadBytes),
+            result => ValidatePromptLookup(result, payloadBytes, transport, "last prompt"), plan)
+            .ConfigureAwait(false);
+    }
+
+    static void ValidateJsonResourceLookup(ReadResourceResult result, int payloadBytes, string transport, string operation)
+    {
+        if (result.Contents.Count != 1 || result.Contents[0] is not TextResourceContents text ||
+            !string.Equals(text.MimeType, "application/json", StringComparison.Ordinal))
+            throw new InvalidOperationException($"The {transport} {operation} returned an unexpected resource content type.");
+
+        using var document = JsonDocument.Parse(text.Text);
+        if (!document.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.String)
+            throw new InvalidOperationException($"The {transport} {operation} omitted its JSON string payload.");
+        ValidateLookupPayloadLength(data.GetString(), payloadBytes, transport, operation);
+    }
+
+    static void ValidatePromptLookup(GetPromptResult result, int payloadBytes, string transport, string operation)
+    {
+        if (result.Messages.Count != 1 || result.Messages[0].Content is not TextContentBlock text)
+            throw new InvalidOperationException($"The {transport} {operation} did not return one text message.");
+        ValidateLookupPayloadLength(text.Text, payloadBytes, transport, operation);
+    }
+
+    static void ValidateLookupPayloadLength(string? payload, int expectedBytes, string transport, string operation)
+    {
+        if (payload is null)
+            throw new InvalidOperationException($"The {transport} {operation} returned no payload.");
+        var actualBytes = Encoding.UTF8.GetByteCount(payload);
+        if (actualBytes != expectedBytes)
+            throw new InvalidOperationException($"The {transport} {operation} expected {expectedBytes} bytes; received {actualBytes}.");
+    }
+
+    static async Task<string> Sha256FileAsync(string path)
+    {
+        var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
+        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
+
     /// <summary>Starts the benchmark server used by the official stdio client transport.</summary>
-    public static async Task RunStdioServerAsync(int catalogSize, string telemetryMode)
+    public static async Task RunStdioServerAsync(int catalogSize, string telemetryMode, bool includeFixedLookupResource = false)
     {
         using var telemetry = BenchmarkTelemetry.Attach(telemetryMode);
         var builder = Host.CreateApplicationBuilder([]);
@@ -200,7 +398,7 @@ public static class McpProtocolQualification
         builder.Services.AddSingleton(serviceProvider => new BenchmarkState(
             telemetryMode == "logging", serviceProvider.GetRequiredService<ILoggerFactory>()));
         var application = RegisterCatalog(builder.Services.AddPortia()
-            .AddRequestHandler<BenchmarkRequestHandler>(), catalogSize);
+            .AddRequestHandler<BenchmarkRequestHandler>(), catalogSize, includeFixedLookupResource);
         application.AddMcpStdio(options => options.UseLocalDevelopmentActor("mcp-benchmark"));
         using var host = builder.Build();
         await host.RunAsync();
@@ -461,6 +659,49 @@ public static class McpProtocolQualification
         var after = server?.Telemetry.Snapshot();
         await WriteMeasurementAsync(output, transport, catalogSize, telemetryMode, operation, payloadBytes,
             measurement, before is not null && after is not null ? after.Difference(before) : null);
+    }
+
+    static async Task WriteLookupMeasuredAsync<TResult>(StreamWriter output, McpBenchmarkServer? server,
+        string transport, int catalogSize, string operation, int payloadBytes, Func<Task<TResult>> action,
+        Action<TResult> validate, CampaignPlan plan) where TResult : notnull
+    {
+        var before = server?.Telemetry.Snapshot();
+        var measurement = await MeasureLookupAsync(action, validate, plan).ConfigureAwait(false);
+        var after = server?.Telemetry.Snapshot();
+        await WriteMeasurementAsync(output, transport, catalogSize, "disabled", operation, payloadBytes,
+            measurement, before is not null && after is not null ? after.Difference(before) : null)
+            .ConfigureAwait(false);
+    }
+
+    static async Task<Measurement> MeasureLookupAsync<TResult>(Func<Task<TResult>> action,
+        Action<TResult> validate, CampaignPlan plan) where TResult : notnull
+    {
+        for (var index = 0; index < plan.Warmups; index++)
+        {
+            var result = await action().ConfigureAwait(false);
+            validate(result);
+        }
+
+        var raw = new double[plan.Samples];
+        for (var index = 0; index < raw.Length; index++)
+        {
+            var started = Stopwatch.GetTimestamp();
+            var result = await action().ConfigureAwait(false);
+            raw[index] = Stopwatch.GetElapsedTime(started).TotalMicroseconds;
+            validate(result);
+        }
+
+        var results = new TResult[plan.ThroughputIterations];
+        var allocationStart = GC.GetTotalAllocatedBytes(precise: false);
+        var batchStarted = Stopwatch.GetTimestamp();
+        for (var index = 0; index < results.Length; index++)
+            results[index] = await action().ConfigureAwait(false);
+        var elapsed = Stopwatch.GetElapsedTime(batchStarted);
+        var allocated = GC.GetTotalAllocatedBytes(precise: false) - allocationStart;
+        foreach (var result in results)
+            validate(result);
+
+        return Measurement.From(raw, plan.ThroughputIterations, elapsed.TotalSeconds, allocated);
     }
 
     static async Task<Measurement> MeasureAsync(Func<Task> action, CampaignPlan plan)
@@ -877,14 +1118,16 @@ sealed class McpBenchmarkClient : IAsyncDisposable
         return new McpBenchmarkClient(client, http, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
     }
 
-    internal static async Task<McpBenchmarkClient> ConnectStdioAsync(int catalogSize, string telemetryMode)
+    internal static async Task<McpBenchmarkClient> ConnectStdioAsync(int catalogSize, string telemetryMode,
+        bool includeFixedLookupResource = false)
     {
         var assembly = Assembly.GetEntryAssembly()?.Location
             ?? throw new InvalidOperationException("Cannot locate the benchmark assembly for the stdio child.");
         var options = new StdioClientTransportOptions
         {
             Command = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet",
-            Arguments = [assembly, "--mcp-stdio-server", catalogSize.ToString(CultureInfo.InvariantCulture), telemetryMode],
+            Arguments = [assembly, "--mcp-stdio-server", catalogSize.ToString(CultureInfo.InvariantCulture),
+                telemetryMode, includeFixedLookupResource ? "true" : "false"],
             Name = "Portia MCP performance qualification",
             WorkingDirectory = Path.GetDirectoryName(assembly),
             ShutdownTimeout = TimeSpan.FromSeconds(3)
@@ -1005,6 +1248,9 @@ sealed class McpBenchmarkClient : IAsyncDisposable
             throw new InvalidOperationException("The MCP benchmark resource content type did not match its media type.");
     }
 
+    internal async Task<ReadResourceResult> ReadResourceForLookupAsync(string uri) =>
+        await _client.ReadResourceAsync(uri).ConfigureAwait(false);
+
     internal async Task GetPromptAsync(int size)
     {
         var result = await _client.GetPromptAsync("benchmark_prompt_0000",
@@ -1013,6 +1259,11 @@ sealed class McpBenchmarkClient : IAsyncDisposable
         if (result.Messages.Count != 1 || result.Messages[0].Content is not TextContentBlock)
             throw new InvalidOperationException("The MCP benchmark prompt did not render one text message.");
     }
+
+    internal async Task<GetPromptResult> GetPromptForLookupAsync(string name, int size) =>
+        await _client.GetPromptAsync(name,
+            new Dictionary<string, object?> { ["size"] = size.ToString(CultureInfo.InvariantCulture) })
+            .ConfigureAwait(false);
 
     static Dictionary<string, object?> ToolArguments(int size) => new(StringComparer.Ordinal)
     {
