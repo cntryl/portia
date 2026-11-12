@@ -171,7 +171,7 @@ suite exercises each primitive on both supported protocol revisions. A timeout i
 `OperationDeadline` returns a sanitized failure, while caller cancellation remains cancellation.
 Stateful Streamable HTTP cancellation remains limited by the SDK's open [transport cancellation
 work](https://github.com/modelcontextprotocol/csharp-sdk/pull/1377); it is not covered by Portia's
-current qualification. See the [MCP transport qualification record](qualification/138-mcp-transport/README.md).
+current qualification.
 
 ## Results and failures
 

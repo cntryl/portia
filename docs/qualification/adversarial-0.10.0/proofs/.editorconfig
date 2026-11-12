@@ -1,6 +1,0 @@
-[*.cs]
-# These isolated review fixtures use the existing test-project convention severities.
-conventions_test_naming_require_given = true
-conventions_test_naming_require_when = false
-dotnet_diagnostic.CNTRYL0001.severity = suggestion
-dotnet_diagnostic.CNTRYL0002.severity = suggestion

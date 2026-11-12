@@ -1,2 +1,0 @@
-Microsoft.AspNetCore.App 11.0.0 [/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App]
-Microsoft.NETCore.App 11.0.0 [/usr/local/share/dotnet/shared/Microsoft.NETCore.App]
