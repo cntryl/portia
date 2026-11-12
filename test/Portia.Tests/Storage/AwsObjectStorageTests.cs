@@ -405,6 +405,71 @@ public sealed class AwsObjectStorageTests
         Assert.Equal(1, proxy.StagingDeleteCount);
     }
 
+    /// <summary>
+    /// Checks that S3 rejecting caller-supplied part receipts surfaces as the contract's invalid-content
+    /// outcome, as the fake reports it, rather than as a vendor SDK exception.
+    /// </summary>
+    [Theory]
+    [InlineData("InvalidPart")]
+    [InlineData("InvalidPartOrder")]
+    [InlineData("EntityTooSmall")]
+    public async Task ShouldReportRejectedPartReceiptsAsInvalidContent(string s3ErrorCode)
+    {
+        var content = "browser upload"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = content;
+        proxy.CompletionErrorCode = s3ErrorCode;
+        var storage = CreateStorage(client);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "\"etag-typed-by-the-client\"")]));
+
+        Assert.Equal(0, proxy.CopyCount);
+    }
+
+    /// <summary>
+    /// Checks that a confirmed promotion is reported as success even when best-effort staging
+    /// cleanup fails afterwards.
+    /// </summary>
+    [Fact]
+    public async Task ShouldReportCommittedCompletionWhenStagingCleanupFails()
+    {
+        var content = "committed object"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var tenant = new TenantId("tenant-one");
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = content;
+        proxy.FailStagingDelete = true;
+        var storage = CreateStorage(client);
+        var session = await storage.CreateUploadAsync(tenant, digest);
+
+        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]);
+
+        Assert.Equal(1, proxy.CopyCount);
+        Assert.True(await storage.HeadAndVerifyAsync(tenant, digest));
+    }
+
+    /// <summary>Checks that a failed abort reports its own failure rather than a later cleanup failure.</summary>
+    [Fact]
+    public async Task ShouldSurfaceTheAbortFailureWhenCleanupAlsoFails()
+    {
+        var digest = new ObjectDigest(new string('a', 64), 1);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.AbortFailuresRemaining = 1;
+        proxy.FailStagingDelete = true;
+        var storage = CreateStorage(client);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+
+        var exception = await Assert.ThrowsAsync<AmazonS3Exception>(async () => await storage.AbortUploadAsync(session));
+
+        Assert.Equal("SlowDown", exception.ErrorCode);
+    }
+
     static AwsObjectStorage CreateStorage(IAmazonS3 client)
     {
         var services = new ServiceCollection();
@@ -497,6 +562,15 @@ public sealed class AwsObjectStorageTests
 
         /// <summary>Gets or sets whether abort reports that the multipart upload is already gone.</summary>
         public bool AbortReportsNoSuchUpload { get; set; }
+
+        /// <summary>Gets or sets an S3 error code that every multipart completion returns as a client error.</summary>
+        public string? CompletionErrorCode { get; set; }
+
+        /// <summary>Gets or sets whether deleting the staging object fails with a transient server error.</summary>
+        public bool FailStagingDelete { get; set; }
+
+        /// <summary>Gets or sets the number of multipart aborts that fail with S3 throttling.</summary>
+        public int AbortFailuresRemaining { get; set; }
 
         /// <summary>Gets the number of multipart completion calls.</summary>
         public int CompleteCount { get; private set; }
@@ -595,6 +669,15 @@ public sealed class AwsObjectStorageTests
                 throw new OperationCanceledException(token);
             }
 
+            if (CompletionErrorCode is { } errorCode)
+            {
+                throw new AmazonS3Exception("S3 rejected the multipart completion.")
+                {
+                    StatusCode = System.Net.HttpStatusCode.BadRequest,
+                    ErrorCode = errorCode
+                };
+            }
+
             if (TimeoutAfterFirstCompletion && CompleteCount == 1)
             {
                 throw new TimeoutException("The response was lost after S3 completed the upload.");
@@ -635,6 +718,16 @@ public sealed class AwsObjectStorageTests
         AbortMultipartUploadResponse CountAbort()
         {
             AbortCount++;
+            if (AbortFailuresRemaining > 0)
+            {
+                AbortFailuresRemaining--;
+                throw new AmazonS3Exception("Please reduce your request rate.")
+                {
+                    StatusCode = System.Net.HttpStatusCode.ServiceUnavailable,
+                    ErrorCode = "SlowDown"
+                };
+            }
+
             if (AbortReportsNoSuchUpload)
             {
                 throw new AmazonS3Exception("The upload ID no longer exists.") { ErrorCode = "NoSuchUpload" };
@@ -645,6 +738,16 @@ public sealed class AwsObjectStorageTests
 
         DeleteObjectResponse CountDelete(object?[] args)
         {
+            var key = args[0] is DeleteObjectRequest deleteRequest ? deleteRequest.Key : args.ElementAtOrDefault(1) as string;
+            if (FailStagingDelete && key?.StartsWith("staging/", StringComparison.Ordinal) == true)
+            {
+                throw new AmazonS3Exception("We encountered an internal error. Please try again.")
+                {
+                    StatusCode = System.Net.HttpStatusCode.InternalServerError,
+                    ErrorCode = "InternalError"
+                };
+            }
+
             if (args[0] is DeleteObjectRequest request && request.Key.StartsWith("staging/", StringComparison.Ordinal))
             {
                 StagingDeleteCount++;

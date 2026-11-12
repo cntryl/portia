@@ -26,6 +26,11 @@ For multipart uploads, each part except the final part must be at least 5 MiB
 (`ObjectStorageLimits.MinimumNonfinalPartLength`). The final part may be smaller. Both the S3 adapter and the testing
 fake follow this completion rule.
 
+`CompleteUploadAsync` reports rejected parts as `InvalidDataException`. Part receipts usually come from the uploading
+client, so a bad receipt or an undersized part is an expected outcome. Both providers keep that session open, and the
+caller can upload corrected parts and complete again. Content that fails length or SHA-256 verification also throws
+`InvalidDataException`, and it ends the session.
+
 The adapter uploads parts to a unique tenant-scoped staging key with SSE-KMS, streams the completed staged object to
 check its actual length and full SHA-256, then conditionally copies verified bytes to
 `content/sha256/{first_two_hex}/{sha256_digest}`. It writes verified digest and length metadata during promotion and
@@ -38,6 +43,10 @@ completed staging object is streamed and verified again before promotion. The co
 destination and the ETag of the staged object that was verified. A concurrent destination-copy conflict is retried a
 bounded number of times. Unresolved completion or copy errors and canceled completion calls retain staging for a later
 retry. Call `AbortUploadAsync` to intentionally discard a session and its staging data.
+
+Staging cleanup after a decided outcome is best effort. If cleanup fails after promotion, `CompleteUploadAsync` still
+reports success, and the lifecycle rules below remove the remaining staging data. If S3 fails the abort itself,
+`AbortUploadAsync` throws that failure without removing staging. Retry the abort.
 
 Configure S3 lifecycle rules to abort incomplete multipart uploads and expire completed objects under the `staging/`
 prefix. These rules protect against host loss and abandoned sessions. The library aborts and removes staging data for

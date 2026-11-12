@@ -47,6 +47,27 @@ public sealed class FakeObjectStorageTests
         Assert.False(await store.HeadAndVerifyAsync(new TenantId("tenant-a"), expected));
     }
 
+    /// <summary>
+    /// Checks that a mistyped part receipt leaves the session open for a corrected completion,
+    /// as S3 keeps the multipart upload open when it rejects a receipt.
+    /// </summary>
+    [Fact]
+    public async Task ShouldKeepSessionOpenAfterAnUnknownPartReceipt()
+    {
+        var store = new FakeObjectStorage();
+        var tenant = new TenantId("tenant-a");
+        var content = "browser upload"u8.ToArray();
+        var digest = Digest(content);
+        var session = await store.CreateUploadAsync(tenant, digest);
+        var receipt = await store.AcceptPartAsync(session, 1, new MemoryStream(content));
+
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await store.CompleteUploadAsync(session, [receipt with { Token = "mistyped-etag" }]));
+        await store.CompleteUploadAsync(session, [receipt]);
+
+        Assert.True(await store.HeadAndVerifyAsync(tenant, digest));
+    }
+
     /// <summary>Checks abort cleanup and bounded presigned lifetimes.</summary>
     [Fact]
     public async Task ShouldAbortSessionAndBoundSignedLifetimes()
@@ -93,7 +114,7 @@ public sealed class FakeObjectStorageTests
                 ct));
     }
 
-    /// <summary>Matches S3's minimum size for every part except the final one.</summary>
+    /// <summary>Matches S3's minimum size for every part except the final one, keeping the session open for corrected parts.</summary>
     [Fact]
     public async Task ShouldRejectAnUndersizedNonfinalPart()
     {
@@ -106,7 +127,7 @@ public sealed class FakeObjectStorageTests
         await Assert.ThrowsAsync<InvalidDataException>(async () =>
             await store.CompleteUploadAsync(session, [first, last]));
 
-        Assert.Equal(0, store.ActiveUploadCount);
+        Assert.Equal(1, store.ActiveUploadCount);
     }
 
     /// <summary>Checks concurrent singleton access to uploads, parts, and tenant objects.</summary>

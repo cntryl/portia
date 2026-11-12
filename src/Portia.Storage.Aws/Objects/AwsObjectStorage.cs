@@ -103,10 +103,15 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
             // still need verification and promotion after a lost response or host restart.
             uploadIdGone = true;
         }
+        catch (AmazonS3Exception exception) when (exception.ErrorCode is "InvalidPart" or "InvalidPartOrder" or "EntityTooSmall")
+        {
+            // S3 keeps the multipart upload open, so the caller can correct its parts and complete again.
+            throw new InvalidDataException("S3 rejected the uploaded parts or their receipts.", exception);
+        }
 
         if (uploadIdGone && await HeadAndVerifyAsync(payload.Bucket, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
         {
-            await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
+            await TryCleanupStagingAsync(payload).ConfigureAwait(false);
             return;
         }
 
@@ -117,7 +122,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         }
         catch (InvalidDataException)
         {
-            await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
+            await TryCleanupStagingAsync(payload).ConfigureAwait(false);
             throw;
         }
         catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -126,7 +131,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
             // was retrying. An absent destination leaves the outcome unresolved for another retry.
             if (await HeadAndVerifyAsync(payload.Bucket, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
             {
-                await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
+                await TryCleanupStagingAsync(payload).ConfigureAwait(false);
                 return;
             }
 
@@ -134,7 +139,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         }
 
         await PromoteVerifiedAsync(payload, verified.Digest, verified.ETag, ct).ConfigureAwait(false);
-        await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
+        await TryCleanupStagingAsync(payload).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -155,10 +160,9 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         {
             // Idempotent abort: the upload may already have completed or been removed.
         }
-        finally
-        {
-            await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
-        }
+
+        // A failed abort propagates unchanged; the caller retries the abort, which then cleans staging.
+        await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -351,6 +355,23 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             // Staging cleanup is idempotent.
+        }
+    }
+
+    /// <summary>
+    /// Removes staging data after the completion outcome is already decided. A cleanup failure must not
+    /// replace that outcome; the staging lifecycle rules remove anything left behind.
+    /// </summary>
+    async ValueTask TryCleanupStagingAsync(SessionPayload payload)
+    {
+        try
+        {
+            await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is Amazon.Runtime.AmazonServiceException or Amazon.Runtime.AmazonClientException or
+            System.Net.Http.HttpRequestException or IOException or TimeoutException or TaskCanceledException)
+        {
+            // Best effort by design: the object is committed (or rejected) and staging expires by lifecycle rule.
         }
     }
 
