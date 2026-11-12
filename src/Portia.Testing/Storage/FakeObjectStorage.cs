@@ -144,25 +144,31 @@ public sealed class FakeObjectStorage : IObjectStorage
 
             var upload = GetUpload(session);
             EnsureActive(upload);
+
+            // Like S3, rejected receipts or part sizes leave the session open so the caller can correct
+            // its parts and complete again. Only a content verification outcome consumes the session.
+            if (parts.Count is < 1 or > 10_000 || parts.Any(static part => part is null || part.PartNumber is < 1 or > 10_000) ||
+                parts.Select(static part => part.PartNumber).Distinct().Count() != parts.Count ||
+                parts.Any(part => !upload.Parts.TryGetValue(part.PartNumber, out var stored) || stored.Receipt != part.Token))
+            {
+                throw new InvalidDataException("Part receipts are missing, duplicated, or invalid.");
+            }
+
+            var ordered = parts.OrderBy(static part => part.PartNumber).ToArray();
+            for (var index = 0; index < ordered.Length - 1; index++)
+            {
+                if (upload.Parts[ordered[index].PartNumber].Content.Length < ObjectStorageLimits.MinimumNonfinalPartLength)
+                {
+                    throw new InvalidDataException("Every nonfinal multipart part must contain at least 5 MiB.");
+                }
+            }
+
             try
             {
-                if (parts.Count is < 1 or > 10_000 || parts.Any(static part => part is null || part.PartNumber is < 1 or > 10_000) ||
-                    parts.Select(static part => part.PartNumber).Distinct().Count() != parts.Count ||
-                    parts.Any(part => !upload.Parts.TryGetValue(part.PartNumber, out var stored) || stored.Receipt != part.Token))
-                {
-                    throw new InvalidDataException("Part receipts are missing, duplicated, or invalid.");
-                }
-
                 using var output = new MemoryStream();
-                var ordered = parts.OrderBy(static part => part.PartNumber).ToArray();
-                for (var index = 0; index < ordered.Length; index++)
+                foreach (var part in ordered)
                 {
-                    var bytes = upload.Parts[ordered[index].PartNumber].Content;
-                    if (index < ordered.Length - 1 && bytes.Length < ObjectStorageLimits.MinimumNonfinalPartLength)
-                    {
-                        throw new InvalidDataException("Every nonfinal multipart part must contain at least 5 MiB.");
-                    }
-
+                    var bytes = upload.Parts[part.PartNumber].Content;
                     if (output.Length + bytes.LongLength > ObjectStorageLimits.MaximumObjectLength ||
                         output.Length + bytes.LongLength > upload.Expected.Length)
                     {

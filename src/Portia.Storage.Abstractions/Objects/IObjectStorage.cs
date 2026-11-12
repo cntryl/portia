@@ -10,6 +10,10 @@ public interface IObjectStorage
     ValueTask<ObjectUploadPart> SignPartAsync(ObjectUploadSession session, int partNumber, TimeSpan lifetime, CancellationToken ct = default);
 
     /// <summary>Completes, verifies, and promotes the upload to its immutable content key. Every nonfinal part must be at least <see cref="ObjectStorageLimits.MinimumNonfinalPartLength"/> bytes.</summary>
+    /// <exception cref="InvalidDataException">
+    /// The parts, their receipts, or the uploaded content were rejected. Rejected receipts or part sizes leave the
+    /// session open for a corrected completion; content that fails length or SHA-256 verification ends the session.
+    /// </exception>
     ValueTask CompleteUploadAsync(ObjectUploadSession session, IReadOnlyList<ObjectPartReceipt> parts, CancellationToken ct = default);
 
     /// <summary>Aborts an active multipart upload and removes any temporary data.</summary>
