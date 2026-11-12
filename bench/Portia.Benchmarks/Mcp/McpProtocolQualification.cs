@@ -86,6 +86,22 @@ public static class McpProtocolQualification
         }));
     }
 
+    /// <summary>Verifies benchmark payload lengths over real HTTP and stdio MCP transports.</summary>
+    public static async Task RunPayloadQualificationAsync()
+    {
+        const int catalogSize = 3;
+        await using var server = await McpBenchmarkServer.StartHttpAsync(catalogSize, "disabled")
+            .ConfigureAwait(false);
+        await using var httpClient = await McpBenchmarkClient.ConnectHttpAsync(server.Endpoint)
+            .ConfigureAwait(false);
+        await httpClient.VerifyPayloadsAsync("Streamable HTTP", PayloadSizes).ConfigureAwait(false);
+
+        await using var stdioClient = await McpBenchmarkClient.ConnectStdioAsync(catalogSize, "disabled")
+            .ConfigureAwait(false);
+        await stdioClient.VerifyPayloadsAsync("stdio", PayloadSizes).ConfigureAwait(false);
+        Console.WriteLine("MCP payload qualification passed over Streamable HTTP and stdio.");
+    }
+
     /// <summary>Measures fixed-resource, template-resource, and prompt lookup at each catalog size.</summary>
     public static async Task RunAdapterLookupQualificationAsync(string outputPath)
     {
@@ -671,9 +687,9 @@ public static class McpProtocolQualification
             : ordered[(int)Math.Ceiling(quantile * ordered.Length) - 1];
     }
 
-    enum ResourceContentKind { Json, Text, Binary }
+    internal enum ResourceContentKind { Json, Text, Binary }
 
-    readonly record struct ResourceFormat(string Name, ResourceContentKind Kind)
+    internal readonly record struct ResourceFormat(string Name, ResourceContentKind Kind)
     {
         internal static ResourceFormat ForIndex(int index) => (index % 3) switch
         {
@@ -877,6 +893,75 @@ sealed class McpBenchmarkClient : IAsyncDisposable
         var transport = new StdioClientTransport(options, NullLoggerFactory.Instance);
         var client = await McpClient.CreateAsync(transport).ConfigureAwait(false);
         return new McpBenchmarkClient(client, null, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+    }
+
+    internal async Task VerifyPayloadsAsync(string transport, IReadOnlyList<int> payloadSizes)
+    {
+        foreach (var size in payloadSizes)
+        {
+            var toolResult = await _client.CallToolAsync("benchmark.tool.0000", ToolArguments(size))
+                .ConfigureAwait(false);
+            if (toolResult.IsError == true || toolResult.StructuredContent is not { } structured ||
+                !structured.TryGetProperty("result", out var result) ||
+                !result.TryGetProperty("data", out var toolData) || toolData.ValueKind != JsonValueKind.String)
+                throw new InvalidOperationException($"The {transport} MCP tool call did not return structured payload data.");
+            VerifyPayloadLength(toolData.GetString(), size, transport, "tool result");
+
+            for (var formatIndex = 0; formatIndex < 3; formatIndex++)
+                await VerifyResourcePayloadAsync(formatIndex, size, transport).ConfigureAwait(false);
+
+            var promptResult = await _client.GetPromptAsync("benchmark_prompt_0000",
+                new Dictionary<string, object?> { ["size"] = size.ToString(CultureInfo.InvariantCulture) })
+                .ConfigureAwait(false);
+            if (promptResult.Messages.Count != 1 || promptResult.Messages[0].Content is not TextContentBlock promptText)
+                throw new InvalidOperationException($"The {transport} MCP prompt did not return one text message.");
+            VerifyPayloadLength(promptText.Text, size, transport, "rendered prompt");
+        }
+    }
+
+    async Task VerifyResourcePayloadAsync(int formatIndex, int size, string transport)
+    {
+        var result = await _client.ReadResourceAsync(
+            $"benchmark://resource/{formatIndex:D4}/{size.ToString(CultureInfo.InvariantCulture)}")
+            .ConfigureAwait(false);
+        if (result.Contents.Count != 1)
+            throw new InvalidOperationException($"The {transport} MCP resource returned an unexpected number of contents.");
+
+        switch (McpProtocolQualification.ResourceFormat.ForIndex(formatIndex).Kind)
+        {
+            case McpProtocolQualification.ResourceContentKind.Json when result.Contents[0] is TextResourceContents json &&
+                                                                        json.MimeType == "application/json":
+                using (var document = JsonDocument.Parse(json.Text))
+                {
+                    if (!document.RootElement.TryGetProperty("data", out var jsonData) ||
+                        jsonData.ValueKind != JsonValueKind.String)
+                        throw new InvalidOperationException($"The {transport} JSON resource omitted its string payload.");
+                    VerifyPayloadLength(jsonData.GetString(), size, transport, "JSON resource data");
+                }
+                break;
+            case McpProtocolQualification.ResourceContentKind.Text when result.Contents[0] is TextResourceContents text &&
+                                                                        text.MimeType == "text/plain":
+                VerifyPayloadLength(text.Text, size, transport, "text resource");
+                break;
+            case McpProtocolQualification.ResourceContentKind.Binary when result.Contents[0] is BlobResourceContents binary &&
+                                                                          binary.MimeType == "application/octet-stream":
+                if (binary.DecodedData.Length != size)
+                    throw new InvalidOperationException($"The {transport} binary resource expected {size} bytes; " +
+                        $"received {binary.DecodedData.Length}.");
+                break;
+            default:
+                throw new InvalidOperationException($"The {transport} MCP resource returned an unexpected content type.");
+        }
+    }
+
+    static void VerifyPayloadLength(string? payload, int expectedBytes, string transport, string operation)
+    {
+        if (payload is null)
+            throw new InvalidOperationException($"The {transport} {operation} returned no payload.");
+        var actualBytes = Encoding.UTF8.GetByteCount(payload);
+        if (actualBytes != expectedBytes)
+            throw new InvalidOperationException($"The {transport} {operation} expected {expectedBytes} bytes; " +
+                $"received {actualBytes}.");
     }
 
     internal async Task DiscoverToolsAsync(int expectedCount)
