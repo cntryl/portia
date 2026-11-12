@@ -57,7 +57,7 @@ public sealed class TenantDirectoryConsumerTests
                                                         public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong offset, CancellationToken ct) => throw new NotSupportedException();
                                                         public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor, [EnumeratorCancellation] CancellationToken ct)
                                                         {
-                                                            Reads++;
+                                                            System.Threading.Interlocked.Increment(ref Reads);
                                                             await Task.CompletedTask;
                                                             yield break;
                                                         }
@@ -83,10 +83,14 @@ public sealed class TenantDirectoryConsumerTests
                                                             await using var watch = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
                                                             var move = watch.MoveNextAsync().AsTask();
                                                             await changes.Subscribed.Task.WaitAsync(TimeSpan.FromSeconds(3));
+                                                            // The directory subscribes before its first read; wait for that read, then stay idle.
+                                                            var deadline = DateTime.UtcNow.AddSeconds(3);
+                                                            while (System.Threading.Volatile.Read(ref source.Reads) < 1 && DateTime.UtcNow < deadline)
+                                                                await Task.Delay(5);
                                                             await Task.Delay(50);
-                                                            var passed = source.Reads == 1 && !move.IsCompleted;
+                                                            var passed = System.Threading.Volatile.Read(ref source.Reads) == 1 && !move.IsCompleted;
                                                             changes.Changed.TrySetResult();
-                                                            while (source.Reads < 2) await Task.Yield();
+                                                            while (System.Threading.Volatile.Read(ref source.Reads) < 2) await Task.Yield();
                                                             cancellation.Cancel();
                                                             try { _ = await move; } catch (OperationCanceledException) { }
                                                             return passed;

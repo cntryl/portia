@@ -62,7 +62,8 @@ public sealed class McpLifecycleQualificationTests
                 Params = new System.Text.Json.Nodes.JsonObject { ["requestId"] = long.Parse(request[1], System.Globalization.CultureInfo.InvariantCulture) }
             }, timeout.Token);
         await PollAsync("disposed");
-        Assert.True(File.Exists(Path.Combine(evidence, "canceled")), evidence);
+        // Scope disposal can finish before the canceled handler records its marker.
+        await PollAsync("canceled");
         var notification = File.ReadAllLines(Path.Combine(evidence, "ingress.tsv"))
             .Select(line => line.Split('\t')).First(fields => fields.Length == 3 && fields[0] == "notification"
                 && fields[1] == NotificationMethods.CancelledNotification);
