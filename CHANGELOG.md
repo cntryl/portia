@@ -6,16 +6,61 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+## 0.11.1
+
+Read the [0.11.1 migration notes](docs/migration-0.11.1.md) before upgrading MCP HTTP hosts or code
+that handles object storage completion failures. Package publication and deployment are separate
+release steps.
+
+### Changed
+
+- MCP Streamable HTTP supports only the stateless session mode. Configuring a stateful mode through
+  `AddMcpHttp(options => ...)` now fails validation during endpoint mapping or host startup, until
+  stateful cancellation is qualified.
+- `IObjectStorage.CompleteUploadAsync` reports parts or receipts rejected by S3 (`InvalidPart`,
+  `InvalidPartOrder`, `EntityTooSmall`) as `InvalidDataException` instead of `AmazonS3Exception`.
+  The session stays open, so the caller can upload corrected parts and complete again. Content that
+  fails length or SHA-256 verification still ends the session.
+- `FakeObjectStorage` matches that contract: rejected receipts and undersized nonfinal parts leave
+  the session open.
+- `PORTIA206` allows Core to reference application projects whose names end in `.Abstractions`.
+  Common's dependency boundary is unchanged.
+- Upgrade AWSSDK.S3 to 4.1.0 and Microsoft.NET.Test.Sdk to 18.12.0. The Accounts example uses
+  ASP.NET Core instrumentation 1.21.0. Fitz .NET stays on 4.1.0.
+
 ### Fixed
 
 - Preserve one asynchronous service scope per MCP HTTP operation in stateless mode, and propagate
   caller cancellation through resource reads and prompt gets. Resource and prompt operations now
-  emit bounded, correlated Portia telemetry with sanitized protocol failures.
+  emit bounded, correlated Portia telemetry with sanitized protocol failures. Scope disposal,
+  cancellation, deadlines, and exported telemetry are qualified across stateless HTTP and stdio,
+  including stdio cancellation on MCP SDK 2.4.0.
+- Report a confirmed S3 upload completion as successful when the best-effort staging cleanup that
+  follows it fails. Lifecycle rules remove leftover staging data.
+- Surface a failed S3 multipart abort's own error instead of a later cleanup failure; retrying the
+  abort removes staging data.
+- `PORTIA200` counts repeated `partial` declarations of one type once.
+- Application structure code fixes decline file operations whose destination is an existing
+  directory, in addition to existing files and solution documents.
 
 ### Added
 
-- Qualify MCP application parity, scope disposal, cancellation, deadline handling, and exported
-  telemetry across stateless HTTP and stdio. Re-enable stdio cancellation coverage on MCP SDK 2.4.0.
+- Add MCP descriptions and metadata: `McpEntryOptions.DescribedAs` and `Titled`, prompt argument
+  `Required`/`Optional` descriptions, `McpResourceOptions<TOut>.Named`, and
+  `McpToolOptions.DescribeProperty`. Generated MCP descriptions include inherited request
+  properties, and duplicate tool checks compare property metadata.
+- Complete `Cntryl.Portia.Mcp.Testing` parity for prompts and resources: `McpScenario.ListPrompts`,
+  `GetPrompt`, `ListResources`, `ListResourceTemplates`, `ReadResource`, and `ConnectStdioAsync`,
+  with expectations and snapshots that expose titles, descriptions, annotations, and metadata.
+- Add a `fix-application-structure` command to the Portia source checkout's repository tools. It
+  applies `PORTIA200` and `PORTIA201` file operations safely, rebuilds, and rolls back on
+  collisions or build failure.
+- Allow Common features to keep `[PortiaJsonContext]` contexts in `Features/{Feature}/Serialization`,
+  matching Core. Any other type in that folder reports `PORTIA204`.
+
+### Performance
+
+- Index exact MCP prompt and resource lookups, and avoid repeated work for unmatched resource templates.
 
 ## 0.11.0
 
