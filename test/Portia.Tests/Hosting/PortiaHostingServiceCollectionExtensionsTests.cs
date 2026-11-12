@@ -164,26 +164,42 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Fact]
     public async Task ShouldAcceptPermissionProtectedRequestsGivenPermissionEvaluatorAtStartup()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddFrameworkTests();
         _ = builder.Services.AddScoped<IPermissionEvaluator>(_ =>
             throw new InvalidOperationException("Startup must not resolve a scoped evaluator."));
         using var host = builder.Build();
 
-        await host.StartAsync();
-        await host.StopAsync();
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await host.StartAsync();
+            await host.StopAsync();
+        });
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>A composition without permission-protected requests has no permission-evaluator requirement.</summary>
     [Fact]
     public async Task ShouldNotRequirePermissionEvaluatorWithoutPermissionProtectedRequests()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia();
         using var host = builder.Build();
 
-        await host.StartAsync();
-        await host.StopAsync();
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await host.StartAsync();
+            await host.StopAsync();
+        });
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>A global workload must declare an exact realm rather than a tenant template.</summary>
@@ -376,12 +392,16 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [InlineData(-1)]
     public void ShouldRejectNonPositiveReactorBatchSizeDuringRegistration(int maxBatchSize)
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+        // Act
+        var thrown = Record.Exception(() =>
             services.AddPortia().AddReactor<TestReactor>("TestReactor", WorkloadScope.Global,
                 o => o.Processing = new ProjectionRunOptions { MaxBatchSize = maxBatchSize }));
 
+        // Assert
+        var exception = Assert.IsType<ArgumentOutOfRangeException>(thrown);
         Assert.Equal(nameof(ProjectionRunOptions.MaxBatchSize), exception.ParamName);
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }

@@ -33,9 +33,14 @@ public sealed class ManualEffectIdentityTests
     [Fact]
     public void ShouldRejectManualNameEndingInSourceIdentity()
     {
+        // Arrange
         var reactor = new EffectProbe("billing:" + OtherSourceId);
 
-        _ = Assert.Throws<InvalidOperationException>(() => reactor.EffectId(Context("acme", SourceId), "audit"));
+        // Act
+        var exception = Record.Exception(() => reactor.EffectId(Context("acme", SourceId), "audit"));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(exception);
     }
 
     /// <summary>Accepted names retain the exact previously persisted UUID, including ordinary colons.</summary>
@@ -86,10 +91,14 @@ public sealed class ManualEffectIdentityTests
     [Fact]
     public void ShouldRejectBoundWorkloadNameContainingLegacyFieldDelimiter()
     {
+        // Arrange
         var reactor = BoundProbe("billing, Tenant = other", new TenantId("acme"));
 
-        var error = Assert.Throws<InvalidOperationException>(() => reactor.EffectId(Context("acme", SourceId), "audit"));
+        // Act
+        var thrown = Record.Exception(() => reactor.EffectId(Context("acme", SourceId), "audit"));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("workload name", error.Message, StringComparison.Ordinal);
     }
 

@@ -20,12 +20,17 @@ public sealed class DomainEventCatalogGeneratorTests
     [Fact]
     public void ShouldRegisterEveryDomainEventTypeInCompilation()
     {
-        var catalog = new DomainEventTypeCatalog().AddPortiaGeneratedDomainEvents();
+        // Arrange
+        var catalog = new DomainEventTypeCatalog();
 
-        Assert.True(catalog.TryResolve("WidgetNamed", 1, out var widgetType));
+        // Act
+        var registered = catalog.AddPortiaGeneratedDomainEvents();
+
+        // Assert
+        Assert.True(registered.TryResolve("WidgetNamed", 1, out var widgetType));
         Assert.Equal(typeof(WidgetNamed), widgetType);
 
-        Assert.True(catalog.TryResolve("OrderPlaced", 2, out var orderType));
+        Assert.True(registered.TryResolve("OrderPlaced", 2, out var orderType));
         Assert.Equal(typeof(OrderPlacedV2), orderType);
     }
 

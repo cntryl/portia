@@ -202,32 +202,46 @@ public sealed class McpRegistrationTests
     [InlineData("tøøl")]
     public void ShouldRejectInvalidMcpToolNames(string name)
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia()
             .AddRequestHandler<ReadGreetingHandler>();
 
-        var exception = Assert.Throws<ArgumentException>(() =>
+        // Act
+        var exception = Record.Exception(() =>
             application.AddMcpTool<ReadGreeting>(tool => tool.Named(name)));
 
-        Assert.Contains("1 to 128 ASCII", exception.Message, StringComparison.Ordinal);
+        // Assert
+        var argument = Assert.IsType<ArgumentException>(exception);
+        Assert.Contains("1 to 128 ASCII", argument.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void ShouldRejectMcpToolNamesLongerThan128Characters()
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia()
             .AddRequestHandler<ReadGreetingHandler>();
 
-        _ = Assert.Throws<ArgumentException>(() =>
+        // Act
+        var exception = Record.Exception(() =>
             application.AddMcpTool<ReadGreeting>(tool => tool.Named(new string('a', 129))));
+
+        // Assert
+        Assert.IsType<ArgumentException>(exception);
     }
 
     [Fact]
     public void ShouldRejectInvalidDiscriminatorAsMcpToolName()
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia()
             .AddRequestHandler<InvalidNameGreetingHandler>();
 
-        _ = Assert.Throws<ArgumentException>(() => application.AddMcpTool<InvalidNameGreeting>());
+        // Act
+        var exception = Record.Exception(() => application.AddMcpTool<InvalidNameGreeting>());
+
+        // Assert
+        Assert.IsType<ArgumentException>(exception);
     }
 
     [Fact]
@@ -428,50 +442,65 @@ public sealed class McpRegistrationTests
     [Fact]
     public void ShouldRejectConflictingPropertyDescriptionsInDuplicateDeclarations()
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia()
             .AddRequestHandler<ReadGreetingHandler>()
             .AddMcpTool<ReadGreeting>(tool => tool.DescribeProperty("Name", "The first description."));
 
-        var exception = Assert.Throws<InvalidOperationException>(() =>
+        // Act
+        var exception = Record.Exception(() =>
             application.AddMcpTool<ReadGreeting>(tool => tool.DescribeProperty("Name", "The second description.")));
 
-        Assert.Contains("conflicting MCP tool declarations", exception.Message, StringComparison.Ordinal);
+        // Assert
+        var invalid = Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("conflicting MCP tool declarations", invalid.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void ShouldRejectEmptyTransportActivation()
     {
-        var stdio = Assert.Throws<InvalidOperationException>(() =>
-            new ServiceCollection().AddPortia().AddMcpStdio());
-        Assert.Contains("at least one MCP declaration", stdio.Message, StringComparison.Ordinal);
-
-        var httpServices = Assert.Throws<InvalidOperationException>(() =>
-            new ServiceCollection().AddPortia().AddMcpHttp());
-        Assert.Contains("at least one MCP declaration", httpServices.Message, StringComparison.Ordinal);
-
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.Services.AddPortia()
             .AddRequestHandler<ReadGreetingHandler>()
             .AddMcpTool<ReadGreeting>();
         using var app = builder.Build();
-        var http = Assert.Throws<InvalidOperationException>(() => app.MapPortiaMcp());
-        Assert.Contains("AddMcpHttp", http.Message, StringComparison.Ordinal);
+
+        // Act
+        var stdio = Record.Exception(() =>
+            new ServiceCollection().AddPortia().AddMcpStdio());
+        var httpServices = Record.Exception(() =>
+            new ServiceCollection().AddPortia().AddMcpHttp());
+        var http = Record.Exception(() => app.MapPortiaMcp());
+
+        // Assert
+        var stdioException = Assert.IsType<InvalidOperationException>(stdio);
+        Assert.Contains("at least one MCP declaration", stdioException.Message, StringComparison.Ordinal);
+        var httpServicesException = Assert.IsType<InvalidOperationException>(httpServices);
+        Assert.Contains("at least one MCP declaration", httpServicesException.Message, StringComparison.Ordinal);
+        var httpException = Assert.IsType<InvalidOperationException>(http);
+        Assert.Contains("AddMcpHttp", httpException.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void ShouldRequireExplicitStdioActorPolicyAndAllowScopedProviders()
     {
+        // Arrange
         var missingActor = new ServiceCollection().AddPortia()
             .AddRequestHandler<ReadGreetingHandler>()
             .AddMcpTool<ReadGreeting>();
-        var exception = Assert.Throws<InvalidOperationException>(() => missingActor.AddMcpStdio());
-        Assert.Contains("explicit actor policy", exception.Message, StringComparison.Ordinal);
-
         var services = new ServiceCollection();
-        _ = services.AddPortia()
+        var scoped = services.AddPortia()
             .AddRequestHandler<ReadGreetingHandler>()
-            .AddMcpTool<ReadGreeting>()
-            .AddMcpStdio(options => options.UseActorProvider<ScopedActorProvider>());
+            .AddMcpTool<ReadGreeting>();
+
+        // Act
+        var exception = Record.Exception(() => missingActor.AddMcpStdio());
+        _ = scoped.AddMcpStdio(options => options.UseActorProvider<ScopedActorProvider>());
+
+        // Assert
+        var invalid = Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("explicit actor policy", invalid.Message, StringComparison.Ordinal);
         var descriptor = Assert.Single(services, service => service.ServiceType == typeof(IMcpActorProvider));
         Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
     }
@@ -1111,6 +1140,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public async Task ShouldKeepStdioProtocolStdoutFreeOfLogLines()
     {
+        // Arrange
         var host = StdioHostPath();
         Assert.True(File.Exists(host), $"The stdio test host was not built: {host}");
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -1126,57 +1156,67 @@ public sealed class McpRegistrationTests
         };
         process.StartInfo.ArgumentList.Add(host);
         Assert.True(process.Start());
+        string? response;
+        string? toolsResponse;
+        string? callResponse;
+        string remainder;
         try
         {
+            // Act
             await process.StandardInput.WriteLineAsync(
                 "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"strict-test\",\"version\":\"1\"}}}");
             await process.StandardInput.FlushAsync(timeout.Token);
-            var response = await process.StandardOutput.ReadLineAsync(timeout.Token);
-            Assert.False(string.IsNullOrWhiteSpace(response), "The stdio host returned no initialize response.");
-            using (JsonDocument.Parse(response))
-            {
-            }
+            response = await process.StandardOutput.ReadLineAsync(timeout.Token);
 
             await process.StandardInput.WriteLineAsync(
                 "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{}}");
             await process.StandardInput.WriteLineAsync(
                 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}");
             await process.StandardInput.FlushAsync(timeout.Token);
-            var toolsResponse = await process.StandardOutput.ReadLineAsync(timeout.Token);
-            Assert.False(string.IsNullOrWhiteSpace(toolsResponse), "The stdio host returned no tools response.");
-            using (var toolsDocument = JsonDocument.Parse(toolsResponse))
-            {
-                var tool = Assert.Single(toolsDocument.RootElement.GetProperty("result").GetProperty("tools")
-                    .EnumerateArray().ToArray());
-                Assert.Equal("object", tool.GetProperty("outputSchema").GetProperty("type").GetString());
-            }
+            toolsResponse = await process.StandardOutput.ReadLineAsync(timeout.Token);
 
             await process.StandardInput.WriteLineAsync(
                 "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"stdio.greetings.read\",\"arguments\":{\"name\":\"legacy\"}}}");
             await process.StandardInput.FlushAsync(timeout.Token);
-            var callResponse = await process.StandardOutput.ReadLineAsync(timeout.Token);
-            Assert.False(string.IsNullOrWhiteSpace(callResponse), "The stdio host returned no call response.");
-            using (var callDocument = JsonDocument.Parse(callResponse))
-            {
-                Assert.Equal("Hello, legacy, from stdio-test-actor.", callDocument.RootElement
-                    .GetProperty("result").GetProperty("structuredContent").GetProperty("result").GetString());
-            }
+            callResponse = await process.StandardOutput.ReadLineAsync(timeout.Token);
 
             process.StandardInput.Close();
             await process.WaitForExitAsync(timeout.Token);
-            var remainder = await process.StandardOutput.ReadToEndAsync(timeout.Token);
-            foreach (var line in remainder.Split('\n', StringSplitOptions.RemoveEmptyEntries
-                                                       | StringSplitOptions.TrimEntries))
-            {
-                using (JsonDocument.Parse(line))
-                {
-                }
-            }
+            remainder = await process.StandardOutput.ReadToEndAsync(timeout.Token);
         }
         finally
         {
             if (!process.HasExited)
                 process.Kill(true);
+        }
+
+        // Assert
+        Assert.False(string.IsNullOrWhiteSpace(response), "The stdio host returned no initialize response.");
+        using (JsonDocument.Parse(response))
+        {
+        }
+
+        Assert.False(string.IsNullOrWhiteSpace(toolsResponse), "The stdio host returned no tools response.");
+        using (var toolsDocument = JsonDocument.Parse(toolsResponse))
+        {
+            var tool = Assert.Single(toolsDocument.RootElement.GetProperty("result").GetProperty("tools")
+                .EnumerateArray().ToArray());
+            Assert.Equal("object", tool.GetProperty("outputSchema").GetProperty("type").GetString());
+        }
+
+        Assert.False(string.IsNullOrWhiteSpace(callResponse), "The stdio host returned no call response.");
+        using (var callDocument = JsonDocument.Parse(callResponse))
+        {
+            Assert.Equal("Hello, legacy, from stdio-test-actor.", callDocument.RootElement
+                .GetProperty("result").GetProperty("structuredContent").GetProperty("result").GetString());
+        }
+
+        foreach (var line in remainder.Split('\n', StringSplitOptions.RemoveEmptyEntries
+                                                   | StringSplitOptions.TrimEntries))
+        {
+            using (JsonDocument.Parse(line))
+            {
+            }
         }
     }
 

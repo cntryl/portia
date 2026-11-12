@@ -23,8 +23,13 @@ public sealed class CassieProjectionDatabaseTests
     [InlineData("23514", false)]
     public void ShouldClassifyCheckpointSchemaErrorsOnly(string sqlState, bool expected)
     {
+        // Arrange
         var error = new CassieException("probe failed", sqlState);
 
-        Assert.Equal(expected, CassieProjectionDatabase.IsCheckpointSchemaFailure(error));
+        // Act
+        var actual = CassieProjectionDatabase.IsCheckpointSchemaFailure(error);
+
+        // Assert
+        Assert.Equal(expected, actual);
     }
 }

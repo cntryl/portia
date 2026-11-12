@@ -18,10 +18,14 @@ public sealed class AggregateMetadataFactoryTests
     [Fact]
     public void ShouldRejectFactoryReturningEmptyEventId()
     {
+        // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4(), Factory(Uuid.Empty));
 
-        var error = Assert.Throws<InvalidOperationException>(() => aggregate.ChangeValue(1));
+        // Act
+        var exception = Record.Exception(() => aggregate.ChangeValue(1));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("empty event ID", error.Message, StringComparison.Ordinal);
         Assert.Empty(aggregate.UncommittedEvents);
         Assert.Equal(0UL, aggregate.Version);
@@ -35,10 +39,14 @@ public sealed class AggregateMetadataFactoryTests
     [Fact]
     public void ShouldRejectFactoryReturningDifferentAggregateId()
     {
+        // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4(), Factory(aggregateId: Uuid.CreateVersion4()));
 
-        var error = Assert.Throws<InvalidOperationException>(() => aggregate.ChangeValue(1));
+        // Act
+        var exception = Record.Exception(() => aggregate.ChangeValue(1));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("different aggregate ID", error.Message, StringComparison.Ordinal);
         Assert.Empty(aggregate.UncommittedEvents);
     }
@@ -51,10 +59,14 @@ public sealed class AggregateMetadataFactoryTests
     [Fact]
     public void ShouldRejectFactoryReturningDifferentAggregateVersion()
     {
+        // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4(), Factory(version: 99));
 
-        var error = Assert.Throws<InvalidOperationException>(() => aggregate.ChangeValue(1));
+        // Act
+        var exception = Record.Exception(() => aggregate.ChangeValue(1));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("different aggregate version", error.Message, StringComparison.Ordinal);
         Assert.Empty(aggregate.UncommittedEvents);
     }
@@ -66,11 +78,15 @@ public sealed class AggregateMetadataFactoryTests
     [Fact]
     public void ShouldRejectFactoryReturningNonUtcOccurrenceTime()
     {
+        // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4(),
             Factory(occurredOn: new DateTimeOffset(2026, 9, 11, 12, 0, 0, TimeSpan.FromHours(-5))));
 
-        var error = Assert.Throws<InvalidOperationException>(() => aggregate.ChangeValue(1));
+        // Act
+        var exception = Record.Exception(() => aggregate.ChangeValue(1));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("non-UTC occurrence time", error.Message, StringComparison.Ordinal);
         Assert.Empty(aggregate.UncommittedEvents);
     }
@@ -82,10 +98,14 @@ public sealed class AggregateMetadataFactoryTests
     [Fact]
     public void ShouldRejectFactoryReturningDifferentAggregateIdForAnAudit()
     {
+        // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4(), Factory(aggregateId: Uuid.CreateVersion4()));
 
-        var error = Assert.Throws<InvalidOperationException>(() => aggregate.Audit("declined"));
+        // Act
+        var exception = Record.Exception(() => aggregate.Audit("declined"));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("different aggregate ID", error.Message, StringComparison.Ordinal);
     }
 

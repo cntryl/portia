@@ -306,20 +306,28 @@ public sealed class FleetPartitionRunnerTests
     [Fact]
     public async Task ShouldAcceptWellFormedPartitionRoute()
     {
+        // Arrange
         var leases = new InMemoryLeaseClient();
         var runner = new FleetPartitionRunner(leases, new SingleWorkerMembership());
         using var cts = new CancellationTokenSource();
 
-        var run = runner.RunAsync(
-            ["lease://portia/fleet/well-formed"],
-            (_, ct) => RunUntilCancelled("lease://portia/fleet/well-formed", new ConcurrentDictionary<string, bool>(),
-                ct),
-            SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
-            cts.Token);
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            var run = runner.RunAsync(
+                ["lease://portia/fleet/well-formed"],
+                (_, ct) => RunUntilCancelled("lease://portia/fleet/well-formed", new ConcurrentDictionary<string, bool>(),
+                    ct),
+                SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
+                cts.Token);
 
-        await WaitUntil(() => leases.Acquisitions.Count == 1);
-        cts.Cancel();
-        await AwaitCancelled(run);
+            await WaitUntil(() => leases.Acquisitions.Count == 1);
+            cts.Cancel();
+            await AwaitCancelled(run);
+        });
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>

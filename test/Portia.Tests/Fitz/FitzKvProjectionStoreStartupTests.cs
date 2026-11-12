@@ -21,10 +21,14 @@ public sealed class FitzKvProjectionStoreStartupTests
     [InlineData(WorkloadScope.PerTenant)]
     public async Task ShouldRejectRepositoryBuiltForAnotherProjectorAtStartup(WorkloadScope scope)
     {
+        // Arrange
         using var host = Host(scope, registeredAs: "orders", repositoryServes: "OrdersProjector");
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        // Act
+        var thrown = await Record.ExceptionAsync(() => host.StartAsync());
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("'OrdersProjector'", error.Message, StringComparison.Ordinal);
         Assert.Contains("'orders'", error.Message, StringComparison.Ordinal);
     }
@@ -33,10 +37,18 @@ public sealed class FitzKvProjectionStoreStartupTests
     [Fact]
     public async Task ShouldStartWhenRepositoryServesTheRegisteredProjector()
     {
+        // Arrange
         using var host = Host(WorkloadScope.Global, registeredAs: "orders", repositoryServes: "orders");
 
-        await host.StartAsync();
-        await host.StopAsync();
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await host.StartAsync();
+            await host.StopAsync();
+        });
+
+        // Assert
+        Assert.Null(exception);
     }
 
     static IHost Host(WorkloadScope scope, string registeredAs, string repositoryServes)

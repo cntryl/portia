@@ -13,12 +13,17 @@ public sealed class InMemoryRpcDeadlineTests
     [InlineData(86400001)]
     public void ShouldRejectInvalidBudgetsGivenTimeoutOutsideTheFitzRange(int milliseconds)
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
 
-        _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
+        // Act
+        var exception = Record.Exception(() =>
         {
             _ = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromMilliseconds(milliseconds));
         });
+
+        // Assert
+        _ = Assert.IsType<ArgumentOutOfRangeException>(exception);
     }
 
     /// <summary>A zero budget expires before any registered worker receives the call.</summary>

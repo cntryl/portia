@@ -17,11 +17,15 @@ public sealed class RequireAuthorizationTests
     [Fact]
     public async Task ShouldRejectUnprotectedCommandAtDispatchWhenAuthorizationIsRequired()
     {
+        // Arrange
         var (bus, calls) = Bus(Required);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        // Act
+        var thrown = await Record.ExceptionAsync(() =>
             bus.DispatchAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System)).AsTask());
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(thrown);
         AssertUnprotected<UnprotectedCommand>(error);
         Assert.Empty(calls);
     }
@@ -30,11 +34,15 @@ public sealed class RequireAuthorizationTests
     [Fact]
     public async Task ShouldRejectUnprotectedQueryAtDispatchWhenAuthorizationIsRequired()
     {
+        // Arrange
         var (bus, calls) = Bus(Required);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        // Act
+        var thrown = await Record.ExceptionAsync(() =>
             bus.DispatchAsync(new UnprotectedQuery(), bus.CreateContext(RequestActor.System)).AsTask());
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(thrown);
         AssertUnprotected<UnprotectedQuery>(error);
         Assert.Empty(calls);
     }
@@ -68,11 +76,15 @@ public sealed class RequireAuthorizationTests
     [Fact]
     public async Task ShouldRejectUnprotectedRequestAtAuthorizeAsyncWhenAuthorizationIsRequired()
     {
+        // Arrange
         var (bus, _) = Bus(Required);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        // Act
+        var thrown = await Record.ExceptionAsync(() =>
             bus.AuthorizeAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System)).AsTask());
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(thrown);
         AssertUnprotected<UnprotectedCommand>(error);
     }
 
@@ -193,9 +205,14 @@ public sealed class RequireAuthorizationTests
     [Fact]
     public void ShouldReturnSameBuilderFromRequireAuthorization()
     {
+        // Arrange
         var builder = new ServiceCollection().AddPortia();
 
-        Assert.Same(builder, builder.RequireAuthorization());
+        // Act
+        var returned = builder.RequireAuthorization();
+
+        // Assert
+        Assert.Same(builder, returned);
     }
 
     /// <summary>A provider composed without hosting still refuses unprotected requests.</summary>
@@ -254,11 +271,16 @@ public sealed class RequireAuthorizationTests
     [Fact]
     public void ShouldAllowRequestFamilyAnonymous()
     {
+        // Arrange
         var registry = Registry(new RequestAuthorizationRequirement([typeof(IPublicRequest)]));
 
+        // Act
+        var unprotected = registry.UnprotectedRequestTypes.Select(type => type.FullName!).Order(StringComparer.Ordinal);
+
+        // Assert
         Assert.Equal(
             [typeof(AnonymousQuery).FullName!, typeof(UnprotectedStream).FullName!],
-            registry.UnprotectedRequestTypes.Select(type => type.FullName!).Order(StringComparer.Ordinal));
+            unprotected);
     }
 
     /// <summary>Allowing every request anonymous is an explicit, supported choice.</summary>
@@ -329,11 +351,15 @@ public sealed class RequireAuthorizationTests
     [Fact]
     public async Task ShouldFailHostedStartupListingUnprotectedRequestTypesInOrdinalOrder()
     {
+        // Arrange
         using var host = Hosted(portia =>
             portia.RequireAuthorization(options => options.AllowAnonymous<AnonymousQuery>()));
 
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        // Act
+        var thrown = await Record.ExceptionAsync(() => host.StartAsync());
 
+        // Assert
+        var failure = Assert.IsType<InvalidOperationException>(thrown);
         const string prefix =
             "Authorization is required, but these request types have no applicable request authorizer or [RequiresPermission]: ";
         Assert.StartsWith(prefix, failure.Message, StringComparison.Ordinal);
@@ -348,23 +374,39 @@ public sealed class RequireAuthorizationTests
     [Fact]
     public async Task ShouldStartHostWhenEveryRequestIsProtectedOrAnonymous()
     {
+        // Arrange
         using var host = Hosted(portia => portia.RequireAuthorization(options => options
             .AllowAnonymous<AnonymousQuery>()
             .AllowAnonymous<UnprotectedCommand>()
             .AllowAnonymous<UnprotectedStream>()));
 
-        await host.StartAsync();
-        await host.StopAsync();
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await host.StartAsync();
+            await host.StopAsync();
+        });
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>Without RequireAuthorization hosted startup does not examine request protection.</summary>
     [Fact]
     public async Task ShouldNotValidateProtectionWhenAuthorizationIsNotRequired()
     {
+        // Arrange
         using var host = Hosted(_ => { });
 
-        await host.StartAsync();
-        await host.StopAsync();
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await host.StartAsync();
+            await host.StopAsync();
+        });
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>A replaced registry cannot silently switch fail-closed authorization off.</summary>

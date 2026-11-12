@@ -14,8 +14,15 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
     [Fact]
     public async Task ShouldSatisfyProjectionConformanceAgainstCassie()
     {
+        // Arrange
         await using var database = await Database.OpenAsync();
-        await ProjectionStoreConformance.VerifyAsync(new Probe(database));
+        var probe = new Probe(database);
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>Real events project to isolated account data and resume without applying increments twice.</summary>

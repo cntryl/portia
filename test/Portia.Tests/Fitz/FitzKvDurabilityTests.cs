@@ -126,12 +126,16 @@ public sealed class FitzKvDurabilityTests
     [InlineData(KvDurability.Sync, KvDurability.Buffered)]
     public void ShouldRejectConflictingDurabilityGivenRepeatedCheckpointSelection(KvDurability first, KvDurability second)
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        var error = Assert.Throws<InvalidOperationException>(() =>
+        // Act
+        var thrown = Record.Exception(() =>
             services.AddPortia().AddFitz(Configuration(), builder =>
                 builder.UseKvCheckpoints(Route, first).UseKvCheckpoints(Route, second)));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("durability", error.Message, StringComparison.Ordinal);
     }
 

@@ -357,8 +357,11 @@ public sealed class FitzNotificationFaultTests
     [Fact]
     public void ShouldNameTheRouteAndRemedyInTheLegacyScheduleDiagnostic()
     {
+        // Arrange
+        // Act
         var exception = new LegacyScheduledRequestException("schedule://test/shared/action/run");
 
+        // Assert
         Assert.Contains("Cancel and recreate", exception.Message, StringComparison.Ordinal);
         Assert.Contains("schedule://test/shared/action/run", exception.Message, StringComparison.Ordinal);
     }

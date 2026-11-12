@@ -171,9 +171,15 @@ public sealed class FitzEventStoreProgressTests
     [InlineData(true)]
     public async Task ShouldRejectDuplicatePositionsAfterAnExpiredGap(bool hasMore)
     {
+        // Arrange
         var client = new ProgressClient(Page(hasMore, Item(2, 2, 2), Item(2, 2, 2)));
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
             await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), EventCursor.Start));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(exception);
     }
 
     /// <summary>A withheld entry does not bypass scope validation of later records.</summary>
@@ -323,9 +329,15 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldRejectRecordsOutsideTheObservedPattern()
     {
+        // Arrange
         var client = new ProgressClient(Page(true, Item(0, 0, 0, "stream://other/orders/one")));
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
             await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant"), EventCursor.Start));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(exception);
     }
 
     static FitzEventStore Store(IStreamClient client) => new(client, new UnusedSerializer());

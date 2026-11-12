@@ -132,9 +132,13 @@ public sealed class EventSchemaEvolutionTests
     [Fact]
     public void ShouldReportAllMissingUpcasterTransitions()
     {
-        var exception = Assert.Throws<InvalidOperationException>(() => TestJson.DomainSerializer(
+        // Arrange
+        // Act
+        var thrown = Record.Exception(() => TestJson.DomainSerializer(
             new DomainEventTypeCatalog(), [new RecordingUpcaster("Zulu", 3), new RecordingUpcaster("Alpha", 1)]));
 
+        // Assert
+        var exception = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("Alpha' is missing an upcaster from schema version 2", exception.Message,
             StringComparison.Ordinal);
         Assert.Contains("Zulu' is missing an upcaster from schema version 4", exception.Message,
@@ -159,8 +163,13 @@ public sealed class EventSchemaEvolutionTests
     [InlineData("WidgetNamed", int.MaxValue)]
     public void ShouldRejectInvalidUpcasterIdentity(string name, int version)
     {
-        var exception = Assert.Throws<InvalidOperationException>(() => TestJson.DomainSerializer(
+        // Arrange
+        // Act
+        var thrown = Record.Exception(() => TestJson.DomainSerializer(
             new DomainEventTypeCatalog(), [new RecordingUpcaster(name, version)]));
+
+        // Assert
+        var exception = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("Invalid JSON domain-event upcaster registrations", exception.Message,
             StringComparison.Ordinal);
     }

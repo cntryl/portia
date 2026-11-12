@@ -105,11 +105,16 @@ public sealed class ReactorContextTests
     [InlineData(false)]
     public void ShouldRejectAMissingRecordOrExecution(bool missingRecord)
     {
+        // Arrange
         var record = Record(out var ev);
 
-        _ = Assert.Throws<ArgumentNullException>(() => missingRecord
+        // Act
+        var exception = Xunit.Record.Exception(() => missingRecord
             ? new ReactorContext<ValueChanged>(ev, null!, new ReactionExecutionContext(record, RequestActor.System))
             : new ReactorContext<ValueChanged>(ev, record, null!));
+
+        // Assert
+        _ = Assert.IsType<ArgumentNullException>(exception);
     }
 
     static DomainEventRecord Record(out ValueChanged ev)

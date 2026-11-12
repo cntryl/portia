@@ -39,11 +39,15 @@ public sealed class JsonRequestSerializerContractTests
     [Fact]
     public void ShouldClassifyMalformedJsonAsPermanentWithoutReplacingJsonException()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
 
-        var error = Assert.ThrowsAny<JsonException>(() =>
+        // Act
+        var thrown = Record.Exception(() =>
             serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes("{")));
 
+        // Assert
+        var error = Assert.IsAssignableFrom<JsonException>(thrown);
         Assert.Equal(RequestEnvelopeFailureKind.Permanent, RequestEnvelopeFailure.GetKind(error));
     }
 
@@ -98,12 +102,16 @@ public sealed class JsonRequestSerializerContractTests
     [Fact]
     public void ShouldRejectTwoTypesRegisteredUnderOneContractNameAndVersion()
     {
-        var error = Assert.Throws<InvalidOperationException>(() => new JsonRequestSerializer(
+        // Arrange
+        // Act
+        var thrown = Record.Exception(() => new JsonRequestSerializer(
         [
             Registration(typeof(UniversalAction), "test.shared.collision"),
             Registration(typeof(RpcGetValue), "test.shared.collision")
         ], TestJson.Options()));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("Duplicate request contract", error.Message, StringComparison.Ordinal);
         Assert.Contains("test.shared.collision", error.Message, StringComparison.Ordinal);
     }
@@ -116,11 +124,15 @@ public sealed class JsonRequestSerializerContractTests
     [Fact]
     public void ShouldRejectConflictingTransportDescriptorsForOneRequestType()
     {
-        var error = Assert.Throws<InvalidOperationException>(() => new JsonRequestSerializer([
+        // Arrange
+        // Act
+        var thrown = Record.Exception(() => new JsonRequestSerializer([
             Registration(typeof(UniversalAction), "test.shared.first"),
             Registration(typeof(UniversalAction), "test.shared.second")
         ], TestJson.Options()));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains(nameof(UniversalAction), error.Message, StringComparison.Ordinal);
         Assert.Contains("conflicting transport descriptors", error.Message, StringComparison.Ordinal);
     }
@@ -156,12 +168,16 @@ public sealed class JsonRequestSerializerContractTests
     [InlineData(true)]
     public void ShouldRejectSerializingAnUninitializedOutcome(bool withResult)
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
 
-        var error = Assert.Throws<InvalidOperationException>(() => withResult
+        // Act
+        var thrown = Record.Exception(() => withResult
             ? serializer.SerializeResult(default(Result<int>))
             : serializer.SerializeOutcome(default));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("uninitialized", error.Message, StringComparison.Ordinal);
     }
 
@@ -192,11 +208,15 @@ public sealed class JsonRequestSerializerContractTests
     [InlineData("{\"version\":3,\"kind\":\"renamed-v3-contract\",\"body\":[]}")]
     public void ShouldRejectUnsupportedEnvelopeVersionBeforeReadingVersionSpecificFields(string json)
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
 
-        var error = Assert.Throws<InvalidOperationException>(() =>
+        // Act
+        var thrown = Record.Exception(() =>
             serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes(json)));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("version 2 only", error.Message, StringComparison.Ordinal);
         Assert.Equal(RequestEnvelopeFailureKind.Retryable, RequestEnvelopeFailure.GetKind(error));
     }
@@ -210,11 +230,15 @@ public sealed class JsonRequestSerializerContractTests
     [InlineData("{\"version\":2.5}")]
     public void ShouldClassifyUnreadableEnvelopeVersionAsPermanent(string json)
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
 
-        var error = Assert.ThrowsAny<Exception>(() =>
+        // Act
+        var error = Record.Exception(() =>
             serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes(json)));
 
+        // Assert
+        Assert.NotNull(error);
         Assert.Equal(RequestEnvelopeFailureKind.Permanent, RequestEnvelopeFailure.GetKind(error));
     }
 

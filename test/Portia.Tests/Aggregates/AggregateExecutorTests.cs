@@ -248,8 +248,14 @@ public sealed class AggregateExecutorTests
     [Fact]
     public void ShouldRejectUninitializedResultInOutcome()
     {
-        _ = Assert.Throws<ArgumentException>(() => AggregateOutcome.Commit(default));
-        _ = Assert.Throws<ArgumentException>(() => AggregateOutcome.Discard(default(Result<int>)));
+        // Arrange
+        // Act
+        var commit = Record.Exception(() => AggregateOutcome.Commit(default));
+        var discard = Record.Exception(() => AggregateOutcome.Discard(default(Result<int>)));
+
+        // Assert
+        _ = Assert.IsType<ArgumentException>(commit);
+        _ = Assert.IsType<ArgumentException>(discard);
     }
 
     /// <summary>The common policy commits a successful untyped result and discards a failed one.</summary>
@@ -290,8 +296,14 @@ public sealed class AggregateExecutorTests
     [Fact]
     public void ShouldRejectUninitializedResultInCommitOnSuccess()
     {
-        _ = Assert.Throws<ArgumentException>(() => AggregateOutcome.CommitOnSuccess(default));
-        _ = Assert.Throws<ArgumentException>(() => AggregateOutcome.CommitOnSuccess(default(Result<int>)));
+        // Arrange
+        // Act
+        var untyped = Record.Exception(() => AggregateOutcome.CommitOnSuccess(default));
+        var typed = Record.Exception(() => AggregateOutcome.CommitOnSuccess(default(Result<int>)));
+
+        // Assert
+        _ = Assert.IsType<ArgumentException>(untyped);
+        _ = Assert.IsType<ArgumentException>(typed);
     }
 
     /// <summary>

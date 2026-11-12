@@ -157,8 +157,11 @@ public sealed class InMemoryRpcClientTests
     [Fact]
     public async Task ShouldRegisterAndCallConcurrently()
     {
+        // Arrange
         var rpc = new InMemoryRpcClient();
-        await Parallel.ForAsync(0, 2000, async (index, ct) =>
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => Parallel.ForAsync(0, 2000, async (index, ct) =>
         {
             var pattern = $"rpc://tenant/area/resource-{index}/run";
             var registration = await rpc.RegisterWorkerAsync(pattern, (_, _, _) => ValueTask.CompletedTask,
@@ -169,6 +172,9 @@ public sealed class InMemoryRpcClientTests
             }
 
             await registration.DisposeAsync();
-        });
+        }));
+
+        // Assert
+        Assert.Null(exception);
     }
 }

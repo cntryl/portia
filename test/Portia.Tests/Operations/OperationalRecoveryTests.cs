@@ -69,10 +69,16 @@ public sealed class OperationalRecoveryTests
     [Fact]
     public async Task ShouldDenyUnconfiguredOperationalAccess()
     {
+        // Arrange
         var operations = new PortiaOperations(new MemoryOperationalStore(), new OperationalOptions(),
             new EmptyApplicationTopology());
-        _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
             await operations.ListIssuesAsync(new ClaimsPrincipal(), OperationalScope.Global));
+
+        // Assert
+        _ = Assert.IsType<UnauthorizedAccessException>(exception);
     }
 
     /// <summary>Operator approval is exact and duplicates enqueue only one execution.</summary>

@@ -41,9 +41,14 @@ public sealed class FitzKvProjectionStoreLifetimeTests
     [Fact]
     public async Task ShouldRejectRepositoryWritesBeforeAnyBatchIsOpened()
     {
+        // Arrange
         var store = new StrayWriteRepository(new FakeKvClient(), "kv://portia/state/orders");
 
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => store.AddAsync("total", 12));
+        // Act
+        var exception = await Record.ExceptionAsync(() => store.AddAsync("total", 12));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(exception);
     }
 
     sealed class StrayWriteRepository(IKvClient client, string route)

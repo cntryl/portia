@@ -9,27 +9,39 @@ public sealed class MemberMetadataBindingTests
     [Fact]
     public void ShouldPreserveMemberIdentityAndConverterGivenReflectionDisabledMetadata()
     {
+        // Arrange
         Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         var options = MemberMetadataJsonContext.Default.Options;
         using var body = JsonDocument.Parse("{\"first\":\"0x10\",\"second\":32}");
 
-        Assert.Equal(16, PortiaHttpBinding.ReadBody<MemberMetadataBinding, int>(body.RootElement, options,
-            0, "First", "first", false, false, 0));
-        Assert.Equal(32, PortiaHttpBinding.ReadBody<MemberMetadataBinding, int>(body.RootElement, options,
-            1, "Second", "second", false, false, 0));
+        // Act
+        var first = PortiaHttpBinding.ReadBody<MemberMetadataBinding, int>(body.RootElement, options,
+            0, "First", "first", false, false, 0);
+        var second = PortiaHttpBinding.ReadBody<MemberMetadataBinding, int>(body.RootElement, options,
+            1, "Second", "second", false, false, 0);
+
+        // Assert
+        Assert.Equal(16, first);
+        Assert.Equal(32, second);
     }
 
     [Fact]
     public void ShouldPreserveInitializerIdentityGivenReflectionDisabledStructMetadata()
     {
+        // Arrange
         Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         var options = MemberMetadataJsonContext.Default.Options;
         using var body = JsonDocument.Parse("{\"wire_first\":11,\"wire_second\":22}");
 
-        Assert.Equal(11, PortiaHttpBinding.ReadBody<MemberMetadataStruct, int>(body.RootElement, options,
-            0, "First", "first", false, false, 0));
-        Assert.Equal(22, PortiaHttpBinding.ReadBody<MemberMetadataStruct, int>(body.RootElement, options,
-            1, "Second", "second", false, false, 0));
+        // Act
+        var first = PortiaHttpBinding.ReadBody<MemberMetadataStruct, int>(body.RootElement, options,
+            0, "First", "first", false, false, 0);
+        var second = PortiaHttpBinding.ReadBody<MemberMetadataStruct, int>(body.RootElement, options,
+            1, "Second", "second", false, false, 0);
+
+        // Assert
+        Assert.Equal(11, first);
+        Assert.Equal(22, second);
     }
 }
 

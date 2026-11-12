@@ -11,6 +11,7 @@ public sealed class FitzQueueOptionsIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldPublishDelayedRequestWithLifetimeAndRetrySameEnvelopeThroughNativeNack()
     {
+        // Arrange
         await using var connection = await broker.CreateClientAsync();
         Assert.Contains(1U, connection.CapabilityIds);
         Assert.Contains(2U, connection.CapabilityIds);
@@ -26,35 +27,42 @@ public sealed class FitzQueueOptionsIntegrationTests(FitzBrokerFixture broker)
         var metadata = new RequestMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), Uuid.CreateVersion4());
         var request = new UniversalAction(174);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-
-        await publisher.EnqueueWithOptionsAsync(request, RequestRouteValues.None, "original-actor", metadata,
-            new RequestQueueOptions(Delay: TimeSpan.FromSeconds(3), TtlHours: 1), deadline.Token);
-
-        Assert.Empty(await connection.Queue.ReserveAsync(route, TimeSpan.FromSeconds(5), wait: TimeSpan.Zero,
-            ct: deadline.Token));
         var consumer = new FitzRequestQueueConsumer(connection.Queue, serializer, route, catalog,
             visibilityTimeoutSeconds: 5, waitDuration: TimeSpan.FromMilliseconds(100));
         await using var reader = consumer.ReadAsync(deadline.Token).GetAsyncEnumerator(deadline.Token);
-        Assert.True(await reader.MoveNextAsync());
+
+        // Act
+        await publisher.EnqueueWithOptionsAsync(request, RequestRouteValues.None, "original-actor", metadata,
+            new RequestQueueOptions(Delay: TimeSpan.FromSeconds(3), TtlHours: 1), deadline.Token);
+        var reservedBeforeDelay = await connection.Queue.ReserveAsync(route, TimeSpan.FromSeconds(5),
+            wait: TimeSpan.Zero, ct: deadline.Token);
+        var readFirst = await reader.MoveNextAsync();
         var first = reader.Current;
+
+        await first.RetryAsync(TimeSpan.FromSeconds(3), deadline.Token);
+
+        var reservedAfterRetry = await connection.Queue.ReserveAsync(route, TimeSpan.FromSeconds(5),
+            wait: TimeSpan.Zero, ct: deadline.Token);
+        var readRetried = await reader.MoveNextAsync();
+        var retried = reader.Current;
+        await retried.CompleteAsync(deadline.Token);
+
+        var reservedAfterComplete = await connection.Queue.ReserveAsync(route, TimeSpan.FromSeconds(5),
+            wait: TimeSpan.Zero, ct: deadline.Token);
+
+        // Assert
+        Assert.Empty(reservedBeforeDelay);
+        Assert.True(readFirst);
         Assert.Equal(request, first.Request);
         Assert.Equal(metadata, first.Metadata);
         Assert.Equal("original-actor", first.ActorToken);
         Assert.Equal(QueueItem.AttemptUnavailable, first.Attempt);
-
-        await first.RetryAsync(TimeSpan.FromSeconds(3), deadline.Token);
-
-        Assert.Empty(await connection.Queue.ReserveAsync(route, TimeSpan.FromSeconds(5), wait: TimeSpan.Zero,
-            ct: deadline.Token));
-        Assert.True(await reader.MoveNextAsync());
-        var retried = reader.Current;
+        Assert.Empty(reservedAfterRetry);
+        Assert.True(readRetried);
         Assert.Equal(request, retried.Request);
         Assert.Equal(metadata, retried.Metadata);
         Assert.Equal(first.ActorToken, retried.ActorToken);
         Assert.Equal(QueueItem.AttemptUnavailable, retried.Attempt);
-        await retried.CompleteAsync(deadline.Token);
-
-        Assert.Empty(await connection.Queue.ReserveAsync(route, TimeSpan.FromSeconds(5), wait: TimeSpan.Zero,
-            ct: deadline.Token));
+        Assert.Empty(reservedAfterComplete);
     }
 }

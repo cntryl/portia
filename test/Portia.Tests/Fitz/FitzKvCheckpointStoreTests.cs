@@ -367,12 +367,16 @@ public sealed class FitzKvCheckpointStoreTests
     [Fact]
     public async Task ShouldSurfaceDisposalFailureWhenTheSaveSucceeded()
     {
+        // Arrange
         var client = new FakeKvClient { DisposeFailure = new IOException("dispose failed") };
 
-        _ = await Assert.ThrowsAsync<IOException>(async () =>
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
             await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints")
                 .SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1"))));
 
+        // Assert
+        _ = Assert.IsType<IOException>(exception);
         Assert.Equal(0, client.LastTransaction.Rollbacks);
         Assert.Single(client.Committed);
     }
@@ -395,14 +399,16 @@ public sealed class FitzKvCheckpointStoreTests
     [InlineData("kv://portia/state/check points")]
     public void ShouldRejectMissingClientOrMalformedRoute(string? route)
     {
-        if (route is null)
-        {
-            _ = Assert.Throws<ArgumentNullException>(() => new FitzKvCheckpointStore(null!, "kv://portia/state/x"));
-        }
-        else
-        {
-            _ = Assert.Throws<ArgumentException>(() => new FitzKvCheckpointStore(new FakeKvClient(), route));
-        }
+        // Arrange
+        var expected = route is null ? typeof(ArgumentNullException) : typeof(ArgumentException);
+
+        // Act
+        var exception = Record.Exception(() => route is null
+            ? new FitzKvCheckpointStore(null!, "kv://portia/state/x")
+            : new FitzKvCheckpointStore(new FakeKvClient(), route));
+
+        // Assert
+        Assert.IsType(expected, exception);
     }
 
     /// <summary>

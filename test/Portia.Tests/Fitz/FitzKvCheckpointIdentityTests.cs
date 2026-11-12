@@ -35,29 +35,49 @@ public sealed class FitzKvCheckpointIdentityTests
     [Fact]
     public void ShouldRejectNulInCheckpointAndWorkloadNames()
     {
+        // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", "events", "order");
-        Assert.Equal("componentName", Assert.Throws<ArgumentException>(() =>
-            new CheckpointIdentity("orders\0other", pattern)).ParamName);
-        Assert.Equal("rebuildId", Assert.Throws<ArgumentException>(() =>
-            new CheckpointIdentity("orders", pattern, "part\0v2")).ParamName);
-        _ = Assert.Throws<ArgumentException>(() => new WorkloadIdentity("orders\0other"));
-        _ = Assert.Throws<ArgumentException>(() => new NamedProjector("orders\0other"));
-        _ = Assert.Throws<ArgumentException>(() => new NamedReactor("orders\0other"));
-        _ = Assert.Throws<ArgumentException>(() => new ProjectionRunOptions { RebuildId = "part\0v2" }.Validate());
-        _ = Assert.Throws<ArgumentException>(() => new ServiceCollection().AddPortia()
+
+        // Act
+        var componentName = Record.Exception(() => new CheckpointIdentity("orders\0other", pattern));
+        var rebuildId = Record.Exception(() => new CheckpointIdentity("orders", pattern, "part\0v2"));
+        var workload = Record.Exception(() => new WorkloadIdentity("orders\0other"));
+        var projector = Record.Exception(() => new NamedProjector("orders\0other"));
+        var reactor = Record.Exception(() => new NamedReactor("orders\0other"));
+        var runOptions = Record.Exception(() => new ProjectionRunOptions { RebuildId = "part\0v2" }.Validate());
+        var registration = Record.Exception(() => new ServiceCollection().AddPortia()
             .AddProjector<TestProjector>("orders\0other", WorkloadScope.Global));
+
+        // Assert
+        Assert.Equal("componentName", Assert.IsType<ArgumentException>(componentName).ParamName);
+        Assert.Equal("rebuildId", Assert.IsType<ArgumentException>(rebuildId).ParamName);
+        _ = Assert.IsType<ArgumentException>(workload);
+        _ = Assert.IsType<ArgumentException>(projector);
+        _ = Assert.IsType<ArgumentException>(reactor);
+        _ = Assert.IsType<ArgumentException>(runOptions);
+        _ = Assert.IsType<ArgumentException>(registration);
     }
 
     /// <summary>Tenant assignment and parsing reject the same invalid realm before routing or key derivation.</summary>
     [Fact]
     public void ShouldRejectNulInTenantIdentity()
     {
+        // Arrange
         const string value = "tenant\0other";
-        _ = Assert.Throws<ArgumentException>(() => new TenantId(value));
-        _ = Assert.Throws<ArgumentException>(() => new TenantId("tenant") with { Value = value });
-        Assert.False(TenantId.TryParse(value, null, out _));
-        Assert.False(TenantId.TryParse(value.AsSpan(), null, out _));
-        _ = Assert.Throws<FormatException>(() => TenantId.Parse(value, null));
+
+        // Act
+        var constructed = Record.Exception(() => new TenantId(value));
+        var replaced = Record.Exception(() => new TenantId("tenant") with { Value = value });
+        var parsedString = TenantId.TryParse(value, null, out _);
+        var parsedSpan = TenantId.TryParse(value.AsSpan(), null, out _);
+        var parseFailure = Record.Exception(() => TenantId.Parse(value, null));
+
+        // Assert
+        _ = Assert.IsType<ArgumentException>(constructed);
+        _ = Assert.IsType<ArgumentException>(replaced);
+        Assert.False(parsedString);
+        Assert.False(parsedSpan);
+        _ = Assert.IsType<FormatException>(parseFailure);
     }
 
     /// <summary>Invalid UTF-16 cannot alias the UTF-8 replacement character in a durable identity.</summary>
@@ -117,11 +137,20 @@ public sealed class FitzKvCheckpointIdentityTests
     [Fact]
     public async Task ShouldRejectNulBeforeNativeRouting()
     {
+        // Arrange
         var client = new FakeKvClient();
-        _ = Assert.Throws<ArgumentException>(() => new IdentityRepository(client, "orders\0other"));
-        _ = Assert.Throws<ArgumentException>(() => new FitzKvCheckpointStore(client, "kv://review\0other/identity/checkpoints"));
         var repository = new IdentityRepository(client, "orders");
-        _ = await Assert.ThrowsAsync<ArgumentException>(async () => await repository.ReadAsync("tenant\0other"));
+
+        // Act
+        var repositoryName = Record.Exception(() => new IdentityRepository(client, "orders\0other"));
+        var checkpointRoute = Record.Exception(() =>
+            new FitzKvCheckpointStore(client, "kv://review\0other/identity/checkpoints"));
+        var read = await Record.ExceptionAsync(async () => await repository.ReadAsync("tenant\0other"));
+
+        // Assert
+        _ = Assert.IsType<ArgumentException>(repositoryName);
+        _ = Assert.IsType<ArgumentException>(checkpointRoute);
+        _ = Assert.IsType<ArgumentException>(read);
         Assert.Empty(client.Transactions);
     }
 

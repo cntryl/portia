@@ -463,50 +463,66 @@ public sealed class McpPrimitiveTests
     [InlineData("greetings://{host}/item")]
     public void ShouldRejectUnsafeResourceTemplates(string uri)
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia();
-        Assert.Throws<ArgumentException>(() => application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
+
+        // Act
+        var exception = Record.Exception(() => application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
             uri, _ => new McpRegistrationTests.ReadGreeting("Portia"),
             options => { options.Public(); options.AsJson(); }));
+
+        // Assert
+        Assert.IsType<ArgumentException>(exception);
     }
 
     [Fact]
     public void ShouldRejectPrimitiveDeclarationsAfterHttpActivation()
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia()
             .AddMcpTool<McpRegistrationTests.ReadGreeting>()
             .AddMcpHttp();
 
-        var resource = Assert.Throws<InvalidOperationException>(() =>
+        // Act
+        var resource = Record.Exception(() =>
             application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
                 "greetings://local/fixed", _ => new McpRegistrationTests.ReadGreeting("Portia"),
                 options => { options.Public(); options.AsJson(); }));
-        var prompt = Assert.Throws<InvalidOperationException>(() =>
+        var prompt = Record.Exception(() =>
             application.AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>(
                 "greeting", _ => new McpRegistrationTests.ReadGreeting("Portia"),
                 value => [new McpPromptMessage("user", value)], options => options.Public()));
 
-        Assert.Contains("before AddMcpHttp", resource.Message, StringComparison.Ordinal);
-        Assert.Contains("before AddMcpHttp", prompt.Message, StringComparison.Ordinal);
+        // Assert
+        var resourceException = Assert.IsType<InvalidOperationException>(resource);
+        var promptException = Assert.IsType<InvalidOperationException>(prompt);
+        Assert.Contains("before AddMcpHttp", resourceException.Message, StringComparison.Ordinal);
+        Assert.Contains("before AddMcpHttp", promptException.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void ShouldRejectPrimitiveDeclarationsAfterStdioActivation()
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia()
             .AddMcpTool<McpRegistrationTests.ReadGreeting>()
             .AddMcpStdio(options => options.UseLocalDevelopmentActor());
 
-        var resource = Assert.Throws<InvalidOperationException>(() =>
+        // Act
+        var resource = Record.Exception(() =>
             application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
                 "greetings://local/fixed", _ => new McpRegistrationTests.ReadGreeting("Portia"),
                 options => { options.Public(); options.AsJson(); }));
-        var prompt = Assert.Throws<InvalidOperationException>(() =>
+        var prompt = Record.Exception(() =>
             application.AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>(
                 "greeting", _ => new McpRegistrationTests.ReadGreeting("Portia"),
                 value => [new McpPromptMessage("user", value)], options => options.Public()));
 
-        Assert.Contains("before AddMcpStdio", resource.Message, StringComparison.Ordinal);
-        Assert.Contains("before AddMcpStdio", prompt.Message, StringComparison.Ordinal);
+        // Assert
+        var resourceException = Assert.IsType<InvalidOperationException>(resource);
+        var promptException = Assert.IsType<InvalidOperationException>(prompt);
+        Assert.Contains("before AddMcpStdio", resourceException.Message, StringComparison.Ordinal);
+        Assert.Contains("before AddMcpStdio", promptException.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -514,19 +530,40 @@ public sealed class McpPrimitiveTests
     [InlineData("greetings://local/{name}")]
     public void ShouldRejectLowerUriLimitWithoutChangingRegisteredLimit(string uri)
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia()
             .AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
                 uri, _ => new McpRegistrationTests.ReadGreeting("Portia"),
                 options => { options.Public(); options.AsJson(); });
 
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
+        // Act
+        var exception = Record.Exception(() =>
             application.ConfigureMcpLimits(limits =>
                 limits.MaxResourceUriBytes = System.Text.Encoding.UTF8.GetByteCount(uri) - 1));
 
+        // Assert
+        Assert.IsType<ArgumentOutOfRangeException>(exception);
         using var services = application.Services.BuildServiceProvider();
         Assert.Equal(2048, services.GetRequiredService<McpLimits>().MaxResourceUriBytes);
+    }
+
+    [Theory]
+    [InlineData("greetings://local/fixed")]
+    [InlineData("greetings://local/{name}")]
+    public void ShouldAcceptUriLimitEqualToRegisteredUriBytes(string uri)
+    {
+        // Arrange
+        var application = new ServiceCollection().AddPortia()
+            .AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
+                uri, _ => new McpRegistrationTests.ReadGreeting("Portia"),
+                options => { options.Public(); options.AsJson(); });
+        using var services = application.Services.BuildServiceProvider();
+
+        // Act
         _ = application.ConfigureMcpLimits(limits =>
             limits.MaxResourceUriBytes = System.Text.Encoding.UTF8.GetByteCount(uri));
+
+        // Assert
         Assert.Equal(System.Text.Encoding.UTF8.GetByteCount(uri),
             services.GetRequiredService<McpLimits>().MaxResourceUriBytes);
     }
@@ -585,10 +622,17 @@ public sealed class McpPrimitiveTests
     [Fact]
     public void ShouldAcceptFixedAbsoluteUriWithoutPath()
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia();
-        _ = application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://local",
+
+        // Act
+        var exception = Record.Exception(() => application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
+            "greetings://local",
             _ => new McpRegistrationTests.ReadGreeting("Portia"),
-            options => { options.Public(); options.AsJson(); });
+            options => { options.Public(); options.AsJson(); }));
+
+        // Assert
+        Assert.Null(exception);
     }
 
     [Fact]

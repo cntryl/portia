@@ -431,14 +431,16 @@ public sealed class FitzKvProjectionStoreTests
     [InlineData("kv://portia/state/check points")]
     public void ShouldRejectMissingClientOrMalformedRoute(string? route)
     {
-        if (route is null)
-        {
-            _ = Assert.Throws<ArgumentNullException>(() => new TotalsRepository(null!, "kv://portia/state/orders"));
-        }
-        else
-        {
-            _ = Assert.Throws<ArgumentException>(() => new TotalsRepository(new FakeKvClient(), route));
-        }
+        // Arrange
+        var expected = route is null ? typeof(ArgumentNullException) : typeof(ArgumentException);
+
+        // Act
+        var exception = Record.Exception(() => route is null
+            ? new TotalsRepository(null!, "kv://portia/state/orders")
+            : new TotalsRepository(new FakeKvClient(), route));
+
+        // Assert
+        Assert.IsType(expected, exception);
     }
 
     /// <summary>
@@ -512,15 +514,23 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldBeginOneTenantsBatchWhileAnotherTenantsBatchIsOpen()
     {
+        // Arrange
         var client = new FakeKvClient();
         var tenantA = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-a", "orders"));
         var tenantB = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-b", "orders"));
         await using var open = await new TotalsRepository(client, "kv://portia/state/orders")
             .BeginAsync(new ProjectionBatchContext(tenantA, ProjectionCheckpoint.Start));
 
-        await using var other = await new TotalsRepository(client, "kv://portia/state/orders")
-            .BeginAsync(new ProjectionBatchContext(tenantB, ProjectionCheckpoint.Start));
-        await other.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await using var other = await new TotalsRepository(client, "kv://portia/state/orders")
+                .BeginAsync(new ProjectionBatchContext(tenantB, ProjectionCheckpoint.Start));
+            await other.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+        });
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>
@@ -639,14 +649,21 @@ public sealed class FitzKvProjectionStoreTests
     [Fact]
     public async Task ShouldRejectBlankComponentNameOrRealm()
     {
-        _ = Assert.Throws<ArgumentException>(() =>
-            new TotalsRepository(new FakeKvClient(), "kv://portia/state/orders", " "));
-        _ = Assert.Throws<ArgumentNullException>(() =>
-            new TotalsRepository(new FakeKvClient(), "kv://portia/state/orders", null!));
-
+        // Arrange
         var client = new FakeKvClient();
-        _ = await Assert.ThrowsAsync<ArgumentException>(async () =>
+
+        // Act
+        var blank = Record.Exception(() =>
+            new TotalsRepository(new FakeKvClient(), "kv://portia/state/orders", " "));
+        var missing = Record.Exception(() =>
+            new TotalsRepository(new FakeKvClient(), "kv://portia/state/orders", null!));
+        var read = await Record.ExceptionAsync(async () =>
             await new TotalsRepository(client, "kv://portia/state/orders").ReadTotalAsync(" ", "widgets"));
+
+        // Assert
+        _ = Assert.IsType<ArgumentException>(blank);
+        _ = Assert.IsType<ArgumentNullException>(missing);
+        _ = Assert.IsType<ArgumentException>(read);
         Assert.Empty(client.Transactions);
     }
 

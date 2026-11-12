@@ -24,13 +24,18 @@ public sealed class DomainEventValidationTests
     [InlineData(true, true)]
     public void ShouldAcceptWellFormedEvent(bool audit, bool attributed)
     {
+        // Arrange
         var metadata = Metadata(audit) with
         {
             ExecutionId = attributed ? Uuid.CreateVersion4() : null,
             Actor = attributed ? new ActorAttribution("alice", "accounts") : null
         };
 
-        DomainEventValidation.Validate(Event(metadata));
+        // Act
+        var exception = Record.Exception(() => DomainEventValidation.Validate(Event(metadata)));
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>
@@ -44,14 +49,18 @@ public sealed class DomainEventValidationTests
     [InlineData(false)]
     public void ShouldRejectEmptyEventOrAggregateIdentity(bool emptyEventId)
     {
+        // Arrange
         var metadata = Metadata() with
         {
             EventId = emptyEventId ? Uuid.Empty : Uuid.CreateVersion4(),
             AggregateId = emptyEventId ? Uuid.CreateVersion4() : Uuid.Empty
         };
 
-        var error = Assert.Throws<InvalidOperationException>(() => DomainEventValidation.Validate(Event(metadata)));
+        // Act
+        var exception = Record.Exception(() => DomainEventValidation.Validate(Event(metadata)));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("identities cannot be empty", error.Message, StringComparison.Ordinal);
     }
 
@@ -67,6 +76,7 @@ public sealed class DomainEventValidationTests
     [InlineData("execution")]
     public void ShouldRejectSuppliedButEmptyAttributionIdentity(string field)
     {
+        // Arrange
         var metadata = Metadata() with
         {
             CorrelationId = field == "correlation" ? Uuid.Empty : null,
@@ -75,8 +85,11 @@ public sealed class DomainEventValidationTests
             Actor = field == "execution" ? new ActorAttribution("alice", "accounts") : null
         };
 
-        var error = Assert.Throws<InvalidOperationException>(() => DomainEventValidation.Validate(Event(metadata)));
+        // Act
+        var exception = Record.Exception(() => DomainEventValidation.Validate(Event(metadata)));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("attribution identities cannot be empty", error.Message, StringComparison.Ordinal);
     }
 
@@ -91,14 +104,18 @@ public sealed class DomainEventValidationTests
     [InlineData(false)]
     public void ShouldRejectExecutionIdentityAndActorSuppliedApart(bool withExecution)
     {
+        // Arrange
         var metadata = Metadata() with
         {
             ExecutionId = withExecution ? Uuid.CreateVersion4() : null,
             Actor = withExecution ? null : new ActorAttribution("alice", "accounts")
         };
 
-        var error = Assert.Throws<InvalidOperationException>(() => DomainEventValidation.Validate(Event(metadata)));
+        // Act
+        var exception = Record.Exception(() => DomainEventValidation.Validate(Event(metadata)));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("must be supplied together", error.Message, StringComparison.Ordinal);
     }
 
@@ -115,14 +132,18 @@ public sealed class DomainEventValidationTests
     [InlineData("alice", "   ")]
     public void ShouldRejectActorAttributionMissingSubjectOrIssuer(string subject, string issuer)
     {
+        // Arrange
         var metadata = Metadata() with
         {
             ExecutionId = Uuid.CreateVersion4(),
             Actor = new ActorAttribution(subject, issuer)
         };
 
-        var error = Assert.Throws<InvalidOperationException>(() => DomainEventValidation.Validate(Event(metadata)));
+        // Act
+        var exception = Record.Exception(() => DomainEventValidation.Validate(Event(metadata)));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("subject and issuer", error.Message, StringComparison.Ordinal);
     }
 
@@ -133,13 +154,17 @@ public sealed class DomainEventValidationTests
     [Fact]
     public void ShouldRejectNonUtcOccurrenceTime()
     {
+        // Arrange
         var metadata = Metadata() with
         {
             OccurredOn = new DateTimeOffset(2026, 9, 11, 12, 0, 0, TimeSpan.FromHours(2))
         };
 
-        var error = Assert.Throws<InvalidOperationException>(() => DomainEventValidation.Validate(Event(metadata)));
+        // Act
+        var exception = Record.Exception(() => DomainEventValidation.Validate(Event(metadata)));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("must be UTC", error.Message, StringComparison.Ordinal);
     }
 
@@ -151,9 +176,12 @@ public sealed class DomainEventValidationTests
     [Fact]
     public void ShouldRejectStateChangingEventAtVersionZero()
     {
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            DomainEventValidation.Validate(Event(Metadata(version: 0))));
+        // Arrange
+        // Act
+        var exception = Record.Exception(() => DomainEventValidation.Validate(Event(Metadata(version: 0))));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("advance the aggregate version", error.Message, StringComparison.Ordinal);
     }
 
@@ -167,12 +195,20 @@ public sealed class DomainEventValidationTests
     [InlineData(true)]
     public void ShouldAcceptBatchOfOneAggregatesEventsInOrder(bool audit)
     {
+        // Arrange
         var aggregateId = Uuid.CreateVersion4();
-        DomainEventValidation.ValidateBatch([
+        var events = new[]
+        {
             Event(Metadata(aggregateId, audit ? 3UL : 1UL, audit)),
             Event(Metadata(aggregateId, audit ? 3UL : 2UL, audit)),
             Event(Metadata(aggregateId, audit ? 3UL : 3UL, audit))
-        ]);
+        };
+
+        // Act
+        var exception = Record.Exception(() => DomainEventValidation.ValidateBatch(events));
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>

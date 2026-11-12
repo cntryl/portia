@@ -609,9 +609,15 @@ public sealed class HttpBindingTests : IAsyncDisposable
     [Fact]
     public void ShouldRejectDuplicateCustomBodyContentTypes()
     {
+        // Arrange
         var configuration = new PortiaEndpointConfiguration<HttpSendPing>();
-        Assert.Throws<InvalidOperationException>(() => configuration.Accepts<string>(
+
+        // Act
+        var exception = Record.Exception(() => configuration.Accepts<string>(
             "application/json", additionalContentTypes: "APPLICATION/JSON"));
+
+        // Assert
+        Assert.IsType<InvalidOperationException>(exception);
     }
 
     /// <inheritdoc />
@@ -1575,20 +1581,30 @@ public sealed class HttpBindingTests : IAsyncDisposable
     [Fact]
     public async Task ShouldReturnGuardProblemBeforeJsonStreamWhenStreamGuardFails()
     {
+        // Arrange
         var client = await StartAsync(app => app.MapPortiaGetStream<HttpListWidgets, string>("/guarded-widgets"),
             AddConflictStreamGuard);
 
-        await AssertGuardConflictAsync(await client.GetAsync("/guarded-widgets"));
+        // Act
+        var response = await client.GetAsync("/guarded-widgets");
+
+        // Assert
+        await AssertGuardConflictAsync(response);
     }
 
     /// <summary>A failed stream guard is a problem response, because no event was written yet.</summary>
     [Fact]
     public async Task ShouldReturnGuardProblemBeforeServerSentEventsWhenStreamGuardFails()
     {
+        // Arrange
         var client = await StartAsync(app => app.MapPortiaGetSse<HttpListWidgets, string>("/guarded-widget-events"),
             AddConflictStreamGuard);
 
-        await AssertGuardConflictAsync(await client.GetAsync("/guarded-widget-events"));
+        // Act
+        var response = await client.GetAsync("/guarded-widget-events");
+
+        // Assert
+        await AssertGuardConflictAsync(response);
     }
 
     static void AddConflictStreamGuard(IServiceCollection services) => _ = services

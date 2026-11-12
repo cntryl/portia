@@ -108,8 +108,15 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldSatisfyEventStoreConformanceAgainstRealFitzBroker()
     {
+        // Arrange
         await using var client = await _broker.CreateClientAsync();
-        await EventStoreConformance.VerifyAsync(new FitzEventStoreProbe(client));
+        var probe = new FitzEventStoreProbe(client);
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => EventStoreConformance.VerifyAsync(probe).AsTask());
+
+        // Assert
+        Assert.Null(exception);
     }
 
     /// <summary>Runs the distributed ownership contract against two real Fitz client sessions.</summary>

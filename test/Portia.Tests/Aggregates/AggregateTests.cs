@@ -13,8 +13,12 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldRejectEmptyAggregateIdWhenConstructed()
     {
-        var exception = Assert.Throws<ArgumentException>(() => new TestAggregate(Uuid.Empty));
+        // Arrange
+        // Act
+        var thrown = Record.Exception(() => new TestAggregate(Uuid.Empty));
 
+        // Assert
+        var exception = Assert.IsType<ArgumentException>(thrown);
         Assert.Equal("id", exception.ParamName);
     }
 

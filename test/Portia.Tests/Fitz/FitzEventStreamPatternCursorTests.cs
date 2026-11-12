@@ -88,9 +88,14 @@ public sealed class FitzEventStreamPatternCursorTests
     [InlineData(null, null, 30UL)]
     public void ShouldSelectTheRecordOffsetMatchingThePatternScope(string? area, string? resource, ulong expected)
     {
+        // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", area, resource);
 
-        Assert.Equal(expected, FitzEventStreamPatternOffsets.GetPatternOffset(pattern, 10, 20, 30));
+        // Act
+        var offset = FitzEventStreamPatternOffsets.GetPatternOffset(pattern, 10, 20, 30);
+
+        // Assert
+        Assert.Equal(expected, offset);
     }
 
     /// <summary>
@@ -104,11 +109,15 @@ public sealed class FitzEventStreamPatternCursorTests
     [InlineData(null, "realm offset")]
     public void ShouldFailWhenARecordOmitsTheScopesOffset(string? area, string expected)
     {
+        // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", area);
 
-        var error = Assert.Throws<InvalidOperationException>(() =>
+        // Act
+        var thrown = Record.Exception(() =>
             FitzEventStreamPatternOffsets.GetPatternOffset(pattern, 10, null, null));
 
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains(expected, error.Message, StringComparison.Ordinal);
     }
 }

@@ -256,9 +256,14 @@ public sealed class PortiaFitzBuilderTests
     [Fact]
     public void ShouldCreateNoRequestWorkersGivenDefaultSelectionWithNoHandlersWhenWorkersAreResolved()
     {
+        // Arrange
         var fitz = new PortiaFitzBuilder(new ServiceCollection().AddPortia());
 
-        Assert.Empty(fitz.Workers);
+        // Act
+        var workers = fitz.Workers;
+
+        // Assert
+        Assert.Empty(workers);
     }
 
     /// <summary>Fleet configuration alone must not silently disable the default request listeners.</summary>

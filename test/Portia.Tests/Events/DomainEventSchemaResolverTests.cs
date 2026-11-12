@@ -60,10 +60,15 @@ public sealed class DomainEventSchemaResolverTests
     [Fact]
     public void ShouldThrowWhenNoRegistrationOrUpcasterCanResolveVersion()
     {
+        // Arrange
         var resolver = new DomainEventSchemaResolver(
             new DomainEventTypeCatalog().Register<WidgetRenamed>(2, "WidgetNamed"),
             new Dictionary<(string, int), IJsonDomainEventUpcaster>());
 
-        _ = Assert.Throws<InvalidOperationException>(() => resolver.Resolve("WidgetNamed", 1, []));
+        // Act
+        var exception = Record.Exception(() => resolver.Resolve("WidgetNamed", 1, []));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(exception);
     }
 }

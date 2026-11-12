@@ -35,9 +35,14 @@ public sealed class DomainEventTests
     [Fact]
     public void ShouldThrowWhenMetadataReadBeforeAttached()
     {
+        // Arrange
         var ev = new StubEvent();
 
-        _ = Assert.Throws<InvalidOperationException>(() => ev.Metadata);
+        // Act
+        var exception = Record.Exception(() => ev.Metadata);
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(exception);
     }
 
     /// <summary>

@@ -17,9 +17,12 @@ public sealed class FitzRoutingTests
     [Fact]
     public void ShouldResolveWildcardRealmFromSuppliedRouteValues()
     {
+        // Arrange
+        // Act
         var route = FitzRouting.ResolveRpcRoute(Catalog, new RoutingProbe(),
             new RequestRouteValues("tenant-a"));
 
+        // Assert
         Assert.Equal("rpc://tenant-a/routing/probe/run", route);
     }
 
@@ -33,9 +36,13 @@ public sealed class FitzRoutingTests
     [InlineData("tenant-٠")]
     public void ShouldRejectNonAsciiRouteSegment(string realm)
     {
-        var exception = Assert.Throws<InvalidOperationException>(() =>
+        // Arrange
+        // Act
+        var thrown = Record.Exception(() =>
             FitzRouting.ResolveRpcRoute(Catalog, new RoutingProbe(), new RequestRouteValues(realm)));
 
+        // Assert
+        var exception = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("unsupported characters", exception.Message, StringComparison.Ordinal);
     }
 
@@ -43,10 +50,14 @@ public sealed class FitzRoutingTests
     [Fact]
     public void ShouldRejectRouteSegmentLongerThanTheSupportedLength()
     {
-        var exception = Assert.Throws<InvalidOperationException>(() =>
+        // Arrange
+        // Act
+        var thrown = Record.Exception(() =>
             FitzRouting.ResolveRpcRoute(Catalog, new RoutingProbe(),
                 new RequestRouteValues(new string('a', 256))));
 
+        // Assert
+        var exception = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains("too long", exception.Message, StringComparison.Ordinal);
     }
 }
