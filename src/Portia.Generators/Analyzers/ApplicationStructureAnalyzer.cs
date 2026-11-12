@@ -220,7 +220,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         return folder switch
         {
             "Commands" or "Queries" => request && !component && !domainEvent,
-            "Events" => domainEvent && !component || feature == "Platform" && ApplicationProject.IsDomainEventCatalogAdapter(symbol),
+            "Events" => domainEvent && !component || ApplicationProject.IsDomainEventCatalogAdapter(symbol),
             "Handlers" or "Capabilities" => handler && !reactor && !projector,
             "Reactors" => reactor && !handler && !projector,
             "Projectors" => projector && !handler && !reactor,
