@@ -13,7 +13,7 @@ namespace Cntryl.Portia;
 public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
 {
     static readonly DiagnosticDescriptor Dependency = new("PORTIA206", "Application dependency crosses its project boundary",
-        "Project '{0}' references '{1}'; Common owns contracts, Core depends on Common and Portia APIs, and Api/Worker configure concrete infrastructure",
+        "Project '{0}' references '{1}'; Common owns contracts, Core depends on Common, application *.Abstractions projects, and Portia APIs, and Api/Worker configure concrete infrastructure",
         "PortiaStructure", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
     static readonly DiagnosticDescriptor Registration = new("PORTIA207", "Component registration is outside its feature registration file",
         "Register {1} feature component(s) in Features/{0}/{0}PortiaExtensions.cs", "PortiaStructure", DiagnosticSeverity.Warning, true,
@@ -68,7 +68,8 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
             context.CancellationToken.ThrowIfCancellationRequested();
             var name = reference.Name;
             var applicationDependency = name.StartsWith(applicationName + ".", StringComparison.Ordinal)
-                && !(project.Role == "Core" && name == applicationName + ".Common");
+                && !(project.Role == "Core" && (name == applicationName + ".Common"
+                    || name.EndsWith(".Abstractions", StringComparison.Ordinal)));
             var frameworkName = name.StartsWith("Cntryl.Portia.", StringComparison.Ordinal) ? name.Substring(7) : name;
             var commonBehavior = project.Role == "Common" && frameworkName.StartsWith("Portia.", StringComparison.Ordinal)
                 && frameworkName is not ("Portia.Abstractions" or "Portia.Storage.Abstractions");
