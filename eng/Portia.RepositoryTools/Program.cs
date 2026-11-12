@@ -21,6 +21,7 @@ static class Program
                 "compiler-merge-campaign" => CompilerCampaign.MergeCampaign(args),
                 "verify-stable-dependencies" => DependencyVerifier.Verify(args),
                 "verify-packed-compiler" => PackedCompilerVerifier.VerifyAsync(args).GetAwaiter().GetResult(),
+                "fix-application-structure" => ApplicationStructureCommand.RunAsync(args).GetAwaiter().GetResult(),
                 _ => UnknownCommand(args[0])
             };
         }
@@ -46,5 +47,6 @@ static class Program
         Console.WriteLine("  compiler-merge-campaign <evidence-directory> <repetitions>");
         Console.WriteLine("  verify-stable-dependencies [--root <repository-root>]");
         Console.WriteLine("  verify-packed-compiler --version <package-version> --packages <package-directory>");
+        Console.WriteLine("  fix-application-structure --solution <path.sln|path.slnx>");
     }
 }

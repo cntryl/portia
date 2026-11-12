@@ -89,6 +89,19 @@ The file-changing `PORTIA200` split and `PORTIA201` rename actions are not offer
 `MSBuildWorkspace` host used by `dotnet format`. That host persists added source documents as
 explicit `<Compile Include>` items, which duplicate SDK default compile globs, and it does not
 reliably persist document renames. Keep these diagnostics staged while using `dotnet format`;
-perform file moves or renames in a host that supports them, or move the files manually. Then run
-`dotnet build` and `dotnet format --verify-no-changes` to confirm the result. Text-only fixes such
-as `PORTIA202` remain available through `dotnet format`.
+text-only fixes such as `PORTIA202` remain available through that host.
+
+The Portia source checkout provides a safe file-operation command for `PORTIA200` and `PORTIA201`:
+
+```sh
+dotnet restore App.slnx
+dotnet run --project /path/to/portia/eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj \
+  -- fix-application-structure --solution App.slnx
+```
+
+The command applies file operations without writing explicit Compile items, reloads the solution,
+checks each destination is included once, builds with `--no-restore`, and confirms a second pass is
+clear. It rolls file changes back if project Compile rules exclude a destination, a collision is
+detected, the reload differs from the planned solution, or the build fails. Consumers without a
+Portia source checkout can perform these file moves manually and then run `dotnet build` and
+`dotnet format --verify-no-changes`.

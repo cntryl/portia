@@ -103,7 +103,8 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
         return moved.WithAdditionalAnnotations(Formatter.Annotation);
     }
 
-    sealed class StructureFixAllProvider : FixAllProvider
+    // The repository CLI reuses this immutable solution transform and owns filesystem persistence.
+    internal sealed class StructureFixAllProvider : FixAllProvider
     {
         public static readonly StructureFixAllProvider Instance = new();
 
@@ -142,7 +143,7 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
                 ct => ApplyAsync(context.Solution, changes, id, ct), context.CodeActionEquivalenceKey);
         }
 
-        static async Task<Solution> ApplyAsync(Solution solution,
+        internal static async Task<Solution> ApplyAsync(Solution solution,
             Dictionary<DocumentId, ImmutableArray<Diagnostic>> changes, string id, CancellationToken ct)
         {
             foreach (var pair in changes)
