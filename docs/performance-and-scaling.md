@@ -430,8 +430,9 @@ A bounded same-runtime Runtime Async on/off diagnostic comparison covers request
 HTTP JSON endpoints, and processor dispatch. All 22 paired timing intervals overlapped, so no
 performance change is claimed. BenchmarkDotNet 0.15.8 required its in-process toolchain for this
 `net11.0` target; the comparison is partial evidence for #175, not a release performance
-qualification. See the [comparison report](qualification/runtime-async-comparison/README.md) and
-its checked-in samples.
+qualification. Runtime Async is preview and remains disabled by default in Portia; the comparison
+uses an explicit build opt-in only. See the [comparison report](qualification/runtime-async-comparison/README.md)
+and its checked-in samples.
 
 ## MCP protocol qualification
 
