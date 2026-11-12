@@ -478,3 +478,8 @@ loopback HTTP measurement includes both client and in-process server, while stdi
 parent client process. The stdio SDK combines child startup and MCP initialize, so those two are
 reported together. These boundaries are recorded in the raw metadata and must be kept in mind when
 comparing transport results.
+
+The [M5 lookup-position supplement](qualification/mcp-lookup-position-2026-11-12/README.md) captures
+fixed-resource, final-template, and final-prompt lookups on the pre-optimization source tree for
+issue #142. It is a single descriptive transport capture; the linked paired M6 artifact carries
+the optimization confidence intervals.
