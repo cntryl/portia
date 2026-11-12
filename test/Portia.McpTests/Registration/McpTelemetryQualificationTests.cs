@@ -31,6 +31,7 @@ public sealed class McpTelemetryQualificationTests
     public async Task ShouldExportBoundedCorrelatedSignalsForEveryPrimitive(string primitive, bool fails,
         bool cancellationException)
     {
+        // Arrange
         var activities = new List<Activity>();
         var metrics = new List<Metric>();
         var logs = new List<LogRecord>();
@@ -65,6 +66,8 @@ public sealed class McpTelemetryQualificationTests
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient());
         await using var client = await McpClient.CreateAsync(transport);
+
+        // Act
         var error = await Record.ExceptionAsync(async () =>
         {
             if (primitive == "tool")
@@ -79,6 +82,11 @@ public sealed class McpTelemetryQualificationTests
             else
                 _ = await client.GetPromptAsync("telemetry-read", new Dictionary<string, object?> { ["fail"] = fails.ToString() });
         });
+        // The in-memory exporters append to plain lists, so stop every producer before reading them.
+        await client.DisposeAsync();
+        await app.StopAsync();
+
+        // Assert
         if (fails && primitive != "tool")
         {
             Assert.NotNull(error);
