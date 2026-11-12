@@ -251,6 +251,43 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
+    public async Task ShouldExposeOptionalPromptArgumentDescriptionOverProtocol()
+    {
+        const string argumentDescription = "Name to greet; defaults to Guest when omitted.";
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia()
+            .AddRequestHandler<McpRegistrationTests.ReadGreetingHandler>()
+            .AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>("optional-greeting",
+                values => new McpRegistrationTests.ReadGreeting(
+                    values.TryGetValue("name", out var name) ? name : "Guest"),
+                value => [new McpPromptMessage("user", value)],
+                options =>
+                {
+                    options.Public();
+                    options.Optional("name", argumentDescription);
+                })
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        _ = app.MapPortiaMcp().AllowAnonymous();
+        await app.StartAsync();
+        var transport = new HttpClientTransport(new HttpClientTransportOptions
+        {
+            Endpoint = new Uri("http://localhost/mcp")
+        }, app.GetTestClient(), null);
+        await using var client = await McpClient.CreateAsync(transport);
+
+        var prompt = Assert.Single(await client.ListPromptsAsync());
+        var argument = Assert.Single(prompt.ProtocolPrompt.Arguments!);
+        Assert.Equal("name", argument.Name);
+        Assert.Equal(argumentDescription, argument.Description);
+        Assert.Equal(false, argument.Required);
+
+        var result = await client.GetPromptAsync("optional-greeting", new Dictionary<string, object?>());
+        Assert.Equal("Hello, Guest.", Assert.IsType<TextContentBlock>(Assert.Single(result.Messages).Content).Text);
+    }
+
+    [Fact]
     public async Task ShouldHideFixedResourceAndPromptFromOtherActor()
     {
         var builder = WebApplication.CreateBuilder();
