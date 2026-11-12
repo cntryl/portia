@@ -148,8 +148,8 @@ indent_size = 2
 trim_trailing_whitespace = false
 
 [{test,examples}/**/*.cs]
-# Should/Given naming is still being migrated; Arrange/Act/Assert phases are required.
+# Test names and Arrange/Act/Assert phases follow the shared conventions; violations fail the build.
 conventions_test_naming_require_given = true
 conventions_test_naming_require_when = false
-dotnet_diagnostic.CNTRYL0001.severity = suggestion
-dotnet_diagnostic.CNTRYL0002.severity = warning
+dotnet_diagnostic.CNTRYL0001.severity = error
+dotnet_diagnostic.CNTRYL0002.severity = error
