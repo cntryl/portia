@@ -12,7 +12,7 @@ public sealed class CompilerContractRegressionTests
     [InlineData("Command", "Action run = () => value.ExpectDenied(); run();")]
     [InlineData("Query", "Action run = () => (value.ExpectDenied()); run();")]
     [InlineData("Feed", "Action run = () => value.ExpectDenied(); run();")]
-    public void DiagnosesDiscardedAugmentationEvenWhenOriginalIsAwaited(string request, string discard)
+    public void ShouldDiagnoseDiscardedAugmentationGivenAwaitedOriginalScenario(string request, string discard)
     {
         // Arrange
         var source = $$"""
@@ -47,7 +47,7 @@ public sealed class CompilerContractRegressionTests
     [InlineData("namespace App_A {", "}", "namespace App {", "A_Context")]
     [InlineData("public class App_A {", "}", "public class App {", "A_Context")]
     [InlineData("namespace @App_A {", "}", "namespace @App {", "@A_Context")]
-    public void DistinctContextIdentitiesCompile(string firstContainer, string end, string secondContainer, string secondName)
+    public void ShouldCompileGivenDistinctContextIdentities(string firstContainer, string end, string secondContainer, string secondName)
     {
         // Arrange
         var source = ContextUsings + "public sealed record Payload;" +
@@ -71,7 +71,7 @@ public sealed class CompilerContractRegressionTests
     [InlineData("", "public", "Context", "private", "", "", "constructor")]
     [InlineData("", "public", "Context", "protected", "", "", "constructor")]
     [InlineData("", "public", "Context", "public", "missing", "", "constructor")]
-    public void DiagnosesInvalidContextWithoutInvalidGeneratedReferences(string prefix, string visibility, string name,
+    public void ShouldDiagnoseContextWithoutInvalidGeneratedReferencesGivenInvalidContextDeclaration(string prefix, string visibility, string name,
         string constructorVisibility, string variant, string suffix, string requirement)
     {
         // A private container is nested so the application declaration itself is legal.
@@ -92,7 +92,7 @@ public sealed class CompilerContractRegressionTests
     }
 
     [Fact]
-    public void DiagnosesWrongContextBase()
+    public void ShouldDiagnoseContextGivenWrongBaseType()
     {
         // Arrange
         const string source = """
@@ -118,7 +118,7 @@ public sealed class CompilerContractRegressionTests
     [InlineData("Func<IEndpointRouteBuilder, string, Action<PortiaEndpointConfiguration<Query, string>>, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaPost<Query, string>;")]
     [InlineData("Func<IEndpointRouteBuilder, string, Action<PortiaStreamingEndpointConfiguration<Feed>>, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaGetSse<Feed, string>;")]
     [InlineData("System.Linq.Expressions.Expression<Func<IEndpointRouteBuilder, IEndpointConventionBuilder>> map = routes => routes.MapPortiaGet<Command>(\"/query\");")]
-    public void DiagnosesUnsupportedHttpMappingForms(string statement)
+    public void ShouldDiagnoseMappingGivenUnsupportedHttpMappingForm(string statement)
     {
         // Arrange
         var source = $$"""
@@ -143,7 +143,7 @@ public sealed class CompilerContractRegressionTests
     }
 
     [Fact]
-    public void StaticImportsKeepValidExtensionCalls()
+    public void ShouldCompileGivenStaticImportAndValidExtensionCall()
     {
         // Arrange
         const string endpoints = """
@@ -159,7 +159,7 @@ public sealed class CompilerContractRegressionTests
     }
 
     [Fact]
-    public void StaticImportsLeaveBareMethodGroupsToTheCompilerDiagnostics()
+    public void ShouldLeaveCompilerDiagnosticGivenStaticImportAndBareMethodGroup()
     {
         // Arrange
         const string endpoints = """
@@ -185,7 +185,7 @@ public sealed class CompilerContractRegressionTests
         """;
 
     [Fact]
-    public void FactoriesComposeAcrossAssembliesWhoseNamesPreviouslySanitizedIdentically()
+    public void ShouldComposeFactoriesGivenAssembliesWhoseNamesSanitizeIdentically()
     {
         // Arrange
         var source = ContextUsings + ManualContext("Context").Replace("typeof(Payload)", "typeof(string)", StringComparison.Ordinal);
@@ -209,7 +209,7 @@ public sealed class CompilerContractRegressionTests
     }
 
     [Fact]
-    public void ContextDeclarationOrderDoesNotChangeFactoryOutput()
+    public void ShouldProduceSameFactoryOutputGivenReorderedContextDeclarations()
     {
         // Arrange
         var first = "namespace App_A {" + ManualContext("Context") + "}";
@@ -225,7 +225,7 @@ public sealed class CompilerContractRegressionTests
     }
 
     [Fact]
-    public void ReferencedLegacyFactoryMetadataRemainsAuthoritative()
+    public void ShouldHonorLegacyFactoryGivenReferencedLegacyFactoryMetadata()
     {
         // Arrange
         var reference = GeneratorCompilation.Reference(ContextUsings + """
@@ -257,7 +257,7 @@ public sealed class CompilerContractRegressionTests
     }
 
     [Fact]
-    public void ObservationAnalyzerKeepsRetainedCallbacksExplicitExecutionAndSuppressions()
+    public void ShouldKeepExplicitExecutionAndSuppressionsGivenRetainedCallbacks()
     {
         // Arrange
         const string source = """
@@ -293,7 +293,7 @@ public sealed class CompilerContractRegressionTests
     }
 
     [Fact]
-    public void SuppressingContextDiagnosticCannotRegisterAnInvalidFactory()
+    public void ShouldNotRegisterFactoryGivenInvalidContextWhenDiagnosticIsSuppressed()
     {
         // Arrange
         var source = ContextUsings + """
@@ -316,7 +316,7 @@ public sealed class CompilerContractRegressionTests
     }
 
     [Fact]
-    public void EmptyPartialContextNeedsARootBeforeGeneratedRegistration()
+    public void ShouldDiagnoseMissingRootGivenEmptyPartialContext()
     {
         // Arrange
         const string source = """
@@ -332,7 +332,7 @@ public sealed class CompilerContractRegressionTests
     }
 
     [Fact]
-    public void ManualOptionsConstructorCanHaveOptionalArguments()
+    public void ShouldCompileGivenManualOptionsConstructorWithOptionalArguments()
     {
         // Arrange
         var source = ContextUsings + "public sealed record Payload;" +
@@ -348,7 +348,7 @@ public sealed class CompilerContractRegressionTests
     [Theory]
     [InlineData("public required int Value { get; init; }", "required members")]
     [InlineData("public Context(JsonSerializerOptions options, bool other = false) : base(options) { } public Context(JsonSerializerOptions options, int other = 0) : base(options) { }", "ambiguous")]
-    public void DiagnosesUnusableOptionsConstructorBeforeFactoryEmission(string member, string expected)
+    public void ShouldDiagnoseContextBeforeFactoryEmissionGivenUnusableOptionsConstructor(string member, string expected)
     {
         // Arrange
         var context = ManualContext("Context");
@@ -368,7 +368,7 @@ public sealed class CompilerContractRegressionTests
     }
 
     [Fact]
-    public void HttpDocumentationReferencesDoNotRequireInterception()
+    public void ShouldCompileGivenHttpDocumentationReferencesWithoutInterception()
     {
         // Arrange
         const string source = """

@@ -15,7 +15,7 @@ public sealed class FleetRedistributionTests
     };
 
     [Fact]
-    public async Task JoinMovesOnlyNewOwnersAndPreservesUnchangedScopesThenDepartureRestoresWork()
+    public async Task ShouldMoveOnlyNewOwnersGivenJoinWhenWorkerLaterDeparts()
     {
         // Arrange
         var membership = new Membership();
@@ -79,7 +79,7 @@ public sealed class FleetRedistributionTests
     }
 
     [Fact]
-    public async Task UnreadyOrMissingMembershipStopsWorkAndReadySnapshotResumes()
+    public async Task ShouldStopWorkGivenUnreadyMembershipWhenReadySnapshotArrives()
     {
         // Arrange
         var membership = new Membership();
@@ -137,7 +137,7 @@ public sealed class FleetRedistributionTests
     [InlineData("lease://fleet/members/*", "", 30)]
     [InlineData("lease://fleet/members/*", "bad/id", 30)]
     [InlineData("lease://fleet/members/*", null, 0)]
-    public async Task InvalidFleetConfigurationIsRejected(string selector, string? workerId, int ttl)
+    public async Task ShouldRejectConfigurationGivenInvalidFleetOptions(string selector, string? workerId, int ttl)
     {
         // Arrange
         var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new Membership());
@@ -155,7 +155,7 @@ public sealed class FleetRedistributionTests
     [InlineData(30_000, 30UL)]
     [InlineData(1100, 2UL)]
     [InlineData(1, 1UL)]
-    public async Task MembershipFailureBackoffRetainsGeneratedWorkerIdentityAndUsesFailFastContention(
+    public async Task ShouldRetainGeneratedWorkerIdentityGivenMembershipFailureWhenBackingOff(
         int milliseconds,
         ulong expectedTtl)
     {
@@ -197,7 +197,7 @@ public sealed class FleetRedistributionTests
     }
 
     [Fact]
-    public async Task InventoryFailureStopsActiveWorkBeforeMembershipRetry()
+    public async Task ShouldStopActiveWorkGivenInventoryFailureBeforeMembershipRetry()
     {
         // Arrange
         var clock = new ManualClock();

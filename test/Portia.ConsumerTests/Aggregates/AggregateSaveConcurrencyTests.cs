@@ -11,7 +11,7 @@ public sealed class AggregateSaveConcurrencyTests
     [InlineData("event")]
     [InlineData("audit")]
     [InlineData("save")]
-    public async Task RejectsConcurrentEmissionOrSave(string operation)
+    public async Task ShouldRejectConcurrentEmissionOrSaveGivenSaveInFlight(string operation)
     {
         // Arrange
         var store = new ControlledStore { BlockFirstAppend = true };
@@ -52,7 +52,7 @@ public sealed class AggregateSaveConcurrencyTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task FailedSavePreservesPayloadIdentityVersionAndKind(bool audit)
+    public async Task ShouldPreservePayloadIdentityVersionAndKindGivenFailedSave(bool audit)
     {
         // Arrange
         var store = new ControlledStore { FailAppend = true };
@@ -105,7 +105,7 @@ public sealed class AggregateSaveConcurrencyTests
     }
 
     [Fact]
-    public async Task EmptySaveDoesNotAppend()
+    public async Task ShouldNotAppendGivenAggregateWithNoPendingEvents()
     {
         // Arrange
         var store = new ControlledStore { FailAppend = true };

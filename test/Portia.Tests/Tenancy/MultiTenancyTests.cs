@@ -21,7 +21,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>A new directory resumes after the persisted cursor and still applies later removals.</summary>
     [Fact]
-    public async Task ShouldResumeTenantMembershipFromDurableSnapshot()
+    public async Task ShouldResumeTenantMembershipGivenDurableSnapshot()
     {
         // Arrange
         var events = new InMemoryEventStore();
@@ -54,7 +54,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>A worker cursor starts from the persisted roster before reading later changes.</summary>
     [Fact]
-    public async Task ShouldResumeWorkerCursorFromDurableSnapshot()
+    public async Task ShouldResumeWorkerCursorGivenDurableSnapshot()
     {
         // Arrange
         var events = new InMemoryEventStore();
@@ -81,7 +81,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>One live change catches up on restart without rewriting the full roster.</summary>
     [Fact]
-    public async Task ShouldBatchLiveRosterWritesAndReplayTheUnsavedTail()
+    public async Task ShouldBatchRosterWritesAndReplayUnsavedTailGivenLiveRosterChanges()
     {
         // Arrange
         var events = new InMemoryEventStore();
@@ -118,7 +118,7 @@ public sealed class MultiTenancyTests
     ///     startup — not missed because it predates the run.
     /// </summary>
     [Fact]
-    public async Task ShouldStartAlreadyRegisteredTenantAtStartup()
+    public async Task ShouldStartTenantGivenTenantRegisteredBeforeStartup()
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -152,7 +152,7 @@ public sealed class MultiTenancyTests
     ///     through <see cref="ITenantDirectory.WatchAsync" />.
     /// </summary>
     [Fact]
-    public async Task ShouldStartTenantRegisteredWhileRunning()
+    public async Task ShouldStartTenantGivenTenantRegisteredWhileRunning()
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -187,7 +187,7 @@ public sealed class MultiTenancyTests
     ///     the per-tenant instance actually stops, not just gets forgotten.
     /// </summary>
     [Fact]
-    public async Task ShouldStopTenantWhenDeregistered()
+    public async Task ShouldStopTenantGivenRunningTenantWhenDeregistered()
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -240,7 +240,7 @@ public sealed class MultiTenancyTests
     ///     callback for each.
     /// </summary>
     [Fact]
-    public async Task ShouldStopEveryActiveTenantWhenRunCancelled()
+    public async Task ShouldStopEveryActiveTenantGivenRunningTenantsWhenRunCancelled()
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -278,7 +278,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>Shutdown does not wait forever for an application stop callback that ignores cancellation.</summary>
     [Fact]
-    public async Task ShouldBoundTenantStopCallbackByShutdownToken()
+    public async Task ShouldBoundStopCallbackGivenShutdownToken()
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -315,7 +315,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>Shutdown gives cooperative application cleanup a real bounded grace interval.</summary>
     [Fact]
-    public async Task ShouldAllowTenantStopCallbackToCompleteWithinShutdownGrace()
+    public async Task ShouldAllowStopCallbackToCompleteGivenShutdownGrace()
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -356,7 +356,7 @@ public sealed class MultiTenancyTests
     ///     disappear.
     /// </summary>
     [Fact]
-    public async Task ShouldReturnCompleteActiveSnapshotAcrossRepeatedReads()
+    public async Task ShouldReturnCompleteActiveSnapshotGivenRepeatedReads()
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -389,7 +389,7 @@ public sealed class MultiTenancyTests
     ///     <see cref="RequestNotificationRunner" /> already has for its own notification stream.
     /// </summary>
     [Fact]
-    public async Task ShouldReconnectAfterTenantDirectoryWatchStreamFaults()
+    public async Task ShouldReconnectGivenTenantDirectoryWatchStreamFault()
     {
         // Arrange
         var directory = new FlakyWatchTenantDirectory();
@@ -431,7 +431,7 @@ public sealed class MultiTenancyTests
     ///     with no future change left to ever stop it.
     /// </summary>
     [Fact]
-    public async Task ShouldStopTenantOmittedFromSnapshotAfterWatchStreamOutage()
+    public async Task ShouldStopTenantGivenSnapshotOmittingTenantAfterWatchStreamOutage()
     {
         // Arrange
         var directory = new OutageDuringWhichTenantWasRemovedDirectory();
@@ -475,7 +475,7 @@ public sealed class MultiTenancyTests
     ///     the directory allows.
     /// </summary>
     [Fact]
-    public async Task ShouldBackOffWhenWatchStreamCompletesCleanlyInsteadOfThrowing()
+    public async Task ShouldBackOffGivenWatchStreamCompletingCleanlyWithoutThrowing()
     {
         // Arrange
         var directory = new CleanlyCompletingWatchDirectory();
@@ -498,7 +498,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>The runner uses one optional cursor and never mixes it with the legacy contract.</summary>
     [Fact]
-    public async Task ShouldPreferOneResumableCursorForTheRunnerLifetime()
+    public async Task ShouldPreferOneResumableCursorGivenRunnerLifetime()
     {
         // Arrange
         var directory = new ResumableProbeDirectory();
@@ -528,7 +528,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>A removal recorded during a cursor outage is applied after the same cursor reconnects.</summary>
     [Fact]
-    public async Task ShouldStopTenantRemovedWhileResumableCursorIsDisconnected()
+    public async Task ShouldStopTenantGivenRemovalWhileResumableCursorIsDisconnected()
     {
         // Arrange
         var directory = new DisconnectingCursorDirectory();
@@ -566,7 +566,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>A cursor resumes its own offset while a separately opened cursor starts independently.</summary>
     [Fact]
-    public async Task ShouldResumeCursorAtNextOffsetAndKeepSeparateCursorsIndependent()
+    public async Task ShouldResumeAtNextOffsetAndKeepCursorsIndependentGivenSeparateCursors()
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -597,7 +597,7 @@ public sealed class MultiTenancyTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ShouldDiscoverTenantAfterPollIntervalWhenNotificationIsLost(bool useCursor)
+    public async Task ShouldDiscoverTenantAfterPollIntervalGivenLostNotification(bool useCursor)
     {
         // Arrange
         var pollInterval = TimeSpan.FromSeconds(30);
@@ -638,7 +638,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>One cursor cannot be enumerated by two consumers at the same time.</summary>
     [Fact]
-    public async Task ShouldRejectConcurrentEnumerationOfOneResumableCursor()
+    public async Task ShouldRejectConcurrentEnumerationGivenOneResumableCursor()
     {
         // Arrange
         var clock = new WaitingClock();
@@ -664,7 +664,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>A subscription completing after cursor disposal is rejected and released before any read.</summary>
     [Fact]
-    public async Task ShouldReleaseSubscriptionWhenCursorIsDisposedWhileSubscribing()
+    public async Task ShouldReleaseSubscriptionGivenCursorDisposedWhileSubscribing()
     {
         // Arrange
         var source = new GatedCursorSource();
@@ -693,7 +693,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>A broken cursor read disposes its subscription and resumes after its last durable offset.</summary>
     [Fact]
-    public async Task ShouldSubscribeBeforeReadingAndRecreateResumableCursorAfterFailure()
+    public async Task ShouldSubscribeBeforeReadingAndRecreateCursorGivenFailure()
     {
         // Arrange
         var source = new CursorSource();
@@ -729,7 +729,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>A tenant workload that ignores removal cancellation faults after the configured deadline.</summary>
     [Fact]
-    public async Task ShouldFaultNormalRemovalWhenWorkloadIgnoresCancellation()
+    public async Task ShouldFaultRemovalGivenWorkloadIgnoringCancellation()
     {
         // Arrange
         var directory = new RemovalDirectory();
@@ -762,7 +762,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>Workload cancellation and its stop callback consume one shared removal budget.</summary>
     [Fact]
-    public async Task ShouldShareOneNormalRemovalDeadlineBetweenWorkloadAndStopCallback()
+    public async Task ShouldShareOneRemovalDeadlineGivenWorkloadAndStopCallback()
     {
         // Arrange
         var directory = new RemovalDirectory();
@@ -809,7 +809,7 @@ public sealed class MultiTenancyTests
 
     /// <summary>Host cancellation during normal removal is not reported as a tenant timeout.</summary>
     [Fact]
-    public async Task ShouldNotReportHostCancellationDuringRemovalAsTenantTimeout()
+    public async Task ShouldNotReportTenantTimeoutGivenHostCancellationDuringRemoval()
     {
         // Arrange
         var directory = new RemovalDirectory();
@@ -841,7 +841,7 @@ public sealed class MultiTenancyTests
     [InlineData(nameof(MultiTenantRunnerOptions.RestartInterval))]
     [InlineData(nameof(MultiTenantRunnerOptions.ShutdownGrace))]
     [InlineData(nameof(MultiTenantRunnerOptions.TenantStopTimeout))]
-    public void ShouldRejectNonPositiveRunnerOptionDurations(string option)
+    public void ShouldRejectOptionsGivenNonPositiveRunnerDurations(string option)
     {
         // Arrange
         var directory = new RemovalDirectory();

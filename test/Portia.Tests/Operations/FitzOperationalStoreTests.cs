@@ -7,7 +7,7 @@ public sealed class FitzOperationalStoreTests
 
     /// <summary>A quiesced cutover reads existing checkpoint keys and preserves their opaque values.</summary>
     [Fact]
-    public async Task ShouldPreserveLegacyProgressAndRejectUnfencedWrites()
+    public async Task ShouldPreserveLegacyProgressGivenUnfencedWriteAttempt()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -26,7 +26,7 @@ public sealed class FitzOperationalStoreTests
 
     /// <summary>A failed commit preserves both progress and running evidence, and rejects stale owners.</summary>
     [Fact]
-    public async Task ShouldCommitReceiptAndCheckpointTogetherOrNeither()
+    public async Task ShouldCommitReceiptAndCheckpointTogetherGivenOperationalState()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -65,7 +65,7 @@ public sealed class FitzOperationalStoreTests
 
     /// <summary>Tenant operational documents use independent Fitz resources.</summary>
     [Fact]
-    public async Task ShouldDeriveIndependentResourcesForTenantJournals()
+    public async Task ShouldDeriveIndependentResourcesGivenTenantJournals()
     {
         // Arrange
         var client = new FakeKvClient();

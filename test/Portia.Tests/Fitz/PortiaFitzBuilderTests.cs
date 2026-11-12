@@ -8,7 +8,7 @@ public sealed class PortiaFitzBuilderTests
 {
     /// <summary>An application-supplied coordinator owns workload identity independently of Fitz.</summary>
     [Fact]
-    public async Task ShouldAllowCustomCoordinatorWorkloadsWithoutFitzFleetIdentity()
+    public async Task ShouldAllowWorkloadsGivenCustomCoordinatorWithoutFleetIdentity()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -30,7 +30,7 @@ public sealed class PortiaFitzBuilderTests
 
     /// <summary>Workloads using the effective Fitz coordinator still require a fleet identity.</summary>
     [Fact]
-    public async Task ShouldRejectFitzCoordinatedWorkloadsWithoutFleetIdentity()
+    public async Task ShouldRejectWorkloadsGivenFitzCoordinationWithoutFleetIdentity()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -53,7 +53,7 @@ public sealed class PortiaFitzBuilderTests
 
     /// <summary>Queue workers can start without an optional terminal failure observer.</summary>
     [Fact]
-    public async Task ShouldAllowQueueWorkerStartupWithoutTerminalHandler()
+    public async Task ShouldAllowQueueWorkerStartupGivenNoTerminalHandler()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -76,7 +76,7 @@ public sealed class PortiaFitzBuilderTests
 
     /// <summary>A scoped terminal observer remains available to queue workers.</summary>
     [Fact]
-    public async Task ShouldAllowQueueWorkerStartupWithScopedTerminalHandler()
+    public async Task ShouldAllowQueueWorkerStartupGivenScopedTerminalHandler()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -100,7 +100,7 @@ public sealed class PortiaFitzBuilderTests
 
     /// <summary>Fitz workers do not begin consuming before grouped HTTP endpoint validation completes.</summary>
     [Fact]
-    public async Task ShouldDeferFitzWorkersUntilEndpointValidationCompletes()
+    public async Task ShouldDeferFitzWorkersGivenEndpointValidationPending()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -131,7 +131,7 @@ public sealed class PortiaFitzBuilderTests
 
     /// <summary>Request listeners do not need workload fleet identity when no component is hosted.</summary>
     [Fact]
-    public async Task ShouldAllowRequestOnlyWorkerStartupWithoutFleetIdentity()
+    public async Task ShouldAllowRequestOnlyWorkerStartupGivenNoFleetIdentity()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -154,7 +154,7 @@ public sealed class PortiaFitzBuilderTests
 
     /// <summary>Fitz rejects terminal thresholds before connecting because attempts are unavailable.</summary>
     [Fact]
-    public async Task ShouldRejectPositiveTerminalAttemptAtFitzStartup()
+    public async Task ShouldRejectFitzStartupGivenPositiveTerminalAttempt()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -179,7 +179,7 @@ public sealed class PortiaFitzBuilderTests
 
     /// <summary>The native schedule API is published from Portia's shared Fitz connection.</summary>
     [Fact]
-    public void ShouldRegisterNativeScheduleClientAlias()
+    public void ShouldRegisterNativeScheduleClientAliasGivenRequestClients()
     {
         // Arrange
         var services = new ServiceCollection();

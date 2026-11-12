@@ -11,7 +11,7 @@ public sealed class FleetBrokerTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task HealthyScaleOutThenDepartureOrCrashRestoresAllPartitions(bool crash)
+    public async Task ShouldRestoreAllPartitionsGivenScaleOutWhenWorkerDepartsOrCrashes(bool crash)
     {
         // Arrange
         await using var first = await ConsumerBroker.ConnectAsync();
@@ -105,7 +105,7 @@ public sealed class FleetBrokerTests
     }
 
     [Fact]
-    public async Task UnrenewedMembershipAndPartitionExpireBeforeSurvivorTakesOver()
+    public async Task ShouldExpireMembershipAndPartitionBeforeTakeoverGivenUnrenewedLeases()
     {
         // Arrange
         await using var stalled = await ConsumerBroker.ConnectAsync();

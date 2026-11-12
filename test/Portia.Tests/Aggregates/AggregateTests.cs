@@ -11,7 +11,7 @@ public sealed class AggregateTests
     ///     Verifies that an aggregate cannot have an empty identity.
     /// </summary>
     [Fact]
-    public void ShouldRejectEmptyAggregateIdWhenConstructed()
+    public void ShouldRejectEmptyAggregateIdGivenEmptyIdWhenConstructed()
     {
         // Arrange
         // Act
@@ -26,7 +26,7 @@ public sealed class AggregateTests
     ///     Verifies that raising an event updates state and tracks the event for persistence.
     /// </summary>
     [Fact]
-    public void ShouldApplyAndTrackEventWhenRaised()
+    public void ShouldApplyAndTrackEventGivenNewAggregateWhenRaised()
     {
         // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4());
@@ -51,7 +51,7 @@ public sealed class AggregateTests
     ///     identity, correlation, and causation without modifying the aggregate base class.
     /// </summary>
     [Fact]
-    public void ShouldUseConfiguredMetadataFactoryWhenEventIsRaised()
+    public void ShouldUseConfiguredMetadataGivenMetadataFactoryWhenEventIsRaised()
     {
         // Arrange
         var aggregateId = Uuid.CreateVersion4();
@@ -80,7 +80,7 @@ public sealed class AggregateTests
     ///     same append batch.
     /// </summary>
     [Fact]
-    public void ShouldRejectFactoryEventIdAlreadyUsedByPendingEvent()
+    public void ShouldRejectFactoryEventIdGivenIdAlreadyUsedByPendingEvent()
     {
         // Arrange
         var eventId = Uuid.CreateVersion4();
@@ -103,7 +103,7 @@ public sealed class AggregateTests
     ///     been committed.
     /// </summary>
     [Fact]
-    public void ShouldRejectFactoryEventIdAlreadyUsedByCommittedEvent()
+    public void ShouldRejectFactoryEventIdGivenIdAlreadyUsedByCommittedEvent()
     {
         // Arrange
         var eventId = Uuid.CreateVersion4();
@@ -127,7 +127,7 @@ public sealed class AggregateTests
     ///     Verifies that replay updates state, version, and committed history only.
     /// </summary>
     [Fact]
-    public void ShouldTrackCommittedEventWhenReplayed()
+    public void ShouldTrackCommittedEventGivenCommittedEventWhenReplayed()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -148,7 +148,7 @@ public sealed class AggregateTests
     ///     Verifies that generated dispatch invokes the concrete overload for each event type.
     /// </summary>
     [Fact]
-    public void ShouldDispatchEachEventToConcreteOnEventMethodWhenLoaded()
+    public void ShouldDispatchEachEventToConcreteOnEventMethodGivenCommittedHistoryWhenLoaded()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -170,7 +170,7 @@ public sealed class AggregateTests
     ///     Verifies that a cached aggregate can catch up from the next committed event.
     /// </summary>
     [Fact]
-    public void ShouldLoadAdditionalCommittedEventsAfterCachedHistory()
+    public void ShouldLoadAdditionalCommittedEventsGivenCachedHistory()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -194,7 +194,7 @@ public sealed class AggregateTests
     ///     Verifies that a catch-up batch must continue directly after the cached version.
     /// </summary>
     [Fact]
-    public void ShouldRejectAdditionalCommittedEventsWhenVersionIsNotContiguous()
+    public void ShouldRejectAdditionalCommittedEventsGivenNonContiguousVersion()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -217,7 +217,7 @@ public sealed class AggregateTests
     ///     Verifies that duplicate event identities cannot appear in committed history.
     /// </summary>
     [Fact]
-    public void ShouldRejectAdditionalCommittedEventWhenEventIdIsAlreadyLoaded()
+    public void ShouldRejectAdditionalCommittedEventGivenEventIdAlreadyLoaded()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -241,7 +241,7 @@ public sealed class AggregateTests
     ///     Verifies that catch-up cannot overwrite pending local decisions.
     /// </summary>
     [Fact]
-    public void ShouldRejectCommittedEventsWhenAggregateHasUncommittedChanges()
+    public void ShouldRejectCommittedEventsGivenAggregateWithUncommittedChanges()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -265,7 +265,7 @@ public sealed class AggregateTests
     ///     Verifies that an audit is pending without changing aggregate state or version.
     /// </summary>
     [Fact]
-    public void ShouldTrackAuditWithoutChangingStateWhenAudited()
+    public void ShouldTrackAuditWithoutChangingStateGivenNewAggregateWhenAudited()
     {
         // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4());
@@ -288,7 +288,7 @@ public sealed class AggregateTests
     ///     Verifies that committing promotes events and clears both pending buffers.
     /// </summary>
     [Fact]
-    public void ShouldPromoteEventsAndClearPendingChangesWhenCommitted()
+    public void ShouldPromoteEventsAndClearPendingChangesGivenRaisedEventWhenCommitted()
     {
         // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4());
@@ -321,7 +321,7 @@ public sealed class AggregateTests
     ///     Verifies that events cannot be associated with a different aggregate instance.
     /// </summary>
     [Fact]
-    public void ShouldRejectEventWhenAggregateIdDoesNotMatch()
+    public void ShouldRejectEventGivenAggregateIdMismatch()
     {
         // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4());
@@ -342,7 +342,7 @@ public sealed class AggregateTests
     ///     not even a base type's — fails the same way an unhandled event always has.
     /// </summary>
     [Fact]
-    public void ShouldThrowWhenApplyingEventWithNoRegisteredHandler()
+    public void ShouldThrowGivenEventWithNoRegisteredHandler()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -362,7 +362,7 @@ public sealed class AggregateTests
     ///     before the event is committed.
     /// </summary>
     [Fact]
-    public void ShouldReleaseEventIdWhenApplyingCommittedEventFails()
+    public void ShouldReleaseEventIdGivenCommittedEventThatFailsToApply()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -392,7 +392,7 @@ public sealed class AggregateTests
     ///     event is eventually applied.
     /// </summary>
     [Fact]
-    public void ShouldThrowWhenRegisteringDuplicateHandlerForSameEventType() =>
+    public void ShouldThrowGivenDuplicateHandlerForSameEventType() =>
         Assert.Throws<InvalidOperationException>(() => new DuplicateHandlerAggregate(Uuid.CreateVersion4()));
 
     /// <summary>
@@ -403,7 +403,7 @@ public sealed class AggregateTests
     ///     from a memory measurement.
     /// </summary>
     [Fact]
-    public void ShouldReleaseReplayedEventsOnceHistoryIsApplied()
+    public void ShouldReleaseReplayedEventsGivenHistoryAlreadyApplied()
     {
         // Arrange
         var id = Uuid.CreateVersion4();

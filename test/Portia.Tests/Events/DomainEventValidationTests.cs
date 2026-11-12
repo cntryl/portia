@@ -22,7 +22,7 @@ public sealed class DomainEventValidationTests
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(true, true)]
-    public void ShouldAcceptWellFormedEvent(bool audit, bool attributed)
+    public void ShouldAcceptEventGivenWellFormedMetadata(bool audit, bool attributed)
     {
         // Arrange
         var metadata = Metadata(audit) with
@@ -47,7 +47,7 @@ public sealed class DomainEventValidationTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void ShouldRejectEmptyEventOrAggregateIdentity(bool emptyEventId)
+    public void ShouldRejectEventGivenEmptyEventOrAggregateIdentity(bool emptyEventId)
     {
         // Arrange
         var metadata = Metadata() with
@@ -74,7 +74,7 @@ public sealed class DomainEventValidationTests
     [InlineData("correlation")]
     [InlineData("causation")]
     [InlineData("execution")]
-    public void ShouldRejectSuppliedButEmptyAttributionIdentity(string field)
+    public void ShouldRejectEventGivenSuppliedButEmptyAttributionIdentity(string field)
     {
         // Arrange
         var metadata = Metadata() with
@@ -102,7 +102,7 @@ public sealed class DomainEventValidationTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void ShouldRejectExecutionIdentityAndActorSuppliedApart(bool withExecution)
+    public void ShouldRejectEventGivenExecutionIdentityAndActorSuppliedApart(bool withExecution)
     {
         // Arrange
         var metadata = Metadata() with
@@ -130,7 +130,7 @@ public sealed class DomainEventValidationTests
     [InlineData("   ", "accounts")]
     [InlineData("alice", "")]
     [InlineData("alice", "   ")]
-    public void ShouldRejectActorAttributionMissingSubjectOrIssuer(string subject, string issuer)
+    public void ShouldRejectEventGivenActorAttributionMissingSubjectOrIssuer(string subject, string issuer)
     {
         // Arrange
         var metadata = Metadata() with
@@ -152,7 +152,7 @@ public sealed class DomainEventValidationTests
     ///     stored, so a stream's times are comparable across the machines that wrote them.
     /// </summary>
     [Fact]
-    public void ShouldRejectNonUtcOccurrenceTime()
+    public void ShouldRejectEventGivenNonUtcOccurrenceTime()
     {
         // Arrange
         var metadata = Metadata() with
@@ -174,7 +174,7 @@ public sealed class DomainEventValidationTests
     ///     exactly what optimistic concurrency relies on never happening.
     /// </summary>
     [Fact]
-    public void ShouldRejectStateChangingEventAtVersionZero()
+    public void ShouldRejectEventGivenStateChangingEventAtVersionZero()
     {
         // Arrange
         // Act
@@ -193,7 +193,7 @@ public sealed class DomainEventValidationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ShouldAcceptBatchOfOneAggregatesEventsInOrder(bool audit)
+    public void ShouldAcceptBatchGivenOneAggregatesEventsInOrder(bool audit)
     {
         // Arrange
         var aggregateId = Uuid.CreateVersion4();
@@ -221,7 +221,7 @@ public sealed class DomainEventValidationTests
     [InlineData("aggregate")]
     [InlineData("kind")]
     [InlineData("version")]
-    public void ShouldRejectBatchThatIsNotOneAggregatesContiguousHistory(string defect)
+    public void ShouldRejectBatchGivenNonContiguousOrMixedAggregateHistory(string defect)
     {
         // Arrange
         var aggregateId = Uuid.CreateVersion4();
@@ -247,7 +247,7 @@ public sealed class DomainEventValidationTests
     ///     every consumer that reads the stream.
     /// </summary>
     [Fact]
-    public void ShouldRejectBatchRepeatingOneEventIdentity()
+    public void ShouldRejectBatchGivenRepeatedEventIdentity()
     {
         // Arrange
         var aggregateId = Uuid.CreateVersion4();
@@ -267,7 +267,7 @@ public sealed class DomainEventValidationTests
 
     /// <summary>Verifies that a missing event is rejected before anything reads its metadata.</summary>
     [Fact]
-    public void ShouldRejectMissingEvent() =>
+    public void ShouldRejectValidationGivenNullEvent() =>
         Assert.Throws<ArgumentNullException>(() => DomainEventValidation.Validate(null!));
 
     /// <summary>
@@ -275,7 +275,7 @@ public sealed class DomainEventValidationTests
     ///     isolation — an application never calls the validator itself, it calls append.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectInvalidBatchThroughTheStoreWithoutWritingAnything()
+    public async Task ShouldRejectAppendAndWriteNothingGivenInvalidBatch()
     {
         // Arrange
         var store = new InMemoryEventStore();

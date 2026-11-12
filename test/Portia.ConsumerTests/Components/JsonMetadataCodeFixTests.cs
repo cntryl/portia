@@ -37,7 +37,7 @@ public sealed class JsonMetadataCodeFixTests
     [InlineData("[PortiaJsonContext] internal abstract partial class AbstractContext : System.Text.Json.Serialization.JsonSerializerContext;")]
     [InlineData("[PortiaJsonContext] internal partial class GenericContext<T> : System.Text.Json.Serialization.JsonSerializerContext;")]
     [InlineData("internal class Outer { [PortiaJsonContext] private partial class HiddenContext : System.Text.Json.Serialization.JsonSerializerContext; }")]
-    public async Task DoesNotOfferUnusableContextsAsRootTargets(string context)
+    public async Task ShouldNotOfferContextAsRootTargetGivenUnusableContext(string context)
     {
         // Arrange
         var source = UnrootedRequest + context;
@@ -77,7 +77,7 @@ public sealed class JsonMetadataCodeFixTests
     ///     useless advice because there is no context yet.
     /// </summary>
     [Fact]
-    public async Task OffersToCreateAContextWhenTheProjectHasNone()
+    public async Task ShouldOfferToCreateContextGivenProjectWithNoContext()
     {
         // Arrange
         var (actions, solution) = await FixAsync(UnrootedRequest, "App.Query", projectName: "orders-api");
@@ -100,7 +100,7 @@ public sealed class JsonMetadataCodeFixTests
     }
 
     [Fact]
-    public async Task CreatesAUniquelyNamedContextWhenPortiaJsonContextIsAlreadyTaken()
+    public async Task ShouldCreateUniquelyNamedContextGivenPortiaJsonContextNameAlreadyTaken()
     {
         // Arrange
         var source = UnrootedRequest + """
@@ -124,7 +124,7 @@ public sealed class JsonMetadataCodeFixTests
     ///     without disturbing the roots already declared there.
     /// </summary>
     [Fact]
-    public async Task AddsTheMissingRootToTheOnlyApplicationContext()
+    public async Task ShouldAddMissingRootGivenSingleApplicationContext()
     {
         // Arrange
         var source = UnrootedRequest + """
@@ -150,7 +150,7 @@ public sealed class JsonMetadataCodeFixTests
     ///     namespace with a same-named child namespace still binds the root to the intended type.
     /// </summary>
     [Fact]
-    public async Task AddsAGloballyQualifiedRootThatBindsInsideTheContextNamespace()
+    public async Task ShouldAddGloballyQualifiedRootGivenContextNamespaceThatShadowsTypeName()
     {
         // Arrange
         const string source = """
@@ -199,7 +199,7 @@ public sealed class JsonMetadataCodeFixTests
     ///     a fix-all that revisits a context — never accumulates duplicate attributes.
     /// </summary>
     [Fact]
-    public async Task LeavesTheContextUnchangedWhenTheRootIsAlreadyDeclared()
+    public async Task ShouldLeaveContextUnchangedGivenRootAlreadyDeclared()
     {
         // Arrange
         var source = UnrootedRequest + """
@@ -232,7 +232,7 @@ public sealed class JsonMetadataCodeFixTests
     ///     roots the type where nothing serializes it.
     /// </summary>
     [Fact]
-    public async Task PrefersTheContextDeclaredInTheTypesOwnNamespace()
+    public async Task ShouldPreferContextGivenContextDeclaredInTypeNamespace()
     {
         // Arrange
         var source = UnrootedRequestInBlockNamespace + """
@@ -262,7 +262,7 @@ public sealed class JsonMetadataCodeFixTests
     ///     than one picked arbitrarily, and each title carries the namespace that tells them apart.
     /// </summary>
     [Fact]
-    public async Task OffersEveryContextWhenNoneMatchesTheTypesNamespace()
+    public async Task ShouldOfferEveryContextGivenNoContextInTypeNamespace()
     {
         // Arrange
         var source = UnrootedRequestInBlockNamespace + """
@@ -311,7 +311,7 @@ public sealed class JsonMetadataCodeFixTests
     ///     listed in — one context is one fix, not one identical action per file.
     /// </summary>
     [Fact]
-    public async Task OffersOneActionForAContextSplitAcrossPartialDeclarations()
+    public async Task ShouldOfferOneActionGivenContextSplitAcrossPartialDeclarations()
     {
         // Arrange
         using var workspace = new AdhocWorkspace();
@@ -341,7 +341,7 @@ public sealed class JsonMetadataCodeFixTests
     ///     would overwrite, the root goes on the application's own part instead of creating a second context.
     /// </summary>
     [Fact]
-    public async Task AddsTheRootToTheHandWrittenPartWhenTheMarkerPartIsGenerated()
+    public async Task ShouldAddRootToHandWrittenPartGivenGeneratedMarkerPart()
     {
         // Arrange
         using var workspace = new AdhocWorkspace();
@@ -385,7 +385,7 @@ public sealed class JsonMetadataCodeFixTests
     ///     root declared on any part as already declared rather than repeating it on the part it writes to.
     /// </summary>
     [Fact]
-    public async Task FixAllAddsEachRootOnceToAContextSplitAcrossPartialDeclarations()
+    public async Task ShouldAddEachRootOnceGivenContextSplitAcrossPartialDeclarationsWhenFixingAll()
     {
         // Arrange
         using var workspace = new AdhocWorkspace();
@@ -421,7 +421,7 @@ public sealed class JsonMetadataCodeFixTests
     ///     offering an action that would write <c>typeof()</c> with nothing in it.
     /// </summary>
     [Fact]
-    public async Task RegistersNoFixForADiagnosticWithoutATypeName()
+    public async Task ShouldRegisterNoFixGivenDiagnosticWithoutTypeName()
     {
         // Arrange
         using var workspace = new AdhocWorkspace();
@@ -445,7 +445,7 @@ public sealed class JsonMetadataCodeFixTests
     ///     missing a dozen roots is one operation rather than a dozen.
     /// </summary>
     [Fact]
-    public void AdvertisesPortia025AndSupportsFixAll()
+    public void ShouldAdvertisePortia025AndSupportFixAllGivenCodeFixProvider()
     {
         // Arrange
         var provider = new JsonMetadataCodeFixProvider();
@@ -460,7 +460,7 @@ public sealed class JsonMetadataCodeFixTests
     }
 
     [Fact]
-    public async Task FixAllCreatesOneContextContainingEveryMissingRoot()
+    public async Task ShouldCreateOneContextWithEveryMissingRootGivenNoContextWhenFixingAll()
     {
         // Arrange
         using var workspace = new AdhocWorkspace();
@@ -488,7 +488,7 @@ public sealed class JsonMetadataCodeFixTests
     }
 
     [Fact]
-    public async Task FixAllAddsEveryMissingRootToTheChosenContextOnce()
+    public async Task ShouldAddEveryMissingRootOnceGivenChosenContextWhenFixingAll()
     {
         // Arrange
         var source = UnrootedRequest + """
@@ -549,7 +549,7 @@ public sealed class JsonMetadataCodeFixTests
     ///     to a same-named type relative to the context's namespace.
     /// </summary>
     [Fact]
-    public async Task AddsAGenericRootWithGloballyQualifiedTypeArguments()
+    public async Task ShouldAddGenericRootWithQualifiedTypeArgumentsGivenGenericResultType()
     {
         // Arrange
         var (actions, solution) = await FixAsync(UnrootedGenericResult,
@@ -568,7 +568,7 @@ public sealed class JsonMetadataCodeFixTests
     ///     own namespace.
     /// </summary>
     [Fact]
-    public async Task CreatesContextOutsideTheFrameworkNamespaceOfAGenericRoot()
+    public async Task ShouldCreateContextOutsideFrameworkNamespaceGivenGenericRoot()
     {
         // Arrange
         var source = UnrootedGenericResult.Replace("[PortiaJsonContext]", string.Empty, StringComparison.Ordinal)

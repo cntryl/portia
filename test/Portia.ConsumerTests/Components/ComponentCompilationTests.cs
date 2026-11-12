@@ -7,7 +7,7 @@ public sealed class ComponentCompilationTests
     [InlineData(true, false, "class")]
     [InlineData(true, false, "interface")]
     [InlineData(false, true, "class")]
-    public async Task GlobalNestedAndPartialComponentsCompileAndExecute(bool nested, bool partial, string containerKind)
+    public async Task ShouldCompileAndExecuteGivenGlobalNestedOrPartialComponents(bool nested, bool partial, string containerKind)
     {
         // Arrange
         var components = """

@@ -17,7 +17,7 @@ public sealed class AllTransportsSharedHandlerTests
     ///     notification — four separate transport paths, one shared implementation.
     /// </summary>
     [Fact]
-    public async Task ShouldInvokeSameHandlerAcrossDirectQueueRpcAndNotificationTransports()
+    public async Task ShouldInvokeSameHandlerGivenDirectQueueRpcAndNotificationTransports()
     {
         // Arrange
         var handler = new UniversalActionHandler();

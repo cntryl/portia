@@ -25,7 +25,7 @@ public sealed class FitzRpcRoundTripTests
     ///     comes back correctly deserialized.
     /// </summary>
     [Fact]
-    public async Task ShouldRoundTripResultBearingRequestOverRpc()
+    public async Task ShouldRoundTripResultGivenResultBearingRequestOverRpc()
     {
         // Arrange
         var rpc = new InMemoryRpcClient();
@@ -45,7 +45,7 @@ public sealed class FitzRpcRoundTripTests
 
     /// <summary>A final Fitz response is carried as a completed result in the outcome-aware API.</summary>
     [Fact]
-    public async Task ShouldReportCompletedOutcomeWhenFinalRpcResponseArrives()
+    public async Task ShouldReportCompletedOutcomeGivenFinalRpcResponse()
     {
         // Arrange
         var rpc = new InMemoryRpcClient();
@@ -67,7 +67,7 @@ public sealed class FitzRpcRoundTripTests
 
     /// <summary>Pre-cancelled sends stay undispatched and remain visible in send telemetry.</summary>
     [Fact]
-    public async Task ShouldRecordTelemetryForPreCancelledOutcomeSends()
+    public async Task ShouldRecordTelemetryGivenPreCancelledOutcomeSends()
     {
         // Arrange
         var rpc = new InMemoryRpcClient();
@@ -109,7 +109,7 @@ public sealed class FitzRpcRoundTripTests
 
     /// <summary>A forwarded cancellation is reported without claiming that the remote handler observed it.</summary>
     [Fact]
-    public async Task ShouldReportCancellationForwardedWhenFitzForwardsCancellation()
+    public async Task ShouldReportCancellationForwardedGivenFitzForwardsCancellation()
     {
         // Arrange
         var rpc = new InMemoryRpcClient();
@@ -137,7 +137,7 @@ public sealed class FitzRpcRoundTripTests
 
     /// <summary>A Fitz call with no final response and no observed cancellation has an unknown outcome.</summary>
     [Fact]
-    public async Task ShouldReportUnknownOutcomeWhenRpcCallEndsWithoutFinalResponse()
+    public async Task ShouldReportUnknownOutcomeGivenRpcCallEndingWithoutFinalResponse()
     {
         // Arrange
         var rpc = new InMemoryRpcClient();
@@ -158,7 +158,7 @@ public sealed class FitzRpcRoundTripTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldReportUnknownOutcomeWhenTransportFailsAfterDispatch(bool connectionDrop)
+    public async Task ShouldReportUnknownOutcomeGivenTransportFailureAfterDispatch(bool connectionDrop)
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
@@ -181,7 +181,7 @@ public sealed class FitzRpcRoundTripTests
 
     /// <summary>An operation cancellation unrelated to the caller token remains an exception.</summary>
     [Fact]
-    public async Task ShouldThrowWhenRpcEnumerationIsCanceledWithoutCallerCancellation()
+    public async Task ShouldThrowGivenRpcEnumerationCanceledWithoutCallerCancellation()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
@@ -201,7 +201,7 @@ public sealed class FitzRpcRoundTripTests
 
     /// <summary>A response frame followed by interrupted enumeration does not prove completion.</summary>
     [Fact]
-    public async Task ShouldReportUnknownOutcomeWhenCallerCancellationInterruptsAfterResponseFrame()
+    public async Task ShouldReportUnknownOutcomeGivenCallerCancellationAfterResponseFrame()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
@@ -228,7 +228,7 @@ public sealed class FitzRpcRoundTripTests
     ///     Verifies that a no-result request sent over RPC reaches its handler.
     /// </summary>
     [Fact]
-    public async Task ShouldRoundTripNoResultRequestOverRpc()
+    public async Task ShouldRoundTripRequestGivenNoResultRequestOverRpc()
     {
         // Arrange
         var rpc = new InMemoryRpcClient();
@@ -253,7 +253,7 @@ public sealed class FitzRpcRoundTripTests
     ///     path has, enforced here at the point the RPC call is actually received, not just sent.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectRequestWhenActorTokenFailsRevalidationOnReceipt()
+    public async Task ShouldRejectRequestGivenActorTokenFailingRevalidationOnReceipt()
     {
         // Arrange
         var rpc = new InMemoryRpcClient();
@@ -283,7 +283,7 @@ public sealed class FitzRpcRoundTripTests
     ///     Explicit component declarations cover DI registration.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchRequestRegisteredEntirelyByGeneratedRpcWorkerRegistration()
+    public async Task ShouldDispatchRequestGivenGeneratedRpcWorkerRegistration()
     {
         // Arrange
         var rpc = new InMemoryRpcClient();

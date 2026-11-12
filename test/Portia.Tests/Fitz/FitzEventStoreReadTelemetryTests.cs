@@ -13,7 +13,7 @@ public sealed class FitzEventStoreReadTelemetryTests
     [InlineData(false, true, 1)]
     [InlineData(true, false, 2)]
     [InlineData(true, true, 1)]
-    public async Task ShouldReportSuccessForCompletionAndEarlyDisposal(bool pattern, bool stopEarly, long expectedCount)
+    public async Task ShouldReportSuccessGivenReadEndingByCompletionOrEarlyDisposal(bool pattern, bool stopEarly, long expectedCount)
     {
         // Arrange
         var measurements = new Measurements();
@@ -45,7 +45,7 @@ public sealed class FitzEventStoreReadTelemetryTests
     [InlineData(true, true, "canceled")]
     [InlineData(false, false, "fault")]
     [InlineData(true, false, "fault")]
-    public async Task ShouldDistinguishCancellationFromFailure(bool pattern, bool cancel, string outcome)
+    public async Task ShouldDistinguishCancellationFromFailureGivenCancelledOrFaultedRead(bool pattern, bool cancel, string outcome)
     {
         // Arrange
         var measurements = new Measurements();

@@ -13,7 +13,7 @@ public sealed class ComponentRegistrationTests
     ///     never has to remember to register it manually.
     /// </summary>
     [Fact]
-    public void ShouldResolveRequestBusAfterExplicitRegistration()
+    public void ShouldResolveRequestBusGivenExplicitRegistration()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -36,7 +36,7 @@ public sealed class ComponentRegistrationTests
     ///     Verifies that a concrete reactor is resolvable after explicit registration.
     /// </summary>
     [Fact]
-    public void ShouldResolveReactorAfterExplicitRegistration()
+    public void ShouldResolveReactorGivenExplicitRegistration()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -55,7 +55,7 @@ public sealed class ComponentRegistrationTests
     ///     Verifies that a concrete projector is resolvable after explicit registration.
     /// </summary>
     [Fact]
-    public void ShouldResolveProjectorAfterExplicitRegistration()
+    public void ShouldResolveProjectorGivenExplicitRegistration()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -75,7 +75,7 @@ public sealed class ComponentRegistrationTests
     ///     declared in this compilation without knowing its concrete type up front.
     /// </summary>
     [Fact]
-    public void ShouldResolveReactorThroughReactorRegistration()
+    public void ShouldResolveReactorGivenReactorRegistration()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -98,7 +98,7 @@ public sealed class ComponentRegistrationTests
     ///     declared in this compilation without knowing its concrete or projection type up front.
     /// </summary>
     [Fact]
-    public async Task ShouldRunProjectorThroughProjectorRegistration()
+    public async Task ShouldRunProjectorGivenProjectorRegistration()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -129,7 +129,7 @@ public sealed class ComponentRegistrationTests
     ///     registered with the transports it actually implements, and only those.
     /// </summary>
     [Fact]
-    public void ShouldRegisterTransportIdsMatchingDeclaredMarkers()
+    public void ShouldRegisterTransportIdsGivenDeclaredMarkers()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -166,17 +166,17 @@ public sealed class ComponentRegistrationTests
     [InlineData("")]
     [InlineData("queue/priority")]
     [InlineData("notice ")]
-    public void ShouldRejectInvalidTransportIds(string value) =>
+    public void ShouldRejectTransportIdGivenInvalidValue(string value) =>
         _ = Assert.Throws<ArgumentException>(() => new RequestTransportId(value));
 
     /// <summary>Verifies an uninitialized transport ID still formats as a string, as its signature promises.</summary>
     [Fact]
-    public void ShouldFormatDefaultTransportIdAsEmpty() =>
+    public void ShouldFormatAsEmptyGivenDefaultTransportId() =>
         Assert.Equal(string.Empty, default(RequestTransportId).ToString());
 
     /// <summary>Verifies registrations cannot contain the invalid default transport ID.</summary>
     [Fact]
-    public void ShouldRejectARegistrationWithoutAValidTransport()
+    public void ShouldRejectRegistrationGivenDefaultTransportId()
     {
         // Arrange
         var route = new RequestRouteAttribute("test", "requests", "probe", "run");

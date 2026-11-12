@@ -13,7 +13,7 @@ public sealed class PortiaTelemetryHistogramAdviceTests
 {
     /// <summary>Every histogram Portia publishes states the buckets its unit needs.</summary>
     [Fact]
-    public void ShouldAdviseBucketBoundariesForEveryPublishedDurationHistogram()
+    public void ShouldAdviseBucketBoundariesGivenEveryPublishedDurationHistogram()
     {
         // Arrange
         var advised = new List<string>();

@@ -5,7 +5,7 @@ public sealed class DispatchConsumerTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task DispatchResolvesOnlySelectedHandlersAndSupportsNestedBus(bool nested)
+    public async Task ShouldResolveOnlySelectedHandlersGivenDispatchWhenBusIsNestedOrDirect(bool nested)
     {
         // Arrange
         var handler = nested

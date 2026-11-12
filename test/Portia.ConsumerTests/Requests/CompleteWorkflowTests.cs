@@ -16,7 +16,7 @@ public sealed class CompleteWorkflowTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task SameBusinessHandlerPersistsAcrossDirectHttpRpcAndQueueWithIndependentAudits(bool fitzStore)
+    public async Task ShouldPersistWithIndependentAuditsGivenSameHandlerAcrossDirectHttpRpcAndQueue(bool fitzStore)
     {
         // Arrange
         var endpoints = GeneratorCompilation.Compile("""

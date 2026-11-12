@@ -3,7 +3,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ExecutionContextContractTests
 {
     [Fact]
-    public async Task GeneratedRequestHandlerReceivesExactRequestAndCancellationToken()
+    public async Task ShouldPassExactRequestAndCancellationTokenGivenGeneratedRequestHandler()
     {
         // Arrange
         const string source = """
@@ -53,7 +53,7 @@ public sealed class ExecutionContextContractTests
     }
 
     [Fact]
-    public async Task NormalHandlerSaveStampsDurableAttribution()
+    public async Task ShouldStampDurableAttributionGivenHandlerSave()
     {
         // Arrange
         const string source = """
@@ -100,7 +100,7 @@ public sealed class ExecutionContextContractTests
     }
 
     [Fact]
-    public async Task NestedDispatchPreservesActorAndCorrelationWithoutSharingExecutionIdentity()
+    public async Task ShouldPreserveActorAndCorrelationGivenNestedDispatchWithSeparateExecutionIdentity()
     {
         // Arrange
         const string source = """

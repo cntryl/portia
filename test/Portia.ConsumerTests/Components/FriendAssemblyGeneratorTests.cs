@@ -8,7 +8,7 @@ public sealed class FriendAssemblyGeneratorTests
     [Theory]
     [InlineData("Friend.Core", "Friend.Tests")]
     [InlineData("Friend.Core", "Friend_Core")]
-    public void GeneratedHelpersDoNotConflictAcrossFriendAssemblies(string sourceAssembly, string friendAssembly)
+    public void ShouldNotConflictGeneratedHelpersGivenFriendAssemblies(string sourceAssembly, string friendAssembly)
     {
         // Arrange
         var options = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(

@@ -11,7 +11,7 @@ public sealed class CallerOwnedHydrationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task CallerConstructsHydratesChangesAndSavesWithoutAnyFactory(bool fitz)
+    public async Task ShouldConstructHydrateChangeAndSaveGivenCallerOwnedAggregateWithoutFactory(bool fitz)
     {
         // Arrange
         await using var fixture = await StoreFixture.CreateAsync(fitz);
@@ -45,7 +45,7 @@ public sealed class CallerOwnedHydrationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task HydrationRejectsPendingChangesWithoutDiscardingThem(bool audit)
+    public async Task ShouldRejectHydrationAndKeepPendingChangesGivenAggregateWithPendingChanges(bool audit)
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -73,7 +73,7 @@ public sealed class CallerOwnedHydrationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task HydrationResumesAfterCommittedEventsAndCanSaveAgain(bool fitz)
+    public async Task ShouldResumeAndSaveAgainGivenHydratedAggregateWithCommittedEvents(bool fitz)
     {
         // Arrange
         await using var fixture = await StoreFixture.CreateAsync(fitz);
@@ -101,7 +101,7 @@ public sealed class CallerOwnedHydrationTests
     }
 
     [Fact]
-    public async Task ReadsOnlyNewOffsetsAndExcludesConcurrentMutationForEntireRead()
+    public async Task ShouldReadOnlyNewOffsetsGivenConcurrentMutationWhenHydratingPeer()
     {
         // Arrange
         var store = new TrackingStore();
@@ -139,7 +139,7 @@ public sealed class CallerOwnedHydrationTests
     }
 
     [Fact]
-    public async Task CancellationLeavesFreshInstanceAvailableForRetry()
+    public async Task ShouldLeaveFreshInstanceAvailableForRetryGivenCancelledHydration()
     {
         // Arrange
         var store = new InMemoryEventStore();

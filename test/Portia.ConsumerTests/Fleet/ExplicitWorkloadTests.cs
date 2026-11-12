@@ -24,7 +24,7 @@ public sealed class ExplicitWorkloadTests
     }
 
     [Fact]
-    public async Task UnexpectedCoordinatorCompletionFailsVisibly()
+    public async Task ShouldFailVisiblyGivenCoordinatorThatCompletesUnexpectedly()
     {
         // Arrange
         var services = ConsumerHost.CreateServices();
@@ -105,7 +105,7 @@ public sealed class ExplicitWorkloadTests
     }
 
     [Fact]
-    public void InfrastructureRegistrationOrderDoesNotChangeWorkloadDeclarations()
+    public void ShouldDeclareSameWorkloadsGivenDifferentInfrastructureRegistrationOrder()
     {
         // Arrange
         var configuration = new ConfigurationBuilder()
@@ -147,7 +147,7 @@ public sealed class ExplicitWorkloadTests
     }
 
     [Fact]
-    public void MixedScopesRegisterWithoutFitzOrStartingWorkers()
+    public void ShouldRegisterWorkloadsGivenMixedScopesWithoutFitz()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -175,7 +175,7 @@ public sealed class ExplicitWorkloadTests
     }
 
     [Fact]
-    public void DuplicateWorkloadRejectsDifferentFailurePolicy()
+    public void ShouldRejectRegistrationGivenDuplicateWorkloadWithDifferentFailurePolicy()
     {
         // Arrange
         var services = new ServiceCollection();

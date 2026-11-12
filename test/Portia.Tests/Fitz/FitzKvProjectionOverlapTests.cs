@@ -7,7 +7,7 @@ public sealed class FitzKvProjectionOverlapTests
 {
     /// <summary>A delayed second acquisition must not retarget writes outside the first batch's checkpoint transaction.</summary>
     [Fact]
-    public async Task ShouldKeepDomainWritesWithTheirCheckpointWhenBeginCallsOverlap()
+    public async Task ShouldKeepDomainWritesWithTheirCheckpointGivenOverlappingBeginCalls()
     {
         // Arrange
         var client = new GatedKvClient();
@@ -52,7 +52,7 @@ public sealed class FitzKvProjectionOverlapTests
 
     /// <summary>A query-side read cannot start while the store is still acquiring its batch transaction.</summary>
     [Fact]
-    public async Task ShouldRejectQueryReadWhileNativeBeginIsPending()
+    public async Task ShouldRejectQueryReadGivenNativeBeginPending()
     {
         // Arrange
         var client = new GatedKvClient();
@@ -80,7 +80,7 @@ public sealed class FitzKvProjectionOverlapTests
 
     /// <summary>A failed native acquisition releases the reserved slot for the next batch.</summary>
     [Fact]
-    public async Task ShouldReleaseBatchSlotWhenNativeBeginFails()
+    public async Task ShouldReleaseBatchSlotGivenNativeBeginFailure()
     {
         // Arrange
         var client = new FailFirstBeginClient();
@@ -102,7 +102,7 @@ public sealed class FitzKvProjectionOverlapTests
 
     /// <summary>Disposal failure must not leave the store's local slot permanently reserved.</summary>
     [Fact]
-    public async Task ShouldReleaseBatchSlotWhenNativeDisposeFails()
+    public async Task ShouldReleaseBatchSlotGivenNativeDisposeFailure()
     {
         // Arrange
         var client = new FakeKvClient { DisposeFailure = new IOException("dispose failed") };
@@ -126,7 +126,7 @@ public sealed class FitzKvProjectionOverlapTests
 
     /// <summary>Disposing an old batch twice cannot release the next batch's reserved slot.</summary>
     [Fact]
-    public async Task ShouldKeepCurrentSlotReservedWhenPreviousBatchIsDisposedAgain()
+    public async Task ShouldKeepCurrentSlotReservedGivenPreviousBatchDisposedAgain()
     {
         // Arrange
         var repository = new OverlapRepository(new FakeKvClient());

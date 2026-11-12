@@ -10,7 +10,7 @@ public sealed class FitzCombinedWorkerFailureTests(FitzBrokerFixture broker)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldFaultCombinedHostWhenTerminalObserverFails(bool withHealthyNoticeListener)
+    public async Task ShouldFaultCombinedHostGivenFailingTerminalObserver(bool withHealthyNoticeListener)
     {
         // Arrange
         await using var client = await broker.CreateClientAsync();

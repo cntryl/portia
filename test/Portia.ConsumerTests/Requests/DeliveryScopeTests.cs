@@ -10,7 +10,7 @@ public sealed class DeliveryScopeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task EveryDeliveryOwnsScopeThroughNestedDispatchFailureAndCancellation(bool notification)
+    public async Task ShouldOwnScopeGivenDeliveryThroughNestedDispatchFailureAndCancellation(bool notification)
     {
         // Arrange
         var requests = new[]
@@ -63,7 +63,7 @@ public sealed class DeliveryScopeTests
     }
 
     [Fact]
-    public async Task RpcServerResolvesFreshApplicationScopeForEveryCall()
+    public async Task ShouldResolveFreshApplicationScopeGivenEachRpcCall()
     {
         // Arrange
         var services = ConsumerHost.CreateServices();

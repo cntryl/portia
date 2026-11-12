@@ -5,7 +5,7 @@ public sealed class FitzKvTenantDirectorySnapshotStoreTests
 {
     /// <summary>An older worker cannot replace a newer roster, and patterns remain isolated.</summary>
     [Fact]
-    public async Task ShouldKeepNewerRosterWhenAStaleWriterTriesToSave()
+    public async Task ShouldKeepNewerRosterGivenStaleWriterWhenSaving()
     {
         // Arrange
         var kv = new FakeKvClient();

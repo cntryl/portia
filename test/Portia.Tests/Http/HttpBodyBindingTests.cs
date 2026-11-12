@@ -13,7 +13,7 @@ public sealed class HttpBodyBindingTests
     ///     duplicate happens to appear last.
     /// </summary>
     [Fact]
-    public void ShouldBindTheFirstCaseInsensitiveBodyPropertyMatch()
+    public void ShouldBindFirstMatchGivenCaseInsensitiveBodyPropertyMatches()
     {
         // Arrange
         var options = new JsonSerializerOptions(TestJson.Options()) { PropertyNameCaseInsensitive = true };
@@ -32,7 +32,7 @@ public sealed class HttpBodyBindingTests
     ///     length reserve the whole configured maximum, and a few concurrent ones exhaust the host.
     /// </summary>
     [Fact]
-    public async Task ShouldNotReserveBufferCapacityForAnUnsentDeclaredContentLength()
+    public async Task ShouldNotReserveBufferCapacityGivenUnsentDeclaredContentLength()
     {
         // Arrange
         const long declared = 8L * 1024 * 1024;

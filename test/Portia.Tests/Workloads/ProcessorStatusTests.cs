@@ -14,7 +14,7 @@ public sealed class ProcessorStatusTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldReadAuthoritativeProgressWithoutRunningProjectorOrReactor(bool reactor)
+    public async Task ShouldReadAuthoritativeProgressGivenProjectorOrReactorNotRunning(bool reactor)
     {
         // Arrange
         var checkpoint = new StatusCheckpointStore();
@@ -51,7 +51,7 @@ public sealed class ProcessorStatusTests
 
     /// <summary>Reads only the requested tenant and configured rebuild generation.</summary>
     [Fact]
-    public async Task ShouldBindExactTenantAndRebuildGenerationBeforeReadingProgress()
+    public async Task ShouldBindExactTenantAndRebuildGenerationGivenTenantScopedTarget()
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -87,7 +87,7 @@ public sealed class ProcessorStatusTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldAllowConfiguredAdministratorsWithoutOperationalPolicy(bool reactor)
+    public async Task ShouldAllowAdministratorGivenConfiguredRoleAndNoOperationalPolicy(bool reactor)
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -124,7 +124,7 @@ public sealed class ProcessorStatusTests
     [Theory]
     [InlineData(ClaimTypes.Role)]
     [InlineData("roles")]
-    public async Task ShouldAcceptAdministratorWithAuthenticatedSecondaryIdentity(string roleClaimType)
+    public async Task ShouldAcceptAdministratorGivenAuthenticatedSecondaryIdentity(string roleClaimType)
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -151,7 +151,7 @@ public sealed class ProcessorStatusTests
     [Theory]
     [InlineData(ClaimTypes.Role)]
     [InlineData("roles")]
-    public async Task ShouldDenyUnauthenticatedAdministratorRoleOnAMixedPrincipal(string roleClaimType)
+    public async Task ShouldDenyAccessGivenUnauthenticatedAdministratorRoleOnMixedPrincipal(string roleClaimType)
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -190,7 +190,7 @@ public sealed class ProcessorStatusTests
     [Theory]
     [InlineData("different-scope", RequestErrorKind.Forbidden)]
     [InlineData(null, RequestErrorKind.Unauthorized)]
-    public async Task ShouldDenyUnauthenticatedOrOutOfScopeInspection(string? actorScope,
+    public async Task ShouldDenyInspectionGivenUnauthenticatedOrOutOfScopeCaller(string? actorScope,
         RequestErrorKind error)
     {
         // Arrange
@@ -219,7 +219,7 @@ public sealed class ProcessorStatusTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldDenyOrdinaryUsersBeforeReadingProjectorOrReactorProgress(bool reactor)
+    public async Task ShouldDenyBeforeReadingProgressGivenOrdinaryUser(bool reactor)
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -257,7 +257,7 @@ public sealed class ProcessorStatusTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("other-platform-operators")]
-    public async Task ShouldDenyMissingBlankOrUnheldConfiguredAdministratorRole(string? configuredRole)
+    public async Task ShouldDenyAccessGivenMissingBlankOrUnheldAdministratorRole(string? configuredRole)
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -299,7 +299,7 @@ public sealed class ProcessorStatusTests
     [InlineData("global-projector", "tenant-a", RequestErrorKind.Validation)]
     [InlineData("tenant-projector", null, RequestErrorKind.Validation)]
     [InlineData("tenant-projector", "invalid/tenant", RequestErrorKind.Validation)]
-    public async Task ShouldRejectInvalidTargetsBeforeResolvingTheirCheckpoint(string processor, string? tenant,
+    public async Task ShouldRejectBeforeResolvingCheckpointGivenInvalidTarget(string processor, string? tenant,
         RequestErrorKind error)
     {
         // Arrange
@@ -322,7 +322,7 @@ public sealed class ProcessorStatusTests
 
     /// <summary>Inspects a tenant checkpoint without replaying, updating, or depending on the tenant directory.</summary>
     [Fact]
-    public async Task ShouldReadTenantStatusWithoutConsultingTenantDirectory()
+    public async Task ShouldReadTenantStatusGivenTenantDirectoryNotConsulted()
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -350,7 +350,7 @@ public sealed class ProcessorStatusTests
 
     /// <summary>Retains the native checkpoint when an adapter returns an unrelated progress position.</summary>
     [Fact]
-    public async Task ShouldRejectSourceObservationThatReplacesAuthoritativeCheckpoint()
+    public async Task ShouldRejectObservationGivenSourceObservationReplacingAuthoritativeCheckpoint()
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -381,7 +381,7 @@ public sealed class ProcessorStatusTests
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(true, true)]
-    public async Task ShouldUseJournalOnlyForFailureEvidenceAtTheAuthoritativeCheckpoint(bool staleJournal,
+    public async Task ShouldUseJournalOnlyForFailureEvidenceGivenAuthoritativeCheckpoint(bool staleJournal,
         bool sourceUnavailable)
     {
         // Arrange
@@ -434,7 +434,7 @@ public sealed class ProcessorStatusTests
 
     /// <summary>Preserves caller cancellation instead of converting it to an unknown source observation.</summary>
     [Fact]
-    public async Task ShouldPropagateCallerCancellationDuringSourceObservation()
+    public async Task ShouldPropagateCancellationGivenCallerCancelledDuringSourceObservation()
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -462,7 +462,7 @@ public sealed class ProcessorStatusTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldPreserveCheckpointAndSourceObservationWhenJournalIsUnavailable(bool sourceUnavailable)
+    public async Task ShouldPreserveCheckpointAndSourceObservationGivenUnavailableJournal(bool sourceUnavailable)
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -492,7 +492,7 @@ public sealed class ProcessorStatusTests
 
     /// <summary>Preserves caller cancellation while reading operational failure evidence.</summary>
     [Fact]
-    public async Task ShouldPropagateCallerCancellationDuringJournalObservation()
+    public async Task ShouldPropagateCancellationGivenCallerCancelledDuringJournalObservation()
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -520,7 +520,7 @@ public sealed class ProcessorStatusTests
 
     /// <summary>Provides one built-in contract with source-generated metadata for all registered components.</summary>
     [Fact]
-    public void ShouldRegisterStatusOnceWithReflectionFreeJsonMetadataForEveryComponent()
+    public void ShouldRegisterStatusOnceWithReflectionFreeJsonGivenEveryComponent()
     {
         // Arrange
         var services = Services(new StatusCheckpointStore());

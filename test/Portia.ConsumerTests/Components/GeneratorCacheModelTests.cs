@@ -9,7 +9,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class GeneratorCacheModelTests
 {
     [Fact]
-    public void HttpBindingShapesIgnoreDiagnosticAndInterceptionLocationMovement() =>
+    public void ShouldReuseHttpBindingShapesGivenUnrelatedPragmaEditMovingLocations() =>
         AssertCachedAfterUnrelatedPragmaEdit(new RequestHttpBindingGenerator(), "PortiaHttpBindingShapes", """
             using Cntryl.Portia;
             using Microsoft.AspNetCore.Routing;
@@ -20,7 +20,7 @@ public sealed class GeneratorCacheModelTests
             """, moveLocation: true);
 
     [Fact]
-    public void HttpImplementationsAreSharedByShapeAndUnaffectedByCallSiteMovement()
+    public void ShouldShareHttpImplementationsByShapeGivenCallSitesAtDifferentLocations()
     {
         // Arrange
         const string source = """
@@ -67,7 +67,7 @@ public sealed class GeneratorCacheModelTests
     }
 
     [Fact]
-    public void ProcessorImplementationIgnoresDiagnosticLocationMovement() =>
+    public void ShouldReuseProcessorImplementationGivenUnrelatedPragmaEditMovingLocations() =>
         AssertCachedAfterUnrelatedPragmaEdit(new ProjectorReactorEventDispatcherGenerator(), "PortiaProcessorImplementations", """
             using Cntryl.Portia;
             public sealed record Changed : DomainEvent;
@@ -75,7 +75,7 @@ public sealed class GeneratorCacheModelTests
             """, moveLocation: true);
 
     [Fact]
-    public void LargeRequestRegistrationsHaveBoundedDeterministicFiles()
+    public void ShouldGenerateBoundedDeterministicFilesGivenLargeRequestRegistrations()
     {
         // Arrange
         var declarations = Enumerable.Range(0, 1000).Select(index =>
@@ -110,7 +110,7 @@ public sealed class GeneratorCacheModelTests
     }
 
     [Fact]
-    public void IncrementalGeneratorCacheModelsDoNotRetainCompilerObjects()
+    public void ShouldNotRetainCompilerObjectsGivenIncrementalGeneratorCacheModels()
     {
         // Arrange
         var assemblies = new[] { typeof(DomainEventCatalogGenerator).Assembly, typeof(RequestHttpBindingGenerator).Assembly };
@@ -140,11 +140,11 @@ public sealed class GeneratorCacheModelTests
     [Theory]
     [InlineData(typeof(IReadOnlyList<Dictionary<string, ISymbol>>))]
     [InlineData(typeof((string, SyntaxNode[])))]
-    public void RecursiveCacheInspectionDetectsNestedCompilerObjects(Type type) =>
+    public void ShouldDetectCompilerRootGivenNestedCompilerObjectType(Type type) =>
         Assert.True(ContainsCompilerRoot(type));
 
     [Fact]
-    public void DomainEventCatalogCodeGenerationIgnoresDiagnosticLocationChanges()
+    public void ShouldReuseCatalogCodeGenerationGivenDiagnosticLocationChanges()
     {
         // Arrange
         const string source = """
@@ -183,7 +183,7 @@ public sealed class GeneratorCacheModelTests
     }
 
     [Fact]
-    public void JsonRootEmissionIgnoresDiagnosticLocationChanges()
+    public void ShouldReuseJsonRootEmissionGivenDiagnosticLocationChanges()
     {
         // Arrange
         const string source = """
@@ -221,7 +221,7 @@ public sealed class GeneratorCacheModelTests
     }
 
     [Fact]
-    public void SuppressionStateDoesNotInvalidatePortableGeneratorModels()
+    public void ShouldKeepPortableGeneratorModelsCachedGivenChangedSuppressionState()
     {
         // Arrange
         const string request = """

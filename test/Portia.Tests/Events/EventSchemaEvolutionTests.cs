@@ -13,7 +13,7 @@ public sealed class EventSchemaEvolutionTests
     ///     to its CLR type name and schema version 1, and serializes/deserializes with no upcasting.
     /// </summary>
     [Fact]
-    public void ShouldRoundTripEventWithDefaultSchemaIdentity()
+    public void ShouldRoundTripEventGivenDefaultSchemaIdentity()
     {
         // Arrange
         var serializer =
@@ -35,7 +35,7 @@ public sealed class EventSchemaEvolutionTests
     ///     <see cref="IJsonDomainEventUpcaster" /> before being deserialized into the current type.
     /// </summary>
     [Fact]
-    public void ShouldUpcastEventWhenOnlyLaterSchemaVersionIsRegistered()
+    public void ShouldUpcastEventGivenOnlyLaterSchemaVersionRegistered()
     {
         // Arrange
         var writer = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed"));
@@ -59,7 +59,7 @@ public sealed class EventSchemaEvolutionTests
     ///     old and new versions can simply coexist forever with no upcaster written at all.
     /// </summary>
     [Fact]
-    public void ShouldResolveDirectlyWhenExactSchemaVersionIsStillRegistered()
+    public void ShouldResolveDirectlyGivenExactSchemaVersionStillRegistered()
     {
         // Arrange
         var v1Writer =
@@ -87,7 +87,7 @@ public sealed class EventSchemaEvolutionTests
     ///     to bridge it forward fails loudly rather than silently dropping data.
     /// </summary>
     [Fact]
-    public void ShouldThrowWhenNoRegistrationOrUpcasterCanResolveStoredVersion()
+    public void ShouldThrowGivenNoRegistrationOrUpcasterForStoredVersion()
     {
         // Arrange
         var writer = TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed"));
@@ -106,14 +106,14 @@ public sealed class EventSchemaEvolutionTests
     ///     fast at construction.
     /// </summary>
     [Fact]
-    public void ShouldThrowWhenRegisteringDuplicateUpcasterForSameNameAndVersion() =>
+    public void ShouldThrowGivenDuplicateUpcasterForSameNameAndVersion() =>
         Assert.Throws<InvalidOperationException>(() => TestJson.DomainSerializer(
             new DomainEventTypeCatalog().Register<WidgetRenamed>(2, "WidgetNamed"),
             [new WidgetNamedToRenamedUpcaster(), new WidgetNamedToRenamedUpcaster()]));
 
     /// <summary>Validates every declared chain without invoking application transformations.</summary>
     [Fact]
-    public void ShouldValidateCompleteMultiHopChainWithoutExecutingUpcasters()
+    public void ShouldValidateChainWithoutExecutingUpcastersGivenCompleteMultiHopChain()
     {
         // Arrange
         var first = new RecordingUpcaster("WidgetNamed", 1);
@@ -130,7 +130,7 @@ public sealed class EventSchemaEvolutionTests
 
     /// <summary>Reports every missing prospective transition in deterministic order.</summary>
     [Fact]
-    public void ShouldReportAllMissingUpcasterTransitions()
+    public void ShouldReportAllMissingTransitionsGivenGapsInUpcasterChains()
     {
         // Arrange
         // Act
@@ -149,7 +149,7 @@ public sealed class EventSchemaEvolutionTests
 
     /// <summary>A staged chain is validated even while its source CLR version remains readable.</summary>
     [Fact]
-    public void ShouldValidateStagedUpcasterWhoseSourceTypeRemainsRegistered() =>
+    public void ShouldValidateStagedUpcasterGivenSourceTypeStillRegistered() =>
         _ = TestJson.DomainSerializer(
             new DomainEventTypeCatalog().Register<OrderPlacedV1>(1, "OrderPlaced")
                 .Register<OrderPlacedV2>(2, "OrderPlaced"),
@@ -161,7 +161,7 @@ public sealed class EventSchemaEvolutionTests
     [InlineData("WidgetNamed", 0)]
     [InlineData("WidgetNamed", -1)]
     [InlineData("WidgetNamed", int.MaxValue)]
-    public void ShouldRejectInvalidUpcasterIdentity(string name, int version)
+    public void ShouldRejectUpcasterGivenInvalidIdentity(string name, int version)
     {
         // Arrange
         // Act

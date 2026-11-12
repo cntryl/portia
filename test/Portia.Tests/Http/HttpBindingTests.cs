@@ -21,7 +21,7 @@ namespace Cntryl.Portia;
 ///     Exercises <c>RequestHttpBindingGenerator</c>'s generated interceptors end to end through a
 ///     real ASP.NET Core <see cref="TestServer" /> — an actual HTTP request/response round trip, not
 ///     an assertion on generated source text. Nothing in this repository tested this path before:
-///     every gap here (most notably <see cref="ShouldReturnBadRequestWhenNestedBodyPropertyIsMalformed" />,
+///     every gap here (most notably <see cref="ShouldReturnBadRequestGivenNestedBodyPropertyIsMalformed" />,
 ///     a regression test for a bug that previously only surfaced during manual HTTP probing) had no
 ///     automated coverage at all.
 /// </summary>
@@ -120,7 +120,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     to the query string, on the same GET request.
     /// </summary>
     [Fact]
-    public async Task ShouldBindRouteTokenAndFallBackToQueryString()
+    public async Task ShouldBindRouteTokenAndFallBackToQueryGivenRouteAndQueryValues()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}"));
@@ -137,7 +137,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <inheritdoc />
     [Fact]
-    public async Task ShouldRunCustomBindingPipelineAndResultHook()
+    public async Task ShouldRunBindingPipelineAndResultHookGivenCustomBinding()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaGet<HttpGetWidget, string>("/custom/{widget_id}", endpoint =>
@@ -169,7 +169,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     object on a GET is assembled by <c>OnBind</c> and still dispatched through the bus.
     /// </summary>
     [Fact]
-    public async Task ShouldBindShapeUnsupportedByDefaultBinderThroughOnBind()
+    public async Task ShouldBindShapeGivenTypeUnsupportedByDefaultBinderWhenUsingOnBind()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaGet<HttpSearchWidgets, string>("/search", endpoint => endpoint
@@ -192,7 +192,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     business operation succeeds the result hook sets a cookie and a header and redirects.
     /// </summary>
     [Fact]
-    public async Task ShouldBindFormPostByDefaultThenSetCookieHeaderAndRedirect()
+    public async Task ShouldBindFormPostAndSetCookieAndRedirectGivenDefaultBinding()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/sign-in", endpoint =>
@@ -227,7 +227,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     defaults, blank-field and checkbox handling, and a member the body omits comes from the query.
     /// </summary>
     [Fact]
-    public async Task ShouldBindRouteAndBodyFromFormOrJson()
+    public async Task ShouldBindRouteAndBodyGivenFormOrJsonContent()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}")
@@ -277,7 +277,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     and form bodies, while the remaining members keep the route, body, query cascade.
     /// </summary>
     [Fact]
-    public async Task ShouldBindFromQueryMemberOnlyFromQueryString()
+    public async Task ShouldBindMemberOnlyFromQueryGivenFromQueryMember()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}",
@@ -306,7 +306,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>Verifies a required <c>FromQuery</c> member is not satisfied by the body.</summary>
     [Fact]
-    public async Task ShouldRequireFromQueryMemberInQueryString()
+    public async Task ShouldRequireMemberInQueryGivenFromQueryMember()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/required-query/{widget_id}",
@@ -328,7 +328,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>Verifies misdeclared <c>FromQuery</c> members fail when the route is mapped.</summary>
     [Fact]
-    public void ShouldRejectInvalidFromQueryDeclarationsWhenMapping()
+    public void ShouldRejectDeclarationGivenInvalidFromQueryMemberWhenMapping()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -365,7 +365,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     [InlineData("name=gear&quantity=1&quantity=2")]
     [InlineData("name=gear&quantity=1&active=maybe")]
     [InlineData("name=gear&quantity=1&active=true&active=maybe")]
-    public async Task ShouldRejectInvalidFormFields(string form)
+    public async Task ShouldRejectRequestGivenInvalidFormFields(string form)
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}")
@@ -381,7 +381,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>Verifies a body with complex members stays JSON-only, refusing a form as an unsupported media type.</summary>
     [Fact]
-    public async Task ShouldRejectFormPostForComplexBody()
+    public async Task ShouldRejectFormPostGivenComplexBody()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpCreateOrder, Uuid>("/orders"));
@@ -398,7 +398,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     rejected, a valid token binds, JSON is unaffected, and an endpoint can opt out.
     /// </summary>
     [Fact]
-    public async Task ShouldValidateAntiforgeryForFormPostsWhenRegistered()
+    public async Task ShouldValidateAntiforgeryGivenFormPostWhenAntiforgeryRegistered()
     {
         // Arrange
         var client = await StartAsync(app =>
@@ -442,7 +442,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     endpoint that calls <c>DisableAntiforgery()</c> accepts forms explicitly.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectFormPostsWhenAntiforgeryIsNotRegistered()
+    public async Task ShouldRejectFormPostsGivenAntiforgeryIsNotRegistered()
     {
         // Arrange
         var client = await StartAsync(app =>
@@ -476,7 +476,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     while declared JSON media types and bodiless posts still bind.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectBodiesBrowsersSendCrossSiteWithoutPreflight()
+    public async Task ShouldRejectBodyGivenCrossSiteBrowserRequestWithoutPreflight()
     {
         // Arrange
         var client = await StartAsync(app =>
@@ -525,7 +525,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     JSON response by returning <see langword="null" />.
     /// </summary>
     [Fact]
-    public async Task ShouldKeepDefaultBindingAndResponseWhenResultHookOnlyAddsHeadersAndCookies()
+    public async Task ShouldKeepDefaultBindingAndResponseGivenResultHookOnlyAddsHeadersAndCookies()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaGet<HttpGetWidget, string>("/decorated/{widget_id}",
@@ -555,7 +555,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     hook can redirect a failure while adjusting cookies around the default success response.
     /// </summary>
     [Fact]
-    public async Task ShouldAuthorizeCustomBoundRequestAndLetResultHookHandleFailureAndSuccess()
+    public async Task ShouldAuthorizeRequestAndLetResultHookHandleOutcomeGivenCustomBoundRequest()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpGuardedAction>("/sign-out", endpoint => endpoint
@@ -587,7 +587,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <inheritdoc />
     [Fact]
-    public async Task ShouldValidateCustomRouteParametersAgainstCompleteGroupedPattern()
+    public async Task ShouldValidateRouteParametersGivenCompleteGroupedPattern()
     {
         // Arrange
         var client = await StartAsync(app => app.MapGroup("/tenants/{tenant_id}")
@@ -607,7 +607,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <inheritdoc />
     [Fact]
-    public void ShouldRejectDuplicateCustomBodyContentTypes()
+    public void ShouldRejectMappingGivenDuplicateCustomBodyContentTypes()
     {
         // Arrange
         var configuration = new PortiaEndpointConfiguration<HttpSendPing>();
@@ -622,7 +622,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <inheritdoc />
     [Fact]
-    public async Task ShouldApplyBodyLimitBeforeCustomBinderRuns()
+    public async Task ShouldApplyBodyLimitBeforeBinderGivenCustomBinder()
     {
         // Arrange
         var binderCalled = false;
@@ -650,7 +650,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     itself, as Kestrel does once Portia lowers <see cref="IHttpMaxRequestBodySizeFeature" />.
     /// </summary>
     [Fact]
-    public async Task ShouldReturnPayloadTooLargeWhenServerRejectsChunkedFormBody()
+    public async Task ShouldReturnPayloadTooLargeGivenServerRejectsChunkedFormBody()
     {
         // Arrange
         var client = await StartAsync(app =>
@@ -678,7 +678,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>An antiforgery form read must preserve an underlying unknown-length body-limit failure as 413.</summary>
     [Fact]
-    public async Task ShouldPreservePayloadTooLargeWhenAntiforgeryReadsChunkedFormBody()
+    public async Task ShouldPreservePayloadTooLargeGivenAntiforgeryReadsChunkedFormBody()
     {
         // Arrange
         var client = await StartAsync(app =>
@@ -704,7 +704,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>Verifies a JSON body rejected by the server's own body size limit is a 413.</summary>
     [Fact]
-    public async Task ShouldReturnPayloadTooLargeWhenServerRejectsJsonBody()
+    public async Task ShouldReturnPayloadTooLargeGivenServerRejectsJsonBody()
     {
         // Arrange
         var client = await StartAsync(app =>
@@ -735,7 +735,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <inheritdoc />
     [Fact]
-    public async Task ShouldApplyBodyLimitToChunkedCustomBinderReads()
+    public async Task ShouldApplyBodyLimitGivenChunkedCustomBinderReads()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/custom-chunked", endpoint =>
@@ -758,7 +758,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>Verifies unread chunked data cannot bypass the declared custom-body limit.</summary>
     [Fact]
-    public async Task ShouldRejectChunkedCustomBodyBeforePartiallyReadingBinderRuns()
+    public async Task ShouldRejectChunkedBodyBeforePartialBinderReadGivenCustomBody()
     {
         // Arrange
         var binderCalled = false;
@@ -791,7 +791,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <inheritdoc />
     [Fact]
-    public async Task ShouldAllowChunkedCustomBodyAtLimit()
+    public async Task ShouldAllowChunkedBodyGivenCustomBodyAtLimit()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/custom-chunked-limit",
@@ -818,7 +818,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     [InlineData(16L, false, 8L)]
     [InlineData(4L, false, 4L)]
     [InlineData(16L, true, 16L)]
-    public void ShouldRespectStricterOrReadOnlyServerBodyLimit(long? serverMaximum, bool readOnly, long expected)
+    public void ShouldRespectServerBodyLimitGivenStricterOrReadOnlyLimit(long? serverMaximum, bool readOnly, long expected)
     {
         // Arrange
         using var services = new ServiceCollection()
@@ -837,7 +837,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <inheritdoc />
     [Fact]
-    public async Task ShouldMapCustomFormatFailureToBadRequest()
+    public async Task ShouldMapToBadRequestGivenCustomFormatFailure()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaGet<HttpGetWidget, string>("/custom-format/{widget_id}",
@@ -855,7 +855,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <inheritdoc />
     [Fact]
-    public void ShouldFreezeConfigurationAfterMapping()
+    public void ShouldFreezeConfigurationGivenEndpointAlreadyMapped()
     {
         // Arrange
         PortiaEndpointConfiguration<HttpOptionalBody, string>? captured = null;
@@ -889,7 +889,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <inheritdoc />
     [Fact]
-    public async Task ShouldRequireResultHookToHonorDeclaredSuccessResponse()
+    public async Task ShouldRequireResultHookGivenDeclaredSuccessResponse()
     {
         // Arrange
         var configuration = new PortiaEndpointConfiguration<HttpOptionalBody, string>();
@@ -914,7 +914,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <inheritdoc />
     [Fact]
-    public async Task ShouldRejectInvalidGroupedCustomRouteAtStartup()
+    public async Task ShouldRejectStartupGivenInvalidGroupedCustomRoute()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -945,7 +945,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>Root route sources are validated before a Portia startup schedule can run.</summary>
     [Fact]
-    public async Task ShouldRejectInvalidRootCustomRouteBeforeStartupSchedule()
+    public async Task ShouldRejectRouteBeforeStartupScheduleGivenInvalidRootCustomRoute()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -976,7 +976,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>A valid grouped route releases deferred startup schedules after its complete pattern is validated.</summary>
     [Fact]
-    public async Task ShouldRunStartupScheduleAfterValidGroupedRouteValidation()
+    public async Task ShouldRunStartupScheduleGivenValidGroupedRoute()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -1006,7 +1006,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <inheritdoc />
     [Fact]
-    public async Task ShouldMapCustomJsonBindingFailureToBadRequest()
+    public async Task ShouldMapToBadRequestGivenCustomJsonBindingFailure()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/custom-json", endpoint =>
@@ -1027,7 +1027,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     unparseable Uuid) is a 400, not an unhandled exception.
     /// </summary>
     [Fact]
-    public async Task ShouldReturnBadRequestWhenRouteValueFailsTryParse()
+    public async Task ShouldReturnBadRequestGivenRouteValueFailsTryParse()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}"));
@@ -1044,7 +1044,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     binds correctly via the generator's JSON-fallback path.
     /// </summary>
     [Fact]
-    public async Task ShouldBindNestedCollectionBodyProperty()
+    public async Task ShouldBindNestedCollectionGivenBodyProperty()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpCreateOrder, Uuid>("/orders"));
@@ -1068,7 +1068,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     client, discovered only through a manual HTTP request.
     /// </summary>
     [Fact]
-    public async Task ShouldReturnBadRequestWhenNestedBodyPropertyIsMalformed()
+    public async Task ShouldReturnBadRequestGivenNestedBodyPropertyIsMalformed()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpCreateOrder, Uuid>("/orders"));
@@ -1086,7 +1086,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     Verifies that malformed top-level JSON (not just a malformed nested property) is a 400.
     /// </summary>
     [Fact]
-    public async Task ShouldReturnBadRequestWhenTopLevelBodyIsNotValidJson()
+    public async Task ShouldReturnBadRequestGivenTopLevelBodyIsNotValidJson()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpCreateOrder, Uuid>("/orders"));
@@ -1107,7 +1107,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     same clean way for it.
     /// </summary>
     [Fact]
-    public async Task ShouldReturnBadRequestWhenBodyIsCompletelyEmpty()
+    public async Task ShouldReturnBadRequestGivenBodyIsCompletelyEmpty()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpCreateOrder, Uuid>("/orders"));
@@ -1125,7 +1125,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     synchronously, with no separate "Async"-suffixed endpoint to opt into it.
     /// </summary>
     [Fact]
-    public async Task ShouldPivotToQueueWhenPreferRespondAsyncHeaderIsSent()
+    public async Task ShouldPivotToQueueGivenPreferRespondAsyncHeaderIsSent()
     {
         // Arrange
         var publisher = new RecordingRequestQueuePublisher();
@@ -1159,7 +1159,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     declined and the request runs now rather than being accepted and then rejected unseen.
     /// </summary>
     [Fact]
-    public async Task ShouldRunAnonymousCallerSynchronouslyWhenRespondAsyncIsPreferred()
+    public async Task ShouldRunAnonymousCallerSynchronouslyGivenRespondAsyncIsPreferred()
     {
         // Arrange
         var publisher = new RecordingRequestQueuePublisher();
@@ -1182,7 +1182,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     is not honored, so the hook runs after the operation instead of a 202 bypassing it.
     /// </summary>
     [Fact]
-    public async Task ShouldRunResultHookInsteadOfQueueingWhenRespondAsyncIsPreferred()
+    public async Task ShouldRunResultHookInsteadOfQueueingGivenRespondAsyncIsPreferred()
     {
         // Arrange
         var publisher = new RecordingRequestQueuePublisher();
@@ -1206,7 +1206,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>Verifies configuring a queuable endpoint without a result hook still honors respond-async.</summary>
     [Fact]
-    public async Task ShouldStillQueueConfiguredEndpointWithoutResultHookWhenRespondAsyncIsPreferred()
+    public async Task ShouldStillQueueConfiguredEndpointWithoutResultHookGivenRespondAsyncIsPreferred()
     {
         // Arrange
         var publisher = new RecordingRequestQueuePublisher();
@@ -1228,7 +1228,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>Verifies a result hook sees an authorization failure even when respond-async is preferred.</summary>
     [Fact]
-    public async Task ShouldRunResultHookForForbiddenQueueableRequestWhenRespondAsyncIsPreferred()
+    public async Task ShouldRunResultHookForForbiddenQueueableRequestGivenRespondAsyncIsPreferred()
     {
         // Arrange
         var publisher = new RecordingRequestQueuePublisher();
@@ -1352,7 +1352,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public async Task ShouldFailVisiblyWithoutDisclosureWhenBodyLimitIsMisconfigured(long maximum)
+    public async Task ShouldFailVisiblyWithoutDisclosureGivenBodyLimitIsMisconfigured(long maximum)
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/optional"),
@@ -1375,7 +1375,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     connection rather than logging a fault and writing a 500 that nobody can receive.
     /// </summary>
     [Fact]
-    public async Task ShouldAbortWithoutFaultWhenClientAbortsUnaryRequest()
+    public async Task ShouldAbortWithoutFaultGivenClientAbortsUnaryRequest()
     {
         // Arrange
         var logs = new RecordingLoggerProvider();
@@ -1411,7 +1411,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     [Theory]
     [InlineData( /*lang=json,strict*/ """{"Value":"bound"}""")]
     [InlineData( /*lang=json,strict*/ """{"VALUE":"bound"}""")]
-    public async Task ShouldBindBodyPropertyWhoseCasingDiffersFromTheNamingPolicy(string json)
+    public async Task ShouldBindBodyPropertyGivenCasingDifferentFromNamingPolicy(string json)
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/optional"));
@@ -1430,7 +1430,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     when the caller doesn't send the <c>Prefer: respond-async</c> header.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchSynchronouslyWithoutPreferHeader()
+    public async Task ShouldDispatchSynchronouslyGivenNoPreferHeader()
     {
         // Arrange
         var publisher = new RecordingRequestQueuePublisher();
@@ -1451,7 +1451,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     pipeline — a caller lacking the permission gets 403, never reaching the handler.
     /// </summary>
     [Fact]
-    public async Task ShouldReturnForbiddenWhenCallerLacksRequiredPermission()
+    public async Task ShouldReturnForbiddenGivenCallerLacksRequiredPermission()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpGuardedAction>("/guarded"));
@@ -1475,7 +1475,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>A transient request failure remains distinguishable over HTTP.</summary>
     [Fact]
-    public async Task ShouldExposeTransientRequestFailureInProblemAndHeader()
+    public async Task ShouldExposeProblemAndHeaderGivenTransientRequestFailure()
     {
         // Arrange
         var context = new DefaultHttpContext();
@@ -1496,7 +1496,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>Unauthorized failures remain bodyless but advertise their authentication scheme.</summary>
     [Fact]
-    public async Task ShouldChallengeBearerWithoutLeakingUnauthorizedDetail()
+    public async Task ShouldChallengeBearerWithoutLeakingDetailGivenUnauthorizedCaller()
     {
         // Arrange
         var context = new DefaultHttpContext();
@@ -1517,7 +1517,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     Verifies that a caller who does carry the required permission claim reaches the handler.
     /// </summary>
     [Fact]
-    public async Task ShouldSucceedWhenCallerHasRequiredPermission()
+    public async Task ShouldSucceedGivenCallerHasRequiredPermission()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpGuardedAction>("/guarded"));
@@ -1543,7 +1543,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     before now.
     /// </summary>
     [Fact]
-    public async Task ShouldBindValueTypeNestedBodyProperty()
+    public async Task ShouldBindValueGivenValueTypeNestedBodyProperty()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaPost<HttpCreatePayment, Uuid>("/payments"));
@@ -1562,7 +1562,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     Verifies streaming as an incrementally-flushed JSON array.
     /// </summary>
     [Fact]
-    public async Task ShouldStreamAsJsonArray()
+    public async Task ShouldStreamAsJsonArrayGivenStreamRequest()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaGetStream<HttpListWidgets, string>("/widgets"));
@@ -1579,7 +1579,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>A failed stream guard is a problem response, because no JSON array was written yet.</summary>
     [Fact]
-    public async Task ShouldReturnGuardProblemBeforeJsonStreamWhenStreamGuardFails()
+    public async Task ShouldReturnGuardProblemBeforeJsonStreamGivenStreamGuardFails()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaGetStream<HttpListWidgets, string>("/guarded-widgets"),
@@ -1594,7 +1594,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     /// <summary>A failed stream guard is a problem response, because no event was written yet.</summary>
     [Fact]
-    public async Task ShouldReturnGuardProblemBeforeServerSentEventsWhenStreamGuardFails()
+    public async Task ShouldReturnGuardProblemBeforeServerSentEventsGivenStreamGuardFails()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaGetSse<HttpListWidgets, string>("/guarded-widget-events"),
@@ -1624,7 +1624,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     <see cref="IStreamRequestHandler{TRequest,TOut}" /> as the JSON-array mapping above.
     /// </summary>
     [Fact]
-    public async Task ShouldStreamAsServerSentEvents()
+    public async Task ShouldStreamAsServerSentEventsGivenStreamRequest()
     {
         // Arrange
         var client = await StartAsync(app => app.MapPortiaGetSse<HttpListWidgets, string>("/widgets/events"));
@@ -1648,7 +1648,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     at the worker, as a dead letter.
     /// </summary>
     [Fact]
-    public async Task ShouldReturnForbiddenWithoutEnqueueingWhenCallerLacksPermissionAndPrefersRespondAsync()
+    public async Task ShouldReturnForbiddenWithoutEnqueueingGivenCallerLacksPermissionAndPrefersRespondAsync()
     {
         // Arrange
         var publisher = new RecordingRequestQueuePublisher();
@@ -1678,7 +1678,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ShouldReturnForbiddenBeforeCheckingTheCredentialWhenPreferringRespondAsync(bool cookieIdentity)
+    public async Task ShouldReturnForbiddenBeforeCheckingTheCredentialGivenPreferringRespondAsync(bool cookieIdentity)
     {
         // Arrange
         var publisher = new RecordingRequestQueuePublisher();
@@ -1707,7 +1707,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
     ///     so authorizing before accepting does not cost the asynchronous path.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectAuthenticatedAsyncCallerWithoutPortableBearerCredential()
+    public async Task ShouldRejectAsyncCallerGivenAuthenticatedCallerWithoutPortableBearerCredential()
     {
         // Arrange
         var publisher = new RecordingRequestQueuePublisher();

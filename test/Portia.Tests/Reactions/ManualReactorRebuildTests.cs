@@ -10,7 +10,7 @@ public sealed class ManualReactorRebuildTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldRejectRebuildGenerationBeforeReadingOrApplyingEffects(bool batch)
+    public async Task ShouldRejectRunGivenRebuildGenerationBeforeReadingOrApplyingEffects(bool batch)
     {
         // Arrange
         var reader = new RecordingReader();
@@ -36,7 +36,7 @@ public sealed class ManualReactorRebuildTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldHandleLiveEventsWithoutRebuildGeneration(bool batch)
+    public async Task ShouldHandleLiveEventsGivenNoRebuildGeneration(bool batch)
     {
         // Arrange
         var reader = new RecordingReader();

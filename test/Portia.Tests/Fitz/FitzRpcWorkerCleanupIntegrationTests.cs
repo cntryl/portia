@@ -14,7 +14,7 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
     [InlineData(false, 1U)]
     [InlineData(false, 2U)]
     [InlineData(true, 1U)]
-    public async Task ShouldExposeDeclaredBackpressureDuringWorkerCleanup(bool portia, uint maxConcurrency)
+    public async Task ShouldExposeDeclaredBackpressureGivenWorkerCleanupInProgress(bool portia, uint maxConcurrency)
     {
         // Arrange
         var endpoint = new Uri(Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT")

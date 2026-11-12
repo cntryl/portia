@@ -10,7 +10,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class NotificationExecutionTests
 {
     [Fact]
-    public async Task EnsuredScheduleDefinitionsAreStableAndContainNoTraceContext()
+    public async Task ShouldProduceStableDefinitionWithoutTraceContextGivenEnsuredSchedule()
     {
         // Arrange
         static async Task<(string Route, byte[] Body)> EnsureAsync()
@@ -44,7 +44,7 @@ public sealed class NotificationExecutionTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task NotificationDispatchUsesConcreteRouteAndScheduleFiringsHaveIndependentIdentities(bool scheduled)
+    public async Task ShouldUseConcreteRouteAndIndependentIdentitiesGivenNotificationDispatch(bool scheduled)
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
@@ -109,7 +109,7 @@ public sealed class NotificationExecutionTests
     }
 
     [Fact]
-    public async Task SchedulerRejectsUserIdentityBeforePersistingAnything()
+    public async Task ShouldRejectScheduleBeforePersistingGivenUserIdentity()
     {
         // Arrange
         var wire = new Wire();
@@ -128,7 +128,7 @@ public sealed class NotificationExecutionTests
     }
 
     [Fact]
-    public async Task FiredSchedulePreservesStableWireName()
+    public async Task ShouldPreserveStableWireNameGivenFiredSchedule()
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
@@ -156,7 +156,7 @@ public sealed class NotificationExecutionTests
     [InlineData(1, "   ", "portia")]
     [InlineData(1, "scheduler", "")]
     [InlineData(1, "scheduler", "   ")]
-    public async Task FiredScheduleWithoutACompleteSystemIdentityIsRejected(int version, string subject, string issuer)
+    public async Task ShouldRejectFiredScheduleGivenIncompleteSystemIdentity(int version, string subject, string issuer)
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
@@ -179,7 +179,7 @@ public sealed class NotificationExecutionTests
     }
 
     [Fact]
-    public async Task LegacyBearerTokenScheduleRequiresDrainAndRecreation()
+    public async Task ShouldRejectScheduleGivenLegacyBearerToken()
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
@@ -203,7 +203,7 @@ public sealed class NotificationExecutionTests
     [Theory]
     [InlineData(RequestScheduleDeliveryMode.One, ScheduleDeliveryMode.Once)]
     [InlineData(RequestScheduleDeliveryMode.Broadcast, ScheduleDeliveryMode.Broadcast)]
-    public async Task DeliveryModeIsCarriedToTheBrokerUntranslated(RequestScheduleDeliveryMode requested,
+    public async Task ShouldCarryDeliveryModeUntranslatedGivenRequestedMode(RequestScheduleDeliveryMode requested,
         ScheduleDeliveryMode expected)
     {
         // Arrange
@@ -222,7 +222,7 @@ public sealed class NotificationExecutionTests
     }
 
     [Fact]
-    public async Task UndefinedDeliveryModeIsRejectedBeforePersistingAnything()
+    public async Task ShouldRejectScheduleBeforePersistingGivenUndefinedDeliveryMode()
     {
         // Arrange
         var wire = new Wire();
@@ -241,7 +241,7 @@ public sealed class NotificationExecutionTests
     }
 
     [Fact]
-    public async Task ScheduleWithoutABrokerIdentityFailsInsteadOfReturningNothingToCancelWith()
+    public async Task ShouldFailGivenBrokerReturningNoScheduleIdentity()
     {
         // Arrange
         var wire = new Wire { ReturnNoIdentity = true };
@@ -260,7 +260,7 @@ public sealed class NotificationExecutionTests
     }
 
     [Fact]
-    public async Task CancellingAScheduleForwardsTheBrokerIdentityItWasCreatedWith()
+    public async Task ShouldForwardBrokerIdentityGivenCreatedScheduleWhenCancelling()
     {
         // Arrange
         var wire = new Wire();
@@ -282,7 +282,7 @@ public sealed class NotificationExecutionTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task CancellingWithoutAScheduleIdentityIsRejectedBeforeReachingTheBroker(string? scheduleId)
+    public async Task ShouldRejectCancellationBeforeBrokerGivenMissingScheduleIdentity(string? scheduleId)
     {
         // Arrange
         var wire = new Wire();

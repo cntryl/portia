@@ -7,7 +7,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class AggregateCapabilitySurfaceTests
 {
     [Fact]
-    public void ShouldExposeOnlyReaderWriterAndExecutor()
+    public void ShouldExposeOnlyReaderWriterAndExecutorGivenAbstractionsAssembly()
     {
         // Arrange
         var abstractions = typeof(IAggregateReader).Assembly;

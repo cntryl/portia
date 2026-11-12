@@ -11,7 +11,7 @@ public sealed partial class CassieProjectionMisuseTests
 
     /// <summary>Reading through the query path inside an open batch is a defect a retry cannot fix.</summary>
     [Fact]
-    public async Task ShouldClassifyQueryReadsDuringABatchAsPermanent()
+    public async Task ShouldClassifyMisuseAsPermanentGivenQueryReadDuringBatch()
     {
         // Arrange
         var activity = new CassieProjectionActivityGate();
@@ -27,7 +27,7 @@ public sealed partial class CassieProjectionMisuseTests
 
     /// <summary>A second batch on the same repository instance is a defect a retry cannot fix.</summary>
     [Fact]
-    public async Task ShouldClassifyOverlappingBatchesAsPermanent()
+    public async Task ShouldClassifyMisuseAsPermanentGivenOverlappingBatches()
     {
         // Arrange
         var activity = new CassieProjectionActivityGate();
@@ -43,7 +43,7 @@ public sealed partial class CassieProjectionMisuseTests
 
     /// <summary>Writing outside a projection batch is a defect a retry cannot fix.</summary>
     [Fact]
-    public async Task ShouldClassifyWritesOutsideABatchAsPermanent()
+    public async Task ShouldClassifyMisuseAsPermanentGivenWriteOutsideBatch()
     {
         // Arrange
         await using var source = new CassieDataSource(UnreachableServer);
@@ -60,7 +60,7 @@ public sealed partial class CassieProjectionMisuseTests
 
     /// <summary>A repository constructed for another projector stops the host before any batch runs.</summary>
     [Fact]
-    public async Task ShouldRejectRepositoryNamedForAnotherProjectorAtStartup()
+    public async Task ShouldRejectStartupGivenRepositoryNamedForAnotherProjector()
     {
         // Arrange
         var services = new ServiceCollection();

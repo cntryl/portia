@@ -11,7 +11,7 @@ public sealed class JsonRequestSerializerTests
     ///     Verifies that a request round-trips to an equal instance, alongside its actor token.
     /// </summary>
     [Fact]
-    public void ShouldRoundTripRequestWithActorToken()
+    public void ShouldRoundTripRequestGivenActorToken()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(SerializerTestRequest));
@@ -32,7 +32,7 @@ public sealed class JsonRequestSerializerTests
     ///     string or a missing-field exception.
     /// </summary>
     [Fact]
-    public void ShouldRoundTripRequestWithNullActorToken()
+    public void ShouldRoundTripRequestGivenNullActorToken()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(SerializerTestRequest));
@@ -51,7 +51,7 @@ public sealed class JsonRequestSerializerTests
     ///     Verifies that a successful no-result outcome round-trips as success, with no error.
     /// </summary>
     [Fact]
-    public void ShouldRoundTripSuccessfulOutcome()
+    public void ShouldRoundTripOutcomeGivenSuccessfulOutcome()
     {
         // Arrange
         var serializer = TestJson.Serializer();
@@ -70,7 +70,7 @@ public sealed class JsonRequestSerializerTests
     ///     transience preserved.
     /// </summary>
     [Fact]
-    public void ShouldRoundTripFailedOutcomeWithErrorDetails()
+    public void ShouldRoundTripOutcomeGivenFailedOutcomeWithErrorDetails()
     {
         // Arrange
         var serializer = TestJson.Serializer();
@@ -92,7 +92,7 @@ public sealed class JsonRequestSerializerTests
     ///     Verifies that a successful with-result outcome round-trips with its value intact.
     /// </summary>
     [Fact]
-    public void ShouldRoundTripSuccessfulResultWithValue()
+    public void ShouldRoundTripResultGivenSuccessfulResultWithValue()
     {
         // Arrange
         var serializer = TestJson.Serializer();
@@ -111,7 +111,7 @@ public sealed class JsonRequestSerializerTests
     ///     Verifies that a failed with-result outcome round-trips its error without a value.
     /// </summary>
     [Fact]
-    public void ShouldRoundTripFailedResult()
+    public void ShouldRoundTripFailedResultGivenResultWithError()
     {
         // Arrange
         var serializer = TestJson.Serializer();
@@ -133,7 +133,7 @@ public sealed class JsonRequestSerializerTests
     ///     still applies at this JSON boundary, not just at the HTTP one.
     /// </summary>
     [Fact]
-    public void ShouldRoundTripUuidFieldOnRequest()
+    public void ShouldRoundTripUuidFieldGivenRequestWithUuidField()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(SerializerTestUuidRequest));
