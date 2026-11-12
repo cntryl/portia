@@ -327,6 +327,30 @@ public sealed class ApplicationStructureAnalyzerTests
         _ = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
     }
 
+    [Theory]
+    [InlineData(typeof(ApplicationStructureAnalyzer))]
+    [InlineData(typeof(ApplicationContractAnalyzer))]
+    public void ShouldAllowDomainEventCatalogAdapterGivenAnyFeatureEventsFolder(Type analyzerType)
+    {
+        // Arrange
+        const string source = """
+            using Cntryl.Portia;
+            namespace Shop.Common.Features.Orders.Events;
+            public static class OrdersDomainEventCatalog
+            {
+                public static DomainEventTypeCatalog AddTo(DomainEventTypeCatalog catalog) => catalog;
+            }
+            """;
+        var analyzer = (Microsoft.CodeAnalysis.Diagnostics.DiagnosticAnalyzer)Activator.CreateInstance(analyzerType)!;
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", analyzer,
+            [("Features/Orders/Events/OrdersDomainEventCatalog.cs", source)]);
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA203" or "PORTIA204" or "PORTIA209");
+    }
+
     [Fact]
     public void ShouldIgnoreNestedTypesGivenTopLevelOwner()
     {

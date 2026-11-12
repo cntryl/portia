@@ -66,7 +66,7 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
             && catalogAdapter.Identifier.ValueText == "AddTo"
             && context.SemanticModel.GetDeclaredSymbol(catalogAdapter, context.CancellationToken) is { IsStatic: true } catalogMethod
             && catalogMethod.ContainingType is { } containingType
-            && path.Length == 4 && path[0] == "Features" && path[1] == "Platform" && path[2] == "Events"
+            && path.Length == 4 && path[0] == "Features" && path[2] == "Events"
             && ApplicationProject.IsDomainEventCatalogAdapter(containingType))
             return;
 
