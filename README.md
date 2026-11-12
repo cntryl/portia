@@ -127,6 +127,7 @@ See [application setup](docs/application-setup.md) and [Fitz upgrade notes](docs
 - [Projectors and reactors](docs/projectors-and-reactors.md): native repositories and durable processing
 - [Processor operations](docs/operations.md): durable diagnosis, operator approval, worker-owned recovery, and verification
 - [Request context](docs/request-context.md): actor, correlation, and causation
+- [Request identities](docs/request-identities.md): typed logical request IDs with `IIdentifiedRequest`
 - [Validation authority](docs/validation-authority.md): local invariants, advisory reads, and authoritative outcome choreography.
 - [Request guards](docs/request-guards.md): authorization, reusable asynchronous preflight, and authoritative invariants
 - [Testing applications](docs/testing.md): aggregate, request, projector, and reactor scenarios
@@ -134,14 +135,16 @@ See [application setup](docs/application-setup.md) and [Fitz upgrade notes](docs
 - [Cassie projections](docs/cassie-projections.md): native SQL repositories, typed projectors, and atomic checkpoints.
 - [Platform vision](docs/platform-vision.md): the fixed Fitz–Portia–Cassie boundary
 - [Scope](docs/scope.md) and [design decisions](docs/design-decisions.md): guarantees and deliberate limits
+- [Observability](docs/observability.md): traces, metrics, structured logs, and Prometheus dashboards
 - [Performance and scaling](docs/performance-and-scaling.md): measured hot paths and scaling model
 - [NativeAOT](docs/native-aot.md): trimming and source-generated JSON setup
 - [Model Context Protocol](docs/mcp.md): request-backed tools, resources, and prompts over stdio and Streamable HTTP
-- [Migrating to Portia 0.4](docs/migration-0.4.md): JSON ownership, tenant templates, and MCP tests
 - [Portia 0.11.1 migration notes](docs/migration-0.11.1.md): stateless MCP HTTP, object storage completion outcomes, and Abstractions references
 - [Portia 0.11.0 migration notes](docs/migration-0.11.0.md): .NET 11, Fitz 4.1, JSON, and compiler updates
 - [Portia 0.10.0 migration notes](docs/migration-0.10.0.md): operator access, processor inspection, typed outcomes, and Fitz 4
 - [Portia 0.8 migration notes](docs/migration-0.8.md): Fitz 2.0 compatibility and queue persistence
+- [Portia 0.7 migration notes](docs/migration-0.7.md): request-scenario cancellation and bounded manual processor passes
+- [Migrating to Portia 0.4](docs/migration-0.4.md): JSON ownership, tenant templates, and MCP tests
 - [Fitz 4 upgrade](docs/fitz-4-upgrade.md): Portia 0.11.0's Wire 3 compatibility, retry policy, and persistence
 
 ## Development
@@ -167,8 +170,8 @@ docker compose down --volumes
 
 Broker integration uses `ws://127.0.0.1:4090/ws` by default. Override it with
 `FITZ_TEST_ENDPOINT`. Storage integration requires the Sqrzl S3 endpoint supplied by
-`PORTIA_S3_TEST_ENDPOINT`. CI runs restore, formatting, Release build, service-free tests, packed
-consumers, and the broker, object-storage, Cassie, and crash-durability integration categories.
+`PORTIA_S3_TEST_ENDPOINT`. CI runs restore, formatting, Release build, service-free tests, and the
+broker, object-storage, Cassie, and crash-durability integration categories.
 The first test command needs no external service.
 
 ## License
