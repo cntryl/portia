@@ -139,14 +139,8 @@ two-second delays, and is recorded lost once after permanent rejection or exhaus
 These expressions are qualified against **Prometheus 3.15.0** and the **OpenTelemetry OTLP
 exporter 1.19.1**, using metrics-specific HTTP/protobuf export, cumulative temporality and
 `UnderscoreEscapingWithSuffixes` translation. Other exporters/backends need their own name check.
-The compiled [qualification workload](../bench/Portia.Benchmarks/Telemetry/PrometheusQualification.cs)
-executes 321 real requests: 41 successes, 40 of each expected refusal kind, 40 in-handler caller
-cancellations and 40 unexpected faults. It asserts exact exported counts, request/workload active
-values of one then zero, and worker failure/restart counters of two. Worker and committed-batch
-observations are controlled framework-instrument fixtures, separate from the real request bus.
-
-The receiver [configuration](../bench/Portia.Benchmarks/Telemetry/prometheus.yaml) enables
-underscore translation, and the receiver starts with `--web.enable-otlp-receiver`.
+The Prometheus receiver must enable OTLP ingestion (`--web.enable-otlp-receiver`) with underscore
+translation.
 
 The tested C# configuration is:
 
@@ -199,9 +193,3 @@ histogram buckets, not an exact event-age gauge. For a rolling mean use rates of
 or quantile can be absent/NaN, while a cumulative mean retains historical observations. Neither
 proves current backlog nor detects a stalled worker. There is no scalar `portia_processor_lag_seconds`
 series to `max`; preserve the instrument's histogram semantics.
-
-Bounded polling and exact raw samples establish the backend semantics, beyond query parsing.
-MCP application and transport qualification and its measured performance work are tracked in #138–#142.
-The release dependency check rejects prerelease
-external direct and locked transitive NuGet dependencies; the existing transitive analyzer now
-uses its stable 5.9.0 release.
