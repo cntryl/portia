@@ -16,7 +16,8 @@ public sealed class GeneratorFalsePositiveTests
     [Fact]
     public void RegistrationNamesCompileForKeywordNamespaces()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using Cntryl.Portia;
                                                                  namespace A.@class
                                                                  {
@@ -28,15 +29,20 @@ public sealed class GeneratorFalsePositiveTests
                                                                      [RequestRoute("a", "b", "c", "e")][Discriminator("p2", 1)]
                                                                      public sealed record Ping : IRequest, ICallable;
                                                                  }
-                                                                 """, new PortiaServiceRegistrationGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new PortiaServiceRegistrationGenerator());
+
+        // Assert
         AssertNoCompilerErrors(diagnostics);
     }
 
     [Fact]
     public void HttpBindingCompilesForLargeDecimalDefaults()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using Cntryl.Portia;
                                                                  using Microsoft.AspNetCore.Routing;
                                                                  public sealed record Quote(decimal Limit = decimal.MaxValue, decimal Floor = decimal.MinValue) : IRequest<string>, ICallable;
@@ -44,15 +50,20 @@ public sealed class GeneratorFalsePositiveTests
                                                                  {
                                                                      public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Quote, string>("/quotes");
                                                                  }
-                                                                 """, new RequestHttpBindingGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         AssertNoCompilerErrors(diagnostics);
     }
 
     [Fact]
     public void HttpBindingReportsRequiredMembersInsteadOfEmittingBrokenConstruction()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using Cntryl.Portia;
                                                                  using Microsoft.AspNetCore.Routing;
                                                                  public sealed class Create : IRequest, ICallable { public required string Name { get; init; } }
@@ -60,15 +71,20 @@ public sealed class GeneratorFalsePositiveTests
                                                                  {
                                                                      public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Create>("/things");
                                                                  }
-                                                                 """, new RequestHttpBindingGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         AssertNoCompilerErrors(diagnostics);
     }
 
     [Fact]
     public void HttpBindingAcceptsRecordStructRequests()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using System;
                                                                  using Cntryl.Portia;
                                                                  using Microsoft.AspNetCore.Routing;
@@ -77,8 +93,12 @@ public sealed class GeneratorFalsePositiveTests
                                                                  {
                                                                      public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<GetThing, string>("/things/{id}");
                                                                  }
-                                                                 """, new RequestHttpBindingGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA016");
         AssertNoCompilerErrors(diagnostics);
     }
@@ -86,7 +106,8 @@ public sealed class GeneratorFalsePositiveTests
     [Fact]
     public void HttpBindingAcceptsRegexConstraintsContainingQuestionMarks()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using Cntryl.Portia;
                                                                  using Microsoft.AspNetCore.Routing;
                                                                  public sealed record GetCode(string Code) : IRequest<string>, ICallable;
@@ -94,15 +115,20 @@ public sealed class GeneratorFalsePositiveTests
                                                                  {
                                                                      public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<GetCode, string>("/codes/{code:regex(^[a-z]?$)}");
                                                                  }
-                                                                 """, new RequestHttpBindingGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA026");
     }
 
     [Fact]
     public void HttpBindingStillRejectsOptionalRouteTokens()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using Cntryl.Portia;
                                                                  using Microsoft.AspNetCore.Routing;
                                                                  public sealed record GetCode(string Code) : IRequest<string>, ICallable;
@@ -114,15 +140,20 @@ public sealed class GeneratorFalsePositiveTests
                                                                          app.MapPortiaGet<GetCode, string>("/b/{code:int?}");
                                                                      }
                                                                  }
-                                                                 """, new RequestHttpBindingGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         Assert.Equal(2, diagnostics.Count(diagnostic => diagnostic.Id == "PORTIA026"));
     }
 
     [Fact]
     public void HttpBindingAcceptsDuplicateMappingExcludedThroughALocal()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using Cntryl.Portia;
                                                                  using Microsoft.AspNetCore.Builder;
                                                                  using Microsoft.AspNetCore.Routing;
@@ -136,15 +167,20 @@ public sealed class GeneratorFalsePositiveTests
                                                                          app.MapPortiaGet<GetA, string>("/a/{id}");
                                                                      }
                                                                  }
-                                                                 """, new RequestHttpBindingGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA027");
     }
 
     [Fact]
     public void JsonMetadataIgnoresAbstractAndOpenGenericDispatchArguments()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                            using System;
                                                            using System.Collections.Generic;
                                                            using System.Security.Claims;
@@ -161,28 +197,38 @@ public sealed class GeneratorFalsePositiveTests
                                                            [PortiaJsonContext]
                                                            [System.Text.Json.Serialization.JsonSerializable(typeof(Guid))]
                                                            internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
-                                                           """, new JsonMetadataDiagnosticGenerator());
+                                                           """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
 
     [Fact]
     public void JsonMetadataIgnoresFileLocalEvents()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                            using Cntryl.Portia;
                                                            [Discriminator("j01", 1)] file sealed record J01 : DomainEvent;
                                                            [PortiaJsonContext]
                                                            internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
-                                                           """, new JsonMetadataDiagnosticGenerator());
+                                                           """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
 
     [Fact]
     public void ProcessorDerivedFromAPartialDispatchingBaseNeedsNoPartial()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using System.Threading;
                                                                  using System.Threading.Tasks;
                                                                  using Cntryl.Portia;
@@ -193,8 +239,12 @@ public sealed class GeneratorFalsePositiveTests
                                                                      public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                                                  }
                                                                  public sealed class Projection(IProjectionStore store) : BaseProjection(store);
-                                                                 """, new ProjectorReactorEventDispatcherGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new ProjectorReactorEventDispatcherGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA002");
         AssertNoCompilerErrors(diagnostics);
     }
@@ -297,12 +347,16 @@ public sealed class GeneratorFalsePositiveTests
     [Fact]
     public void JsonContextInAGeneratedFileCoversItsRoots()
     {
-        var diagnostics = GenerateFiles(new JsonMetadataDiagnosticGenerator(),
-            ("Events.cs", """
+        // Arrange
+        const string source = """
                           using Cntryl.Portia;
                           namespace App;
                           [Discriminator("created", 1)] public sealed record Created : DomainEvent;
-                          """),
+                          """;
+
+        // Act
+        var diagnostics = GenerateFiles(new JsonMetadataDiagnosticGenerator(),
+            ("Events.cs", source),
             ("AppJson.g.cs", """
                              // <auto-generated/>
                              using System.Text.Json.Serialization;
@@ -313,6 +367,7 @@ public sealed class GeneratorFalsePositiveTests
                              public partial class AppJson : JsonSerializerContext;
                              """));
 
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
 
@@ -320,13 +375,17 @@ public sealed class GeneratorFalsePositiveTests
     [Fact]
     public void ComponentWithAGeneratedFirstPartIsStillChecked()
     {
-        var diagnostics = AnalyzeFiles(new ComponentPracticeAnalyzer(),
-            ("Handler.designer.cs", """
+        // Arrange
+        const string source = """
                                     public sealed partial class Handler
                                     {
                                         public Handler(System.IServiceProvider services) => _ = services;
                                     }
-                                    """),
+                                    """;
+
+        // Act
+        var diagnostics = AnalyzeFiles(new ComponentPracticeAnalyzer(),
+            ("Handler.designer.cs", source),
             ("Handler.cs", """
                            using System.Threading;
                            using System.Threading.Tasks;
@@ -339,6 +398,7 @@ public sealed class GeneratorFalsePositiveTests
                            }
                            """));
 
+        // Assert
         _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA101");
     }
 

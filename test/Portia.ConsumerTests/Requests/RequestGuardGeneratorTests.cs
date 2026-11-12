@@ -53,7 +53,8 @@ public sealed class RequestGuardGeneratorTests
     [Fact]
     public void NonGuardRegistrationReportsPortia018()
     {
-        var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                                         using Cntryl.Portia;
                                                                         using Microsoft.Extensions.DependencyInjection;
                                                                         public sealed class NotAGuard;
@@ -61,9 +62,14 @@ public sealed class RequestGuardGeneratorTests
                                                                         {
                                                                             public static void Register() => new ServiceCollection().AddPortia().AddRequestGuard<NotAGuard>();
                                                                         }
-                                                                        """,
-            new RegistrationCallInterceptorGenerator()), item => item.Id == "PORTIA018");
+                                                                        """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source,
+            new RegistrationCallInterceptorGenerator());
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA018");
         Assert.Contains("does not implement a Portia guard interface",
             diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
@@ -71,7 +77,8 @@ public sealed class RequestGuardGeneratorTests
     [Fact]
     public void MalformedGuardSignatureRemainsACompilationError()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using System.Threading;
                                                                  using System.Threading.Tasks;
                                                                  using Cntryl.Portia;
@@ -85,15 +92,20 @@ public sealed class RequestGuardGeneratorTests
                                                                  {
                                                                      public static void Register() => new ServiceCollection().AddPortia().AddRequestGuard<Broken>();
                                                                  }
-                                                                 """, new RegistrationCallInterceptorGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator());
+
+        // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "CS0535");
     }
 
     [Fact]
     public void GenericGuardDeclarationReportsPortia015()
     {
-        var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                                         using System.Threading;
                                                                         using System.Threading.Tasks;
                                                                         using Cntryl.Portia;
@@ -102,9 +114,14 @@ public sealed class RequestGuardGeneratorTests
                                                                         {
                                                                             public ValueTask<Result> GuardAsync(IRequestContext<Command> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                                                         }
-                                                                        """, new RequestShapeDiagnosticsGenerator()),
-            item => item.Id == "PORTIA015");
+                                                                        """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestShapeDiagnosticsGenerator());
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics,
+            item => item.Id == "PORTIA015");
         Assert.Contains("generic component types are unsupported",
             diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
@@ -159,7 +176,8 @@ public sealed class RequestGuardGeneratorTests
     [Fact]
     public void Portia018NamesTheRejectedType()
     {
-        var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                                         using Cntryl.Portia;
                                                                         using Microsoft.Extensions.DependencyInjection;
                                                                         public sealed class NotAGuard;
@@ -167,9 +185,14 @@ public sealed class RequestGuardGeneratorTests
                                                                         {
                                                                             public static void Register() => new ServiceCollection().AddPortia().AddRequestGuard<NotAGuard>();
                                                                         }
-                                                                        """,
-            new RegistrationCallInterceptorGenerator()), item => item.Id == "PORTIA018");
+                                                                        """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source,
+            new RegistrationCallInterceptorGenerator());
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA018");
         Assert.Equal(
             "Cannot register 'NotAGuard' as a Portia guard: the type does not implement a Portia guard interface",
             diagnostic.GetMessage(CultureInfo.InvariantCulture));
@@ -178,16 +201,22 @@ public sealed class RequestGuardGeneratorTests
     [Fact]
     public void GenericGuardRegistrationReportsPortia018()
     {
-        var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                                         using Cntryl.Portia;
                                                                         public static class Scenario
                                                                         {
                                                                             public static void Register<TGuard>(PortiaBuilder builder) where TGuard : class => builder.AddRequestGuard<TGuard>();
                                                                         }
-                                                                        """,
-                new RegistrationCallInterceptorGenerator()),
-            item => item.Id == "PORTIA018");
+                                                                        """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source,
+                new RegistrationCallInterceptorGenerator());
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics,
+            item => item.Id == "PORTIA018");
         Assert.Contains("use a concrete named type",
             diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
@@ -195,7 +224,8 @@ public sealed class RequestGuardGeneratorTests
     [Fact]
     public void GuardNameParticipatesInGeneratedRegistrationCollisionHandling()
     {
-        var generated = GeneratorCompilation.GeneratedSource("""
+        // Arrange
+        const string source = """
                                                              using System.Threading;
                                                              using System.Threading.Tasks;
                                                              using Cntryl.Portia;
@@ -212,8 +242,12 @@ public sealed class RequestGuardGeneratorTests
                                                                      public ValueTask<Result> GuardAsync(IRequestContext<Requests.Component> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                                                  }
                                                              }
-                                                             """, new PortiaServiceRegistrationGenerator());
+                                                             """;
 
+        // Act
+        var generated = GeneratorCompilation.GeneratedSource(source, new PortiaServiceRegistrationGenerator());
+
+        // Assert
         Assert.Contains("AddRequestsComponent", generated, StringComparison.Ordinal);
     }
 }

@@ -40,13 +40,17 @@ public sealed class PartialProcessorCodeFixTests
     public async Task ModifierFreeDeclarationPreservesTriviaOnItsActualFirstToken(string declaration,
         string expected)
     {
-        var corrected = await ApplyAllAsync("using Cntryl.Portia;\npublic sealed record Changed : DomainEvent;\n" +
-                                            declaration.Replace(";", ", IProjectorHandler<Changed>;"));
+        // Arrange
+        var source = "using Cntryl.Portia;\npublic sealed record Changed : DomainEvent;\n" +
+                     declaration.Replace(";", ", IProjectorHandler<Changed>;");
 
+        // Act
+        var corrected = await ApplyAllAsync(source);
+        var diagnostics = GeneratorCompilation.Diagnostics(corrected, new ProjectorReactorEventDispatcherGenerator());
+
+        // Assert
         Assert.Contains(expected, corrected, StringComparison.Ordinal);
-        Assert.DoesNotContain(GeneratorCompilation.Diagnostics(corrected,
-                new ProjectorReactorEventDispatcherGenerator()),
-            diagnostic => diagnostic.Severity == DiagnosticSeverity.Warning);
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Warning);
     }
 
     [Theory]
@@ -123,6 +127,7 @@ public sealed class PartialProcessorCodeFixTests
     [Fact]
     public async Task OffersNoPartialFixForAnUnsupportedShapeItCannotRepair()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               using System.Threading;
@@ -138,7 +143,11 @@ public sealed class PartialProcessorCodeFixTests
                               }
                               """;
 
-        Assert.Empty(await ActionsAsync(source, "PORTIA015"));
+        // Act
+        var actions = await ActionsAsync(source, "PORTIA015");
+
+        // Assert
+        Assert.Empty(actions);
     }
 
     [Theory]

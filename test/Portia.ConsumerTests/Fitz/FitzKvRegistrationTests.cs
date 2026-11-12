@@ -93,11 +93,16 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void ConflictingTenantSnapshotRoutesAreRejected()
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        _ = Assert.Throws<InvalidOperationException>(() => services.AddPortia().AddFitz(Configuration(), builder =>
+        // Act
+        var error = Record.Exception(() => services.AddPortia().AddFitz(Configuration(), builder =>
             builder.UseKvTenantSnapshots("kv://accounts/tenants/snapshots")
                 .UseKvTenantSnapshots("kv://accounts/tenants/other")));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(error);
     }
 
     [Fact]
@@ -124,12 +129,16 @@ public sealed class FitzKvRegistrationTests
     [InlineData("kv://accounts/*/checkpoints")]
     public void CheckpointRouteMustBeAnExactThreeSegmentKvRoute(string route)
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        var error = Assert.Throws<ArgumentException>(() =>
+        // Act
+        var error = Record.Exception(() =>
             services.AddPortia().AddFitz(Configuration(), builder => builder.UseKvCheckpoints(route)));
 
-        Assert.Contains("kv://{realm}/{area}/{resource}", error.Message, StringComparison.Ordinal);
+        // Assert
+        var invalid = Assert.IsType<ArgumentException>(error);
+        Assert.Contains("kv://{realm}/{area}/{resource}", invalid.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -153,13 +162,17 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void ConflictingCheckpointRoutesAreRejected()
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        var error = Assert.Throws<InvalidOperationException>(() =>
+        // Act
+        var error = Record.Exception(() =>
             services.AddPortia().AddFitz(Configuration(), builder =>
                 builder.UseKvCheckpoints(Route).UseKvCheckpoints("kv://accounts/progress/other")));
 
-        Assert.Contains("conflicting Fitz KV checkpoint routes", error.Message, StringComparison.Ordinal);
+        // Assert
+        var invalid = Assert.IsType<InvalidOperationException>(error);
+        Assert.Contains("conflicting Fitz KV checkpoint routes", invalid.Message, StringComparison.Ordinal);
     }
 
     static IConfiguration Configuration() =>

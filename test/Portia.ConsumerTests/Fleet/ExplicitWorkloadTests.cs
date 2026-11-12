@@ -107,9 +107,13 @@ public sealed class ExplicitWorkloadTests
     [Fact]
     public void InfrastructureRegistrationOrderDoesNotChangeWorkloadDeclarations()
     {
+        // Arrange
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             { ["Endpoint"] = "ws://127.0.0.1:1/ws", ["ApplicationName"] = "registration-test" }).Build();
+
+        // Act
+        var registrations = new List<(int Workloads, int Coordinators)>();
         foreach (var infrastructureFirst in new[] { true, false })
         {
             var services = new ServiceCollection();
@@ -126,10 +130,16 @@ public sealed class ExplicitWorkloadTests
                 _ = services.AddPortia().AddFitz(configuration);
             }
 
-            Assert.Equal(2, services.Count(item => item.ServiceType == typeof(WorkloadRegistration)));
-            _ = Assert.Single(services, item => item.ServiceType == typeof(IWorkloadCoordinator));
+            registrations.Add((services.Count(item => item.ServiceType == typeof(WorkloadRegistration)),
+                services.Count(item => item.ServiceType == typeof(IWorkloadCoordinator))));
         }
 
+        // Assert
+        Assert.All(registrations, registration =>
+        {
+            Assert.Equal(2, registration.Workloads);
+            Assert.Equal(1, registration.Coordinators);
+        });
         Assert.DoesNotContain(typeof(PortiaFitzBuilder).GetMethods(),
             method => method.Name is "AddProjector" or "AddReactor");
         Assert.DoesNotContain(typeof(PortiaBuilder).Assembly.GetExportedTypes(),

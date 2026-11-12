@@ -112,8 +112,11 @@ public sealed class GeneratorCacheModelTests
     [Fact]
     public void IncrementalGeneratorCacheModelsDoNotRetainCompilerObjects()
     {
+        // Arrange
         var assemblies = new[] { typeof(DomainEventCatalogGenerator).Assembly, typeof(RequestHttpBindingGenerator).Assembly };
         Assert.Equal(2, assemblies.Distinct().Count());
+
+        // Act
         var generators = assemblies.SelectMany(assembly => assembly.GetTypes())
             .Where(type => typeof(IIncrementalGenerator).IsAssignableFrom(type) && !type.IsAbstract)
             .ToArray();
@@ -124,6 +127,7 @@ public sealed class GeneratorCacheModelTests
         var fields = cacheModels.SelectMany(static type => type.GetFields(
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)).ToArray();
 
+        // Assert
         Assert.All(assemblies, assembly => Assert.Contains(generators, generator => generator.Assembly == assembly));
         Assert.NotEmpty(generators);
         Assert.NotEmpty(cacheModels);
@@ -219,6 +223,7 @@ public sealed class GeneratorCacheModelTests
     [Fact]
     public void SuppressionStateDoesNotInvalidatePortableGeneratorModels()
     {
+        // Arrange
         const string request = """
                                using Cntryl.Portia;
                                [RequestRoute("*", "orders", "order", "create")]
@@ -233,7 +238,7 @@ public sealed class GeneratorCacheModelTests
                                         public static PortiaBuilder Compose(IServiceCollection services) => services.AddPortia();
                                     }
                                     """;
-        const string httpBinding = """
+        const string source = """
                                    using Cntryl.Portia;
                                    using Microsoft.AspNetCore.Routing;
                                    public sealed record GetOrder(int Id) : IRequest, ICallable;
@@ -243,19 +248,28 @@ public sealed class GeneratorCacheModelTests
                                    }
                                    """;
 
-        AssertCachedAfterUnrelatedPragmaEdit(
-            new PortiaServiceRegistrationGenerator(), "PortiaRequestTransports", request);
-        AssertModifiedAfterUnrelatedPragmaEdit(
-            new RegistrationCallInterceptorGenerator(), "PortiaRegistrationCalls", registration);
-        AssertModifiedAfterUnrelatedPragmaEdit(
-            new RequestHttpBindingGenerator(), "PortiaHttpBindings", httpBinding);
-        AssertCachedAfterUnrelatedPragmaEdit(new JsonRootMarkerGenerator(), "PortiaJsonRootContexts", """
+        const string jsonRoot = """
             using Cntryl.Portia;
             using System.Text.Json.Serialization;
             [PortiaJsonContext]
             [JsonSerializable(typeof(string))]
             public partial class ExampleContext : JsonSerializerContext;
-            """);
+            """;
+
+        // Act
+        var failure = Record.Exception(() =>
+        {
+            AssertCachedAfterUnrelatedPragmaEdit(
+                new PortiaServiceRegistrationGenerator(), "PortiaRequestTransports", request);
+            AssertModifiedAfterUnrelatedPragmaEdit(
+                new RegistrationCallInterceptorGenerator(), "PortiaRegistrationCalls", registration);
+            AssertModifiedAfterUnrelatedPragmaEdit(
+                new RequestHttpBindingGenerator(), "PortiaHttpBindings", source);
+            AssertCachedAfterUnrelatedPragmaEdit(new JsonRootMarkerGenerator(), "PortiaJsonRootContexts", jsonRoot);
+        });
+
+        // Assert
+        Assert.Null(failure);
     }
 
     static void AssertCachedAfterUnrelatedPragmaEdit(

@@ -39,7 +39,13 @@ public sealed class JsonMetadataCodeFixTests
     [InlineData("internal class Outer { [PortiaJsonContext] private partial class HiddenContext : System.Text.Json.Serialization.JsonSerializerContext; }")]
     public async Task DoesNotOfferUnusableContextsAsRootTargets(string context)
     {
-        var (actions, _) = await FixAsync(UnrootedRequest + context, "App.Query", projectName: "orders-api");
+        // Arrange
+        var source = UnrootedRequest + context;
+
+        // Act
+        var (actions, _) = await FixAsync(source, "App.Query", projectName: "orders-api");
+
+        // Assert
         Assert.Single(actions, action => action.Title.StartsWith("Create a Portia JSON context", StringComparison.Ordinal));
         Assert.DoesNotContain(actions, action => action.Title.StartsWith("Add App.Query to", StringComparison.Ordinal));
     }
@@ -73,11 +79,15 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task OffersToCreateAContextWhenTheProjectHasNone()
     {
+        // Arrange
         var (actions, solution) = await FixAsync(UnrootedRequest, "App.Query", projectName: "orders-api");
-
         var action = Assert.Single(actions,
             item => item.Title.StartsWith("Create a Portia JSON context", StringComparison.Ordinal));
+
+        // Act
         var created = await ApplyAsync(solution, action);
+
+        // Assert
         var document = Assert.Single(created.Projects.Single().Documents,
             item => item.Name == "PortiaJsonContext.cs");
         var text = (await document.GetTextAsync()).ToString();
@@ -437,10 +447,16 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public void AdvertisesPortia025AndSupportsFixAll()
     {
+        // Arrange
         var provider = new JsonMetadataCodeFixProvider();
 
-        Assert.Equal("PORTIA025", Assert.Single(provider.FixableDiagnosticIds));
-        Assert.NotNull(provider.GetFixAllProvider());
+        // Act
+        var fixableIds = provider.FixableDiagnosticIds;
+        var fixAllProvider = provider.GetFixAllProvider();
+
+        // Assert
+        Assert.Equal("PORTIA025", Assert.Single(fixableIds));
+        Assert.NotNull(fixAllProvider);
     }
 
     [Fact]
@@ -535,11 +551,14 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task AddsAGenericRootWithGloballyQualifiedTypeArguments()
     {
+        // Arrange
         var (actions, solution) = await FixAsync(UnrootedGenericResult,
             "System.Collections.Generic.List<App.Answer>");
 
+        // Act
         var text = await SingleDocumentTextAsync(await ApplyAsync(solution, Assert.Single(actions)));
 
+        // Assert
         Assert.Contains("typeof(global::System.Collections.Generic.List<global::App.Answer>)", text,
             StringComparison.Ordinal);
     }

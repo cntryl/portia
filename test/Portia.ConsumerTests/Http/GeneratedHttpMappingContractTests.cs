@@ -85,7 +85,8 @@ public sealed class GeneratedHttpMappingContractTests
     [Fact]
     public void ResultBearingQueueHttpMappingHasActionableDiagnostic()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                            using Cntryl.Portia;
                                                            using Cntryl.Portia.Testing;
                                                            using Microsoft.AspNetCore.Routing;
@@ -94,7 +95,12 @@ public sealed class GeneratedHttpMappingContractTests
                                                            {
                                                                public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Binding, string>("/binding");
                                                            }
-                                                           """, new RequestHttpBindingGenerator());
+                                                           """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA016");
         Assert.Contains("no-result", diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }

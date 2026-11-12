@@ -73,10 +73,16 @@ public sealed class StartupValidationTests
     [InlineData(1, " ")]
     public void InvalidProjectionOptionsDoNotMutateRegistrations(int batchSize, string? rebuildId)
     {
+        // Arrange
         var services = new ServiceCollection();
-        _ = Assert.ThrowsAny<ArgumentException>(() =>
+
+        // Act
+        var error = Record.Exception(() =>
             services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
                 o => o.Processing = new ProjectionRunOptions { MaxBatchSize = batchSize, RebuildId = rebuildId }));
+
+        // Assert
+        _ = Assert.IsAssignableFrom<ArgumentException>(error);
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 
@@ -85,13 +91,20 @@ public sealed class StartupValidationTests
     [InlineData(-1)]
     public void WorkloadsRejectInvalidPollingIntervals(int milliseconds)
     {
+        // Arrange
         var services = new ServiceCollection();
-        _ = Assert.ThrowsAny<ArgumentException>(() =>
+
+        // Act
+        var reactorError = Record.Exception(() =>
             services.AddPortia().AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global,
                 o => o.PollInterval = TimeSpan.FromMilliseconds(milliseconds)));
-        _ = Assert.ThrowsAny<ArgumentException>(() =>
+        var projectorError = Record.Exception(() =>
             services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
                 o => o.PollInterval = TimeSpan.FromMilliseconds(milliseconds)));
+
+        // Assert
+        _ = Assert.IsAssignableFrom<ArgumentException>(reactorError);
+        _ = Assert.IsAssignableFrom<ArgumentException>(projectorError);
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 
@@ -100,30 +113,48 @@ public sealed class StartupValidationTests
     [InlineData(-1)]
     public void WorkloadsRejectInvalidFailureAttemptLimits(int attempts)
     {
+        // Arrange
         var services = new ServiceCollection();
-        _ = Assert.Throws<ArgumentOutOfRangeException>(() => services.AddPortia()
+
+        // Act
+        var error = Record.Exception(() => services.AddPortia()
             .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
                 options => options.FailureAttemptLimit = attempts));
+
+        // Assert
+        _ = Assert.IsType<ArgumentOutOfRangeException>(error);
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 
     [Fact]
     public void WorkloadsRejectInvalidMaximumFailureDelay()
     {
+        // Arrange
         var services = new ServiceCollection();
-        _ = Assert.Throws<ArgumentOutOfRangeException>(() => services.AddPortia()
+
+        // Act
+        var error = Record.Exception(() => services.AddPortia()
             .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
                 options => options.MaximumFailureDelay = TimeSpan.Zero));
+
+        // Assert
+        _ = Assert.IsType<ArgumentOutOfRangeException>(error);
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 
     [Fact]
     public void ReactorsRejectRebuildGenerations()
     {
+        // Arrange
         var services = new ServiceCollection();
-        _ = Assert.ThrowsAny<ArgumentException>(() =>
+
+        // Act
+        var error = Record.Exception(() =>
             services.AddPortia().AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global,
                 o => o.Processing = new ProjectionRunOptions { RebuildId = "repair" }));
+
+        // Assert
+        _ = Assert.IsAssignableFrom<ArgumentException>(error);
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 

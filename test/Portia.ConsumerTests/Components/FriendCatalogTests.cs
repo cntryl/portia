@@ -145,7 +145,8 @@ public sealed class FriendCatalogTests
     [Fact]
     public void ShouldDiagnoseCatalogMethodGroupBeforeExecution()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
             using System;
             using Cntryl.Portia;
             public static class Scenario
@@ -153,8 +154,12 @@ public sealed class FriendCatalogTests
                 public static Func<DomainEventTypeCatalog> Bind(DomainEventTypeCatalog catalog)
                     => catalog.AddPortiaGeneratedDomainEvents;
             }
-            """, new DomainEventCatalogGenerator());
+            """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new DomainEventCatalogGenerator());
+
+        // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA019");
     }
 
@@ -163,25 +168,35 @@ public sealed class FriendCatalogTests
     [InlineData("catalog.AddPortiaGeneratedDomainEvents")]
     public void ShouldAllowCatalogNameofWithoutRegistration(string member)
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics($$"""
+        // Arrange
+        var source = $$"""
             using Cntryl.Portia;
             public static class Scenario
             {
                 public static string Name(DomainEventTypeCatalog catalog) => nameof({{member}});
             }
-            """, new DomainEventCatalogGenerator());
+            """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new DomainEventCatalogGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
     [Fact]
     public void ShouldExplainMissingGeneratorGivenCatalogEntryPoint()
     {
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            new DomainEventTypeCatalog().AddPortiaGeneratedDomainEvents());
+        // Arrange
+        var catalog = new DomainEventTypeCatalog();
 
-        Assert.Contains("did not intercept", error.Message, StringComparison.Ordinal);
-        Assert.Contains("analyzer assets", error.Message, StringComparison.Ordinal);
+        // Act
+        var error = Record.Exception(() => catalog.AddPortiaGeneratedDomainEvents());
+
+        // Assert
+        var invalid = Assert.IsType<InvalidOperationException>(error);
+        Assert.Contains("did not intercept", invalid.Message, StringComparison.Ordinal);
+        Assert.Contains("analyzer assets", invalid.Message, StringComparison.Ordinal);
     }
 
     static void Register(Assembly assembly, string composition, DomainEventTypeCatalog catalog) =>

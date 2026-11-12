@@ -120,6 +120,8 @@ public sealed class GeneratedRegistrationTests
             Repeat(builder, key, 10_000);
             allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         });
+
+        // Act
         measurement.Start();
         measurement.Join();
 

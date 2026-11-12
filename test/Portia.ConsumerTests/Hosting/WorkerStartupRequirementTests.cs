@@ -51,6 +51,7 @@ public sealed class WorkerStartupRequirementTests
     [Fact]
     public async Task GlobalWorkersDoNotRequireATenantDirectory()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
@@ -60,18 +61,33 @@ public sealed class WorkerStartupRequirementTests
             .AddWorkers().UseSingleProcessWorkloads();
         using var host = builder.Build();
 
-        await host.StartAsync();
-        await host.StopAsync();
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
+        {
+            await host.StartAsync();
+            await host.StopAsync();
+        });
+
+        // Assert
+        Assert.Null(error);
     }
 
     [Fact]
     public async Task AHostThatDeclaredNoComponentsRequiresNothing()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia().AddWorkers().UseSingleProcessWorkloads();
         using var host = builder.Build();
 
-        await host.StartAsync();
-        await host.StopAsync();
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
+        {
+            await host.StartAsync();
+            await host.StopAsync();
+        });
+
+        // Assert
+        Assert.Null(error);
     }
 }

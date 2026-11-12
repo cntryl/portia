@@ -5,8 +5,14 @@ public sealed class ApplicationStructureAnalyzerTests
     [Fact]
     public void ShouldRejectRootHelperGivenJsonMarkerWithoutContextContract()
     {
+        // Arrange
+        const string source = "using Cntryl.Portia; namespace Shop.Core; [PortiaJsonContext] public class Helper;";
+
+        // Act
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
-            [("Helper.cs", "using Cntryl.Portia; namespace Shop.Core; [PortiaJsonContext] public class Helper;")]);
+            [("Helper.cs", source)]);
+
+        // Assert
         Assert.Contains(diagnostics, item => item.Id == "PORTIA203");
     }
 
@@ -37,8 +43,14 @@ public sealed class ApplicationStructureAnalyzerTests
     [Fact]
     public void ShouldExplainModelsGivenCommonEnumInValues()
     {
+        // Arrange
+        const string source = "namespace Shop.Common.Features.Orders.Values; public enum Status { Pending, Complete }";
+
+        // Act
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationStructureAnalyzer(),
-            [("Features/Orders/Values/Status.cs", "namespace Shop.Common.Features.Orders.Values; public enum Status { Pending, Complete }")]);
+            [("Features/Orders/Values/Status.cs", source)]);
+
+        // Assert
         var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
         Assert.Contains("Models", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }

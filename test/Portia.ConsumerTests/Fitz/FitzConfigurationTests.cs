@@ -20,12 +20,16 @@ public sealed class FitzConfigurationTests
     [InlineData("/relative/ws")]
     public void EndpointMustBeAnAbsoluteWebSocketUri(string? endpoint)
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        var error = Assert.Throws<ArgumentException>(() =>
+        // Act
+        var error = Record.Exception(() =>
             services.AddPortia().AddFitz(Configuration(("Endpoint", endpoint))));
 
-        Assert.Contains("absolute ws:// or wss:// URI", error.Message, StringComparison.Ordinal);
+        // Assert
+        var invalid = Assert.IsType<ArgumentException>(error);
+        Assert.Contains("absolute ws:// or wss:// URI", invalid.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -52,12 +56,16 @@ public sealed class FitzConfigurationTests
     [InlineData("Infinity")]
     public void StartupTimeoutMustBePositiveFiniteAndWithinAnHour(string seconds)
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        var error = Assert.Throws<ArgumentException>(() => services.AddPortia().AddFitz(
+        // Act
+        var error = Record.Exception(() => services.AddPortia().AddFitz(
             Configuration(("Endpoint", "ws://127.0.0.1:4090/ws"), ("StartupTimeoutSeconds", seconds))));
 
-        Assert.Contains("between zero and 3600 seconds", error.Message, StringComparison.Ordinal);
+        // Assert
+        var invalid = Assert.IsType<ArgumentException>(error);
+        Assert.Contains("between zero and 3600 seconds", invalid.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -85,12 +93,16 @@ public sealed class FitzConfigurationTests
     [InlineData("star*")]
     public void ApplicationNameMustBeAnExactRouteSegmentBecauseItBecomesTheFleetSelector(string name)
     {
+        // Arrange
         var services = new ServiceCollection();
 
-        var error = Assert.Throws<ArgumentException>(() => services.AddPortia().AddFitz(
+        // Act
+        var error = Record.Exception(() => services.AddPortia().AddFitz(
             Configuration(("Endpoint", "ws://127.0.0.1:4090/ws"), ("ApplicationName", name))));
 
-        Assert.Contains("exact route segment", error.Message, StringComparison.Ordinal);
+        // Assert
+        var invalid = Assert.IsType<ArgumentException>(error);
+        Assert.Contains("exact route segment", invalid.Message, StringComparison.Ordinal);
     }
 
     [Fact]

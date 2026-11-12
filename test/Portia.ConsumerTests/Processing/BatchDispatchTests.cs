@@ -7,7 +7,8 @@ public sealed class BatchDispatchTests
     [Fact]
     public async Task GeneratedBatchesPreserveOrderAndDerivedHandlersAndCausalContexts()
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using System;
                                                     using System.Collections.Generic;
                                                     using System.Linq;
@@ -104,12 +105,20 @@ public sealed class BatchDispatchTests
                                                                 && repository.Reactions.All(c => RequestActor.IsSystem(c.Actor));
                                                         }
                                                     }
-                                                    """, new ProjectorReactorEventDispatcherGenerator());
-        Assert.True(await assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<bool>>>()());
-        Assert.Equal(["Child [batch]", "Root [batch]"],
-            assembly.GetType("Projector")!.GetCustomAttribute<ProcessorTopologyAttribute>()!.Subscriptions);
-        Assert.Equal(["Child [batch]", "Root [batch]"],
-            assembly.GetType("Reaction")!.GetCustomAttribute<ProcessorTopologyAttribute>()!.Subscriptions);
+                                                    """;
+
+        var assembly = GeneratorCompilation.Compile(source, new ProjectorReactorEventDispatcherGenerator());
+
+        // Act
+        var passed = await assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<bool>>>()();
+        var subscriptions = assembly.GetType("Projector")!.GetCustomAttribute<ProcessorTopologyAttribute>()!.Subscriptions;
+
+        var reactionSubscriptions = assembly.GetType("Reaction")!.GetCustomAttribute<ProcessorTopologyAttribute>()!.Subscriptions;
+
+        // Assert
+        Assert.True(passed);
+        Assert.Equal(["Child [batch]", "Root [batch]"], subscriptions);
+        Assert.Equal(["Child [batch]", "Root [batch]"], reactionSubscriptions);
     }
 
     [Theory]

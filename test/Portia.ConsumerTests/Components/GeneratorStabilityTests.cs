@@ -103,8 +103,17 @@ public sealed class GeneratorStabilityTests
     [Fact]
     public void EveryGeneratorAndAnalyzerIsCovered()
     {
-        Assert.Equal(8, AllGenerators().Length);
-        Assert.Equal(5, AllAnalyzers().Length);
+        // Arrange
+        const int expectedGenerators = 8;
+        const int expectedAnalyzers = 5;
+
+        // Act
+        var generators = AllGenerators();
+        var analyzers = AllAnalyzers();
+
+        // Assert
+        Assert.Equal(expectedGenerators, generators.Length);
+        Assert.Equal(expectedAnalyzers, analyzers.Length);
     }
 
     /// <summary>Every prefix of a realistic file, as it exists while being typed, runs without an exception.</summary>

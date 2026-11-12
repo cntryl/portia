@@ -27,7 +27,8 @@ public sealed class ExplicitRegistrationConsumerTests
     [Fact]
     public void StronglyTypedOutboundCallsInferEveryRequestTransportWithoutExplicitRegistration()
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using System.Linq;
                                                     using System.Threading.Tasks;
                                                     using Cntryl.Portia;
@@ -72,15 +73,21 @@ public sealed class ExplicitRegistrationConsumerTests
                                                                 && requests.Contains(typeof(ScheduleAccount));
                                                         }
                                                     }
-                                                    """, new RegistrationCallInterceptorGenerator());
+                                                    """;
+        var assembly = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
 
-        Assert.True(assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>()());
+        // Act
+        var passed = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>()();
+
+        // Assert
+        Assert.True(passed);
     }
 
     [Fact]
     public void SelectedHandlersAndAuthorizersRemainIndependent()
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using System;
                                                     using System.Linq;
                                                     using System.Security.Claims;
@@ -116,8 +123,14 @@ public sealed class ExplicitRegistrationConsumerTests
                                                             return services.Count == count && !services.Any(s => s.ServiceType == typeof(Unselected));
                                                         }
                                                     }
-                                                    """, new RegistrationCallInterceptorGenerator());
-        Assert.True(assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>()());
+                                                    """;
+        var assembly = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
+
+        // Act
+        var passed = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>()();
+
+        // Assert
+        Assert.True(passed);
     }
 
     [Theory]

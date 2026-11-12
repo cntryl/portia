@@ -14,6 +14,7 @@ public sealed class CompilerContractRegressionTests
     [InlineData("Feed", "Action run = () => value.ExpectDenied(); run();")]
     public void DiagnosesDiscardedAugmentationEvenWhenOriginalIsAwaited(string request, string discard)
     {
+        // Arrange
         var source = $$"""
             using System;
             using System.Threading.Tasks;
@@ -32,7 +33,12 @@ public sealed class CompilerContractRegressionTests
                 }
             }
             """;
-        var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics(source, new ScenarioObservationAnalyzer()), d => d.Id == "PORTIA107");
+
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new ScenarioObservationAnalyzer());
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics, d => d.Id == "PORTIA107");
         Assert.Equal("DiagnosticScenario.cs", diagnostic.Location.GetLineSpan().Path);
         Assert.Contains("assert", diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
@@ -88,11 +94,17 @@ public sealed class CompilerContractRegressionTests
     [Fact]
     public void DiagnosesWrongContextBase()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics(ContextUsings + """
+        // Arrange
+        const string source = """
             public sealed record Payload;
             [PortiaJsonContext, JsonSerializable(typeof(Payload))]
             public class Context { public Context(JsonSerializerOptions options) { } }
-            """, new JsonRootMarkerGenerator());
+            """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(ContextUsings + source, new JsonRootMarkerGenerator());
+
+        // Assert
         Assert.Single(diagnostics, d => d.Id == "PORTIA030" && d.GetMessage(CultureInfo.InvariantCulture).Contains("JsonSerializerContext", StringComparison.Ordinal));
         Assert.DoesNotContain(diagnostics, d => d.Id == "CS0029");
     }
@@ -131,33 +143,46 @@ public sealed class CompilerContractRegressionTests
     }
 
     [Fact]
-    public void StaticImportsKeepValidExtensionCallsAndCompilerDiagnosesBareMethodGroups()
+    public void StaticImportsKeepValidExtensionCalls()
     {
         // Arrange
-        const string prefix = """
-            using System;
-            using Cntryl.Portia;
-            using Microsoft.AspNetCore.Builder;
-            using Microsoft.AspNetCore.Routing;
-            using static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions;
-            public sealed record Command : IRequest, ICallable;
+        const string endpoints = """
+            public static class Endpoints { public static void Configure(IEndpointRouteBuilder routes) =>
+                routes.MapPortiaGet<Command>("/query"); }
             """;
 
         // Act
-        var valid = GeneratorCompilation.OutputDiagnostics(prefix + """
-            public static class Endpoints { public static void Configure(IEndpointRouteBuilder routes) =>
-                routes.MapPortiaGet<Command>("/query"); }
-            """, new RequestHttpBindingGenerator());
+        var valid = GeneratorCompilation.OutputDiagnostics(StaticImportPrefix + endpoints, new RequestHttpBindingGenerator());
 
         // Assert
         Assert.DoesNotContain(valid, d => d.Severity == DiagnosticSeverity.Error);
-        var invalid = GeneratorCompilation.OutputDiagnostics(prefix + """
+    }
+
+    [Fact]
+    public void StaticImportsLeaveBareMethodGroupsToTheCompilerDiagnostics()
+    {
+        // Arrange
+        const string endpoints = """
             public static class Endpoints { public static void Configure() {
                 Func<IEndpointRouteBuilder, string, IEndpointConventionBuilder> map = MapPortiaGet<Command>;
             } }
-            """, new RequestHttpBindingGenerator());
+            """;
+
+        // Act
+        var invalid = GeneratorCompilation.OutputDiagnostics(StaticImportPrefix + endpoints, new RequestHttpBindingGenerator());
+
+        // Assert
         Assert.Single(invalid, d => d.Id == "CS0103");
     }
+
+    const string StaticImportPrefix = """
+        using System;
+        using Cntryl.Portia;
+        using Microsoft.AspNetCore.Builder;
+        using Microsoft.AspNetCore.Routing;
+        using static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions;
+        public sealed record Command : IRequest, ICallable;
+        """;
 
     [Fact]
     public void FactoriesComposeAcrossAssembliesWhoseNamesPreviouslySanitizedIdentically()
@@ -189,13 +214,14 @@ public sealed class CompilerContractRegressionTests
         // Arrange
         var first = "namespace App_A {" + ManualContext("Context") + "}";
         var second = "namespace App {" + ManualContext("A_Context") + "}";
-
-        // Act
         var prefix = ContextUsings + "public sealed record Payload;";
 
+        // Act
+        var firstThenSecond = GeneratorCompilation.GeneratedSource(prefix + first + second, new JsonRootMarkerGenerator());
+        var secondThenFirst = GeneratorCompilation.GeneratedSource(prefix + second + first, new JsonRootMarkerGenerator());
+
         // Assert
-        Assert.Equal(GeneratorCompilation.GeneratedSource(prefix + first + second, new JsonRootMarkerGenerator()),
-            GeneratorCompilation.GeneratedSource(prefix + second + first, new JsonRootMarkerGenerator()));
+        Assert.Equal(firstThenSecond, secondThenFirst);
     }
 
     [Fact]
@@ -223,17 +249,18 @@ public sealed class CompilerContractRegressionTests
 
         // Act
         var output = GeneratorCompilation.GeneratedSource(consumer, [reference], new RegistrationCallInterceptorGenerator());
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(consumer, [reference], new RegistrationCallInterceptorGenerator());
 
         // Assert
         Assert.Contains("global::LegacyFactory.Create(options)", output, StringComparison.Ordinal);
-        Assert.DoesNotContain(GeneratorCompilation.OutputDiagnostics(consumer, [reference], new RegistrationCallInterceptorGenerator()),
-            d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
     }
 
     [Fact]
     public void ObservationAnalyzerKeepsRetainedCallbacksExplicitExecutionAndSuppressions()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
             using System;
             using System.Threading.Tasks;
             using Cntryl.Portia;
@@ -256,7 +283,12 @@ public sealed class CompilerContractRegressionTests
                     executed();
                 }
             }
-            """, new ScenarioObservationAnalyzer());
+            """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new ScenarioObservationAnalyzer());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, d => d.Id == "PORTIA107");
     }
 
@@ -274,20 +306,27 @@ public sealed class CompilerContractRegressionTests
         // Act
         var generated = GeneratorCompilation.GeneratedSource(source,
             new JsonRootMarkerGenerator(), new RegistrationCallInterceptorGenerator());
+        var assembly = GeneratorCompilation.CompileSuppressing(source, "PORTIA030",
+            new JsonRootMarkerGenerator(), new RegistrationCallInterceptorGenerator());
 
         // Assert
         Assert.DoesNotContain("new global::InvalidContext", generated, StringComparison.Ordinal);
         Assert.DoesNotContain("typeof(global::InvalidContext)", generated, StringComparison.Ordinal);
-        _ = GeneratorCompilation.CompileSuppressing(source, "PORTIA030",
-            new JsonRootMarkerGenerator(), new RegistrationCallInterceptorGenerator());
+        Assert.NotNull(assembly);
     }
 
     [Fact]
     public void EmptyPartialContextNeedsARootBeforeGeneratedRegistration()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics(ContextUsings + """
+        // Arrange
+        const string source = """
             [PortiaJsonContext] internal partial class EmptyContext : JsonSerializerContext;
-            """, new JsonRootMarkerGenerator());
+            """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(ContextUsings + source, new JsonRootMarkerGenerator());
+
+        // Assert
         Assert.Single(diagnostics, d => d.Id == "PORTIA030"
             && d.GetMessage(CultureInfo.InvariantCulture).Contains("JsonSerializable", StringComparison.Ordinal));
     }
@@ -295,10 +334,15 @@ public sealed class CompilerContractRegressionTests
     [Fact]
     public void ManualOptionsConstructorCanHaveOptionalArguments()
     {
+        // Arrange
         var source = ContextUsings + "public sealed record Payload;" +
             ManualContext("Context").Replace("Context(JsonSerializerOptions options)", "Context(JsonSerializerOptions options, bool unused = false)", StringComparison.Ordinal);
-        Assert.DoesNotContain(GeneratorCompilation.OutputDiagnostics(source, new JsonRootMarkerGenerator()),
-            d => d.Severity == DiagnosticSeverity.Error);
+
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new JsonRootMarkerGenerator());
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
     }
 
     [Theory]
@@ -326,13 +370,19 @@ public sealed class CompilerContractRegressionTests
     [Fact]
     public void HttpDocumentationReferencesDoNotRequireInterception()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
             using Cntryl.Portia;
             using Microsoft.AspNetCore.Routing;
             public sealed record Command : IRequest, ICallable;
             /// <summary>See <see cref="PortiaEndpointRouteBuilderExtensions.MapPortiaGet{Command}(IEndpointRouteBuilder, string)"/>.</summary>
             public static class Documentation { }
-            """, new RequestHttpBindingGenerator());
+            """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
     }
 

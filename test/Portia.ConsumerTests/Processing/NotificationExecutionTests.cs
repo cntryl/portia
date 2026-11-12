@@ -224,31 +224,39 @@ public sealed class NotificationExecutionTests
     [Fact]
     public async Task UndefinedDeliveryModeIsRejectedBeforePersistingAnything()
     {
+        // Arrange
         var wire = new Wire();
 
-        _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+        // Act
+        var error = await Record.ExceptionAsync(() =>
             new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).ScheduleAsync(
                 new BrokerExecutionContextTests.Command(2),
                 new RequestScheduleSpec("0 0 * * *", (RequestScheduleDeliveryMode)42),
                 new RequestRouteValues(Resource: "actual"),
                 RequestActor.CreateSystem("scheduler")).AsTask());
 
+        // Assert
+        _ = Assert.IsType<ArgumentOutOfRangeException>(error);
         Assert.True(wire.Body.IsEmpty);
     }
 
     [Fact]
     public async Task ScheduleWithoutABrokerIdentityFailsInsteadOfReturningNothingToCancelWith()
     {
+        // Arrange
         var wire = new Wire { ReturnNoIdentity = true };
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        // Act
+        var error = await Record.ExceptionAsync(() =>
             new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).ScheduleAsync(
                 new BrokerExecutionContextTests.Command(2),
                 new RequestScheduleSpec("0 0 * * *"),
                 new RequestRouteValues(Resource: "actual"),
                 RequestActor.CreateSystem("scheduler")).AsTask());
 
-        Assert.Contains("did not return an identity", error.Message, StringComparison.Ordinal);
+        // Assert
+        var invalid = Assert.IsType<InvalidOperationException>(error);
+        Assert.Contains("did not return an identity", invalid.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -276,11 +284,15 @@ public sealed class NotificationExecutionTests
     [InlineData("   ")]
     public async Task CancellingWithoutAScheduleIdentityIsRejectedBeforeReachingTheBroker(string? scheduleId)
     {
+        // Arrange
         var wire = new Wire();
 
-        _ = await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+        // Act
+        var error = await Record.ExceptionAsync(() =>
             new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).CancelAsync(scheduleId!).AsTask());
 
+        // Assert
+        _ = Assert.IsAssignableFrom<ArgumentException>(error);
         Assert.Empty(wire.Cancellations);
     }
 

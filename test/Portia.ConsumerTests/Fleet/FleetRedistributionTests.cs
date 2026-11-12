@@ -81,6 +81,7 @@ public sealed class FleetRedistributionTests
     [Fact]
     public async Task UnreadyOrMissingMembershipStopsWorkAndReadySnapshotResumes()
     {
+        // Arrange
         var membership = new Membership();
         membership.Observer.Set("a");
         var active = 0;
@@ -99,23 +100,34 @@ public sealed class FleetRedistributionTests
                     _ = Interlocked.Decrement(ref active);
                 }
             }, Options, cancellation.Token);
+        var observed = new List<int>();
+
+        // Act
         try
         {
             await Until(() => active == 8);
+            observed.Add(active);
             membership.Observer.IsReady = false;
             await Until(() => active == 0);
+            observed.Add(active);
             membership.Observer.IsReady = true;
             await Until(() => active == 8);
+            observed.Add(active);
             membership.Observer.Set("b");
             await Until(() => active == 0);
+            observed.Add(active);
             membership.Observer.Set("a");
             await Until(() => active == 8);
+            observed.Add(active);
         }
         finally
         {
             cancellation.Cancel();
             await run;
         }
+
+        // Assert
+        Assert.Equal([8, 0, 8, 0, 8], observed);
     }
 
     [Theory]
@@ -127,10 +139,16 @@ public sealed class FleetRedistributionTests
     [InlineData("lease://fleet/members/*", null, 0)]
     public async Task InvalidFleetConfigurationIsRejected(string selector, string? workerId, int ttl)
     {
+        // Arrange
         var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new Membership());
-        _ = await Assert.ThrowsAnyAsync<ArgumentException>(() => runner.RunAsync(Partitions,
+
+        // Act
+        var error = await Record.ExceptionAsync(() => runner.RunAsync(Partitions,
             static (_, _) => Task.CompletedTask,
             Options with { MembershipSelector = selector, WorkerId = workerId, LeaseTtl = TimeSpan.FromSeconds(ttl) }));
+
+        // Assert
+        _ = Assert.IsAssignableFrom<ArgumentException>(error);
     }
 
     [Theory]

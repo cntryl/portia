@@ -40,7 +40,8 @@ public sealed class TenantDirectoryConsumerTests
     [Fact]
     public async Task StreamNotificationWakesIdleDirectoryWithoutPollingDelay()
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using System;
                                                     using System.Collections.Generic;
                                                     using System.Runtime.CompilerServices;
@@ -91,8 +92,15 @@ public sealed class TenantDirectoryConsumerTests
                                                             return passed;
                                                         }
                                                     }
-                                                    """);
-        Assert.True(await (Task<bool>)assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, null)!);
+                                                    """;
+
+        // Act
+        var assembly = GeneratorCompilation.Compile(source);
+        var run = (Task<bool>)assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, null)!;
+        var woke = await run;
+
+        // Assert
+        Assert.True(woke);
     }
 
     [Theory]

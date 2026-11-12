@@ -8,7 +8,8 @@ public sealed class ReactorExecutionContractTests
     [InlineData(true)]
     public async Task GeneratedReactionSavesAsSystemAndUsesTriggeringEventAsCause(bool fitz)
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using System;
                                                     using System.Threading;
                                                     using System.Threading.Tasks;
@@ -51,8 +52,15 @@ public sealed class ReactorExecutionContractTests
                                                                     || output.Event.Metadata.Actor?.Subject != "portia:system") throw new Exception("Incorrect reaction attribution");
                                                         }
                                                     }
-                                                    """, new ProjectorReactorEventDispatcherGenerator());
+                                                    """;
+        var assembly = GeneratorCompilation.Compile(source, new ProjectorReactorEventDispatcherGenerator());
+        var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<IEventStore, Task>>();
         await using var fixture = await StoreFixture.CreateAsync(fitz);
-        await assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<IEventStore, Task>>()(fixture.Store);
+
+        // Act
+        var error = await Record.ExceptionAsync(() => run(fixture.Store));
+
+        // Assert
+        Assert.Null(error);
     }
 }

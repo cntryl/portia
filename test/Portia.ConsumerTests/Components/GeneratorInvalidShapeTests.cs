@@ -12,7 +12,8 @@ public sealed class GeneratorInvalidShapeTests
     [Fact]
     public void ShouldSkipEventGivenInaccessibleContainingTypeWhenAddingPortia()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using Cntryl.Portia;
                                                                  using Microsoft.Extensions.DependencyInjection;
                                                                  public static class Outer
@@ -27,16 +28,21 @@ public sealed class GeneratorInvalidShapeTests
                                                                  {
                                                                      public static PortiaBuilder Register(IServiceCollection services) => services.AddPortia();
                                                                  }
-                                                                 """, new RegistrationCallInterceptorGenerator(),
+                                                                 """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator(),
             new DomainEventCatalogGenerator());
 
+        // Assert
         AssertNoCompilerErrors(diagnostics);
     }
 
     [Fact]
     public void ShouldSkipEventGivenFileLocalEventWhenAddingPortia()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using Cntryl.Portia;
                                                                  using Microsoft.Extensions.DependencyInjection;
                                                                  [Discriminator("app.ev")]
@@ -45,16 +51,21 @@ public sealed class GeneratorInvalidShapeTests
                                                                  {
                                                                      public static PortiaBuilder Register(IServiceCollection services) => services.AddPortia();
                                                                  }
-                                                                 """, new RegistrationCallInterceptorGenerator(),
+                                                                 """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator(),
             new DomainEventCatalogGenerator());
 
+        // Assert
         AssertNoCompilerErrors(diagnostics);
     }
 
     [Fact]
     public void ShouldReportPortia015GivenFileLocalHandlerWhenRegistered()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using System.Threading;
                                                                  using System.Threading.Tasks;
                                                                  using Cntryl.Portia;
@@ -70,9 +81,13 @@ public sealed class GeneratorInvalidShapeTests
                                                                      public static PortiaBuilder Register(IServiceCollection services) =>
                                                                          services.AddPortia().AddRequestHandler<Handler>();
                                                                  }
-                                                                 """, new RegistrationCallInterceptorGenerator(),
+                                                                 """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator(),
             new RequestShapeDiagnosticsGenerator(), new PortiaServiceRegistrationGenerator());
 
+        // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA015");
         AssertNoCompilerErrors(diagnostics);
     }
@@ -99,7 +114,8 @@ public sealed class GeneratorInvalidShapeTests
     [Fact]
     public void ShouldReportPortia015GivenFileLocalProjector()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using System.Threading;
                                                                  using System.Threading.Tasks;
                                                                  using Cntryl.Portia;
@@ -110,8 +126,12 @@ public sealed class GeneratorInvalidShapeTests
                                                                  {
                                                                      public ValueTask<Result> HandleAsync(IProjectorContext<Ev> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                                                  }
-                                                                 """, new ProjectorReactorEventDispatcherGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new ProjectorReactorEventDispatcherGenerator());
+
+        // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA015");
         AssertNoCompilerErrors(diagnostics);
     }
@@ -119,7 +139,8 @@ public sealed class GeneratorInvalidShapeTests
     [Fact]
     public void ShouldReportPortia016GivenFileLocalHttpRequest()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using Cntryl.Portia;
                                                                  using Microsoft.AspNetCore.Routing;
                                                                  file sealed record GetOrder(int Id) : IRequest, ICallable;
@@ -127,8 +148,12 @@ public sealed class GeneratorInvalidShapeTests
                                                                  {
                                                                      public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<GetOrder>("/orders/{id}");
                                                                  }
-                                                                 """, new RequestHttpBindingGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA016");
         AssertNoCompilerErrors(diagnostics);
     }
@@ -136,7 +161,8 @@ public sealed class GeneratorInvalidShapeTests
     [Fact]
     public void ShouldEmitDistinctRegistrationNamesGivenQualifiedNameCollidingWithSimpleName()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using Cntryl.Portia;
                                                                  namespace Billing
                                                                  {
@@ -156,15 +182,20 @@ public sealed class GeneratorInvalidShapeTests
                                                                      [Discriminator("other.charge")]
                                                                      public sealed record BillingCharge : IRequest, IQueuable;
                                                                  }
-                                                                 """, new PortiaServiceRegistrationGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new PortiaServiceRegistrationGenerator());
+
+        // Assert
         AssertNoCompilerErrors(diagnostics);
     }
 
     [Fact]
     public void ShouldEscapeControlCharactersGivenDiscriminatorAndPermissionLiterals()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using System.Threading;
                                                                  using System.Threading.Tasks;
                                                                  using Cntryl.Portia;
@@ -183,16 +214,21 @@ public sealed class GeneratorInvalidShapeTests
                                                                      public static PortiaBuilder Register(IServiceCollection services) =>
                                                                          services.AddPortia().AddRequestHandler<Handler>();
                                                                  }
-                                                                 """, new RegistrationCallInterceptorGenerator(),
+                                                                 """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator(),
             new DomainEventCatalogGenerator());
 
+        // Assert
         AssertNoCompilerErrors(diagnostics);
     }
 
     [Fact]
     public void ShouldReportPortia011GivenPermissionTokenBoundToInaccessibleProperty()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using System.Threading;
                                                                  using System.Threading.Tasks;
                                                                  using Cntryl.Portia;
@@ -212,8 +248,12 @@ public sealed class GeneratorInvalidShapeTests
                                                                      public static PortiaBuilder Register(IServiceCollection services) =>
                                                                          services.AddPortia().AddRequestHandler<Handler>();
                                                                  }
-                                                                 """, new RegistrationCallInterceptorGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator());
+
+        // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA011");
         AssertNoCompilerErrors(diagnostics);
     }
@@ -258,7 +298,8 @@ public sealed class GeneratorInvalidShapeTests
     [Fact]
     public void ShouldEmitNamedConstantsGivenNonFiniteFloatingPointDefaults()
     {
-        var diagnostics = GeneratorCompilation.OutputDiagnostics("""
+        // Arrange
+        const string source = """
                                                                  using Cntryl.Portia;
                                                                  using Microsoft.AspNetCore.Routing;
                                                                  public sealed record Probe(
@@ -272,8 +313,12 @@ public sealed class GeneratorInvalidShapeTests
                                                                  {
                                                                      public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Probe>("/probe");
                                                                  }
-                                                                 """, new RequestHttpBindingGenerator());
+                                                                 """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         AssertNoCompilerErrors(diagnostics);
     }
 

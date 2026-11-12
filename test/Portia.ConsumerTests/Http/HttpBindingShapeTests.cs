@@ -10,7 +10,8 @@ public sealed class HttpBindingShapeTests
     [Fact]
     public void NullableReferenceResultIsCarriedIntoGeneratedOpenApiMetadata()
     {
-        var generated = GeneratorCompilation.GeneratedSource("""
+        // Arrange
+        const string source = """
                                                              #nullable enable
                                                              using Cntryl.Portia;
                                                              using Microsoft.AspNetCore.Routing;
@@ -21,8 +22,12 @@ public sealed class HttpBindingShapeTests
                                                                  public static void Map(IEndpointRouteBuilder app)
                                                                      => app.MapPortiaPost<Query, NullableResult?>("/query");
                                                              }
-                                                             """, new RequestHttpBindingGenerator());
+                                                             """;
 
+        // Act
+        var generated = GeneratorCompilation.GeneratedSource(source, new RequestHttpBindingGenerator());
+
+        // Assert
         Assert.Contains("ResultIsNullable = true", generated, StringComparison.Ordinal);
     }
 
@@ -412,8 +417,14 @@ public sealed class HttpBindingShapeTests
     [Fact]
     public void StreamingConfigurationDoesNotExposeOnResult()
     {
-        Assert.DoesNotContain(typeof(PortiaStreamingEndpointConfiguration<object>).GetMethods(),
-            method => method.Name == "OnResult");
+        // Arrange
+        var configurationType = typeof(PortiaStreamingEndpointConfiguration<object>);
+
+        // Act
+        var methods = configurationType.GetMethods();
+
+        // Assert
+        Assert.DoesNotContain(methods, method => method.Name == "OnResult");
     }
 
     [Fact]
@@ -467,7 +478,8 @@ public sealed class HttpBindingShapeTests
     [Fact]
     public void InvalidTryParseShapeRemainsUnsupportedForQueryBinding()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                            using Cntryl.Portia;
                                                            using Microsoft.AspNetCore.Routing;
                                                            public enum SomeStyle { Default }
@@ -485,8 +497,12 @@ public sealed class HttpBindingShapeTests
                                                                public static void Map(IEndpointRouteBuilder app)
                                                                    => app.MapPortiaGet<Binding, string>("/binding");
                                                            }
-                                                           """, new RequestHttpBindingGenerator());
+                                                           """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA016");
         Assert.Contains("supported scalar TryParse", diagnostic.GetMessage(CultureInfo.InvariantCulture),
             StringComparison.Ordinal);
@@ -522,7 +538,8 @@ public sealed class HttpBindingShapeTests
     [Fact]
     public void ShouldReportDiagnosticGivenOptionalRouteTokenWhenMappingIsGenerated()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                            using Cntryl.Portia;
                                                            using Cntryl.Portia.Testing;
                                                            using Microsoft.AspNetCore.Routing;
@@ -531,7 +548,12 @@ public sealed class HttpBindingShapeTests
                                                            {
                                                                public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Binding, string>("/binding/{id?}");
                                                            }
-                                                           """, new RequestHttpBindingGenerator());
+                                                           """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA026");
         Assert.Contains("query parameter or separate endpoint", diagnostic.GetMessage(CultureInfo.InvariantCulture),
             StringComparison.Ordinal);
@@ -604,7 +626,8 @@ public sealed class HttpBindingShapeTests
         // Whether an endpoint is described is a property of the endpoint, not of the order its
         // conventions happen to be written in. Detecting the exclusion only when it sits directly
         // on the mapping made a hard compile error depend on formatting.
-        var diagnostics = GeneratorCompilation.Diagnostics($$"""
+        // Arrange
+        var source = $$"""
                                                              using Cntryl.Portia;
                                                              using Cntryl.Portia.Testing;
                                                              using Microsoft.AspNetCore.Builder;
@@ -618,15 +641,20 @@ public sealed class HttpBindingShapeTests
                                                                      app.MapPortiaPost<RefreshOrder>("/orders/refresh"){{conventions}};
                                                                  }
                                                              }
-                                                             """, new RequestHttpBindingGenerator());
+                                                             """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestHttpBindingGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA027");
     }
 
     [Fact]
     public void UnrelatedMappingMethodIsNeverIntercepted()
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using Cntryl.Portia;
                                                     using Cntryl.Portia.Testing;
                                                     public sealed record Binding(int Value) : IRequest<string>, ICallable;
@@ -638,8 +666,14 @@ public sealed class HttpBindingShapeTests
                                                     {
                                                         public static int Run() => new Unrelated().MapPortiaGet<Binding, string>("/binding");
                                                     }
-                                                    """, new RequestHttpBindingGenerator());
-        Assert.Equal(321, assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, null));
+                                                    """;
+
+        // Act
+        var assembly = GeneratorCompilation.Compile(source, new RequestHttpBindingGenerator());
+        var result = assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, null);
+
+        // Assert
+        Assert.Equal(321, result);
     }
 
     [Fact]

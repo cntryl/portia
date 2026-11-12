@@ -30,9 +30,14 @@ public sealed class ConditionalSenderDiscoveryTests
     [Fact]
     public void ShouldRequireRequestJsonMetadataGivenConditionalPublication()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics(Source("conditional"),
+        // Arrange
+        var source = Source("conditional");
+
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source,
             new JsonMetadataDiagnosticGenerator());
 
+        // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
 

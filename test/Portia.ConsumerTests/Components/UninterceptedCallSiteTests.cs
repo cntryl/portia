@@ -19,7 +19,8 @@ public sealed class UninterceptedCallSiteTests
     [InlineData("MapPortiaDelete<Binding>(app, \"/binding\")")]
     public void UninterceptedEndpointMappingExplainsWhyItWasNotGenerated(string call)
     {
-        var error = RunGeneric($$"""
+        // Arrange
+        var source = $$"""
                                  using Cntryl.Portia;
                                  using Cntryl.Portia.Testing;
                                  using Microsoft.AspNetCore.Builder;
@@ -38,8 +39,12 @@ public sealed class UninterceptedCallSiteTests
                                          _ = PortiaEndpointRouteBuilderExtensions.{{call}};
                                      }
                                  }
-                                 """);
+                                 """;
 
+        // Act
+        var error = RunGeneric(source);
+
+        // Assert
         Assert.Contains("did not intercept this endpoint mapping", error.Message, StringComparison.Ordinal);
         Assert.Contains("analyzer assets", error.Message, StringComparison.Ordinal);
         Assert.Contains("Cntryl.Portia.AspNetCore", error.Message, StringComparison.Ordinal);
@@ -50,7 +55,8 @@ public sealed class UninterceptedCallSiteTests
     [Fact]
     public void UninterceptedStreamingEndpointMappingExplainsWhyItWasNotGenerated()
     {
-        var error = RunGeneric("""
+        // Arrange
+        const string source = """
                                using Cntryl.Portia;
                                using Cntryl.Portia.Testing;
                                using Microsoft.AspNetCore.Builder;
@@ -64,8 +70,12 @@ public sealed class UninterceptedCallSiteTests
                                        _ = PortiaEndpointRouteBuilderExtensions.MapPortiaGetSse<Feed, string>(app, "/feed");
                                    }
                                }
-                               """);
+                               """;
 
+        // Act
+        var error = RunGeneric(source);
+
+        // Assert
         Assert.Contains("did not intercept this endpoint mapping", error.Message, StringComparison.Ordinal);
     }
 
@@ -109,7 +119,8 @@ public sealed class UninterceptedCallSiteTests
     [InlineData("AddEvent<Happened>()", "domain event")]
     public void UninterceptedRegistrationNamesTheTypeAndTheRoleItWasRegisteringAs(string call, string role)
     {
-        var error = RunGeneric($$"""
+        // Arrange
+        var source = $$"""
                                  using System.Threading;
                                  using System.Threading.Tasks;
                                  using Cntryl.Portia;
@@ -148,8 +159,12 @@ public sealed class UninterceptedCallSiteTests
                                          _ = builder.{{call}};
                                      }
                                  }
-                                 """);
+                                 """;
 
+        // Act
+        var error = RunGeneric(source);
+
+        // Assert
         Assert.Contains("did not intercept registration", error.Message, StringComparison.Ordinal);
         Assert.Contains(role, error.Message, StringComparison.Ordinal);
         Assert.Contains("analyzer assets", error.Message, StringComparison.Ordinal);

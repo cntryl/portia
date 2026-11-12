@@ -78,9 +78,14 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false)]
     public async Task UninitializedResultsCannotAdvanceProgress(bool projection)
     {
+        // Arrange
         var state = new State { ReturnDefault = true };
-        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await RunAsync(await SeedAsync(), state, projection, 1));
 
+        // Act
+        var error = await Record.ExceptionAsync(async () => await RunAsync(await SeedAsync(), state, projection, 1));
+
+        // Assert
+        var failure = Assert.IsType<ProcessorFailureException>(error);
         Assert.IsType<InvalidOperationException>(failure.InnerException);
         Assert.Equal(ProcessorFailureStage.Handling, failure.Stage);
         Assert.Equal(ProjectionCheckpoint.Start, state.Checkpoint);

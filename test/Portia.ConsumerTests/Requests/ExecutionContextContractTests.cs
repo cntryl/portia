@@ -5,7 +5,8 @@ public sealed class ExecutionContextContractTests
     [Fact]
     public async Task GeneratedRequestHandlerReceivesExactRequestAndCancellationToken()
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using System;
                                                     using System.Threading;
                                                     using System.Threading.Tasks;
@@ -40,14 +41,22 @@ public sealed class ExecutionContextContractTests
                                                                 .SendAsync(request, RequestActor.System, cancellation.Token);
                                                         }
                                                     }
-                                                    """, new RegistrationCallInterceptorGenerator());
-        await assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task>>()();
+                                                    """;
+        var assembly = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
+        var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task>>();
+
+        // Act
+        var error = await Record.ExceptionAsync(run);
+
+        // Assert
+        Assert.Null(error);
     }
 
     [Fact]
     public async Task NormalHandlerSaveStampsDurableAttribution()
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using System;
                                                     using System.Threading.Tasks;
                                                     using Cntryl.Portia;
@@ -79,14 +88,22 @@ public sealed class ExecutionContextContractTests
                                                             }
                                                         }
                                                     }
-                                                    """);
-        await assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task>>()();
+                                                    """;
+        var assembly = GeneratorCompilation.Compile(source);
+        var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task>>();
+
+        // Act
+        var error = await Record.ExceptionAsync(run);
+
+        // Assert
+        Assert.Null(error);
     }
 
     [Fact]
     public async Task NestedDispatchPreservesActorAndCorrelationWithoutSharingExecutionIdentity()
     {
-        var assembly = GeneratorCompilation.Compile("""
+        // Arrange
+        const string source = """
                                                     using System;
                                                     using System.Threading;
                                                     using System.Threading.Tasks;
@@ -128,7 +145,14 @@ public sealed class ExecutionContextContractTests
                                                             await scope.ServiceProvider.GetRequiredService<IRequestBus>().SendAsync(new Outer(), RequestActor.System);
                                                         }
                                                     }
-                                                    """, new RegistrationCallInterceptorGenerator());
-        await assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task>>()();
+                                                    """;
+        var assembly = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
+        var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task>>();
+
+        // Act
+        var error = await Record.ExceptionAsync(run);
+
+        // Assert
+        Assert.Null(error);
     }
 }

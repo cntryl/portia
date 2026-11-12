@@ -136,8 +136,14 @@ public sealed class HttpStreamingConsumerTests
     [InlineData(true, 403)]
     public async Task AuthorizationFailureReturnsStatusBeforeStreamStarts(bool sse, int mode)
     {
+        // Arrange
+        var expectedStatus = mode;
+
+        // Act
         var (status, _, enumerations, disposals, handlerDisposals, failed) = await RunAsync(sse, mode);
-        Assert.Equal(mode, status);
+
+        // Assert
+        Assert.Equal(expectedStatus, status);
         Assert.False(failed);
         Assert.Equal(0, enumerations);
         Assert.Equal(0, disposals);
@@ -153,11 +159,17 @@ public sealed class HttpStreamingConsumerTests
     [InlineData(true, 3)]
     public async Task StreamEnumeratesOnceAndDisposesAfterCompletionCancellationOrFailure(bool sse, int mode)
     {
+        // Arrange
+        var expectedFailure = mode != 0;
+
+        // Act
         var (status, body, enumerations, disposals, handlerDisposals, failed) = await RunAsync(sse, mode);
+
+        // Assert
         Assert.Equal(1, enumerations);
         Assert.Equal(1, disposals);
         Assert.Equal(1, handlerDisposals);
-        Assert.Equal(mode != 0, failed);
+        Assert.Equal(expectedFailure, failed);
         if (mode == 0)
         {
             Assert.Equal(200, status);

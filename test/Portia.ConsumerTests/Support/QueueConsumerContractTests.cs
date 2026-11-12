@@ -198,10 +198,14 @@ public sealed class QueueConsumerContractTests
     [Fact]
     public async Task UnsupportedNativeNackDoesNotAcknowledgeOrDisposeReservation()
     {
+        // Arrange
         var item = new Reserved(ReadOnlyMemory<byte>.Empty, QueueItem.AttemptUnavailable);
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => item.NackAsync());
+        // Act
+        var error = await Record.ExceptionAsync(() => item.NackAsync());
 
+        // Assert
+        _ = Assert.IsType<NotSupportedException>(error);
         Assert.Equal(0, item.Completions);
         Assert.Equal(0, item.Disposals);
         Assert.Equal(QueueItem.AttemptUnavailable, item.Attempt);

@@ -100,7 +100,8 @@ public sealed class GeneratorShapeTests
     [Fact]
     public void ShouldReportUnsupportedCallSiteGivenRegistrationMethodGroupWhenGenerating()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                            using System;
                                                            using System.Threading;
                                                            using System.Threading.Tasks;
@@ -118,8 +119,12 @@ public sealed class GeneratorShapeTests
                                                                public static Func<PortiaBuilder> Registration(PortiaBuilder portia) =>
                                                                    portia.AddRequestHandler<Handler>;
                                                            }
-                                                           """, new RegistrationCallInterceptorGenerator());
+                                                           """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new RegistrationCallInterceptorGenerator());
+
+        // Assert
         var diagnostic = Assert.Single(diagnostics, candidate => candidate.Id == "PORTIA019");
         Assert.Contains("ordinary call or feature-local extension method",
             diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
@@ -202,7 +207,8 @@ public sealed class GeneratorShapeTests
     [Fact]
     public void ShouldReportNullableTokenGivenInheritedClassPropertyWhenRegisteringHandler()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                            using Cntryl.Portia;
                                                            using Cntryl.Portia.Testing;
                                                            using Microsoft.Extensions.DependencyInjection;
@@ -219,15 +225,20 @@ public sealed class GeneratorShapeTests
                                                                public static void Register(IServiceCollection services) =>
                                                                    services.AddPortia().AddRequestHandler<Handler>();
                                                            }
-                                                           """, new RegistrationCallInterceptorGenerator());
+                                                           """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new RegistrationCallInterceptorGenerator());
+
+        // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA013");
     }
 
     [Fact]
     public void ShouldIgnoreInvalidPermissionGivenUnselectedHandlerWhenGeneratingRegistrations()
     {
-        var diagnostics = GeneratorCompilation.Diagnostics("""
+        // Arrange
+        const string source = """
                                                            using Cntryl.Portia;
                                                            using Cntryl.Portia.Testing;
                                                            [RequiresPermission("accounts:{Missing}:read")]
@@ -237,8 +248,12 @@ public sealed class GeneratorShapeTests
                                                                public ValueTask<Result> HandleAsync(IRequestContext<ReadAccount> context, CancellationToken ct) =>
                                                                    ValueTask.FromResult(Result.Success);
                                                            }
-                                                           """, new RegistrationCallInterceptorGenerator());
+                                                           """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new RegistrationCallInterceptorGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "PORTIA011" or "PORTIA013");
     }
 
@@ -248,7 +263,8 @@ public sealed class GeneratorShapeTests
     public void ShouldReportInvalidPermissionGivenSelectedHandlerWhenGeneratingRegistrations(string permission,
         string diagnosticId)
     {
-        var diagnostics = GeneratorCompilation.Diagnostics($$"""
+        // Arrange
+        var source = $$"""
                                                              using Cntryl.Portia;
                                                              using Cntryl.Portia.Testing;
                                                              using Microsoft.Extensions.DependencyInjection;
@@ -264,21 +280,30 @@ public sealed class GeneratorShapeTests
                                                                  public static void Register(IServiceCollection services) =>
                                                                      services.AddPortia().AddRequestHandler<Handler>();
                                                              }
-                                                             """, new RegistrationCallInterceptorGenerator());
+                                                             """;
 
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new RegistrationCallInterceptorGenerator());
+
+        // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == diagnosticId);
     }
 
     [Fact]
     public void ShouldNotGenerateLegacyRegistrationHelperGivenDomainEventWhenGeneratingCatalog()
     {
-        var generated = GeneratorCompilation.GeneratedSource("""
+        // Arrange
+        const string source = """
                                                              using Cntryl.Portia;
                                                              using Cntryl.Portia.Testing;
                                                              [Discriminator("AccountOpened")]
                                                              public sealed record AccountOpened : DomainEvent;
-                                                             """, new DomainEventCatalogGenerator());
+                                                             """;
 
+        // Act
+        var generated = GeneratorCompilation.GeneratedSource(source, new DomainEventCatalogGenerator());
+
+        // Assert
         Assert.Contains("AddPortiaGeneratedDomainEvents", generated, StringComparison.Ordinal);
         Assert.DoesNotContain("AddGeneratedEvents", generated, StringComparison.Ordinal);
         Assert.DoesNotContain("PortiaGeneratedEventRegistrations", generated, StringComparison.Ordinal);
@@ -354,7 +379,8 @@ public sealed class GeneratorShapeTests
     [Fact]
     public void ShouldNotGenerateComponentNamedRegistrationMethodsGivenHandlerWhenGeneratorRuns()
     {
-        var generated = GeneratorCompilation.GeneratedSource("""
+        // Arrange
+        const string source = """
                                                              using System.Threading;
                                                              using System.Threading.Tasks;
                                                              using Cntryl.Portia;
@@ -371,8 +397,12 @@ public sealed class GeneratorShapeTests
                                                                  public static void Register(IServiceCollection services) =>
                                                                      services.AddPortia().AddRequestHandler<Handler>();
                                                              }
-                                                             """, new RegistrationCallInterceptorGenerator());
+                                                             """;
 
+        // Act
+        var generated = GeneratorCompilation.GeneratedSource(source, new RegistrationCallInterceptorGenerator());
+
+        // Assert
         Assert.Contains("AddGeneratedHandler", generated, StringComparison.Ordinal);
         Assert.DoesNotContain("AddHandler", generated, StringComparison.Ordinal);
         Assert.DoesNotContain("PortiaGeneratedRequestRegistrations", generated, StringComparison.Ordinal);
