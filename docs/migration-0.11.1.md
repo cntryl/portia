@@ -53,3 +53,6 @@ suppressions you added for that reference. Common's dependency boundary is uncha
 Common features may now keep `[PortiaJsonContext]` contexts in `Features/{Feature}/Serialization`.
 Applications that kept per-feature contexts at Common's project root to satisfy `PORTIA203` can move
 them there. The folder accepts only Portia JSON contexts.
+
+A static `*DomainEventCatalog` adapter is now accepted in any feature's `Events` folder, not only in
+a feature named `Platform`. No change is required.

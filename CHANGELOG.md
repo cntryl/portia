@@ -57,6 +57,8 @@ release steps.
   collisions or build failure.
 - Allow Common features to keep `[PortiaJsonContext]` contexts in `Features/{Feature}/Serialization`,
   matching Core. Any other type in that folder reports `PORTIA204`.
+- Accept a static `*DomainEventCatalog` adapter in any feature's `Events` folder. `PORTIA204` and
+  `PORTIA209` previously accepted it only in a feature named `Platform`.
 
 ### Performance
 
