@@ -32,18 +32,18 @@ public sealed class McpTelemetryQualificationTests
         bool cancellationException)
     {
         // Arrange
-        var activities = new List<Activity>();
-        var metrics = new List<Metric>();
-        var logs = new List<LogRecord>();
+        var exportedActivities = new ExportedTelemetry<Activity>();
+        var exportedMetrics = new ExportedTelemetry<Metric>();
+        var exportedLogs = new ExportedTelemetry<LogRecord>();
         var failure = new TelemetryFailure(cancellationException);
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
         builder.Services.AddSingleton(failure);
         _ = builder.Services.AddOpenTelemetry().WithPortia()
-            .WithTracing(tracing => tracing.SetSampler(new AlwaysOnSampler()).AddInMemoryExporter(activities))
-            .WithMetrics(meter => meter.AddInMemoryExporter(metrics))
-            .WithLogging(logging => logging.AddInMemoryExporter(logs));
+            .WithTracing(tracing => tracing.SetSampler(new AlwaysOnSampler()).AddInMemoryExporter(exportedActivities))
+            .WithMetrics(meter => meter.AddInMemoryExporter(exportedMetrics))
+            .WithLogging(logging => logging.AddInMemoryExporter(exportedLogs));
         _ = builder.Services.AddPortia().AddRequestHandler<ReadTelemetryHandler>()
             .AddMcpTool<ReadTelemetry>()
             .AddMcpResource<ReadTelemetry, string>("telemetry://read/{fail}",
@@ -82,7 +82,7 @@ public sealed class McpTelemetryQualificationTests
             else
                 _ = await client.GetPromptAsync("telemetry-read", new Dictionary<string, object?> { ["fail"] = fails.ToString() });
         });
-        // The in-memory exporters append to plain lists, so stop every producer before reading them.
+        // Stop every producer, then assert against snapshots: exporters may still append on other threads.
         await client.DisposeAsync();
         await app.StopAsync();
 
@@ -98,9 +98,12 @@ public sealed class McpTelemetryQualificationTests
         Assert.True(app.Services.GetRequiredService<TracerProvider>().ForceFlush());
         Assert.True(app.Services.GetRequiredService<MeterProvider>().ForceFlush());
         Assert.True(app.Services.GetRequiredService<LoggerProvider>().ForceFlush());
+        var activities = exportedActivities.Snapshot();
+        var metrics = exportedMetrics.Snapshot();
+        var logs = exportedLogs.Snapshot();
         var process = Assert.Single(activities, activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);
         var execute = Assert.Single(activities, activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName);
-        Assert.Equal(2, activities.Count);
+        Assert.Equal(2, activities.Length);
         Assert.Equal(process.SpanId, execute.ParentSpanId);
         Assert.Equal(process.TraceId, execute.TraceId);
         foreach (var activity in activities)
@@ -178,6 +181,24 @@ public sealed class McpTelemetryQualificationTests
         Assert.NotNull(error);
         Assert.Contains(safeMessage, error.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("sensitive", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A thread-safe exporter target whose contents are read through snapshots.</summary>
+    sealed class ExportedTelemetry<T> : ICollection<T>
+    {
+        readonly List<T> _items = [];
+        readonly Lock _gate = new();
+
+        public int Count { get { lock (_gate) return _items.Count; } }
+        public bool IsReadOnly => false;
+        public T[] Snapshot() { lock (_gate) return [.. _items]; }
+        public void Add(T item) { lock (_gate) _items.Add(item); }
+        public void Clear() { lock (_gate) _items.Clear(); }
+        public bool Contains(T item) { lock (_gate) return _items.Contains(item); }
+        public void CopyTo(T[] array, int arrayIndex) { lock (_gate) _items.CopyTo(array, arrayIndex); }
+        public bool Remove(T item) { lock (_gate) return _items.Remove(item); }
+        public IEnumerator<T> GetEnumerator() => ((IEnumerable<T>)Snapshot()).GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     public sealed class TelemetryFailure(bool cancellationException = false)
