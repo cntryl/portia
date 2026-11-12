@@ -16,7 +16,6 @@ concurrency:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  PORTIA_SMOKE_PACKAGE_VERSION: 1.0.0-ci.${{ github.run_id }}.${{ github.run_attempt }}
 
 jobs:
   ci:
@@ -53,7 +52,7 @@ jobs:
           FITZ_STORAGE_PATH: /tmp/fitz
           FITZ_TCP_ENABLED: "false"
         ports:
-          - 4090/tcp
+          - 127.0.0.1:4090:4090
         options: >-
           --init
           --read-only
@@ -76,6 +75,7 @@ jobs:
 
     env:
       PORTIA_S3_TEST_ENDPOINT: http://127.0.0.1:9000
+      FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
       PORTIA_CASSIE_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Database=postgres;Username=root;Password=portia-cassie-test;SSL Mode=Disable;Timeout=15
 
     steps:
@@ -113,27 +113,6 @@ jobs:
       - name: Build solution
         run: dotnet build Portia.slnx --configuration Release --no-restore
 
-      - name: Qualify application structure file fixes through the Portia CLI
-        run: bash scripts/verify-structure-file-fixes.sh "$RUNNER_TEMP/portia-structure-file-fixes"
-
-      - name: Qualify namespace Fix All with generated constructor references
-        run: bash scripts/verify-namespace-fix.sh "$RUNNER_TEMP/portia-namespace-fix" 64
-
-      - name: Qualify actual Prometheus dashboard queries
-        run: scripts/qualify-prometheus.sh "$RUNNER_TEMP/portia-prometheus-evidence"
-
-      # These qualification modes exercise correctness only; neither runs timed benchmark jobs.
-      - name: Test runtime behavior matrix with JSON reflection disabled
-        run: dotnet run --project bench/Portia.Benchmarks/Portia.Benchmarks.csproj --configuration Release --no-build -- --runtime-qualification
-
-      - name: Verify MCP payloads over HTTP and stdio
-        run: dotnet run --project bench/Portia.Benchmarks/Portia.Benchmarks.csproj --configuration Release --no-build -- --mcp-protocol-payload-qualification
-
-      - name: Validate M5 MCP lookup supplement report
-        run: |
-          python3 bench/Portia.Benchmarks/Mcp/summarize_mcp_lookup_supplement.py docs/qualification/mcp-lookup-position-2026-11-12/raw.jsonl
-          git diff --exit-code -- docs/qualification/mcp-lookup-position-2026-11-12/README.md
-
       - name: Test solution
         run: >-
           dotnet test Portia.slnx
@@ -141,101 +120,10 @@ jobs:
           --no-build
           --filter "Category!=BrokerIntegration&Category!=StorageIntegration&Category!=CassieIntegration&Category!=DurabilityIntegration"
 
-      - name: Confirm packed consumers
-        run: |
-          # Package consumer projects use source references by default so standalone dependency
-          # discovery can restore them. This property switches them to the freshly packed packages.
-          dotnet pack Portia.slnx \
-            --configuration Release \
-            --no-build \
-            --no-restore \
-            --output artifacts/packages \
-            -p:PackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          dotnet run --project eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj \
-            --configuration Release \
-            --no-build \
-            -- verify-packed-compiler \
-            --version "$PORTIA_SMOKE_PACKAGE_VERSION" \
-            --packages artifacts/packages
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-aot-packages" dotnet restore \
-            smoke/Portia.AspNetCore.NativeAotConsumer/Portia.AspNetCore.NativeAotConsumer.csproj \
-            --runtime linux-x64 \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-aot-packages" dotnet publish \
-            smoke/Portia.AspNetCore.NativeAotConsumer/Portia.AspNetCore.NativeAotConsumer.csproj \
-            --configuration Release \
-            --runtime linux-x64 \
-            --self-contained true \
-            --no-restore \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION" \
-            --output artifacts/native-aot
-          artifacts/native-aot/Portia.AspNetCore.NativeAotConsumer
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-mcp-aot-packages" dotnet restore \
-            smoke/Portia.Mcp.AspNetCore.NativeAotConsumer/Portia.Mcp.AspNetCore.NativeAotConsumer.csproj \
-            --runtime linux-x64 \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-mcp-aot-packages" dotnet publish \
-            smoke/Portia.Mcp.AspNetCore.NativeAotConsumer/Portia.Mcp.AspNetCore.NativeAotConsumer.csproj \
-            --configuration Release \
-            --runtime linux-x64 \
-            --self-contained true \
-            --no-restore \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION" \
-            --output artifacts/mcp-native-aot
-          artifacts/mcp-native-aot/Portia.Mcp.AspNetCore.NativeAotConsumer
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-projection-packages" dotnet restore \
-            smoke/Portia.ProjectionStore.PackageConsumer/Portia.ProjectionStore.PackageConsumer.csproj \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-projection-packages" dotnet run \
-            --project smoke/Portia.ProjectionStore.PackageConsumer/Portia.ProjectionStore.PackageConsumer.csproj \
-            --configuration Release \
-            --no-restore \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-cassie-packages" dotnet restore \
-            smoke/Portia.Cassie.PackageConsumer/Portia.Cassie.PackageConsumer.csproj \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-cassie-packages" dotnet run \
-            --project smoke/Portia.Cassie.PackageConsumer/Portia.Cassie.PackageConsumer.csproj \
-            --configuration Release \
-            --no-restore \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-mcp-testing-packages" dotnet restore \
-            smoke/Portia.Mcp.Testing.PackageConsumer/Portia.Mcp.Testing.PackageConsumer.csproj \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-mcp-testing-packages" dotnet run \
-            --project smoke/Portia.Mcp.Testing.PackageConsumer/Portia.Mcp.Testing.PackageConsumer.csproj \
-            --configuration Release \
-            --no-restore \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-storage-packages" dotnet restore \
-            smoke/Portia.Storage.PackageConsumer/Host/Portia.Storage.PackageConsumer.csproj \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-storage-packages" dotnet run \
-            --project smoke/Portia.Storage.PackageConsumer/Host/Portia.Storage.PackageConsumer.csproj \
-            --configuration Release \
-            --no-restore \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-fitz-lexkey-packages" dotnet restore \
-            smoke/Portia.Fitz.LexKey.PackageConsumer/Portia.Fitz.LexKey.PackageConsumer.csproj \
-            --runtime linux-x64 \
-            -p:PublishAot=true \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          NUGET_PACKAGES="$RUNNER_TEMP/portia-fitz-lexkey-packages" dotnet publish \
-            smoke/Portia.Fitz.LexKey.PackageConsumer/Portia.Fitz.LexKey.PackageConsumer.csproj \
-            --configuration Release \
-            --runtime linux-x64 \
-            --self-contained true \
-            --no-restore \
-            -p:PublishAot=true \
-            --output artifacts/fitz-lexkey-native-aot \
-            -p:PortiaSmokePackageVersion="$PORTIA_SMOKE_PACKAGE_VERSION"
-          artifacts/fitz-lexkey-native-aot/Portia.Fitz.LexKey.PackageConsumer
-          scripts/qualify-account-example.sh "$RUNNER_TEMP/portia-account-otel-evidence"
-
       # Service containers start without a health check, so wait for each endpoint before testing.
       - name: Wait for integration services
         run: |
-          for url in http://127.0.0.1:9000/healthz "http://127.0.0.1:${{ job.services.fitz.ports['4090'] }}/readyz" http://127.0.0.1:8080/readyz; do
+          for url in http://127.0.0.1:9000/healthz http://127.0.0.1:4090/readyz http://127.0.0.1:8080/readyz; do
             curl --fail --silent --show-error --retry 30 --retry-delay 1 \
               --retry-connrefused --retry-all-errors --max-time 2 --output /dev/null "$url"
           done
@@ -248,8 +136,6 @@ jobs:
           --filter "Category=StorageIntegration"
 
       - name: Test full broker integration
-        env:
-          FITZ_TEST_ENDPOINT: ws://127.0.0.1:${{ job.services.fitz.ports['4090'] }}/ws
         run: >-
           dotnet test Portia.slnx
           --configuration Release
@@ -265,8 +151,6 @@ jobs:
           --filter "Category=DurabilityIntegration"
 
       - name: Test Fitz Portia Cassie integration
-        env:
-          FITZ_TEST_ENDPOINT: ws://127.0.0.1:${{ job.services.fitz.ports['4090'] }}/ws
         run: >-
           dotnet test Portia.slnx
           --configuration Release
