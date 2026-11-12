@@ -229,6 +229,58 @@ static class ApplicationStructureCommand
     static bool PathEquals(string? left, string? right) => left is not null && right is not null
         && string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), StringComparison.OrdinalIgnoreCase);
 
+    static void TryDelete(string? path)
+    {
+        if (path is not null && File.Exists(path))
+            File.Delete(path);
+    }
+
+    internal static FileStream CreateStagedFile(Func<string> nextCandidatePath, Action<string> registerPath)
+    {
+        while (true)
+        {
+            var candidatePath = nextCandidatePath();
+            FileStream stream;
+            try
+            {
+                stream = new FileStream(candidatePath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            }
+            catch (IOException) when (File.Exists(candidatePath) || Directory.Exists(candidatePath))
+            {
+                continue;
+            }
+
+            try
+            {
+                registerPath(candidatePath);
+                return stream;
+            }
+            catch
+            {
+                stream.Dispose();
+                TryDelete(candidatePath);
+                throw;
+            }
+        }
+    }
+
+    internal static string MoveToUniqueBackup(string sourcePath, Func<string> nextCandidatePath)
+    {
+        while (true)
+        {
+            var candidatePath = nextCandidatePath();
+            try
+            {
+                File.Move(sourcePath, candidatePath);
+                return candidatePath;
+            }
+            catch (IOException) when (File.Exists(candidatePath) || Directory.Exists(candidatePath))
+            {
+                continue;
+            }
+        }
+    }
+
     sealed class FileOperationPlan
     {
         readonly List<OperationState> _states;
@@ -365,8 +417,8 @@ static class ApplicationStructureCommand
                 {
                     var operation = Operations[index];
                     var directory = Path.GetDirectoryName(operation.DestinationPath)!;
-                    _states[index].StagedPath = UniqueSiblingPath(directory, ".portia-stage");
-                    using var stream = new FileStream(_states[index].StagedPath!, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                    using var stream = CreateStagedFile(
+                        () => UniqueSiblingPath(directory, ".portia-stage"), path => _states[index].StagedPath = path);
                     stream.Write(operation.ContentBytes);
                 }
 
@@ -379,8 +431,8 @@ static class ApplicationStructureCommand
                             SHA256.HashData(File.ReadAllBytes(sourcePath)), SHA256.HashData(operation.ExpectedBytes!)))
                         throw new InvalidOperationException($"Source changed immediately before applying: {sourcePath}");
 
-                    _states[index].BackupPath = UniqueSiblingPath(Path.GetDirectoryName(sourcePath)!, ".portia-backup");
-                    File.Move(sourcePath, _states[index].BackupPath!);
+                    _states[index].BackupPath = MoveToUniqueBackup(sourcePath,
+                        () => UniqueSiblingPath(Path.GetDirectoryName(sourcePath)!, ".portia-backup"));
                     if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(File.ReadAllBytes(_states[index].BackupPath!)),
                             SHA256.HashData(operation.ExpectedBytes!)))
                     {
@@ -475,15 +527,8 @@ static class ApplicationStructureCommand
             }
         }
 
-        static string UniqueSiblingPath(string directory, string suffix)
-        {
-            string path;
-            do
-            {
-                path = Path.Combine(directory, suffix + "-" + Guid.NewGuid().ToString("N"));
-            } while (File.Exists(path) || Directory.Exists(path));
-            return path;
-        }
+        static string UniqueSiblingPath(string directory, string suffix) =>
+            Path.Combine(directory, suffix + "-" + Guid.NewGuid().ToString("N"));
 
         static bool TextMatches(byte[] bytes, SourceText expected)
         {
@@ -492,11 +537,6 @@ static class ApplicationStructureCommand
             return string.Equals(reader.ReadToEnd(), expected.ToString(), StringComparison.Ordinal);
         }
 
-        static void TryDelete(string? path)
-        {
-            if (path is not null && File.Exists(path))
-                File.Delete(path);
-        }
     }
 
     sealed class OperationState

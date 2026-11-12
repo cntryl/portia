@@ -46,6 +46,9 @@ jobs:
       - name: Build solution
         run: dotnet build Portia.slnx --configuration Release --no-restore
 
+      - name: Qualify application structure file fixes through the Portia CLI
+        run: bash scripts/verify-structure-file-fixes.sh "$RUNNER_TEMP/portia-structure-file-fixes"
+
       - name: Qualify namespace Fix All with generated constructor references
         run: bash scripts/verify-namespace-fix.sh "$RUNNER_TEMP/portia-namespace-fix" 64
 
