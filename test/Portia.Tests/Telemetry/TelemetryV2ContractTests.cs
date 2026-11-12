@@ -13,7 +13,7 @@ public sealed class TelemetryV2ContractTests
 {
     /// <summary>Every activity uses the namespaced Portia schema and optional messaging conventions.</summary>
     [Fact]
-    public void ShouldEmitExactOrderedTagsForAllActivityKinds()
+    public void ShouldEmitExactOrderedTagsGivenAllActivityKinds()
     {
         // Arrange
         using var listener = Listen(out var activities);
@@ -67,7 +67,7 @@ public sealed class TelemetryV2ContractTests
 
     /// <summary>Adapters that do not know a messaging technology emit no speculative standard attributes.</summary>
     [Fact]
-    public void ShouldOmitMessagingAttributesWhenSystemIsUnknown()
+    public void ShouldOmitMessagingAttributesGivenSystemIsUnknown()
     {
         // Arrange
         using var listener = Listen(out var activities);
@@ -86,7 +86,7 @@ public sealed class TelemetryV2ContractTests
 
     /// <summary>Asynchronous invocations always start new linked roots while RPC preserves parentage.</summary>
     [Fact]
-    public void ShouldApplyInvocationTraceRelationship()
+    public void ShouldApplyTraceRelationshipGivenInvocation()
     {
         // Arrange
         using var listener = Listen(out var activities);
@@ -116,7 +116,7 @@ public sealed class TelemetryV2ContractTests
 
     /// <summary>The delivery counter has one closed typed outcome and exactly three dimensions.</summary>
     [Fact]
-    public void ShouldRecordTypedDeliveryOutcomeWithExactDimensions()
+    public void ShouldRecordExactDimensionsGivenTypedDeliveryOutcome()
     {
         // Arrange
         using var listener = ListenToDelivery(out var measurements);
@@ -134,13 +134,13 @@ public sealed class TelemetryV2ContractTests
 
     /// <summary>An undefined enum value cannot silently widen the delivery-outcome vocabulary.</summary>
     [Fact]
-    public void ShouldRejectUndefinedDeliveryOutcome() =>
+    public void ShouldRejectGivenUndefinedDeliveryOutcome() =>
         _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
             PortiaTelemetry.RecordDelivery("test.request", "queue", (RequestDeliveryOutcome)42));
 
     /// <summary>Fitz RPC emits one send-process-execute chain named by the wire discriminator.</summary>
     [Fact]
-    public async Task ShouldEmitExactRpcTopologyUsingGeneratedDiscriminator()
+    public async Task ShouldEmitExactRpcTopologyGivenGeneratedDiscriminator()
     {
         // Arrange
         using var listener = Listen(out var activities);
@@ -175,7 +175,7 @@ public sealed class TelemetryV2ContractTests
 
     /// <summary>Repeated schedule firings are distinct linked roots with one execute child each.</summary>
     [Fact]
-    public async Task ShouldStartDistinctLinkedTraceForEveryScheduleFiring()
+    public async Task ShouldStartDistinctLinkedTraceGivenEveryScheduleFiring()
     {
         // Arrange
         using var listener = Listen(out var activities);
@@ -243,7 +243,7 @@ public sealed class TelemetryV2ContractTests
 
     /// <summary>Requested cancellation is non-error; unexpected faults retain the full exception event.</summary>
     [Fact]
-    public void ShouldDistinguishRequestedCancellationFromUnexpectedFault()
+    public void ShouldDistinguishCancellationFromFaultGivenRequestedAndUnexpectedCancellation()
     {
         // Arrange
         using var listener = Listen(out var activities);
@@ -274,7 +274,7 @@ public sealed class TelemetryV2ContractTests
 
     /// <summary>A persisted schedule links later firings to its send span, not its caller.</summary>
     [Fact]
-    public async Task ShouldPersistScheduleProducerContext()
+    public async Task ShouldPersistProducerContextGivenSchedule()
     {
         // Arrange
         using var listener = Listen(out var activities);
@@ -299,7 +299,7 @@ public sealed class TelemetryV2ContractTests
 
     /// <summary>Invalid propagation is ignored and counted without echoing the bad value.</summary>
     [Fact]
-    public void ShouldCountAndIgnoreInvalidPropagatedContext()
+    public void ShouldCountAndIgnoreContextGivenInvalidPropagatedContext()
     {
         // Arrange
         using var activityListener = Listen(out var activities);
@@ -338,7 +338,7 @@ public sealed class TelemetryV2ContractTests
 
     /// <summary>Propagation-only sampling retains status but suppresses tags and exception events.</summary>
     [Fact]
-    public void ShouldGateTagsAndExceptionEventsOnRequestedData()
+    public void ShouldGateTagsAndExceptionEventsGivenRequestedDataSetting()
     {
         // Arrange
         var activities = new ConcurrentBag<Activity>();
@@ -365,7 +365,7 @@ public sealed class TelemetryV2ContractTests
 
     /// <summary>A cancellation exception without a requested token is an unexpected process fault.</summary>
     [Fact]
-    public async Task ShouldTreatUnrequestedCancellationAsFault()
+    public async Task ShouldTreatAsFaultGivenUnrequestedCancellation()
     {
         // Arrange
         using var listener = Listen(out var activities);
@@ -387,7 +387,7 @@ public sealed class TelemetryV2ContractTests
 
     /// <summary>A cancellation observed from the supplied token is non-error and has no exception event.</summary>
     [Fact]
-    public async Task ShouldTreatRequestedCancellationAsCanceled()
+    public async Task ShouldTreatAsCanceledGivenRequestedCancellation()
     {
         // Arrange
         using var listener = Listen(out var activities);

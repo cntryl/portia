@@ -16,7 +16,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
     ///     renew it automatically, not just that the API shape suggests it should.
     /// </summary>
     [Fact]
-    public async Task ShouldRenewLeaseAutomaticallyWhileCallbackOutlivesTtl()
+    public async Task ShouldRenewLeaseAutomaticallyGivenCallbackOutlivingTtl()
     {
         // Arrange
         await using var client = await _broker.CreateClientAsync();
@@ -74,7 +74,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
     ///     TTL lapses — real crash recovery, not just a cooperative handoff.
     /// </summary>
     [Fact]
-    public async Task ShouldGrantPartitionToWaitingWorkerWhenHolderDisconnectsWithoutReleasing()
+    public async Task ShouldGrantPartitionToWaitingWorkerGivenHolderDisconnectsWithoutReleasing()
     {
         // Arrange
         var holderClient = await _broker.CreateClientAsync();

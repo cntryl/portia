@@ -18,7 +18,7 @@ public sealed class FitzConfigurationTests
     [InlineData("http://127.0.0.1:4090/")]
     [InlineData("https://127.0.0.1:4090/")]
     [InlineData("/relative/ws")]
-    public void EndpointMustBeAnAbsoluteWebSocketUri(string? endpoint)
+    public void ShouldRejectEndpointGivenNonAbsoluteWebSocketUri(string? endpoint)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -35,7 +35,7 @@ public sealed class FitzConfigurationTests
     [Theory]
     [InlineData("ws://127.0.0.1:4090/ws")]
     [InlineData("wss://broker.example/ws")]
-    public void AcceptsEitherWebSocketScheme(string endpoint)
+    public void ShouldAcceptEndpointGivenEitherWebSocketScheme(string endpoint)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -54,7 +54,7 @@ public sealed class FitzConfigurationTests
     [InlineData("3601")]
     [InlineData("NaN")]
     [InlineData("Infinity")]
-    public void StartupTimeoutMustBePositiveFiniteAndWithinAnHour(string seconds)
+    public void ShouldRejectStartupTimeoutGivenNonPositiveNonFiniteOrOverAnHour(string seconds)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -72,7 +72,7 @@ public sealed class FitzConfigurationTests
     [InlineData("0.5")]
     [InlineData("30")]
     [InlineData("3600")]
-    public void StartupTimeoutAcceptsAnyPositiveValueWithinAnHour(string seconds)
+    public void ShouldAcceptStartupTimeoutGivenPositiveValueWithinAnHour(string seconds)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -91,7 +91,7 @@ public sealed class FitzConfigurationTests
     [InlineData("two words")]
     [InlineData("has/slash")]
     [InlineData("star*")]
-    public void ApplicationNameMustBeAnExactRouteSegmentBecauseItBecomesTheFleetSelector(string name)
+    public void ShouldRejectApplicationNameGivenNonRouteSegment(string name)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -106,7 +106,7 @@ public sealed class FitzConfigurationTests
     }
 
     [Fact]
-    public void ApplicationNameBecomesTheFleetMembershipSelector()
+    public void ShouldUseFleetMembershipSelectorGivenApplicationName()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -120,7 +120,7 @@ public sealed class FitzConfigurationTests
     }
 
     [Fact]
-    public void SecondFitzConnectionWithDifferentSettingsIsRejected()
+    public void ShouldRejectSecondConnectionGivenDifferentSettings()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -137,7 +137,7 @@ public sealed class FitzConfigurationTests
     }
 
     [Fact]
-    public void RepeatingTheSameFitzConfigurationComposesOntoTheOneConnection()
+    public void ShouldComposeOntoOneConnectionGivenRepeatedSameConfiguration()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -153,7 +153,7 @@ public sealed class FitzConfigurationTests
     }
 
     [Fact]
-    public void AnOwnedConnectionAndACallerSuppliedClientCannotBothOwnOneApplication()
+    public void ShouldRejectSecondOwnerGivenOwnedConnectionAndCallerSuppliedClient()
     {
         // Arrange
         var services = new ServiceCollection();

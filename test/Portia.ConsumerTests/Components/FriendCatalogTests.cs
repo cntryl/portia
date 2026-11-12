@@ -143,7 +143,7 @@ public sealed class FriendCatalogTests
     }
 
     [Fact]
-    public void ShouldDiagnoseCatalogMethodGroupBeforeExecution()
+    public void ShouldDiagnoseCatalogMethodGroupGivenCatalogReferencedBeforeExecution()
     {
         // Arrange
         const string source = """
@@ -166,7 +166,7 @@ public sealed class FriendCatalogTests
     [Theory]
     [InlineData("DomainEventTypeCatalog.AddPortiaGeneratedDomainEvents")]
     [InlineData("catalog.AddPortiaGeneratedDomainEvents")]
-    public void ShouldAllowCatalogNameofWithoutRegistration(string member)
+    public void ShouldAllowCatalogNameofGivenNoRegistration(string member)
     {
         // Arrange
         var source = $$"""

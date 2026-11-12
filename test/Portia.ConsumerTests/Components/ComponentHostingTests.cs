@@ -8,7 +8,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed partial class ComponentHostingTests
 {
     [Fact]
-    public async Task HostedRegistrationNameOverridesConstructorCheckpointAndEffectIdentity()
+    public async Task ShouldOverrideConstructorIdentityGivenHostedRegistrationName()
     {
         // Arrange
         var services = ConsumerHost.CreateServices();
@@ -38,7 +38,7 @@ public sealed partial class ComponentHostingTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task StreamNotificationWakesCompletedWorkloadWithoutPollingDelay(bool projector)
+    public async Task ShouldWakeWorkloadGivenCompletedWorkloadWhenStreamNotificationArrives(bool projector)
     {
         // Arrange
         var changes = new Changes();
@@ -84,7 +84,7 @@ public sealed partial class ComponentHostingTests
     }
 
     [Fact]
-    public async Task BrokenNotificationSubscriptionIsDisposedAndRecreatedBeforeNextPass()
+    public async Task ShouldRecreateSubscriptionGivenBrokenNotificationSubscriptionBeforeNextPass()
     {
         // Arrange
         var clock = new ManualClock();
@@ -129,7 +129,7 @@ public sealed partial class ComponentHostingTests
     }
 
     [Fact]
-    public async Task FailingNotificationSubscriptionFallsBackToPollingWithoutFaultingTheWorkload()
+    public async Task ShouldFallBackToPollingGivenFailingNotificationSubscription()
     {
         // Arrange
         var changes = new Changes { FailSubscriptions = true };
@@ -169,7 +169,7 @@ public sealed partial class ComponentHostingTests
     }
 
     [Fact]
-    public async Task ScopedComponentCannotChangeTheRetainedSubscriptionPattern()
+    public async Task ShouldRetainSubscriptionPatternGivenScopedComponentThatChangesIt()
     {
         // Arrange
         var changes = new Changes();
@@ -208,7 +208,7 @@ public sealed partial class ComponentHostingTests
     [Theory]
     [InlineData(null)]
     [InlineData("repair")]
-    public async Task UncertainProjectionCommitAndFailedReloadPreserveDurableProgress(string? rebuildId)
+    public async Task ShouldPreserveDurableProgressGivenUncertainProjectionCommitAndFailedReload(string? rebuildId)
     {
         // Arrange
         var clock = new ManualClock();
@@ -250,7 +250,7 @@ public sealed partial class ComponentHostingTests
     }
 
     [Fact]
-    public async Task PoisonEventBacksOffThenFaultsWorkerAtAttemptLimit()
+    public async Task ShouldFaultWorkerGivenPoisonEventWhenAttemptLimitIsReached()
     {
         // Arrange
         var clock = new ManualClock();
@@ -291,7 +291,7 @@ public sealed partial class ComponentHostingTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task CancellationDisposesActiveComponentScope(bool projector)
+    public async Task ShouldDisposeComponentScopeGivenActiveComponentWhenCancelled(bool projector)
     {
         // Arrange
         var services = ConsumerHost.CreateServices();
@@ -327,7 +327,7 @@ public sealed partial class ComponentHostingTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task EachPassDisposesItsScopeAndReloadsDurableProgress(bool projector)
+    public async Task ShouldDisposeScopeAndReloadProgressGivenEachPass(bool projector)
     {
         // Arrange
         var clock = new ManualClock();
@@ -374,7 +374,7 @@ public sealed partial class ComponentHostingTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task HostsBothConcreteReactorsWithScopes(bool scoped)
+    public async Task ShouldHostBothReactorsGivenConcreteReactorsWithScopes(bool scoped)
     {
         // Arrange
         var services = ConsumerHost.CreateServices(scoped);
@@ -418,7 +418,7 @@ public sealed partial class ComponentHostingTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task HostsGeneratedProjectorsSharingOneProjectionPort(bool scoped)
+    public async Task ShouldHostProjectorsGivenGeneratedProjectorsSharingOneProjectionPort(bool scoped)
     {
         // Arrange
         var services = ConsumerHost.CreateServices(scoped);

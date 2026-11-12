@@ -18,7 +18,7 @@ public sealed class PortiaTelemetryLoggerFallbackTests
     ///     supplied.
     /// </summary>
     [Fact]
-    public void ShouldLogFaultWhenNoActivityListenerIsAttached()
+    public void ShouldLogFaultGivenNoActivityListenerIsAttached()
     {
         // Arrange
         var logger = new CapturingLogger();
@@ -41,13 +41,13 @@ public sealed class PortiaTelemetryLoggerFallbackTests
     ///     additive, not a required parameter every existing call site has to be rewritten for.
     /// </summary>
     [Fact]
-    public void ShouldNotThrowWhenLoggerIsOmitted() =>
+    public void ShouldNotThrowGivenLoggerIsOmitted() =>
         PortiaTelemetry.RecordRunnerFault("TestRunner", RunnerFaultStage.Execution,
             new InvalidOperationException("boom"));
 
     /// <summary>Every non-fault catalog entry has its fixed identifier and prescribed level.</summary>
     [Fact]
-    public void ShouldUseStableEventIdsAndLevelsWithoutRoutesOrBusinessMessages()
+    public void ShouldUseStableEventIdsAndLevelsGivenFallbackLoggingWithoutRoutesOrBusinessMessages()
     {
         // Arrange
         var logger = new CapturingLogger();

@@ -11,7 +11,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class WorkerStartupRequirementTests
 {
     [Fact]
-    public async Task WorkersWithoutAnEventReaderFailBeforeServing()
+    public async Task ShouldFailBeforeServingGivenWorkersWithoutEventReader()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
@@ -30,7 +30,7 @@ public sealed class WorkerStartupRequirementTests
     }
 
     [Fact]
-    public async Task PerTenantWorkersAlsoRequireATenantDirectory()
+    public async Task ShouldRequireTenantDirectoryGivenPerTenantWorkers()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
@@ -49,7 +49,7 @@ public sealed class WorkerStartupRequirementTests
     }
 
     [Fact]
-    public async Task GlobalWorkersDoNotRequireATenantDirectory()
+    public async Task ShouldNotRequireTenantDirectoryGivenGlobalWorkers()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
@@ -73,7 +73,7 @@ public sealed class WorkerStartupRequirementTests
     }
 
     [Fact]
-    public async Task AHostThatDeclaredNoComponentsRequiresNothing()
+    public async Task ShouldRequireNothingGivenHostWithNoComponents()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();

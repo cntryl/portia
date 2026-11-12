@@ -11,7 +11,7 @@ public sealed class RequestBusExtensionsTests
 {
     /// <summary>A reaction command inherits the triggering event's execution identity.</summary>
     [Fact]
-    public async Task ShouldPreserveReactionCausalityWhenReactionCommandSucceeds()
+    public async Task ShouldPreserveReactionCausalityGivenReactionCommandSucceeds()
     {
         // Arrange
         var source = CreateReactionContext();
@@ -51,7 +51,7 @@ public sealed class RequestBusExtensionsTests
     ///     removes that fork, so a registered clock is honoured no matter which overload is called.
     /// </summary>
     [Fact]
-    public async Task ShouldStampExecutionStartFromTheRegisteredTimeProvider()
+    public async Task ShouldStampExecutionStartGivenRegisteredTimeProvider()
     {
         // Arrange
         var clock = new FixedClock(new DateTimeOffset(2031, 4, 5, 6, 7, 8, TimeSpan.Zero));

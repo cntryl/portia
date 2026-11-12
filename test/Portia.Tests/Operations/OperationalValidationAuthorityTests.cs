@@ -5,7 +5,7 @@ public sealed partial class OperationalValidationAuthorityTests
 {
     /// <summary>An advisory stock check passes, a competing reservation wins, and choreography records rejection idempotently.</summary>
     [Fact]
-    public async Task ShouldRecordAuthoritativeRejectionAsSuccessfulProcessingAfterAdvisoryRace()
+    public async Task ShouldRecordAuthoritativeRejectionAsSuccessfulProcessingGivenAdvisoryRace()
     {
         // Arrange
         var events = new InMemoryEventStore();

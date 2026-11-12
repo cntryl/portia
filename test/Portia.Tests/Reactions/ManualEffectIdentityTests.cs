@@ -12,7 +12,7 @@ public sealed class ManualEffectIdentityTests
     [Theory]
     [InlineData(SourceId)]
     [InlineData(OtherSourceId)]
-    public void ShouldRejectManualNameContainingSourceIdentityDelimiter(string embeddedSource)
+    public void ShouldRejectManualNameGivenSourceIdentityDelimiter(string embeddedSource)
     {
         // Arrange
         var first = new EffectProbe("billing");
@@ -31,7 +31,7 @@ public sealed class ManualEffectIdentityTests
 
     /// <summary>The terminal delimiter between the name and source also counts as a boundary.</summary>
     [Fact]
-    public void ShouldRejectManualNameEndingInSourceIdentity()
+    public void ShouldRejectManualNameGivenNameEndingInSourceIdentity()
     {
         // Arrange
         var reactor = new EffectProbe("billing:" + OtherSourceId);
@@ -52,7 +52,7 @@ public sealed class ManualEffectIdentityTests
     [InlineData("billing:00000000-0000-0000-0000-000000000000:reserve", "audit", "bc323bb7-59d3-5569-8fea-7761faa6eae9")]
     [InlineData("billing", "通知😀", "4c880aa0-f143-5ece-af7d-17e640c668c4")]
     [InlineData("billing", "audit\0copy", "67eb83d1-7cb1-57cf-94b7-022c2375c6ee")]
-    public void ShouldPreserveAcceptedLegacyManualEffectId(string name, string effect, string expected)
+    public void ShouldPreserveEffectIdGivenAcceptedLegacyManualEffectId(string name, string effect, string expected)
     {
         // Arrange
         var reactor = new EffectProbe(name);
@@ -68,7 +68,7 @@ public sealed class ManualEffectIdentityTests
 
     /// <summary>A tenant cannot close its legacy wrapper and consume the reactor/source fields.</summary>
     [Fact]
-    public void ShouldRejectBoundTenantContainingLegacyClosingMarker()
+    public void ShouldRejectBoundTenantGivenLegacyClosingMarker()
     {
         // Arrange
         var firstTenant = new TenantId("acme");
@@ -89,7 +89,7 @@ public sealed class ManualEffectIdentityTests
 
     /// <summary>Workload names cannot inject the exact legacy name-to-tenant delimiter.</summary>
     [Fact]
-    public void ShouldRejectBoundWorkloadNameContainingLegacyFieldDelimiter()
+    public void ShouldRejectBoundWorkloadNameGivenLegacyFieldDelimiter()
     {
         // Arrange
         var reactor = BoundProbe("billing, Tenant = other", new TenantId("acme"));
@@ -104,7 +104,7 @@ public sealed class ManualEffectIdentityTests
 
     /// <summary>Ordinary hosted names and tenants with colons retain their exact persisted derivation.</summary>
     [Fact]
-    public void ShouldPreserveAcceptedLegacyBoundEffectId()
+    public void ShouldPreserveEffectIdGivenAcceptedLegacyBoundEffectId()
     {
         // Arrange
         var tenant = new TenantId("acme:west");
@@ -121,7 +121,7 @@ public sealed class ManualEffectIdentityTests
     [Theory]
     [InlineData(0xd800)]
     [InlineData(0xdc00)]
-    public void ShouldRejectMalformedUtf16EffectNames(int codeUnit)
+    public void ShouldRejectEffectNameGivenMalformedUtf16(int codeUnit)
     {
         // Arrange
         var reactor = new EffectProbe("billing");

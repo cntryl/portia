@@ -8,7 +8,7 @@ public sealed class SingleProcessWorkloadCancellationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldAwaitRevokedWorkloadDespiteCancellationCallbackFailure(bool throwOnCancellation)
+    public async Task ShouldAwaitRevokedWorkloadGivenCancellationCallbackFailure(bool throwOnCancellation)
     {
         // Arrange
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -87,7 +87,7 @@ public sealed class SingleProcessWorkloadCancellationTests
 
     /// <summary>Cancellation callback and asynchronous cleanup faults both survive revocation.</summary>
     [Fact]
-    public async Task ShouldPreserveCancellationAndWorkloadCleanupFailures()
+    public async Task ShouldPreserveBothFailuresGivenCancellationAndWorkloadCleanupFailures()
     {
         // Arrange
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -13,7 +13,7 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
 {
     /// <summary>A blocked reactor survives worker restart, recovers exactly once, and its committed effects project.</summary>
     [Fact]
-    public async Task ShouldDiagnoseApproveRetryAndVerifyRealProcessing()
+    public async Task ShouldDiagnoseApproveRetryAndVerifyGivenRealProcessing()
     {
         // Arrange
         await using var client = await broker.CreateClientAsync();

@@ -5,7 +5,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class RequestGuardGeneratorTests
 {
     [Fact]
-    public async Task ValidFamilyGuardRegistrationEmitsTypedDescriptorsAndDispatches()
+    public async Task ShouldEmitTypedDescriptorsAndDispatchGivenValidFamilyGuardRegistration()
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""
@@ -51,7 +51,7 @@ public sealed class RequestGuardGeneratorTests
     }
 
     [Fact]
-    public void NonGuardRegistrationReportsPortia018()
+    public void ShouldReportPortia018GivenNonGuardRegistration()
     {
         // Arrange
         const string source = """
@@ -75,7 +75,7 @@ public sealed class RequestGuardGeneratorTests
     }
 
     [Fact]
-    public void MalformedGuardSignatureRemainsACompilationError()
+    public void ShouldRemainCompilationErrorGivenMalformedGuardSignature()
     {
         // Arrange
         const string source = """
@@ -102,7 +102,7 @@ public sealed class RequestGuardGeneratorTests
     }
 
     [Fact]
-    public void GenericGuardDeclarationReportsPortia015()
+    public void ShouldReportPortia015GivenGenericGuardDeclaration()
     {
         // Arrange
         const string source = """
@@ -127,7 +127,7 @@ public sealed class RequestGuardGeneratorTests
     }
 
     [Fact]
-    public async Task StreamGuardRegistrationEmitsDescriptorAndRunsBeforeStreamHandler()
+    public async Task ShouldEmitDescriptorAndRunBeforeHandlerGivenStreamGuardRegistration()
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""
@@ -174,7 +174,7 @@ public sealed class RequestGuardGeneratorTests
     }
 
     [Fact]
-    public void Portia018NamesTheRejectedType()
+    public void ShouldNameRejectedTypeGivenPortia018()
     {
         // Arrange
         const string source = """
@@ -199,7 +199,7 @@ public sealed class RequestGuardGeneratorTests
     }
 
     [Fact]
-    public void GenericGuardRegistrationReportsPortia018()
+    public void ShouldReportPortia018GivenGenericGuardRegistration()
     {
         // Arrange
         const string source = """
@@ -222,7 +222,7 @@ public sealed class RequestGuardGeneratorTests
     }
 
     [Fact]
-    public void GuardNameParticipatesInGeneratedRegistrationCollisionHandling()
+    public void ShouldHandleRegistrationCollisionGivenGuardNames()
     {
         // Arrange
         const string source = """

@@ -32,7 +32,7 @@ public sealed class OpenApiTests : IAsyncDisposable
 
     /// <summary>Converter-backed collections retain their application-declared wire shape in both documents.</summary>
     [Fact]
-    public async Task ShouldDescribeConvertedCollectionsAtEveryContractPosition()
+    public async Task ShouldDescribeConvertedCollectionsGivenEveryContractPosition()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -102,7 +102,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [Theory]
     [InlineData("json")]
     [InlineData("yml")]
-    public async Task ShouldPreserveNullableMappedAndDeclaredCollectionElements(string format)
+    public async Task ShouldPreserveNullabilityGivenMappedAndDeclaredCollectionElements(string format)
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -150,7 +150,7 @@ public sealed class OpenApiTests : IAsyncDisposable
 
     /// <summary>Mapped request and nullable response roots retain their runtime array contract.</summary>
     [Fact]
-    public async Task ShouldSerializeAndDescribeMappedRequestAndResponseRoots()
+    public async Task ShouldSerializeAndDescribeRootsGivenMappedRequestAndResponse()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -203,7 +203,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldRejectInvalidSchemaMappings(bool missingMetadata)
+    public async Task ShouldRejectMappingGivenInvalidSchemaMapping(bool missingMetadata)
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -236,7 +236,7 @@ public sealed class OpenApiTests : IAsyncDisposable
 
     /// <summary>HTTP activation never replaces the application's global ASP.NET JSON policy.</summary>
     [Fact]
-    public void ShouldLeaveAspNetCoreJsonOptionsOwnedByTheApplication()
+    public void ShouldLeaveJsonOptionsOwnedByApplicationGivenAspNetCoreJsonOptions()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -255,7 +255,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldDescribePortiaSerializerContractsSeparately(bool customizeMoney)
+    public async Task ShouldDescribeContractsSeparatelyGivenPortiaSerializerContracts(bool customizeMoney)
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -572,7 +572,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     ///     Registering HTTP services does not publish the document unless the application maps it.
     /// </summary>
     [Fact]
-    public async Task ShouldNotMapOpenApiEndpointsUntilExplicitlyRequested()
+    public async Task ShouldNotMapEndpointsGivenNoExplicitRequest()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -600,7 +600,7 @@ public sealed class OpenApiTests : IAsyncDisposable
 
     /// <summary>Application-owned components with similar names do not replace Portia error references.</summary>
     [Fact]
-    public async Task ShouldAvoidApplicationResponseComponentNameCollision()
+    public async Task ShouldAvoidComponentNameCollisionGivenApplicationResponseComponent()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -641,7 +641,7 @@ public sealed class OpenApiTests : IAsyncDisposable
 
     /// <summary>A thousand generated operation contracts keep default response output compact.</summary>
     [Fact]
-    public async Task ShouldKeepThousandOperationOpenApiDocumentCompact()
+    public async Task ShouldKeepDocumentCompactGivenThousandOperations()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -704,7 +704,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     ///     separate port — and still get Portia's operation IDs, parameters and responses.
     /// </summary>
     [Fact]
-    public async Task ShouldLetApplicationMapTheDocumentOnItsOwnProtectedRoute()
+    public async Task ShouldLetApplicationMapDocumentGivenItsOwnProtectedRoute()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -736,7 +736,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     ///     only JSON for those bodies; an endpoint that disables antiforgery still describes form content.
     /// </summary>
     [Fact]
-    public async Task ShouldDescribeFormContentOnlyWhenFormPostsAreAccepted()
+    public async Task ShouldDescribeFormContentOnlyGivenFormPostsAreAccepted()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();

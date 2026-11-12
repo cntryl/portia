@@ -3,7 +3,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ApplicationSetupTests
 {
     [Fact]
-    public async Task ApplicationHydratesCallerConstructedAggregateWithoutFactory()
+    public async Task ShouldHydrateAggregateGivenCallerConstructedAggregateWithoutFactory()
     {
         // Arrange
         const string source = """
@@ -39,7 +39,7 @@ public sealed class ApplicationSetupTests
     }
 
     [Fact]
-    public void SharedSetupOnlyActivatesWorkersInWorkerHost()
+    public void ShouldActivateWorkersOnlyInWorkerHostGivenSharedSetup()
     {
         // Arrange
         const string source = """

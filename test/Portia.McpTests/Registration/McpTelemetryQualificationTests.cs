@@ -28,7 +28,7 @@ public sealed class McpTelemetryQualificationTests
     [InlineData("tool", true, true)]
     [InlineData("resource", true, true)]
     [InlineData("prompt", true, true)]
-    public async Task ShouldExportBoundedCorrelatedSignalsForEveryPrimitive(string primitive, bool fails,
+    public async Task ShouldExportBoundedCorrelatedSignalsGivenEveryPrimitive(string primitive, bool fails,
         bool cancellationException)
     {
         // Arrange
@@ -141,7 +141,7 @@ public sealed class McpTelemetryQualificationTests
     [Theory]
     [InlineData("resource", "Resource unavailable.")]
     [InlineData("prompt", "Prompt unavailable.")]
-    public async Task ShouldSanitizeMcpExceptionsThrownByPrimitiveDelegates(string primitive, string safeMessage)
+    public async Task ShouldSanitizeMcpExceptionsGivenPrimitiveDelegatesThatThrow(string primitive, string safeMessage)
     {
         // Arrange
         var resourceFailure = new McpException("sensitive resource projection failure");

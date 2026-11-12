@@ -5,7 +5,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ReactorEffectPatternsTests
 {
     [Fact]
-    public async Task CommandReactionPreservesCheckpointGivenCommandFailure()
+    public async Task ShouldPreserveCheckpointGivenCommandReactionFailure()
     {
         // Arrange
         var aggregateId = Uuid.CreateVersion4();
@@ -28,7 +28,7 @@ public sealed class ReactorEffectPatternsTests
     }
 
     [Fact]
-    public async Task DirectEffectReactionRunsWithoutRequestBus()
+    public async Task ShouldRunReactionGivenDirectEffectWithoutRequestBus()
     {
         // Arrange
         var aggregateId = Uuid.CreateVersion4();

@@ -9,7 +9,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class MixedWorkloadTests
 {
     [Fact]
-    public async Task MixedScopesIsolateProgressAndReconcileTenantsWithoutRestartingGlobalWork()
+    public async Task ShouldIsolateProgressAndReconcileTenantsGivenMixedScopes()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();

@@ -14,7 +14,7 @@ public sealed class RequestGuardTests
 
     /// <summary>A successful command guard runs before its handler and shares the typed context.</summary>
     [Fact]
-    public async Task ShouldRunCommandGuardBeforeHandlerWithSharedContext()
+    public async Task ShouldRunGuardBeforeHandlerGivenCommandWithSharedContext()
     {
         // Arrange
         var calls = new List<string>();
@@ -33,7 +33,7 @@ public sealed class RequestGuardTests
 
     /// <summary>The first command guard failure is returned unchanged and skips later work.</summary>
     [Fact]
-    public async Task ShouldShortCircuitCommandOnFirstGuardFailure()
+    public async Task ShouldShortCircuitCommandGivenFirstGuardFailure()
     {
         // Arrange
         var calls = new List<string>();
@@ -56,7 +56,7 @@ public sealed class RequestGuardTests
 
     /// <summary>A query guard failure maps the same error into a result-bearing failure.</summary>
     [Fact]
-    public async Task ShouldMapQueryGuardFailureWithoutCallingHandler()
+    public async Task ShouldMapFailureWithoutCallingHandlerGivenQueryGuardFailure()
     {
         // Arrange
         var calls = new List<string>();
@@ -75,7 +75,7 @@ public sealed class RequestGuardTests
 
     /// <summary>Successful guards preserve the handler's exact expected failure.</summary>
     [Fact]
-    public async Task ShouldPreserveHandlerResultAfterSuccessfulGuards()
+    public async Task ShouldPreserveHandlerResultGivenSuccessfulGuards()
     {
         // Arrange
         var calls = new List<string>();
@@ -94,7 +94,7 @@ public sealed class RequestGuardTests
 
     /// <summary>Matching family and concrete guards run sequentially in registration order.</summary>
     [Fact]
-    public async Task ShouldRunMatchingGuardsInRegistrationOrder()
+    public async Task ShouldRunGuardsInRegistrationOrderGivenMatchingGuards()
     {
         // Arrange
         var calls = new List<string>();
@@ -116,7 +116,7 @@ public sealed class RequestGuardTests
 
     /// <summary>Pipeline behaviors wrap guards and the handler at the innermost point.</summary>
     [Fact]
-    public async Task ShouldRunGuardsInsidePipelineBehaviors()
+    public async Task ShouldRunGuardsInsideBehaviorsGivenPipelineBehaviors()
     {
         // Arrange
         var calls = new List<string>();
@@ -135,7 +135,7 @@ public sealed class RequestGuardTests
 
     /// <summary>An outer behavior that short-circuits does not run guards because no handler executes.</summary>
     [Fact]
-    public async Task ShouldSkipGuardsWhenBehaviorShortCircuits()
+    public async Task ShouldSkipGuardsGivenBehaviorShortCircuits()
     {
         // Arrange
         var calls = new List<string>();
@@ -155,7 +155,7 @@ public sealed class RequestGuardTests
 
     /// <summary>AuthorizeAsync remains authorization-only; dispatch authorizes before it runs guards.</summary>
     [Fact]
-    public async Task ShouldKeepAuthorizationSeparateAndAheadOfGuards()
+    public async Task ShouldRunAuthorizationBeforeGuardsGivenBothConfigured()
     {
         // Arrange
         var calls = new List<string>();
@@ -181,7 +181,7 @@ public sealed class RequestGuardTests
 
     /// <summary>The dispatch cancellation token reaches a guard and cancellation propagates.</summary>
     [Fact]
-    public async Task ShouldPropagateGuardCancellation()
+    public async Task ShouldPropagateCancellationGivenCancelledGuard()
     {
         // Arrange
         var calls = new List<string>();
@@ -207,7 +207,7 @@ public sealed class RequestGuardTests
 
     /// <summary>Unexpected guard exceptions remain exceptions and skip the handler.</summary>
     [Fact]
-    public async Task ShouldPropagateGuardException()
+    public async Task ShouldPropagateExceptionGivenThrowingGuard()
     {
         // Arrange
         var calls = new List<string>();
@@ -229,7 +229,7 @@ public sealed class RequestGuardTests
 
     /// <summary>An uninitialized guard result fails loudly and names the application guard.</summary>
     [Fact]
-    public async Task ShouldNameGuardReturningUninitializedResult()
+    public async Task ShouldNameGuardGivenGuardReturningUninitializedResult()
     {
         // Arrange
         var calls = new List<string>();
@@ -250,7 +250,7 @@ public sealed class RequestGuardTests
 
     /// <summary>One application-owned request-family guard applies to several concrete requests.</summary>
     [Fact]
-    public async Task ShouldReuseFamilyGuardAcrossConcreteRequests()
+    public async Task ShouldReuseFamilyGuardGivenMultipleConcreteRequests()
     {
         // Arrange
         var calls = new List<string>();
@@ -274,7 +274,7 @@ public sealed class RequestGuardTests
 
     /// <summary>A guard whose scope matches a streaming request runs before the stream handler.</summary>
     [Fact]
-    public async Task ShouldRunGuardsBeforeStreamingHandler()
+    public async Task ShouldRunGuardsBeforeHandlerGivenStreamingHandler()
     {
         // Arrange
         var calls = new List<string>();
@@ -294,7 +294,7 @@ public sealed class RequestGuardTests
 
     /// <summary>A failed stream guard ends the stream before its first item, carrying the guard's error.</summary>
     [Fact]
-    public async Task ShouldFailStreamBeforeFirstItemWhenGuardFails()
+    public async Task ShouldFailStreamBeforeFirstItemGivenGuardFails()
     {
         // Arrange
         var calls = new List<string>();
@@ -323,7 +323,7 @@ public sealed class RequestGuardTests
 
     /// <summary>Stream guards run inside stream behaviors, matching the unary lifecycle order.</summary>
     [Fact]
-    public async Task ShouldRunStreamGuardsInsideStreamBehaviors()
+    public async Task ShouldRunStreamGuardsInsideBehaviorsGivenStreamBehaviors()
     {
         // Arrange
         var calls = new List<string>();

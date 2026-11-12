@@ -103,7 +103,7 @@ public sealed class ReflectionDisabledConsumerTests
     }
 
     [Fact]
-    public async Task HostStartupReportsEveryMissingRegisteredRoot()
+    public async Task ShouldReportEveryMissingRootGivenHostStartupWithUnregisteredRoots()
     {
         // Arrange
         Assert.False(JsonSerializer.IsReflectionEnabledByDefault);

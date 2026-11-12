@@ -16,7 +16,7 @@ public sealed class TransportExecutionContextTests
     ///     invocation entirely, since a query string can carry credentials that must not reach telemetry.
     /// </summary>
     [Fact]
-    public async Task ShouldReportConcreteHttpIngressWithoutQueryString()
+    public async Task ShouldReportConcreteIngressWithoutQueryStringGivenHttpRequest()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -50,7 +50,7 @@ public sealed class TransportExecutionContextTests
     ///     ever sharing one execution id.
     /// </summary>
     [Fact]
-    public async Task ShouldKeepRequestIdentityButStartNewExecutionOnQueueRedelivery()
+    public async Task ShouldKeepRequestIdentityAndStartNewExecutionGivenQueueRedelivery()
     {
         // Arrange
         var metadata = RequestMetadata.Create();

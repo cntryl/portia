@@ -12,7 +12,7 @@ public sealed class JsonDomainEventSerializerContractTests
     ///     contract, including metadata and the application's payload naming policy.
     /// </summary>
     [Fact]
-    public void ShouldPreserveDurableEnvelopeShape()
+    public void ShouldPreserveDurableEnvelopeShapeGivenSerializedDomainEvent()
     {
         // Arrange
         var options = TestJson.Options();

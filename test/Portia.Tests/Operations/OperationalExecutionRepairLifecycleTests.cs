@@ -4,7 +4,7 @@ public sealed partial class OperationalExecutionTests
 {
     /// <summary>Native progress invalidates queued plans without declaring an unknown repair successful.</summary>
     [Fact]
-    public async Task ShouldInvalidateQueuedRepairsWhenAuthoritativeCheckpointChanges()
+    public async Task ShouldInvalidateQueuedRepairsGivenAuthoritativeCheckpointChanges()
     {
         // Arrange
         var journal = new MemoryOperationalStore();
@@ -45,7 +45,7 @@ public sealed partial class OperationalExecutionTests
 
     /// <summary>A transient recovery failure keeps the same approved repair and its queued sibling until success.</summary>
     [Fact]
-    public async Task ShouldKeepQueuedRepairWhileApprovedRetryRemainsIncomplete()
+    public async Task ShouldKeepQueuedRepairGivenApprovedRetryRemainsIncomplete()
     {
         // Arrange
         var journal = new MemoryOperationalStore();
@@ -88,7 +88,7 @@ public sealed partial class OperationalExecutionTests
 
     /// <summary>A failed recovery invalidates stale queued plans while preserving the new unresolved block.</summary>
     [Fact]
-    public async Task ShouldPreserveNewBlockWhenApprovedRetryFails()
+    public async Task ShouldPreserveNewBlockGivenApprovedRetryFails()
     {
         // Arrange
         var journal = new MemoryOperationalStore();

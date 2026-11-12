@@ -21,7 +21,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
     /// <summary>Two replicas upsert one route, changed desired state replaces it, and cancellation removes it.</summary>
     [Fact]
-    public async Task ShouldUpsertAndCancelDeclarativeScheduleAgainstRealFitzBroker()
+    public async Task ShouldUpsertAndCancelScheduleGivenDeclarativeScheduleAndRealFitzBroker()
     {
         // Arrange
         await using var firstClient = await _broker.CreateClientAsync();
@@ -62,7 +62,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
     /// <summary>A real persisted schedule carries the completed producer span as its future link.</summary>
     [Fact]
-    public async Task ShouldPersistScheduleProducerContextAgainstRealFitzBroker()
+    public async Task ShouldPersistScheduleProducerContextGivenRealFitzBroker()
     {
         // Arrange
         using var listener = ListenToRequests(out var activities);
@@ -106,7 +106,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     ///     append surfaces as EventStreamConcurrencyException and writes nothing.
     /// </summary>
     [Fact]
-    public async Task ShouldSatisfyEventStoreConformanceAgainstRealFitzBroker()
+    public async Task ShouldSatisfyEventStoreConformanceGivenRealFitzBroker()
     {
         // Arrange
         await using var client = await _broker.CreateClientAsync();
@@ -121,7 +121,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
     /// <summary>Runs the distributed ownership contract against two real Fitz client sessions.</summary>
     [Fact]
-    public async Task ShouldSatisfyWorkloadCoordinatorConformanceAgainstRealFitzBroker() =>
+    public async Task ShouldSatisfyWorkloadCoordinatorConformanceGivenRealFitzBroker() =>
         await WorkloadCoordinatorConformance.VerifyAsync(new FitzWorkloadCoordinatorProbe(_broker));
 
     /// <summary>
@@ -132,7 +132,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     ///     letting the loser's stale commit through and replaying the projection.
     /// </summary>
     [Fact]
-    public async Task ShouldSatisfyProjectionStoreConformanceAgainstRealFitzKv() =>
+    public async Task ShouldSatisfyProjectionStoreConformanceGivenRealFitzKv() =>
         await ProjectionStoreConformance.VerifyAsync(new FitzKvProjectionProbe(_broker));
 
     /// <summary>
@@ -140,7 +140,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     ///     client can repair it, after which the original store can immediately begin and commit again.
     /// </summary>
     [Fact]
-    public async Task ShouldReleaseRealFitzTransactionAfterMalformedCheckpointValidation()
+    public async Task ShouldReleaseTransactionGivenRealFitzAndMalformedCheckpointValidation()
     {
         // Arrange
         await using var originalClient = await _broker.CreateClientAsync();
@@ -187,7 +187,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     ///     unwritten-identity default, and separation by identity are asserted directly here.
     /// </summary>
     [Fact]
-    public async Task ShouldPersistReactorCheckpointsThroughRealFitzKv()
+    public async Task ShouldPersistReactorCheckpointsGivenRealFitzKv()
     {
         // Arrange
         await using var client = await _broker.CreateClientAsync();
@@ -221,7 +221,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     ///     host once every tenant's reactor shared one route.
     /// </summary>
     [Fact]
-    public async Task ShouldSaveOneTenantsReactorCheckpointWhileAnotherTenantsIsInFlight()
+    public async Task ShouldSaveReactorCheckpointGivenAnotherTenantsCheckpointInFlight()
     {
         // Arrange
         await using var client = await _broker.CreateClientAsync();
@@ -243,7 +243,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     ///     Verifies that a Portia domain event survives an append/read round trip through Fitz.
     /// </summary>
     [Fact]
-    public async Task ShouldRoundTripDomainEventThroughRealFitzBroker()
+    public async Task ShouldRoundTripDomainEventGivenRealFitzBroker()
     {
         // Arrange
         await using var client = await _broker.CreateClientAsync();
@@ -283,7 +283,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     ///     reads that same real Fitz stream back.
     /// </summary>
     [Fact]
-    public async Task ShouldUpcastEventReadFromRealFitzStreamWrittenByOlderSchemaVersion()
+    public async Task ShouldUpcastEventGivenRealFitzStreamWrittenByOlderSchemaVersion()
     {
         // Arrange
         await using var client = await _broker.CreateClientAsync();
@@ -322,7 +322,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     ///     wording matching.
     /// </summary>
     [Fact]
-    public async Task ShouldThrowConcurrencyExceptionWhenAppendingWithStaleExpectedVersion()
+    public async Task ShouldThrowConcurrencyExceptionGivenAppendingWithStaleExpectedVersion()
     {
         // Arrange
         await using var client = await _broker.CreateClientAsync();
@@ -387,7 +387,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     ///     two real Fitz client sessions.
     /// </summary>
     [Fact]
-    public async Task ShouldRoundTripRequestThroughRealFitzBroker()
+    public async Task ShouldRoundTripRequestGivenRealFitzBroker()
     {
         // Arrange
         using var activityListener = ListenToRequests(out var activities);
@@ -421,7 +421,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
     /// <summary>A real queue delivery starts a linked root and records one completed reservation.</summary>
     [Fact]
-    public async Task ShouldEmitLinkedQueueTopologyAgainstRealFitzBroker()
+    public async Task ShouldEmitLinkedQueueTopologyGivenRealFitzBroker()
     {
         // Arrange
         await using var workerClient = await _broker.CreateClientAsync();
@@ -453,7 +453,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
     /// <summary>A terminal queue delivery expires and becomes reservable again through Fitz.</summary>
     [Fact]
-    public async Task ShouldRedeliverTerminalQueueFailureThroughFitz()
+    public async Task ShouldRedeliverTerminalQueueFailureGivenFitzQueue()
     {
         // Arrange
         await using var workerClient = await _broker.CreateClientAsync();
@@ -500,7 +500,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
     /// <summary>A real notice delivery starts a linked root and records one completed delivery.</summary>
     [Fact]
-    public async Task ShouldEmitLinkedNoticeTopologyAgainstRealFitzBroker()
+    public async Task ShouldEmitLinkedNoticeTopologyGivenRealFitzBroker()
     {
         // Arrange
         await using var workerClient = await _broker.CreateClientAsync();
@@ -538,7 +538,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     ///     some caller-supplied deadline.
     /// </summary>
     [Fact]
-    public async Task ShouldFailFastWhenNoWorkerIsRegisteredForRoute()
+    public async Task ShouldFailFastGivenNoWorkerIsRegisteredForRoute()
     {
         // Arrange
         await using var client = await _broker.CreateClientAsync();

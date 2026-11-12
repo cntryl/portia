@@ -15,7 +15,7 @@ public sealed class ConsumerRecoveryTests
     [InlineData(false, true, true)]
     [InlineData(true, false, true)]
     [InlineData(true, true, true)]
-    public async Task HostedConsumerRestartsAfterFaultOrUnexpectedCompletion(bool notification, bool fault,
+    public async Task ShouldRestartConsumerGivenHostedConsumerFaultOrUnexpectedCompletion(bool notification, bool fault,
         bool stopDuringBackoff)
     {
         // Arrange

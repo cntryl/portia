@@ -11,7 +11,7 @@ public sealed class FixedTenantDirectoryTests
 {
     /// <summary>The directory reports its tenants in the given order, and an empty directory is allowed.</summary>
     [Fact]
-    public async Task ShouldReportConfiguredTenants()
+    public async Task ShouldReportTenantsGivenConfiguredTenants()
     {
         // Arrange
         var directory = new FixedTenantDirectory(new TenantId("acme"), new TenantId("beta"));
@@ -28,7 +28,7 @@ public sealed class FixedTenantDirectoryTests
 
     /// <summary>A tenant listed twice is a configuration mistake, not two workloads.</summary>
     [Fact]
-    public void ShouldRejectDuplicateTenants()
+    public void ShouldRejectGivenDuplicateTenants()
     {
         // Arrange
         var tenant = new TenantId("acme");
@@ -42,7 +42,7 @@ public sealed class FixedTenantDirectoryTests
 
     /// <summary>The watch stays open until cancelled and ends through cancellation, never on its own.</summary>
     [Fact]
-    public async Task ShouldKeepWatchOpenUntilCancelled()
+    public async Task ShouldKeepWatchOpenGivenWatchNotYetCancelled()
     {
         // Arrange
         var directory = new FixedTenantDirectory(new TenantId("acme"));
@@ -60,7 +60,7 @@ public sealed class FixedTenantDirectoryTests
 
     /// <summary>The runner starts a workload for each tenant and stops them all on shutdown.</summary>
     [Fact]
-    public async Task ShouldStartEveryTenantUnderTheRunner()
+    public async Task ShouldStartEveryTenantGivenRunner()
     {
         // Arrange
         var directory = new FixedTenantDirectory(new TenantId("acme"), new TenantId("beta"));

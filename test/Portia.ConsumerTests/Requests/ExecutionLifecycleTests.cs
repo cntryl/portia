@@ -7,7 +7,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ExecutionLifecycleTests
 {
     [Fact]
-    public async Task StreamingAuthorizationAndHandlerShareExecutionWithoutSharingMutablePrincipals()
+    public async Task ShouldShareExecutionWithoutSharingPrincipalsGivenStreamingAuthorizationAndHandler()
     {
         // Arrange
         var services = new ServiceCollection();

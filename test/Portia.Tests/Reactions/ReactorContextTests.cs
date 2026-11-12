@@ -15,7 +15,7 @@ public sealed class ReactorContextTests
     ///     the execution is a system one caused by that event, and the context exposes both unchanged.
     /// </summary>
     [Fact]
-    public void ShouldExposeTheTriggeringEventAndItsSystemExecution()
+    public void ShouldExposeTriggeringEventAndExecutionGivenSystemExecution()
     {
         // Arrange
         var record = Record(out var ev);
@@ -37,7 +37,7 @@ public sealed class ReactorContextTests
     ///     deduplicate one event's effects against another's.
     /// </summary>
     [Fact]
-    public void ShouldRejectATriggerThatIsNotTheRecordsOwnEvent()
+    public void ShouldRejectGivenTriggerThatIsNotRecordsOwnEvent()
     {
         // Arrange
         var record = Record(out _);
@@ -61,7 +61,7 @@ public sealed class ReactorContextTests
     ///     them, and a context is the only place the two are checked against each other.
     /// </summary>
     [Fact]
-    public void ShouldRejectAnExecutionCausedByADifferentEvent()
+    public void ShouldRejectGivenExecutionCausedByDifferentEvent()
     {
         // Arrange
         var record = Record(out var ev);
@@ -83,7 +83,7 @@ public sealed class ReactorContextTests
     ///     principal would let a reaction's effects pass authorization the user never had.
     /// </summary>
     [Fact]
-    public void ShouldRejectAnExecutionThatIsNotASystemPrincipal()
+    public void ShouldRejectGivenExecutionThatIsNotSystemPrincipal()
     {
         // Arrange
         var record = Record(out var ev);
@@ -103,7 +103,7 @@ public sealed class ReactorContextTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void ShouldRejectAMissingRecordOrExecution(bool missingRecord)
+    public void ShouldRejectGivenMissingRecordOrExecution(bool missingRecord)
     {
         // Arrange
         var record = Record(out var ev);

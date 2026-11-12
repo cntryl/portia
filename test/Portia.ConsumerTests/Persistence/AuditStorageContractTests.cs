@@ -12,7 +12,7 @@ public sealed class AuditStorageContractTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task AuditOnlyPagesPreserveOffsetsAndDoNotEnterAggregateHistory(bool fitz)
+    public async Task ShouldPreserveOffsetsAndExcludeAggregateHistoryGivenAuditOnlyPages(bool fitz)
     {
         // Arrange
         await using var fixture = await StoreFixture.CreateAsync(fitz);
@@ -54,7 +54,7 @@ public sealed class AuditStorageContractTests
     }
 
     [Fact]
-    public void StoredEventsWithoutAuditFlagRemainNonAudits()
+    public void ShouldTreatEventsAsNonAuditsGivenStoredEventsWithoutAuditFlag()
     {
         // Arrange
         var serializer =
@@ -75,7 +75,7 @@ public sealed class AuditStorageContractTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void AggregateEmissionOwnsAuditClassification(bool audit)
+    public void ShouldClassifyAuditGivenAggregateEmission(bool audit)
     {
         // Arrange
         var account = new Account(Uuid.CreateVersion4(), new MisclassifyingFactory(audit));

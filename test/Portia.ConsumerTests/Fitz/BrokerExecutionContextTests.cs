@@ -7,7 +7,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class BrokerExecutionContextTests
 {
     [Fact]
-    public async Task RpcChildKeepsCausalityAndStampsReceiverRouteAndActor()
+    public async Task ShouldKeepCausalityAndStampReceiverGivenRpcChild()
     {
         // Arrange
         await using var client = await ConsumerBroker.ConnectAsync();
@@ -38,7 +38,7 @@ public sealed class BrokerExecutionContextTests
     }
 
     [Fact]
-    public async Task QueueBrokerRedeliveryPreservesEnvelopeAndReportsTransportAttempt()
+    public async Task ShouldPreserveEnvelopeAndReportAttemptGivenQueueBrokerRedelivery()
     {
         // Arrange
         await using var client = await ConsumerBroker.ConnectAsync();

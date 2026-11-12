@@ -9,7 +9,7 @@ public sealed class QueueConsumerContractTests
     [Theory]
     [InlineData(4)]
     [InlineData(30)]
-    public async Task AbandonmentUsesNativeNackWithConfiguredVisibilityDelay(int leaseSeconds)
+    public async Task ShouldUseNativeNackWithVisibilityDelayGivenConfiguredAbandonment(int leaseSeconds)
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
@@ -36,7 +36,7 @@ public sealed class QueueConsumerContractTests
     [Theory]
     [InlineData(0)]
     [InlineData(7)]
-    public async Task ExplicitRetryUsesNativeNackWithRequestedDelay(int seconds)
+    public async Task ShouldUseNativeNackWithRequestedDelayGivenExplicitRetry(int seconds)
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
@@ -60,7 +60,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task UnsupportedNativeNackFallsBackToExpiryOnlyForDefaultAbandonment()
+    public async Task ShouldFallBackToExpiryGivenUnsupportedNativeNackAndDefaultAbandonment()
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
@@ -89,7 +89,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task RetryStopsRenewalBeforeNackSoNoExtendCanRaceReleasedLease()
+    public async Task ShouldStopRenewalBeforeNackGivenRetryToAvoidExtendRacingReleasedLease()
     {
         // Arrange
         var clock = new ManualClock();
@@ -123,7 +123,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task FailedAcknowledgmentCannotBeFollowedByNativeNack()
+    public async Task ShouldNotNackGivenFailedAcknowledgment()
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
@@ -146,7 +146,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task LostReservationCannotBeNackedByAnExplicitRetry()
+    public async Task ShouldNotNackGivenLostReservationWhenExplicitRetry()
     {
         // Arrange
         var clock = new ManualClock();
@@ -177,7 +177,7 @@ public sealed class QueueConsumerContractTests
         => serializer.Serialize(request, null, RequestMetadata.Create(), null);
 
     [Fact]
-    public async Task QueuePublicationOptionsPreserveDelayAndRejectUnsupportedLifetime()
+    public async Task ShouldPreserveDelayAndRejectLifetimeGivenQueuePublicationOptions()
     {
         // Arrange
         var queue = new QueueClient([]);
@@ -196,7 +196,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task UnsupportedNativeNackDoesNotAcknowledgeOrDisposeReservation()
+    public async Task ShouldNotAcknowledgeOrDisposeReservationGivenUnsupportedNativeNack()
     {
         // Arrange
         var item = new Reserved(ReadOnlyMemory<byte>.Empty, QueueItem.AttemptUnavailable);
@@ -214,7 +214,7 @@ public sealed class QueueConsumerContractTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ActiveReservationRenewsAndStopsAfterAcknowledgmentOrAbandonment(bool acknowledge)
+    public async Task ShouldRenewAndThenStopGivenActiveReservationAfterAcknowledgmentOrAbandonment(bool acknowledge)
     {
         // Arrange
         var clock = new ManualClock();
@@ -246,7 +246,7 @@ public sealed class QueueConsumerContractTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task SettledReservationReleasesItsFitzItem(bool acknowledge)
+    public async Task ShouldReleaseFitzItemGivenSettledReservation(bool acknowledge)
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
@@ -276,7 +276,7 @@ public sealed class QueueConsumerContractTests
     // So acknowledgment stops renewal first. The last renewal left at least half a lease, and a
     // COMPLETE has to fit inside the lease regardless, since Fitz rejects it once the token expires.
     [Fact]
-    public async Task AcknowledgmentStopsRenewalSoItNeverRacesTheCompletion()
+    public async Task ShouldStopRenewalGivenAcknowledgmentToAvoidRacingCompletion()
     {
         // Arrange
         var clock = new ManualClock();
@@ -315,7 +315,7 @@ public sealed class QueueConsumerContractTests
     // redundant. Draining them before every reserve keeps a consumer that never runs dry from
     // filling the bounded subscription buffer, which Fitz ends with SubscriptionBackpressureException.
     [Fact]
-    public async Task BusyConsumerDrainsWakeUpsSoTheSubscriptionNeverOverflows()
+    public async Task ShouldDrainWakeUpsGivenBusyConsumerToAvoidOverflow()
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
@@ -346,7 +346,7 @@ public sealed class QueueConsumerContractTests
     // harmless when the next step is a reserve anyway, so the overflow resubscribes and reserves
     // rather than ending the read loop with an error.
     [Fact]
-    public async Task WakeUpOverflowResubscribesAndReservesInsteadOfFaulting()
+    public async Task ShouldResubscribeAndReserveGivenWakeUpOverflow()
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
@@ -390,7 +390,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task RenewalLossCancelsActiveDeliveryWithoutAcknowledgingAndLaterWorkRuns()
+    public async Task ShouldCancelDeliveryWithoutAcknowledgingGivenRenewalLoss()
     {
         // Arrange
         var clock = new ManualClock();
@@ -443,7 +443,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task FailingCancellationCallbackDoesNotPreventReservationCleanupOrLaterWork()
+    public async Task ShouldCleanUpReservationGivenFailingCancellationCallback()
     {
         // Arrange
         var clock = new ManualClock();
@@ -476,7 +476,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task SubscriptionIsEstablishedBeforeImmediateReserveWithoutChangingAttempt()
+    public async Task ShouldSubscribeBeforeReserveGivenImmediateReserveWithoutChangingAttempt()
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
@@ -499,7 +499,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task MalformedUnexpectedAndTerminalFailuresRemainUnacknowledged()
+    public async Task ShouldLeaveUnacknowledgedGivenMalformedUnexpectedOrTerminalFailures()
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
@@ -562,7 +562,7 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task TransportMismatchRetainsEnvelopeAndLeavesItUnacknowledged()
+    public async Task ShouldRetainEnvelopeUnacknowledgedGivenTransportMismatch()
     {
         // Arrange
         var registration = new RequestTransportRegistration(typeof(ScopeRequest),

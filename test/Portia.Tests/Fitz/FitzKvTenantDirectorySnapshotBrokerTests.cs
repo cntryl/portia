@@ -7,7 +7,7 @@ public sealed class FitzKvTenantDirectorySnapshotBrokerTests(FitzBrokerFixture b
 {
     /// <summary>A new adapter reads the committed roster, while another pattern stays independent.</summary>
     [Fact]
-    public async Task ShouldRoundTripAndIsolateLifecyclePatterns()
+    public async Task ShouldRoundTripAndIsolateGivenLifecyclePatterns()
     {
         // Arrange
         await using var client = await broker.CreateClientAsync();

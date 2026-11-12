@@ -10,7 +10,7 @@ public sealed class ObservabilityContractTests
 {
     /// <summary>The meter publishes the exact version-two instrument names and semantic units.</summary>
     [Fact]
-    public void ShouldPublishExactMetricContract()
+    public void ShouldPublishExactMetricContractGivenInstrumentedPortia()
     {
         // Arrange
         var units = new ConcurrentDictionary<string, string?>();

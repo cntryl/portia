@@ -27,7 +27,7 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
     [InlineData("yml", false)]
     [InlineData("json", true)]
     [InlineData("yml", true)]
-    public async Task ShouldDescribeTenantCollectionElementsAsStrings(string format, bool dictionary)
+    public async Task ShouldDescribeElementsAsStringsGivenTenantCollection(string format, bool dictionary)
     {
         // Arrange
         var builder = CreateBuilder();
