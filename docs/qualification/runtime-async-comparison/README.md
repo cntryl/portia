@@ -6,9 +6,10 @@ endpoints, and processor dispatch. It is one runtime-performance slice of #175; 
 complete the generator/analyzer qualification or the issue's other acceptance criteria.
 
 Runtime Async remains a preview feature. This comparison is diagnostic and makes no production
-adoption recommendation. The [official .NET 11 runtime notes](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-11/runtime#runtime-async)
-document the feature and the `UseRuntimeAsync=false` per-project opt-out. The repository build
-target now honors that opt-out while retaining its existing .NET 11 default.
+adoption recommendation. The repository keeps it disabled by default; a build must set
+`UseRuntimeAsync=true` to opt a .NET 11 project into the preview compiler feature. The
+[official .NET 11 runtime notes](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-11/runtime#runtime-async)
+document the feature. The comparison script sets the property explicitly for both modes.
 
 ## Method
 
