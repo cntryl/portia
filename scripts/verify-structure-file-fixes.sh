@@ -83,11 +83,11 @@ dotnet run --project "$portia_root/eng/Portia.RepositoryTools/Portia.RepositoryT
 test ! -e "$portia_globbed/Features/Orders/Values/Wrong.cs"
 test -f "$portia_globbed/Features/Orders/Values/Price.cs"
 test -f "$portia_globbed/Features/Orders/Values/Currency.cs"
-! rg -q '<Compile[[:space:]]+Include=' "$portia_globbed/Shop.Core.csproj"
+! grep -E -q '<Compile[[:space:]]+Include=' "$portia_globbed/Shop.Core.csproj"
 dotnet run --project "$portia_root/eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj" \
   --configuration Release --no-build -- fix-application-structure --solution "$portia_globbed/PortiaStructureSmoke.slnx" \
   > "$portia_globbed/idempotence.log" 2>&1
-rg -q 'No PORTIA200 or PORTIA201 fixes are needed\.' "$portia_globbed/idempotence.log"
+grep -F -q 'No PORTIA200 or PORTIA201 fixes are needed.' "$portia_globbed/idempotence.log"
 
 portia_workspace_failure="$portia_output/workspace-failure"
 write_fixture "$portia_workspace_failure" ""
@@ -109,10 +109,10 @@ fi
 test -f "$portia_workspace_failure/Features/Orders/Values/Wrong.cs"
 test ! -e "$portia_workspace_failure/Features/Orders/Values/Price.cs"
 test ! -e "$portia_workspace_failure/Features/Orders/Values/Currency.cs"
-rg -q 'MSBuildWorkspace reported project load failures' "$portia_workspace_failure/fix.log"
-rg -q 'Broken/Bad.csproj' "$portia_workspace_failure/fix.log"
-rg -q 'project file could not be loaded' "$portia_workspace_failure/fix.log"
-! find "$portia_workspace_failure" -name '.portia-stage-*' -o -name '.portia-backup-*' | rg .
+grep -F -q 'MSBuildWorkspace reported project load failures' "$portia_workspace_failure/fix.log"
+grep -F -q 'Broken/Bad.csproj' "$portia_workspace_failure/fix.log"
+grep -F -q 'project file could not be loaded' "$portia_workspace_failure/fix.log"
+! find "$portia_workspace_failure" \( -name '.portia-stage-*' -o -name '.portia-backup-*' \) -print | grep . > /dev/null
 
 portia_explicit="$portia_output/explicit"
 write_fixture "$portia_explicit" "<EnableDefaultCompileItems>false</EnableDefaultCompileItems>"
@@ -125,9 +125,9 @@ if dotnet run --project "$portia_root/eng/Portia.RepositoryTools/Portia.Reposito
 fi
 test -f "$portia_explicit/Features/Orders/Values/Wrong.cs"
 test ! -e "$portia_explicit/Features/Orders/Values/Currency.cs"
-rg -q 'public sealed record Currency' "$portia_explicit/Features/Orders/Values/Wrong.cs"
-rg -q '<Compile Include="Features/Orders/Values/Wrong.cs"' "$portia_explicit/Shop.Core.csproj"
-! find "$portia_explicit" -name '.portia-stage-*' -o -name '.portia-backup-*' | rg .
+grep -F -q 'public sealed record Currency' "$portia_explicit/Features/Orders/Values/Wrong.cs"
+grep -F -q '<Compile Include="Features/Orders/Values/Wrong.cs"' "$portia_explicit/Shop.Core.csproj"
+! find "$portia_explicit" \( -name '.portia-stage-*' -o -name '.portia-backup-*' \) -print | grep . > /dev/null
 
 portia_explicit_glob="$portia_output/explicit-glob"
 write_fixture "$portia_explicit_glob" ""
@@ -172,6 +172,6 @@ fi
 test -f "$portia_build_failure/Features/Orders/Values/Wrong.cs"
 test ! -e "$portia_build_failure/Features/Orders/Values/Price.cs"
 test ! -e "$portia_build_failure/Features/Orders/Values/Currency.cs"
-rg -q 'public sealed record Currency' "$portia_build_failure/Features/Orders/Values/Wrong.cs"
+grep -F -q 'public sealed record Currency' "$portia_build_failure/Features/Orders/Values/Wrong.cs"
 
 echo 'Qualified PORTIA200/201 file operations through the Portia CLI; project-load failures, default globs, explicit Compile rollback/collision, destination collision refusal, build-failure rollback, and second-pass idempotence passed.'
