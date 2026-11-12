@@ -1,5 +1,0 @@
---- a/src/Portia.Fitz/Rpc/FitzProcessorStatusRpcRegistrar.cs
-+++ b/src/Portia.Fitz/Rpc/FitzProcessorStatusRpcRegistrar.cs
-@@ -73,1 +73,1 @@
--            _ = await TryWithdrawAsync(pending.Key, pending.Value, finalWithdrawalBudget.Token).ConfigureAwait(false);
-+            _ = await TryWithdrawAsync(pending.Key, pending.Value, CancellationToken.None).ConfigureAwait(false);
