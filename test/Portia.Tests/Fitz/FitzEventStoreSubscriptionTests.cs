@@ -18,7 +18,7 @@ public sealed class FitzEventStoreSubscriptionTests
     ///     subscription down would leave the workload notified exactly once and polling thereafter.
     /// </summary>
     [Fact]
-    public async Task ShouldKeepSignallingAfterACallerCancelsOneWait()
+    public async Task ShouldKeepSignallingGivenCallerCancelledOneWait()
     {
         // Arrange
         var commits = Channel.CreateUnbounded<StreamCommitEvent>();
@@ -47,7 +47,7 @@ public sealed class FitzEventStoreSubscriptionTests
     ///     does not leave the underlying Fitz subscription running for the life of the process.
     /// </summary>
     [Fact]
-    public async Task ShouldReleaseTheUnderlyingSubscriptionOnDisposal()
+    public async Task ShouldReleaseUnderlyingSubscriptionGivenActiveSubscriptionWhenDisposed()
     {
         // Arrange
         var commits = Channel.CreateUnbounded<StreamCommitEvent>();
@@ -74,7 +74,7 @@ public sealed class FitzEventStoreSubscriptionTests
     ///     and does not rethrow the fault the caller already observed from that wait.
     /// </summary>
     [Fact]
-    public async Task ShouldReleaseTheUnderlyingSubscriptionOnDisposalAfterAFaultedWait()
+    public async Task ShouldReleaseUnderlyingSubscriptionGivenFaultedWaitWhenDisposed()
     {
         // Arrange
         var commits = Channel.CreateUnbounded<StreamCommitEvent>();
@@ -105,7 +105,7 @@ public sealed class FitzEventStoreSubscriptionTests
     ///     accumulate until Fitz ends the subscription at the bound of its buffer.
     /// </summary>
     [Fact]
-    public async Task ShouldDrainBufferedCommitsAtEachWait()
+    public async Task ShouldDrainBufferedCommitsGivenSubscriptionWhenWaitingEachRound()
     {
         // Arrange
         var client = new BoundedStreamClient(4);
@@ -133,7 +133,7 @@ public sealed class FitzEventStoreSubscriptionTests
     ///     subscription is replaced — whereas a fault is logged and costs a poll interval.
     /// </summary>
     [Fact]
-    public async Task ShouldTreatAnOverflowedSubscriptionAsAWakeUpAndResubscribe()
+    public async Task ShouldResubscribeGivenOverflowedSubscriptionWhenWaiting()
     {
         // Arrange
         var client = new BoundedStreamClient(2);

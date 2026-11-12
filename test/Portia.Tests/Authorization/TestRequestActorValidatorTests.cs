@@ -16,7 +16,7 @@ public sealed class TestRequestActorValidatorTests
     ///     authenticating as <see cref="RequestActor.System" />.
     /// </summary>
     [Fact]
-    public async Task ShouldFailValidationWhenTokenIsNull()
+    public async Task ShouldFailValidationGivenTokenIsNull()
     {
         // Arrange
         var validator = new TestRequestActorValidator();
@@ -34,7 +34,7 @@ public sealed class TestRequestActorValidatorTests
     ///     successfully as <see cref="RequestActor.System" />.
     /// </summary>
     [Fact]
-    public async Task ShouldSucceedAsSystemActorWhenTokenIsProvidedAndNotRejected()
+    public async Task ShouldSucceedAsSystemActorGivenTokenIsProvidedAndNotRejected()
     {
         // Arrange
         var validator = new TestRequestActorValidator();
@@ -53,7 +53,7 @@ public sealed class TestRequestActorValidatorTests
     ///     it had expired.
     /// </summary>
     [Fact]
-    public async Task ShouldFailValidationForTheConfiguredRejectToken()
+    public async Task ShouldFailValidationGivenConfiguredRejectToken()
     {
         // Arrange
         var validator = new TestRequestActorValidator("expired-token");

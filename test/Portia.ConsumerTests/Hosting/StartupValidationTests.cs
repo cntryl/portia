@@ -7,7 +7,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class StartupValidationTests
 {
     [Fact]
-    public void AddPortiaComposesJsonContextOwnedByReferencedAssembly()
+    public void ShouldComposeJsonContextGivenContextOwnedByReferencedAssembly()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -28,7 +28,7 @@ public sealed class StartupValidationTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void ApplicationJsonOptionsNeverBecomePortiasWireFormat(bool registeredFirst)
+    public void ShouldKeepPortiaWireFormatGivenApplicationJsonOptionsRegistered(bool registeredFirst)
     {
         // Arrange
         var application = new JsonSerializerOptions { WriteIndented = true };
@@ -50,7 +50,7 @@ public sealed class StartupValidationTests
     }
 
     [Fact]
-    public async Task AdvertisedUsageStillFailsStartupWhenNoComposedContextResolvesTheRoot()
+    public async Task ShouldFailStartupGivenNoComposedContextResolvingRoot()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
@@ -71,7 +71,7 @@ public sealed class StartupValidationTests
     [InlineData(-1, null)]
     [InlineData(1, "")]
     [InlineData(1, " ")]
-    public void InvalidProjectionOptionsDoNotMutateRegistrations(int batchSize, string? rebuildId)
+    public void ShouldNotMutateRegistrationsGivenInvalidProjectionOptions(int batchSize, string? rebuildId)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -89,7 +89,7 @@ public sealed class StartupValidationTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void WorkloadsRejectInvalidPollingIntervals(int milliseconds)
+    public void ShouldRejectWorkloadGivenInvalidPollingInterval(int milliseconds)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -111,7 +111,7 @@ public sealed class StartupValidationTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void WorkloadsRejectInvalidFailureAttemptLimits(int attempts)
+    public void ShouldRejectWorkloadGivenInvalidFailureAttemptLimit(int attempts)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -127,7 +127,7 @@ public sealed class StartupValidationTests
     }
 
     [Fact]
-    public void WorkloadsRejectInvalidMaximumFailureDelay()
+    public void ShouldRejectWorkloadGivenInvalidMaximumFailureDelay()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -143,7 +143,7 @@ public sealed class StartupValidationTests
     }
 
     [Fact]
-    public void ReactorsRejectRebuildGenerations()
+    public void ShouldRejectReactorGivenRebuildGeneration()
     {
         // Arrange
         var services = new ServiceCollection();

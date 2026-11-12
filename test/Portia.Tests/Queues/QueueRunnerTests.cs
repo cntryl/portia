@@ -22,7 +22,7 @@ public sealed class QueueRunnerTests
     [InlineData("read")]
     [InlineData("actor")]
     [InlineData("transport")]
-    public async Task ShouldApplyConfiguredRetryDelayToEveryIncompleteDelivery(string situation)
+    public async Task ShouldApplyRetryDelayGivenConfiguredDelayAndIncompleteDeliveries(string situation)
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -51,7 +51,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>A failed release cannot enter the processing-failure path and release the same reservation twice.</summary>
     [Fact]
-    public async Task ShouldNotRetryDispositionWhenNativeRetryFails()
+    public async Task ShouldNotRetryDispositionGivenNativeRetryFails()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -74,7 +74,7 @@ public sealed class QueueRunnerTests
     [Theory]
     [InlineData(-1000)]
     [InlineData(1500)]
-    public async Task ShouldRejectInvalidRetryDelayBeforeQueueProcessing(int milliseconds)
+    public async Task ShouldRejectBeforeProcessingGivenInvalidRetryDelay(int milliseconds)
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -98,7 +98,7 @@ public sealed class QueueRunnerTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldNotRetryLostReservationsOrFailedAcknowledgments(bool lost)
+    public async Task ShouldNotRetryGivenLostReservationOrFailedAcknowledgment(bool lost)
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -121,7 +121,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>An adapter cannot silently ignore an explicitly configured redelivery delay.</summary>
     [Fact]
-    public async Task ShouldRejectConfiguredRetryDelayWhenAdapterDoesNotSupportIt()
+    public async Task ShouldRejectConfiguredRetryDelayGivenAdapterDoesNotSupportIt()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -177,7 +177,7 @@ public sealed class QueueRunnerTests
     [InlineData("fault", true)]
     [InlineData("terminal-ack", false)]
     [InlineData("terminal-ack", true)]
-    public async Task ShouldExportCorrelatedActualQueueOutcomeLogs(string mode, bool ambient)
+    public async Task ShouldExportCorrelatedOutcomeLogsGivenActualQueueOutcome(string mode, bool ambient)
     {
         // Arrange
         using var capture = new RunnerExportCapture();
@@ -208,7 +208,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>Simultaneous runners retain distinct delivery roots and restore their shared caller context.</summary>
     [Fact]
-    public async Task ShouldKeepConcurrentRunnerLogCorrelationsSeparate()
+    public async Task ShouldKeepLogCorrelationsSeparateGivenConcurrentRunners()
     {
         // Arrange
         using var capture = new RunnerExportCapture();
@@ -229,7 +229,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>Each reservation records one final disposition and only terminal/fault logs.</summary>
     [Fact]
-    public async Task ShouldRecordOneDeliveryOutcomeWithoutRetryOrBusinessErrorLogNoise()
+    public async Task ShouldRecordOneDeliveryOutcomeGivenRetryOrBusinessErrorWithoutLogNoise()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -261,7 +261,7 @@ public sealed class QueueRunnerTests
     ///     Verifies that every queued request is dispatched to its handler and completed.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchAndCompleteEveryQueuedRequest()
+    public async Task ShouldDispatchAndCompleteEveryRequestGivenQueuedRequests()
     {
         // Arrange
         var handler = new ChangeValueHandler();
@@ -291,7 +291,7 @@ public sealed class QueueRunnerTests
     ///     still dispatches the requests that follow it.
     /// </summary>
     [Fact]
-    public async Task ShouldAbandonFailedRequestAndContinue()
+    public async Task ShouldAbandonAndContinueGivenFailedRequest()
     {
         // Arrange
         var handler = new ChangeValueHandler();
@@ -317,7 +317,7 @@ public sealed class QueueRunnerTests
     ///     Verifies that a non-transient <see cref="RequestError" /> is reported then left to the transport.
     /// </summary>
     [Fact]
-    public async Task ShouldLeaveNonTransientFailureForTransportRedeliveryAfterCallback()
+    public async Task ShouldLeaveForTransportRedeliveryGivenNonTransientFailureAfterCallback()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -346,7 +346,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>A direct runner abandons a terminal failure when no application observer is registered.</summary>
     [Fact]
-    public async Task ShouldAbandonTerminalFailureWithoutOptionalHandler()
+    public async Task ShouldAbandonGivenTerminalFailureAndNoOptionalHandler()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -366,7 +366,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>A success-only queue does not need an unused terminal observer.</summary>
     [Fact]
-    public async Task ShouldRunSuccessfulQueueWithoutOptionalHandler()
+    public async Task ShouldRunQueueGivenSuccessAndNoOptionalHandler()
     {
         // Arrange
         using var busHost = TestRequestBus.Create(new ChangeValueHandler());
@@ -387,7 +387,7 @@ public sealed class QueueRunnerTests
     ///     to the transport without reaching the handler.
     /// </summary>
     [Fact]
-    public async Task ShouldLeaveRequestForTransportWhenActorTokenFailsRevalidation()
+    public async Task ShouldLeaveRequestForTransportGivenActorTokenFailsRevalidation()
     {
         // Arrange
         var handler = new ChangeValueHandler();
@@ -418,7 +418,7 @@ public sealed class QueueRunnerTests
     ///     requests that follow it still dispatch normally.
     /// </summary>
     [Fact]
-    public async Task ShouldContinueAfterActorTokenRevalidationFailure()
+    public async Task ShouldContinueGivenActorTokenRevalidationFailure()
     {
         // Arrange
         var handler = new ChangeValueHandler();
@@ -444,7 +444,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>Callback completion precedes returning a terminal delivery to its transport.</summary>
     [Fact]
-    public async Task ShouldAbandonAfterTerminalCallbackExactlyOnce()
+    public async Task ShouldAbandonExactlyOnceGivenTerminalCallback()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -465,7 +465,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>The transport invocation is snapshot data through terminal callback and abandonment.</summary>
     [Fact]
-    public async Task ShouldReadInvocationOnceThroughTerminalCallbackAndAbandonment()
+    public async Task ShouldReadInvocationOnceGivenTerminalCallbackAndAbandonment()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -487,7 +487,7 @@ public sealed class QueueRunnerTests
     ///     Verifies that a terminal delivery never attempts acknowledgment and later deliveries continue.
     /// </summary>
     [Fact]
-    public async Task ShouldContinueAndLeaveTerminalDeliveryWithTransport()
+    public async Task ShouldContinueAndLeaveWithTransportGivenTerminalDelivery()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -527,7 +527,7 @@ public sealed class QueueRunnerTests
     ///     acknowledgment is a cleanup fault, and the transport's redelivery is the at-least-once path.
     /// </summary>
     [Fact]
-    public async Task ShouldNotDeadLetterASuccessfulRequestWhoseAcknowledgmentFailsAtTerminalAttempt()
+    public async Task ShouldNotDeadLetterGivenSuccessfulRequestWhoseAcknowledgmentFailsAtTerminalAttempt()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -552,7 +552,7 @@ public sealed class QueueRunnerTests
     ///     redeliver it, so the runner neither dead-letters nor abandons it.
     /// </summary>
     [Fact]
-    public async Task ShouldLeaveADeliveryWhoseReservationWasLostToTheTransport()
+    public async Task ShouldLeaveDeliveryGivenReservationLostToTransport()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -581,7 +581,7 @@ public sealed class QueueRunnerTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldLeaveADeliveryWhoseReservationIsLostWhileItsHandlerRuns(bool fails)
+    public async Task ShouldLeaveDeliveryGivenReservationLostWhileHandlerRuns(bool fails)
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -611,7 +611,7 @@ public sealed class QueueRunnerTests
     ///     not a lost reservation: the handled delivery is still acknowledged and nothing is reported.
     /// </summary>
     [Fact]
-    public async Task ShouldTreatHostShutdownAfterDispatchAsCancellationNotALostReservation()
+    public async Task ShouldTreatAsCancellationGivenHostShutdownAfterDispatch()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -658,7 +658,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>An unknown wire contract remains transport-owned below its durable threshold.</summary>
     [Fact]
-    public async Task ShouldAbandonRetryableEnvelopeFailureBelowTerminalAttempt()
+    public async Task ShouldAbandonGivenRetryableEnvelopeFailureBelowTerminalAttempt()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -700,7 +700,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>A permanent lazy read always reaches the terminal callback and later work continues.</summary>
     [Fact]
-    public async Task ShouldTerminalizePermanentEnvelopeFailureAndContinue()
+    public async Task ShouldTerminalizeAndContinueGivenPermanentEnvelopeFailure()
     {
         // Arrange
         var handler = new ChangeValueHandler();
@@ -725,7 +725,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>An abandoned lazy read failure is visible exactly once as an execution fault.</summary>
     [Fact]
-    public async Task ShouldRecordAbandonedReadFailureExactlyOnce()
+    public async Task ShouldRecordExactlyOnceGivenAbandonedReadFailure()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -777,7 +777,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>A retryable lazy read is terminalized at its durable threshold.</summary>
     [Fact]
-    public async Task ShouldTerminalizeRetryableEnvelopeFailureAtThreshold()
+    public async Task ShouldTerminalizeGivenRetryableEnvelopeFailureAtThreshold()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -819,7 +819,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>Zero is not a meaningful terminal delivery attempt.</summary>
     [Fact]
-    public async Task ShouldRejectZeroTerminalAttemptBeforeReadingTheDelivery()
+    public async Task ShouldRejectBeforeReadingDeliveryGivenZeroTerminalAttempt()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -916,7 +916,7 @@ public sealed class QueueRunnerTests
     [Theory]
     [InlineData(null)]
     [InlineData(3U)]
-    public async Task ShouldAbandonRetryableResultBelowThresholdOrWithoutThreshold(uint? terminalAttempt)
+    public async Task ShouldAbandonGivenRetryableResultBelowThresholdOrNoThreshold(uint? terminalAttempt)
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -1019,7 +1019,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>A hosted queue can run without registering a terminal observer.</summary>
     [Fact]
-    public async Task ShouldRunHostedQueueWithoutTerminalHandler()
+    public async Task ShouldRunHostedQueueGivenNoTerminalHandler()
     {
         // Arrange
         using var busHost = TestRequestBus.Create(new ChangeValueHandler());
@@ -1087,7 +1087,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>Preflight scope dependencies are disposed and delivery uses a fresh scope.</summary>
     [Fact]
-    public async Task ShouldDisposePreflightScopeAndUseFreshDeliveryScope()
+    public async Task ShouldDisposePreflightScopeAndUseFreshDeliveryScopeGivenDelivery()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -1107,7 +1107,7 @@ public sealed class QueueRunnerTests
 
     /// <summary>A terminal observer may be absent from an individual delivery scope.</summary>
     [Fact]
-    public async Task ShouldAllowDeliveryScopeWithoutOptionalTerminalObserver()
+    public async Task ShouldAllowDeliveryScopeGivenNoOptionalTerminalObserver()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();

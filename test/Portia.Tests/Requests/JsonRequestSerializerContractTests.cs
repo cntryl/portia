@@ -20,7 +20,7 @@ public sealed class JsonRequestSerializerContractTests
     [InlineData("contract_version")]
     [InlineData("metadata")]
     [InlineData("payload")]
-    public void ShouldClassifyMissingRequiredRequestEnvelopePropertiesAsPermanent(string property)
+    public void ShouldClassifyAsPermanentGivenMissingRequiredEnvelopeProperty(string property)
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -37,7 +37,7 @@ public sealed class JsonRequestSerializerContractTests
 
     /// <summary>Malformed JSON keeps its JsonException contract while carrying permanent classification.</summary>
     [Fact]
-    public void ShouldClassifyMalformedJsonAsPermanentWithoutReplacingJsonException()
+    public void ShouldClassifyAsPermanentWithoutReplacingJsonExceptionGivenMalformedJson()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -57,7 +57,7 @@ public sealed class JsonRequestSerializerContractTests
     ///     type this deployment does not have yet.
     /// </summary>
     [Fact]
-    public void ShouldRejectUnknownRequestContractName()
+    public void ShouldRejectRequestGivenUnknownContractName()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -79,7 +79,7 @@ public sealed class JsonRequestSerializerContractTests
     ///     how a field silently arrives as its default.
     /// </summary>
     [Fact]
-    public void ShouldRejectKnownContractAtAnUnknownVersion()
+    public void ShouldRejectRequestGivenKnownContractAtUnknownVersion()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -100,7 +100,7 @@ public sealed class JsonRequestSerializerContractTests
     ///     collision is refused where it is introduced — at registration.
     /// </summary>
     [Fact]
-    public void ShouldRejectTwoTypesRegisteredUnderOneContractNameAndVersion()
+    public void ShouldRejectRegistrationGivenTwoTypesUnderOneContractNameAndVersion()
     {
         // Arrange
         // Act
@@ -122,7 +122,7 @@ public sealed class JsonRequestSerializerContractTests
     ///     reported against the type that caused it rather than left to a dictionary's bare key error.
     /// </summary>
     [Fact]
-    public void ShouldRejectConflictingTransportDescriptorsForOneRequestType()
+    public void ShouldRejectRegistrationGivenConflictingTransportDescriptorsForOneRequestType()
     {
         // Arrange
         // Act
@@ -143,7 +143,7 @@ public sealed class JsonRequestSerializerContractTests
     ///     apart, and a zero or null would flow on as if the handler had produced it.
     /// </summary>
     [Fact]
-    public void ShouldRejectSuccessfulResultEnvelopeWithNoValue()
+    public void ShouldRejectResultEnvelopeGivenSuccessWithNoValue()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -166,7 +166,7 @@ public sealed class JsonRequestSerializerContractTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ShouldRejectSerializingAnUninitializedOutcome(bool withResult)
+    public void ShouldRejectSerializationGivenUninitializedOutcome(bool withResult)
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -186,7 +186,7 @@ public sealed class JsonRequestSerializerContractTests
     ///     refused by version, before anything inside it is read.
     /// </summary>
     [Fact]
-    public void ShouldRejectUnsupportedEnvelopeVersion()
+    public void ShouldRejectEnvelopeGivenUnsupportedVersion()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -206,7 +206,7 @@ public sealed class JsonRequestSerializerContractTests
     [Theory]
     [InlineData("{\"version\":3}")]
     [InlineData("{\"version\":3,\"kind\":\"renamed-v3-contract\",\"body\":[]}")]
-    public void ShouldRejectUnsupportedEnvelopeVersionBeforeReadingVersionSpecificFields(string json)
+    public void ShouldRejectEnvelopeBeforeReadingVersionSpecificFieldsGivenUnsupportedVersion(string json)
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -228,7 +228,7 @@ public sealed class JsonRequestSerializerContractTests
     [InlineData("{\"version\":\"2\"}")]
     [InlineData("{\"version\":{}}")]
     [InlineData("{\"version\":2.5}")]
-    public void ShouldClassifyUnreadableEnvelopeVersionAsPermanent(string json)
+    public void ShouldClassifyAsPermanentGivenUnreadableEnvelopeVersion(string json)
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -280,7 +280,7 @@ public sealed class JsonRequestSerializerContractTests
     ///     equal request, so the rejections above are about the defect and not the harness.
     /// </summary>
     [Fact]
-    public void ShouldRoundTripAKnownContract()
+    public void ShouldRoundTripGivenKnownContract()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));

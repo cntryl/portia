@@ -16,7 +16,7 @@ public sealed class TenantRequestAuthorizerTests
 
     /// <summary>An actor acting in its own tenant is authorized and handled.</summary>
     [Fact]
-    public async Task ShouldAuthorizeActorInOwnTenant()
+    public async Task ShouldAuthorizeActorGivenOwnTenant()
     {
         // Arrange
         await using var provider = Provider();
@@ -39,7 +39,7 @@ public sealed class TenantRequestAuthorizerTests
     [InlineData("beta")]
     [InlineData(null)]
     [InlineData("a/b")]
-    public async Task ShouldDenyActorOutsideRequestTenant(string? claim)
+    public async Task ShouldDenyActorGivenActorOutsideRequestTenant(string? claim)
     {
         // Arrange
         await using var provider = Provider();
@@ -57,7 +57,7 @@ public sealed class TenantRequestAuthorizerTests
 
     /// <summary>An actor with two tenant claims belongs to no single tenant and is denied.</summary>
     [Fact]
-    public async Task ShouldDenyActorWithAmbiguousTenant()
+    public async Task ShouldDenyActorGivenAmbiguousTenant()
     {
         // Arrange
         await using var provider = Provider();
@@ -77,7 +77,7 @@ public sealed class TenantRequestAuthorizerTests
 
     /// <summary>A system actor acts in any tenant, so reactions and schedules are not blocked.</summary>
     [Fact]
-    public async Task ShouldExemptSystemActor()
+    public async Task ShouldExemptActorGivenSystemActor()
     {
         // Arrange
         await using var provider = Provider();
@@ -95,7 +95,7 @@ public sealed class TenantRequestAuthorizerTests
 
     /// <summary>Hosted startup fails when the authorizer is selected but no resolver is registered.</summary>
     [Fact]
-    public async Task ShouldRequireResolverAtStartup()
+    public async Task ShouldRequireResolverAtStartupGivenTenantScopedHandlerWithoutResolver()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
@@ -114,7 +114,7 @@ public sealed class TenantRequestAuthorizerTests
 
     /// <summary>A registered resolver satisfies hosted startup.</summary>
     [Fact]
-    public async Task ShouldStartWithResolver()
+    public async Task ShouldStartGivenRegisteredResolver()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();

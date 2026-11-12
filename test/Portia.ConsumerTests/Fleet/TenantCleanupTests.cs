@@ -9,7 +9,7 @@ public sealed class TenantCleanupTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task CleanupFaultsDoNotAbandonOtherTenantsOrDirectory(bool removeFirst)
+    public async Task ShouldCleanUpOtherTenantsAndDirectoryGivenCleanupFault(bool removeFirst)
     {
         // Arrange
         var directory = new Directory();

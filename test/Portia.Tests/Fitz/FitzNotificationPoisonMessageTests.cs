@@ -143,7 +143,7 @@ public sealed class FitzNotificationPoisonMessageTests
     ///     the same subscription still arrives.
     /// </summary>
     [Fact]
-    public async Task ShouldSkipAnUndeserializableNoticeAndKeepReading()
+    public async Task ShouldSkipNoticeAndKeepReadingGivenUndeserializableNotice()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -167,7 +167,7 @@ public sealed class FitzNotificationPoisonMessageTests
     ///     fail independently of the request payload inside it.
     /// </summary>
     [Fact]
-    public async Task ShouldSkipAnUndeserializableScheduleEntryAndKeepReading()
+    public async Task ShouldSkipEntryAndKeepReadingGivenUndeserializableScheduleEntry()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));

@@ -12,7 +12,7 @@ public sealed class RequestEnvelopeContextTests
     ///     (the execution id and the resolved principal's claims) never crosses the wire at all.
     /// </summary>
     [Fact]
-    public void ShouldPreserveLogicalIdentityWithoutReceiverStateWhenDeserializingEnvelope()
+    public void ShouldPreserveLogicalIdentityWithoutReceiverStateGivenDeserializingEnvelope()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
@@ -64,7 +64,7 @@ public sealed class RequestEnvelopeContextTests
     ///     rejected outright rather than deserialized into a request with a default-constructed identity.
     /// </summary>
     [Fact]
-    public void ShouldRejectEnvelopeWithoutVersionOrMetadata()
+    public void ShouldRejectEnvelopeGivenMissingVersionOrMetadata()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
@@ -91,7 +91,7 @@ public sealed class RequestEnvelopeContextTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ShouldRejectUnsupportedEnvelopeVersionOrEmptyRequestIdentity(bool unsupportedVersion)
+    public void ShouldRejectEnvelopeGivenUnsupportedVersionOrEmptyRequestIdentity(bool unsupportedVersion)
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));

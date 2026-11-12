@@ -11,7 +11,7 @@ public sealed class AggregateEventDispatcherOrderingTests
     ///     for its base event type, regardless of how the two type names sort alphabetically.
     /// </summary>
     [Fact]
-    public void ShouldPreferDerivedEventHandlerWhenBaseHandlerAlsoRegistered()
+    public void ShouldPreferDerivedEventHandlerGivenBaseHandlerAlsoRegistered()
     {
         // Arrange
         var aggregate = new HierarchyAggregate(Uuid.CreateVersion4());

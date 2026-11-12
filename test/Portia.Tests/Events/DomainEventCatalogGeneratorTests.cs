@@ -18,7 +18,7 @@ public sealed class DomainEventCatalogGeneratorTests
     ///     registered under its declared name and version.
     /// </summary>
     [Fact]
-    public void ShouldRegisterEveryDomainEventTypeInCompilation()
+    public void ShouldRegisterEveryDomainEventTypeGivenCompilationWithEventTypes()
     {
         // Arrange
         var catalog = new DomainEventTypeCatalog();
@@ -40,7 +40,7 @@ public sealed class DomainEventCatalogGeneratorTests
     ///     zero-boilerplate.
     /// </summary>
     [Fact]
-    public void ShouldResolveDomainEventSerializerAfterGeneratedRegistration()
+    public void ShouldResolveDomainEventSerializerGivenGeneratedRegistration()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -64,7 +64,7 @@ public sealed class DomainEventCatalogGeneratorTests
     ///     one in a real app.
     /// </summary>
     [Fact]
-    public void ShouldUpcastThroughGeneratedSerializerWhenUpcasterIsRegisteredInDi()
+    public void ShouldUpcastThroughGeneratedSerializerGivenUpcasterRegisteredInDi()
     {
         // Arrange
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)

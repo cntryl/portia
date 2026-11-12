@@ -6,7 +6,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class OperationalTopologyTests
 {
     [Fact]
-    public void ShouldDescribeOnlyRegisteredCrossAssemblyProcessorsWithoutResolvingDependencies()
+    public void ShouldDescribeRegisteredCrossAssemblyProcessorsGivenUnresolvedDependencies()
     {
         // Arrange
         var services = new ServiceCollection();

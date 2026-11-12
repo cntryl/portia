@@ -28,7 +28,7 @@ public sealed class McpLifecycleQualificationTests
     [InlineData("tool", "2025-11-25", true)]
     [InlineData("resource", "2025-11-25", true)]
     [InlineData("prompt", "2025-11-25", true)]
-    public async Task ShouldCancelMinimalSdkStdioHandler(string primitive, string revision, bool explicitNotification)
+    public async Task ShouldCancelHandlerGivenMinimalSdkStdioHost(string primitive, string revision, bool explicitNotification)
     {
         // Arrange
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -95,7 +95,7 @@ public sealed class McpLifecycleQualificationTests
     }
 
     [Fact]
-    public async Task ShouldPreserveHttpConfigurationWhileOwningOperationScopes()
+    public async Task ShouldPreserveHttpConfigurationGivenOperationScopesOwnedByHost()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -154,7 +154,7 @@ public sealed class McpLifecycleQualificationTests
     [InlineData("stdio", "tool", false, true, "2026-07-28")]
     [InlineData("stdio", "resource", false, true, "2026-07-28")]
     [InlineData("stdio", "prompt", false, true, "2026-07-28")]
-    public async Task ShouldPropagateCancellationAndSanitizeDeadlinesOnBothTransports(string transportName,
+    public async Task ShouldPropagateCancellationAndSanitizeDeadlinesGivenEitherTransport(string transportName,
         string primitive, bool deadline, bool explicitNotification, string revision)
     {
         // Arrange

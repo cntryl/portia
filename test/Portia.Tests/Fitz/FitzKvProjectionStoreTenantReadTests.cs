@@ -11,7 +11,7 @@ public sealed class FitzKvProjectionStoreTenantReadTests
 {
     /// <summary>A typed tenant read opens the same read-only resource as the realm read for that tenant.</summary>
     [Fact]
-    public async Task ShouldOpenTheTenantResourceForTypedRead()
+    public async Task ShouldOpenTenantResourceGivenTypedRead()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -32,7 +32,7 @@ public sealed class FitzKvProjectionStoreTenantReadTests
 
     /// <summary>A default tenant is refused before any transaction opens.</summary>
     [Fact]
-    public async Task ShouldRejectDefaultTenant()
+    public async Task ShouldRejectReadGivenDefaultTenant()
     {
         // Arrange
         var client = new FakeKvClient();

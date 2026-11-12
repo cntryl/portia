@@ -70,7 +70,7 @@ public sealed class RequestTransportMarkerTests
     ///     Verifies that a result-bearing request is accepted by the RPC sender.
     /// </summary>
     [Fact]
-    public async Task ShouldAcceptCallableResultBearingRequestOverRpc()
+    public async Task ShouldAcceptRequestGivenCallableResultBearingRequestOverRpc()
     {
         // The real assertion is that this compiles: CreateUser only implements IRequest{Uuid}
         // and ICallable, not IRequest — so it could never be passed to EnqueueAsync/
@@ -92,7 +92,7 @@ public sealed class RequestTransportMarkerTests
     ///     transport's sender/publisher/scheduler signature.
     /// </summary>
     [Fact]
-    public async Task ShouldAcceptFullyMarkedNoResultRequestAcrossEveryTransportSignature()
+    public async Task ShouldAcceptRequestGivenFullyMarkedNoResultRequestAcrossEveryTransportSignature()
     {
         // The real assertion is that this compiles: SendWelcomeEmail implements IRequest plus
         // all four marker interfaces, so every transport signature below accepts it.
@@ -119,7 +119,7 @@ public sealed class RequestTransportMarkerTests
 
     /// <summary>A legacy sender implementation reports completed results through the default outcome API.</summary>
     [Fact]
-    public async Task ShouldReportCompletedOutcomeForLegacySenderImplementation()
+    public async Task ShouldReportCompletedOutcomeGivenLegacySenderImplementation()
     {
         // Arrange
         IRemoteRequestSender sender = new FakeRemoteRequestSender();
@@ -135,7 +135,7 @@ public sealed class RequestTransportMarkerTests
 
     /// <summary>A legacy sender returns not-dispatched without invoking the implementation for prior cancellation.</summary>
     [Fact]
-    public async Task ShouldReportNotDispatchedOutcomeForPreCancelledLegacySender()
+    public async Task ShouldReportNotDispatchedOutcomeGivenPreCancelledLegacySender()
     {
         // Arrange
         var implementation = new FakeRemoteRequestSender();
@@ -155,7 +155,7 @@ public sealed class RequestTransportMarkerTests
 
     /// <summary>A legacy sender reports an unknown outcome when cancellation interrupts an active send.</summary>
     [Fact]
-    public async Task ShouldReportUnknownOutcomeWhenLegacySenderIsCancelledAfterDispatch()
+    public async Task ShouldReportUnknownOutcomeGivenLegacySenderCancelledAfterDispatch()
     {
         // Arrange
         var implementation = new WaitingRemoteRequestSender();
@@ -177,7 +177,7 @@ public sealed class RequestTransportMarkerTests
 
     /// <summary>Outcome-aware child sends inherit their parent's correlation and causation identities.</summary>
     [Fact]
-    public async Task ShouldPreserveParentContextWhenSendingOutcomeAwareRequests()
+    public async Task ShouldPreserveParentContextGivenOutcomeAwareRequests()
     {
         // Arrange
         var parentMetadata = new RequestMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), Uuid.CreateVersion4());

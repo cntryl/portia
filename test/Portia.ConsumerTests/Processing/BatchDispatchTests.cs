@@ -5,7 +5,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class BatchDispatchTests
 {
     [Fact]
-    public async Task GeneratedBatchesPreserveOrderAndDerivedHandlersAndCausalContexts()
+    public async Task ShouldPreserveOrderAndCausalContextsGivenGeneratedBatchesWithDerivedHandlers()
     {
         // Arrange
         const string source = """
@@ -124,7 +124,7 @@ public sealed class BatchDispatchTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void BatchHandlersRequireAnExplicitBatchBase(bool reactor)
+    public void ShouldRequireExplicitBatchBaseGivenBatchHandler(bool reactor)
     {
         // Arrange
         var source = reactor

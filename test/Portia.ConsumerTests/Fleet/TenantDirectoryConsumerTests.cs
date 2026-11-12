@@ -3,7 +3,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class TenantDirectoryConsumerTests
 {
     [Fact]
-    public void OptionalCursorAndRunnerOptionsCompileForAnExternalConsumer() =>
+    public void ShouldCompileOptionalCursorAndRunnerOptionsGivenExternalConsumer() =>
         _ = GeneratorCompilation.Compile("""
                                          using System;
                                          using System.Collections.Generic;
@@ -38,7 +38,7 @@ public sealed class TenantDirectoryConsumerTests
                                          """);
 
     [Fact]
-    public async Task StreamNotificationWakesIdleDirectoryWithoutPollingDelay()
+    public async Task ShouldWakeIdleDirectoryWithoutPollingDelayGivenStreamNotification()
     {
         // Arrange
         const string source = """
@@ -110,7 +110,7 @@ public sealed class TenantDirectoryConsumerTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task WatchersHaveIndependentProgressAcrossOtherWatchersAndSnapshots(bool interveningSnapshot)
+    public async Task ShouldTrackProgressIndependentlyGivenMultipleWatchersAndSnapshots(bool interveningSnapshot)
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -156,7 +156,7 @@ public sealed class TenantDirectoryConsumerTests
     }
 
     [Fact]
-    public async Task InitialReconciliationDoesNotReplayHistoricalStartStopCycles()
+    public async Task ShouldNotReplayStartStopCyclesGivenHistoricalLifecycleDuringInitialReconciliation()
     {
         // Arrange
         var store = new InMemoryEventStore();

@@ -17,7 +17,7 @@ public sealed class ResultInitializationTests
     [Theory]
     [InlineData("IsSuccess")]
     [InlineData("Error")]
-    public void ShouldThrowForEveryMemberOfAnUninitializedResult(string member)
+    public void ShouldThrowForEveryMemberGivenUninitializedResult(string member)
     {
         // Arrange
         var result = default(Result);
@@ -41,7 +41,7 @@ public sealed class ResultInitializationTests
     [InlineData("IsSuccess")]
     [InlineData("Value")]
     [InlineData("Error")]
-    public void ShouldThrowForEveryMemberOfAnUninitializedResultWithValue(string member)
+    public void ShouldThrowForEveryMemberGivenUninitializedResultWithValue(string member)
     {
         // Arrange
         var result = default(Result<int>);
@@ -65,7 +65,7 @@ public sealed class ResultInitializationTests
     ///     rather than at the failure branch they forgot to check.
     /// </summary>
     [Fact]
-    public void ShouldDistinguishAFailedResultFromAnUninitializedOne()
+    public void ShouldDistinguishFailedResultGivenUninitializedResult()
     {
         // Arrange
         var result = Result<int>.Failure(new RequestError(RequestErrorKind.Validation, "no"));
@@ -83,7 +83,7 @@ public sealed class ResultInitializationTests
     ///     including a success that legitimately carries null for a nullable type argument.
     /// </summary>
     [Fact]
-    public void ShouldAnswerNormallyForResultsBuiltThroughTheFactories()
+    public void ShouldAnswerNormallyGivenResultsBuiltThroughFactories()
     {
         // Arrange
         var error = new RequestError(RequestErrorKind.Validation, "no");

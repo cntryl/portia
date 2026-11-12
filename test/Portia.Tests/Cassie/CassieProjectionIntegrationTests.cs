@@ -12,7 +12,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
 {
     /// <summary>Application data and checkpoint operations satisfy the shared backend contract.</summary>
     [Fact]
-    public async Task ShouldSatisfyProjectionConformanceAgainstCassie()
+    public async Task ShouldSatisfyProjectionConformanceGivenCassieStore()
     {
         // Arrange
         await using var database = await Database.OpenAsync();
@@ -27,7 +27,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
 
     /// <summary>Real events project to isolated account data and resume without applying increments twice.</summary>
     [Fact]
-    public async Task ShouldProjectFitzEventsIntoCassieAndResumeAcrossRepositoryScopes()
+    public async Task ShouldProjectAndResumeGivenFitzEventsAndNewRepositoryScopes()
     {
         // Arrange
         await using var database = await Database.OpenAsync();
@@ -85,7 +85,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ShouldApplyFrameworkRetryPolicyAcrossFitzAndCassie(bool transient)
+    public async Task ShouldApplyFrameworkRetryPolicyGivenFitzAndCassieFailures(bool transient)
     {
         // Arrange
         await using var database = await Database.OpenAsync();
@@ -166,7 +166,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
     [InlineData("(identity TEXT PRIMARY KEY, cursor TEXT NOT NULL)")]
     [InlineData("(identity TEXT NOT NULL, cursor TEXT NOT NULL, revision BIGINT NOT NULL)")]
     [InlineData("(identity TEXT PRIMARY KEY, cursor TEXT NOT NULL, revision TEXT NOT NULL)")]
-    public async Task ShouldRejectIncompatibleCheckpointTableAtStartup(string schema)
+    public async Task ShouldRejectStartupGivenIncompatibleCheckpointTable(string schema)
     {
         // Arrange
         await using var database = await Database.OpenAsync();
@@ -210,7 +210,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
 
     /// <summary>A query read holds off batches until the read itself is disposed, even if its connection is reopened.</summary>
     [Fact]
-    public async Task ShouldHoldBatchesUntilTheReadIsDisposedWhenItsConnectionIsReopened()
+    public async Task ShouldHoldBatchesUntilTheReadIsDisposedGivenItsConnectionIsReopened()
     {
         // Arrange
         await using var database = await Database.OpenAsync();

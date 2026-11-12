@@ -7,7 +7,7 @@ public sealed class ReactionIdentityTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task TriggerActorDoesNotAuthorizeReactionAndSystemIdentityIsConfigurable(bool userPrincipal)
+    public async Task ShouldNotAuthorizeWithTriggerActorGivenConfigurableSystemIdentity(bool userPrincipal)
     {
         // Arrange
         var store = new InMemoryEventStore();

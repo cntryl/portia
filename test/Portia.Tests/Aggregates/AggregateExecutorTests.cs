@@ -12,7 +12,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>A successful state change the handler commits is hydrated, applied, and persisted.</summary>
     [Fact]
-    public async Task ShouldHydrateInvokeAndCommitWhenOutcomeIsCommit()
+    public async Task ShouldHydrateInvokeAndCommitGivenCommitOutcome()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -33,7 +33,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>A rejected operation can keep its audit, as a failed login does.</summary>
     [Fact]
-    public async Task ShouldCommitAuditAndReturnFailureWhenFailedOutcomeIsCommit()
+    public async Task ShouldCommitAuditAndReturnFailureGivenFailedCommitOutcome()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -54,7 +54,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>A rejected operation can still commit the state it changed.</summary>
     [Fact]
-    public async Task ShouldCommitStateAndReturnFailureWhenFailedOutcomeIsCommit()
+    public async Task ShouldCommitStateAndReturnFailureGivenFailedCommitOutcome()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -76,7 +76,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>Several aggregate calls in one operation share one commit.</summary>
     [Fact]
-    public async Task ShouldCommitEveryChangeFromOneOperationTogether()
+    public async Task ShouldCommitChangesTogetherGivenOneOperationWithEveryChange()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -100,7 +100,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>A discarded outcome writes nothing, whatever the aggregate recorded.</summary>
     [Fact]
-    public async Task ShouldNotWriteWhenOutcomeIsDiscard()
+    public async Task ShouldNotWriteGivenDiscardOutcome()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -122,7 +122,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>Committing when the aggregate recorded nothing is a harmless no-op.</summary>
     [Fact]
-    public async Task ShouldTreatCommitWithNothingPendingAsNoOp()
+    public async Task ShouldTreatCommitAsNoOpGivenNothingPending()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -139,7 +139,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>A typed operation returns its value.</summary>
     [Fact]
-    public async Task ShouldReturnTypedValue()
+    public async Task ShouldReturnTypedValueGivenDiscardOutcomeWithValue()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -156,7 +156,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>Saved events are attributed to the explicitly supplied execution context.</summary>
     [Fact]
-    public async Task ShouldAttributeSavedEventsFromExplicitContext()
+    public async Task ShouldAttributeSavedEventsGivenExplicitContext()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -178,7 +178,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>An exception from the operation propagates and nothing is saved.</summary>
     [Fact]
-    public async Task ShouldPropagateOperationExceptionWithoutSaving()
+    public async Task ShouldPropagateExceptionWithoutSavingGivenThrowingOperation()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -202,7 +202,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>A concurrency conflict propagates after one attempt; the executor never retries.</summary>
     [Fact]
-    public async Task ShouldPropagateConcurrencyExceptionWithoutRetrying()
+    public async Task ShouldPropagateConcurrencyExceptionWithoutRetryingGivenStoreConflict()
     {
         // Arrange
         var store = new RecordingEventStore { Conflict = true };
@@ -223,7 +223,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>An operation returning an uninitialized outcome is rejected before anything is written.</summary>
     [Fact]
-    public async Task ShouldRejectDefaultOutcome()
+    public async Task ShouldRejectOutcomeGivenDefaultOutcome()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -246,7 +246,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>An outcome cannot be built from an uninitialized result.</summary>
     [Fact]
-    public void ShouldRejectUninitializedResultInOutcome()
+    public void ShouldRejectOutcomeGivenUninitializedResult()
     {
         // Arrange
         // Act
@@ -260,7 +260,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>The common policy commits a successful untyped result and discards a failed one.</summary>
     [Fact]
-    public void ShouldCommitUntypedResultOnlyWhenSuccessful()
+    public void ShouldCommitGivenSuccessfulUntypedResultOnly()
     {
         // Arrange
         var success = AggregateOutcome.CommitOnSuccess(Result.Success);
@@ -277,7 +277,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>The common policy preserves typed values and errors while choosing the disposition.</summary>
     [Fact]
-    public void ShouldCommitTypedResultOnlyWhenSuccessful()
+    public void ShouldCommitGivenSuccessfulTypedResultOnly()
     {
         // Arrange
         var success = AggregateOutcome.CommitOnSuccess(Result<int>.Success(42));
@@ -294,7 +294,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>The convenience policy rejects default results just like the explicit factories.</summary>
     [Fact]
-    public void ShouldRejectUninitializedResultInCommitOnSuccess()
+    public void ShouldRejectCommitOnSuccessGivenUninitializedResult()
     {
         // Arrange
         // Act
@@ -311,7 +311,7 @@ public sealed class AggregateExecutorTests
     ///     matches the store, so any later use is refused.
     /// </summary>
     [Fact]
-    public async Task ShouldClearAndInvalidateDiscardedAggregateWithPendingRecords()
+    public async Task ShouldClearAndInvalidateAggregateGivenDiscardWithPendingRecords()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -339,7 +339,7 @@ public sealed class AggregateExecutorTests
     ///     so a caller that reuses it cannot save a failed operation's events later.
     /// </summary>
     [Fact]
-    public async Task ShouldDiscardAndInvalidateWhenOperationThrows()
+    public async Task ShouldDiscardAndInvalidateGivenThrowingOperation()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -369,7 +369,7 @@ public sealed class AggregateExecutorTests
     ///     so the instance is refused afterwards even though no event was pending to discard.
     /// </summary>
     [Fact]
-    public async Task ShouldInvalidateWhenAnEventHandlerThrowsPartWay()
+    public async Task ShouldInvalidateGivenEventHandlerThrowingPartWay()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -395,7 +395,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>The value-returning overload discards a throwing operation's records the same way.</summary>
     [Fact]
-    public async Task ShouldDiscardWhenValueOperationThrows()
+    public async Task ShouldDiscardGivenThrowingValueOperation()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -418,7 +418,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>A discarded outcome with nothing recorded leaves the instance usable.</summary>
     [Fact]
-    public async Task ShouldKeepAggregateUsableAfterDiscardWithNothingPending()
+    public async Task ShouldKeepAggregateUsableGivenDiscardWithNothingPending()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -437,7 +437,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>A canceled token stops execution before the operation runs.</summary>
     [Fact]
-    public async Task ShouldHonorCancellation()
+    public async Task ShouldHonorCancellationGivenCanceledToken()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -461,7 +461,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>The aggregate rule that events and audits cannot share a batch surfaces unchanged.</summary>
     [Fact]
-    public async Task ShouldSurfaceAggregateBatchRuleUnchanged()
+    public async Task ShouldSurfaceBatchRuleUnchangedGivenAuditAfterChange()
     {
         // Arrange
         var store = new RecordingEventStore();
@@ -484,7 +484,7 @@ public sealed class AggregateExecutorTests
 
     /// <summary>AddPortia registers one executor per scope.</summary>
     [Fact]
-    public async Task ShouldResolveScopedAggregateExecutor()
+    public async Task ShouldResolveExecutorGivenScopedProvider()
     {
         // Arrange
         var services = new ServiceCollection();

@@ -18,7 +18,7 @@ public sealed class FleetPartitionRunnerTests
     ///     reproducing the burst that caused the outage.
     /// </summary>
     [Fact]
-    public async Task ShouldBackOffProgressivelyWhenPartitionAcquisitionKeepsFailing()
+    public async Task ShouldBackOffProgressivelyGivenPartitionAcquisitionKeepsFailing()
     {
         // Arrange
         const string partition = "lease://portia/fleet/unreachable";
@@ -112,7 +112,7 @@ public sealed class FleetPartitionRunnerTests
 
     /// <summary>A non-positive callback termination timeout is rejected before the runner starts.</summary>
     [Fact]
-    public async Task ShouldRejectNonPositivePartitionStopTimeout()
+    public async Task ShouldRejectStopTimeoutGivenNonPositivePartitionStopTimeout()
     {
         // Arrange
         var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
@@ -130,7 +130,7 @@ public sealed class FleetPartitionRunnerTests
 
     /// <summary>Changing tenant partitions revoke only removed work and retain global ownership.</summary>
     [Fact]
-    public async Task ShouldPreserveRetainedOwnershipWhenPartitionsChange()
+    public async Task ShouldPreserveRetainedOwnershipGivenPartitionsChange()
     {
         // Arrange
         var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
@@ -191,7 +191,7 @@ public sealed class FleetPartitionRunnerTests
     ///     callback's partition can possibly be re-acquired in a short window.
     /// </summary>
     [Fact]
-    public async Task ShouldBackOffWhenCallbackReturnsImmediately()
+    public async Task ShouldBackOffGivenCallbackReturningImmediately()
     {
         // Arrange
         var leases = new InMemoryLeaseClient();
@@ -214,7 +214,7 @@ public sealed class FleetPartitionRunnerTests
 
     /// <summary>A terminal hosted-workload fault crosses the fleet resilience boundary.</summary>
     [Fact]
-    public async Task ShouldPropagateTerminalWorkloadFailure()
+    public async Task ShouldPropagateFailureGivenTerminalWorkloadFailure()
     {
         // Arrange
         var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
@@ -239,7 +239,7 @@ public sealed class FleetPartitionRunnerTests
     ///     than surfacing later as an opaque overflow when converting to whole seconds.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectNonPositiveLeaseTtl()
+    public async Task ShouldRejectLeaseTtlGivenNonPositiveTtl()
     {
         // Arrange
         var leases = new InMemoryLeaseClient();
@@ -276,7 +276,7 @@ public sealed class FleetPartitionRunnerTests
     [InlineData("lease://realm/area/**", "a recursive wildcard resource segment")]
     [InlineData("lease://realm/a*ea/resource", "a wildcard embedded in the area segment")]
     [InlineData("lease://realm/area/res*", "a wildcard embedded in the resource segment")]
-    public async Task ShouldRejectMalformedPartitionRoute(string route, string reason)
+    public async Task ShouldRejectRouteGivenMalformedPartitionRoute(string route, string reason)
     {
         // Arrange
         var leases = new InMemoryLeaseClient();
@@ -304,7 +304,7 @@ public sealed class FleetPartitionRunnerTests
     ///     overzealous.
     /// </summary>
     [Fact]
-    public async Task ShouldAcceptWellFormedPartitionRoute()
+    public async Task ShouldAcceptRouteGivenWellFormedPartitionRoute()
     {
         // Arrange
         var leases = new InMemoryLeaseClient();
@@ -336,7 +336,7 @@ public sealed class FleetPartitionRunnerTests
     ///     process already holds — nothing in that process would ever release it.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectDuplicatePartitionKeys()
+    public async Task ShouldRejectPartitionsGivenDuplicatePartitionKeys()
     {
         // Arrange
         var leases = new InMemoryLeaseClient();
@@ -358,7 +358,7 @@ public sealed class FleetPartitionRunnerTests
     ///     observed.
     /// </summary>
     [Fact]
-    public async Task ShouldReportDifferentFaultReasonForFailedAcquisitionThanFailedCallback()
+    public async Task ShouldReportDifferentFaultReasonGivenFailedAcquisitionVersusFailedCallback()
     {
         // Arrange
         var leases = new InMemoryLeaseClient();
@@ -409,7 +409,7 @@ public sealed class FleetPartitionRunnerTests
     ///     partition it's given.
     /// </summary>
     [Fact]
-    public async Task ShouldAcquireEveryPartitionWhenNoWorkerContestsThem()
+    public async Task ShouldAcquireEveryPartitionGivenNoContestingWorker()
     {
         // Arrange
         var leases = new InMemoryLeaseClient();
@@ -440,7 +440,7 @@ public sealed class FleetPartitionRunnerTests
     ///     callback concurrently with the first.
     /// </summary>
     [Fact]
-    public async Task ShouldGrantPartitionToExactlyOneCompetingWorker()
+    public async Task ShouldGrantPartitionToExactlyOneWorkerGivenCompetingWorkers()
     {
         // Arrange
         var leases = new InMemoryLeaseClient();
@@ -497,7 +497,7 @@ public sealed class FleetPartitionRunnerTests
     ///     never interrupted, restarted, or even briefly re-contended.
     /// </summary>
     [Fact]
-    public async Task ShouldOnlyMoveThePartitionThatWasReleasedWhenAWorkerStops()
+    public async Task ShouldOnlyMoveReleasedPartitionGivenWorkerStops()
     {
         // Arrange
         var leases = new InMemoryLeaseClient();

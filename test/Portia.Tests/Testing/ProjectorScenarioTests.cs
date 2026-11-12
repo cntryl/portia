@@ -10,7 +10,7 @@ public sealed class ProjectorScenarioTests
     [Theory]
     [InlineData(4097)]
     [InlineData(8193)]
-    public async Task ShouldDrainHistoryAcrossBoundedPasses(int count)
+    public async Task ShouldDrainHistoryGivenBoundedPasses(int count)
     {
         // Arrange
         var ids = Enumerable.Range(0, count).Select(_ => Uuid.CreateVersion4()).ToArray();
@@ -48,7 +48,7 @@ public sealed class ProjectorScenarioTests
 
     /// <summary>A later run resumes from the committed checkpoint, projecting only events given since.</summary>
     [Fact]
-    public async Task ShouldResumeFromCommittedCheckpoint()
+    public async Task ShouldResumeGivenCommittedCheckpoint()
     {
         // Arrange
         var first = Uuid.CreateVersion4();
@@ -68,7 +68,7 @@ public sealed class ProjectorScenarioTests
 
     /// <summary>A tenant-scoped projector runs bound to a test tenant, as its hosted workload would be.</summary>
     [Fact]
-    public async Task ShouldRunTenantScopedProjector()
+    public async Task ShouldRunProjectorGivenTenantScope()
     {
         // Arrange
         var user = Uuid.CreateVersion4();
@@ -84,7 +84,7 @@ public sealed class ProjectorScenarioTests
 
     /// <summary>A caller-selected tenant binds the projector and supplies matching event streams.</summary>
     [Fact]
-    public async Task ShouldRunProjectorUnderChosenTenant()
+    public async Task ShouldRunProjectorGivenChosenTenant()
     {
         // Arrange
         var tenant = new TenantId(Uuid.CreateVersion4().ToString());
@@ -102,6 +102,6 @@ public sealed class ProjectorScenarioTests
 
     /// <summary>The optional tenant cannot be the uninitialized value of the tenant struct.</summary>
     [Fact]
-    public void ShouldRejectUninitializedTenant() =>
+    public void ShouldRejectScenarioGivenUninitializedTenant() =>
         _ = Assert.ThrowsAny<ArgumentException>(() => new ProjectorScenario(default));
 }

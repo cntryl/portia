@@ -9,7 +9,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class PartialProcessorCodeFixTests
 {
     [Fact]
-    public async Task AddsPartialWithoutDisturbingExistingModifiersOrTrivia()
+    public async Task ShouldAddPartialGivenExistingModifiersAndTrivia()
     {
         // Arrange
         const string source = """
@@ -37,7 +37,7 @@ public sealed class PartialProcessorCodeFixTests
         "    partial class Projection")]
     [InlineData("[System.Obsolete]\nclass Projection() : Projector(null!, EventStreamPattern.ForPattern(\"events\"));",
         "[System.Obsolete]\npartial class Projection")]
-    public async Task ModifierFreeDeclarationPreservesTriviaOnItsActualFirstToken(string declaration,
+    public async Task ShouldPreserveTriviaOnFirstTokenGivenModifierFreeDeclaration(string declaration,
         string expected)
     {
         // Arrange
@@ -57,7 +57,7 @@ public sealed class PartialProcessorCodeFixTests
     [InlineData(FixAllScope.Document)]
     [InlineData(FixAllScope.Project)]
     [InlineData(FixAllScope.Solution)]
-    public async Task FixAllCorrectsProjectorAndReactorAndLeavesGeneratedOutputCompilable(FixAllScope scope)
+    public async Task ShouldCorrectProjectorAndReactorGivenFixAllWithCompilableGeneratedOutput(FixAllScope scope)
     {
         // Arrange
         const string source = """
@@ -91,7 +91,7 @@ public sealed class PartialProcessorCodeFixTests
     }
 
     [Fact]
-    public async Task MakesEveryEnclosingTypeOfANestedProcessorPartial()
+    public async Task ShouldMakeEveryEnclosingTypePartialGivenNestedProcessor()
     {
         // Arrange
         const string source = """
@@ -125,7 +125,7 @@ public sealed class PartialProcessorCodeFixTests
     }
 
     [Fact]
-    public async Task OffersNoPartialFixForAnUnsupportedShapeItCannotRepair()
+    public async Task ShouldOfferNoPartialFixGivenUnsupportedShape()
     {
         // Arrange
         const string source = """
@@ -154,7 +154,7 @@ public sealed class PartialProcessorCodeFixTests
     [InlineData(FixAllScope.Document)]
     [InlineData(FixAllScope.Project)]
     [InlineData(FixAllScope.Solution)]
-    public async Task FixAllRepairsSharedNestedContainers(FixAllScope scope)
+    public async Task ShouldRepairSharedContainersGivenNestedProcessorsWhenFixAll(FixAllScope scope)
     {
         // Arrange
         const string source = """

@@ -7,7 +7,7 @@ public sealed class OperationalConcurrencyIntegrationTests(FitzBrokerFixture bro
 {
     /// <summary>A competing writer is rejected at BEGIN and cannot overwrite the current revision.</summary>
     [Fact]
-    public async Task ShouldFenceConcurrentOperationalWritersUsingRealFitzLocks()
+    public async Task ShouldFenceConcurrentWritersGivenRealFitzLocks()
     {
         // Arrange
         await using var client = await broker.CreateClientAsync();

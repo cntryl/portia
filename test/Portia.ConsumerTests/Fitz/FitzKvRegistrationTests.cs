@@ -20,7 +20,7 @@ public sealed class FitzKvRegistrationTests
     ///     against a broker the host already connects and disposes.
     /// </summary>
     [Fact]
-    public void FitzPublishesItsKvClientForApplicationRepositories()
+    public void ShouldPublishKvClientGivenFitzRegistration()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -39,7 +39,7 @@ public sealed class FitzKvRegistrationTests
     ///     second connection to learn what the first one already knows.
     /// </summary>
     [Fact]
-    public void FitzPublishesItsStreamClientForApplicationReaders()
+    public void ShouldPublishStreamClientGivenFitzRegistration()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -57,7 +57,7 @@ public sealed class FitzKvRegistrationTests
     ///     durable progress is a resolution failure at startup rather than silent replay after a restart.
     /// </summary>
     [Fact]
-    public void ReactorCheckpointsAreNotRegisteredWithoutSelection()
+    public void ShouldNotRegisterCheckpointStoreGivenNoCheckpointSelection()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -74,7 +74,7 @@ public sealed class FitzKvRegistrationTests
     ///     event-sourced directory replays its lifecycle history on every start, which is correct but slow.
     /// </summary>
     [Fact]
-    public void SelectingKvTenantSnapshotsRegistersTheDurableStore()
+    public void ShouldRegisterSnapshotStoreGivenKvTenantSnapshotsSelected()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -91,7 +91,7 @@ public sealed class FitzKvRegistrationTests
 
     /// <summary>Two different snapshot routes cannot both be the one a restart resumes from.</summary>
     [Fact]
-    public void ConflictingTenantSnapshotRoutesAreRejected()
+    public void ShouldRejectSnapshotRoutesGivenConflictingTenantSnapshotRoutes()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -106,7 +106,7 @@ public sealed class FitzKvRegistrationTests
     }
 
     [Fact]
-    public void SelectingKvCheckpointsRegistersTheDurableStore()
+    public void ShouldRegisterCheckpointStoreGivenKvCheckpointsSelected()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -127,7 +127,7 @@ public sealed class FitzKvRegistrationTests
     [InlineData("kv://accounts/progress/checkpoints/extra")]
     [InlineData("kv://accounts//checkpoints")]
     [InlineData("kv://accounts/*/checkpoints")]
-    public void CheckpointRouteMustBeAnExactThreeSegmentKvRoute(string route)
+    public void ShouldRejectCheckpointRouteGivenRouteNotExactThreeSegmentKvRoute(string route)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -146,7 +146,7 @@ public sealed class FitzKvRegistrationTests
     ///     more than once in a process. Repeating it is the normal case; changing it is the mistake.
     /// </summary>
     [Fact]
-    public void RepeatingTheSameCheckpointRouteIsIdempotent()
+    public void ShouldRegisterOneCheckpointStoreGivenSameRouteRepeated()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -160,7 +160,7 @@ public sealed class FitzKvRegistrationTests
     }
 
     [Fact]
-    public void ConflictingCheckpointRoutesAreRejected()
+    public void ShouldRejectCheckpointRoutesGivenConflictingRoutes()
     {
         // Arrange
         var services = new ServiceCollection();

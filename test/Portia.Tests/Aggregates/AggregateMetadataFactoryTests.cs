@@ -16,7 +16,7 @@ public sealed class AggregateMetadataFactoryTests
     ///     be stored with an identity that deduplication and replay cannot tell apart from any other.
     /// </summary>
     [Fact]
-    public void ShouldRejectFactoryReturningEmptyEventId()
+    public void ShouldRejectEventGivenFactoryReturningEmptyEventId()
     {
         // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4(), Factory(Uuid.Empty));
@@ -37,7 +37,7 @@ public sealed class AggregateMetadataFactoryTests
     ///     to another, and every projector keyed on the aggregate identity would misfile it.
     /// </summary>
     [Fact]
-    public void ShouldRejectFactoryReturningDifferentAggregateId()
+    public void ShouldRejectEventGivenFactoryReturningDifferentAggregateId()
     {
         // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4(), Factory(aggregateId: Uuid.CreateVersion4()));
@@ -57,7 +57,7 @@ public sealed class AggregateMetadataFactoryTests
     ///     would let two writers both believe they had won.
     /// </summary>
     [Fact]
-    public void ShouldRejectFactoryReturningDifferentAggregateVersion()
+    public void ShouldRejectEventGivenFactoryReturningDifferentAggregateVersion()
     {
         // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4(), Factory(version: 99));
@@ -76,7 +76,7 @@ public sealed class AggregateMetadataFactoryTests
     ///     than at save, so the stack trace names the factory rather than the store.
     /// </summary>
     [Fact]
-    public void ShouldRejectFactoryReturningNonUtcOccurrenceTime()
+    public void ShouldRejectEventGivenFactoryReturningNonUtcOccurrenceTime()
     {
         // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4(),
@@ -96,7 +96,7 @@ public sealed class AggregateMetadataFactoryTests
     ///     aggregate — audits do not advance the version, but they still may not misidentify it.
     /// </summary>
     [Fact]
-    public void ShouldRejectFactoryReturningDifferentAggregateIdForAnAudit()
+    public void ShouldRejectAuditGivenFactoryReturningDifferentAggregateId()
     {
         // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4(), Factory(aggregateId: Uuid.CreateVersion4()));
@@ -115,7 +115,7 @@ public sealed class AggregateMetadataFactoryTests
     ///     would leave the aggregate's version and its stream permanently disagreeing.
     /// </summary>
     [Fact]
-    public void ShouldRejectAuditEventDuringReplay()
+    public void ShouldRejectAuditEventGivenReplay()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -139,7 +139,7 @@ public sealed class AggregateMetadataFactoryTests
     ///     its own validation and rollback code that must behave identically.
     /// </summary>
     [Fact]
-    public void ShouldLoadCommittedEventsSuppliedAsAPlainReadOnlyCollection()
+    public void ShouldLoadCommittedEventsGivenPlainReadOnlyCollection()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -159,7 +159,7 @@ public sealed class AggregateMetadataFactoryTests
     ///     in the batch fails to apply, and invalidates the failed instance. A fresh instance accepts a corrected history.
     /// </summary>
     [Fact]
-    public void ShouldReleaseReservedIdentitiesWhenAReadOnlyCollectionBatchFailsToApply()
+    public void ShouldReleaseReservedIdentitiesGivenReadOnlyCollectionBatchFailingToApply()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -185,7 +185,7 @@ public sealed class AggregateMetadataFactoryTests
     ///     the same as the list and array paths, so catch-up can never overwrite an undecided change.
     /// </summary>
     [Fact]
-    public void ShouldRejectReadOnlyCollectionOfCommittedEventsWhileChangesArePending()
+    public void ShouldRejectCommittedEventsGivenReadOnlyCollectionWhileChangesPending()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -206,7 +206,7 @@ public sealed class AggregateMetadataFactoryTests
     ///     and that nothing from it is applied.
     /// </summary>
     [Fact]
-    public void ShouldRejectReadOnlyCollectionOfCommittedEventsWithAVersionGap()
+    public void ShouldRejectCommittedEventsGivenReadOnlyCollectionWithVersionGap()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -228,7 +228,7 @@ public sealed class AggregateMetadataFactoryTests
     ///     factory issued for it, so the aggregate only tracks identities that an event actually carries.
     /// </summary>
     [Fact]
-    public void ShouldNotReserveEventIdWhenAttachingFails()
+    public void ShouldNotReserveEventIdGivenFailedAttach()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -249,7 +249,7 @@ public sealed class AggregateMetadataFactoryTests
     ///     the aggregate raises under its own identity and version.
     /// </summary>
     [Fact]
-    public void ShouldRaiseCopyOfRaisedEventUnderNewIdentity()
+    public void ShouldRaiseCopyUnderNewIdentityGivenRaisedEventCopied()
     {
         // Arrange
         var aggregate = new InstanceAggregate(Uuid.CreateVersion4());

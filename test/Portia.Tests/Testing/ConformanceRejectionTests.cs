@@ -179,7 +179,7 @@ public sealed class ConformanceRejectionTests
     [InlineData(StoreDefect.CorruptsPatternPayload, "payload")]
     [InlineData(StoreDefect.CorruptsOffsetPayload, "payload")]
     [InlineData(StoreDefect.CorruptsCursorPayload, "payload")]
-    public async Task ShouldRejectCorruptedOriginalRecords(StoreDefect defect, string expected)
+    public async Task ShouldRejectProbeGivenCorruptedOriginalRecords(StoreDefect defect, string expected)
     {
         // Arrange
         var probe = new DefectiveEventStoreProbe(defect);
@@ -204,7 +204,7 @@ public sealed class ConformanceRejectionTests
     [InlineData("ExecutionId")]
     [InlineData("Actor")]
     [InlineData("IsAudit")]
-    public async Task ShouldRejectRewriteOfEachOriginalMetadataMember(string member)
+    public async Task ShouldRejectProbeGivenRewriteOfEachOriginalMetadataMember(string member)
     {
         // Arrange
         var probe = new DefectiveEventStoreProbe(StoreDefect.RewritesMetadata, member);
@@ -223,7 +223,7 @@ public sealed class ConformanceRejectionTests
     ///     rejection above is evidence of the injected defect rather than of the harness itself.
     /// </summary>
     [Fact]
-    public async Task ShouldAcceptEventStoreProbeWithNoInjectedDefect()
+    public async Task ShouldAcceptEventStoreProbeGivenNoInjectedDefect()
     {
         // Arrange
         var probe = new DefectiveEventStoreProbe(StoreDefect.None);
@@ -267,7 +267,7 @@ public sealed class ConformanceRejectionTests
     ///     Verifies the positive control for the deduplication table: an intact guard passes.
     /// </summary>
     [Fact]
-    public async Task ShouldAcceptDeduplicationProbeWithNoInjectedDefect()
+    public async Task ShouldAcceptDeduplicationProbeGivenNoInjectedDefect()
     {
         // Arrange
         var probe = new DefectiveDeduplicationProbe(DeduplicationDefect.None);

@@ -5,7 +5,7 @@ public sealed class AggregateEmissionTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void RejectsMixingRaisedAndAuditedEventsBeforeMetadataOrStateChanges(bool auditFirst)
+    public void ShouldRejectMixedEventsGivenRaisedAndAuditedEventsBeforeMetadataOrStateChanges(bool auditFirst)
     {
         // Arrange
         var factory = new CountingMetadataFactory();

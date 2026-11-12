@@ -13,7 +13,7 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
 
     /// <summary>The directory reads tenant lifecycle events through the registered event reader.</summary>
     [Fact]
-    public async Task ShouldReadTenantsThroughRegisteredReader()
+    public async Task ShouldReadTenantsGivenRegisteredReader()
     {
         // Arrange
         var events = new InMemoryEventStore();
@@ -33,7 +33,7 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
 
     /// <summary>A registered snapshot store is used, so a restart resumes from the saved roster.</summary>
     [Fact]
-    public async Task ShouldSnapshotThroughRegisteredStore()
+    public async Task ShouldSnapshotGivenRegisteredStore()
     {
         // Arrange
         var events = new InMemoryEventStore();
@@ -57,7 +57,7 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
 
     /// <summary>A directory the application registered itself wins over the event-sourced one.</summary>
     [Fact]
-    public void ShouldKeepApplicationRegisteredDirectory()
+    public void ShouldKeepApplicationDirectoryGivenApplicationRegisteredDirectory()
     {
         // Arrange
         var fixedDirectory = new FixedTenantDirectory(new TenantId("demo"));

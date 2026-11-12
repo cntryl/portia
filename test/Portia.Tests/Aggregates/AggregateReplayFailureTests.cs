@@ -19,7 +19,7 @@ public sealed class AggregateReplayFailureTests
     [InlineData(0, true, true)]
     [InlineData(1, true, true)]
     [InlineData(2, true, true)]
-    public async Task ShouldDiscardAfterReplayApplicationFailure(int failureIndex, bool readOnly, bool useOverride)
+    public async Task ShouldDiscardAggregateGivenReplayApplicationFailure(int failureIndex, bool readOnly, bool useOverride)
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -54,7 +54,7 @@ public sealed class AggregateReplayFailureTests
 
     /// <summary>Complete validation precedes application and releases reserved IDs for a corrected retry.</summary>
     [Fact]
-    public void ShouldKeepPreApplyValidationFailureRetryable()
+    public void ShouldKeepAggregateRetryableGivenPreApplyValidationFailure()
     {
         // Arrange
         var id = Uuid.CreateVersion4();

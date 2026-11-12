@@ -16,7 +16,7 @@ public sealed class ResultConversionTests
     [InlineData(RequestErrorKind.Forbidden)]
     [InlineData(RequestErrorKind.NotFound)]
     [InlineData(RequestErrorKind.Conflict)]
-    public void ShouldCreateErrorOfRequestedKind(RequestErrorKind kind)
+    public void ShouldCreateErrorGivenRequestedKind(RequestErrorKind kind)
     {
         // Arrange
         const string message = "The operation was rejected.";
@@ -32,7 +32,7 @@ public sealed class ResultConversionTests
 
     /// <summary>A factory still carries the transient flag through to the error.</summary>
     [Fact]
-    public void ShouldCarryTransientFlagThroughFactory()
+    public void ShouldCarryTransientFlagGivenTransientFactoryArgument()
     {
         // Arrange
         const string message = "Operations are paused.";
@@ -46,7 +46,7 @@ public sealed class ResultConversionTests
 
     /// <summary>A factory applies the same message rule as the constructor.</summary>
     [Fact]
-    public void ShouldRejectBlankMessageFromFactory()
+    public void ShouldRejectMessageGivenBlankFactoryMessage()
     {
         // Arrange
         const string blank = " ";
@@ -60,7 +60,7 @@ public sealed class ResultConversionTests
 
     /// <summary>An error converts to a failed no-value result carrying that same error.</summary>
     [Fact]
-    public void ShouldConvertErrorToFailedResult()
+    public void ShouldConvertToFailedResultGivenError()
     {
         // Arrange
         var error = RequestError.NotFound("The account is not open.");
@@ -75,7 +75,7 @@ public sealed class ResultConversionTests
 
     /// <summary>An error converts to a failed value result carrying that same error.</summary>
     [Fact]
-    public void ShouldConvertErrorToFailedValueResult()
+    public void ShouldConvertToFailedValueResultGivenError()
     {
         // Arrange
         var error = RequestError.Forbidden("The actor cannot access this account.");
@@ -90,7 +90,7 @@ public sealed class ResultConversionTests
 
     /// <summary>A value converts to a successful value result.</summary>
     [Fact]
-    public void ShouldConvertValueToSuccessfulResult()
+    public void ShouldConvertToSuccessfulResultGivenValue()
     {
         // Arrange
         const string value = "savings";
@@ -105,7 +105,7 @@ public sealed class ResultConversionTests
 
     /// <summary>A method returning a result can return either side without naming the result type.</summary>
     [Fact]
-    public void ShouldReturnEitherSideFromOneMethod()
+    public void ShouldReturnEitherSideGivenValidOrInvalidAmount()
     {
         // Arrange
         const int validAmount = 5;

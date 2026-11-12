@@ -16,7 +16,7 @@ public sealed class UuidTests
     ///     Verifies UUID version 5 against the RFC name-based example.
     /// </summary>
     [Fact]
-    public void ShouldCreateKnownVersion5UuidForDnsName()
+    public void ShouldCreateKnownVersion5UuidGivenDnsName()
     {
         // Arrange
         const string name = "www.widgets.com";
@@ -33,7 +33,7 @@ public sealed class UuidTests
     ///     Verifies that identical namespace and name inputs produce identical UUIDs.
     /// </summary>
     [Fact]
-    public void ShouldCreateSameVersion5UuidForSameNamespaceAndName()
+    public void ShouldCreateSameVersion5UuidGivenSameNamespaceAndName()
     {
         // Arrange
         var first = Uuid.CreateVersion5(Uuid.UrlNamespace, "https://cntryl.com/aggregates/42");
@@ -49,7 +49,7 @@ public sealed class UuidTests
     ///     Verifies that the text overload uses the same UTF-8 representation as the byte overload.
     /// </summary>
     [Fact]
-    public void ShouldCreateSameVersion5UuidFromTextAndUtf8Bytes()
+    public void ShouldCreateSameVersion5UuidGivenTextAndEquivalentUtf8Bytes()
     {
         // Arrange
         const string name = "café/東京/🦋";
@@ -67,7 +67,7 @@ public sealed class UuidTests
     ///     Verifies safe version 5 generation for names larger than the stack-buffer threshold.
     /// </summary>
     [Fact]
-    public void ShouldCreateVersion5UuidForLargeName()
+    public void ShouldCreateVersion5UuidGivenLargeName()
     {
         // Arrange
         var name = new string('a', 4096);
@@ -86,7 +86,7 @@ public sealed class UuidTests
     ///     Verifies that namespaces participate in version 5 identity.
     /// </summary>
     [Fact]
-    public void ShouldCreateDifferentVersion5UuidForDifferentNamespace()
+    public void ShouldCreateDifferentVersion5UuidGivenDifferentNamespace()
     {
         // Arrange
         var dns = Uuid.CreateVersion5(Uuid.DnsNamespace, "cntryl.com");
@@ -102,7 +102,7 @@ public sealed class UuidTests
     ///     Verifies that generated UUID version 4 values report the correct version.
     /// </summary>
     [Fact]
-    public void ShouldCreateVersion4Uuid()
+    public void ShouldCreateVersion4UuidGivenRandomGeneration()
     {
         // Arrange
         // No setup: version 4 generation takes no inputs.
@@ -119,7 +119,7 @@ public sealed class UuidTests
     ///     Verifies canonical text parsing and formatting.
     /// </summary>
     [Fact]
-    public void ShouldRoundTripCanonicalUuidText()
+    public void ShouldRoundTripGivenCanonicalUuidText()
     {
         // Arrange
         const string text = CanonicalText;
@@ -137,7 +137,7 @@ public sealed class UuidTests
 
     /// <summary>Verifies string and span parsing through their generic contracts.</summary>
     [Fact]
-    public void ShouldParseThroughGenericContractsWithGuidParity()
+    public void ShouldParseWithGuidParityGivenGenericContracts()
     {
         // Arrange
         var expected = Guid.Parse(CanonicalText, CultureInfo.InvariantCulture);
@@ -158,7 +158,7 @@ public sealed class UuidTests
 
     /// <summary>Verifies generic parsing preserves <see cref="Guid" />'s invalid-input behavior.</summary>
     [Fact]
-    public void ShouldRejectInvalidInputThroughGenericParsingContracts()
+    public void ShouldRejectInvalidInputGivenGenericParsingContracts()
     {
         // Arrange
         const string invalid = "not-a-uuid";
@@ -186,7 +186,7 @@ public sealed class UuidTests
     [InlineData("B")]
     [InlineData("P")]
     [InlineData("X")]
-    public void ShouldFormatThroughGenericContractsWithGuidParity(string format)
+    public void ShouldFormatWithGuidParityGivenGenericContracts(string format)
     {
         // Arrange
         var guid = Guid.Parse(CanonicalText, CultureInfo.InvariantCulture);
@@ -202,7 +202,7 @@ public sealed class UuidTests
 
     /// <summary>Verifies generic comparison follows the wrapped <see cref="Guid" /> ordering.</summary>
     [Fact]
-    public void ShouldCompareThroughGenericContractWithGuidParity()
+    public void ShouldCompareWithGuidParityGivenGenericContract()
     {
         // Arrange
         var firstGuid = Guid.Parse("00000000-0000-0000-0000-000000000001", CultureInfo.InvariantCulture);
@@ -222,7 +222,7 @@ public sealed class UuidTests
     ///     Verifies failed parsing returns the empty UUID sentinel.
     /// </summary>
     [Fact]
-    public void ShouldReturnEmptyUuidWhenTryParseFails()
+    public void ShouldReturnEmptyUuidGivenTryParseFails()
     {
         // Arrange
         const string invalid = "not-a-uuid";
@@ -243,7 +243,7 @@ public sealed class UuidTests
     ///     setup required.
     /// </summary>
     [Fact]
-    public void ShouldSerializeAsPlainCanonicalString()
+    public void ShouldSerializeAsPlainStringGivenCanonicalUuid()
     {
         // Arrange
         var uuid = Uuid.Parse("21f7f8de-8051-5b89-8680-0195ef798b6a", CultureInfo.InvariantCulture);
@@ -259,7 +259,7 @@ public sealed class UuidTests
     ///     Verifies that a UUID deserializes from its canonical string form back to an equal value.
     /// </summary>
     [Fact]
-    public void ShouldDeserializeFromCanonicalString()
+    public void ShouldDeserializeGivenCanonicalString()
     {
         // Arrange
         const string json = "\"21f7f8de-8051-5b89-8680-0195ef798b6a\"";
@@ -278,7 +278,7 @@ public sealed class UuidTests
     ///     channel.
     /// </summary>
     [Fact]
-    public void ShouldThrowWhenDeserializingInvalidUuidString()
+    public void ShouldThrowGivenDeserializingInvalidUuidString()
     {
         // Arrange
         const string json = "\"not-a-uuid\"";
@@ -292,7 +292,7 @@ public sealed class UuidTests
 
     /// <summary>A UUID-keyed dictionary round-trips with each key in its canonical string form.</summary>
     [Fact]
-    public void ShouldRoundTripAsDictionaryKey()
+    public void ShouldRoundTripGivenUuidAsDictionaryKey()
     {
         // Arrange
         var uuid = Uuid.Parse("21f7f8de-8051-5b89-8680-0195ef798b6a", CultureInfo.InvariantCulture);
@@ -309,7 +309,7 @@ public sealed class UuidTests
 
     /// <summary>A key that is not a UUID fails as JSON rather than becoming <see cref="Uuid.Empty" />.</summary>
     [Fact]
-    public void ShouldThrowWhenDeserializingInvalidUuidKey()
+    public void ShouldThrowGivenDeserializingInvalidUuidKey()
     {
         // Arrange
         const string json = "{\"x\":1}";

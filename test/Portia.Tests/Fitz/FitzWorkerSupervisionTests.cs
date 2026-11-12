@@ -5,7 +5,7 @@ public sealed class FitzWorkerSupervisionTests
 {
     /// <summary>A fatal listener cancels its healthy sibling and awaits cleanup before reaching the host.</summary>
     [Fact]
-    public async Task ShouldAwaitHealthyListenerCleanupBeforePropagatingFatalFailure()
+    public async Task ShouldAwaitHealthyListenerCleanupGivenFatalFailureBeforePropagating()
     {
         // Arrange
         var expected = new TerminalHandlerFailureException(new IOException("terminal observer failed"));
@@ -67,7 +67,7 @@ public sealed class FitzWorkerSupervisionTests
 
     /// <summary>The original fatal failure remains visible alongside callback and asynchronous cleanup failures.</summary>
     [Fact]
-    public async Task ShouldPreserveFatalAndSiblingCleanupFailures()
+    public async Task ShouldPreserveBothFailuresGivenFatalFailureAndSiblingCleanupFailure()
     {
         // Arrange
         var expected = new TerminalHandlerFailureException(new IOException("terminal observer failed"));
@@ -120,7 +120,7 @@ public sealed class FitzWorkerSupervisionTests
 
     /// <summary>Stopping a healthy host awaits every listener without inventing a fatal failure.</summary>
     [Fact]
-    public async Task ShouldCompleteNormallyAfterHostCancellation()
+    public async Task ShouldCompleteNormallyGivenHostCancellation()
     {
         // Arrange
         var stopped = 0;
@@ -150,7 +150,7 @@ public sealed class FitzWorkerSupervisionTests
 
     /// <summary>A later listener's synchronous startup failure still cancels and observes previously started work.</summary>
     [Fact]
-    public async Task ShouldObserveEarlierListenersWhenStartupThrows()
+    public async Task ShouldObserveEarlierListenersGivenStartupThrows()
     {
         // Arrange
         var stopped = false;

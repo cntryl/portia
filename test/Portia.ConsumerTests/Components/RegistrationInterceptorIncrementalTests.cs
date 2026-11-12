@@ -43,7 +43,7 @@ public sealed class RegistrationInterceptorIncrementalTests
     ///     are not silently missing for the rest of the editing session.
     /// </summary>
     [Fact]
-    public void ShouldRegisterAnEventAddedAfterAnIncrementalRerun()
+    public void ShouldRegisterEventGivenEventAddedAfterIncrementalRerun()
     {
         // Arrange
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
@@ -76,7 +76,7 @@ public sealed class RegistrationInterceptorIncrementalTests
     ///     site whenever any event changes; those inputs belong in their own pipeline stage.
     /// </summary>
     [Fact]
-    public void ShouldNotInvalidateCallSiteModelsWhenAnUnrelatedEventIsAdded()
+    public void ShouldNotInvalidateCallSiteModelsGivenUnrelatedEventAdded()
     {
         // Arrange
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
@@ -111,7 +111,7 @@ public sealed class RegistrationInterceptorIncrementalTests
     }
 
     [Fact]
-    public void ShouldRefreshGeneratedMcpDescriptionAfterDocumentationOnlyEdit()
+    public void ShouldRefreshGeneratedMcpDescriptionGivenDocumentationOnlyEdit()
     {
         // Arrange
         const string initialRequest = """
@@ -161,7 +161,7 @@ public sealed class RegistrationInterceptorIncrementalTests
     }
 
     [Fact]
-    public void ShouldReadMcpDescriptionsFromReferencedAssemblyXmlFile()
+    public void ShouldReadMcpDescriptionsGivenReferencedAssemblyXmlFile()
     {
         // Arrange
         const string source = """
@@ -198,7 +198,7 @@ public sealed class RegistrationInterceptorIncrementalTests
     }
 
     [Fact]
-    public void ShouldGenerateMcpPropertyDescriptionsDeterministically()
+    public void ShouldGenerateMcpPropertyDescriptionsDeterministicallyGivenSameInput()
     {
         // Arrange
         const string declarationOrder = """
@@ -246,7 +246,7 @@ public sealed class RegistrationInterceptorIncrementalTests
 
     /// <summary>A request sent only through the outcome-aware API still enters the generated transport catalog.</summary>
     [Fact]
-    public void ShouldRegisterRequestDispatchedThroughOutcomeAwareSender()
+    public void ShouldRegisterRequestGivenDispatchThroughOutcomeAwareSender()
     {
         // Arrange
         const string source = """

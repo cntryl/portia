@@ -15,7 +15,7 @@ public sealed class OpenTelemetryIntegrationTests
 {
     /// <summary>One idempotent call enables trace, metric, and correlated log export.</summary>
     [Fact]
-    public void ShouldExportAllSignalsAndRemainIdempotent()
+    public void ShouldExportAllSignalsAndRemainIdempotentGivenConfiguredExporters()
     {
         // Arrange
         var activities = new List<Activity>();
@@ -65,7 +65,7 @@ public sealed class OpenTelemetryIntegrationTests
 
     /// <summary>Only the opt-in package has a metadata reference to an OpenTelemetry assembly.</summary>
     [Fact]
-    public void ShouldKeepOpenTelemetryReferencesOutOfCorePackages()
+    public void ShouldKeepOpenTelemetryReferencesOutGivenCorePackages()
     {
         // Arrange
         var directory = Path.GetDirectoryName(typeof(PortiaTelemetry).Assembly.Location)!;

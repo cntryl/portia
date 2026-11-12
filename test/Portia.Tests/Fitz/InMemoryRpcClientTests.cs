@@ -10,7 +10,7 @@ public sealed class InMemoryRpcClientTests
 {
     /// <summary>Fitz 2 calls carry their budget and complete their cancellation result.</summary>
     [Fact]
-    public async Task ShouldExposeCompletionAndBudgetThroughTheFitzInterface()
+    public async Task ShouldExposeCompletionAndBudgetGivenFitzInterface()
     {
 #pragma warning disable CA1859 // Exercise the shipped Fitz interface as a consumer would.
         // Arrange
@@ -38,7 +38,7 @@ public sealed class InMemoryRpcClientTests
 
     /// <summary>The timeout overload cancels work that exceeds its budget.</summary>
     [Fact]
-    public async Task ShouldCancelWorkerWhenTheCallBudgetExpires()
+    public async Task ShouldCancelWorkerGivenExpiredCallBudget()
     {
 #pragma warning disable CA1859 // Exercise the shipped Fitz interface as a consumer would.
         // Arrange
@@ -76,7 +76,7 @@ public sealed class InMemoryRpcClientTests
     [InlineData("rpc://tenant-a/**")]
     [InlineData("rpc://**/run")]
     [InlineData("rpc://tenant-a/orders/place/run")]
-    public async Task ShouldRouteAConcreteCallToAMatchingPattern(string pattern)
+    public async Task ShouldRouteCallGivenConcreteRouteMatchingPattern(string pattern)
     {
         // Arrange
         var rpc = new InMemoryRpcClient();
@@ -105,7 +105,7 @@ public sealed class InMemoryRpcClientTests
     [InlineData("rpc://tenant*/orders/place/run")]
     [InlineData("rpc://tenant-b/**")]
     [InlineData("queue://*/orders/place/run")]
-    public async Task ShouldNotRouteACallToANonMatchingPattern(string pattern)
+    public async Task ShouldNotRouteCallGivenNonMatchingPattern(string pattern)
     {
         // Arrange
         var rpc = new InMemoryRpcClient();
@@ -126,7 +126,7 @@ public sealed class InMemoryRpcClientTests
     ///     Verifies disposing a superseded registration leaves the worker that replaced it in place.
     /// </summary>
     [Fact]
-    public async Task ShouldKeepTheReplacingWorkerWhenASupersededRegistrationIsDisposed()
+    public async Task ShouldKeepReplacingWorkerGivenSupersededRegistrationDisposed()
     {
         // Arrange
         var rpc = new InMemoryRpcClient();
@@ -155,7 +155,7 @@ public sealed class InMemoryRpcClientTests
     ///     registrations and a test's calls do.
     /// </summary>
     [Fact]
-    public async Task ShouldRegisterAndCallConcurrently()
+    public async Task ShouldRegisterAndCallGivenConcurrentWorkers()
     {
         // Arrange
         var rpc = new InMemoryRpcClient();

@@ -15,7 +15,7 @@ public sealed class FitzRoutingTests
 
     /// <summary>An ordinary ASCII realm resolves into the wire route unchanged.</summary>
     [Fact]
-    public void ShouldResolveWildcardRealmFromSuppliedRouteValues()
+    public void ShouldResolveWildcardRealmGivenSuppliedRouteValues()
     {
         // Arrange
         // Act
@@ -34,7 +34,7 @@ public sealed class FitzRoutingTests
     [InlineData("tenant-а")]
     [InlineData("тenant-a")]
     [InlineData("tenant-٠")]
-    public void ShouldRejectNonAsciiRouteSegment(string realm)
+    public void ShouldRejectRouteGivenNonAsciiSegment(string realm)
     {
         // Arrange
         // Act
@@ -48,7 +48,7 @@ public sealed class FitzRoutingTests
 
     /// <summary>An unbounded segment is still a segment; the wire route has to stay addressable.</summary>
     [Fact]
-    public void ShouldRejectRouteSegmentLongerThanTheSupportedLength()
+    public void ShouldRejectRouteGivenSegmentLongerThanSupportedLength()
     {
         // Arrange
         // Act

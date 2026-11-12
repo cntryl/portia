@@ -12,7 +12,7 @@ public sealed partial class ComponentHostingTests
     ///     controls time still waits out the interval in real seconds.
     /// </summary>
     [Fact]
-    public async Task NotificationBackstopIsScheduledOnTheInjectedClock()
+    public async Task ShouldScheduleNotificationBackstopGivenInjectedClock()
     {
         // Arrange
         var pollInterval = TimeSpan.FromMinutes(10);

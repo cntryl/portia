@@ -17,7 +17,7 @@ public sealed class FitzKvProjectionStoreLifetimeTests
     ///     is silently lost.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectRepositoryWritesAfterTheBatchIsDisposed()
+    public async Task ShouldRejectRepositoryWritesGivenDisposedBatch()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -39,7 +39,7 @@ public sealed class FitzKvProjectionStoreLifetimeTests
     ///     dereferencing the uninitialized transaction.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectRepositoryWritesBeforeAnyBatchIsOpened()
+    public async Task ShouldRejectRepositoryWritesGivenNoOpenBatch()
     {
         // Arrange
         var store = new StrayWriteRepository(new FakeKvClient(), "kv://portia/state/orders");

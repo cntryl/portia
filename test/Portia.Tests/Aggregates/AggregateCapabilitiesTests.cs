@@ -11,7 +11,7 @@ public sealed class AggregateCapabilitiesTests
 {
     /// <summary>The combined double exposes all three aggregate capabilities.</summary>
     [Fact]
-    public async Task ShouldExposeReaderWriterAndExecutorCapabilities()
+    public async Task ShouldExposeReaderWriterAndExecutorGivenAggregateCapabilities()
     {
         // Arrange
         await using var provider = Provider();
@@ -28,7 +28,7 @@ public sealed class AggregateCapabilitiesTests
 
     /// <summary>State committed through the executor hydrates back through the same double.</summary>
     [Fact]
-    public async Task ShouldHydrateStateCommittedThroughExecutor()
+    public async Task ShouldHydrateStateGivenCommitThroughExecutor()
     {
         // Arrange
         await using var provider = Provider();
@@ -55,7 +55,7 @@ public sealed class AggregateCapabilitiesTests
 
     /// <summary>State saved through the combined double hydrates back through the same double.</summary>
     [Fact]
-    public async Task ShouldHydrateStateSavedThroughItself()
+    public async Task ShouldHydrateStateGivenSaveThroughCapabilities()
     {
         // Arrange
         await using var provider = Provider();

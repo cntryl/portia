@@ -15,7 +15,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>An unprotected command throws and never reaches its handler.</summary>
     [Fact]
-    public async Task ShouldRejectUnprotectedCommandAtDispatchWhenAuthorizationIsRequired()
+    public async Task ShouldRejectUnprotectedCommandAtDispatchGivenAuthorizationIsRequired()
     {
         // Arrange
         var (bus, calls) = Bus(Required);
@@ -32,7 +32,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>An unprotected result-bearing request throws and never reaches its handler.</summary>
     [Fact]
-    public async Task ShouldRejectUnprotectedQueryAtDispatchWhenAuthorizationIsRequired()
+    public async Task ShouldRejectUnprotectedQueryAtDispatchGivenAuthorizationIsRequired()
     {
         // Arrange
         var (bus, calls) = Bus(Required);
@@ -49,7 +49,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>An unprotected stream throws before producing its first item.</summary>
     [Fact]
-    public async Task ShouldRejectUnprotectedStreamBeforeFirstItemWhenAuthorizationIsRequired()
+    public async Task ShouldRejectUnprotectedStreamBeforeFirstItemGivenAuthorizationIsRequired()
     {
         // Arrange
         var (bus, calls) = Bus(Required);
@@ -74,7 +74,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>The accept-now-run-later authorization check rejects an unprotected request too.</summary>
     [Fact]
-    public async Task ShouldRejectUnprotectedRequestAtAuthorizeAsyncWhenAuthorizationIsRequired()
+    public async Task ShouldRejectUnprotectedRequestAtAuthorizeAsyncGivenAuthorizationIsRequired()
     {
         // Arrange
         var (bus, _) = Bus(Required);
@@ -90,7 +90,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>A request allowed anonymous dispatches without any authorizer or permission.</summary>
     [Fact]
-    public async Task ShouldDispatchAnonymousAllowedRequestWhenAuthorizationIsRequired()
+    public async Task ShouldDispatchAnonymousAllowedRequestGivenAuthorizationIsRequired()
     {
         // Arrange
         var (bus, calls) = Bus(Required);
@@ -105,7 +105,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>A concrete-request authorizer protects its request.</summary>
     [Fact]
-    public async Task ShouldDispatchRequestProtectedByConcreteAuthorizerWhenAuthorizationIsRequired()
+    public async Task ShouldDispatchRequestProtectedByConcreteAuthorizerGivenAuthorizationIsRequired()
     {
         // Arrange
         var (bus, calls) = Bus(Required);
@@ -120,7 +120,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>A request-family authorizer protects every request in the family.</summary>
     [Fact]
-    public async Task ShouldDispatchRequestProtectedByFamilyAuthorizerWhenAuthorizationIsRequired()
+    public async Task ShouldDispatchRequestProtectedByFamilyAuthorizerGivenAuthorizationIsRequired()
     {
         // Arrange
         var (bus, calls) = Bus(Required);
@@ -135,7 +135,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>A principal-stage authorizer scoped to every request protects every request.</summary>
     [Fact]
-    public async Task ShouldTreatPrincipalStageBaseAuthorizerAsProtectingEveryRequest()
+    public async Task ShouldProtectEveryRequestGivenPrincipalStageBaseAuthorizer()
     {
         // Arrange
         var (bus, calls) = Bus(Required,
@@ -151,7 +151,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>A declared permission protects its request.</summary>
     [Fact]
-    public async Task ShouldDispatchPermissionProtectedRequestWhenAuthorizationIsRequired()
+    public async Task ShouldDispatchPermissionProtectedRequestGivenAuthorizationIsRequired()
     {
         // Arrange
         var (bus, calls) = Bus(Required);
@@ -166,7 +166,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>Without the requirement, an unprotected request dispatches exactly as before.</summary>
     [Fact]
-    public async Task ShouldDispatchUnprotectedRequestWhenAuthorizationIsNotRequired()
+    public async Task ShouldDispatchUnprotectedRequestGivenAuthorizationIsNotRequired()
     {
         // Arrange
         var (bus, calls) = Bus(null);
@@ -181,7 +181,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>The registry exposes unprotected request types only when authorization is required.</summary>
     [Fact]
-    public void ShouldExposeUnprotectedRequestTypesOnlyWhenAuthorizationIsRequired()
+    public void ShouldExposeUnprotectedRequestTypesOnlyGivenAuthorizationIsRequired()
     {
         // Arrange
         var required = Registry(Required);
@@ -203,7 +203,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>RequireAuthorization chains on the same builder.</summary>
     [Fact]
-    public void ShouldReturnSameBuilderFromRequireAuthorization()
+    public void ShouldReturnSameBuilderGivenRequireAuthorization()
     {
         // Arrange
         var builder = new ServiceCollection().AddPortia();
@@ -217,7 +217,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>A provider composed without hosting still refuses unprotected requests.</summary>
     [Fact]
-    public async Task ShouldRejectUnprotectedRequestAtDispatchInNonHostedProvider()
+    public async Task ShouldRejectUnprotectedRequestAtDispatchGivenNonHostedProvider()
     {
         // Arrange
         await using var provider = Composed(portia => portia.RequireAuthorization());
@@ -235,7 +235,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>A request allowed anonymous at the composition root dispatches.</summary>
     [Fact]
-    public async Task ShouldDispatchAnonymousAllowedRequestInNonHostedProvider()
+    public async Task ShouldDispatchAnonymousAllowedRequestGivenNonHostedProvider()
     {
         // Arrange
         await using var provider = Composed(portia =>
@@ -252,7 +252,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>Feature assemblies can each contribute anonymous requests to the same requirement.</summary>
     [Fact]
-    public async Task ShouldUnionAnonymousRequestsAcrossRepeatedRequireAuthorizationCalls()
+    public async Task ShouldUnionAnonymousRequestsGivenRepeatedRequireAuthorizationCalls()
     {
         // Arrange
         await using var provider = Composed(portia => portia
@@ -269,7 +269,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>A request family allowed anonymous covers every request in the family.</summary>
     [Fact]
-    public void ShouldAllowRequestFamilyAnonymous()
+    public void ShouldAllowFamilyRequestsGivenRequestFamilyAnonymous()
     {
         // Arrange
         var registry = Registry(new RequestAuthorizationRequirement([typeof(IPublicRequest)]));
@@ -285,7 +285,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>Allowing every request anonymous is an explicit, supported choice.</summary>
     [Fact]
-    public async Task ShouldAllowEveryRequestAnonymousThroughRequestBase()
+    public async Task ShouldAllowEveryRequestGivenRequestBaseAnonymous()
     {
         // Arrange
         await using var provider = Composed(portia =>
@@ -301,7 +301,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>Shared setup may allow requests another host does not register.</summary>
     [Fact]
-    public async Task ShouldIgnoreAnonymousRequestsWithoutRegisteredHandlers()
+    public async Task ShouldIgnoreAnonymousRequestsGivenNoRegisteredHandlers()
     {
         // Arrange
         await using var provider = Composed(portia => portia.RequireAuthorization(options => options
@@ -318,7 +318,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>Without RequireAuthorization the composed bus dispatches unprotected requests as before.</summary>
     [Fact]
-    public async Task ShouldNotChangeDispatchWhenRequireAuthorizationIsNotCalled()
+    public async Task ShouldNotChangeDispatchGivenRequireAuthorizationIsNotCalled()
     {
         // Arrange
         await using var provider = Composed(_ => { });
@@ -349,7 +349,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>Hosted startup names every unprotected request type in stable order before serving.</summary>
     [Fact]
-    public async Task ShouldFailHostedStartupListingUnprotectedRequestTypesInOrdinalOrder()
+    public async Task ShouldFailHostedStartupListingTypesInOrdinalOrderGivenUnprotectedRequestTypes()
     {
         // Arrange
         using var host = Hosted(portia =>
@@ -372,7 +372,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>Hosted startup succeeds once every request is protected or allowed anonymous.</summary>
     [Fact]
-    public async Task ShouldStartHostWhenEveryRequestIsProtectedOrAnonymous()
+    public async Task ShouldStartHostGivenEveryRequestIsProtectedOrAnonymous()
     {
         // Arrange
         using var host = Hosted(portia => portia.RequireAuthorization(options => options
@@ -393,7 +393,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>Without RequireAuthorization hosted startup does not examine request protection.</summary>
     [Fact]
-    public async Task ShouldNotValidateProtectionWhenAuthorizationIsNotRequired()
+    public async Task ShouldNotValidateProtectionGivenAuthorizationIsNotRequired()
     {
         // Arrange
         using var host = Hosted(_ => { });
@@ -411,7 +411,7 @@ public sealed class RequireAuthorizationTests
 
     /// <summary>A replaced registry cannot silently switch fail-closed authorization off.</summary>
     [Fact]
-    public async Task ShouldFailHostedStartupWhenAuthorizationIsRequiredButRegistryWasReplaced()
+    public async Task ShouldFailHostedStartupGivenAuthorizationIsRequiredButRegistryWasReplaced()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();

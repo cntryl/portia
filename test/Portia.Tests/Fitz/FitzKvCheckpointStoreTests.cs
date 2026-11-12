@@ -14,7 +14,7 @@ public sealed class FitzKvCheckpointStoreTests
 
     /// <summary>A persisted reset survives a new reactor store instance.</summary>
     [Fact]
-    public async Task ShouldReloadStartAfterReset()
+    public async Task ShouldReloadStartGivenReset()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -35,7 +35,7 @@ public sealed class FitzKvCheckpointStoreTests
     ///     rather than reporting whatever a missing key decodes to.
     /// </summary>
     [Fact]
-    public async Task ShouldLoadStartWhenNothingHasBeenSaved()
+    public async Task ShouldLoadStartGivenNothingHasBeenSaved()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -54,7 +54,7 @@ public sealed class FitzKvCheckpointStoreTests
     ///     that distinguishes opaque cursors from legacy big-endian offsets.
     /// </summary>
     [Fact]
-    public async Task ShouldRoundTripSavedCheckpointInVersionedFormat()
+    public async Task ShouldRoundTripCheckpointGivenVersionedFormat()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -73,7 +73,7 @@ public sealed class FitzKvCheckpointStoreTests
 
     /// <summary>Reads the fixed-width unsigned big-endian checkpoint format published by Portia 0.1.x.</summary>
     [Fact]
-    public async Task ShouldLoadLegacyBigEndianCheckpoint()
+    public async Task ShouldLoadCheckpointGivenLegacyBigEndianEncoding()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -91,7 +91,7 @@ public sealed class FitzKvCheckpointStoreTests
 
     /// <summary>Proves a current eight-byte cursor remains opaque because the current format is prefixed.</summary>
     [Fact]
-    public async Task ShouldRoundTripEightByteOpaqueCursorWithoutLegacyMisclassification()
+    public async Task ShouldRoundTripCursorGivenEightByteOpaqueCursorLookingLikeLegacy()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -106,7 +106,7 @@ public sealed class FitzKvCheckpointStoreTests
 
     /// <summary>Rejects bytes which are neither a current prefixed cursor nor a legacy fixed-width offset.</summary>
     [Fact]
-    public async Task ShouldRejectUnknownUnversionedCheckpointEncoding()
+    public async Task ShouldRejectCheckpointGivenUnknownUnversionedEncoding()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -125,7 +125,7 @@ public sealed class FitzKvCheckpointStoreTests
     ///     generation must never overwrite the live one.
     /// </summary>
     [Fact]
-    public async Task ShouldKeepCheckpointsSeparatePerComponentPatternAndRebuildGeneration()
+    public async Task ShouldKeepCheckpointsSeparateGivenDifferentComponentPatternAndRebuildGeneration()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -158,7 +158,7 @@ public sealed class FitzKvCheckpointStoreTests
     ///     reactor's save block or conflict with another reactor's or projector's.
     /// </summary>
     [Fact]
-    public async Task ShouldRouteDifferentComponentsToDifferentFitzKvResources()
+    public async Task ShouldRouteToDifferentResourcesGivenDifferentComponents()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -181,7 +181,7 @@ public sealed class FitzKvCheckpointStoreTests
 
     /// <summary>Verifies that the same component always resolves back to the same derived route.</summary>
     [Fact]
-    public async Task ShouldRouteTheSameComponentToTheSameFitzKvResourceAcrossCalls()
+    public async Task ShouldRouteToSameResourceGivenSameComponentAcrossCalls()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -203,7 +203,7 @@ public sealed class FitzKvCheckpointStoreTests
     ///     alone would make every tenant contend for one lock — contention that grows with tenant count.
     /// </summary>
     [Fact]
-    public async Task ShouldRouteTenantsOfOneComponentToDifferentFitzKvResources()
+    public async Task ShouldRouteToDifferentResourcesGivenTenantsOfOneComponent()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -225,7 +225,7 @@ public sealed class FitzKvCheckpointStoreTests
     ///     the same reactor against a broker that locks a whole resource per read-write transaction.
     /// </summary>
     [Fact]
-    public async Task ShouldSaveOneTenantWhileAnotherTenantHoldsItsResource()
+    public async Task ShouldSaveCheckpointGivenAnotherTenantHoldingItsResource()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -248,7 +248,7 @@ public sealed class FitzKvCheckpointStoreTests
     ///     cause and the losing write rolled back rather than left staged.
     /// </summary>
     [Fact]
-    public async Task ShouldTranslateIsolationConflictToProjectionConcurrencyException()
+    public async Task ShouldThrowProjectionConcurrencyExceptionGivenIsolationConflict()
     {
         // Arrange
         var conflict = new KvException("conflict", "TX_CONFLICT", domainCode: FitzErrorCodes.KvIsolationConflict);
@@ -274,7 +274,7 @@ public sealed class FitzKvCheckpointStoreTests
     ///     message reaches error logs and trace exception events, which must not carry tenant data.
     /// </summary>
     [Fact]
-    public async Task ShouldKeepTenantAndAggregateIdentifiersOutOfTheConflictMessage()
+    public async Task ShouldOmitIdentifiersFromMessageGivenConflict()
     {
         // Arrange
         var conflict = new KvException("conflict", "TX_CONFLICT", domainCode: FitzErrorCodes.KvIsolationConflict);
@@ -303,7 +303,7 @@ public sealed class FitzKvCheckpointStoreTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldRethrowNonConflictFailureUnchanged(bool atCommit)
+    public async Task ShouldRethrowFailureUnchangedGivenNonConflictFailure(bool atCommit)
     {
         // Arrange
         var failure = new KvException("backend down", "KV_BACKEND", domainCode: FitzErrorCodes.KvBackendError);
@@ -336,7 +336,7 @@ public sealed class FitzKvCheckpointStoreTests
     ///     failure — the one that says whether the checkpoint advanced — as the thrown exception.
     /// </summary>
     [Fact]
-    public async Task ShouldPreserveCommitFailureWhenRollbackAndDisposalAlsoFail()
+    public async Task ShouldPreserveCommitFailureGivenRollbackAndDisposalAlsoFail()
     {
         // Arrange
         var failure = new KvException("commit failed", "KV_BACKEND", domainCode: FitzErrorCodes.KvBackendError);
@@ -365,7 +365,7 @@ public sealed class FitzKvCheckpointStoreTests
     ///     cannot close its own transaction is not something to hide from the caller.
     /// </summary>
     [Fact]
-    public async Task ShouldSurfaceDisposalFailureWhenTheSaveSucceeded()
+    public async Task ShouldSurfaceDisposalFailureGivenTheSaveSucceeded()
     {
         // Arrange
         var client = new FakeKvClient { DisposeFailure = new IOException("dispose failed") };
@@ -397,7 +397,7 @@ public sealed class FitzKvCheckpointStoreTests
     [InlineData("kv://portia//checkpoints")]
     [InlineData("kv://portia/state/*")]
     [InlineData("kv://portia/state/check points")]
-    public void ShouldRejectMissingClientOrMalformedRoute(string? route)
+    public void ShouldRejectGivenMissingClientOrMalformedRoute(string? route)
     {
         // Arrange
         var expected = route is null ? typeof(ArgumentNullException) : typeof(ArgumentException);
@@ -419,7 +419,7 @@ public sealed class FitzKvCheckpointStoreTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldRejectMissingIdentityBeforeOpeningATransaction(bool saving)
+    public async Task ShouldRejectGivenMissingIdentityBeforeOpeningTransaction(bool saving)
     {
         // Arrange
         var client = new FakeKvClient();

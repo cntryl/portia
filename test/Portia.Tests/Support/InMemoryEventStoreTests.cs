@@ -11,7 +11,7 @@ public sealed class InMemoryEventStoreTests
     ///     Verifies ordered append and incremental asynchronous reads.
     /// </summary>
     [Fact]
-    public async Task ShouldReadEventsAfterKnownVersionWhenAppended()
+    public async Task ShouldReadEventsAfterKnownVersionGivenAppended()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -35,7 +35,7 @@ public sealed class InMemoryEventStoreTests
     ///     Verifies optimistic concurrency rejects a stale writer without changing history.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectAppendWhenExpectedVersionIsStale()
+    public async Task ShouldRejectAppendGivenExpectedVersionIsStale()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -62,7 +62,7 @@ public sealed class InMemoryEventStoreTests
     ///     Verifies projector reads preserve scope ordering and concrete source streams.
     /// </summary>
     [Fact]
-    public async Task ShouldReadRealmPatternFromCheckpointAcrossStreams()
+    public async Task ShouldReadRealmPatternFromCheckpointGivenMultipleStreams()
     {
         // Arrange
         var firstId = Uuid.CreateVersion4();
@@ -91,7 +91,7 @@ public sealed class InMemoryEventStoreTests
 
     /// <summary>Event IDs are stream-local and failed batches leave every scope contiguous.</summary>
     [Fact]
-    public async Task ShouldAppendSharedEventIdsAtomicallyAcrossStreams()
+    public async Task ShouldAppendAtomicallyGivenSharedEventIdsAcrossStreams()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -133,7 +133,7 @@ public sealed class InMemoryEventStoreTests
 
     /// <summary>Verifies an event ID already committed to the stream is rejected without publishing the batch.</summary>
     [Fact]
-    public async Task ShouldRejectEventIdAlreadyCommittedToStream()
+    public async Task ShouldRejectAppendGivenEventIdAlreadyCommittedToStream()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -156,7 +156,7 @@ public sealed class InMemoryEventStoreTests
 
     /// <summary>Verifies seeding one stream by individual appends allocates near-linearly, not quadratically.</summary>
     [Fact]
-    public async Task ShouldAllocateNearLinearlyWhenSeedingOneStreamByIndividualAppends()
+    public async Task ShouldAllocateNearLinearlyGivenSeedingOneStreamByIndividualAppends()
     {
         // Arrange
         await SeedAsync(256);

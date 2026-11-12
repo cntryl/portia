@@ -14,7 +14,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
 {
     /// <summary>Owns and runs a workload present in the opening snapshot.</summary>
     [Fact]
-    public async Task ShouldRunWorkloadDeclaredBeforeStart()
+    public async Task ShouldRunWorkloadGivenWorkloadDeclaredBeforeStart()
     {
         // Arrange
         var coordinator = new SingleProcessWorkloadCoordinator(TimeSpan.FromMilliseconds(10));
@@ -45,7 +45,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     ///     after start rather than captured once from the opening snapshot.
     /// </summary>
     [Fact]
-    public async Task ShouldStartWorkloadThatAppearsAfterStartAndCancelOneThatDisappears()
+    public async Task ShouldStartAndCancelWorkloadsGivenWorkloadAppearingAfterStartAndOneDisappearing()
     {
         // Arrange
         var coordinator = new SingleProcessWorkloadCoordinator(TimeSpan.FromMilliseconds(10));
@@ -101,7 +101,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     ///     running are cancelled and awaited rather than abandoned by the second fault.
     /// </summary>
     [Fact]
-    public async Task ShouldSurfaceEveryFaultAndReleaseRemainingWorkloadsWhenWorkloadsFaultTogether()
+    public async Task ShouldSurfaceEveryFaultAndReleaseRemainingWorkloadsGivenWorkloadsFaultTogether()
     {
         // Arrange
         var coordinator = new SingleProcessWorkloadCoordinator(TimeSpan.FromMilliseconds(10));
@@ -150,7 +150,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     [Theory]
     [InlineData(null, "declared-projection-name")]
     [InlineData("chosen-by-the-host", "chosen-by-the-host")]
-    public async Task ShouldUseRegistrationNameAsHostedComponentCheckpointIdentity(string? workloadName,
+    public async Task ShouldUseRegistrationNameAsCheckpointIdentityGivenHostedComponent(string? workloadName,
         string expected)
     {
         // Arrange

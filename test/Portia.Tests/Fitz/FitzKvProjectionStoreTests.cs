@@ -32,7 +32,7 @@ public sealed class FitzKvProjectionStoreTests
     /// </summary>
     [Theory]
     [MemberData(nameof(BeginValidationFailures))]
-    public async Task ShouldCleanUpAndRemainReusableWhenBeginValidationFails(string failureKind,
+    public async Task ShouldCleanUpAndRemainReusableGivenBeginValidationFailure(string failureKind,
         bool cleanupFails)
     {
         // Arrange
@@ -123,7 +123,7 @@ public sealed class FitzKvProjectionStoreTests
 
     /// <summary>A committed reset can be loaded and used to begin the next batch.</summary>
     [Fact]
-    public async Task ShouldReloadStartAfterResetBatch()
+    public async Task ShouldReloadStartGivenResetBatch()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -153,7 +153,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     checkpoint become visible together, in one commit, and never separately.
     /// </summary>
     [Fact]
-    public async Task ShouldCommitRepositoryWritesAndCheckpointInOneTransaction()
+    public async Task ShouldCommitWritesAndCheckpointInOneTransactionGivenRepositoryWrites()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -178,7 +178,7 @@ public sealed class FitzKvProjectionStoreTests
 
     /// <summary>Accepts 0.1.x progress at begin and upgrades it only when the next batch commits.</summary>
     [Fact]
-    public async Task ShouldAcceptLegacyCheckpointAndRewriteItOnCommit()
+    public async Task ShouldRewriteCheckpointOnCommitGivenLegacyCheckpoint()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -204,7 +204,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     faults midway leaves neither half-applied projection data nor an advanced checkpoint.
     /// </summary>
     [Fact]
-    public async Task ShouldRollBackWhenBatchIsDisposedWithoutCommitting()
+    public async Task ShouldRollBackGivenBatchDisposedWithoutCommitting()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -227,7 +227,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     the committed work stays committed and the broker sees one terminal call, not two.
     /// </summary>
     [Fact]
-    public async Task ShouldNotRollBackAfterACommittedBatchIsDisposed()
+    public async Task ShouldNotRollBackGivenCommittedBatchDisposed()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -250,7 +250,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     instead of replaying from its stale in-memory one.
     /// </summary>
     [Fact]
-    public async Task ShouldTranslateIsolationConflictToProjectionConcurrencyException()
+    public async Task ShouldThrowProjectionConcurrencyExceptionGivenIsolationConflict()
     {
         // Arrange
         var conflict = new KvException("conflict", "TX_CONFLICT", domainCode: FitzErrorCodes.KvIsolationConflict);
@@ -277,7 +277,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     failed batch afterwards does not roll back a second time.
     /// </summary>
     [Fact]
-    public async Task ShouldRethrowNonConflictCommitFailureAndRollBackOnce()
+    public async Task ShouldRethrowAndRollBackOnceGivenNonConflictCommitFailure()
     {
         // Arrange
         var failure = new KvException("backend down", "KV_BACKEND", domainCode: FitzErrorCodes.KvBackendError);
@@ -302,7 +302,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     commit failure as the exception the caller sees.
     /// </summary>
     [Fact]
-    public async Task ShouldPreserveCommitFailureWhenRollbackAlsoFails()
+    public async Task ShouldPreserveCommitFailureGivenRollbackAlsoFails()
     {
         // Arrange
         var failure = new KvException("commit failed", "KV_BACKEND", domainCode: FitzErrorCodes.KvBackendError);
@@ -325,7 +325,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     read through its own read-only transaction rather than the batch's.
     /// </summary>
     [Fact]
-    public async Task ShouldLoadStartWhenNothingHasBeenSaved()
+    public async Task ShouldLoadStartGivenNothingSaved()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -343,7 +343,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     checkpoint untouched so a rebuild never repoints the deployment that is still serving reads.
     /// </summary>
     [Fact]
-    public async Task ShouldCommitRebuildGenerationWithoutDisturbingLiveCheckpoint()
+    public async Task ShouldNotDisturbLiveCheckpointGivenCommittedRebuildGeneration()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -370,7 +370,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     open batch's writes and commit — or roll back — the wrong transaction.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectASecondBatchWhileOneIsOpen()
+    public async Task ShouldRejectSecondBatchGivenOneBatchOpen()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -393,7 +393,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     bounds concurrency, it does not permanently retire the store after one pass.
     /// </summary>
     [Fact]
-    public async Task ShouldAcceptAnotherBatchAfterThePreviousOneIsDisposed()
+    public async Task ShouldAcceptAnotherBatchGivenPreviousBatchDisposed()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -429,7 +429,7 @@ public sealed class FitzKvProjectionStoreTests
     [InlineData("kv://portia//checkpoints")]
     [InlineData("kv://portia/state/*")]
     [InlineData("kv://portia/state/check points")]
-    public void ShouldRejectMissingClientOrMalformedRoute(string? route)
+    public void ShouldRejectConstructionGivenMissingClientOrMalformedRoute(string? route)
     {
         // Arrange
         var expected = route is null ? typeof(ArgumentNullException) : typeof(ArgumentException);
@@ -450,7 +450,7 @@ public sealed class FitzKvProjectionStoreTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldRejectMissingArgumentBeforeOpeningATransaction(bool beginning)
+    public async Task ShouldRejectBeforeOpeningTransactionGivenMissingArgument(bool beginning)
     {
         // Arrange
         var client = new FakeKvClient();
@@ -480,7 +480,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     derived Fitz KV resource, so none of them can contend for another's lock.
     /// </summary>
     [Fact]
-    public async Task ShouldRouteEachWorkloadToItsOwnFitzKvResource()
+    public async Task ShouldRouteToOwnResourceGivenEachWorkload()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -512,7 +512,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     same projector against a broker that locks a whole resource per read-write transaction.
     /// </summary>
     [Fact]
-    public async Task ShouldBeginOneTenantsBatchWhileAnotherTenantsBatchIsOpen()
+    public async Task ShouldBeginBatchGivenAnotherTenantsBatchOpen()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -539,7 +539,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     write lock the projector needs.
     /// </summary>
     [Fact]
-    public async Task ShouldReadWhereTheProjectorWroteWithoutTakingItsWriteLock()
+    public async Task ShouldReadWithoutWriteLockGivenProjectorWroteToSameResource()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -565,7 +565,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     for that realm writes — rather than another realm's.
     /// </summary>
     [Fact]
-    public async Task ShouldReadEachRealmFromItsOwnResource()
+    public async Task ShouldReadFromOwnResourceGivenEachRealm()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -592,7 +592,7 @@ public sealed class FitzKvProjectionStoreTests
     ///     during a batch belong on the batch's own transaction.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectAQueryReadWhileABatchIsOpen()
+    public async Task ShouldRejectQueryReadGivenBatchOpen()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -618,7 +618,7 @@ public sealed class FitzKvProjectionStoreTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldRejectAWorkloadForAnotherProjector(bool beginning)
+    public async Task ShouldRejectWorkloadGivenWorkloadForAnotherProjector(bool beginning)
     {
         // Arrange
         var client = new FakeKvClient();
@@ -647,7 +647,7 @@ public sealed class FitzKvProjectionStoreTests
 
     /// <summary>Verifies that a blank projector name or read realm is rejected up front.</summary>
     [Fact]
-    public async Task ShouldRejectBlankComponentNameOrRealm()
+    public async Task ShouldRejectConstructionGivenBlankComponentNameOrRealm()
     {
         // Arrange
         var client = new FakeKvClient();

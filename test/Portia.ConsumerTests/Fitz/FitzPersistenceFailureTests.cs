@@ -13,7 +13,7 @@ public sealed class FitzPersistenceFailureTests
     [InlineData("commit", false)]
     [InlineData("commit", true)]
     [InlineData("success", false)]
-    public async Task SessionAlwaysDisposesWhileFailurePreservesOriginalErrorAndPendingBatch(string failureAt,
+    public async Task ShouldDisposeSessionAndPreserveErrorGivenFailure(string failureAt,
         bool cleanupFails)
     {
         // Arrange
@@ -58,7 +58,7 @@ public sealed class FitzPersistenceFailureTests
     }
 
     [Fact]
-    public async Task ConfirmedCommitRemainsSuccessfulWhenSessionDisposalFails()
+    public async Task ShouldRemainSuccessfulGivenConfirmedCommitWhenSessionDisposalFails()
     {
         // Arrange
         var session = new Session("success", cleanupFails: true);
@@ -86,7 +86,7 @@ public sealed class FitzPersistenceFailureTests
     [InlineData("commit", FitzErrorCodes.StreamConcurrencyConflict, "unrelated wording", true)]
     [InlineData("append", FitzErrorCodes.StreamSessionAlreadyActive, "concurrency conflict", false)]
     [InlineData("commit", null, "concurrency conflict", false)]
-    public async Task OnlyStructuredConflictCodeIsTranslatedDespiteCleanupFailures(string failureAt, uint? code,
+    public async Task ShouldTranslateOnlyStructuredConflictCodeGivenCleanupFailures(string failureAt, uint? code,
         string message, bool conflict)
     {
         // Arrange
@@ -149,7 +149,7 @@ public sealed class FitzPersistenceFailureTests
     [Theory]
     [InlineData(FitzErrorCodes.StreamSessionAlreadyActive)]
     [InlineData(FitzErrorCodes.StreamConcurrencyConflict)]
-    public async Task ConcurrencyFailuresKeepTenantAndAggregateIdentifiersOutOfTheirMessage(uint code)
+    public async Task ShouldOmitIdentifiersFromMessageGivenConcurrencyFailure(uint code)
     {
         // Arrange
         var original = new StreamException("rejected", "APPEND_FAILED", domainCode: code);

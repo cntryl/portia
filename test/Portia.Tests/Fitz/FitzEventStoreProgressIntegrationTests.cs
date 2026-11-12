@@ -7,7 +7,7 @@ public sealed class FitzEventStoreProgressIntegrationTests(FitzBrokerFixture bro
 {
     /// <summary>Resource, area, and realm progress follows committed cursors without modifying event history.</summary>
     [Fact]
-    public async Task ShouldReportRealFitzProgressWithoutAdvancingOrChangingTheSource()
+    public async Task ShouldReportProgressWithoutAdvancingOrChangingSourceGivenRealFitz()
     {
         // Arrange
         await using var client = await broker.CreateClientAsync();

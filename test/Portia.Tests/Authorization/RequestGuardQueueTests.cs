@@ -9,7 +9,7 @@ public sealed class RequestGuardQueueTests
 {
     /// <summary>A transient guard failure abandons, then a fresh scoped guard runs before redelivery succeeds.</summary>
     [Fact]
-    public async Task ShouldResolveAndRunGuardAgainInFreshRedeliveryScope()
+    public async Task ShouldResolveAndRunGuardAgainGivenFreshRedeliveryScope()
     {
         // Arrange
         var state = new AttemptState();

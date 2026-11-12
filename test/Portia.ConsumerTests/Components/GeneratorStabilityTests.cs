@@ -101,7 +101,7 @@ public sealed class GeneratorStabilityTests
     ///     analyzers report only the design warnings.
     /// </summary>
     [Fact]
-    public void EveryGeneratorAndAnalyzerIsCovered()
+    public void ShouldCoverEveryGeneratorAndAnalyzerGivenCurrentAssemblies()
     {
         // Arrange
         const int expectedGenerators = 8;
@@ -118,7 +118,7 @@ public sealed class GeneratorStabilityTests
 
     /// <summary>Every prefix of a realistic file, as it exists while being typed, runs without an exception.</summary>
     [Fact]
-    public void NeverThrowOnIncompleteCode()
+    public void ShouldNotThrowGivenIncompleteCode()
     {
         // Arrange
         var failures = new List<string>();
@@ -133,7 +133,7 @@ public sealed class GeneratorStabilityTests
 
     /// <summary>Removing any single line, as an edit in progress does, runs without an exception.</summary>
     [Fact]
-    public void NeverThrowWithAnyLineMissing()
+    public void ShouldNotThrowGivenAnyLineMissing()
     {
         // Arrange
         var lines = Corpus.Split('\n');
@@ -152,7 +152,7 @@ public sealed class GeneratorStabilityTests
 
     /// <summary>Two independent runs over the same input produce identical sources and diagnostics.</summary>
     [Fact]
-    public void OutputIsDeterministic()
+    public void ShouldProduceSameOutputGivenSameCorpusRunTwice()
     {
         // Arrange
         var first = Snapshot(Run(Corpus));

@@ -8,7 +8,7 @@ public sealed class AggregateScenarioTests
 {
     /// <summary>Bare events are replayed as history, numbered from the aggregate's current version.</summary>
     [Fact]
-    public void ShouldReplayBareEventsAsHistory()
+    public void ShouldReplayEventsAsHistoryGivenBareEvents()
     {
         // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
@@ -27,7 +27,7 @@ public sealed class AggregateScenarioTests
 
     /// <summary>Events that already carry metadata are replayed as seeded, so tests keep full control when they need it.</summary>
     [Fact]
-    public void ShouldReplaySeededEventsUnchanged()
+    public void ShouldReplayEventsUnchangedGivenSeededEvents()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -44,7 +44,7 @@ public sealed class AggregateScenarioTests
 
     /// <summary>A committed operation leaves what it raised pending, comparable to expected payloads.</summary>
     [Fact]
-    public void ShouldKeepRaisedEventsWhenOperationCommits()
+    public void ShouldKeepRaisedEventsGivenOperationThatCommits()
     {
         // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()))
@@ -64,7 +64,7 @@ public sealed class AggregateScenarioTests
 
     /// <summary>A discarded operation leaves nothing pending, exactly as the executor would persist nothing.</summary>
     [Fact]
-    public void ShouldDropRaisedEventsWhenOperationDiscards()
+    public void ShouldDropRaisedEventsGivenOperationThatDiscards()
     {
         // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
@@ -83,7 +83,7 @@ public sealed class AggregateScenarioTests
 
     /// <summary>A value-returning operation returns its result and keeps committed records.</summary>
     [Fact]
-    public void ShouldReturnValueAndKeepAuditsWhenOperationCommits()
+    public void ShouldReturnValueAndKeepAuditsGivenOperationThatCommits()
     {
         // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
@@ -105,7 +105,7 @@ public sealed class AggregateScenarioTests
     ///     records show only the latest operation and an audit followed by a raise behaves as in production.
     /// </summary>
     [Fact]
-    public void ShouldSaveCommittedOperationBeforeNextOperation()
+    public void ShouldSaveCommittedOperationGivenNextOperationFollows()
     {
         // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
@@ -130,7 +130,7 @@ public sealed class AggregateScenarioTests
 
     /// <summary>History can follow a committed operation, since that operation was saved.</summary>
     [Fact]
-    public void ShouldAcceptHistoryAfterCommittedOperation()
+    public void ShouldAcceptHistoryGivenCommittedOperation()
     {
         // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
@@ -153,7 +153,7 @@ public sealed class AggregateScenarioTests
     ///     operations exactly as it would after the executor discarded it.
     /// </summary>
     [Fact]
-    public void ShouldDiscardWhatAThrowingOperationRaised()
+    public void ShouldDiscardRaisedEventsGivenThrowingOperation()
     {
         // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
@@ -179,7 +179,7 @@ public sealed class AggregateScenarioTests
 
     /// <summary>What a direct call on the aggregate raised is saved before the next history, like a committed When.</summary>
     [Fact]
-    public void ShouldSaveDirectCallsBeforeFurtherHistory()
+    public void ShouldSaveDirectCallsGivenFurtherHistory()
     {
         // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
@@ -195,7 +195,7 @@ public sealed class AggregateScenarioTests
 
     /// <summary>An uninitialized outcome is a bug in the operation, reported the same way the executor reports it.</summary>
     [Fact]
-    public void ShouldThrowWhenOperationReturnsUninitializedOutcome()
+    public void ShouldThrowGivenOperationReturningUninitializedOutcome()
     {
         // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
@@ -209,7 +209,7 @@ public sealed class AggregateScenarioTests
 
     /// <summary>The shortcut commits a successful result and retains its raised event.</summary>
     [Fact]
-    public void ShouldCommitSuccessfulResultThroughShortcut()
+    public void ShouldCommitGivenSuccessfulResultThroughShortcut()
     {
         // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
@@ -228,7 +228,7 @@ public sealed class AggregateScenarioTests
 
     /// <summary>The shortcut discards a failed value result and prevents later operations.</summary>
     [Fact]
-    public void ShouldDiscardFailedValueResultThroughShortcut()
+    public void ShouldDiscardGivenFailedValueResultThroughShortcut()
     {
         // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));
@@ -252,7 +252,7 @@ public sealed class AggregateScenarioTests
 
     /// <summary>A successful value result is returned and its audit is retained.</summary>
     [Fact]
-    public void ShouldReturnSuccessfulValueThroughShortcut()
+    public void ShouldReturnValueGivenSuccessfulResultThroughShortcut()
     {
         // Arrange
         var scenario = new AggregateScenario<TestAggregate>(new TestAggregate(Uuid.CreateVersion4()));

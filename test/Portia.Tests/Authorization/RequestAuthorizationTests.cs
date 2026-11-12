@@ -14,7 +14,7 @@ public sealed class RequestAuthorizationTests
     ///     request.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchUnguardedRequestWithoutConsultingAnyEvaluator()
+    public async Task ShouldDispatchRequestGivenUnguardedRequestWithoutEvaluator()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
@@ -32,7 +32,7 @@ public sealed class RequestAuthorizationTests
     ///     runs, and a denial short-circuits dispatch entirely.
     /// </summary>
     [Fact]
-    public async Task ShouldBlockNoResultRequestWhenPermissionDenied()
+    public async Task ShouldBlockNoResultRequestGivenPermissionDenied()
     {
         // Arrange
         var handler = new GuardedActionHandler();
@@ -54,7 +54,7 @@ public sealed class RequestAuthorizationTests
     ///     through to its handler.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchNoResultRequestWhenPermissionGranted()
+    public async Task ShouldDispatchNoResultRequestGivenPermissionGranted()
     {
         // Arrange
         var handler = new GuardedActionHandler();
@@ -75,7 +75,7 @@ public sealed class RequestAuthorizationTests
     ///     runs, and a denial produces a failed <see cref="Result{T}" /> rather than throwing.
     /// </summary>
     [Fact]
-    public async Task ShouldBlockWithResultRequestWhenPermissionDenied()
+    public async Task ShouldBlockWithResultRequestGivenPermissionDenied()
     {
         // Arrange
         using var busHost = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.DenyAll());
@@ -96,7 +96,7 @@ public sealed class RequestAuthorizationTests
     ///     different permission strings.
     /// </summary>
     [Fact]
-    public async Task ShouldInterpolateRequestPropertyIntoPermissionString()
+    public async Task ShouldInterpolatePermissionStringGivenRequestProperty()
     {
         // Arrange
         var evaluator = TestPermissionEvaluator.AllowAll();
@@ -118,7 +118,7 @@ public sealed class RequestAuthorizationTests
     ///     all — the two mechanisms are independent.
     /// </summary>
     [Fact]
-    public async Task ShouldBlockRequestWhenAuthorizerDenies()
+    public async Task ShouldBlockRequestGivenAuthorizerDenies()
     {
         // Arrange
         var handler = new AuthorizedActionHandler();
@@ -140,7 +140,7 @@ public sealed class RequestAuthorizationTests
     ///     and denying for another of the same type.
     /// </summary>
     [Fact]
-    public async Task ShouldGrantOrDenyBasedOnRequestInstanceData()
+    public async Task ShouldGrantOrDenyGivenRequestInstanceData()
     {
         // Arrange
         using var busHost = TestRequestBus.Create(authorizedActionAuthorizer: new AuthorizedActionAuthorizer());
@@ -163,7 +163,7 @@ public sealed class RequestAuthorizationTests
     ///     runs at all, not just "runs but its result is discarded."
     /// </summary>
     [Fact]
-    public async Task ShouldCheckPermissionBeforeAuthorizerAndShortCircuitOnDenial()
+    public async Task ShouldShortCircuitOnDenialGivenPermissionCheckedBeforeAuthorizer()
     {
         // Arrange
         var authorizer = new RecordingGuardedAndAuthorizedActionAuthorizer();
@@ -185,7 +185,7 @@ public sealed class RequestAuthorizationTests
     ///     independently deny the request.
     /// </summary>
     [Fact]
-    public async Task ShouldRunAuthorizerAfterPermissionIsGranted()
+    public async Task ShouldRunAuthorizerGivenPermissionGranted()
     {
         // Arrange
         var authorizer = new RecordingGuardedAndAuthorizedActionAuthorizer(false);
@@ -208,7 +208,7 @@ public sealed class RequestAuthorizationTests
     ///     there's no <see cref="Result" /> to wrap for a stream, so this is the failure channel.
     /// </summary>
     [Fact]
-    public async Task ShouldThrowForStreamedRequestWhenPermissionDenied()
+    public async Task ShouldThrowForStreamedRequestGivenPermissionDenied()
     {
         // Arrange
         var handler = new GuardedSequenceHandler();
@@ -235,7 +235,7 @@ public sealed class RequestAuthorizationTests
     ///     items.
     /// </summary>
     [Fact]
-    public async Task ShouldStreamItemsWhenPermissionGranted()
+    public async Task ShouldStreamItemsGivenPermissionGranted()
     {
         // Arrange
         using var busHost = TestRequestBus.Create(permissionEvaluator: TestPermissionEvaluator.AllowAll());
@@ -253,7 +253,7 @@ public sealed class RequestAuthorizationTests
 
     /// <summary>Every matching request-family policy runs by semantic stage before the handler.</summary>
     [Fact]
-    public async Task ShouldComposeTieredRequestFamilyAuthorizers()
+    public async Task ShouldComposeAuthorizersGivenTieredRequestFamily()
     {
         // Arrange
         var calls = new List<string>();

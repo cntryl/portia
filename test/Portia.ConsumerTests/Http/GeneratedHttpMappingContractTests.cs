@@ -5,7 +5,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class GeneratedHttpMappingContractTests
 {
     [Fact]
-    public async Task QualifiedStaticHttpMappingPreservesGeneratedBinding()
+    public async Task ShouldPreserveGeneratedBindingGivenQualifiedStaticHttpMapping()
     {
         // Arrange
         var assembly = HttpConsumerScenario.Compile(
@@ -22,7 +22,7 @@ public sealed class GeneratedHttpMappingContractTests
     }
 
     [Fact]
-    public async Task PropertyConverterUsesApplicationJsonContract()
+    public async Task ShouldUseApplicationJsonContractGivenPropertyConverter()
     {
         // Arrange
         var assembly = HttpConsumerScenario.Compile(
@@ -40,7 +40,7 @@ public sealed class GeneratedHttpMappingContractTests
     }
 
     [Fact]
-    public async Task JsonTypeInfoPropertyNamesAreHonored()
+    public async Task ShouldHonorPropertyNamesGivenJsonTypeInfo()
     {
         // Arrange
         var assembly = HttpConsumerScenario.Compile(
@@ -65,7 +65,7 @@ public sealed class GeneratedHttpMappingContractTests
     }
 
     [Fact]
-    public async Task PropertyNumberHandlingOverridesWebDefaults()
+    public async Task ShouldOverrideWebDefaultsGivenPropertyNumberHandling()
     {
         // Arrange
         var assembly = HttpConsumerScenario.Compile(
@@ -83,7 +83,7 @@ public sealed class GeneratedHttpMappingContractTests
     }
 
     [Fact]
-    public void ResultBearingQueueHttpMappingHasActionableDiagnostic()
+    public void ShouldReportActionableDiagnosticGivenResultBearingQueueHttpMapping()
     {
         // Arrange
         const string source = """

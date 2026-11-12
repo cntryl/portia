@@ -9,7 +9,7 @@ public sealed class RequestBusTests
     ///     Verifies that a no-result request is dispatched to its single registered handler.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchRequestWithNoResult()
+    public async Task ShouldDispatchRequestGivenRequestWithNoResult()
     {
         // Arrange
         var handler = new ChangeValueHandler();
@@ -29,7 +29,7 @@ public sealed class RequestBusTests
     ///     handler's result.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchRequestWithResult()
+    public async Task ShouldDispatchRequestGivenRequestWithResult()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();

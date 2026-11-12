@@ -11,7 +11,7 @@ public sealed class SystemOperatorAccessTests
     [Theory]
     [InlineData(ClaimTypes.Role)]
     [InlineData("roles")]
-    public async Task ShouldDenyUnauthenticatedAdministratorRoleOnAMixedPrincipal(string roleClaimType)
+    public async Task ShouldDenyAdministratorRoleGivenUnauthenticatedIdentityOnMixedPrincipal(string roleClaimType)
     {
         // Arrange
         var store = new ObservedStore();
@@ -47,7 +47,7 @@ public sealed class SystemOperatorAccessTests
     [Theory]
     [InlineData(ClaimTypes.Role)]
     [InlineData("roles")]
-    public async Task ShouldAllowAuthenticatedSecondaryAdministratorIdentityWithCustomRoleClaims(string roleClaimType)
+    public async Task ShouldAllowAdministratorGivenAuthenticatedSecondaryIdentityWithCustomRoleClaims(string roleClaimType)
     {
         // Arrange
         var topology = new ObservedTopology();
@@ -68,7 +68,7 @@ public sealed class SystemOperatorAccessTests
 
     /// <summary>DI uses host role configuration even when no custom clock is registered.</summary>
     [Fact]
-    public async Task ShouldUseConfiguredAdministratorRoleWhenResolvedWithoutRegisteredClock()
+    public async Task ShouldUseConfiguredAdministratorRoleGivenResolutionWithoutRegisteredClock()
     {
         // Arrange
         var topology = new ObservedTopology();
@@ -95,7 +95,7 @@ public sealed class SystemOperatorAccessTests
 
     /// <summary>Administrator membership alone does not grant direct operational permissions.</summary>
     [Fact]
-    public async Task ShouldDenyConfiguredAdministratorsWithoutExplicitOperationalPolicy()
+    public async Task ShouldDenyConfiguredAdministratorsGivenNoExplicitOperationalPolicy()
     {
         // Arrange
         var store = new ObservedStore();
@@ -125,7 +125,7 @@ public sealed class SystemOperatorAccessTests
     [InlineData("revoke")]
     [InlineData("execute")]
     [InlineData("verify")]
-    public async Task ShouldRejectApplicationUsersEvenWhenOperationalPolicyAllowsEverything(string operation)
+    public async Task ShouldRejectApplicationUsersGivenOperationalPolicyAllowingEverything(string operation)
     {
         // Arrange
         var store = new ObservedStore();

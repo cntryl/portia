@@ -67,7 +67,7 @@ public sealed class HttpBindingConsumerTests
     }
 
     [Fact]
-    public async Task LiteralRouteBaselineCompilesAndExecutes()
+    public async Task ShouldBindRequestGivenLiteralRoute()
     {
         // Arrange
         var assembly = HttpConsumerScenario.Compile(
@@ -84,7 +84,7 @@ public sealed class HttpBindingConsumerTests
     }
 
     [Fact]
-    public async Task ConstantRouteBindsIdenticallyToLiteral()
+    public async Task ShouldBindRequestIdenticallyGivenConstantRoute()
     {
         // Arrange
         var assembly = HttpConsumerScenario.Compile(
@@ -105,7 +105,7 @@ public sealed class HttpBindingConsumerTests
     [InlineData("?required=x&limit=9&optional=2&note=", 200, "x/9/2/")]
     [InlineData("", 400, null)]
     [InlineData("?required=x&optional=bad", 400, null)]
-    public async Task QueryBindingPreservesNullableDefaultAndRequiredValues(string query, int expectedStatus,
+    public async Task ShouldPreserveNullableDefaultAndRequiredValuesGivenQueryString(string query, int expectedStatus,
         string? expected)
     {
         // Arrange
@@ -137,7 +137,7 @@ public sealed class HttpBindingConsumerTests
     [InlineData(false, false, "{}", 400, null)]
     [InlineData(false, false, "[]", 400, null)]
     [InlineData(false, false, "null", 400, null)]
-    public async Task JsonBindingHonorsOptionsNamesConvertersNullsAndKinds(bool snake, bool converter, string json,
+    public async Task ShouldHonorJsonOptionsGivenBodyWithNamesConvertersAndNulls(bool snake, bool converter, string json,
         int expectedStatus, string? expected)
     {
         // Arrange

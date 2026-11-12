@@ -20,7 +20,7 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false, 0, true)]
     [InlineData(false, 1, true)]
     [InlineData(false, 2, true)]
-    public async Task FailedResultsStopDispatchAndResumeAtCommittedProgress(bool projection, int mode, bool transient)
+    public async Task ShouldStopDispatchAndResumeAtCommittedProgressGivenFailedResult(bool projection, int mode, bool transient)
     {
         // Arrange
         var source = await SeedAsync();
@@ -55,7 +55,7 @@ public sealed partial class ProcessorOutcomeTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ThrownExceptionsRetainTheOriginalFailureAndSource(bool projection)
+    public async Task ShouldRetainOriginalFailureAndSourceGivenThrownException(bool projection)
     {
         // Arrange
         var original = new IOException("source service failed");
@@ -76,7 +76,7 @@ public sealed partial class ProcessorOutcomeTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task UninitializedResultsCannotAdvanceProgress(bool projection)
+    public async Task ShouldNotAdvanceProgressGivenUninitializedResult(bool projection)
     {
         // Arrange
         var state = new State { ReturnDefault = true };
@@ -93,7 +93,7 @@ public sealed partial class ProcessorOutcomeTests
     }
 
     [Fact]
-    public async Task CleanupFailureCannotReplaceTheHandlerFailure()
+    public async Task ShouldKeepHandlerFailureGivenCleanupFailure()
     {
         // Arrange
         var cleanup = new IOException("cleanup failed");
@@ -112,7 +112,7 @@ public sealed partial class ProcessorOutcomeTests
     }
 
     [Fact]
-    public async Task CleanupAfterACommitReportsTheConfirmedCheckpoint()
+    public async Task ShouldReportConfirmedCheckpointGivenCleanupAfterCommit()
     {
         // Arrange
         var cleanup = new IOException("cleanup failed");
@@ -133,7 +133,7 @@ public sealed partial class ProcessorOutcomeTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task SourceReadFailuresCarryTheResumeCheckpoint(bool projection)
+    public async Task ShouldCarryResumeCheckpointGivenSourceReadFailure(bool projection)
     {
         // Arrange
         var original = new IOException("reader failed");
@@ -159,7 +159,7 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false, false)]
     [InlineData(true, true)]
     [InlineData(false, true)]
-    public async Task HostedPermanentResultsStopImmediatelyAndTransientResultsRetry(bool projection, bool transient)
+    public async Task ShouldStopOrRetryGivenHostedPermanentOrTransientResults(bool projection, bool transient)
     {
         // Arrange
         var state = new State { Projection = projection, Error = RequestError.Conflict("unavailable", transient) };
@@ -228,7 +228,7 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false, true, 3)]
     [InlineData(true, false, 3)]
     [InlineData(false, false, 3)]
-    public async Task HostedExceptionsRespectClassificationAndRetainTheCause(bool projection, bool transient, int kind)
+    public async Task ShouldRespectClassificationAndRetainCauseGivenHostedException(bool projection, bool transient, int kind)
     {
         // Arrange
         Exception original = kind switch
@@ -277,7 +277,7 @@ public sealed partial class ProcessorOutcomeTests
     }
 
     [Fact]
-    public async Task TypedContextsShareMetadataOnlyWithinTheirTransaction()
+    public async Task ShouldShareMetadataWithinTransactionOnlyGivenTypedContexts()
     {
         // Arrange
         var state = new State();
@@ -305,7 +305,7 @@ public sealed partial class ProcessorOutcomeTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task SourceCleanupCannotReplaceADeclaredFailure(bool projection)
+    public async Task ShouldKeepDeclaredFailureGivenSourceCleanupFailure(bool projection)
     {
         // Arrange
         var cleanup = new IOException("source cleanup failed");
@@ -335,7 +335,7 @@ public sealed partial class ProcessorOutcomeTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task SourceCleanupAfterSuccessReportsConfirmedProgress(bool projection)
+    public async Task ShouldReportConfirmedProgressGivenSourceCleanupAfterSuccess(bool projection)
     {
         // Arrange
         var cleanup = new IOException("source cleanup failed");

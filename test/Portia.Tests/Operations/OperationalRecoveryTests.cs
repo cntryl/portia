@@ -67,7 +67,7 @@ public sealed class OperationalRecoveryTests
 
     /// <summary>Operations never grants access without a host policy.</summary>
     [Fact]
-    public async Task ShouldDenyUnconfiguredOperationalAccess()
+    public async Task ShouldDenyAccessGivenUnconfiguredOperationalAuthorizer()
     {
         // Arrange
         var operations = new PortiaOperations(new MemoryOperationalStore(), new OperationalOptions(),
@@ -83,7 +83,7 @@ public sealed class OperationalRecoveryTests
 
     /// <summary>Operator approval is exact and duplicates enqueue only one execution.</summary>
     [Fact]
-    public async Task ShouldRequireSeparateApprovalAndQueueOnlyOnce()
+    public async Task ShouldRequireSeparateApprovalAndQueueOnceGivenBlockedProcessor()
     {
         // Arrange
         var store = new MemoryOperationalStore();
@@ -111,7 +111,7 @@ public sealed class OperationalRecoveryTests
 
     /// <summary>Ownership handoff preserves blocks but invalidates old plans and writes.</summary>
     [Fact]
-    public async Task ShouldFenceOldOwnersAndInvalidatePlans()
+    public async Task ShouldFenceOldOwnersAndInvalidatePlansGivenNewSessionAcquiringProcessor()
     {
         // Arrange
         var store = new MemoryOperationalStore();
@@ -135,7 +135,7 @@ public sealed class OperationalRecoveryTests
 
     /// <summary>Every read and action has an exact authorized scope.</summary>
     [Fact]
-    public async Task ShouldIsolateTenantEvidence()
+    public async Task ShouldIsolateTenantEvidenceGivenTenantScopedActor()
     {
         // Arrange
         var store = new MemoryOperationalStore();
@@ -156,7 +156,7 @@ public sealed class OperationalRecoveryTests
     [InlineData("expired")]
     [InlineData("revoked")]
     [InlineData("checkpoint")]
-    public async Task ShouldRejectInvalidatedApproval(string change)
+    public async Task ShouldRejectApprovalGivenExpiredOrRevokedPlan(string change)
     {
         // Arrange
         var store = new MemoryOperationalStore();
@@ -193,7 +193,7 @@ public sealed class OperationalRecoveryTests
 
     /// <summary>Approval revocation after queueing prevents the owning worker from invoking anything.</summary>
     [Fact]
-    public async Task ShouldRecheckRevocationBeforeClaim()
+    public async Task ShouldInvalidateRepairGivenApprovedPlanRevokedAfterExecution()
     {
         // Arrange
         var store = new MemoryOperationalStore();
@@ -215,7 +215,7 @@ public sealed class OperationalRecoveryTests
 
     /// <summary>Completed recovery evidence expires while the current unresolved failure remains retained.</summary>
     [Fact]
-    public async Task ShouldRetainUnresolvedFailuresAndExposeCompletedHistoryBoundary()
+    public async Task ShouldRetainUnresolvedFailuresGivenRecordedProcessorFailure()
     {
         // Arrange
         var store = new MemoryOperationalStore();

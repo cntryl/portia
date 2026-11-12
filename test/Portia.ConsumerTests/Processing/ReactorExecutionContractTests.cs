@@ -6,7 +6,7 @@ public sealed class ReactorExecutionContractTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task GeneratedReactionSavesAsSystemAndUsesTriggeringEventAsCause(bool fitz)
+    public async Task ShouldSaveAsSystemWithTriggeringEventCauseGivenGeneratedReaction(bool fitz)
     {
         // Arrange
         const string source = """

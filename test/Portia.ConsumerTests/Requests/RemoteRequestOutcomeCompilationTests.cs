@@ -10,7 +10,7 @@ public sealed class RemoteRequestOutcomeCompilationTests
 
     /// <summary>All no-result cases can be handled without a fallback, including a completed business rejection.</summary>
     [Fact]
-    public async Task ShouldCompileExhaustiveSwitchForNoResultOutcomes()
+    public async Task ShouldCompileExhaustiveSwitchGivenNoResultOutcomes()
     {
         // Arrange
         var describe = await CompileSwitchAsync<RemoteRequestOutcome>(resultBearing: false);
@@ -33,7 +33,7 @@ public sealed class RemoteRequestOutcomeCompilationTests
 
     /// <summary>The generic cases retain result payloads and distinguish unresolved transport outcomes.</summary>
     [Fact]
-    public async Task ShouldCompileExhaustiveSwitchForResultOutcomes()
+    public async Task ShouldCompileExhaustiveSwitchGivenResultOutcomes()
     {
         // Arrange
         var describe = await CompileSwitchAsync<RemoteRequestOutcome<int>>(resultBearing: true);
@@ -58,7 +58,7 @@ public sealed class RemoteRequestOutcomeCompilationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldRequireExplicitUnknownOutcomeCase(bool resultBearing)
+    public async Task ShouldRequireExplicitUnknownOutcomeCaseGivenSwitchOmittingIt(bool resultBearing)
     {
         // Arrange
         const bool includeUnknown = false;

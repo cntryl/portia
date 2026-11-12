@@ -5,7 +5,7 @@ public sealed class CassieProjectionActivityGateTests
 {
     /// <summary>A batch waits for every earlier read and blocks later reads until it exits.</summary>
     [Fact]
-    public async Task ShouldWaitForOpenReadConnectionsBeforeStartingBatch()
+    public async Task ShouldWaitBeforeStartingBatchGivenOpenReadConnections()
     {
         // Arrange
         var activity = new CassieProjectionActivityGate();

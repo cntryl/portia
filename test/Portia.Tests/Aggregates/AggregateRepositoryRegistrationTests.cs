@@ -10,7 +10,7 @@ public sealed class AggregateRepositoryRegistrationTests
 {
     /// <summary>The reader and writer are the one scoped repository instance.</summary>
     [Fact]
-    public async Task ShouldResolveReaderAndWriterAsSameScopedInstance()
+    public async Task ShouldResolveSameScopedInstanceGivenReaderAndWriterRegistrations()
     {
         // Arrange
         await using var provider = Provider(services => services.AddPortia());
@@ -27,7 +27,7 @@ public sealed class AggregateRepositoryRegistrationTests
 
     /// <summary>Application-registered capabilities replace Portia's.</summary>
     [Fact]
-    public async Task ShouldPreserveApplicationRegisteredWriter()
+    public async Task ShouldPreserveWriterGivenApplicationRegisteredWriter()
     {
         // Arrange
         var replacement = new RecordingAggregateRepository();
@@ -47,7 +47,7 @@ public sealed class AggregateRepositoryRegistrationTests
 
     /// <summary>An application-registered reader is kept.</summary>
     [Fact]
-    public async Task ShouldPreserveApplicationRegisteredReader()
+    public async Task ShouldPreserveReaderGivenApplicationRegisteredReader()
     {
         // Arrange
         var reader = new RecordingAggregateRepository();
@@ -66,7 +66,7 @@ public sealed class AggregateRepositoryRegistrationTests
 
     /// <summary>State saved through the writer hydrates through the reader.</summary>
     [Fact]
-    public async Task ShouldHydrateThroughReaderAndSaveThroughWriter()
+    public async Task ShouldHydrateAndSaveGivenRegisteredReaderAndWriter()
     {
         // Arrange
         await using var provider = Provider(services => services.AddPortia());

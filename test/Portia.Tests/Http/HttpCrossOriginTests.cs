@@ -34,7 +34,7 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     ///     bodiless post that no content-type rule can catch and an endpoint with a custom binder.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectCrossOriginUnsafeRequestsBeforeBinding()
+    public async Task ShouldRejectBeforeBindingGivenCrossOriginUnsafeRequest()
     {
         // Arrange
         var binderCalls = 0;
@@ -82,7 +82,7 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     ///     and safe methods from any origin are unaffected.
     /// </summary>
     [Fact]
-    public async Task ShouldAllowSameOriginNonBrowserAndSafeRequests()
+    public async Task ShouldAllowRequestGivenSameOriginNonBrowserOrSafeRequest()
     {
         // Arrange
         var client = await StartAsync(app =>
@@ -131,7 +131,7 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     [InlineData("example.com", "ftp://example.com", "https", false)]
     [InlineData("example.com", "null", "https", false)]
     [InlineData("example.com", "", "https", false)]
-    public void ShouldCompareOriginWithRequestHostWithoutFetchMetadata(string host, string origin, string scheme,
+    public void ShouldCompareOriginWithRequestHostGivenNoFetchMetadata(string host, string origin, string scheme,
         bool allowed)
     {
         // Arrange
@@ -156,7 +156,7 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ShouldTrustOriginsTheCorsPipelineAllows(bool corsRegisteredFirst)
+    public async Task ShouldTrustOriginsGivenCorsPipelineAllowsThem(bool corsRegisteredFirst)
     {
         // Arrange
         var client = await StartAsync(app =>
@@ -197,7 +197,7 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
 
     /// <summary>Verifies the default CORS policy applied by <c>UseCors()</c> is honored the same way.</summary>
     [Fact]
-    public async Task ShouldTrustOriginsTheDefaultCorsPolicyAllows()
+    public async Task ShouldTrustOriginsGivenDefaultCorsPolicyAllowsThem()
     {
         // Arrange
         var client = await StartAsync(app =>
@@ -222,7 +222,7 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     ///     pipeline's decisions, rather than silently refusing every trusted origin.
     /// </summary>
     [Fact]
-    public void ShouldRequireAddHttpBeforeMappingEndpoints()
+    public void ShouldRequireAddHttpGivenEndpointMappingWithoutIt()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();

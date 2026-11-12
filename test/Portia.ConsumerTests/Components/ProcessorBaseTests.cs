@@ -8,7 +8,7 @@ public sealed class ProcessorBaseTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task InjectedRepositoryCommitsDataAndProgressAtTheSelectedBoundary(bool batch)
+    public async Task ShouldCommitDataAndProgressAtBoundaryGivenInjectedRepository(bool batch)
     {
         // Arrange
         var events = await Seed();
@@ -27,7 +27,7 @@ public sealed class ProcessorBaseTests
     }
 
     [Fact]
-    public async Task FailedBatchRollsBackAndResumesFromTheRepositoryCheckpoint()
+    public async Task ShouldRollBackAndResumeFromRepositoryCheckpointGivenFailedBatch()
     {
         // Arrange
         var events = await Seed();
@@ -51,7 +51,7 @@ public sealed class ProcessorBaseTests
     }
 
     [Fact]
-    public void RegistrationNeedsOnlyTheApplicationRepository()
+    public void ShouldResolveProjectorGivenOnlyApplicationRepositoryRegistered()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -71,7 +71,7 @@ public sealed class ProcessorBaseTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ReactionsOwnTheirCheckpointsAndKeepPerEventCausality(bool batch)
+    public async Task ShouldOwnCheckpointsAndKeepPerEventCausalityGivenReactions(bool batch)
     {
         // Arrange
         var events = await Seed();
@@ -94,7 +94,7 @@ public sealed class ProcessorBaseTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task FailedReactionCheckpointReplaysEffectsButNeverAdvancesProgress(bool batch)
+    public async Task ShouldReplayEffectsWithoutAdvancingProgressGivenFailedReactionCheckpoint(bool batch)
     {
         // Arrange
         var events = await Seed();
@@ -119,7 +119,7 @@ public sealed class ProcessorBaseTests
     }
 
     [Fact]
-    public async Task CancellationDiscardsBufferedWritesAndDoesNotCommitCheckpoint()
+    public async Task ShouldDiscardBufferedWritesAndSkipCheckpointGivenCancellation()
     {
         // Arrange
         using var cancellation = new CancellationTokenSource();

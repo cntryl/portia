@@ -15,7 +15,7 @@ public sealed class PermissionCultureTests
     ///     culture-sensitive interpolation silently asks the evaluator about a different permission.
     /// </summary>
     [Fact]
-    public async Task ShouldInterpolatePermissionTokensIndependentlyOfTheCurrentCulture()
+    public async Task ShouldInterpolatePermissionTokensGivenNonInvariantCurrentCulture()
     {
         // Arrange
         var evaluator = TestPermissionEvaluator.AllowAll();

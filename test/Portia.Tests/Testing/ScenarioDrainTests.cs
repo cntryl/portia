@@ -9,7 +9,7 @@ public sealed class ScenarioDrainTests
     [InlineData(8193, false)]
     [InlineData(4097, true)]
     [InlineData(8193, true)]
-    public async Task ShouldDrainBatchAndMixedHistories(int count, bool reaction)
+    public async Task ShouldDrainGivenBatchAndMixedHistories(int count, bool reaction)
     {
         // Arrange
         var events = Enumerable.Range(0, count).Select(index => index % 2 == 0
@@ -47,7 +47,7 @@ public sealed class ScenarioDrainTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldPropagateSuffixFailureAndKeepCommittedProgress(bool reaction)
+    public async Task ShouldPropagateFailureAndKeepCommittedProgressGivenSuffixFailure(bool reaction)
     {
         // Arrange
         var events = Enumerable.Range(0, 4097).Select(_ => (DomainEvent)new UserCreated(Uuid.CreateVersion4())).ToArray();
@@ -83,7 +83,7 @@ public sealed class ScenarioDrainTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldObserveCancellationBetweenPasses(bool reaction)
+    public async Task ShouldObserveCancellationGivenCancellationBetweenPasses(bool reaction)
     {
         // Arrange
         var ids = Enumerable.Range(0, 4097).Select(_ => Uuid.CreateVersion4()).ToArray();
@@ -133,7 +133,7 @@ public sealed class ScenarioDrainTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldObserveCancellationWithinPass(bool reaction)
+    public async Task ShouldObserveCancellationGivenCancellationWithinPass(bool reaction)
     {
         // Arrange
         var events = Enumerable.Range(0, 600).Select(_ => (DomainEvent)new UserCreated(Uuid.CreateVersion4())).ToArray();

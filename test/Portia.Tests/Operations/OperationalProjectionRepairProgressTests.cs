@@ -4,7 +4,7 @@ public sealed partial class OperationalProjectionTests
 {
     /// <summary>Advanced native progress ends an active retry as unknown until an operator approves resumption.</summary>
     [Fact]
-    public async Task ShouldPreserveIndeterminateRepairWhenCommitAcknowledgementIsLost()
+    public async Task ShouldPreserveIndeterminateRepairGivenLostCommitAcknowledgement()
     {
         // Arrange
         var journal = new MemoryOperationalStore();

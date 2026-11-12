@@ -46,7 +46,7 @@ public sealed class TelemetryCompletionTests
     [Theory]
     [InlineData(false, "success")]
     [InlineData(true, "conflict")]
-    public async Task ShouldRecordGuardDurationWithComponentNameAndOutcome(bool fails, string expectedOutcome)
+    public async Task ShouldRecordGuardDurationWithComponentAndOutcomeGivenGuard(bool fails, string expectedOutcome)
     {
         // Arrange
         using var measurements = new OutcomeMeasurements();
@@ -106,7 +106,7 @@ public sealed class TelemetryCompletionTests
 
     /// <summary>Guards after the first failure never run, so they record nothing.</summary>
     [Fact]
-    public async Task ShouldNotRecordGuardTelemetryForGuardsAfterFirstFailure()
+    public async Task ShouldNotRecordGuardTelemetryGivenGuardsAfterFirstFailure()
     {
         // Arrange
         using var measurements = new OutcomeMeasurements();
@@ -126,7 +126,7 @@ public sealed class TelemetryCompletionTests
 
     /// <summary>A stream ended by a failed guard reports the guard's error as the request outcome.</summary>
     [Fact]
-    public async Task ShouldRecordStreamGuardFailureAsRequestOutcome()
+    public async Task ShouldRecordRequestOutcomeGivenStreamGuardFailure()
     {
         // Arrange
         using var measurements = new OutcomeMeasurements();
@@ -158,7 +158,7 @@ public sealed class TelemetryCompletionTests
 
     /// <summary>A commit-time concurrency exception is a settled conflict while still propagating.</summary>
     [Fact]
-    public async Task ShouldRecordCommitConcurrencyAsRequestConflict()
+    public async Task ShouldRecordRequestConflictGivenCommitConcurrency()
     {
         // Arrange
         using var measurements = new OutcomeMeasurements();
@@ -186,7 +186,7 @@ public sealed class TelemetryCompletionTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldRecordStreamCommitConcurrencyAsRequestConflict(bool onDispose)
+    public async Task ShouldRecordRequestConflictGivenStreamCommitConcurrency(bool onDispose)
     {
         // Arrange
         using var measurements = new OutcomeMeasurements();
@@ -234,7 +234,7 @@ public sealed class TelemetryCompletionTests
     [Theory]
     [InlineData(false, "canceled")]
     [InlineData(true, "fault")]
-    public async Task ShouldRecordStreamStoppedEarlyByConsumerAsCanceled(bool disposeFails, string expectedOutcome)
+    public async Task ShouldRecordCanceledGivenStreamStoppedEarlyByConsumer(bool disposeFails, string expectedOutcome)
     {
         // Arrange
         using var measurements = new OutcomeMeasurements();
@@ -292,7 +292,7 @@ public sealed class TelemetryCompletionTests
     [InlineData("query", false, true)]
     [InlineData("stream", true, true)]
     [InlineData("dispose", true, true)]
-    public async Task ShouldClassifyTheActualDispatchFailure(string shape, bool cancel, bool cancellationException)
+    public async Task ShouldClassifyActualDispatchFailureGivenDispatchFailure(string shape, bool cancel, bool cancellationException)
     {
         // Arrange
         using var measurements = new OutcomeMeasurements();
@@ -472,7 +472,7 @@ public sealed class TelemetryCompletionTests
     [Theory]
     [InlineData("projector")]
     [InlineData("reactor")]
-    public async Task ShouldRecordLagAndEventCountOnlyForCommittedBatch(string runner)
+    public async Task ShouldRecordLagAndEventCountOnlyGivenCommittedBatch(string runner)
     {
         // Arrange
         using var measurements = new OutcomeMeasurements();

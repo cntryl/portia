@@ -21,7 +21,7 @@ public sealed class AdminMcpTests
     [Theory]
     [InlineData("initialize")]
     [InlineData("tools/list")]
-    public async Task ShouldDenyApplicationUsersBeforeAdministrativeDiscovery(string method)
+    public async Task ShouldDenyAdministrativeDiscoveryGivenApplicationUser(string method)
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -57,7 +57,7 @@ public sealed class AdminMcpTests
     }
 
     [Fact]
-    public async Task ShouldDenyApplicationUsersBeforeReadingRepairApprovalBody()
+    public async Task ShouldDenyRepairApprovalBeforeReadingBodyGivenApplicationUser()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -89,7 +89,7 @@ public sealed class AdminMcpTests
     }
 
     [Fact]
-    public async Task ShouldApproveExactPlanOnlyThroughSeparatelyAuthorizedHttpActor()
+    public async Task ShouldApproveExactPlanGivenSeparatelyAuthorizedHttpActor()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -138,7 +138,7 @@ public sealed class AdminMcpTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ShouldIsolateCatalogsAndGuessedCallsInEitherRegistrationOrder(bool adminFirst)
+    public async Task ShouldIsolateCatalogsAndGuessedCallsGivenEitherRegistrationOrder(bool adminFirst)
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -198,7 +198,7 @@ public sealed class AdminMcpTests
     }
 
     [Fact]
-    public void ShouldRejectSharedStatefulHttpConfiguration()
+    public void ShouldRejectConfigurationGivenSharedStatefulHttpTransport()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -214,7 +214,7 @@ public sealed class AdminMcpTests
     }
 
     [Fact]
-    public async Task ShouldExcludeApplicationFallbackHandlersAndRawMethods()
+    public async Task ShouldExcludeFallbackHandlersAndRawMethodsGivenApplicationRegistrations()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();

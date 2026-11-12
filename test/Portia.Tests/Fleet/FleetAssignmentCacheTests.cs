@@ -9,7 +9,7 @@ public sealed class FleetAssignmentCacheTests
 {
     /// <summary>Membership order and fixed partition changes match an independent implementation.</summary>
     [Fact]
-    public void ShouldMatchIndependentRendezvousImplementationAcrossChanges()
+    public void ShouldMatchIndependentRendezvousImplementationGivenMembershipChanges()
     {
         // Arrange
         var cache = new FleetAssignmentCache();

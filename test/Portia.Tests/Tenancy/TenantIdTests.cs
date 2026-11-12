@@ -12,7 +12,7 @@ public sealed class TenantIdTests
 {
     /// <summary>A well-formed segment parses to the tenant it names.</summary>
     [Fact]
-    public void ShouldParseWellFormedSegment()
+    public void ShouldParseGivenWellFormedSegment()
     {
         // Arrange
         const string text = "acme";
@@ -37,7 +37,7 @@ public sealed class TenantIdTests
     [InlineData("a/b")]
     [InlineData("a*b")]
     [InlineData("{tenant}")]
-    public void ShouldRejectMalformedSegment(string text)
+    public void ShouldRejectGivenMalformedSegment(string text)
     {
         // Arrange
         // The rejected text arrives as the theory argument.
@@ -56,7 +56,7 @@ public sealed class TenantIdTests
 
     /// <summary>A null string fails to parse without throwing.</summary>
     [Fact]
-    public void ShouldRejectNullText()
+    public void ShouldRejectGivenNullText()
     {
         // Arrange
         string? text = null;
@@ -70,7 +70,7 @@ public sealed class TenantIdTests
 
     /// <summary>The tenant formats as its bare value, including through the span API.</summary>
     [Fact]
-    public void ShouldFormatAsBareValue()
+    public void ShouldFormatAsBareValueGivenTenantId()
     {
         // Arrange
         var tenant = new TenantId("acme");
@@ -88,7 +88,7 @@ public sealed class TenantIdTests
 
     /// <summary>The converter on the type itself serializes a tenant as a plain JSON string.</summary>
     [Fact]
-    public void ShouldSerializeAsPlainString()
+    public void ShouldSerializeAsPlainStringGivenTenantId()
     {
         // Arrange
         var tenant = new TenantId("acme");
@@ -104,7 +104,7 @@ public sealed class TenantIdTests
 
     /// <summary>A JSON string that is not a realm segment is a JSON error, not an argument error.</summary>
     [Fact]
-    public void ShouldRejectMalformedJsonString()
+    public void ShouldRejectGivenMalformedJsonString()
     {
         // Arrange
         const string json = "\"a/b\"";
@@ -118,7 +118,7 @@ public sealed class TenantIdTests
 
     /// <summary>A tenant can key a JSON dictionary.</summary>
     [Fact]
-    public void ShouldRoundTripAsDictionaryKey()
+    public void ShouldRoundTripGivenTenantIdAsDictionaryKey()
     {
         // Arrange
         var dictionary = new Dictionary<TenantId, int> { [new TenantId("acme")] = 1 };

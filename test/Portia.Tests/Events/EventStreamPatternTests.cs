@@ -16,7 +16,7 @@ public sealed class EventStreamPatternTests
     [InlineData("sales", "orders", "one", "stream://sales/orders/one")]
     [InlineData("sales", "orders", null, "stream://sales/orders/*")]
     [InlineData("sales", null, null, "stream://sales/*/*")]
-    public void ShouldCreatePatternFromOptionalSegments(
+    public void ShouldCreatePatternGivenOptionalSegments(
         string realm,
         string? area,
         string? resource,
@@ -38,7 +38,7 @@ public sealed class EventStreamPatternTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData(" ")]
-    public void ShouldRejectMissingRealm(string? realm)
+    public void ShouldRejectPatternGivenMissingRealm(string? realm)
     {
         // Arrange
         // Act
@@ -51,7 +51,7 @@ public sealed class EventStreamPatternTests
 
     /// <summary>A resource cannot be selected beneath a wildcard area.</summary>
     [Fact]
-    public void ShouldRejectResourceWithoutArea()
+    public void ShouldRejectPatternGivenResourceWithoutArea()
     {
         // Arrange
         // Act
@@ -65,7 +65,7 @@ public sealed class EventStreamPatternTests
 
     /// <summary>A tenant template is distinguishable and reserves its internal realm token.</summary>
     [Fact]
-    public void ShouldCreateOnlyExplicitTenantTemplates()
+    public void ShouldCreateTenantTemplateGivenExplicitTemplateOnly()
     {
         // Arrange
         // Act
@@ -90,7 +90,7 @@ public sealed class EventStreamPatternTests
 
     /// <summary>Binding occurs before the exact pattern is used for checkpoint identity or reads.</summary>
     [Fact]
-    public void ShouldBindTenantTemplateToTheWorkloadTenant()
+    public void ShouldBindToWorkloadTenantGivenTenantTemplate()
     {
         // Arrange
         var projector = new TestProjector(new RecordingProjectionTarget(),
@@ -106,7 +106,7 @@ public sealed class EventStreamPatternTests
 
     /// <summary>A template cannot be bound to its own reserved realm token, which would read as still unbound.</summary>
     [Fact]
-    public void ShouldRejectBindingTenantTemplateToReservedRealm() =>
+    public void ShouldRejectBindingGivenTenantTemplateAndReservedRealm() =>
         _ = Assert.ThrowsAny<ArgumentException>(() =>
             EventStreamPattern.ForTenant("orders").BindTenant(new TenantId("{tenant}")));
 
@@ -118,7 +118,7 @@ public sealed class EventStreamPatternTests
     [InlineData(" ")]
     [InlineData("a/b*")]
     [InlineData("{tenant}")]
-    public void ShouldRejectTenantIdThatIsNotARealmSegment(string? value)
+    public void ShouldRejectTenantIdGivenValueThatIsNotRealmSegment(string? value)
     {
         // Arrange
         // Act
@@ -132,11 +132,11 @@ public sealed class EventStreamPatternTests
 
     /// <summary>An uninitialized tenant ID still formats as a string, as its non-nullable signature promises.</summary>
     [Fact]
-    public void ShouldFormatDefaultTenantIdAsEmpty() => Assert.Equal(string.Empty, default(TenantId).ToString());
+    public void ShouldFormatEmptyGivenDefaultTenantId() => Assert.Equal(string.Empty, default(TenantId).ToString());
 
     /// <summary>Manual runners cannot construct a checkpoint for an unbound template.</summary>
     [Fact]
-    public async Task ShouldRejectManualRunOfUnboundTenantTemplate()
+    public async Task ShouldRejectManualRunGivenUnboundTenantTemplate()
     {
         // Arrange
         var projector = new TestProjector(new RecordingProjectionTarget(),
@@ -154,7 +154,7 @@ public sealed class EventStreamPatternTests
 
     /// <summary>An exact pattern cannot be silently rebound to a tenant.</summary>
     [Fact]
-    public void ShouldRejectBindingExactPatternToTenantWorkload()
+    public void ShouldRejectBindingGivenExactPatternAndTenantWorkload()
     {
         // Arrange
         var projector = new TestProjector(new RecordingProjectionTarget(),

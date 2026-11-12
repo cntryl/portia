@@ -86,7 +86,7 @@ public sealed class ApplicationContractAnalyzerTests
     [InlineData("public record Price", "Features/Orders/Values/Price.cs")]
     [InlineData("public sealed record Price", "Features/Orders/Models/Price.cs")]
     [InlineData("public sealed class Price", "Features/Orders/Values/Price.cs")]
-    public void ShouldReportConstructorOutsideSealedValueRecord(string declaration, string path)
+    public void ShouldReportConstructorGivenTypeOtherThanSealedValueRecord(string declaration, string path)
     {
         // Arrange
         var source = $"{declaration} {{ public Price() {{ }} }}";

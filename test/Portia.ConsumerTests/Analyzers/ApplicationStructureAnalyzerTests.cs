@@ -597,7 +597,7 @@ public sealed class ApplicationStructureAnalyzerTests
     }
 
     [Fact]
-    public void ShouldRequireRepositoryContractInTheSameFeature()
+    public void ShouldRequireRepositoryContractGivenAggregateInSameFeature()
     {
         // Arrange
         const string contract = "namespace Shop.Core.Features.Orders.Ports; public interface IOrders;";

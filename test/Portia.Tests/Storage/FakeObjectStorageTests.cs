@@ -5,7 +5,7 @@ public sealed class FakeObjectStorageTests
 {
     /// <summary>Checks content verification and tenant isolation.</summary>
     [Fact]
-    public async Task ShouldVerifyAndIsolateObjectsByTenant()
+    public async Task ShouldVerifyAndIsolateObjectsGivenMultipleTenants()
     {
         // Arrange
         var store = new FakeObjectStorage();
@@ -36,7 +36,7 @@ public sealed class FakeObjectStorageTests
 
     /// <summary>Checks that mismatched uploads fail and discard their session.</summary>
     [Fact]
-    public async Task ShouldRejectMismatchedContentAndRemoveFailedSession()
+    public async Task ShouldRejectAndRemoveFailedSessionGivenMismatchedContent()
     {
         // Arrange
         var store = new FakeObjectStorage();
@@ -59,7 +59,7 @@ public sealed class FakeObjectStorageTests
     /// as S3 keeps the multipart upload open when it rejects a receipt.
     /// </summary>
     [Fact]
-    public async Task ShouldKeepSessionOpenAfterAnUnknownPartReceipt()
+    public async Task ShouldKeepSessionOpenGivenUnknownPartReceipt()
     {
         // Arrange
         var store = new FakeObjectStorage();
@@ -82,7 +82,7 @@ public sealed class FakeObjectStorageTests
 
     /// <summary>Checks abort cleanup and bounded presigned lifetimes.</summary>
     [Fact]
-    public async Task ShouldAbortSessionAndBoundSignedLifetimes()
+    public async Task ShouldAbortSessionAndBoundSignedLifetimesGivenOpenSession()
     {
         // Arrange
         var store = new FakeObjectStorage();
@@ -107,7 +107,7 @@ public sealed class FakeObjectStorageTests
 
     /// <summary>Checks the maximum object size and digest validation.</summary>
     [Fact]
-    public void ShouldEnforceThe256MiBBoundary()
+    public void ShouldEnforce256MiBBoundaryGivenMaximumAndOversizedDigests()
     {
         // Arrange
         var digest = new string('a', 64);
@@ -125,7 +125,7 @@ public sealed class FakeObjectStorageTests
 
     /// <summary>Runs the reusable provider conformance suite against the fake.</summary>
     [Fact]
-    public async Task ShouldPassReusableStorageConformance()
+    public async Task ShouldPassReusableStorageConformanceGivenFakeStorage()
     {
         // Arrange
         var store = new FakeObjectStorage();
@@ -147,7 +147,7 @@ public sealed class FakeObjectStorageTests
 
     /// <summary>Matches S3's minimum size for every part except the final one, keeping the session open for corrected parts.</summary>
     [Fact]
-    public async Task ShouldRejectAnUndersizedNonfinalPart()
+    public async Task ShouldRejectPartGivenUndersizedNonfinalPart()
     {
         // Arrange
         var store = new FakeObjectStorage();
@@ -166,7 +166,7 @@ public sealed class FakeObjectStorageTests
 
     /// <summary>Checks concurrent singleton access to uploads, parts, and tenant objects.</summary>
     [Fact]
-    public async Task ShouldCompleteParallelUploadsAndParts()
+    public async Task ShouldCompleteUploadsGivenParallelUploadsAndParts()
     {
         // Arrange
         var store = new FakeObjectStorage();
@@ -200,7 +200,7 @@ public sealed class FakeObjectStorageTests
 
     /// <summary>An in-flight part cannot repopulate a session after abort.</summary>
     [Fact]
-    public async Task ShouldRejectPartThatFinishesAfterAbort()
+    public async Task ShouldRejectPartGivenPartFinishingAfterAbort()
     {
         // Arrange
         var store = new FakeObjectStorage();
@@ -221,7 +221,7 @@ public sealed class FakeObjectStorageTests
 
     /// <summary>Only the same completed session and receipts can replay a verified promotion.</summary>
     [Fact]
-    public async Task ShouldRetrySuccessfulCompletionWithoutCrossTenantOrReceiptConfusion()
+    public async Task ShouldRetrySuccessfulCompletionWithoutConfusionGivenCrossTenantReceipts()
     {
         // Arrange
         var store = new FakeObjectStorage();

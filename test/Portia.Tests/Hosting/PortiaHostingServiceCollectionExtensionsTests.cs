@@ -18,7 +18,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 {
     /// <summary>Schedule declarations do not add startup work to API-only hosts.</summary>
     [Fact]
-    public void ShouldLeaveStartupSchedulesDormantWithoutWorkers()
+    public void ShouldLeaveStartupSchedulesDormantGivenNoWorkers()
     {
         // Arrange
         var scheduler = new RecordingStartupScheduler();
@@ -38,7 +38,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>Worker startup ensures declarations once and in registration order.</summary>
     [Fact]
-    public async Task ShouldEnsureStartupSchedulesSequentiallyWhenWorkersStart()
+    public async Task ShouldEnsureStartupSchedulesSequentiallyGivenWorkersStart()
     {
         // Arrange
         var scheduler = new RecordingStartupScheduler();
@@ -65,7 +65,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>A declared schedule fails startup clearly when no provider was composed.</summary>
     [Fact]
-    public async Task ShouldFailWorkerStartupWhenScheduleProviderIsMissing()
+    public async Task ShouldFailWorkerStartupGivenScheduleProviderIsMissing()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -112,7 +112,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>Provider persistence failures propagate and stop worker startup.</summary>
     [Fact]
-    public async Task ShouldFailWorkerStartupWhenSchedulePersistenceFails()
+    public async Task ShouldFailWorkerStartupGivenSchedulePersistenceFails()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -136,7 +136,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>Hosted composition fails before serving when permission-protected requests have no evaluator.</summary>
     [Fact]
-    public async Task ShouldRequirePermissionEvaluatorForPermissionProtectedRequestsAtStartup()
+    public async Task ShouldRequirePermissionEvaluatorAtStartupGivenPermissionProtectedRequests()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
@@ -184,7 +184,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>A composition without permission-protected requests has no permission-evaluator requirement.</summary>
     [Fact]
-    public async Task ShouldNotRequirePermissionEvaluatorWithoutPermissionProtectedRequests()
+    public async Task ShouldNotRequirePermissionEvaluatorGivenNoPermissionProtectedRequests()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
@@ -204,7 +204,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>A global workload must declare an exact realm rather than a tenant template.</summary>
     [Fact]
-    public async Task ShouldRejectTenantTemplateForGlobalWorkloadAtStartup()
+    public async Task ShouldRejectAtStartupGivenTenantTemplateForGlobalWorkload()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
@@ -226,7 +226,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>A per-tenant workload must declare a tenant template rather than an exact realm.</summary>
     [Fact]
-    public async Task ShouldRejectExactPatternForPerTenantWorkloadAtStartup()
+    public async Task ShouldRejectAtStartupGivenExactPatternForPerTenantWorkload()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
@@ -249,7 +249,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>A failing worker contribution leaves the target collection unchanged.</summary>
     [Fact]
-    public void ShouldStageAllWorkerRegistrationsBeforeApplyingAny()
+    public void ShouldStageAllWorkerRegistrationsGivenMultipleRegistrationsBeforeApplyingAny()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -281,7 +281,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ShouldKeepApplicationRegistrationsOverWorkerDefaults(bool declaredAfterActivation)
+    public void ShouldKeepApplicationRegistrationsGivenWorkerDefaults(bool declaredAfterActivation)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -312,7 +312,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     ///     collection it is given; activation keeps those registrations.
     /// </summary>
     [Fact]
-    public void ShouldKeepRegistrationsADeclarationMakesThroughTheApplicationCollection()
+    public void ShouldKeepDeclarationRegistrationsGivenApplicationCollection()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -330,7 +330,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>Shared setup that repeats the single-process opt-in still registers exactly one coordinator.</summary>
     [Fact]
-    public void ShouldRegisterOneCoordinatorWhenSingleProcessWorkloadsIsRepeated()
+    public void ShouldRegisterOneCoordinatorGivenSingleProcessWorkloadsIsRepeated()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -345,7 +345,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>A replacement serializer remains outside Portia's JSON-upcaster policy.</summary>
     [Fact]
-    public async Task ShouldSkipJsonUpcasterPolicyForCustomSerializer()
+    public async Task ShouldSkipJsonUpcasterPolicyGivenCustomSerializer()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -366,7 +366,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
     /// <summary>API-only hosts validate the default serializer before serving requests.</summary>
     [Fact]
-    public async Task ShouldRejectInvalidUpcastersWithoutWorkers()
+    public async Task ShouldRejectInvalidUpcastersGivenNoWorkers()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
@@ -390,7 +390,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void ShouldRejectNonPositiveReactorBatchSizeDuringRegistration(int maxBatchSize)
+    public void ShouldRejectRegistrationGivenNonPositiveReactorBatchSize(int maxBatchSize)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -411,7 +411,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     ///     hosted service starts.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchQueuedRequestWhenHostedServiceStarts()
+    public async Task ShouldDispatchQueuedRequestGivenHostedServiceStarts()
     {
         // Arrange
         var handler = new ChangeValueHandler();
@@ -440,7 +440,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     ///     and disposes that scope when the tenant stops.
     /// </summary>
     [Fact]
-    public async Task ShouldRunScopedTenantWorkloadWhenHostedServiceStarts()
+    public async Task ShouldRunScopedTenantWorkloadGivenHostedServiceStarts()
     {
         // Arrange
         var state = new HostingWorkloadState();
@@ -469,7 +469,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     ///     committed atomically by the projection target.
     /// </summary>
     [Fact]
-    public async Task ShouldRunProjectorPassAndSaveCheckpointWhenHostedServiceStarts()
+    public async Task ShouldRunProjectorPassAndSaveCheckpointGivenHostedServiceStarts()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -507,7 +507,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     ///     authoritative checkpoint before retrying, so the committed event is not applied twice.
     /// </summary>
     [Fact]
-    public async Task ShouldNotReplayCommittedProjectionBatchAfterLateCommitFailure()
+    public async Task ShouldNotReplayCommittedBatchGivenLateCommitFailure()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -547,7 +547,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
     ///     from its stale in-memory checkpoint while the target remains unavailable.
     /// </summary>
     [Fact]
-    public async Task ShouldRetryCheckpointReloadWithoutReplayingFromStaleCheckpoint()
+    public async Task ShouldRetryCheckpointReloadWithoutReplayGivenStaleCheckpoint()
     {
         // Arrange
         var id = Uuid.CreateVersion4();

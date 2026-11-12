@@ -14,7 +14,7 @@ public sealed class DynamicRequestRegistrationTests
     ///     same request by another route.
     /// </summary>
     [Fact]
-    public void ShouldAddTheTransportDescriptorForADynamicallyRegisteredRequest()
+    public void ShouldAddTransportDescriptorGivenDynamicallyRegisteredRequest()
     {
         // Arrange
         const string source = """

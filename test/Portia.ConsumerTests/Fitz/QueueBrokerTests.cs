@@ -7,7 +7,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class QueueBrokerTests
 {
     [Fact]
-    public async Task MalformedReservationIsRedeliveredByFitzAfterValidWorkIsAcknowledged()
+    public async Task ShouldRedeliverMalformedReservationGivenValidWorkAcknowledged()
     {
         // Arrange
         await using var client = await ConsumerBroker.ConnectAsync();
@@ -46,7 +46,7 @@ public sealed class QueueBrokerTests
     ///     stays pinned to the discriminator rather than falling back to the CLR type name.
     /// </summary>
     [Fact]
-    public async Task ReservationReportsTheEnvelopeDiscriminatorAsItsWireName()
+    public async Task ShouldReportEnvelopeDiscriminatorAsWireNameGivenQueuedRequest()
     {
         // Arrange
         await using var client = await ConsumerBroker.ConnectAsync();
@@ -68,7 +68,7 @@ public sealed class QueueBrokerTests
     }
 
     [Fact]
-    public async Task ActiveDeliveryRetainsLeaseThenHandsRedeliveryBackToFitzOnCancellation()
+    public async Task ShouldRetainLeaseAndHandBackRedeliveryGivenActiveDeliveryWhenCancelled()
     {
         // Arrange
         await using var client = await ConsumerBroker.ConnectAsync();

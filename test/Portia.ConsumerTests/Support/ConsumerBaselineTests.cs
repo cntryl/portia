@@ -3,7 +3,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ConsumerBaselineTests
 {
     [Fact]
-    public void PublicAggregateAppliesContractFromSeparateAssembly()
+    public void ShouldApplyContractGivenPublicAggregateFromSeparateAssembly()
     {
         // Arrange
         var account = new Account(Uuid.CreateVersion4());
@@ -19,7 +19,7 @@ public sealed class ConsumerBaselineTests
     }
 
     [Fact]
-    public void GeneratorHarnessCompilesAndExecutesConsumer()
+    public void ShouldCompileAndExecuteConsumerGivenGeneratorHarness()
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""

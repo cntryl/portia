@@ -17,7 +17,7 @@ public sealed class UninterceptedCallSiteTests
     [InlineData("MapPortiaPut<Binding>(app, \"/binding\")")]
     [InlineData("MapPortiaPatch<Binding>(app, \"/binding\")")]
     [InlineData("MapPortiaDelete<Binding>(app, \"/binding\")")]
-    public void UninterceptedEndpointMappingExplainsWhyItWasNotGenerated(string call)
+    public void ShouldExplainMissingInterceptionGivenUninterceptedEndpointMapping(string call)
     {
         // Arrange
         var source = $$"""
@@ -53,7 +53,7 @@ public sealed class UninterceptedCallSiteTests
     }
 
     [Fact]
-    public void UninterceptedStreamingEndpointMappingExplainsWhyItWasNotGenerated()
+    public void ShouldExplainMissingInterceptionGivenUninterceptedStreamingEndpointMapping()
     {
         // Arrange
         const string source = """
@@ -83,7 +83,7 @@ public sealed class UninterceptedCallSiteTests
     [InlineData("app", null)]
     [InlineData(null, "")]
     [InlineData(null, "   ")]
-    public void UninterceptedEndpointMappingChecksItsArgumentsBeforeReportingTheCause(string? app, string? pattern)
+    public void ShouldRejectArgumentsGivenInvalidAppOrPatternBeforeReportingCause(string? app, string? pattern)
     {
         // Arrange
         var route = app is null
@@ -117,7 +117,7 @@ public sealed class UninterceptedCallSiteTests
     [InlineData("AddRequestGuard<Guard>()", "request guard")]
     [InlineData("RegisterDynamicRequest<Command>()", "request")]
     [InlineData("AddEvent<Happened>()", "domain event")]
-    public void UninterceptedRegistrationNamesTheTypeAndTheRoleItWasRegisteringAs(string call, string role)
+    public void ShouldNameTypeAndRoleGivenUninterceptedRegistration(string call, string role)
     {
         // Arrange
         var source = $$"""

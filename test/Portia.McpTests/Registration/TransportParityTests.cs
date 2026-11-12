@@ -26,7 +26,7 @@ public sealed class TransportParityTests
     [InlineData("rest")]
     [InlineData("mcp-http")]
     [InlineData("mcp-stdio")]
-    public async Task ShouldPreserveTheSameApplicationPipelineAndCommittedEvents(string transportName)
+    public async Task ShouldPreserveApplicationPipelineAndCommittedEventsGivenTransport(string transportName)
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();

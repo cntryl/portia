@@ -10,7 +10,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     [InlineData(0, 1)]
     [InlineData(3, 2)]
     [InlineData(4, null)]
-    public async Task ShouldForwardNativeDelayAndLifetimeWithoutChangingEnvelope(int seconds, int? hours)
+    public async Task ShouldForwardDelayAndLifetimeWithoutChangingEnvelopeGivenNativeOptions(int seconds, int? hours)
     {
         // Arrange
         var queue = new PublicationQueue();
@@ -36,7 +36,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
 
     /// <summary>The options convenience method retains an explicitly identified operation.</summary>
     [Fact]
-    public async Task ShouldPreserveTypedOperationIdentityWhenPublishingWithOptions()
+    public async Task ShouldPreserveTypedOperationIdentityGivenPublishingWithOptions()
     {
         // Arrange
         var queue = new PublicationQueue();
@@ -54,7 +54,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
 
     /// <summary>The parent-context helper preserves correlation and causation through the options path.</summary>
     [Fact]
-    public async Task ShouldPreserveParentContextWhenPublishingWithOptions()
+    public async Task ShouldPreserveParentContextGivenPublishingWithOptions()
     {
         // Arrange
         var queue = new PublicationQueue();
@@ -79,7 +79,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     [InlineData(-1000, 1)]
     [InlineData(1, 1)]
     [InlineData(0, 0)]
-    public async Task ShouldRejectInvalidOptionsBeforeTouchingQueue(int milliseconds, int hours)
+    public async Task ShouldRejectBeforeTouchingQueueGivenInvalidOptions(int milliseconds, int hours)
     {
         // Arrange
         var queue = new PublicationQueue();
@@ -98,7 +98,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
 
     /// <summary>Cancellation before publication cannot reach either provider enqueue operation.</summary>
     [Fact]
-    public async Task ShouldLeavePublicationUndispatchedWhenAlreadyCancelled()
+    public async Task ShouldLeavePublicationUndispatchedGivenAlreadyCancelled()
     {
         // Arrange
         var queue = new PublicationQueue();
@@ -119,7 +119,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
 
     /// <summary>Unavailable requested capability does not fall back to an enqueue without the requested lifetime.</summary>
     [Fact]
-    public async Task ShouldPropagateUnavailableNativeCapabilityWithoutPublicationFallback()
+    public async Task ShouldPropagateFailureWithoutFallbackGivenUnavailableNativeCapability()
     {
         // Arrange
         var queue = new PublicationQueue { SupportsLifetime = false };
@@ -139,7 +139,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
 
     /// <summary>Existing enqueue calls retain their provider-default publication path.</summary>
     [Fact]
-    public async Task ShouldKeepLegacyEnqueueOnExistingNativePath()
+    public async Task ShouldKeepExistingNativePathGivenLegacyEnqueue()
     {
         // Arrange
         var queue = new PublicationQueue();
@@ -156,7 +156,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
 
     /// <summary>Existing custom publishers remain compatible when no additional publication semantics are requested.</summary>
     [Fact]
-    public async Task ShouldAllowDefaultOptionsOnLegacyPublisherWithoutDroppingLogicalMetadata()
+    public async Task ShouldKeepLogicalMetadataGivenDefaultOptionsOnLegacyPublisher()
     {
         // Arrange
         var implementation = new LegacyPublisher();
@@ -176,7 +176,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     [Theory]
     [InlineData(1, null)]
     [InlineData(0, 1)]
-    public async Task ShouldRejectNondefaultOptionsOnLegacyPublisher(int seconds, int? hours)
+    public async Task ShouldRejectOptionsGivenNondefaultOptionsOnLegacyPublisher(int seconds, int? hours)
     {
         // Arrange
         var implementation = new LegacyPublisher();

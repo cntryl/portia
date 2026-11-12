@@ -16,7 +16,7 @@ public sealed class McpPrimitiveTests
     [Theory]
     [InlineData("--resource-only", "resources", "resources/templates/list")]
     [InlineData("--prompt-only", "prompts", "prompts/list")]
-    public async Task ShouldEmitPrivateZeroTtlHintsOnModernProtocol(string mode, string capability,
+    public async Task ShouldEmitPrivateZeroTtlHintsGivenModernProtocol(string mode, string capability,
         string listMethod)
     {
         // Arrange
@@ -82,7 +82,7 @@ public sealed class McpPrimitiveTests
     [Theory]
     [InlineData("--resource-only")]
     [InlineData("--prompt-only")]
-    public async Task ShouldServeSinglePrimitiveFromStdioHost(string mode)
+    public async Task ShouldServeSinglePrimitiveGivenStdioHost(string mode)
     {
         // Arrange
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name
@@ -120,7 +120,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public async Task ShouldServeResourceOnlyHostThroughRequestBus()
+    public async Task ShouldServeResourceGivenResourceOnlyHostWhenRoutedThroughRequestBus()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -167,7 +167,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public async Task ShouldIndexFixedResourcesAndPromptsWhilePreservingTemplateOrder()
+    public async Task ShouldIndexFixedPrimitivesAndPreserveTemplateOrderGivenMixedResourcesAndPrompts()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -230,7 +230,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public async Task ShouldServePromptOnlyHostThroughRequestBus()
+    public async Task ShouldServePromptGivenPromptOnlyHostWhenRoutedThroughRequestBus()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -275,7 +275,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public async Task ShouldExposeOptionalPromptArgumentDescriptionOverProtocol()
+    public async Task ShouldExposeArgumentDescriptionGivenOptionalPromptArgument()
     {
         // Arrange
         const string argumentDescription = "Name to greet; defaults to Guest when omitted.";
@@ -316,7 +316,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public async Task ShouldHideFixedResourceAndPromptFromOtherActor()
+    public async Task ShouldHideFixedResourceAndPromptGivenOtherActor()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -389,7 +389,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public async Task ShouldApplyTenantAuthorizerToGuessedResourceAndPrompt()
+    public async Task ShouldApplyTenantAuthorizerGivenGuessedResourceAndPrompt()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -461,7 +461,7 @@ public sealed class McpPrimitiveTests
     [InlineData("greetings://local/a?x=1")]
     [InlineData("greetings://local/a#part")]
     [InlineData("greetings://{host}/item")]
-    public void ShouldRejectUnsafeResourceTemplates(string uri)
+    public void ShouldRejectTemplateGivenUnsafeResourceUri(string uri)
     {
         // Arrange
         var application = new ServiceCollection().AddPortia();
@@ -476,7 +476,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public void ShouldRejectPrimitiveDeclarationsAfterHttpActivation()
+    public void ShouldRejectPrimitiveDeclarationsGivenHttpTransportAlreadyActivated()
     {
         // Arrange
         var application = new ServiceCollection().AddPortia()
@@ -501,7 +501,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public void ShouldRejectPrimitiveDeclarationsAfterStdioActivation()
+    public void ShouldRejectPrimitiveDeclarationsGivenStdioTransportAlreadyActivated()
     {
         // Arrange
         var application = new ServiceCollection().AddPortia()
@@ -528,7 +528,7 @@ public sealed class McpPrimitiveTests
     [Theory]
     [InlineData("greetings://local/fixed")]
     [InlineData("greetings://local/{name}")]
-    public void ShouldRejectLowerUriLimitWithoutChangingRegisteredLimit(string uri)
+    public void ShouldKeepRegisteredLimitGivenLowerUriLimitRejected(string uri)
     {
         // Arrange
         var application = new ServiceCollection().AddPortia()
@@ -550,7 +550,7 @@ public sealed class McpPrimitiveTests
     [Theory]
     [InlineData("greetings://local/fixed")]
     [InlineData("greetings://local/{name}")]
-    public void ShouldAcceptUriLimitEqualToRegisteredUriBytes(string uri)
+    public void ShouldAcceptLimitGivenUriLimitEqualToRegisteredUriBytes(string uri)
     {
         // Arrange
         var application = new ServiceCollection().AddPortia()
@@ -569,7 +569,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public void ShouldRejectAmbiguousResourceRegistrations()
+    public void ShouldRejectRegistrationGivenAmbiguousResourceTemplateAndFixedUri()
     {
         // Arrange
         var application = new ServiceCollection().AddPortia();
@@ -586,7 +586,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public void ShouldRejectOverlappingTemplatesWithDifferentPlaceholderPositions()
+    public void ShouldRejectTemplateGivenOverlapWithDifferentPlaceholderPosition()
     {
         // Arrange
         var application = new ServiceCollection().AddPortia();
@@ -603,7 +603,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public void ShouldRejectEncodedAliasOfFixedResource()
+    public void ShouldRejectRegistrationGivenEncodedAliasOfFixedResource()
     {
         // Arrange
         var application = new ServiceCollection().AddPortia();
@@ -620,7 +620,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public void ShouldAcceptFixedAbsoluteUriWithoutPath()
+    public void ShouldAcceptRegistrationGivenFixedAbsoluteUriWithoutPath()
     {
         // Arrange
         var application = new ServiceCollection().AddPortia();
@@ -636,7 +636,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public void ShouldRejectResourceTemplateBeyondDefaultUriLimit()
+    public void ShouldRejectTemplateGivenUriBeyondDefaultLimit()
     {
         // Arrange
         var application = new ServiceCollection().AddPortia();
@@ -651,7 +651,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public async Task ShouldReturnBinaryResourceAndRejectUnknownPromptArgumentsBeforeBinding()
+    public async Task ShouldReturnBinaryResourceAndRejectUnknownArgumentsGivenBinaryResourceAndPrompt()
     {
         // Arrange
         var bound = 0;
@@ -699,7 +699,7 @@ public sealed class McpPrimitiveTests
     [InlineData("greetings://local/%2e")]
     [InlineData("greetings://local/%ZZ")]
     [InlineData("greetings://local/../item")]
-    public async Task ShouldRejectUnsafeReadUriBeforeBinding(string uri)
+    public async Task ShouldRejectReadBeforeBindingGivenUnsafeUri(string uri)
     {
         // Arrange
         var bound = 0;
@@ -728,7 +728,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public async Task ShouldEnforceConfiguredPromptAndOutputLimits()
+    public async Task ShouldEnforceLimitsGivenConfiguredPromptAndOutputLimits()
     {
         // Arrange
         var bound = 0;
@@ -781,7 +781,7 @@ public sealed class McpPrimitiveTests
     }
 
     [Fact]
-    public async Task ShouldCancelResourceDispatchAtConfiguredDeadline()
+    public async Task ShouldCancelResourceDispatchGivenConfiguredOperationDeadline()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();

@@ -8,7 +8,7 @@ public sealed class ConditionalRegistrationTests
 {
     [Theory]
     [InlineData("PortiaBuilder.AddRequestHandler")]
-    public void ShouldAllowRegistrationNameofWithoutRegistration(string member)
+    public void ShouldAllowRegistrationNameofGivenNoRegistration(string member)
     {
         // Arrange
         var source = $$"""

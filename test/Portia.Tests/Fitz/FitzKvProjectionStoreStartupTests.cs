@@ -19,7 +19,7 @@ public sealed class FitzKvProjectionStoreStartupTests
     [Theory]
     [InlineData(WorkloadScope.Global)]
     [InlineData(WorkloadScope.PerTenant)]
-    public async Task ShouldRejectRepositoryBuiltForAnotherProjectorAtStartup(WorkloadScope scope)
+    public async Task ShouldRejectStartupGivenRepositoryBuiltForAnotherProjector(WorkloadScope scope)
     {
         // Arrange
         using var host = Host(scope, registeredAs: "orders", repositoryServes: "OrdersProjector");
@@ -35,7 +35,7 @@ public sealed class FitzKvProjectionStoreStartupTests
 
     /// <summary>A repository built for the registered name starts normally.</summary>
     [Fact]
-    public async Task ShouldStartWhenRepositoryServesTheRegisteredProjector()
+    public async Task ShouldStartGivenRepositoryServingRegisteredProjector()
     {
         // Arrange
         using var host = Host(WorkloadScope.Global, registeredAs: "orders", repositoryServes: "orders");

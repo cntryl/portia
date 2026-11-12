@@ -7,7 +7,7 @@ public sealed class RequestRpcConsumerTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task RequestDescriptorsRegisterAllRpcWorkersAndOwnTheirLifetime(bool reverse)
+    public async Task ShouldRegisterAllRpcWorkersAndOwnLifetimeGivenRequestDescriptors(bool reverse)
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""

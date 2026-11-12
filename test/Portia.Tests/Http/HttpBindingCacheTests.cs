@@ -10,7 +10,7 @@ public sealed class HttpBindingCacheTests
 {
     /// <summary>Options identities retain independent resolved wire names.</summary>
     [Fact]
-    public void ShouldNotShareBindingMetadataAcrossApplicationOptions()
+    public void ShouldNotShareBindingMetadataGivenDifferentApplicationOptions()
     {
         // Arrange
         var alpha = Options("alpha");
@@ -30,7 +30,7 @@ public sealed class HttpBindingCacheTests
 
     /// <summary>A cached property converter remains scoped to its own request member.</summary>
     [Fact]
-    public void ShouldNotLeakCachedPropertyConverterToAnotherRequest()
+    public void ShouldNotLeakCachedPropertyConverterGivenAnotherRequestType()
     {
         // Arrange
         var options = Options();
@@ -46,7 +46,7 @@ public sealed class HttpBindingCacheTests
 
     /// <summary>Concurrent first use resolves one immutable binding and returns correct values.</summary>
     [Fact]
-    public async Task ShouldResolveBindingMetadataOnceDuringConcurrentFirstUse()
+    public async Task ShouldResolveBindingMetadataOnceGivenConcurrentFirstUse()
     {
         // Arrange
         var resolutions = 0;
@@ -70,7 +70,7 @@ public sealed class HttpBindingCacheTests
 
     /// <summary>Property-level number handling overrides otherwise strict options.</summary>
     [Fact]
-    public void ShouldHonorCachedPropertyNumberHandling()
+    public void ShouldHonorNumberHandlingGivenCachedProperty()
     {
         // Arrange
         var options = Options();

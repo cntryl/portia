@@ -11,7 +11,7 @@ public sealed class DomainEventCatalogShapeTests
     ///     a build break in generated source rather than a diagnostic on the declaration.
     /// </summary>
     [Fact]
-    public void ShouldNotEmitCatalogRegistrationForAGenericDomainEvent()
+    public void ShouldNotEmitCatalogRegistrationGivenGenericDomainEvent()
     {
         // Arrange
         const string source = """

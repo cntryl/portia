@@ -8,7 +8,7 @@ public sealed class ProcessorStatusHostingTests
 {
     /// <summary>Projectors and reactors keep processing while an initially unavailable status endpoint retries.</summary>
     [Fact]
-    public async Task ShouldProcessWhileStatusRegistrationFailsAndEventuallyRegisterBothEndpoints()
+    public async Task ShouldProcessAndEventuallyRegisterBothEndpointsGivenStatusRegistrationFailure()
     {
         // Arrange
         var source = new InMemoryEventStore();

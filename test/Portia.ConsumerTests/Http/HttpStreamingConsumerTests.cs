@@ -134,7 +134,7 @@ public sealed class HttpStreamingConsumerTests
     [InlineData(false, 403)]
     [InlineData(true, 401)]
     [InlineData(true, 403)]
-    public async Task AuthorizationFailureReturnsStatusBeforeStreamStarts(bool sse, int mode)
+    public async Task ShouldReturnStatusBeforeStreamStartsGivenAuthorizationFailure(bool sse, int mode)
     {
         // Arrange
         var expectedStatus = mode;
@@ -157,7 +157,7 @@ public sealed class HttpStreamingConsumerTests
     [InlineData(true, 2)]
     [InlineData(false, 3)]
     [InlineData(true, 3)]
-    public async Task StreamEnumeratesOnceAndDisposesAfterCompletionCancellationOrFailure(bool sse, int mode)
+    public async Task ShouldEnumerateOnceAndDisposeGivenStreamEndingByCompletionCancellationOrFailure(bool sse, int mode)
     {
         // Arrange
         var expectedFailure = mode != 0;

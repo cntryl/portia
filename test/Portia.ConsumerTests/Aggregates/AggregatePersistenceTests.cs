@@ -10,7 +10,7 @@ public sealed class AggregatePersistenceTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task AuditBatchesUseDistinctVersionFourSessionStreamsWithoutChangingAggregateVersion(bool fitz)
+    public async Task ShouldUseDistinctSessionStreamsAndKeepAggregateVersionGivenAuditBatches(bool fitz)
     {
         // Arrange
         await using var fixture = await StoreFixture.CreateAsync(fitz);
@@ -75,7 +75,7 @@ public sealed class AggregatePersistenceTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task AuditBeforeCreationLeavesAggregateStreamAbsent(bool fitz)
+    public async Task ShouldLeaveAggregateStreamAbsentGivenAuditBeforeCreation(bool fitz)
     {
         // Arrange
         await using var fixture = await StoreFixture.CreateAsync(fitz);
@@ -98,7 +98,7 @@ public sealed class AggregatePersistenceTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task CompetingRaisedEventsStillConflictAndKeepPendingChanges(bool fitz)
+    public async Task ShouldConflictAndKeepPendingChangesGivenCompetingRaisedEvents(bool fitz)
     {
         // Arrange
         await using var fixture = await StoreFixture.CreateAsync(fitz);
@@ -123,7 +123,7 @@ public sealed class AggregatePersistenceTests
     }
 
     [Fact]
-    public async Task PublicRegistrationSavesAndReloadsAggregate()
+    public async Task ShouldSaveAndReloadAggregateGivenPublicRegistration()
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""

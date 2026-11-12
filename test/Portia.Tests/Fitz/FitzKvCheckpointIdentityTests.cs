@@ -11,7 +11,7 @@ public sealed class FitzKvCheckpointIdentityTests
     [InlineData("realm")]
     [InlineData("area")]
     [InlineData("resource")]
-    public void ShouldRejectNulInStreamIdentitySegments(string segment)
+    public void ShouldRejectNulGivenStreamIdentitySegment(string segment)
     {
         // Arrange
         var realm = segment == "realm" ? "tenant\0other" : "tenant";
@@ -33,7 +33,7 @@ public sealed class FitzKvCheckpointIdentityTests
 
     /// <summary>Names and generations cannot introduce another durable key field.</summary>
     [Fact]
-    public void ShouldRejectNulInCheckpointAndWorkloadNames()
+    public void ShouldRejectNulGivenCheckpointAndWorkloadNames()
     {
         // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", "events", "order");
@@ -60,7 +60,7 @@ public sealed class FitzKvCheckpointIdentityTests
 
     /// <summary>Tenant assignment and parsing reject the same invalid realm before routing or key derivation.</summary>
     [Fact]
-    public void ShouldRejectNulInTenantIdentity()
+    public void ShouldRejectNulGivenTenantIdentity()
     {
         // Arrange
         const string value = "tenant\0other";
@@ -86,7 +86,7 @@ public sealed class FitzKvCheckpointIdentityTests
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]
-    public void ShouldRejectMalformedUnicodeIdentities(int kind)
+    public void ShouldRejectIdentityGivenMalformedUnicode(int kind)
     {
         // Arrange
         var invalid = kind switch
@@ -117,7 +117,7 @@ public sealed class FitzKvCheckpointIdentityTests
 
     /// <summary>Valid Unicode and existing non-NUL controls retain their exact checkpoint byte encoding.</summary>
     [Fact]
-    public void ShouldPreserveValidUnicodeAndNonNulControlCharacters()
+    public void ShouldPreserveCharactersGivenValidUnicodeAndNonNulControlCharacters()
     {
         // Arrange
         const string text = "café-\uD83D\uDE80\n\t";
@@ -135,7 +135,7 @@ public sealed class FitzKvCheckpointIdentityTests
 
     /// <summary>Store construction and query routing reject NUL before opening a native transaction.</summary>
     [Fact]
-    public async Task ShouldRejectNulBeforeNativeRouting()
+    public async Task ShouldRejectNulBeforeNativeRoutingGivenNulInRepositoryOrRoute()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -159,7 +159,7 @@ public sealed class FitzKvCheckpointIdentityTests
     [Theory]
     [InlineData(null)]
     [InlineData("candidate-2")]
-    public void ShouldPreserveExistingKeyBytesForOrdinaryIdentity(string? generation)
+    public void ShouldPreserveKeyBytesGivenOrdinaryIdentity(string? generation)
     {
         // Arrange
         var identity = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "events", "order"),
@@ -174,7 +174,7 @@ public sealed class FitzKvCheckpointIdentityTests
 
     /// <summary>Valid source and generation distinctions continue to own independent progress.</summary>
     [Fact]
-    public async Task ShouldKeepOrdinaryCheckpointProgressIndependent()
+    public async Task ShouldKeepProgressIndependentGivenOrdinaryCheckpointsWithAmbiguousNames()
     {
         // Arrange
         var first = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "events", "order-part"), "v2");

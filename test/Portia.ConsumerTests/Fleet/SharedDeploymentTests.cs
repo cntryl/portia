@@ -13,7 +13,7 @@ public sealed class SharedDeploymentTests
     readonly RequestDispatchContext _saveContext = new(RequestActor.System);
 
     [Fact]
-    public async Task SharedApplicationStartsListenersOnlyInWorkerAndKeepsExternalClientAlive()
+    public async Task ShouldStartListenersOnlyInWorkerGivenSharedApplicationAndKeepExternalClientAlive()
     {
         // Arrange
         await using var client = await ConsumerBroker.ConnectAsync();
@@ -71,7 +71,7 @@ public sealed class SharedDeploymentTests
     }
 
     [Fact]
-    public async Task OwnedConfigurationConnectsBeforeHostStartsAndSupportsPersistence()
+    public async Task ShouldConnectBeforeHostStartsGivenOwnedConfiguration()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
@@ -125,7 +125,7 @@ public sealed class SharedDeploymentTests
     }
 
     [Fact]
-    public async Task MissingTenantDirectoryFailsBeforeAttemptingConnection()
+    public async Task ShouldFailBeforeConnectingGivenMissingTenantDirectory()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();

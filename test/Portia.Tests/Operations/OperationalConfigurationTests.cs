@@ -5,7 +5,7 @@ public sealed class OperationalConfigurationTests
 {
     /// <summary>A host must acknowledge that legacy workers were quiesced.</summary>
     [Fact]
-    public async Task ShouldRequireQuiescedCutoverBeforeEnablingOperations()
+    public async Task ShouldRequireQuiescedCutoverGivenOperationsEnabledWithoutIt()
     {
         // Arrange
         await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
@@ -25,7 +25,7 @@ public sealed class OperationalConfigurationTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ShouldRejectMixedCheckpointOwnership(bool operationsFirst)
+    public async Task ShouldRejectMixedCheckpointOwnershipGivenOperationsAndCheckpointsInEitherOrder(bool operationsFirst)
     {
         // Arrange
         await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
@@ -52,7 +52,7 @@ public sealed class OperationalConfigurationTests
 
     /// <summary>Service providers borrow domain clients when the application owns the Fitz connection.</summary>
     [Fact]
-    public async Task ShouldKeepBorrowedFitzClientsOutsideServiceProviderDisposal()
+    public async Task ShouldKeepClientOutsideProviderDisposalGivenBorrowedFitzClient()
     {
         // Arrange
         await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));

@@ -9,7 +9,7 @@ public sealed class FitzEventStreamPatternOffsetsTests
 {
     /// <summary>Verifies resource-scoped patterns select the resource offset.</summary>
     [Fact]
-    public void ShouldReturnTheResourceOffsetForResourceScope()
+    public void ShouldReturnResourceOffsetGivenResourceScope()
     {
         // Arrange
         var pattern = EventStreamPattern.ForPattern("realm", "area", "resource");
@@ -23,7 +23,7 @@ public sealed class FitzEventStreamPatternOffsetsTests
 
     /// <summary>Verifies area-scoped patterns select the area offset.</summary>
     [Fact]
-    public void ShouldReturnTheAreaOffsetForAreaScope()
+    public void ShouldReturnAreaOffsetGivenAreaScope()
     {
         // Arrange
         var pattern = EventStreamPattern.ForPattern("realm", "area");
@@ -37,7 +37,7 @@ public sealed class FitzEventStreamPatternOffsetsTests
 
     /// <summary>Verifies realm-scoped patterns select the realm offset.</summary>
     [Fact]
-    public void ShouldReturnTheRealmOffsetForRealmScope()
+    public void ShouldReturnRealmOffsetGivenRealmScope()
     {
         // Arrange
         var pattern = EventStreamPattern.ForPattern("realm");
@@ -51,7 +51,7 @@ public sealed class FitzEventStreamPatternOffsetsTests
 
     /// <summary>Verifies a stream matches a pattern when every non-null segment equals it.</summary>
     [Fact]
-    public void ShouldMatchAStreamWhenEveryNonNullPatternSegmentEqualsIt()
+    public void ShouldMatchAStreamGivenEveryNonNullPatternSegmentEqualsIt()
     {
         // Arrange
         var stream = new EventStreamAddress("realm", "area", "resource");
@@ -65,7 +65,7 @@ public sealed class FitzEventStreamPatternOffsetsTests
 
     /// <summary>Verifies a stream doesn't match a pattern whose segment differs from it.</summary>
     [Fact]
-    public void ShouldNotMatchAStreamWhenAPatternSegmentDiffers()
+    public void ShouldNotMatchAStreamGivenAPatternSegmentDiffers()
     {
         // Arrange
         var stream = new EventStreamAddress("realm", "area", "resource");

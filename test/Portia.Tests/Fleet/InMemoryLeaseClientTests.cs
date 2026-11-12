@@ -16,7 +16,7 @@ public sealed class InMemoryLeaseClientTests
     ///     <see cref="NotSupportedException" /> anywhere in the interface's one member.
     /// </summary>
     [Fact]
-    public async Task ShouldRunCallbackAndRecordAcquisition()
+    public async Task ShouldRunCallbackAndRecordAcquisitionGivenAvailableLease()
     {
         // Arrange
         var leases = new InMemoryLeaseClient();

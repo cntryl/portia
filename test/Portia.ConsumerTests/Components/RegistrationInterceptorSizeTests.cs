@@ -10,7 +10,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class RegistrationInterceptorSizeTests
 {
     [Fact]
-    public void ShouldBoundCatalogAndSharedRegistrationMethods()
+    public void ShouldBoundCatalogAndSharedRegistrationMethodsGivenLargeRegistrationSet()
     {
         // Arrange
         var options = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(

@@ -14,7 +14,7 @@ public sealed class TenantDirectoryTelemetryTests
 
     /// <summary>A snapshot reports replay cost, lifecycle volume, and final active membership.</summary>
     [Fact]
-    public async Task ShouldMeasureCompleteSnapshotReplayWithoutTenantIdentityTags()
+    public async Task ShouldMeasureReplayWithoutTenantIdentityTagsGivenCompleteSnapshot()
     {
         // Arrange
         var clock = new ManualTestClock();
@@ -42,7 +42,7 @@ public sealed class TenantDirectoryTelemetryTests
 
     /// <summary>Legacy watch reads distinguish the initial replay from a later catch-up pass.</summary>
     [Fact]
-    public async Task ShouldDistinguishLegacyWatchReplayFromCatchUp()
+    public async Task ShouldDistinguishReplayFromCatchUpGivenLegacyWatch()
     {
         // Arrange
         var clock = new ManualTestClock();
@@ -80,7 +80,7 @@ public sealed class TenantDirectoryTelemetryTests
 
     /// <summary>A production cursor distinguishes replay from catch-up and excludes consumer delay.</summary>
     [Fact]
-    public async Task ShouldMeasureCursorReplayAndCatchUpWithoutConsumerBackpressure()
+    public async Task ShouldMeasureReplayAndCatchUpGivenCursorWithoutConsumerBackpressure()
     {
         // Arrange
         var clock = new ManualTestClock();

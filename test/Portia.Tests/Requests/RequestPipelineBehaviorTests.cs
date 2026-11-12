@@ -12,7 +12,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>Request-family and concrete behaviors wrap the handler in stable order.</summary>
     [Fact]
-    public async Task ShouldRunMatchingBehaviorsInOrderAroundHandler()
+    public async Task ShouldRunBehaviorsInOrderAroundHandlerGivenMatchingBehaviors()
     {
         // Arrange
         var calls = new List<string>();
@@ -34,7 +34,7 @@ public sealed class RequestPipelineBehaviorTests
     [Theory]
     [InlineData(30)]
     [InlineData(31)]
-    public void ShouldEnforceSingleUseAtExtendedStateBoundary(int position)
+    public void ShouldEnforceSingleUseGivenExtendedStateBoundary(int position)
     {
         // Arrange
         var closed = new RequestPipelineFrame<PipelineAction>(
@@ -57,7 +57,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>Authorization denial prevents all behavior execution.</summary>
     [Fact]
-    public async Task ShouldAuthorizeBeforeEnteringBehaviorChain()
+    public async Task ShouldAuthorizeBeforeEnteringChainGivenBehaviorChain()
     {
         // Arrange
         var calls = new List<string>();
@@ -82,7 +82,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>Result-bearing and streaming behaviors compose around their handlers.</summary>
     [Fact]
-    public async Task ShouldComposeResultAndStreamingBehaviors()
+    public async Task ShouldComposeBehaviorsGivenResultAndStreamingBehaviors()
     {
         // Arrange
         var calls = new List<string>();
@@ -112,7 +112,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>Invalid results identify the framework extension that returned them.</summary>
     [Fact]
-    public async Task ShouldNameOwnerOfUninitializedResult()
+    public async Task ShouldNameOwnerGivenUninitializedResult()
     {
         // Arrange
         using var provider = Provider([], new RequestRegistration<InvalidPipelineAction, InvalidPipelineHandler>());
@@ -136,7 +136,7 @@ public sealed class RequestPipelineBehaviorTests
     ///     result-bearing dispatch it cannot handle.
     /// </summary>
     [Fact]
-    public async Task ShouldSkipBehaviorsThatCannotServeTheDispatchedShape()
+    public async Task ShouldSkipBehaviorsGivenBehaviorsThatCannotServeDispatchedShape()
     {
         // Arrange
         var calls = new List<string>();
@@ -161,7 +161,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>A no-result behavior may short-circuit without invoking downstream work.</summary>
     [Fact]
-    public async Task ShouldAllowBehaviorToSkipContinuation()
+    public async Task ShouldSkipHandlerGivenBehaviorThatSkipsContinuation()
     {
         // Arrange
         var calls = new List<string>();
@@ -184,7 +184,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>Result-bearing and streaming behaviors may also short-circuit their continuations.</summary>
     [Fact]
-    public async Task ShouldAllowResultAndStreamingBehaviorsToSkipContinuation()
+    public async Task ShouldSkipHandlerGivenResultAndStreamingBehaviorsThatSkipContinuation()
     {
         // Arrange
         var services = Services([]);
@@ -216,7 +216,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>A continuation is single-use and cannot execute a handler twice.</summary>
     [Fact]
-    public async Task ShouldRejectSecondSequentialContinuationInvocation()
+    public async Task ShouldRejectSecondInvocationGivenSequentialContinuationInvocations()
     {
         // Arrange
         var calls = new List<string>();
@@ -240,7 +240,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>Two concurrent continuation calls admit one winner and reject the other.</summary>
     [Fact]
-    public async Task ShouldAllowExactlyOneConcurrentContinuationInvocation()
+    public async Task ShouldAllowExactlyOneInvocationGivenConcurrentContinuationInvocations()
     {
         // Arrange
         var calls = new List<string>();
@@ -265,7 +265,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>Awaiting before the first continuation call is valid.</summary>
     [Fact]
-    public async Task ShouldAllowAwaitBeforeFirstContinuationInvocation()
+    public async Task ShouldAllowInvocationGivenAwaitBeforeFirstContinuationInvocation()
     {
         // Arrange
         var calls = new List<string>();
@@ -288,7 +288,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>An inner continuation expires when its own behavior returns, even while an outer behavior remains.</summary>
     [Fact]
-    public async Task ShouldRejectInnerContinuationAfterInnerBehaviorReturns()
+    public async Task ShouldRejectInnerContinuationGivenInnerBehaviorAlreadyReturned()
     {
         // Arrange
         var calls = new List<string>();
@@ -316,7 +316,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>A continuation retained by a behavior expires when that behavior returns.</summary>
     [Fact]
-    public async Task ShouldRejectContinuationRetainedAfterBehaviorReturns()
+    public async Task ShouldRejectContinuationGivenContinuationRetainedAfterBehaviorReturns()
     {
         // Arrange
         var calls = new List<string>();
@@ -344,7 +344,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>Result-bearing and streaming continuations enforce the same single-use contract.</summary>
     [Fact]
-    public async Task ShouldRejectSecondResultAndStreamingContinuationInvocations()
+    public async Task ShouldRejectSecondInvocationGivenResultAndStreamingContinuations()
     {
         // Arrange
         var calls = new List<string>();
@@ -386,7 +386,7 @@ public sealed class RequestPipelineBehaviorTests
     [InlineData(1, true)]
     [InlineData(2, false)]
     [InlineData(2, true)]
-    public async Task ShouldRejectExpiredContinuationsInsideLaterInvocations(int shape, bool useFirst)
+    public async Task ShouldRejectExpiredContinuationsGivenLaterInvocations(int shape, bool useFirst)
     {
         // Arrange
         var calls = new List<string>();
@@ -437,7 +437,7 @@ public sealed class RequestPipelineBehaviorTests
     [InlineData(1, true)]
     [InlineData(2, false)]
     [InlineData(2, true)]
-    public async Task ShouldRejectContinuationBorrowedFromActiveInvocation(int shape, bool nested)
+    public async Task ShouldRejectContinuationGivenContinuationBorrowedFromActiveInvocation(int shape, bool nested)
     {
         // Arrange
         var behavior = new BorrowingContinuationBehavior();
@@ -500,7 +500,7 @@ public sealed class RequestPipelineBehaviorTests
     [Theory]
     [InlineData(30)]
     [InlineData(31)]
-    public async Task ShouldAllowOneConcurrentWinnerAtStateBoundary(int position)
+    public async Task ShouldAllowOneWinnerGivenConcurrentInvocationsAtStateBoundary(int position)
     {
         // Arrange
         var frame = new RequestPipelineFrame<PipelineAction>(
@@ -529,7 +529,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>The concrete typed context instance is shared through a family behavior and handler.</summary>
     [Fact]
-    public async Task ShouldShareOneConcreteRequestContextAcrossPipeline()
+    public async Task ShouldShareOneRequestContextGivenPipelineWithMultipleStages()
     {
         // Arrange
         var seen = new List<IRequestContext>();
@@ -554,7 +554,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>Nested and concurrent dispatches through one scoped bus retain distinct execution frames.</summary>
     [Fact]
-    public async Task ShouldIsolateNestedAndConcurrentDispatchFrames()
+    public async Task ShouldIsolateDispatchFramesGivenNestedAndConcurrentDispatch()
     {
         // Arrange
         var services = Services([]);
@@ -587,7 +587,7 @@ public sealed class RequestPipelineBehaviorTests
 
     /// <summary>Built-in and custom invocations expose bounded transport names.</summary>
     [Fact]
-    public void ShouldExposeStableBuiltInAndCustomTransportNames()
+    public void ShouldExposeStableTransportNamesGivenBuiltInAndCustomTransports()
     {
         // Arrange
         RequestInvocation[] invocations =

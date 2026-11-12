@@ -8,7 +8,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class GeneratorDiagnosticsTests
 {
     [Fact]
-    public void Portia100RecognizesKnownEffectDependenciesThroughTypeAncestry()
+    public void ShouldRecognizePortia100GivenKnownEffectDependenciesThroughTypeAncestry()
     {
         // Arrange
         const string source = """
@@ -46,7 +46,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia100ReportsProjectorAggregateWriterAndExecutorButNotReader()
+    public void ShouldReportPortia100GivenProjectorDependingOnAggregateWriterAndExecutorButNotReader()
     {
         // Arrange
         const string source = """
@@ -64,7 +64,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia102ReportsAggregateReaderWriterAndExecutorDependencies()
+    public void ShouldReportPortia102GivenAggregateReaderWriterAndExecutorDependencies()
     {
         // Arrange
         const string source = """
@@ -88,7 +88,7 @@ public sealed class GeneratorDiagnosticsTests
     [InlineData("PORTIA106", "IRequestAuthorizer<Command>",
         "public ValueTask<Result> AuthorizeAsync(IRequestContext<Command> context, CancellationToken ct) => default;",
         "Request authorizer 'Component' takes effect-capable dependency '")]
-    public void Portia105And106ReportPreflightEffectCapableDependencies(string id, string role, string member,
+    public void ShouldReportPortia105And106GivenPreflightEffectCapableDependencies(string id, string role, string member,
         string messagePrefix)
     {
         // Arrange
@@ -126,7 +126,7 @@ public sealed class GeneratorDiagnosticsTests
         "public ValueTask<Result> GuardAsync(IRequestContext<Command> context, CancellationToken ct) => default;")]
     [InlineData("IRequestAuthorizer<Command>",
         "public ValueTask<Result> AuthorizeAsync(IRequestContext<Command> context, CancellationToken ct) => default;")]
-    public void Portia105And106AllowReadOnlyDependencies(string role, string member)
+    public void ShouldAllowPortia105And106GivenReadOnlyDependencies(string role, string member)
     {
         // Arrange
         var source = $$"""
@@ -149,7 +149,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia105And106IgnoreTypesThatAreNotGuardsOrAuthorizers()
+    public void ShouldIgnorePortia105And106GivenTypesThatAreNotGuardsOrAuthorizers()
     {
         // Arrange
         const string source = """
@@ -175,7 +175,7 @@ public sealed class GeneratorDiagnosticsTests
             diagnostic.Location.SourceSpan.Length) == parameter).GetMessage(CultureInfo.InvariantCulture);
 
     [Fact]
-    public void Portia101ReportsConstructorAndActivatorUtilitiesServiceLocationAtUse()
+    public void ShouldReportPortia101GivenConstructorAndActivatorUtilitiesServiceLocationAtUse()
     {
         // Arrange
         const string source = """
@@ -205,7 +205,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void PracticeDiagnosticsRemainBestEffortAndIgnoreUnrecognizedGatewaysAndLookalikes()
+    public void ShouldIgnoreLookalikesGivenUnrecognizedGatewaysInPracticeDiagnostics()
     {
         // Arrange
         const string source = """
@@ -230,7 +230,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void BatchHandlerWithoutBatchBaseNamesProcessorAndHandlerAtProcessorDeclaration()
+    public void ShouldNameProcessorAndHandlerGivenBatchHandlerWithoutBatchBase()
     {
         // Arrange
         const string source = """
@@ -254,7 +254,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void SingleAndBatchHandlerForOneEventNamesProcessorAndEventAtProcessorDeclaration()
+    public void ShouldNameProcessorAndEventGivenSingleAndBatchHandlerForOneEvent()
     {
         // Arrange
         const string source = """
@@ -278,7 +278,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void DuplicateDomainEventNamesBothClrTypesAtDuplicateDeclaration()
+    public void ShouldNameBothClrTypesGivenDuplicateDomainEvent()
     {
         // Arrange
         const string source = """
@@ -302,7 +302,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void InferredExternalDomainEventLocalsDoNotReportDuplicateDiscriminator()
+    public void ShouldNotReportDuplicateDiscriminatorGivenInferredExternalDomainEventLocals()
     {
         // Arrange
         var contracts = GeneratorCompilation.Reference("""
@@ -335,7 +335,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void ExplicitBaseTypedExternalDomainEventLocalsDoNotReportDuplicateDiscriminator()
+    public void ShouldNotReportDuplicateDiscriminatorGivenExplicitBaseTypedExternalDomainEventLocals()
     {
         // Arrange
         var contracts = GeneratorCompilation.Reference("""
@@ -368,7 +368,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void DistinctExternalDomainEventTypesStillReportDuplicateDiscriminator()
+    public void ShouldReportDuplicateDiscriminatorGivenDistinctExternalDomainEventTypes()
     {
         // Arrange
         var contracts = GeneratorCompilation.Reference("""
@@ -405,7 +405,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void DuplicateRequestNamesBothClrTypesAtDuplicateDeclaration()
+    public void ShouldNameBothClrTypesGivenDuplicateRequest()
     {
         // Arrange
         const string source = """
@@ -431,7 +431,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void DuplicateRequestDiagnosticMovesWithDeclarationOnIncrementalRerun()
+    public void ShouldMoveDuplicateRequestDiagnosticGivenMovedDeclarationWhenIncrementalRerun()
     {
         // Arrange
         const string source = """
@@ -481,7 +481,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia015ReportsGenericHandler()
+    public void ShouldReportPortia015GivenGenericHandler()
     {
         // Arrange
         const string source = """
@@ -511,7 +511,7 @@ public sealed class GeneratorDiagnosticsTests
     ///     analyzers still fails.
     /// </summary>
     [Fact]
-    public void BuildSoundnessErrorsAreReportedByGeneratorsAlone()
+    public void ShouldReportBuildSoundnessErrorsGivenGeneratorsAlone()
     {
         // Arrange
         const string source = """
@@ -550,7 +550,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia020ReportsTransportedRequestWithoutDiscriminator()
+    public void ShouldReportPortia020GivenTransportedRequestWithoutDiscriminator()
     {
         // Arrange
         const string source = """
@@ -574,7 +574,7 @@ public sealed class GeneratorDiagnosticsTests
         "[RequestRoute(\"*\", \"bad/area\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IQueuable;")]
     [InlineData("PORTIA029",
         "[RequestRoute(\"*\", \"orders\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IBadTransport;\n[RequestTransport(\"bad/id\")] public interface IBadTransport;")]
-    public void PortiaDiagnosticsHonorPragmaSuppressionWithoutRetainingSyntaxTrees(string id, string declaration)
+    public void ShouldHonorPragmaSuppressionGivenPragmaWithoutRetainingSyntaxTrees(string id, string declaration)
     {
         // Arrange
         var source = $$"""
@@ -598,7 +598,7 @@ public sealed class GeneratorDiagnosticsTests
         "[RequestRoute(\"*\", \"bad/area\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IQueuable;")]
     [InlineData("PORTIA029",
         "[RequestRoute(\"*\", \"orders\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IBadTransport;\n[RequestTransport(\"bad/id\")] public interface IBadTransport;")]
-    public void PortiaDiagnosticsIgnoreInactivePragmaDisable(string id, string declaration)
+    public void ShouldIgnorePragmaGivenInactivePragmaDisable(string id, string declaration)
     {
         // Arrange
         var source = $$"""
@@ -623,7 +623,7 @@ public sealed class GeneratorDiagnosticsTests
         "[RequestRoute(\"*\", \"bad/area\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IQueuable;")]
     [InlineData("PORTIA029",
         "[RequestRoute(\"*\", \"orders\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IBadTransport;\n[RequestTransport(\"bad/id\")] public interface IBadTransport;")]
-    public void PortiaDiagnosticsIgnoreInactivePragmaRestore(string id, string declaration)
+    public void ShouldIgnorePragmaGivenInactivePragmaRestore(string id, string declaration)
     {
         // Arrange
         var source = $$"""
@@ -649,7 +649,7 @@ public sealed class GeneratorDiagnosticsTests
         "[RequestRoute(\"*\", \"bad/area\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IQueuable;")]
     [InlineData("PORTIA029",
         "[RequestRoute(\"*\", \"orders\", \"order\", \"create\")]\n[Discriminator(\"orders.create\")]\npublic sealed record CreateOrder : IRequest, IBadTransport;\n[RequestTransport(\"bad/id\")] public interface IBadTransport;")]
-    public void PortiaDiagnosticsHonorSuppressMessageWithoutRetainingSymbols(string id, string declaration)
+    public void ShouldHonorSuppressMessageGivenSuppressMessageWithoutRetainingSymbols(string id, string declaration)
     {
         // Arrange
         var source = $$"""
@@ -667,7 +667,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia021ReportsDomainEventWithoutDiscriminator()
+    public void ShouldReportPortia021GivenDomainEventWithoutDiscriminator()
     {
         // Arrange
         const string source = """
@@ -684,7 +684,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia024ReportsUnsafeRequestRouteSegment()
+    public void ShouldReportPortia024GivenUnsafeRequestRouteSegment()
     {
         // Arrange
         const string source = """
@@ -705,7 +705,7 @@ public sealed class GeneratorDiagnosticsTests
     [Theory]
     [InlineData("")]
     [InlineData("bad/id")]
-    public void Portia029ReportsInvalidTransportId(string id)
+    public void ShouldReportPortia029GivenInvalidTransportId(string id)
     {
         // Arrange
         var source = $$"""
@@ -724,7 +724,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia104ReportsHandlerCatchAllReturningFailedResult()
+    public void ShouldReportPortia104GivenHandlerCatchAllReturningFailedResult()
     {
         // Arrange
         const string source = """
@@ -752,7 +752,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia104IgnoresCatchAllsThatNarrowOrRethrowUnexpectedFailures()
+    public void ShouldIgnorePortia104GivenCatchAllsThatNarrowOrRethrowUnexpectedFailures()
     {
         // Arrange
         const string source = """
@@ -797,7 +797,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia104IgnoresFailureValuesThatAreNotReturned()
+    public void ShouldIgnorePortia104GivenFailureValuesThatAreNotReturned()
     {
         // Arrange
         const string source = """
@@ -829,7 +829,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia104IgnoresCatchesOutsideImplementedHandlerMethods()
+    public void ShouldIgnorePortia104GivenCatchesOutsideImplementedHandlerMethods()
     {
         // Arrange
         const string source = """
@@ -869,7 +869,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void PracticeDiagnosticsReportOncePerTypeGivenPartialDeclarations()
+    public void ShouldReportOncePerTypeGivenPartialDeclarations()
     {
         // Arrange
         const string source = """
@@ -906,7 +906,7 @@ public sealed class GeneratorDiagnosticsTests
     ///     declaration that holds the parameter, and still once for the whole compilation.
     /// </summary>
     [Fact]
-    public async Task PracticeDiagnosticsReportFromThePartialDeclarationHoldingTheParameter()
+    public async Task ShouldReportFromPartialDeclarationGivenPartialHoldingTheParameter()
     {
         // Arrange
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
@@ -949,7 +949,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void PracticeDiagnosticsCoverRecordStructComponents()
+    public void ShouldReportPracticeDiagnosticsGivenRecordStructComponents()
     {
         // Arrange
         const string source = """
@@ -973,7 +973,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia104UsesSemanticExceptionAndResultTypes()
+    public void ShouldReportPortia104GivenSemanticExceptionAndResultTypes()
     {
         // Arrange
         const string source = """
@@ -1014,7 +1014,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia107ReportsScenarioExpectationsDiscardedAsStatements()
+    public void ShouldReportPortia107GivenScenarioExpectationsDiscardedAsStatements()
     {
         // Arrange
         const string source = """
@@ -1037,7 +1037,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia107IgnoresAwaitedAndDeliberatelyKeptExpectations()
+    public void ShouldIgnorePortia107GivenAwaitedOrDeliberatelyKeptExpectations()
     {
         // Arrange
         const string source = """
@@ -1066,7 +1066,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia105And106IgnorePreflightReadsThroughNonPortiaClients()
+    public void ShouldIgnorePortia105And106GivenPreflightReadsThroughNonPortiaClients()
     {
         // Arrange
         const string source = """
@@ -1102,7 +1102,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia105StillReportsPreflightDispatchAndProjectionStore()
+    public void ShouldReportPortia105GivenPreflightDispatchAndProjectionStore()
     {
         // Arrange
         const string source = """
@@ -1128,7 +1128,7 @@ public sealed class GeneratorDiagnosticsTests
     [InlineData("PORTIA106", "IRequestAuthorizer<Req>", "AuthorizeAsync", "IProjectionStore")]
     [InlineData("PORTIA105", "IRequestGuard<Req>", "GuardAsync", "IProjectionCheckpointStore")]
     [InlineData("PORTIA106", "IRequestAuthorizer<Req>", "AuthorizeAsync", "IProjectionCheckpointStore")]
-    public void PreflightProjectionStoreDiagnosticSuggestsQueryOnlyApplicationInterface(
+    public void ShouldSuggestQueryOnlyInterfaceGivenPreflightProjectionStoreDiagnostic(
         string diagnosticId, string role, string method, string dependencyType)
     {
         // Arrange
@@ -1154,7 +1154,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia100IgnoresTheProjectorsOwnProjectionStore()
+    public void ShouldIgnorePortia100GivenProjectorsOwnProjectionStore()
     {
         // Arrange
         const string source = """
@@ -1178,7 +1178,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia104IgnoresFailuresBuiltInsideLambdas()
+    public void ShouldIgnorePortia104GivenFailuresBuiltInsideLambdas()
     {
         // Arrange
         const string source = """
@@ -1206,7 +1206,7 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
-    public void Portia101LeavesAggregateLocatorsToPortia102()
+    public void ShouldLeaveLocatorsToPortia102GivenAggregateLocatorsForPortia101()
     {
         // Arrange
         const string source = """

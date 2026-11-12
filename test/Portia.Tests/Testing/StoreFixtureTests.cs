@@ -8,7 +8,7 @@ public sealed class StoreFixtureTests
 {
     /// <summary>With no store supplied, the fixture defaults to an in-memory store.</summary>
     [Fact]
-    public async Task ShouldDefaultToInMemoryEventStore()
+    public async Task ShouldUseInMemoryEventStoreGivenNoSuppliedStore()
     {
         // Arrange
         // The fixture is built with no store supplied.
@@ -22,7 +22,7 @@ public sealed class StoreFixtureTests
 
     /// <summary>A caller-supplied store is used instead of the default.</summary>
     [Fact]
-    public async Task ShouldUseSuppliedEventStore()
+    public async Task ShouldUseSuppliedEventStoreGivenSuppliedStore()
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -36,7 +36,7 @@ public sealed class StoreFixtureTests
 
     /// <summary>State saved through the fixture's repository hydrates back through it.</summary>
     [Fact]
-    public async Task ShouldHydrateStateSavedThroughRepository()
+    public async Task ShouldHydrateStateGivenStateSavedThroughRepository()
     {
         // Arrange
         await using var fixture = new StoreFixture();
@@ -55,7 +55,7 @@ public sealed class StoreFixtureTests
 
     /// <summary>The fixture's repository is also usable as the executor a handler-like class under test depends on.</summary>
     [Fact]
-    public async Task ShouldExecuteAndHydrateThroughRepository()
+    public async Task ShouldExecuteAndHydrateGivenRepository()
     {
         // Arrange
         await using var fixture = new StoreFixture();
@@ -76,7 +76,7 @@ public sealed class StoreFixtureTests
 
     /// <summary>Anything else <c>AddPortia()</c> registers is reachable through the fixture's scope.</summary>
     [Fact]
-    public async Task ShouldResolveAggregateExecutorFromServices()
+    public async Task ShouldResolveAggregateExecutorGivenServices()
     {
         // Arrange
         await using var fixture = new StoreFixture();

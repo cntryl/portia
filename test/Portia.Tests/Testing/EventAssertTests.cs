@@ -7,7 +7,7 @@ public sealed class EventAssertTests
 {
     /// <summary>Metadata does not affect recursive comparison of ordered business data.</summary>
     [Fact]
-    public void ShouldCompareCollectionsAndNestedRecordsIgnoringMetadata()
+    public void ShouldCompareIgnoringMetadataGivenCollectionsAndNestedRecords()
     {
         // Arrange
         var expected = new CriteriaRevised(["one", "two"], new RevisionDetails(["a", "b"]));
@@ -26,7 +26,7 @@ public sealed class EventAssertTests
 
     /// <summary>A mismatch reports the property and collection index for diagnosis.</summary>
     [Fact]
-    public void ShouldReportNestedCollectionMismatch()
+    public void ShouldReportMismatchGivenNestedCollectionDifference()
     {
         // Arrange
         var expected = new CriteriaRevised(["one"], new RevisionDetails(["a", "b"]));
@@ -42,7 +42,7 @@ public sealed class EventAssertTests
 
     /// <summary>Different event types and event counts fail the assertion.</summary>
     [Fact]
-    public void ShouldRejectDifferentEventTypesAndSequenceLengths()
+    public void ShouldRejectGivenDifferentEventTypesAndSequenceLengths()
     {
         // Arrange
         var revised = new CriteriaRevised(["one"], new RevisionDetails(["a"]));
@@ -58,7 +58,7 @@ public sealed class EventAssertTests
 
     /// <summary>A sequence mismatch names the event index and payload path.</summary>
     [Fact]
-    public void ShouldReportEventIndexForSequenceMismatch()
+    public void ShouldReportEventIndexGivenSequenceMismatch()
     {
         // Arrange
         var first = new CriteriaRevised(["one"], new RevisionDetails(["a"]));
@@ -75,7 +75,7 @@ public sealed class EventAssertTests
 
     /// <summary>Nested record structs use the same structural collection comparison.</summary>
     [Fact]
-    public void ShouldCompareNestedRecordStructCollections()
+    public void ShouldCompareGivenNestedRecordStructCollections()
     {
         // Arrange
         var expected = new StructuredRevision(new RevisionStruct(["a", "b"]));
@@ -92,7 +92,7 @@ public sealed class EventAssertTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ShouldReportPublicFieldMismatch(bool nested)
+    public void ShouldReportMismatchGivenPublicFieldDifference(bool nested)
     {
         // Arrange
         DomainEvent expected = nested ? new NestedFields(new FieldValue { Extra = 2 }) : new MixedFields(1) { Extra = 2 };
@@ -107,7 +107,7 @@ public sealed class EventAssertTests
 
     /// <summary>Static state, indexers and non-public getters are outside the payload-member contract.</summary>
     [Fact]
-    public void ShouldIgnoreStaticMembersIndexersAndNonPublicGetters()
+    public void ShouldIgnoreMembersGivenStaticMembersIndexersAndNonPublicGetters()
     {
         // Arrange
         var mixed = new MixedFields(1) { Extra = 2 };

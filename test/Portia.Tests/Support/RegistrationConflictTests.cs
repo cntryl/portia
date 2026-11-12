@@ -16,7 +16,7 @@ public sealed class RegistrationConflictTests
     ///     both, rather than the last registration silently winning.
     /// </summary>
     [Fact]
-    public void ShouldRejectTwoHandlersForOneRequestAtRegistryComposition()
+    public void ShouldRejectRegistryCompositionGivenTwoHandlersForOneRequest()
     {
         // Arrange
         RequestHandlerRegistration[] handlers =
@@ -40,7 +40,7 @@ public sealed class RegistrationConflictTests
     ///     and preflight are separate responsibilities that run at different lifecycle phases.
     /// </summary>
     [Fact]
-    public void ShouldRejectTypeRegisteredAsBothAuthorizerAndGuard()
+    public void ShouldRejectRegistrationGivenTypeRegisteredAsBothAuthorizerAndGuard()
     {
         // Arrange
         var handlers = new[] { new RequestRegistration<UniversalAction, UniversalActionHandler>() };
@@ -62,7 +62,7 @@ public sealed class RegistrationConflictTests
     ///     registrations are composed more than once must still start.
     /// </summary>
     [Fact]
-    public void ShouldAcceptOneHandlerRegisteredTwice()
+    public void ShouldAcceptRegistrationGivenOneHandlerRegisteredTwice()
     {
         // Arrange
         RequestHandlerRegistration[] handlers =
@@ -80,7 +80,7 @@ public sealed class RegistrationConflictTests
 
     /// <summary>Equivalent transport metadata composes idempotently at every runtime boundary.</summary>
     [Fact]
-    public void ShouldAcceptEquivalentTransportDescriptors()
+    public void ShouldAcceptRegistrationGivenEquivalentTransportDescriptors()
     {
         // Arrange
         var first = Transport();
@@ -103,7 +103,7 @@ public sealed class RegistrationConflictTests
 
     /// <summary>Conflicting transport metadata fails before the builder mutates the service collection.</summary>
     [Fact]
-    public void ShouldRejectConflictingTransportDescriptorsAtRegistration()
+    public void ShouldRejectRegistrationGivenConflictingTransportDescriptors()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -126,7 +126,7 @@ public sealed class RegistrationConflictTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ShouldRejectConflictingTransportDescriptorsAtRegistryComposition(bool reverse)
+    public void ShouldRejectRegistryCompositionGivenConflictingTransportDescriptors(bool reverse)
     {
         // Arrange
         var first = Transport();
@@ -148,7 +148,7 @@ public sealed class RegistrationConflictTests
     ///     which is the one ordering the request pipeline actually depends on.
     /// </summary>
     [Fact]
-    public void ShouldRejectUndefinedAuthorizationStageAtRegistryComposition()
+    public void ShouldRejectRegistryCompositionGivenUndefinedAuthorizationStage()
     {
         // Arrange
         RequestAuthorizerRegistration[] authorizers =
@@ -167,7 +167,7 @@ public sealed class RegistrationConflictTests
     ///     mistake is reported where it was made rather than at startup.
     /// </summary>
     [Fact]
-    public void ShouldRejectUndefinedAuthorizationStageAtRegistration()
+    public void ShouldRejectRegistrationGivenUndefinedAuthorizationStage()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -191,7 +191,7 @@ public sealed class RegistrationConflictTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ShouldRejectOnlyConflictingAuthorizerStages(bool conflicting)
+    public void ShouldRejectOnlyConflictingStagesGivenAuthorizerRegistrations(bool conflicting)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -220,7 +220,7 @@ public sealed class RegistrationConflictTests
     ///     authorizer at two stages is refused there too, naming the authorizer.
     /// </summary>
     [Fact]
-    public void ShouldRejectConflictingAuthorizerStagesAtRegistryComposition()
+    public void ShouldRejectRegistryCompositionGivenConflictingAuthorizerStages()
     {
         // Arrange
         RequestAuthorizerRegistration[] authorizers =
@@ -248,7 +248,7 @@ public sealed class RegistrationConflictTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ShouldRejectOnlyConflictingBehaviorOrders(bool conflicting)
+    public void ShouldRejectOnlyConflictingOrdersGivenBehaviorRegistrations(bool conflicting)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -275,7 +275,7 @@ public sealed class RegistrationConflictTests
     ///     Verifies the registry refuses conflicting behavior orders as well, naming the behavior.
     /// </summary>
     [Fact]
-    public void ShouldRejectConflictingBehaviorOrdersAtRegistryComposition()
+    public void ShouldRejectRegistryCompositionGivenConflictingBehaviorOrders()
     {
         // Arrange
         RequestPipelineBehaviorRegistration[] behaviors =
@@ -299,7 +299,7 @@ public sealed class RegistrationConflictTests
     ///     each other's progress — the same hazard workload naming already guards against elsewhere.
     /// </summary>
     [Fact]
-    public void ShouldRejectTwoComponentsClaimingOneWorkloadName()
+    public void ShouldRejectRegistrationGivenTwoComponentsClaimingOneWorkloadName()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -322,7 +322,7 @@ public sealed class RegistrationConflictTests
     ///     rather than the number of components one application can host.
     /// </summary>
     [Fact]
-    public void ShouldAcceptTwoComponentsWithDistinctWorkloadNames()
+    public void ShouldAcceptRegistrationGivenTwoComponentsWithDistinctWorkloadNames()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -342,7 +342,7 @@ public sealed class RegistrationConflictTests
     ///     the registration would produce a workload that fails only once the host first starts it.
     /// </summary>
     [Fact]
-    public void ShouldRejectAbstractComponent()
+    public void ShouldRejectRegistrationGivenAbstractComponent()
     {
         // Arrange
         var services = new ServiceCollection();

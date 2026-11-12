@@ -51,7 +51,7 @@ public sealed class RunnerFaultVisibilityTests
 
     /// <summary>Polling-adjacent lifecycle, checkpoint, retry, and renewal measurements create no spans.</summary>
     [Fact]
-    public void ShouldNeverCreateActivitiesForNonRequestRuntimeLoops()
+    public void ShouldNeverCreateActivitiesGivenNonRequestRuntimeLoops()
     {
         // Arrange
         var activities = new ConcurrentBag<Activity>();

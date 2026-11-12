@@ -20,7 +20,7 @@ public sealed class McpSchemaFidelityTests
     [InlineData("schema.nullable", true)]
     [InlineData("schema.no-result", false)]
     [InlineData("trees.read", true)]
-    public async Task ShouldValidateSuccessfulNullableRecursiveAndNoResultTools(string name, bool structured)
+    public async Task ShouldValidateSuccessGivenNullableRecursiveAndNoResultTools(string name, bool structured)
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -64,7 +64,7 @@ public sealed class McpSchemaFidelityTests
     }
 
     [Fact]
-    public void ShouldKeepProtocolContractsBoundToTheirConfiguredJsonOptions()
+    public void ShouldBindProtocolContractsToConfiguredJsonOptionsGivenCustomOptions()
     {
         // Arrange
         var naming = JsonNamingPolicy.CamelCase;
@@ -87,7 +87,7 @@ public sealed class McpSchemaFidelityTests
     }
 
     [Fact]
-    public void ShouldAttachPropertyDescriptionsUsingFinalJsonTypeInfoNames()
+    public void ShouldAttachPropertyDescriptionsGivenFinalJsonTypeInfoNames()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -112,7 +112,7 @@ public sealed class McpSchemaFidelityTests
     }
 
     [Fact]
-    public void ShouldRejectConverterShapedToolInputBeforeServing()
+    public void ShouldRejectToolInputBeforeServingGivenConverterShapedInput()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -136,7 +136,7 @@ public sealed class McpSchemaFidelityTests
     [InlineData("{\"inherited\":\"custom\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[]}", true)]
     [InlineData("{\"inherited\":\"base\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[2,3],\"choice\":\"Second\",\"note\":null}", true)]
     [InlineData("{\"inherited\":\"base\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[],\"note\":null,\"restricted\":null}", false)]
-    public async Task ShouldAdvertiseTheEffectiveBindingContract(string input, bool valid)
+    public async Task ShouldAdvertiseEffectiveBindingContractGivenConfiguredBinding(string input, bool valid)
     {
         // Arrange
         var probe = new InvocationCount();
@@ -184,7 +184,7 @@ public sealed class McpSchemaFidelityTests
     }
 
     [Fact]
-    public async Task ShouldAdvertiseAndEnforceTheInputContractOverStdio()
+    public async Task ShouldAdvertiseAndEnforceInputContractGivenStdioTransport()
     {
         // Arrange
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;

@@ -3,7 +3,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class HttpAsyncRouteTests
 {
     [Fact]
-    public async Task AsyncDispatchUsesEndpointRouteValuesAndCarriedActorToken()
+    public async Task ShouldUseEndpointRouteValuesAndCarriedActorTokenGivenAsyncDispatch()
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""

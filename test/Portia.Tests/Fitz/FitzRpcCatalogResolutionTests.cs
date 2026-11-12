@@ -15,7 +15,7 @@ public sealed class FitzRpcCatalogResolutionTests
     ///     value that is then thrown away.
     /// </summary>
     [Fact]
-    public async Task ShouldResolveTheTransportCatalogOnceUnderConcurrentRegistration()
+    public async Task ShouldResolveTransportCatalogOnceGivenConcurrentRegistration()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();

@@ -8,7 +8,7 @@ public sealed class OperationalStartAcknowledgementTests
 
     /// <summary>A persisted start can be observed after acknowledgement loss without being appended again.</summary>
     [Fact]
-    public async Task ShouldRecordOneAttemptAfterStartAcknowledgementIsLost()
+    public async Task ShouldRecordOneAttemptGivenLostStartAcknowledgement()
     {
         // Arrange
         var journal = new LostStartAcknowledgementStore();
@@ -29,7 +29,7 @@ public sealed class OperationalStartAcknowledgementTests
 
     /// <summary>A failed journal write that never committed also retries without duplicating its start.</summary>
     [Fact]
-    public async Task ShouldRecordOneAttemptAfterStartWriteFailsBeforeCommit()
+    public async Task ShouldRecordOneAttemptGivenStartWriteFailingBeforeCommit()
     {
         // Arrange
         var journal = new LostStartAcknowledgementStore();
@@ -54,7 +54,7 @@ public sealed class OperationalStartAcknowledgementTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldCompleteReactorAfterStartAcknowledgementLoss(bool loseAcknowledgement)
+    public async Task ShouldCompleteReactorGivenLostStartAcknowledgement(bool loseAcknowledgement)
     {
         // Arrange
         var journal = new LostStartAcknowledgementStore();

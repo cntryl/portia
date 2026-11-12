@@ -27,7 +27,7 @@ public sealed class FitzKvDirectoryProjectionTests(FitzBrokerFixture broker)
     ///     from its cursor; another tenant's list and lookups see only that tenant's teams.
     /// </summary>
     [Fact]
-    public async Task ShouldPageEachTenantsProjectedTeamsInNameOrder()
+    public async Task ShouldPageTeamsInNameOrderGivenProjectedTeamsPerTenant()
     {
         // Arrange
         await using var client = await _broker.CreateClientAsync();
@@ -64,7 +64,7 @@ public sealed class FitzKvDirectoryProjectionTests(FitzBrokerFixture broker)
     ///     rejected rather than silently starting that tenant's page from a foreign key.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectOneTenantsCursorOnAnotherTenantsList()
+    public async Task ShouldRejectCursorGivenCursorFromAnotherTenant()
     {
         // Arrange
         await using var client = await _broker.CreateClientAsync();

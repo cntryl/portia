@@ -9,7 +9,7 @@ public sealed class AwsObjectStorageIntegrationTests
 {
     /// <summary>Runs the reusable storage contract checks against the S3 adapter.</summary>
     [Fact]
-    public async Task ShouldPassSharedConformanceAgainstSqrzl()
+    public async Task ShouldPassSharedConformanceGivenSqrzlS3Server()
     {
         // Arrange
         var endpoint = Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")
@@ -60,7 +60,7 @@ public sealed class AwsObjectStorageIntegrationTests
 
     /// <summary>Checks Sqrzl's conditional PUT and COPY behavior through the configured SDK client.</summary>
     [Fact]
-    public async Task ShouldRejectConditionalOverwriteAgainstSqrzl()
+    public async Task ShouldRejectConditionalOverwriteGivenSqrzlS3Server()
     {
         // Arrange
         var endpoint = Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")
@@ -125,7 +125,7 @@ public sealed class AwsObjectStorageIntegrationTests
 
     /// <summary>Proves signed multipart upload, conditional promotion, tenant buckets, reads, and deletion across hosts.</summary>
     [Fact]
-    public async Task ShouldCompleteInApiAndReadInSeparateWorkerAgainstSqrzl()
+    public async Task ShouldCompleteInApiAndReadInSeparateWorkerGivenSqrzlS3Server()
     {
         // Arrange
         var endpoint = Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")

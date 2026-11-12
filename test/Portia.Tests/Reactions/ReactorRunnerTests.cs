@@ -12,7 +12,7 @@ public sealed class ReactorRunnerTests
     ///     past the last one.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchReadableEventsAndAdvanceCheckpointWhenRun()
+    public async Task ShouldDispatchReadableEventsAndAdvanceCheckpointGivenRun()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -41,7 +41,7 @@ public sealed class ReactorRunnerTests
     ///     Verifies that running with nothing to read leaves the checkpoint unchanged.
     /// </summary>
     [Fact]
-    public async Task ShouldKeepCheckpointWhenNothingIsReadable()
+    public async Task ShouldKeepCheckpointGivenNothingIsReadable()
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -60,7 +60,7 @@ public sealed class ReactorRunnerTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public async Task ShouldNameLegacyBatchSizeParameterWhenRejected(int maxBatchSize)
+    public async Task ShouldNameLegacyBatchSizeParameterGivenRejected(int maxBatchSize)
     {
         // Arrange
         var runner = new ReactorRunner(new InMemoryEventStore());
@@ -77,7 +77,7 @@ public sealed class ReactorRunnerTests
 
     /// <summary>The options entry point bounds a pass and resumes from durable progress.</summary>
     [Fact]
-    public async Task ShouldBoundPassAndResumeWithOptionsEntryPoint()
+    public async Task ShouldBoundPassAndResumeGivenOptionsEntryPoint()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -104,7 +104,7 @@ public sealed class ReactorRunnerTests
 
     /// <summary>A batch reactor cannot enumerate beyond a pass budget smaller than its batch.</summary>
     [Fact]
-    public async Task ShouldBoundBatchPassWithoutReadingAheadAndResume()
+    public async Task ShouldBoundPassAndResumeGivenBatchWithoutReadingAhead()
     {
         // Arrange
         var store = await StoreValuesAsync(1, 2, 3);
@@ -128,7 +128,7 @@ public sealed class ReactorRunnerTests
 
     /// <summary>A batch reactor saves full and partial batches at a non-divisible pass budget.</summary>
     [Fact]
-    public async Task ShouldCommitPartialBatchAtNonDivisiblePassBudgetAndResume()
+    public async Task ShouldCommitPartialBatchAndResumeGivenNonDivisiblePassBudget()
     {
         // Arrange
         var store = await StoreValuesAsync(1, 2, 3, 4, 5, 6);
@@ -152,7 +152,7 @@ public sealed class ReactorRunnerTests
 
     /// <summary>Actor snapshots exposed by one reaction cannot mutate another reaction in the same pass.</summary>
     [Fact]
-    public async Task ShouldIsolateExposedActorsAcrossOnePass()
+    public async Task ShouldIsolateExposedActorsGivenOnePass()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -176,11 +176,11 @@ public sealed class ReactorRunnerTests
     ///     <see cref="IProjectionCheckpointStore" /> passed to <c>ReactorRunner.RunAsync</c>):
     ///     a failure partway through a pass returns no checkpoint at all, and a subsequent retry
     ///     re-reacts to every event already successfully handled earlier in that same pass. See
-    ///     <see cref="ShouldOnlyReprocessCurrentBatchWhenCheckpointStoreIsSuppliedAndMidPassFailureOccurs" />
+    ///     <see cref="ShouldOnlyReprocessCurrentBatchGivenCheckpointStoreIsSuppliedAndMidPassFailureOccurs" />
     ///     for the bounded version of this same scenario.
     /// </summary>
     [Fact]
-    public async Task ShouldReprocessAlreadyHandledEventsOnRetryAfterMidPassFailure()
+    public async Task ShouldReprocessHandledEventsOnRetryGivenMidPassFailure()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -224,7 +224,7 @@ public sealed class ReactorRunnerTests
     ///     events 3-4, never events 1-2 again.
     /// </summary>
     [Fact]
-    public async Task ShouldOnlyReprocessCurrentBatchWhenCheckpointStoreIsSuppliedAndMidPassFailureOccurs()
+    public async Task ShouldOnlyReprocessCurrentBatchGivenCheckpointStoreIsSuppliedAndMidPassFailureOccurs()
     {
         // Arrange
         var id = Uuid.CreateVersion4();

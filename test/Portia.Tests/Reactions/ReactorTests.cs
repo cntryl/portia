@@ -12,7 +12,7 @@ public sealed class ReactorTests
     ///     another aggregate through the aggregate repository.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchAsyncHandlerAndRaiseCommandThroughRepository()
+    public async Task ShouldDispatchAsyncHandlerAndRaiseCommandGivenRepository()
     {
         // Arrange
         var sourceId = Uuid.CreateVersion4();
@@ -33,7 +33,7 @@ public sealed class ReactorTests
     ///     Verifies that a reactor dispatches to the handler matching its event type.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchMatchingHandler()
+    public async Task ShouldDispatchHandlerGivenMatchingEventType()
     {
         // Arrange
         var repository = new RecordingAggregateRepository();
@@ -54,7 +54,7 @@ public sealed class ReactorTests
     ///     handler interfaces) is exactly how that's supposed to work.
     /// </summary>
     [Fact]
-    public async Task ShouldSkipUnhandledEventType()
+    public async Task ShouldSkipEventGivenUnhandledEventType()
     {
         // Arrange
         var repository = new RecordingAggregateRepository();

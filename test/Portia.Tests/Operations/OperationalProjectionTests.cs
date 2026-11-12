@@ -8,7 +8,7 @@ public sealed partial class OperationalProjectionTests
 
     /// <summary>A confirmed commit followed by cleanup failure resumes without reapplying any event.</summary>
     [Fact]
-    public async Task ShouldResumeConfirmedProjectionWithoutReplayingCleanupFailure()
+    public async Task ShouldResumeWithoutReplayGivenConfirmedProjectionAndCleanupFailure()
     {
         // Arrange
         var journal = new MemoryOperationalStore();
@@ -40,7 +40,7 @@ public sealed partial class OperationalProjectionTests
 
     /// <summary>A lost separate confirmation never causes a native projection checkpoint to rewind.</summary>
     [Fact]
-    public async Task ShouldReloadAuthoritativeProgressAfterLostProjectionConfirmation()
+    public async Task ShouldReloadAuthoritativeProgressGivenLostProjectionConfirmation()
     {
         // Arrange
         var journal = new MemoryOperationalStore();

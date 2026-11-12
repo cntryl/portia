@@ -35,7 +35,7 @@ public sealed class GeneratorShapeTests
     }
 
     [Fact]
-    public void ShouldDiscoverAnExternalAnnotatedTransportMarker()
+    public void ShouldDiscoverTransportMarkerGivenExternalAnnotatedMarker()
     {
         // Arrange
         const string source = """
@@ -349,7 +349,7 @@ public sealed class GeneratorShapeTests
     }
 
     [Fact]
-    public void ShouldExcludeOpenGenericDomainEventFromAddPortiaRegistration()
+    public void ShouldExcludeDomainEventFromAddPortiaRegistrationGivenOpenGenericDomainEvent()
     {
         // Arrange
         const string source = """
@@ -411,7 +411,7 @@ public sealed class GeneratorShapeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task EveryImplementedRequestInterfaceDispatchesAndPartialDeclarationsAreUnique(bool partial)
+    public async Task ShouldDispatchEveryRequestInterfaceGivenImplementedInterfacesAndPartialDeclarations(bool partial)
     {
         // Arrange
         var extra = partial ? "public partial class Handler { }" : "";

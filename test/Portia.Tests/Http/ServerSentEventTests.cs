@@ -33,7 +33,7 @@ public sealed class ServerSentEventTests : IAsyncDisposable
     ///     to become its own <c>data:</c> field, for all three line-break forms.
     /// </summary>
     [Fact]
-    public async Task ShouldFrameEachLineOfAMultiLinePayloadSeparately()
+    public async Task ShouldFrameEachLineSeparatelyGivenMultiLinePayload()
     {
         // Arrange
         var client = await StartAsync(TimeSpan.FromSeconds(30));
@@ -52,7 +52,7 @@ public sealed class ServerSentEventTests : IAsyncDisposable
     ///     browsers between it and the caller will reclaim a connection they consider dead.
     /// </summary>
     [Fact]
-    public async Task ShouldSendKeepAliveCommentsWhileTheStreamIsIdle()
+    public async Task ShouldSendKeepAliveCommentsGivenIdleStream()
     {
         // Arrange
         var client = await StartAsync(TimeSpan.FromMilliseconds(50));
@@ -68,7 +68,7 @@ public sealed class ServerSentEventTests : IAsyncDisposable
 
     /// <summary>The comment stream is disabled by configuration, for a caller that does not want it.</summary>
     [Fact]
-    public async Task ShouldNotSendKeepAliveCommentsWhenDisabled()
+    public async Task ShouldNotSendKeepAliveCommentsGivenDisabled()
     {
         // Arrange
         var client = await StartAsync(null);
@@ -90,7 +90,7 @@ public sealed class ServerSentEventTests : IAsyncDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldStopAnIdleSourceWhenAKeepAliveWriteFails(bool throwingCallback)
+    public async Task ShouldStopAnIdleSourceGivenAKeepAliveWriteFails(bool throwingCallback)
     {
         // Arrange
         var services = new ServiceCollection()

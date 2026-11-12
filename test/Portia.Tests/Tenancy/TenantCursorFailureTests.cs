@@ -10,7 +10,7 @@ public sealed class TenantCursorFailureTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldRetryLifecycleRecordAfterExtractorFailure(bool removal)
+    public async Task ShouldRetryLifecycleRecordGivenExtractorFailure(bool removal)
     {
         // Arrange
         var events = new InMemoryEventStore();
@@ -49,7 +49,7 @@ public sealed class TenantCursorFailureTests
 
     /// <summary>Repeated failures keep the same removal pending and preserve the following addition.</summary>
     [Fact]
-    public async Task ShouldResumeOrderedLifecycleAfterRepeatedExtractionFailures()
+    public async Task ShouldResumeOrderedLifecycleGivenRepeatedExtractionFailures()
     {
         // Arrange
         var events = new InMemoryEventStore();
@@ -81,7 +81,7 @@ public sealed class TenantCursorFailureTests
 
     /// <summary>A subscription cleanup fault must release the cursor's enumeration reservation.</summary>
     [Fact]
-    public async Task ShouldResumeCursorAfterSubscriptionDisposalFails()
+    public async Task ShouldResumeCursorGivenSubscriptionDisposalFailure()
     {
         // Arrange
         var events = new InMemoryEventStore();
@@ -106,7 +106,7 @@ public sealed class TenantCursorFailureTests
 
     /// <summary>The same cursor resumes normally after successful subscription disposal.</summary>
     [Fact]
-    public async Task ShouldResumeCursorAfterOrdinarySubscriptionDisposal()
+    public async Task ShouldResumeCursorGivenOrdinarySubscriptionDisposal()
     {
         // Arrange
         var events = new InMemoryEventStore();
@@ -127,7 +127,7 @@ public sealed class TenantCursorFailureTests
 
     /// <summary>The cursor stays reserved during cleanup and becomes reusable even when cleanup then faults.</summary>
     [Fact]
-    public async Task ShouldReserveCursorUntilFaultedSubscriptionCleanupCompletes()
+    public async Task ShouldReserveCursorGivenFaultedSubscriptionCleanupPending()
     {
         // Arrange
         var events = new InMemoryEventStore();

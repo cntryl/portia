@@ -93,7 +93,7 @@ public sealed class McpRegistrationTests
     static readonly int[] MalformedInputValues = [1];
 
     [Fact]
-    public void ShouldAddToolToExistingApplicationBuilder()
+    public void ShouldAddToolGivenExistingApplicationBuilder()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -119,7 +119,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldUseExplicitToolDescriptionOverGeneratedRequestSummary()
+    public void ShouldUseExplicitDescriptionGivenGeneratedRequestSummary()
     {
         // Arrange
         const string explicitDescription = "Uses the caller-provided description.";
@@ -137,7 +137,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldGeneratePropertyDescriptionsUsingJsonContractNames()
+    public void ShouldGeneratePropertyDescriptionsGivenJsonContractNames()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -155,7 +155,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldGeneratePropertyDescriptionsFromInheritedRequestMembers()
+    public void ShouldGeneratePropertyDescriptionsGivenInheritedRequestMembers()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -174,7 +174,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldRenderXmlReferencesAndResolveInheritedDocumentation()
+    public void ShouldRenderXmlReferencesGivenInheritedDocumentation()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -200,7 +200,7 @@ public sealed class McpRegistrationTests
     [InlineData("bad/name")]
     [InlineData("not a tool")]
     [InlineData("tøøl")]
-    public void ShouldRejectInvalidMcpToolNames(string name)
+    public void ShouldRejectToolNameGivenInvalidName(string name)
     {
         // Arrange
         var application = new ServiceCollection().AddPortia()
@@ -216,7 +216,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldRejectMcpToolNamesLongerThan128Characters()
+    public void ShouldRejectToolNameGivenMoreThan128Characters()
     {
         // Arrange
         var application = new ServiceCollection().AddPortia()
@@ -231,7 +231,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldRejectInvalidDiscriminatorAsMcpToolName()
+    public void ShouldRejectToolGivenInvalidDiscriminatorAsName()
     {
         // Arrange
         var application = new ServiceCollection().AddPortia()
@@ -245,7 +245,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldRewriteResultSchemaReferencesInsideObjectEnvelope()
+    public void ShouldRewriteSchemaReferencesGivenResultInsideObjectEnvelope()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -264,7 +264,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldGenerateFallbackForRequestFromContractsAssemblyWithoutDocumentation()
+    public void ShouldGenerateFallbackDescriptionGivenContractsRequestWithoutDocumentation()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -282,7 +282,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldMapHttpFromSharedToolDeclarations()
+    public async Task ShouldMapHttpGivenSharedToolDeclarations()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -304,7 +304,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldDiscoverAndInvokeToolOverStreamableHttp()
+    public async Task ShouldDiscoverAndInvokeToolGivenStreamableHttp()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -341,7 +341,7 @@ public sealed class McpRegistrationTests
     ///     rule, trusting exactly the origins the application's CORS pipeline allows.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectCrossOriginMcpRequestsUnlessCorsAllowsTheOrigin()
+    public async Task ShouldRejectRequestGivenCrossOriginUnlessCorsAllowsOrigin()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -374,7 +374,7 @@ public sealed class McpRegistrationTests
     ///     rule accepts it; ASP.NET Core host filtering is what refuses a host the application does not serve.
     /// </summary>
     [Fact]
-    public async Task ShouldLeaveDnsRebindingToAspNetCoreHostFiltering()
+    public async Task ShouldLeaveDnsRebindingToHostFilteringGivenAspNetCoreAllowedHosts()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -424,7 +424,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldRejectConflictingDeclarations()
+    public void ShouldRejectDeclarationGivenConflictingToolDeclarations()
     {
         // Arrange
         var application = new ServiceCollection().AddPortia()
@@ -440,7 +440,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldRejectConflictingPropertyDescriptionsInDuplicateDeclarations()
+    public void ShouldRejectDuplicateGivenConflictingPropertyDescriptions()
     {
         // Arrange
         var application = new ServiceCollection().AddPortia()
@@ -457,7 +457,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldRejectEmptyTransportActivation()
+    public void ShouldRejectTransportActivationGivenNoMcpDeclarations()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -483,7 +483,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldRequireExplicitStdioActorPolicyAndAllowScopedProviders()
+    public void ShouldRequireExplicitActorPolicyGivenStdioWithoutProviderAndAllowScopedProvider()
     {
         // Arrange
         var missingActor = new ServiceCollection().AddPortia()
@@ -506,7 +506,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldApplyPortiaHttpRequestBodyLimitToMcpEndpoint()
+    public void ShouldApplyBodyLimitGivenPortiaHttpMaxJsonBodyBytes()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -528,7 +528,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldRejectStatefulHttpConfigurationFromTransportCallback()
+    public void ShouldRejectStatefulHttpGivenStatefulTransportCallback()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -549,7 +549,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldRejectStatefulHttpConfigurationAtStartupWithoutMappedEndpoint()
+    public async Task ShouldRejectStatefulHttpAtStartupGivenNoMappedEndpoint()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -569,7 +569,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public void ShouldRejectStatefulHttpConfigurationRegisteredAfterPortia()
+    public void ShouldRejectStatefulHttpGivenConfigurationRegisteredAfterPortia()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -590,7 +590,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldAllowSafeHttpTransportConfiguration()
+    public async Task ShouldAllowHttpTransportGivenSafeConfiguration()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -618,7 +618,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldRejectExposedRequestWithoutHandlerBeforeServing()
+    public async Task ShouldRejectStartupGivenExposedRequestWithoutHandler()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -638,7 +638,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldMapExpectedBusinessFailureAsPortiaToolFailure()
+    public async Task ShouldMapToolFailureGivenExpectedBusinessFailure()
     {
         // Arrange
         var stopped = new ConcurrentQueue<Activity>();
@@ -674,7 +674,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldReportPostDispatchJsonExceptionAsInternalAndRecordTheFault()
+    public async Task ShouldReportInternalErrorAndRecordFaultGivenPostDispatchJsonException()
     {
         // Arrange
         var probe = new MutationProbe();
@@ -715,7 +715,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldNotClassifyUnrelatedActorExceptionAsUnauthorized()
+    public async Task ShouldNotClassifyAsUnauthorizedGivenUnrelatedActorException()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -740,7 +740,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldRecordInvalidToolArgumentsAsValidation()
+    public async Task ShouldRecordValidationGivenInvalidToolArguments()
     {
         // Arrange
         var stopped = new ConcurrentQueue<Activity>();
@@ -772,7 +772,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldBindNestedObjectArrayScalarAndNullArgumentsWithRegisteredMetadata()
+    public async Task ShouldBindArgumentsGivenNestedObjectArrayScalarAndNullWithRegisteredMetadata()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -814,7 +814,7 @@ public sealed class McpRegistrationTests
     ///     metadata instead, where clients read them without validating against the schema.
     /// </summary>
     [Fact]
-    public async Task ShouldKeepFailuresOfResultBearingToolsConformantToTheirOutputSchema()
+    public async Task ShouldConformToOutputSchemaGivenFailureOfResultBearingTool()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -846,7 +846,7 @@ public sealed class McpRegistrationTests
         JsonSerializer.SerializeToElement(result.Meta?["portia/error"]);
 
     [Fact]
-    public async Task ShouldRejectMalformedNestedInputBeforeResolvingActorOrInvokingHandler()
+    public async Task ShouldRejectInputBeforeResolvingActorOrInvokingHandlerGivenMalformedNestedInput()
     {
         // Arrange
         var actor = new CountingActorProvider();
@@ -882,7 +882,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldMapCommitConcurrencyToSafeTransientConflictWithoutRetry()
+    public async Task ShouldMapToTransientConflictWithoutRetryGivenCommitConcurrency()
     {
         // Arrange
         var probe = new ConcurrencyProbe();
@@ -936,7 +936,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldUseHttpPrincipalAsPortiaActor()
+    public async Task ShouldUsePortiaActorGivenHttpPrincipal()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -969,7 +969,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldNotConsultStdioActorProviderForAnonymousHttpCaller()
+    public async Task ShouldNotConsultStdioActorProviderGivenAnonymousHttpCaller()
     {
         // Arrange
         var actor = new NamedActorProvider("provider-actor");
@@ -996,7 +996,7 @@ public sealed class McpRegistrationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldRejectMissingOrNullNonNullableArgumentAsBinding(bool explicitNull)
+    public async Task ShouldRejectAsBindingGivenMissingOrNullNonNullableArgument(bool explicitNull)
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -1023,7 +1023,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldBindOmittedNullableArgumentAsNull()
+    public async Task ShouldBindNullGivenOmittedNullableArgument()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -1055,7 +1055,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldRequireHttpAuthenticationByDefault()
+    public async Task ShouldRequireHttpAuthenticationGivenDefaultConfiguration()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -1081,7 +1081,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldComposeWithAspNetAuthorization()
+    public async Task ShouldComposeWithAuthorizationGivenAspNetAuthorization()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -1108,7 +1108,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldDiscoverAndInvokeToolFromExternalStdioHost()
+    public async Task ShouldDiscoverAndInvokeToolGivenExternalStdioHost()
     {
         // Arrange
         var host = StdioHostPath();
@@ -1138,7 +1138,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldKeepStdioProtocolStdoutFreeOfLogLines()
+    public async Task ShouldKeepStdoutFreeOfLogLinesGivenStdioProtocol()
     {
         // Arrange
         var host = StdioHostPath();
@@ -1221,7 +1221,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldPropagateClientCancellationToHandler()
+    public async Task ShouldCancelHandlerGivenClientCancellation()
     {
         // Arrange
         var probe = new CancellationProbe();
@@ -1255,7 +1255,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldCreateFreshBoundedReceiveAndExecuteActivities()
+    public async Task ShouldCreateFreshBoundedActivitiesGivenReceiveAndExecute()
     {
         // Arrange
         var stopped = new ConcurrentQueue<Activity>();
@@ -1296,7 +1296,7 @@ public sealed class McpRegistrationTests
     }
 
     [Fact]
-    public async Task ShouldKeepTelemetryKeyedByDiscriminatorWhenToolIsRenamed()
+    public async Task ShouldKeyTelemetryByDiscriminatorGivenRenamedTool()
     {
         // Arrange
         var stopped = new ConcurrentQueue<Activity>();
