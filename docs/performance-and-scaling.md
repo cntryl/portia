@@ -264,8 +264,6 @@ after a handler returns. Single-event dispatch remains a direct typed switch. Or
 for handlers or values no longer disable referenced-event name filtering across the compilation;
 event aliases are resolved once, with conservative handling of namespace and unresolved aliases.
 
-Use `bench/Portia.CompilerBenchmarks` for all generators, unchanged inputs, unrelated edits,
-contract changes, and referenced-assembly changes. Use `ProcessorDispatchBenchmarks`,
-`ReactorDispatchBenchmarks`, `HttpBindingBenchmarks`, and `RequestDispatchBenchmarks` for the
-runtime paths. Source size and allocation counts are separate from timing distributions; a short
+Use `ProcessorDispatchBenchmarks`, `ReactorDispatchBenchmarks`, `HttpBindingBenchmarks`, and
+`RequestDispatchBenchmarks` for the runtime paths. Source size and allocation counts are separate from timing distributions; a short
 local benchmark is not a release performance guarantee.

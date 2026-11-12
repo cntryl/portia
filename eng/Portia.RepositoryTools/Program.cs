@@ -16,11 +16,7 @@ static class Program
         {
             return args[0] switch
             {
-                "resolve-json-generator" => CompilerCampaign.ResolveJsonGenerator(args),
-                "compiler-build-campaign" => CompilerCampaign.BuildCampaignAsync(args).GetAwaiter().GetResult(),
-                "compiler-merge-campaign" => CompilerCampaign.MergeCampaign(args),
                 "verify-stable-dependencies" => DependencyVerifier.Verify(args),
-                "verify-packed-compiler" => PackedCompilerVerifier.VerifyAsync(args).GetAwaiter().GetResult(),
                 "fix-application-structure" => ApplicationStructureCommand.RunAsync(args).GetAwaiter().GetResult(),
                 _ => UnknownCommand(args[0])
             };
@@ -42,11 +38,7 @@ static class Program
     static void PrintUsage()
     {
         Console.WriteLine("Portia repository tools:");
-        Console.WriteLine("  resolve-json-generator <resolved-analyzers.json>");
-        Console.WriteLine("  compiler-build-campaign <evidence-directory> [repetitions]");
-        Console.WriteLine("  compiler-merge-campaign <evidence-directory> <repetitions>");
         Console.WriteLine("  verify-stable-dependencies [--root <repository-root>]");
-        Console.WriteLine("  verify-packed-compiler --version <package-version> --packages <package-directory>");
         Console.WriteLine("  fix-application-structure --solution <path.sln|path.slnx>");
     }
 }
