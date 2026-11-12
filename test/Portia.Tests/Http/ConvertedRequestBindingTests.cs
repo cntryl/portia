@@ -14,9 +14,13 @@ public sealed class ConvertedRequestBindingTests
     [Fact]
     public void ShouldRequireChildMetadataGivenConvertedRequestRootOnly()
     {
+        // Arrange
         var context = new ConvertedRequestRootOnlyJsonContext(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        // Act
         using var document = JsonDocument.Parse("""{"body":{"amount":42}}""");
 
+        // Assert
         Assert.NotNull(context.GetTypeInfo(typeof(ConvertedHttpRequest)));
         Assert.Null(context.GetTypeInfo(typeof(ConvertedHttpBody)));
         Assert.Throws<NotSupportedException>(() =>
@@ -28,6 +32,7 @@ public sealed class ConvertedRequestBindingTests
     [Fact]
     public async Task ShouldBindConvertedRequestGivenExplicitChildMetadata()
     {
+        // Arrange
         var observed = new ConvertedHttpObservation();
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
@@ -39,8 +44,10 @@ public sealed class ConvertedRequestBindingTests
         using var client = app.GetTestClient();
         using var content = new StringContent("""{"body":{"amount":42}}""", Encoding.UTF8, "application/json");
 
+        // Act
         using var response = await client.PostAsync("/converted", content);
 
+        // Assert
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(new ConvertedHttpBody(42), observed.Body);
     }

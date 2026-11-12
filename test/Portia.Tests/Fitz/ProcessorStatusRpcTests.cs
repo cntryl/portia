@@ -10,10 +10,14 @@ public sealed class ProcessorStatusRpcTests
     [Fact]
     public void ShouldKeepProcessorStatusSeparateFromGeneralRequestWorkerSelection()
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia();
         ProcessorStatusRegistration.Add(application);
+
+        // Act
         var fitz = new PortiaFitzBuilder(application);
 
+        // Assert
         Assert.Empty(fitz.Workers);
     }
 
@@ -21,11 +25,15 @@ public sealed class ProcessorStatusRpcTests
     [Fact]
     public void ShouldShareStatusNamespaceWithApplicationFleetConfiguration()
     {
+        // Arrange
         var fleet = new PortiaFitzBuilder(new ServiceCollection().AddPortia());
         _ = fleet.UseFleet(new FleetRunOptions { MembershipSelector = "lease://accounts/portia-members/*" });
         var explicitNamespace = new PortiaFitzBuilder(new ServiceCollection().AddPortia());
+
+        // Act
         _ = explicitNamespace.UseProcessorStatusRpc("accounts");
 
+        // Assert
         Assert.Equal(fleet.ProcessorStatusNamespace, explicitNamespace.ProcessorStatusNamespace);
         Assert.Equal(FitzProcessorStatusRoutes.Route(fleet.ProcessorStatusNamespace, new WorkloadIdentity("balances")),
             FitzProcessorStatusRoutes.Route(explicitNamespace.ProcessorStatusNamespace, new WorkloadIdentity("balances")));
@@ -35,9 +43,13 @@ public sealed class ProcessorStatusRpcTests
     [Fact]
     public void ShouldAddressExactApplicationProcessorAndTenantWithoutRestrictingComponentNames()
     {
+        // Arrange
         var workload = new WorkloadIdentity("account balances / \u03b1", new TenantId("tenant-a"));
+
+        // Act
         var route = FitzProcessorStatusRoutes.Route("application-a", workload);
 
+        // Assert
         Assert.Equal(route, FitzProcessorStatusRoutes.Route("application-a", workload));
         Assert.NotEqual(route, FitzProcessorStatusRoutes.Route("application-b", workload));
         Assert.NotEqual(route, FitzProcessorStatusRoutes.Route("application-a",
@@ -51,6 +63,7 @@ public sealed class ProcessorStatusRpcTests
     [Fact]
     public async Task ShouldLeaveStatusRpcDormantOutsideWorkloadOwnership()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddPortia();
         ProcessorStatusRegistration.Add(services.AddPortia());
@@ -62,8 +75,11 @@ public sealed class ProcessorStatusRpcTests
         var server = new FitzRpcRequestServer(rpc, provider.GetRequiredService<IServiceScopeFactory>(), catalog);
         await using var registrations = await server.RegisterRequestsAsync();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer, catalog);
+
+        // Act
         var client = new FitzProcessorStatusClient(sender, () => "application");
 
+        // Assert
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await client.GetAsync("balances"));
     }
 
@@ -74,6 +90,7 @@ public sealed class ProcessorStatusRpcTests
     [InlineData("balances", null)]
     public async Task ShouldRejectRequestThatDoesNotBelongToConcreteEndpoint(string processor, string? tenant)
     {
+        // Arrange
         var services = new ServiceCollection();
         ProcessorStatusRegistration.Add(services.AddPortia());
         // A mismatched body must be rejected by the endpoint before authorizing or executing
@@ -96,9 +113,11 @@ public sealed class ProcessorStatusRpcTests
                 && request.Tenant == identity.Tenant?.Value, default);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer, catalog);
 
+        // Act
         var result = await sender.SendAsync<GetProcessorStatus, ProcessorStatus>(
             new GetProcessorStatus(processor, tenant), FitzProcessorStatusRoutes.Values("application", identity), "actor");
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Validation, result.Error.Kind);
     }
@@ -110,6 +129,7 @@ public sealed class ProcessorStatusRpcTests
     [InlineData(true)]
     public async Task ShouldRejectStaleCallbackWhenNativeWithdrawalFails(bool cancelOwnership)
     {
+        // Arrange
         var services = new ServiceCollection();
         var handler = new CountingStatusHandler();
         _ = services.AddSingleton(handler);
@@ -138,7 +158,11 @@ public sealed class ProcessorStatusRpcTests
         var server = new FitzRpcRequestServer(rpc, provider.GetRequiredService<IServiceScopeFactory>(), catalog);
         owned.Attach(await server.RegisterAsync<GetProcessorStatus, ProcessorStatus>(route, owned.Accepts, default));
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer, catalog);
+
+        // Act
         var client = new FitzProcessorStatusClient(sender, () => "application");
+
+        // Assert
         Assert.True((await client.GetAsync(identity.Name, actorToken: "actor")).IsSuccess);
         Assert.Equal(1, handler.Calls);
 
@@ -163,6 +187,7 @@ public sealed class ProcessorStatusRpcTests
     [Fact]
     public async Task ShouldReacquireEndpointAfterFailedNativeWithdrawal()
     {
+        // Arrange
         var clock = new ManualTestClock();
         var services = new ServiceCollection();
         var handler = new CountingStatusHandler();
@@ -190,7 +215,11 @@ public sealed class ProcessorStatusRpcTests
             catalog, () => "application", timeProvider: clock);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer, catalog);
         var client = new FitzProcessorStatusClient(sender, () => "application");
+
+        // Act
         var first = await registrar.RegisterAsync(identity);
+
+        // Assert
         Assert.True((await client.GetAsync(identity.Name, actorToken: "actor")).IsSuccess);
         await first.DisposeAsync();
         Assert.Equal(1, rpc.FailedWithdrawals);
@@ -207,6 +236,7 @@ public sealed class ProcessorStatusRpcTests
     [Fact]
     public async Task ShouldWithdrawRetainedEndpointWithoutReacquiringWorkload()
     {
+        // Arrange
         var (services, handler) = CountingStatusServices();
         await using var provider = services.BuildServiceProvider();
         await using var rpc = new RetainedRpcClient { AllowWithdrawalAfterFailure = true };
@@ -217,7 +247,11 @@ public sealed class ProcessorStatusRpcTests
             provider.GetRequiredService<IServiceScopeFactory>(), catalog, () => "application");
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer, catalog);
         var client = new FitzProcessorStatusClient(sender, () => "application");
+
+        // Act
         var endpoint = await registrar.RegisterAsync(identity);
+
+        // Assert
         Assert.True((await client.GetAsync(identity.Name, actorToken: "actor")).IsSuccess);
 
         await endpoint.DisposeAsync();
@@ -234,6 +268,7 @@ public sealed class ProcessorStatusRpcTests
     [Fact]
     public async Task ShouldShareOneFinalWithdrawalBudgetAcrossRetainedEndpoints()
     {
+        // Arrange
         var (services, _) = CountingStatusServices();
         await using var provider = services.BuildServiceProvider();
         var clock = new ManualTestClock();
@@ -244,7 +279,11 @@ public sealed class ProcessorStatusRpcTests
         var first = await registrar.RegisterAsync(new WorkloadIdentity("first"));
         var second = await registrar.RegisterAsync(new WorkloadIdentity("second"));
         await first.DisposeAsync();
+
+        // Act
         await second.DisposeAsync();
+
+        // Assert
         Assert.Equal(2, rpc.InitialFailures);
         rpc.BlockWithdrawals = true;
 

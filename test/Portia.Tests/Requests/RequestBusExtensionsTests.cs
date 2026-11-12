@@ -13,11 +13,14 @@ public sealed class RequestBusExtensionsTests
     [Fact]
     public async Task ShouldPreserveReactionCausalityWhenReactionCommandSucceeds()
     {
+        // Arrange
         var source = CreateReactionContext();
         var bus = new RecordingRequestBus(Result.Success);
 
+        // Act
         await bus.SendReactionAsync(new ClockProbe(), source);
 
+        // Assert
         Assert.NotNull(bus.Context);
         Assert.Equal(source.CorrelationId, bus.Context.CorrelationId);
         Assert.Equal(source.CauseId, bus.Context.CausationId);
@@ -28,11 +31,14 @@ public sealed class RequestBusExtensionsTests
     [Fact]
     public async Task ShouldReturnReactionCommandFailureGivenFailedCommandResult()
     {
+        // Arrange
         var error = new RequestError(RequestErrorKind.Conflict, "account is closed");
         var bus = new RecordingRequestBus(Result.Failure(error));
 
+        // Act
         var result = await bus.SendReactionAsync(new ClockProbe(), CreateReactionContext());
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Same(error, result.Error);
     }
@@ -47,6 +53,7 @@ public sealed class RequestBusExtensionsTests
     [Fact]
     public async Task ShouldStampExecutionStartFromTheRegisteredTimeProvider()
     {
+        // Arrange
         var clock = new FixedClock(new DateTimeOffset(2031, 4, 5, 6, 7, 8, TimeSpan.Zero));
         var handler = new ClockProbeHandler();
 
@@ -57,8 +64,11 @@ public sealed class RequestBusExtensionsTests
         await using var provider = services.BuildServiceProvider(
             new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         await using var scope = provider.CreateAsyncScope();
+
+        // Act
         var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
 
+        // Assert
         Assert.True((await bus.SendAsync(new ClockProbe(), RequestActor.System)).IsSuccess);
         Assert.Equal(clock.GetUtcNow(), handler.StartedAt);
 

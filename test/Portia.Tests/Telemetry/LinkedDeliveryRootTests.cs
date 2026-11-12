@@ -14,6 +14,7 @@ public sealed class LinkedDeliveryRootTests
     [Fact]
     public void ShouldSampleWireParentsAsRemoteAndSdkParentsAsLocal()
     {
+        // Arrange
         var exported = new List<Activity>();
         var services = new ServiceCollection();
         _ = services.AddOpenTelemetry().WithPortia().WithTracing(tracing => tracing
@@ -23,7 +24,11 @@ public sealed class LinkedDeliveryRootTests
             .AddInMemoryExporter(exported));
         using var provider = services.BuildServiceProvider();
         var tracer = provider.GetRequiredService<TracerProvider>();
+
+        // Act
         var propagated = new RequestTraceContext(Parent);
+
+        // Assert
         using (var received = PortiaTelemetry.StartProcess("remote.rpc", new RpcInvocation("rpc://test"), propagated))
             Assert.True(received?.Recorded);
         using (var local = PortiaTelemetry.StartProcess("local.sdk", new RpcInvocation("rpc://test"), propagated,
@@ -39,6 +44,7 @@ public sealed class LinkedDeliveryRootTests
     [InlineData(false)]
     public void ShouldUseRootSamplingForLinkedDelivery(bool sampleRoot)
     {
+        // Arrange
         var exported = new List<Activity>();
         var services = new ServiceCollection();
         services.AddOpenTelemetry().WithPortia().WithTracing(tracing => tracing
@@ -47,7 +53,11 @@ public sealed class LinkedDeliveryRootTests
         using var provider = services.BuildServiceProvider();
         var tracer = provider.GetRequiredService<TracerProvider>();
         using var caller = new Activity("sampled-unrelated-caller").SetIdFormat(ActivityIdFormat.W3C).Start();
+
+        // Act
         caller.ActivityTraceFlags = ActivityTraceFlags.Recorded;
+
+        // Assert
         using (var process = PortiaTelemetry.StartProcess("linked.sampling", new QueueInvocation("queue://test", 1),
                    new RequestTraceContext(Parent)))
         {
@@ -73,6 +83,7 @@ public sealed class LinkedDeliveryRootTests
     [InlineData("schedule", "invalid")]
     public async Task ShouldCreateIndependentLinkedRootsAndRestoreAmbient(string transport, string propagation)
     {
+        // Arrange
         using var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == PortiaTelemetry.SourceName,
@@ -93,7 +104,11 @@ public sealed class LinkedDeliveryRootTests
             "invalid" => new RequestTraceContext("invalid-secret-trace-field"),
             _ => null
         };
+
+        // Act
         var traces = new HashSet<ActivityTraceId>();
+
+        // Assert
         for (var attempt = 0; attempt < 2; attempt++)
         {
             using (var process = PortiaTelemetry.StartProcess("linked.delivery", invocation, context))

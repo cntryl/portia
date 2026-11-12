@@ -9,6 +9,7 @@ public sealed class FitzKvProjectionOverlapTests
     [Fact]
     public async Task ShouldKeepDomainWritesWithTheirCheckpointWhenBeginCallsOverlap()
     {
+        // Arrange
         var client = new GatedKvClient();
         var repository = new OverlapRepository(client);
         var first = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("first", "orders"));
@@ -16,7 +17,11 @@ public sealed class FitzKvProjectionOverlapTests
         var firstOpen = repository.BeginAsync(new ProjectionBatchContext(first, ProjectionCheckpoint.Start)).AsTask();
         await client.FirstArrived.Task.WaitAsync(TimeSpan.FromSeconds(5));
         var secondOpen = repository.BeginAsync(new ProjectionBatchContext(second, ProjectionCheckpoint.Start)).AsTask();
+
+        // Act
         _ = await Task.WhenAny(client.BothArrived.Task, secondOpen).WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Assert
         if (secondOpen.IsFaulted)
         {
             _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await secondOpen);
@@ -49,11 +54,16 @@ public sealed class FitzKvProjectionOverlapTests
     [Fact]
     public async Task ShouldRejectQueryReadWhileNativeBeginIsPending()
     {
+        // Arrange
         var client = new GatedKvClient();
         var repository = new OverlapRepository(client);
         var identity = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "orders"));
         var opening = repository.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)).AsTask();
+
+        // Act
         await client.FirstArrived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Assert
         try
         {
             _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -72,10 +82,15 @@ public sealed class FitzKvProjectionOverlapTests
     [Fact]
     public async Task ShouldReleaseBatchSlotWhenNativeBeginFails()
     {
+        // Arrange
         var client = new FailFirstBeginClient();
         var repository = new OverlapRepository(client);
         var identity = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "orders"));
+
+        // Act
         var context = new ProjectionBatchContext(identity, ProjectionCheckpoint.Start);
+
+        // Assert
         _ = await Assert.ThrowsAsync<IOException>(async () => await repository.BeginAsync(context));
 
         await using var batch = await repository.BeginAsync(context);
@@ -89,11 +104,16 @@ public sealed class FitzKvProjectionOverlapTests
     [Fact]
     public async Task ShouldReleaseBatchSlotWhenNativeDisposeFails()
     {
+        // Arrange
         var client = new FakeKvClient { DisposeFailure = new IOException("dispose failed") };
         var repository = new OverlapRepository(client);
         var identity = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "orders"));
         var context = new ProjectionBatchContext(identity, ProjectionCheckpoint.Start);
+
+        // Act
         var failed = await repository.BeginAsync(context);
+
+        // Assert
         _ = await Assert.ThrowsAsync<IOException>(async () => await failed.DisposeAsync());
         client.DisposeFailure = null;
 
@@ -108,6 +128,7 @@ public sealed class FitzKvProjectionOverlapTests
     [Fact]
     public async Task ShouldKeepCurrentSlotReservedWhenPreviousBatchIsDisposedAgain()
     {
+        // Arrange
         var repository = new OverlapRepository(new FakeKvClient());
         var identity = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "orders"));
         var context = new ProjectionBatchContext(identity, ProjectionCheckpoint.Start);
@@ -115,8 +136,10 @@ public sealed class FitzKvProjectionOverlapTests
         await previous.DisposeAsync();
         await using var current = await repository.BeginAsync(context);
 
+        // Act
         await previous.DisposeAsync();
 
+        // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await repository.BeginAsync(context));
         await repository.StageAsync("current");
         await current.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));

@@ -11,8 +11,13 @@ public sealed class FleetAssignmentCacheTests
     [Fact]
     public void ShouldMatchIndependentRendezvousImplementationAcrossChanges()
     {
+        // Arrange
         var cache = new FleetAssignmentCache();
+
+        // Act
         var random = new Random(8421);
+
+        // Assert
         for (var iteration = 0; iteration < 20; iteration++)
         {
             var workers = Enumerable.Range(0, random.Next(1, 8)).Select(index => $"worker-{index}")

@@ -9,10 +9,14 @@ public sealed class ResultNullabilityCompilationTests
     [Fact]
     public void ShouldPreserveNullableSuccessAndValueStateValidation()
     {
+        // Arrange
         var nullableSuccess = Result<string?>.Success(null);
         var failure = Result<string>.Failure(new RequestError(RequestErrorKind.NotFound, "missing"));
+
+        // Act
         Result<string> uninitialized = default;
 
+        // Assert
         Assert.True(nullableSuccess.IsSuccess);
         Assert.Null(nullableSuccess.Value);
         _ = Assert.Throws<InvalidOperationException>(() => failure.Value);

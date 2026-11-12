@@ -14,6 +14,7 @@ public sealed class JsonDomainEventSerializerContractTests
     [Fact]
     public void ShouldPreserveDurableEnvelopeShape()
     {
+        // Arrange
         var options = TestJson.Options();
         var catalog = new DomainEventTypeCatalog().Register<WidgetNamed>(7, "widget.named");
         var serializer = new JsonDomainEventSerializer(catalog, null, options);
@@ -39,7 +40,11 @@ public sealed class JsonDomainEventSerializerContractTests
 
         var actual = serializer.Serialize(ev);
         var expectedNode = JsonNode.Parse(expected)!;
+
+        // Act
         var actualNode = JsonNode.Parse(actual.Span)!;
+
+        // Assert
         Assert.True(JsonNode.DeepEquals(expectedNode, actualNode));
 
         var oldEnvelopeReader = JsonSerializer.Deserialize(

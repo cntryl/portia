@@ -22,9 +22,13 @@ public sealed class EventAssertTests
     [Fact]
     public void ShouldReportNestedCollectionMismatch()
     {
+        // Arrange
         var expected = new CriteriaRevised(["one"], new RevisionDetails(["a", "b"]));
+
+        // Act
         var actual = new CriteriaRevised(["one"], new RevisionDetails(["a", "c"]));
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() => EventAssert.Equal(expected, actual));
 
         Assert.Contains("Details.Tags[1]", error.Message, StringComparison.Ordinal);
@@ -44,10 +48,14 @@ public sealed class EventAssertTests
     [Fact]
     public void ShouldReportEventIndexForSequenceMismatch()
     {
+        // Arrange
         var first = new CriteriaRevised(["one"], new RevisionDetails(["a"]));
         var expected = new CriteriaRevised(["two"], new RevisionDetails(["b"]));
+
+        // Act
         var actual = new CriteriaRevised(["two"], new RevisionDetails(["c"]));
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() => EventAssert.Equal([first, expected], [first, actual]));
 
         Assert.Contains("[1].CriteriaRevised.Details.Tags[0]", error.Message, StringComparison.Ordinal);
@@ -69,8 +77,13 @@ public sealed class EventAssertTests
     [InlineData(true)]
     public void ShouldReportPublicFieldMismatch(bool nested)
     {
+        // Arrange
         DomainEvent expected = nested ? new NestedFields(new FieldValue { Extra = 2 }) : new MixedFields(1) { Extra = 2 };
+
+        // Act
         DomainEvent actual = nested ? new NestedFields(new FieldValue { Extra = 3 }) : new MixedFields(1) { Extra = 3 };
+
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() => EventAssert.Equal(expected, actual));
         Assert.Contains(nested ? "Details.Extra" : "MixedFields.Extra", error.Message, StringComparison.Ordinal);
     }

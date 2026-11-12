@@ -13,10 +13,14 @@ public sealed class FitzKvCheckpointIdentityTests
     [InlineData("resource")]
     public void ShouldRejectNulInStreamIdentitySegments(string segment)
     {
+        // Arrange
         var realm = segment == "realm" ? "tenant\0other" : "tenant";
         var area = segment == "area" ? "events\0other" : "events";
+
+        // Act
         var resource = segment == "resource" ? "order\0part" : "order";
 
+        // Assert
         Assert.Equal(segment, Assert.Throws<ArgumentException>(() =>
             EventStreamPattern.ForPattern(realm, area, resource)).ParamName);
         Assert.Equal(segment, Assert.Throws<ArgumentException>(() =>
@@ -64,13 +68,18 @@ public sealed class FitzKvCheckpointIdentityTests
     [InlineData(2)]
     public void ShouldRejectMalformedUnicodeIdentities(int kind)
     {
+        // Arrange
         var invalid = kind switch
         {
             0 => "orders" + (char)0xD800,
             1 => "orders" + (char)0xDC00,
             _ => "orders" + (char)0xD800 + "x"
         };
+
+        // Act
         var replacement = Encoding.UTF8.GetString(Encoding.UTF8.GetBytes(invalid));
+
+        // Assert
         Assert.NotEqual(invalid, replacement);
         var pattern = EventStreamPattern.ForPattern("tenant");
         _ = Assert.Throws<ArgumentException>(() => new CheckpointIdentity(invalid, pattern));
@@ -90,9 +99,14 @@ public sealed class FitzKvCheckpointIdentityTests
     [Fact]
     public void ShouldPreserveValidUnicodeAndNonNulControlCharacters()
     {
+        // Arrange
         const string text = "café-\uD83D\uDE80\n\t";
         var identity = new CheckpointIdentity(text, EventStreamPattern.ForPattern(text, text, text), text);
+
+        // Act
         var expected = Encoding.UTF8.GetBytes($"checkpoint\0{text}\0stream://{text}/{text}/{text}\0{text}");
+
+        // Assert
         Assert.Equal(expected, FitzKvCheckpoints.Key(identity).ToArray());
         Assert.True(TenantId.TryParse(text, null, out var tenant));
         Assert.Equal(text, tenant.Value);
@@ -118,10 +132,14 @@ public sealed class FitzKvCheckpointIdentityTests
     [InlineData("candidate-2")]
     public void ShouldPreserveExistingKeyBytesForOrdinaryIdentity(string? generation)
     {
+        // Arrange
         var identity = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "events", "order"),
             generation);
+
+        // Act
         var expected = Encoding.UTF8.GetBytes("checkpoint\0orders\0stream://tenant/events/order\0" + generation);
 
+        // Assert
         Assert.Equal(expected, FitzKvCheckpoints.Key(identity).ToArray());
     }
 
@@ -129,8 +147,13 @@ public sealed class FitzKvCheckpointIdentityTests
     [Fact]
     public async Task ShouldKeepOrdinaryCheckpointProgressIndependent()
     {
+        // Arrange
         var first = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "events", "order-part"), "v2");
+
+        // Act
         var second = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "events", "order"), "part-v2");
+
+        // Assert
         Assert.NotEqual(FitzKvCheckpoints.Key(first).ToArray(), FitzKvCheckpoints.Key(second).ToArray());
         var client = new FakeKvClient();
         var store = new FitzKvCheckpointStore(client, "kv://review/identity/checkpoints");

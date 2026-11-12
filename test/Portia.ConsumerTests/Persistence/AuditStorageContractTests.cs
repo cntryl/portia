@@ -14,12 +14,17 @@ public sealed class AuditStorageContractTests
     [InlineData(true)]
     public async Task AuditOnlyPagesPreserveOffsetsAndDoNotEnterAggregateHistory(bool fitz)
     {
+        // Arrange
         await using var fixture = await StoreFixture.CreateAsync(fitz);
         var account = new Account(Uuid.CreateVersion4());
         for (var index = 0; index < 1025; index++)
             account.Audit(new Declined(index.ToString(CultureInfo.InvariantCulture)));
         await fixture.Repository.SaveAsync(account, _saveContext);
+
+        // Act
         var scenario = new AggregateScenario<Account>(account);
+
+        // Assert
         Assert.Empty(scenario.PendingAudits);
         Assert.Equal(0UL, scenario.CommittedEventCount);
         Assert.Equal(0UL, account.CommittedStreamPosition);
@@ -51,10 +56,15 @@ public sealed class AuditStorageContractTests
     [Fact]
     public void StoredEventsWithoutAuditFlagRemainNonAudits()
     {
+        // Arrange
         var serializer =
             ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Deposited>(1, "Deposited"));
         var ev = DomainEventSeed.Attach(new Deposited(3), Uuid.CreateVersion4(), 1);
+
+        // Act
         var envelope = JsonNode.Parse(serializer.Serialize(ev).Span)!.AsObject();
+
+        // Assert
         Assert.True(envelope["metadata"]!.AsObject().Remove("is_audit"));
         var stored = JsonSerializer.SerializeToUtf8Bytes(envelope);
         var loaded = serializer.Deserialize(stored);
@@ -67,8 +77,11 @@ public sealed class AuditStorageContractTests
     [InlineData(true)]
     public void AggregateEmissionOwnsAuditClassification(bool audit)
     {
+        // Arrange
         var account = new Account(Uuid.CreateVersion4(), new MisclassifyingFactory(audit));
         var ev = new Deposited(1);
+
+        // Act
         if (audit)
         {
             account.Audit(ev);
@@ -78,6 +91,7 @@ public sealed class AuditStorageContractTests
             account.Raise(ev);
         }
 
+        // Assert
         Assert.Equal(audit, ev.Metadata.IsAudit);
         var serializer =
             ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Deposited>(1, "Deposited"));

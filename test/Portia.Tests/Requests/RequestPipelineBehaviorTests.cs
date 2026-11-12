@@ -14,15 +14,18 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldRunMatchingBehaviorsInOrderAroundHandler()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
             new RequestRegistration<PipelineAction, PipelineActionHandler>(),
             new RequestPipelineBehaviorRegistration<IBehaviorRequest, OuterBehavior>(-10),
             new RequestPipelineBehaviorRegistration<PipelineAction, InnerBehavior>(20));
 
+        // Act
         var result = await provider.GetRequiredService<IRequestBus>()
             .SendAsync(new PipelineAction(), RequestActor.System);
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(["outer-before", "inner-before", "handler", "inner-after", "outer-after"], calls);
     }
@@ -33,11 +36,15 @@ public sealed class RequestPipelineBehaviorTests
     [InlineData(31)]
     public void ShouldEnforceSingleUseAtExtendedStateBoundary(int position)
     {
+        // Arrange
         var closed = new RequestPipelineFrame<PipelineAction>(
             new object(), null!, null!, new PipelineAction(), null!, 32);
         closed.Use(position);
+
+        // Act
         closed.Close(position);
 
+        // Assert
         var closedFailure = Assert.Throws<InvalidOperationException>(() => closed.Use(position));
 
         var completed = new RequestPipelineFrame<PipelineAction>(
@@ -52,6 +59,7 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldAuthorizeBeforeEnteringBehaviorChain()
     {
+        // Arrange
         var calls = new List<string>();
         var services = Services(calls);
         _ = services.AddSingleton<RequestHandlerRegistration>(
@@ -63,9 +71,11 @@ public sealed class RequestPipelineBehaviorTests
         _ = services.AddSingleton<DenyingAuthorizer>();
         using var provider = services.BuildServiceProvider();
 
+        // Act
         var result = await provider.GetRequiredService<IRequestBus>()
             .SendAsync(new PipelineAction(), RequestActor.System);
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Empty(calls);
     }
@@ -74,6 +84,7 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldComposeResultAndStreamingBehaviors()
     {
+        // Arrange
         var calls = new List<string>();
         var services = Services(calls);
         _ = services.AddSingleton<RequestHandlerRegistration>(
@@ -89,9 +100,12 @@ public sealed class RequestPipelineBehaviorTests
 
         var result = await bus.SendAsync(new PipelineQuery(), RequestActor.System);
         var items = new List<int>();
+
+        // Act
         await foreach (var item in bus.StreamAsync(new PipelineStream(), RequestActor.System))
             items.Add(item);
 
+        // Assert
         Assert.Equal(42, result.Value);
         Assert.Equal([0, 1, 2, 3], items);
     }
@@ -120,6 +134,7 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldSkipBehaviorsThatCannotServeTheDispatchedShape()
     {
+        // Arrange
         var calls = new List<string>();
         var services = Services(calls);
         _ = services.AddSingleton<MixedShapeHandler>();
@@ -130,8 +145,11 @@ public sealed class RequestPipelineBehaviorTests
         using var provider = services.BuildServiceProvider();
 
         var bus = provider.GetRequiredService<IRequestBus>();
+
+        // Act
         var result = await bus.DispatchAsync<int>(new MixedShape(), bus.CreateContext(RequestActor.System));
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(7, result.Value);
         Assert.Empty(calls);
@@ -141,6 +159,7 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldAllowBehaviorToSkipContinuation()
     {
+        // Arrange
         var calls = new List<string>();
         var services = Services(calls);
         _ = services.AddSingleton<ShortCircuitBehavior>();
@@ -150,9 +169,11 @@ public sealed class RequestPipelineBehaviorTests
             new RequestPipelineBehaviorRegistration<PipelineAction, ShortCircuitBehavior>(0));
         using var provider = services.BuildServiceProvider();
 
+        // Act
         var result = await provider.GetRequiredService<IRequestBus>()
             .SendAsync(new PipelineAction(), RequestActor.System);
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(["short-circuit"], calls);
     }
@@ -161,6 +182,7 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldAllowResultAndStreamingBehaviorsToSkipContinuation()
     {
+        // Arrange
         var services = Services([]);
         _ = services.AddSingleton<ShortCircuitQueryBehavior>();
         _ = services.AddSingleton<ShortCircuitStreamBehavior>();
@@ -177,9 +199,12 @@ public sealed class RequestPipelineBehaviorTests
 
         var query = await bus.SendAsync(new PipelineQuery(), RequestActor.System);
         var stream = new List<int>();
+
+        // Act
         await foreach (var item in bus.StreamAsync(new PipelineStream(), RequestActor.System))
             stream.Add(item);
 
+        // Assert
         Assert.True(query.IsSuccess);
         Assert.Equal(99, query.Value);
         Assert.Equal([9], stream);
@@ -189,6 +214,7 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldRejectSecondSequentialContinuationInvocation()
     {
+        // Arrange
         var calls = new List<string>();
         var services = Services(calls);
         _ = services.AddSingleton<TwiceBehavior>();
@@ -196,8 +222,11 @@ public sealed class RequestPipelineBehaviorTests
             new RequestRegistration<PipelineAction, PipelineActionHandler>());
         _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
             new RequestPipelineBehaviorRegistration<PipelineAction, TwiceBehavior>(0));
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await provider.GetRequiredService<IRequestBus>().SendAsync(new PipelineAction(), RequestActor.System));
 
@@ -209,6 +238,7 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldAllowExactlyOneConcurrentContinuationInvocation()
     {
+        // Arrange
         var calls = new List<string>();
         var behavior = new ConcurrentBehavior();
         var services = Services(calls);
@@ -219,9 +249,11 @@ public sealed class RequestPipelineBehaviorTests
             new RequestPipelineBehaviorRegistration<PipelineAction, ConcurrentBehavior>(0));
         using var provider = services.BuildServiceProvider();
 
+        // Act
         var result = await provider.GetRequiredService<IRequestBus>()
             .SendAsync(new PipelineAction(), RequestActor.System);
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(["handler"], calls);
         Assert.Equal(SingleUseMessage, Assert.Single(behavior.Failures).Message);
@@ -231,6 +263,7 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldAllowAwaitBeforeFirstContinuationInvocation()
     {
+        // Arrange
         var calls = new List<string>();
         var services = Services(calls);
         _ = services.AddSingleton<YieldBeforeContinuationBehavior>();
@@ -240,9 +273,11 @@ public sealed class RequestPipelineBehaviorTests
             new RequestPipelineBehaviorRegistration<PipelineAction, YieldBeforeContinuationBehavior>(0));
         using var provider = services.BuildServiceProvider();
 
+        // Act
         var result = await provider.GetRequiredService<IRequestBus>()
             .SendAsync(new PipelineAction(), RequestActor.System);
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(["handler"], calls);
     }
@@ -251,6 +286,7 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldRejectInnerContinuationAfterInnerBehaviorReturns()
     {
+        // Arrange
         var calls = new List<string>();
         var retained = new RetainingBehavior();
         var services = Services(calls);
@@ -262,8 +298,11 @@ public sealed class RequestPipelineBehaviorTests
             new RequestPipelineBehaviorRegistration<PipelineAction, InvokeRetainedInnerBehavior>(-10));
         _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
             new RequestPipelineBehaviorRegistration<PipelineAction, RetainingBehavior>(0));
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await provider.GetRequiredService<IRequestBus>().SendAsync(new PipelineAction(), RequestActor.System));
 
@@ -275,6 +314,7 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldRejectContinuationRetainedAfterBehaviorReturns()
     {
+        // Arrange
         var calls = new List<string>();
         var behavior = new RetainingBehavior();
         var services = Services(calls);
@@ -285,8 +325,11 @@ public sealed class RequestPipelineBehaviorTests
             new RequestPipelineBehaviorRegistration<PipelineAction, RetainingBehavior>(0));
         using var provider = services.BuildServiceProvider();
 
+        // Act
         var result = await provider.GetRequiredService<IRequestBus>()
             .SendAsync(new PipelineAction(), RequestActor.System);
+
+        // Assert
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await behavior.Continuation!(default));
 
@@ -299,6 +342,7 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldRejectSecondResultAndStreamingContinuationInvocations()
     {
+        // Arrange
         var calls = new List<string>();
         var services = Services(calls);
         _ = services.AddSingleton<TwiceQueryBehavior>();
@@ -312,8 +356,11 @@ public sealed class RequestPipelineBehaviorTests
         _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
             new StreamRequestPipelineBehaviorRegistration<PipelineStream, TwiceStreamBehavior, int>(0));
         using var provider = services.BuildServiceProvider();
+
+        // Act
         var bus = provider.GetRequiredService<IRequestBus>();
 
+        // Assert
         var queryFailure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await bus.SendAsync(new PipelineQuery(), RequestActor.System));
         var streamFailure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -337,6 +384,7 @@ public sealed class RequestPipelineBehaviorTests
     [InlineData(2, true)]
     public async Task ShouldRejectExpiredContinuationsInsideLaterInvocations(int shape, bool useFirst)
     {
+        // Arrange
         var calls = new List<string>();
         var services = Services(calls);
         _ = services.AddSingleton(new StaleContinuationBehavior(useFirst));
@@ -367,7 +415,11 @@ public sealed class RequestPipelineBehaviorTests
         }
 
         await DispatchAsync();
+
+        // Act
         var initialCalls = calls.Count;
+
+        // Assert
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(DispatchAsync);
         Assert.Equal(SingleUseMessage, failure.Message);
         Assert.Equal(initialCalls, calls.Count);
@@ -383,6 +435,7 @@ public sealed class RequestPipelineBehaviorTests
     [InlineData(2, true)]
     public async Task ShouldRejectContinuationBorrowedFromActiveInvocation(int shape, bool nested)
     {
+        // Arrange
         var behavior = new BorrowingContinuationBehavior();
         var services = Services([]);
         _ = services.AddSingleton(behavior);
@@ -400,8 +453,11 @@ public sealed class RequestPipelineBehaviorTests
             new StreamRequestPipelineBehaviorRegistration<PipelineStream, BorrowingContinuationBehavior, int>(0));
         using var provider = services.BuildServiceProvider();
         var bus = provider.GetRequiredService<IRequestBus>();
+
+        // Act
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
+        // Assert
         async Task DispatchAsync()
         {
             if (shape == 0)
@@ -442,9 +498,14 @@ public sealed class RequestPipelineBehaviorTests
     [InlineData(31)]
     public async Task ShouldAllowOneConcurrentWinnerAtStateBoundary(int position)
     {
+        // Arrange
         var frame = new RequestPipelineFrame<PipelineAction>(
             new object(), null!, null!, new PipelineAction(), null!, 32);
+
+        // Act
         using var ready = new Barrier(2);
+
+        // Assert
         Task<bool> Attempt() => Task.Run(() =>
         {
             Assert.True(ready.SignalAndWait(TimeSpan.FromSeconds(10)));
@@ -466,6 +527,7 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldShareOneConcreteRequestContextAcrossPipeline()
     {
+        // Arrange
         var seen = new List<IRequestContext>();
         var services = Services([]);
         _ = services.AddSingleton(seen);
@@ -477,8 +539,10 @@ public sealed class RequestPipelineBehaviorTests
             new RequestPipelineBehaviorRegistration<IBehaviorRequest, ContextBehavior>(0));
         using var provider = services.BuildServiceProvider();
 
+        // Act
         _ = await provider.GetRequiredService<IRequestBus>().SendAsync(new PipelineAction(), RequestActor.System);
 
+        // Assert
         Assert.Equal(2, seen.Count);
         Assert.Same(seen[0], seen[1]);
         Assert.IsType<RequestContext<PipelineAction>>(seen[0]);
@@ -488,6 +552,7 @@ public sealed class RequestPipelineBehaviorTests
     [Fact]
     public async Task ShouldIsolateNestedAndConcurrentDispatchFrames()
     {
+        // Arrange
         var services = Services([]);
         var handled = new ConcurrentBag<int>();
         var gate = new DispatchGate();
@@ -502,9 +567,12 @@ public sealed class RequestPipelineBehaviorTests
         using var provider = services.BuildServiceProvider();
         var bus = provider.GetRequiredService<IRequestBus>();
 
+        // Act
         var results = await Task.WhenAll(
             bus.SendAsync(new NestedConcurrentAction(1, true), RequestActor.System).AsTask(),
             bus.SendAsync(new NestedConcurrentAction(2, true), RequestActor.System).AsTask());
+
+        // Assert
         Assert.All(results, result => Assert.True(result.IsSuccess));
 
         gate.Bypass = true;

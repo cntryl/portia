@@ -26,14 +26,17 @@ public sealed class HttpOriginSchemeTests
     public void ShouldCompareOriginSchemeGivenMatchingHostAndDefaultPorts(string scheme, string host, string origin,
         bool rejected)
     {
+        // Arrange
         var context = new DefaultHttpContext();
         context.Request.Method = HttpMethods.Post;
         context.Request.Scheme = scheme;
         context.Request.Host = new HostString(host);
         context.Request.Headers.Origin = origin;
 
+        // Act
         var result = PortiaHttpBinding.RejectCrossOrigin(context);
 
+        // Assert
         Assert.Equal(rejected, result is not null);
     }
 }

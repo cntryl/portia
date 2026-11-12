@@ -20,11 +20,15 @@ public sealed class FitzNotificationPoisonMessageTests
     [Fact]
     public async Task ShouldDropNoticeGivenDeclaredTransportMismatch()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
+
+        // Act
         var consumer = new FitzNoticeRequestConsumer(
             new ScriptedNoticeClient([Envelope(serializer)]), serializer, "notice://test/shared/action",
             TestJson.Catalog(RequestTransportId.Callable, typeof(UniversalAction)));
 
+        // Assert
         Assert.Empty(await ReadAllAsync(consumer));
     }
 
@@ -32,13 +36,17 @@ public sealed class FitzNotificationPoisonMessageTests
     [Fact]
     public async Task ShouldDropScheduleGivenDeclaredTransportMismatch()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
+
+        // Act
         var consumer = new FitzScheduledRequestConsumer(
             new ScriptedScheduleClient([ScheduleEnvelope(serializer)]), serializer,
             "schedule://test/shared/action/run",
             TestJson.Catalog(RequestTransportId.Callable, typeof(UniversalAction)),
             new AllowScheduledRequestActorValidator());
 
+        // Assert
         Assert.Empty(await ReadAllAsync(consumer));
     }
 
@@ -49,14 +57,18 @@ public sealed class FitzNotificationPoisonMessageTests
     [Fact]
     public async Task ShouldDropScheduleGivenRequestDeclaredForAnotherRoute()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var validator = new CountingScheduledValidator();
         using var meter = ListenToLost(out var lost);
+
+        // Act
         var consumer = new FitzScheduledRequestConsumer(
             new ScriptedScheduleClient([ScheduleEnvelope(serializer)]), serializer,
             "schedule://test/billing/invoices/generate",
             TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)), validator);
 
+        // Assert
         Assert.Empty(await ReadAllAsync(consumer));
         Assert.Equal(0, validator.Calls);
         Assert.Equal(["schedule"], lost);
@@ -69,13 +81,17 @@ public sealed class FitzNotificationPoisonMessageTests
     [Fact]
     public async Task ShouldDropScheduleGivenWildcardRequestWhoseLiteralSegmentDiffers()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var validator = new CountingScheduledValidator();
         using var meter = ListenToLost(out var lost);
+
+        // Act
         var consumer = new FitzScheduledRequestConsumer(
             new ScriptedScheduleClient([ScheduleEnvelope(serializer)]), serializer,
             "schedule://t1/billing/action/run", WildcardRealmCatalog(), validator);
 
+        // Assert
         Assert.Empty(await ReadAllAsync(consumer));
         Assert.Equal(0, validator.Calls);
         Assert.Equal(["schedule"], lost);
@@ -85,14 +101,18 @@ public sealed class FitzNotificationPoisonMessageTests
     [Fact]
     public async Task ShouldDropScheduleGivenFiredRouteThatDiffersOnlyInCase()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var validator = new CountingScheduledValidator();
         using var meter = ListenToLost(out var lost);
+
+        // Act
         var consumer = new FitzScheduledRequestConsumer(
             new ScriptedScheduleClient([ScheduleEnvelope(serializer)]), serializer,
             "schedule://test/Shared/action/run",
             TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)), validator);
 
+        // Assert
         Assert.Empty(await ReadAllAsync(consumer));
         Assert.Equal(0, validator.Calls);
         Assert.Equal(["schedule"], lost);
@@ -102,14 +122,18 @@ public sealed class FitzNotificationPoisonMessageTests
     [Fact]
     public async Task ShouldRecordARunnerFaultGivenScheduleRequestDeclaredForAnotherRoute()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var logger = new CapturingLogger<FitzScheduledRequestConsumer>();
+
+        // Act
         var consumer = new FitzScheduledRequestConsumer(
             new ScriptedScheduleClient([ScheduleEnvelope(serializer)]), serializer,
             "schedule://test/billing/invoices/generate",
             TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)),
             new AllowScheduledRequestActorValidator(), logger);
 
+        // Assert
         Assert.Empty(await ReadAllAsync(consumer));
         Assert.Equal([(1002, LogLevel.Error), (1004, LogLevel.Warning)], logger.Entries);
     }
@@ -121,6 +145,7 @@ public sealed class FitzNotificationPoisonMessageTests
     [Fact]
     public async Task ShouldSkipAnUndeserializableNoticeAndKeepReading()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var logger = new CapturingLogger<FitzNoticeRequestConsumer>();
         var consumer = new FitzNoticeRequestConsumer(
@@ -128,8 +153,10 @@ public sealed class FitzNotificationPoisonMessageTests
             serializer, "notice://test/shared/action",
             TestJson.Catalog(RequestTransportId.Notice, typeof(UniversalAction)), logger);
 
+        // Act
         var delivered = await ReadAllAsync(consumer);
 
+        // Assert
         _ = Assert.Single(delivered);
         _ = Assert.IsType<UniversalAction>(delivered[0].Request);
         Assert.Equal((1004, LogLevel.Warning), Assert.Single(logger.Entries));
@@ -142,6 +169,7 @@ public sealed class FitzNotificationPoisonMessageTests
     [Fact]
     public async Task ShouldSkipAnUndeserializableScheduleEntryAndKeepReading()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var logger = new CapturingLogger<FitzScheduledRequestConsumer>();
         var consumer = new FitzScheduledRequestConsumer(
@@ -150,8 +178,10 @@ public sealed class FitzNotificationPoisonMessageTests
             TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)),
             new AllowScheduledRequestActorValidator(), logger);
 
+        // Act
         var delivered = await ReadAllAsync(consumer);
 
+        // Assert
         _ = Assert.Single(delivered);
         _ = Assert.IsType<UniversalAction>(delivered[0].Request);
         Assert.Equal([(1002, LogLevel.Error), (1004, LogLevel.Warning)], logger.Entries);
@@ -161,14 +191,17 @@ public sealed class FitzNotificationPoisonMessageTests
     [Fact]
     public async Task ShouldRecordLostAndContinueGivenRetryableNoticeEnvelopeFailure()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         using var meter = ListenToLost(out var lost);
         var consumer = new FitzNoticeRequestConsumer(
             new ScriptedNoticeClient([UnsupportedEnvelope(serializer), Envelope(serializer)]), serializer,
             "notice://test/shared/action", TestJson.Catalog(RequestTransportId.Notice, typeof(UniversalAction)));
 
+        // Act
         var delivered = await ReadAllAsync(consumer);
 
+        // Assert
         _ = Assert.Single(delivered);
         Assert.Equal(["notice"], lost);
     }
@@ -177,6 +210,7 @@ public sealed class FitzNotificationPoisonMessageTests
     [Fact]
     public async Task ShouldRecordLostWithoutValidationAndContinueGivenRetryableScheduledEnvelopeFailure()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var validator = new CountingScheduledValidator();
         using var meter = ListenToLost(out var lost);
@@ -185,8 +219,10 @@ public sealed class FitzNotificationPoisonMessageTests
             ]), serializer, "schedule://test/shared/action/run",
             TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)), validator);
 
+        // Act
         var delivered = await ReadAllAsync(consumer);
 
+        // Assert
         _ = Assert.Single(delivered);
         Assert.Equal(1, validator.Calls);
         Assert.Equal(["schedule"], lost);

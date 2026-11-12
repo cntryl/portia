@@ -10,10 +10,15 @@ public sealed partial class ComponentHostingTests
     [Fact]
     public async Task HostedRegistrationNameOverridesConstructorCheckpointAndEffectIdentity()
     {
+        // Arrange
         var services = ConsumerHost.CreateServices();
         _ = services.AddPortia().AddReactor<FirstReactor>("upgraded-reactor", WorkloadScope.Global).AddWorkers().UseSingleProcessWorkloads();
         await using var provider = ConsumerHost.Build(services);
+
+        // Act
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
@@ -35,6 +40,7 @@ public sealed partial class ComponentHostingTests
     [InlineData(true)]
     public async Task StreamNotificationWakesCompletedWorkloadWithoutPollingDelay(bool projector)
     {
+        // Arrange
         var changes = new Changes();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<IDomainEventNotifier>(changes);
@@ -48,7 +54,11 @@ public sealed partial class ComponentHostingTests
         await using var provider = ConsumerHost.Build(services);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         var id = Uuid.CreateVersion4();
+
+        // Act
         await ConsumerHost.SeedAsync(provider, id);
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
@@ -76,6 +86,7 @@ public sealed partial class ComponentHostingTests
     [Fact]
     public async Task BrokenNotificationSubscriptionIsDisposedAndRecreatedBeforeNextPass()
     {
+        // Arrange
         var clock = new ManualClock();
         var changes = new Changes { FailNextWait = true };
         var services = ConsumerHost.CreateServices();
@@ -84,7 +95,11 @@ public sealed partial class ComponentHostingTests
         _ = services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
             options => options.PollInterval = TimeSpan.FromSeconds(1)).AddWorkers().UseSingleProcessWorkloads();
         await using var provider = ConsumerHost.Build(services);
+
+        // Act
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
@@ -116,6 +131,7 @@ public sealed partial class ComponentHostingTests
     [Fact]
     public async Task FailingNotificationSubscriptionFallsBackToPollingWithoutFaultingTheWorkload()
     {
+        // Arrange
         var changes = new Changes { FailSubscriptions = true };
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<IDomainEventNotifier>(changes);
@@ -125,7 +141,11 @@ public sealed partial class ComponentHostingTests
             options.PollInterval = TimeSpan.FromMilliseconds(20);
         }).AddWorkers().UseSingleProcessWorkloads();
         await using var provider = ConsumerHost.Build(services);
+
+        // Act
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
@@ -151,6 +171,7 @@ public sealed partial class ComponentHostingTests
     [Fact]
     public async Task ScopedComponentCannotChangeTheRetainedSubscriptionPattern()
     {
+        // Arrange
         var changes = new Changes();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<IDomainEventNotifier>(changes);
@@ -161,7 +182,11 @@ public sealed partial class ComponentHostingTests
                 options.FailureAttemptLimit = 1;
                 options.PollInterval = TimeSpan.FromDays(1);
             }).AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         await using var provider = ConsumerHost.Build(services);
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await worker.StartAsync(default);
         await changes.Subscribed.Task.WaitAsync(TimeSpan.FromSeconds(3));
@@ -185,6 +210,7 @@ public sealed partial class ComponentHostingTests
     [InlineData("repair")]
     public async Task UncertainProjectionCommitAndFailedReloadPreserveDurableProgress(string? rebuildId)
     {
+        // Arrange
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
@@ -194,7 +220,11 @@ public sealed partial class ComponentHostingTests
         var storage = provider.GetRequiredService<ConsumerHost.ProjectionStorage>();
         storage.FailAfterCommit = true;
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
+
+        // Act
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
@@ -222,6 +252,7 @@ public sealed partial class ComponentHostingTests
     [Fact]
     public async Task PoisonEventBacksOffThenFaultsWorkerAtAttemptLimit()
     {
+        // Arrange
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
@@ -234,7 +265,11 @@ public sealed partial class ComponentHostingTests
         }).AddWorkers().UseSingleProcessWorkloads();
         await using var provider = ConsumerHost.Build(services);
         provider.GetRequiredService<ConsumerHost.ProjectionStorage>().FailAfterCommit = true;
+
+        // Act
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
 
         await worker.StartAsync(default);
@@ -258,6 +293,7 @@ public sealed partial class ComponentHostingTests
     [InlineData(true)]
     public async Task CancellationDisposesActiveComponentScope(bool projector)
     {
+        // Arrange
         var services = ConsumerHost.CreateServices();
         var reader = new BlockingReader();
         _ = services.AddSingleton<IDomainEventReader>(reader);
@@ -265,7 +301,11 @@ public sealed partial class ComponentHostingTests
         _ = (projector
             ? portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global)
             : portia.AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)).AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         await using var provider = ConsumerHost.Build(services);
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
@@ -289,6 +329,7 @@ public sealed partial class ComponentHostingTests
     [InlineData(true)]
     public async Task EachPassDisposesItsScopeAndReloadsDurableProgress(bool projector)
     {
+        // Arrange
         var clock = new ManualClock();
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
@@ -296,7 +337,11 @@ public sealed partial class ComponentHostingTests
         _ = (projector
             ? portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global)
             : portia.AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)).AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         await using var provider = ConsumerHost.Build(services);
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         var id = Uuid.CreateVersion4();
@@ -331,6 +376,7 @@ public sealed partial class ComponentHostingTests
     [InlineData(true)]
     public async Task HostsBothConcreteReactorsWithScopes(bool scoped)
     {
+        // Arrange
         var services = ConsumerHost.CreateServices(scoped);
         _ = services.AddAccounts();
         _ = services.AddReporting();
@@ -340,7 +386,11 @@ public sealed partial class ComponentHostingTests
             .AddWorkers().UseSingleProcessWorkloads();
         await using var provider = ConsumerHost.Build(services);
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
+
+        // Act
         var workers = provider.GetServices<IHostedService>().OfType<BackgroundService>().ToArray();
+
+        // Assert
         _ = Assert.Single(workers);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         try
@@ -370,6 +420,7 @@ public sealed partial class ComponentHostingTests
     [InlineData(true)]
     public async Task HostsGeneratedProjectorsSharingOneProjectionPort(bool scoped)
     {
+        // Arrange
         var services = ConsumerHost.CreateServices(scoped);
         _ = services.AddAccounts();
         _ = services.AddReporting();
@@ -379,7 +430,11 @@ public sealed partial class ComponentHostingTests
             .AddWorkers().UseSingleProcessWorkloads();
         await using var provider = ConsumerHost.Build(services);
         await ConsumerHost.SeedAsync(provider, Uuid.CreateVersion4());
+
+        // Act
         var workers = provider.GetServices<IHostedService>().OfType<BackgroundService>().ToArray();
+
+        // Assert
         _ = Assert.Single(workers);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         try

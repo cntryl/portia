@@ -7,11 +7,16 @@ public sealed class GeneratedHttpMappingContractTests
     [Fact]
     public async Task QualifiedStaticHttpMappingPreservesGeneratedBinding()
     {
+        // Arrange
         var assembly = HttpConsumerScenario.Compile(
             "public sealed record Binding(int Id) : IRequest<string>, ICallable;",
             "request.Id.ToString(CultureInfo.InvariantCulture)",
             "PortiaEndpointRouteBuilderExtensions.MapPortiaGet<Binding, string>(app, \"/binding/{id}\");");
+
+        // Act
         var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding/7");
+
+        // Assert
         Assert.Equal(200, status);
         Assert.Equal("\"7\"", body);
     }
@@ -19,12 +24,17 @@ public sealed class GeneratedHttpMappingContractTests
     [Fact]
     public async Task PropertyConverterUsesApplicationJsonContract()
     {
+        // Arrange
         var assembly = HttpConsumerScenario.Compile(
             "public sealed record Binding([property: JsonConverter(typeof(HexConverter))] int Value) : IRequest<string>, ICallable;",
             "request.Value.ToString(CultureInfo.InvariantCulture)",
             "app.MapPortiaPost<Binding, string>(\"/binding\");");
+
+        // Act
         var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding", /*lang=json,strict*/
             "{\"value\":\"0x10\"}", converter: true);
+
+        // Assert
         Assert.Equal(200, status);
         Assert.Equal("\"16\"", body);
     }
@@ -32,6 +42,7 @@ public sealed class GeneratedHttpMappingContractTests
     [Fact]
     public async Task JsonTypeInfoPropertyNamesAreHonored()
     {
+        // Arrange
         var assembly = HttpConsumerScenario.Compile(
             "public sealed record Binding(int Value) : IRequest<string>, ICallable;",
             "request.Value.ToString(CultureInfo.InvariantCulture)",
@@ -43,8 +54,12 @@ public sealed class GeneratedHttpMappingContractTests
                     Modifiers = { info => { if (info.Type == typeof(Binding)) info.Properties[0].Name = "custom"; } }
                 });
             """);
+
+        // Act
         var (status, body) =
             await HttpConsumerScenario.RunAsync(assembly, "/binding", /*lang=json,strict*/ "{\"custom\":16}");
+
+        // Assert
         Assert.Equal(200, status);
         Assert.Equal("\"16\"", body);
     }
@@ -52,13 +67,18 @@ public sealed class GeneratedHttpMappingContractTests
     [Fact]
     public async Task PropertyNumberHandlingOverridesWebDefaults()
     {
+        // Arrange
         var assembly = HttpConsumerScenario.Compile(
             "public sealed record Binding(int Value) : IRequest<string>, ICallable;",
             "request.Value.ToString(CultureInfo.InvariantCulture)",
             "app.MapPortiaPost<Binding, string>(\"/binding\");",
             "builder.Services.AddPortia().ConfigureJson(options => options.NumberHandling = JsonNumberHandling.Strict);");
+
+        // Act
         var (status, _) =
             await HttpConsumerScenario.RunAsync(assembly, "/binding", /*lang=json,strict*/ "{\"value\":\"16\"}");
+
+        // Assert
         Assert.Equal(400, status);
     }
 

@@ -16,6 +16,7 @@ public sealed class ProcessorStatusTests
     [InlineData(true)]
     public async Task ShouldReadAuthoritativeProgressWithoutRunningProjectorOrReactor(bool reactor)
     {
+        // Arrange
         var checkpoint = new StatusCheckpointStore();
         var identity = new CheckpointIdentity("registered-name", EventStreamPattern.ForPattern("global", "events"));
         checkpoint.Set(identity, "opaque-committed");
@@ -29,8 +30,10 @@ public sealed class ProcessorStatusTests
             _ = builder.AddProjector<GlobalStatusProjector>(identity.ComponentName, WorkloadScope.Global);
         await using var provider = services.BuildServiceProvider();
 
+        // Act
         var result = await SendAsync(provider, new GetProcessorStatus(identity.ComponentName));
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(reactor ? "reactor" : "projector", result.Value.Kind);
         Assert.Equal(identity.ComponentName, result.Value.Processor);
@@ -50,6 +53,7 @@ public sealed class ProcessorStatusTests
     [Fact]
     public async Task ShouldBindExactTenantAndRebuildGenerationBeforeReadingProgress()
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         var pattern = EventStreamPattern.ForPattern("tenant-a", "events");
         var identity = new CheckpointIdentity("tenant-projector", pattern, "candidate");
@@ -63,8 +67,10 @@ public sealed class ProcessorStatusTests
             options => options.Processing = new ProjectionRunOptions { RebuildId = "candidate" });
         await using var provider = services.BuildServiceProvider();
 
+        // Act
         var result = await SendAsync(provider, new GetProcessorStatus(identity.ComponentName, "tenant-a"), "tenant-a");
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal("tenant-a", result.Value.Tenant);
         Assert.Equal("candidate", result.Value.RebuildId);
@@ -83,6 +89,7 @@ public sealed class ProcessorStatusTests
     [InlineData(true)]
     public async Task ShouldAllowConfiguredAdministratorsWithoutOperationalPolicy(bool reactor)
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         var identity = new CheckpointIdentity("component", EventStreamPattern.ForPattern("global", "events"));
         store.Set(identity, "native-progress");
@@ -96,7 +103,11 @@ public sealed class ProcessorStatusTests
             _ = builder.AddReactor<GlobalStatusReactor>(identity.ComponentName, WorkloadScope.Global);
         else
             _ = builder.AddProjector<GlobalStatusProjector>(identity.ComponentName, WorkloadScope.Global);
+
+        // Act
         await using var provider = services.BuildServiceProvider();
+
+        // Assert
         Assert.Null(provider.GetService<IOperationalAuthorizer>());
 
         var result = await SendAsync(provider, new GetProcessorStatus(identity.ComponentName));
@@ -115,6 +126,7 @@ public sealed class ProcessorStatusTests
     [InlineData("roles")]
     public async Task ShouldAcceptAdministratorWithAuthenticatedSecondaryIdentity(string roleClaimType)
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         var services = Services(store);
         _ = services.AddPortia().AddProjector<GlobalStatusProjector>("projection", WorkloadScope.Global);
@@ -125,9 +137,11 @@ public sealed class ProcessorStatusTests
                 new Claim(roleClaimType, AdministratorRole)], "test", ClaimTypes.Name, roleClaimType);
         var actor = new ClaimsPrincipal([new ClaimsIdentity(), authenticated]);
 
+        // Act
         var result = await scope.ServiceProvider.GetRequiredService<IRequestBus>()
             .SendAsync(new GetProcessorStatus("projection"), actor);
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Single(store.Reads);
     }
@@ -139,6 +153,7 @@ public sealed class ProcessorStatusTests
     [InlineData("roles")]
     public async Task ShouldDenyUnauthenticatedAdministratorRoleOnAMixedPrincipal(string roleClaimType)
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         var progress = new StatusProgressReader();
         var services = Services(store);
@@ -151,7 +166,11 @@ public sealed class ProcessorStatusTests
             "test", ClaimTypes.Name, roleClaimType);
         var unauthenticatedAdministrator = new ClaimsIdentity([new Claim(roleClaimType, AdministratorRole)],
             null, ClaimTypes.Name, roleClaimType);
+
+        // Act
         var actor = new ClaimsPrincipal([ordinary, unauthenticatedAdministrator]);
+
+        // Assert
         Assert.True(actor.IsInRole(AdministratorRole));
         Assert.True(await provider.GetRequiredService<IOperationalAuthorizer>()
             .AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Read));
@@ -174,6 +193,7 @@ public sealed class ProcessorStatusTests
     public async Task ShouldDenyUnauthenticatedOrOutOfScopeInspection(string? actorScope,
         RequestErrorKind error)
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         var services = new ServiceCollection();
         _ = services.AddSingleton(store);
@@ -184,9 +204,11 @@ public sealed class ProcessorStatusTests
         await using var scope = provider.CreateAsyncScope();
         var actor = actorScope is null ? RequestActor.Anonymous : SystemAdminActor(actorScope);
 
+        // Act
         var result = await scope.ServiceProvider.GetRequiredService<IRequestBus>()
             .SendAsync(new GetProcessorStatus("projection"), actor);
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(error, result.Error.Kind);
         Assert.Empty(store.Reads);
@@ -199,6 +221,7 @@ public sealed class ProcessorStatusTests
     [InlineData(true)]
     public async Task ShouldDenyOrdinaryUsersBeforeReadingProjectorOrReactorProgress(bool reactor)
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         var progress = new StatusProgressReader();
         var services = Services(store);
@@ -210,7 +233,11 @@ public sealed class ProcessorStatusTests
             _ = builder.AddProjector<GlobalStatusProjector>("component", WorkloadScope.Global);
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
+
+        // Act
         var actor = TestOperationalAuthorizer.Actor();
+
+        // Assert
         Assert.True(await provider.GetRequiredService<IOperationalAuthorizer>()
             .AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Read));
 
@@ -232,6 +259,7 @@ public sealed class ProcessorStatusTests
     [InlineData("other-platform-operators")]
     public async Task ShouldDenyMissingBlankOrUnheldConfiguredAdministratorRole(string? configuredRole)
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         var progress = new StatusProgressReader();
         var services = Services(store);
@@ -245,7 +273,11 @@ public sealed class ProcessorStatusTests
         var actorRole = configuredRole is null
             ? "unassigned-" + Environment.GetEnvironmentVariable("PORTIA_SYSTEM_ADMIN_ROLE")
             : AdministratorRole;
+
+        // Act
         var actor = SystemAdminActor(role: actorRole);
+
+        // Assert
         Assert.True(await provider.GetRequiredService<IOperationalAuthorizer>()
             .AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Read));
 
@@ -270,6 +302,7 @@ public sealed class ProcessorStatusTests
     public async Task ShouldRejectInvalidTargetsBeforeResolvingTheirCheckpoint(string processor, string? tenant,
         RequestErrorKind error)
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         var services = Services(store);
         _ = services.AddSingleton<ITenantDirectory>(new FixedTenantDirectory(new TenantId("tenant-a")));
@@ -278,8 +311,10 @@ public sealed class ProcessorStatusTests
             .AddProjector<TenantStatusProjector>("tenant-projector", WorkloadScope.PerTenant);
         await using var provider = services.BuildServiceProvider();
 
+        // Act
         var result = await SendAsync(provider, new GetProcessorStatus(processor, tenant), tenant ?? "global");
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(error, result.Error.Kind);
         Assert.Empty(store.Reads);
@@ -289,6 +324,7 @@ public sealed class ProcessorStatusTests
     [Fact]
     public async Task ShouldReadTenantStatusWithoutConsultingTenantDirectory()
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         var pattern = EventStreamPattern.ForPattern("tenant-a", "events");
         var identity = new CheckpointIdentity("tenant-projection", pattern);
@@ -300,8 +336,10 @@ public sealed class ProcessorStatusTests
         _ = services.AddPortia().AddProjector<TenantStatusProjector>(identity.ComponentName, WorkloadScope.PerTenant);
         await using var provider = services.BuildServiceProvider();
 
+        // Act
         var result = await SendAsync(provider, new GetProcessorStatus(identity.ComponentName, "tenant-a"), "tenant-a");
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal("native-tenant-progress", result.Value.Progress.Position.Value);
         Assert.Equal(pattern.ToString(), result.Value.Pattern);
@@ -314,6 +352,7 @@ public sealed class ProcessorStatusTests
     [Fact]
     public async Task ShouldRejectSourceObservationThatReplacesAuthoritativeCheckpoint()
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         store.Set(new CheckpointIdentity("projection", EventStreamPattern.ForPattern("global", "events")), "native-progress");
         var services = Services(store);
@@ -321,8 +360,10 @@ public sealed class ProcessorStatusTests
         _ = services.AddPortia().AddProjector<GlobalStatusProjector>("projection", WorkloadScope.Global);
         await using var provider = services.BuildServiceProvider();
 
+        // Act
         var result = await SendAsync(provider, new GetProcessorStatus("projection"));
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal("native-progress", result.Value.Progress.Position.Value);
         Assert.Equal(nameof(InvalidOperationException), result.Value.SourceError);
@@ -343,6 +384,7 @@ public sealed class ProcessorStatusTests
     public async Task ShouldUseJournalOnlyForFailureEvidenceAtTheAuthoritativeCheckpoint(bool staleJournal,
         bool sourceUnavailable)
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         var pattern = EventStreamPattern.ForPattern("global", "events");
         var identity = new CheckpointIdentity("projection", pattern);
@@ -364,8 +406,10 @@ public sealed class ProcessorStatusTests
         _ = services.AddPortia().AddProjector<GlobalStatusProjector>(identity.ComponentName, WorkloadScope.Global);
         await using var provider = services.BuildServiceProvider();
 
+        // Act
         var result = await SendAsync(provider, new GetProcessorStatus(identity.ComponentName));
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal("native-progress", result.Value.Progress.Position.Value);
         Assert.Equal(sourceUnavailable ? nameof(IOException) : null, result.Value.SourceError);
@@ -392,6 +436,7 @@ public sealed class ProcessorStatusTests
     [Fact]
     public async Task ShouldPropagateCallerCancellationDuringSourceObservation()
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         var services = Services(store);
         using var cancellation = new CancellationTokenSource();
@@ -399,8 +444,11 @@ public sealed class ProcessorStatusTests
         _ = services.AddPortia().AddProjector<GlobalStatusProjector>("projection", WorkloadScope.Global);
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
+
+        // Act
         var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
 
+        // Assert
         var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await bus.SendAsync(new GetProcessorStatus("projection"), SystemAdminActor(), cancellation.Token));
 
@@ -416,6 +464,7 @@ public sealed class ProcessorStatusTests
     [InlineData(true)]
     public async Task ShouldPreserveCheckpointAndSourceObservationWhenJournalIsUnavailable(bool sourceUnavailable)
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         store.Set(new CheckpointIdentity("projection", EventStreamPattern.ForPattern("global", "events")), "native-progress");
         var services = Services(store);
@@ -425,8 +474,10 @@ public sealed class ProcessorStatusTests
         _ = services.AddPortia().AddProjector<GlobalStatusProjector>("projection", WorkloadScope.Global);
         await using var provider = services.BuildServiceProvider();
 
+        // Act
         var result = await SendAsync(provider, new GetProcessorStatus("projection"));
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal("native-progress", result.Value.Progress.Position.Value);
         Assert.Equal(sourceUnavailable ? nameof(IOException) : null, result.Value.SourceError);
@@ -443,6 +494,7 @@ public sealed class ProcessorStatusTests
     [Fact]
     public async Task ShouldPropagateCallerCancellationDuringJournalObservation()
     {
+        // Arrange
         var store = new StatusCheckpointStore();
         var services = Services(store);
         var progress = new StatusProgressReader();
@@ -452,8 +504,11 @@ public sealed class ProcessorStatusTests
         _ = services.AddPortia().AddProjector<GlobalStatusProjector>("projection", WorkloadScope.Global);
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
+
+        // Act
         var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
 
+        // Assert
         var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await bus.SendAsync(new GetProcessorStatus("projection"), SystemAdminActor(), cancellation.Token));
 
@@ -467,12 +522,16 @@ public sealed class ProcessorStatusTests
     [Fact]
     public void ShouldRegisterStatusOnceWithReflectionFreeJsonMetadataForEveryComponent()
     {
+        // Arrange
         var services = Services(new StatusCheckpointStore());
         _ = services.AddPortia()
             .AddProjector<GlobalStatusProjector>("projection", WorkloadScope.Global)
             .AddReactor<GlobalStatusReactor>("reaction", WorkloadScope.Global);
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         Assert.Single(provider.GetServices<RequestHandlerRegistration>(), item => item.RequestType == typeof(GetProcessorStatus));
         Assert.Single(provider.GetServices<RequestAuthorizerRegistration>(), item => item.RequestType == typeof(GetProcessorStatus));
         Assert.Single(provider.GetServices<RequestTransportRegistration>(), item => item.RequestType == typeof(GetProcessorStatus));

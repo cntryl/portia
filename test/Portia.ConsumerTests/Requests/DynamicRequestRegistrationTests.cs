@@ -16,6 +16,7 @@ public sealed class DynamicRequestRegistrationTests
     [Fact]
     public void ShouldAddTheTransportDescriptorForADynamicallyRegisteredRequest()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               using Microsoft.Extensions.DependencyInjection;
@@ -31,8 +32,10 @@ public sealed class DynamicRequestRegistrationTests
                               }
                               """;
 
+        // Act
         var generated = GeneratorCompilation.GeneratedSource(source, new RegistrationCallInterceptorGenerator());
 
+        // Assert
         Assert.Contains("DynamicOnly", generated, StringComparison.Ordinal);
         Assert.Contains("builder.AddGeneratedRequest(", generated, StringComparison.Ordinal);
     }

@@ -13,6 +13,7 @@ public sealed class InMemoryEventStoreTests
     [Fact]
     public async Task ShouldReadEventsAfterKnownVersionWhenAppended()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "aggregates", id.ToString());
         var store = new InMemoryEventStore();
@@ -21,9 +22,12 @@ public sealed class InMemoryEventStoreTests
         await store.AppendAsync(stream, 0, [first, second]);
 
         var events = new List<DomainEvent>();
+
+        // Act
         await foreach (var ev in store.ReadAsync(stream, 1))
             events.Add(ev.Event);
 
+        // Assert
         Assert.Same(second, Assert.Single(events));
     }
 
@@ -33,13 +37,17 @@ public sealed class InMemoryEventStoreTests
     [Fact]
     public async Task ShouldRejectAppendWhenExpectedVersionIsStale()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "aggregates", id.ToString());
         var store = new InMemoryEventStore();
         var first = Committed(new ValueChanged(40), id, 1);
         await store.AppendAsync(stream, 0, [first]);
 
+        // Act
         var stale = Committed(new ValueIncremented(2), id, 1);
+
+        // Assert
         _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(async () =>
             await store.AppendAsync(stream, 0, [stale]));
 
@@ -56,6 +64,7 @@ public sealed class InMemoryEventStoreTests
     [Fact]
     public async Task ShouldReadRealmPatternFromCheckpointAcrossStreams()
     {
+        // Arrange
         var firstId = Uuid.CreateVersion4();
         var secondId = Uuid.CreateVersion4();
         var firstStream = new EventStreamAddress("test", "orders", firstId.ToString());
@@ -66,10 +75,13 @@ public sealed class InMemoryEventStoreTests
         await store.AppendAsync(secondStream, 0, [second]);
 
         var records = new List<DomainEventRecord>();
+
+        // Act
         await foreach (var record in store.ReadAsync(EventStreamPattern.ForPattern("test"), new EventCursor("1"),
                            default))
             records.Add(record);
 
+        // Assert
         var result = Assert.Single(records);
         Assert.Same(second, result.Event);
         Assert.Equal(secondStream, result.Stream);
@@ -81,6 +93,7 @@ public sealed class InMemoryEventStoreTests
     [Fact]
     public async Task ShouldAppendSharedEventIdsAtomicallyAcrossStreams()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var first = new EventStreamAddress("test", "orders", "first");
         var second = new EventStreamAddress("test", "orders", "second");
@@ -89,7 +102,11 @@ public sealed class InMemoryEventStoreTests
         await store.AppendAsync(first, 0, [shared]);
         var other = Committed(new ValueChanged(2), id, 1);
         await store.AppendAsync(second, 0, [other, shared]);
+
+        // Act
         var rejected = Committed(new ValueChanged(3), id, 1);
+
+        // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.AppendAsync(second, 2, [rejected, shared]));
         await store.AppendAsync(second, 2, [rejected]);
@@ -118,13 +135,17 @@ public sealed class InMemoryEventStoreTests
     [Fact]
     public async Task ShouldRejectEventIdAlreadyCommittedToStream()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "aggregates", id.ToString());
         var store = new InMemoryEventStore();
         var first = Committed(new ValueChanged(1), id, 1);
         await store.AppendAsync(stream, 0, [first]);
+
+        // Act
         var fresh = Committed(new ValueChanged(2), id, 2);
 
+        // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.AppendAsync(stream, 1, [fresh, first]));
         await store.AppendAsync(stream, 1, [fresh]);
@@ -137,11 +158,16 @@ public sealed class InMemoryEventStoreTests
     [Fact]
     public async Task ShouldAllocateNearLinearlyWhenSeedingOneStreamByIndividualAppends()
     {
+        // Arrange
         await SeedAsync(256);
         var small = await SeedAsync(1_024);
+
+        // Act
         var large = await SeedAsync(4_096);
 
+
         // Four times the events: linear growth is ~4x, a per-append rebuild of the ID set is ~16x.
+        // Assert
         Assert.True(large < small * 8.0, $"4,096 appends allocated {large:N0} bytes vs {small:N0} for 1,024.");
     }
 

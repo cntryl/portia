@@ -100,13 +100,18 @@ public sealed class TenantDirectoryConsumerTests
     [InlineData(true)]
     public async Task WatchersHaveIndependentProgressAcrossOtherWatchersAndSnapshots(bool interveningSnapshot)
     {
+        // Arrange
         var store = new InMemoryEventStore();
         var directory = CreateDirectory(store);
         var id = Uuid.CreateVersion4();
         using var cancellation = new CancellationTokenSource();
         await using var first = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
         await using var second = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
+
+        // Act
         await SeedAsync(store, id, 0, new Activated("acme"));
+
+        // Assert
         Assert.True(await first.MoveNextAsync());
         Assert.Equal(TenantLifecycleChangeKind.Added, first.Current.Kind);
         if (interveningSnapshot)
@@ -141,6 +146,7 @@ public sealed class TenantDirectoryConsumerTests
     [Fact]
     public async Task InitialReconciliationDoesNotReplayHistoricalStartStopCycles()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         var clock = new ManualClock();
         var directory = CreateDirectory(store, clock);
@@ -149,7 +155,11 @@ public sealed class TenantDirectoryConsumerTests
         await SeedAsync(store, id, 1, new Deactivated("acme"));
         await SeedAsync(store, id, 2, new Activated("acme"));
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         await using var watch = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
+
+        // Assert
         Assert.True(await watch.MoveNextAsync());
         Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")), watch.Current);
         var next = watch.MoveNextAsync().AsTask();

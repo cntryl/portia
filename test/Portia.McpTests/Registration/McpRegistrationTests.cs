@@ -121,11 +121,16 @@ public sealed class McpRegistrationTests
     [Fact]
     public void ShouldUseExplicitToolDescriptionOverGeneratedRequestSummary()
     {
+        // Arrange
         const string explicitDescription = "Uses the caller-provided description.";
         var services = new ServiceCollection();
         _ = services.AddPortia().AddRequestHandler<ReadGreetingHandler>()
             .AddMcpTool<ReadGreeting>(tool => tool.DescribedAs(explicitDescription));
+
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         var tool = Assert.Single(provider.GetServices<McpServerTool>());
 
         Assert.Equal(explicitDescription, tool.ProtocolTool.Description);
@@ -134,9 +139,14 @@ public sealed class McpRegistrationTests
     [Fact]
     public void ShouldGeneratePropertyDescriptionsUsingJsonContractNames()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddPortia().AddRequestHandler<DocumentedGreetingHandler>().AddMcpTool<DocumentedGreeting>();
+
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         var tool = Assert.Single(provider.GetServices<McpServerTool>());
 
         Assert.Equal("Reads a greeting by its documented name.", tool.ProtocolTool.Description);
@@ -147,11 +157,16 @@ public sealed class McpRegistrationTests
     [Fact]
     public void ShouldGeneratePropertyDescriptionsFromInheritedRequestMembers()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddPortia()
             .AddRequestHandler<InheritedDocumentedGreetingHandler>()
             .AddMcpTool<InheritedDocumentedGreeting>();
+
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         var tool = Assert.Single(provider.GetServices<McpServerTool>());
 
         Assert.Equal("The person whose greeting should be read.", tool.ProtocolTool.InputSchema
@@ -161,6 +176,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public void ShouldRenderXmlReferencesAndResolveInheritedDocumentation()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddPortia()
             .AddRequestHandler<MarkupGreetingHandler>()
@@ -169,8 +185,11 @@ public sealed class McpRegistrationTests
             .AddMcpTool<InheritedGreeting>();
 
         using var provider = services.BuildServiceProvider();
+
+        // Act
         var tools = provider.GetServices<McpServerTool>().ToDictionary(tool => tool.ProtocolTool.Name);
 
+        // Assert
         Assert.Equal("Returns ReadGreeting when the null value is missing; owners use \"Tom & Jerry\".",
             tools["greetings.markup"].ProtocolTool.Description);
         Assert.Equal("Reads a greeting inherited by the concrete MCP request.",
@@ -214,12 +233,16 @@ public sealed class McpRegistrationTests
     [Fact]
     public void ShouldRewriteResultSchemaReferencesInsideObjectEnvelope()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddPortia()
             .AddRequestHandler<ReadTreeHandler>()
             .AddMcpTool<ReadTree>();
 
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         var schema = Assert.Single(provider.GetServices<McpServerTool>()).ProtocolTool.OutputSchema?.GetRawText();
 
         Assert.Contains("\"$ref\":\"#/properties/result/", schema, StringComparison.Ordinal);
@@ -229,12 +252,16 @@ public sealed class McpRegistrationTests
     [Fact]
     public void ShouldGenerateFallbackForRequestFromContractsAssemblyWithoutDocumentation()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddPortia()
             .AddRequestHandler<UndocumentedGreetingHandler>()
             .AddMcpTool<UndocumentedGreeting>();
 
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         var tool = Assert.Single(provider.GetServices<McpServerTool>());
 
         Assert.Equal("Invokes the UndocumentedGreeting request.", tool.ProtocolTool.Description);
@@ -452,6 +479,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public void ShouldApplyPortiaHttpRequestBodyLimitToMcpEndpoint()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.Services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 1_234);
         _ = builder.Services.AddPortia()
@@ -459,8 +487,11 @@ public sealed class McpRegistrationTests
             .AddMcpTool<ReadGreeting>()
             .AddMcpHttp();
         using var app = builder.Build();
+
+        // Act
         _ = app.MapPortiaMcp().AllowAnonymous();
 
+        // Assert
         var endpoint = Assert.Single(((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints),
             candidate => candidate.DisplayName?.Contains("MCP", StringComparison.OrdinalIgnoreCase) == true);
         Assert.Equal(1_234, endpoint.Metadata.GetMetadata<IRequestSizeLimitMetadata>()?.MaxRequestBodySize);
@@ -470,14 +501,17 @@ public sealed class McpRegistrationTests
     [Fact]
     public void ShouldRejectStatefulHttpConfigurationFromTransportCallback()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddPortia()
             .AddRequestHandler<ReadGreetingHandler>()
             .AddMcpTool<ReadGreeting>()
             .AddMcpHttp(options => options.Stateless = false);
 
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         var exception = Assert.Throws<OptionsValidationException>(() =>
             provider.GetRequiredService<IOptions<HttpServerTransportOptions>>().Value);
 
@@ -488,14 +522,18 @@ public sealed class McpRegistrationTests
     [Fact]
     public async Task ShouldRejectStatefulHttpConfigurationAtStartupWithoutMappedEndpoint()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia()
             .AddRequestHandler<ReadGreetingHandler>()
             .AddMcpTool<ReadGreeting>()
             .AddMcpHttp(options => options.Stateless = false);
+
+        // Act
         await using var app = builder.Build();
 
+        // Assert
         var exception = await Assert.ThrowsAsync<OptionsValidationException>(() => app.StartAsync());
 
         Assert.Contains("requires stateless Streamable HTTP", exception.Message, StringComparison.Ordinal);
@@ -504,6 +542,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public void ShouldRejectStatefulHttpConfigurationRegisteredAfterPortia()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.Services.AddPortia()
             .AddRequestHandler<ReadGreetingHandler>()
@@ -512,8 +551,10 @@ public sealed class McpRegistrationTests
         builder.Services.Configure<HttpServerTransportOptions>(options =>
             options.SessionMode = HttpServerSessionMode.StatefulForInitializeClients);
 
+        // Act
         using var app = builder.Build();
 
+        // Assert
         var exception = Assert.Throws<OptionsValidationException>(() => app.MapPortiaMcp());
 
         Assert.Contains("requires stateless Streamable HTTP", exception.Message, StringComparison.Ordinal);
@@ -522,6 +563,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public async Task ShouldAllowSafeHttpTransportConfiguration()
     {
+        // Arrange
         var services = new ServiceCollection();
         var configured = false;
         _ = services.AddPortia()
@@ -535,7 +577,10 @@ public sealed class McpRegistrationTests
 
         using var provider = services.BuildServiceProvider();
 
+        // Act
         var options = provider.GetRequiredService<IOptions<HttpServerTransportOptions>>().Value;
+
+        // Assert
         Assert.True(options.Stateless);
         var sessionOptions = new McpServerOptions();
         await options.ConfigureSessionOptions!(new DefaultHttpContext(), sessionOptions, CancellationToken.None);
@@ -546,13 +591,17 @@ public sealed class McpRegistrationTests
     [Fact]
     public async Task ShouldRejectExposedRequestWithoutHandlerBeforeServing()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia().AddMcpTool<ReadGreeting>().AddMcpHttp();
         await using var app = builder.Build();
         UseTestActor(app);
+
+        // Act
         _ = app.MapPortiaMcp().AllowAnonymous();
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => app.StartAsync());
 
         Assert.Contains("greetings.read", error.Message, StringComparison.Ordinal);
@@ -598,6 +647,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public async Task ShouldReportPostDispatchJsonExceptionAsInternalAndRecordTheFault()
     {
+        // Arrange
         var probe = new MutationProbe();
         var logs = new CapturingLoggerProvider();
         var stopped = new ConcurrentQueue<Activity>();
@@ -617,8 +667,10 @@ public sealed class McpRegistrationTests
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
+        // Act
         var result = await client.CallToolAsync("failures.json", new Dictionary<string, object?>());
 
+        // Assert
         Assert.Equal(1, probe.Committed);
         Assert.True(result.IsError);
         Assert.Equal("Internal", PortiaFailure(result).GetProperty("kind").GetString());
@@ -636,6 +688,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public async Task ShouldNotClassifyUnrelatedActorExceptionAsUnauthorized()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia()
@@ -648,8 +701,10 @@ public sealed class McpRegistrationTests
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
+        // Act
         var result = await client.CallToolAsync("failures.actor", new Dictionary<string, object?>());
 
+        // Assert
         Assert.True(result.IsError);
         Assert.Equal("Internal", PortiaFailure(result).GetProperty("kind").GetString());
         Assert.DoesNotContain("Actor 42", PortiaFailure(result).GetRawText(), StringComparison.Ordinal);
@@ -658,6 +713,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public async Task ShouldRecordInvalidToolArgumentsAsValidation()
     {
+        // Arrange
         var stopped = new ConcurrentQueue<Activity>();
         using var listener = Listen(stopped);
         var builder = WebApplication.CreateBuilder();
@@ -672,11 +728,13 @@ public sealed class McpRegistrationTests
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
+        // Act
         var result = await client.CallToolAsync("greetings.read", new Dictionary<string, object?>
         {
             ["name"] = 42
         });
 
+        // Assert
         Assert.True(result.IsError);
         Assert.Equal("Binding", PortiaFailure(result).GetProperty("kind").GetString());
         var receive = Assert.Single(stopped, activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);
@@ -687,6 +745,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public async Task ShouldBindNestedObjectArrayScalarAndNullArgumentsWithRegisteredMetadata()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddSingleton<InvocationProbe>();
@@ -700,6 +759,7 @@ public sealed class McpRegistrationTests
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
+        // Act
         var result = await client.CallToolAsync("inputs.inspect", new Dictionary<string, object?>
         {
             ["payload"] = new { source_record_id = "single-1", name = "Nested" },
@@ -713,6 +773,7 @@ public sealed class McpRegistrationTests
             ["note"] = null
         });
 
+        // Assert
         Assert.False(result.IsError);
         Assert.Equal("single-1:Nested|app-1:Payroll,app-2:Benefits|2,3,5|scalar|null",
             result.StructuredContent?.GetProperty("result").GetString());
@@ -726,6 +787,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public async Task ShouldKeepFailuresOfResultBearingToolsConformantToTheirOutputSchema()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia()
@@ -738,8 +800,10 @@ public sealed class McpRegistrationTests
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
+        // Act
         var result = await client.CallToolAsync("greetings.read", new Dictionary<string, object?> { ["name"] = 42 });
 
+        // Assert
         Assert.True(result.IsError);
         Assert.Null(result.StructuredContent);
         var failure = PortiaFailure(result);
@@ -755,6 +819,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public async Task ShouldRejectMalformedNestedInputBeforeResolvingActorOrInvokingHandler()
     {
+        // Arrange
         var actor = new CountingActorProvider();
         var probe = new InvocationProbe();
         var builder = WebApplication.CreateBuilder();
@@ -770,6 +835,7 @@ public sealed class McpRegistrationTests
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
+        // Act
         var result = await client.CallToolAsync("inputs.inspect", new Dictionary<string, object?>
         {
             ["payload"] = "not-an-object",
@@ -779,6 +845,7 @@ public sealed class McpRegistrationTests
             ["note"] = null
         });
 
+        // Assert
         Assert.True(result.IsError);
         Assert.Equal("Binding", PortiaFailure(result).GetProperty("kind").GetString());
         Assert.Equal(0, actor.Invocations);
@@ -788,6 +855,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public async Task ShouldMapCommitConcurrencyToSafeTransientConflictWithoutRetry()
     {
+        // Arrange
         var probe = new ConcurrencyProbe();
         var stopped = new ConcurrentQueue<Activity>();
         using var listener = Listen(stopped);
@@ -812,7 +880,11 @@ public sealed class McpRegistrationTests
         {
             ["expected_version"] = 0
         });
+
+        // Act
         var responses = new[] { await firstCall, await secondCall };
+
+        // Assert
         var winner = Assert.Single(responses, result => result.IsError != true);
         var conflict = Assert.Single(responses, result => result.IsError == true);
 
@@ -956,6 +1028,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public async Task ShouldRequireHttpAuthenticationByDefault()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddAuthentication("test")
@@ -969,7 +1042,10 @@ public sealed class McpRegistrationTests
         _ = app.MapPortiaMcp();
         await app.StartAsync();
 
+        // Act
         using var http = app.GetTestClient();
+
+        // Assert
         var error = await Assert.ThrowsAsync<HttpRequestException>(async () =>
             await McpScenario.ConnectAsync(http, new Uri("http://localhost/mcp")));
         Assert.Equal(HttpStatusCode.Unauthorized, error.StatusCode);
@@ -1182,6 +1258,7 @@ public sealed class McpRegistrationTests
     [Fact]
     public async Task ShouldKeepTelemetryKeyedByDiscriminatorWhenToolIsRenamed()
     {
+        // Arrange
         var stopped = new ConcurrentQueue<Activity>();
         using var listener = Listen(stopped);
         var builder = WebApplication.CreateBuilder();
@@ -1196,8 +1273,10 @@ public sealed class McpRegistrationTests
         await app.StartAsync();
         await using var client = await HttpClientAsync(app);
 
+        // Act
         var result = await client.CallToolAsync("actors.alias", new Dictionary<string, object?>());
 
+        // Assert
         Assert.Equal("aliased-agent|mcp|actors.alias",
             result.StructuredContent?.GetProperty("result").GetString());
         var receive = Assert.Single(stopped, activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);

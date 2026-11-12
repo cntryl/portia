@@ -111,10 +111,14 @@ public sealed class GeneratorStabilityTests
     [Fact]
     public void NeverThrowOnIncompleteCode()
     {
+        // Arrange
         var failures = new List<string>();
+
+        // Act
         for (var length = 0; length <= Corpus.Length; length += 11)
             failures.AddRange(Failures(Corpus[..length]).Select(failure => $"prefix {length}: {failure}"));
 
+        // Assert
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures.Take(20)));
     }
 
@@ -122,14 +126,18 @@ public sealed class GeneratorStabilityTests
     [Fact]
     public void NeverThrowWithAnyLineMissing()
     {
+        // Arrange
         var lines = Corpus.Split('\n');
         var failures = new List<string>();
+
+        // Act
         for (var index = 0; index < lines.Length; index++)
         {
             var source = string.Join('\n', lines.Where((_, line) => line != index));
             failures.AddRange(Failures(source).Select(failure => $"without line {index + 1}: {failure}"));
         }
 
+        // Assert
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures.Take(20)));
     }
 
@@ -137,9 +145,13 @@ public sealed class GeneratorStabilityTests
     [Fact]
     public void OutputIsDeterministic()
     {
+        // Arrange
         var first = Snapshot(Run(Corpus));
+
+        // Act
         var second = Snapshot(Run(Corpus));
 
+        // Assert
         Assert.NotEmpty(first);
         Assert.Equal(first, second);
     }

@@ -33,10 +33,13 @@ public sealed class FitzConfigurationTests
     [InlineData("wss://broker.example/ws")]
     public void AcceptsEitherWebSocketScheme(string endpoint)
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration(("Endpoint", endpoint)));
 
+        // Assert
         Assert.Contains(services, item => item.ServiceType.Name == "FitzApplicationConnection");
     }
 
@@ -63,11 +66,14 @@ public sealed class FitzConfigurationTests
     [InlineData("3600")]
     public void StartupTimeoutAcceptsAnyPositiveValueWithinAnHour(string seconds)
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(
             Configuration(("Endpoint", "ws://127.0.0.1:4090/ws"), ("StartupTimeoutSeconds", seconds)));
 
+        // Assert
         Assert.Contains(services, item => item.ServiceType.Name == "FitzApplicationConnection");
     }
 
@@ -90,21 +96,28 @@ public sealed class FitzConfigurationTests
     [Fact]
     public void ApplicationNameBecomesTheFleetMembershipSelector()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(
             Configuration(("Endpoint", "ws://127.0.0.1:4090/ws"), ("ApplicationName", "orders")));
 
+        // Assert
         Assert.Contains(services, item => item.ServiceType.Name == "FitzApplicationConnection");
     }
 
     [Fact]
     public void SecondFitzConnectionWithDifferentSettingsIsRejected()
     {
+        // Arrange
         var services = new ServiceCollection();
         var portia = services.AddPortia();
+
+        // Act
         _ = portia.AddFitz(Configuration(("Endpoint", "ws://127.0.0.1:4090/ws")));
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() =>
             portia.AddFitz(Configuration(("Endpoint", "ws://127.0.0.1:4091/ws"))));
 
@@ -114,23 +127,30 @@ public sealed class FitzConfigurationTests
     [Fact]
     public void RepeatingTheSameFitzConfigurationComposesOntoTheOneConnection()
     {
+        // Arrange
         var services = new ServiceCollection();
         var portia = services.AddPortia();
         _ = portia.AddFitz(Configuration(("Endpoint", "ws://127.0.0.1:4090/ws")));
         var count = services.Count(item => item.ServiceType.Name == "FitzApplicationConnection");
 
+        // Act
         _ = portia.AddFitz(Configuration(("Endpoint", "ws://127.0.0.1:4090/ws")));
 
+        // Assert
         Assert.Equal(count, services.Count(item => item.ServiceType.Name == "FitzApplicationConnection"));
     }
 
     [Fact]
     public void AnOwnedConnectionAndACallerSuppliedClientCannotBothOwnOneApplication()
     {
+        // Arrange
         var services = new ServiceCollection();
         var portia = services.AddPortia();
+
+        // Act
         _ = portia.AddFitz(Configuration(("Endpoint", "ws://127.0.0.1:4090/ws")));
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() =>
             portia.UseFitzClient(new Client(new ClientConfig(new Uri("ws://127.0.0.1:4090/ws"))), _ => { }));
 

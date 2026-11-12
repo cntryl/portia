@@ -9,10 +9,14 @@ public sealed class StartupValidationTests
     [Fact]
     public void AddPortiaComposesJsonContextOwnedByReferencedAssembly()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = ReferencedJsonComposition.Add(services);
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         Assert.True(provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json)
             .TryGetTypeInfo(typeof(ReferencedContractJsonPayload), out _));
     }
@@ -26,6 +30,7 @@ public sealed class StartupValidationTests
     [InlineData(false)]
     public void ApplicationJsonOptionsNeverBecomePortiasWireFormat(bool registeredFirst)
     {
+        // Arrange
         var application = new JsonSerializerOptions { WriteIndented = true };
         var services = new ServiceCollection();
         if (registeredFirst)
@@ -35,7 +40,10 @@ public sealed class StartupValidationTests
             _ = services.AddSingleton(application);
         using var provider = services.BuildServiceProvider();
 
+        // Act
         var portia = provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
+
+        // Assert
         Assert.NotSame(application, portia);
         Assert.True(portia.TryGetTypeInfo(typeof(ReferencedContractJsonPayload), out _));
         Assert.Same(application, provider.GetRequiredService<JsonSerializerOptions>());
@@ -44,11 +52,15 @@ public sealed class StartupValidationTests
     [Fact]
     public async Task AdvertisedUsageStillFailsStartupWhenNoComposedContextResolvesTheRoot()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia()
             .AddGeneratedHandler(new RequestRegistration<MissingJsonMetadataRequest, MissingJsonMetadataHandler>());
+
+        // Act
         using var host = builder.Build();
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
         Assert.Contains(typeof(MissingJsonMetadataRequest).FullName!, error.Message, StringComparison.Ordinal);

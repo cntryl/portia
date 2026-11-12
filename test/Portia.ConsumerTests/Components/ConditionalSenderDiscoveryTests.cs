@@ -10,9 +10,14 @@ public sealed class ConditionalSenderDiscoveryTests
     [InlineData("conditional_legacy")]
     public void ShouldRegisterOutboundQueueRequestGivenConditionalPublication(string form)
     {
+        // Arrange
         var source = Source(form);
+
+        // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source,
             new RegistrationCallInterceptorGenerator());
+
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
         var generated = GeneratorCompilation.GeneratedSource(source,

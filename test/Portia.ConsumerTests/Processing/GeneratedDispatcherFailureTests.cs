@@ -7,6 +7,7 @@ public sealed class GeneratedDispatcherFailureTests
     [InlineData(true, "batch", "1,2,3,4")]
     public async Task ShouldStopNestedDispatcherGivenSingleOrBatchFailure(bool rejectBatch, string error, string observed)
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
             using System;
             using System.Collections.Generic;
@@ -67,8 +68,10 @@ public sealed class GeneratedDispatcherFailureTests
             """, new ProjectorReactorEventDispatcherGenerator());
         var run = assembly.GetType("Dispatch.Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool, Task<string[]>>>();
 
+        // Act
         var result = await run(rejectBatch);
 
+        // Assert
         Assert.Equal(["False", error, observed, "True"], result);
     }
 }

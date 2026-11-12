@@ -22,6 +22,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
     [Fact]
     public async Task ShouldProjectFitzEventsIntoCassieAndResumeAcrossRepositoryScopes()
     {
+        // Arrange
         await using var database = await Database.OpenAsync();
         await using var client = await broker.CreateClientAsync();
         var events = new FitzEventStore(client.Stream, TestJson.DomainSerializer(new DomainEventTypeCatalog()
@@ -35,7 +36,10 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
             changes[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), account, (ulong)i + 1, DateTimeOffset.UtcNow));
         await events.AppendAsync(new EventStreamAddress(realm, "accounts", account.ToString()), 0, changes);
 
+        // Act
         var expectedFailure = RequestError.Conflict("temporary projection dependency", isTransient: true);
+
+        // Assert
         await using (var repository = new AccountRepository(database))
         {
             var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events)
@@ -76,6 +80,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
     [InlineData(false)]
     public async Task ShouldApplyFrameworkRetryPolicyAcrossFitzAndCassie(bool transient)
     {
+        // Arrange
         await using var database = await Database.OpenAsync();
         await using var client = await broker.CreateClientAsync();
         var events = new FitzEventStore(client.Stream, TestJson.DomainSerializer(new DomainEventTypeCatalog()
@@ -101,7 +106,11 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
             options.MaximumFailureDelay = TimeSpan.FromMilliseconds(20);
             options.FailureAttemptLimit = 3;
         }).AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
@@ -152,14 +161,18 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
     [InlineData("(identity TEXT PRIMARY KEY, cursor TEXT NOT NULL, revision TEXT NOT NULL)")]
     public async Task ShouldRejectIncompatibleCheckpointTableAtStartup(string schema)
     {
+        // Arrange
         await using var database = await Database.OpenAsync();
         var table = "portia_" + Guid.NewGuid().ToString("N") + "_legacy";
+
+        // Act
         await using (var connection = await database.Source.OpenConnectionAsync())
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = $"CREATE TABLE {table} {schema}";
             _ = await command.ExecuteNonQueryAsync();
         }
+        // Assert
         try
         {
             var services = new ServiceCollection();
@@ -192,6 +205,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
     [Fact]
     public async Task ShouldHoldBatchesUntilTheReadIsDisposedWhenItsConnectionIsReopened()
     {
+        // Arrange
         await using var database = await Database.OpenAsync();
         await using var repository = new AccountRepository(database);
         var identity = Identity("cassie-reopen-" + Uuid.CreateVersion4());
@@ -202,8 +216,11 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         var startedEarly = await Task.WhenAny(begin, Task.Delay(Timeout.InfiniteTimeSpan, timeout.Token)) == begin;
         await timeout.CancelAsync();
         await read.DisposeAsync();
+
+        // Act
         await using var batch = await begin.WaitAsync(TimeSpan.FromSeconds(15));
 
+        // Assert
         Assert.False(startedEarly, "A batch began while a query read was still open.");
     }
 

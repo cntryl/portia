@@ -13,13 +13,17 @@ public sealed class FitzKvProjectionStoreTenantReadTests
     [Fact]
     public async Task ShouldOpenTheTenantResourceForTypedRead()
     {
+        // Arrange
         var client = new FakeKvClient();
         var repository = new BalancesRepository(client, "kv://portia/accounts/balances");
         var tenant = new TenantId("acme");
 
         _ = await repository.ReadAsync(tenant, "savings");
+
+        // Act
         _ = await repository.ReadAsync("acme", "savings");
 
+        // Assert
         Assert.Equal(2, client.Transactions.Count);
         Assert.Equal(client.Transactions[1].Route, client.Transactions[0].Route);
         Assert.Equal(FitzKvCheckpoints.WorkloadRoute("kv://portia/accounts/balances", "balances", "acme"),
@@ -30,9 +34,13 @@ public sealed class FitzKvProjectionStoreTenantReadTests
     [Fact]
     public async Task ShouldRejectDefaultTenant()
     {
+        // Arrange
         var client = new FakeKvClient();
+
+        // Act
         var repository = new BalancesRepository(client, "kv://portia/accounts/balances");
 
+        // Assert
         _ = await Assert.ThrowsAnyAsync<ArgumentException>(async () => await repository.ReadAsync(default(TenantId), "savings"));
 
         Assert.Empty(client.Transactions);

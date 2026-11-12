@@ -29,6 +29,7 @@ public sealed class FitzKvDirectoryProjectionTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldPageEachTenantsProjectedTeamsInNameOrder()
     {
+        // Arrange
         await using var client = await _broker.CreateClientAsync();
         var events = EventStore(client);
         Uuid alpha = Uuid.CreateVersion4(), charlie = Uuid.CreateVersion4(), delta = Uuid.CreateVersion4();
@@ -45,8 +46,11 @@ public sealed class FitzKvDirectoryProjectionTests(FitzBrokerFixture broker)
 
         var first = await teams.ListAsync(_tenantA, take: 2, cursor: null, default);
         var second = await teams.ListAsync(_tenantA, take: 2, first.NextCursor, default);
+
+        // Act
         var tenantB = await teams.ListAsync(_tenantB, take: 2, cursor: null, default);
 
+        // Assert
         Assert.Equal(["alpha", "Bravo"], first.Items.Select(static team => team.Name));
         Assert.Equal(["Charlie"], second.Items.Select(static team => team.Name));
         Assert.Null(second.NextCursor);
@@ -62,6 +66,7 @@ public sealed class FitzKvDirectoryProjectionTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldRejectOneTenantsCursorOnAnotherTenantsList()
     {
+        // Arrange
         await using var client = await _broker.CreateClientAsync();
         var events = EventStore(client);
         await AppendAsync(events, _tenantA, Uuid.CreateVersion4(), new TeamCreated("alpha"));
@@ -70,8 +75,11 @@ public sealed class FitzKvDirectoryProjectionTests(FitzBrokerFixture broker)
         await ProjectAsync(services, _tenantA);
         await using var scope = services.CreateAsyncScope();
         var teams = scope.ServiceProvider.GetRequiredService<ITeamDirectory>();
+
+        // Act
         var first = await teams.ListAsync(_tenantA, take: 1, cursor: null, default);
 
+        // Assert
         var error = await Assert.ThrowsAsync<KvDirectoryQueryException>(async () =>
             await teams.ListAsync(_tenantB, take: 1, first.NextCursor, default));
 

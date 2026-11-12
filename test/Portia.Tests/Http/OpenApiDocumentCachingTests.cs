@@ -34,10 +34,14 @@ public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
     [Fact]
     public async Task ShouldNotRecomposeTheDocumentOnEveryRequest()
     {
+        // Arrange
         const int iterations = 100;
         var client = await StartAsync();
 
+        // Act
         var first = await client.GetAsync("/openapi/v1.json");
+
+        // Assert
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         var documentBytes = (await first.Content.ReadAsByteArrayAsync()).Length;
         for (var i = 0; i < 10; i++)
@@ -59,12 +63,16 @@ public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
     [Fact]
     public async Task ShouldServeTheDocumentedMediaTypesAndRejectUnknownDocumentNames()
     {
+        // Arrange
         var client = await StartAsync();
 
         var json = await client.GetAsync("/openapi/v1.json");
         var yaml = await client.GetAsync("/openapi/v1.yml");
+
+        // Act
         var unknown = await client.GetAsync("/openapi/v2.json");
 
+        // Assert
         Assert.Equal("application/json; charset=utf-8", json.Content.Headers.ContentType?.ToString());
         Assert.Equal("text/plain+yaml; charset=utf-8", yaml.Content.Headers.ContentType?.ToString());
         Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
@@ -79,6 +87,7 @@ public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
     [Fact]
     public async Task ShouldFailEveryRequestGivenTheDocumentCannotBeComposed()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddFrameworkTests();
@@ -89,8 +98,11 @@ public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
         _ = _app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");
         _ = _app.MapGet("/ordinary", () => Results.Ok()).WithName("httpGetWidget");
         await _app.StartAsync();
+
+        // Act
         using var client = _app.GetTestClient();
 
+        // Assert
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>

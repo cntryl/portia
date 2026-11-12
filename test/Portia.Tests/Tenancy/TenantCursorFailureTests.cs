@@ -12,6 +12,7 @@ public sealed class TenantCursorFailureTests
     [InlineData(true)]
     public async Task ShouldRetryLifecycleRecordAfterExtractorFailure(bool removal)
     {
+        // Arrange
         var events = new InMemoryEventStore();
         var aggregate = Uuid.CreateVersion4();
         await AppendAsync(events, aggregate, 0, new Started("acme"));
@@ -25,7 +26,11 @@ public sealed class TenantCursorFailureTests
             }
             return GetTenant(ev);
         });
+
+        // Act
         await using var cursor = await directory.OpenCursorAsync();
+
+        // Assert
         if (removal)
         {
             Assert.Equal(Added("acme"), await ReadOneAsync(cursor));
@@ -46,6 +51,7 @@ public sealed class TenantCursorFailureTests
     [Fact]
     public async Task ShouldResumeOrderedLifecycleAfterRepeatedExtractionFailures()
     {
+        // Arrange
         var events = new InMemoryEventStore();
         var aggregate = Uuid.CreateVersion4();
         await AppendAsync(events, aggregate, 0, new Started("acme"));
@@ -56,7 +62,11 @@ public sealed class TenantCursorFailureTests
                 throw new IOException("tenant extraction remains unavailable");
             return GetTenant(ev);
         });
+
+        // Act
         await using var cursor = await directory.OpenCursorAsync();
+
+        // Assert
         Assert.Equal(Added("acme"), await ReadOneAsync(cursor));
         await AppendAsync(events, aggregate, 1, new Stopped("acme"));
         await AppendAsync(events, aggregate, 2, new Started("beta"));
@@ -73,6 +83,7 @@ public sealed class TenantCursorFailureTests
     [Fact]
     public async Task ShouldResumeCursorAfterSubscriptionDisposalFails()
     {
+        // Arrange
         var events = new InMemoryEventStore();
         var aggregate = Uuid.CreateVersion4();
         await AppendAsync(events, aggregate, 0, new Started("acme"));
@@ -80,7 +91,11 @@ public sealed class TenantCursorFailureTests
         var directory = new EventSourcedTenantDirectory<Started, Stopped>(events, Pattern, GetTenant,
             notifier: notifier);
         await using var cursor = await directory.OpenCursorAsync();
+
+        // Act
         var first = cursor.ReadAsync().GetAsyncEnumerator();
+
+        // Assert
         Assert.True(await first.MoveNextAsync());
         Assert.Equal(Added("acme"), first.Current);
         _ = await Assert.ThrowsAsync<IOException>(() => first.DisposeAsync().AsTask());
@@ -93,12 +108,17 @@ public sealed class TenantCursorFailureTests
     [Fact]
     public async Task ShouldResumeCursorAfterOrdinarySubscriptionDisposal()
     {
+        // Arrange
         var events = new InMemoryEventStore();
         var aggregate = Uuid.CreateVersion4();
         await AppendAsync(events, aggregate, 0, new Started("acme"));
         var directory = new EventSourcedTenantDirectory<Started, Stopped>(events, Pattern, GetTenant,
             notifier: new CleanupNotifier(false));
+
+        // Act
         await using var cursor = await directory.OpenCursorAsync();
+
+        // Assert
         Assert.Equal(Added("acme"), await ReadOneAsync(cursor));
         await AppendAsync(events, aggregate, 1, new Started("beta"));
 
@@ -109,6 +129,7 @@ public sealed class TenantCursorFailureTests
     [Fact]
     public async Task ShouldReserveCursorUntilFaultedSubscriptionCleanupCompletes()
     {
+        // Arrange
         var events = new InMemoryEventStore();
         var aggregate = Uuid.CreateVersion4();
         await AppendAsync(events, aggregate, 0, new Started("acme"));
@@ -116,7 +137,11 @@ public sealed class TenantCursorFailureTests
         var directory = new EventSourcedTenantDirectory<Started, Stopped>(events, Pattern, GetTenant,
             notifier: notifier);
         await using var cursor = await directory.OpenCursorAsync();
+
+        // Act
         var first = cursor.ReadAsync().GetAsyncEnumerator();
+
+        // Assert
         Assert.True(await first.MoveNextAsync());
         var cleanup = first.DisposeAsync().AsTask();
         await notifier.DisposalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));

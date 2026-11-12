@@ -15,10 +15,12 @@ public sealed class FitzEventStoreReadTelemetryTests
     [InlineData(true, true, 1)]
     public async Task ShouldReportSuccessForCompletionAndEarlyDisposal(bool pattern, bool stopEarly, long expectedCount)
     {
+        // Arrange
         var measurements = new Measurements();
         using var listener = measurements.Listen();
         var fixture = CreateStore(new Pages(CreatePage(2)));
 
+        // Act
         if (pattern)
         {
             await foreach (var _ in fixture.Store.ReadAsync(EventStreamPattern.ForPattern("test")))
@@ -32,6 +34,7 @@ public sealed class FitzEventStoreReadTelemetryTests
                     break;
         }
 
+        // Assert
         Assert.Equal("success", Assert.Single(measurements.Durations).Outcome);
         Assert.Equal(expectedCount, Assert.Single(measurements.Counts));
     }
@@ -44,6 +47,7 @@ public sealed class FitzEventStoreReadTelemetryTests
     [InlineData(true, false, "fault")]
     public async Task ShouldDistinguishCancellationFromFailure(bool pattern, bool cancel, string outcome)
     {
+        // Arrange
         var measurements = new Measurements();
         using var listener = measurements.Listen();
         using var cancellation = new CancellationTokenSource();
@@ -54,6 +58,7 @@ public sealed class FitzEventStoreReadTelemetryTests
             : new IOException("read failed");
         var fixture = CreateStore(new Pages(failure));
 
+        // Act
         var error = await Record.ExceptionAsync(async () =>
         {
             if (pattern)
@@ -71,6 +76,7 @@ public sealed class FitzEventStoreReadTelemetryTests
             }
         });
 
+        // Assert
         if (cancel)
             _ = Assert.IsType<OperationCanceledException>(error);
         else
@@ -86,10 +92,14 @@ public sealed class FitzEventStoreReadTelemetryTests
     [Fact]
     public async Task ShouldFaultAPatternReadGivenMetadataThatDisagreesWithTheRecordRoute()
     {
+        // Arrange
         var measurements = new Measurements();
         using var listener = measurements.Listen();
+
+        // Act
         var fixture = CreateStore(new Pages(CreatePage(1, new EventStreamAddress("test", "events", "other"))));
 
+        // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await foreach (var _ in fixture.Store.ReadAsync(EventStreamPattern.ForPattern("test")))

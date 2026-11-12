@@ -10,6 +10,7 @@ public sealed class SingleProcessWorkloadCancellationTests
     [InlineData(true)]
     public async Task ShouldAwaitRevokedWorkloadDespiteCancellationCallbackFailure(bool throwOnCancellation)
     {
+        // Arrange
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -19,6 +20,8 @@ public sealed class SingleProcessWorkloadCancellationTests
         WorkloadIdentity[] snapshot = [new("pass2-cancellation-cleanup")];
         using var lifetime = new CancellationTokenSource();
         var coordinator = new SingleProcessWorkloadCoordinator(TimeSpan.FromMilliseconds(1));
+
+        // Act
         var run = coordinator.RunAsync(() => Volatile.Read(ref snapshot), async (_, token) =>
         {
             // Keep registration alive through coordination, even if the cancelled delay resumes
@@ -42,6 +45,7 @@ public sealed class SingleProcessWorkloadCancellationTests
             }
         }, lifetime.Token);
 
+        // Assert
         try
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -85,6 +89,7 @@ public sealed class SingleProcessWorkloadCancellationTests
     [Fact]
     public async Task ShouldPreserveCancellationAndWorkloadCleanupFailures()
     {
+        // Arrange
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -94,6 +99,8 @@ public sealed class SingleProcessWorkloadCancellationTests
         WorkloadIdentity[] snapshot = [new("faulting"), new("sibling")];
         using var lifetime = new CancellationTokenSource();
         var coordinator = new SingleProcessWorkloadCoordinator(TimeSpan.FromMilliseconds(1));
+
+        // Act
         var run = coordinator.RunAsync(() => Volatile.Read(ref snapshot), async (identity, token) =>
         {
             // The test owns the faulting registration until coordination finishes. Disposing it
@@ -121,6 +128,7 @@ public sealed class SingleProcessWorkloadCancellationTests
             }
         }, lifetime.Token);
 
+        // Assert
         try
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(5));

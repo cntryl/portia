@@ -22,6 +22,7 @@ public sealed class HostedReactorRecoveryTests
     [Fact]
     public async Task ShouldResumeFromStoreCheckpointAfterFaultedPassRatherThanStaleLocalValue()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "reactors", id.ToString());
         var eventStore = new InMemoryEventStore();
@@ -42,8 +43,11 @@ public sealed class HostedReactorRecoveryTests
                 o.PollInterval = TimeSpan.FromMilliseconds(20);
                 o.Processing = new ProjectionRunOptions { MaxBatchSize = 2 };
             }).AddWorkers().UseSingleProcessWorkloads();
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await hostedService.StartAsync(default);
         var executeTask = hostedService.ExecuteTask

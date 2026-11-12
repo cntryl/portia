@@ -9,6 +9,7 @@ public sealed class QueueBrokerTests
     [Fact]
     public async Task MalformedReservationIsRedeliveredByFitzAfterValidWorkIsAcknowledged()
     {
+        // Arrange
         await using var client = await ConsumerBroker.ConnectAsync();
         var route = "queue://portia-consumer-tests/queue/" + Guid.NewGuid().ToString("N");
         var serializer = ConsumerJson.CreateSerializer();
@@ -17,7 +18,11 @@ public sealed class QueueBrokerTests
         _ = await client.Queue.EnqueueAsync(route,
             serializer.Serialize(new ScopeRequest(id), null, RequestMetadata.Create(), null));
         var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog());
+
+        // Act
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+
+        // Assert
         Assert.True(await reader.MoveNextAsync());
         var malformed = reader.Current;
         var attempt = malformed.Attempt;
@@ -43,14 +48,18 @@ public sealed class QueueBrokerTests
     [Fact]
     public async Task ReservationReportsTheEnvelopeDiscriminatorAsItsWireName()
     {
+        // Arrange
         await using var client = await ConsumerBroker.ConnectAsync();
         var route = "queue://portia-consumer-tests/queue/" + Guid.NewGuid().ToString("N");
         var serializer = ConsumerJson.CreateSerializer();
         _ = await client.Queue.EnqueueAsync(route,
             serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null, RequestMetadata.Create(), null));
         var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog());
+
+        // Act
         await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
 
+        // Assert
         Assert.True(await reader.MoveNextAsync());
 
         Assert.Equal("consumer.scopes.scope-request", reader.Current.Name);
@@ -61,6 +70,7 @@ public sealed class QueueBrokerTests
     [Fact]
     public async Task ActiveDeliveryRetainsLeaseThenHandsRedeliveryBackToFitzOnCancellation()
     {
+        // Arrange
         await using var client = await ConsumerBroker.ConnectAsync();
         await using var competitor = await ConsumerBroker.ConnectAsync();
         var route = "queue://portia-consumer-tests/queue/" + Guid.NewGuid().ToString("N");
@@ -79,7 +89,11 @@ public sealed class QueueBrokerTests
         _ = services.AddPortiaQueueRunner();
         await using var provider = ConsumerHost.Build(services);
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         var run = provider.GetRequiredService<QueueRunner>().RunAsync(cancellation.Token);
+
+        // Assert
         try
         {
             await provider.GetRequiredService<ConsumerHost.Effects>().WaitForAsync("nested");

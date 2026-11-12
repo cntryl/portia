@@ -10,6 +10,7 @@ public sealed class OperationalStartAcknowledgementTests
     [Fact]
     public async Task ShouldRecordOneAttemptAfterStartAcknowledgementIsLost()
     {
+        // Arrange
         var journal = new LostStartAcknowledgementStore();
         var session = await SessionAsync(journal);
         var records = new List<DomainEventRecord>();
@@ -19,7 +20,10 @@ public sealed class OperationalStartAcknowledgementTests
 
         var attempt = await session.BeginAsync(records, ProjectionCheckpoint.Start, default);
 
+        // Act
         var persisted = (await journal.ReadAsync(Target))!;
+
+        // Assert
         Assert.Single(persisted.Attempts, candidate => candidate.Id == attempt);
     }
 
@@ -27,6 +31,7 @@ public sealed class OperationalStartAcknowledgementTests
     [Fact]
     public async Task ShouldRecordOneAttemptAfterStartWriteFailsBeforeCommit()
     {
+        // Arrange
         var journal = new LostStartAcknowledgementStore();
         var session = await SessionAsync(journal);
         var records = new List<DomainEventRecord>();
@@ -34,8 +39,10 @@ public sealed class OperationalStartAcknowledgementTests
             records.Add(record);
         journal.FailNextStartBeforeCommit = true;
 
+        // Act
         var attempt = await session.BeginAsync(records, ProjectionCheckpoint.Start, default);
 
+        // Assert
         var persisted = Assert.Single((await journal.ReadAsync(Target))!.Attempts);
         Assert.Equal(attempt, persisted.Id);
         Assert.Equal("running", persisted.Outcome);
@@ -49,6 +56,7 @@ public sealed class OperationalStartAcknowledgementTests
     [InlineData(true)]
     public async Task ShouldCompleteReactorAfterStartAcknowledgementLoss(bool loseAcknowledgement)
     {
+        // Arrange
         var journal = new LostStartAcknowledgementStore();
         var session = await SessionAsync(journal);
         journal.LoseNextStartAcknowledgement = loseAcknowledgement;
@@ -56,9 +64,11 @@ public sealed class OperationalStartAcknowledgementTests
         var reactor = new OperationalExecutionTests.EffectReactor(journal, effects);
         reactor.BindWorkload(new WorkloadIdentity(Target.Processor), Target.Processor);
 
+        // Act
         var checkpoint = await new ReactorRunner(await OperationalExecutionTests.EventsAsync())
         { Operations = session }.RunAsync(reactor, ProjectionCheckpoint.Start);
 
+        // Assert
         Assert.Equal("2", checkpoint.Cursor.Value);
         Assert.Equal(checkpoint, await journal.LoadAsync(Target.Identity));
         Assert.Equal(2, effects.Executions.Count);

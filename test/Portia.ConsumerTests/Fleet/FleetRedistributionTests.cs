@@ -17,6 +17,7 @@ public sealed class FleetRedistributionTests
     [Fact]
     public async Task JoinMovesOnlyNewOwnersAndPreservesUnchangedScopesThenDepartureRestoresWork()
     {
+        // Arrange
         var membership = new Membership();
         membership.Observer.Set("a");
         var state = new State();
@@ -28,12 +29,16 @@ public sealed class FleetRedistributionTests
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
         { ValidateScopes = true, ValidateOnBuild = true });
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         var run = new FleetPartitionRunner(new InMemoryLeaseClient(), membership, timeProvider: clock).RunAsync(
             Partitions, async (partition, ct) =>
             {
                 await using var scope = provider.CreateAsyncScope();
                 await scope.ServiceProvider.GetRequiredService<Workload>().RunAsync(partition, ct);
             }, options, cancellation.Token);
+
+        // Assert
         try
         {
             await Until(() => state.Active.Count == 8);
@@ -136,13 +141,18 @@ public sealed class FleetRedistributionTests
         int milliseconds,
         ulong expectedTtl)
     {
+        // Arrange
         var clock = new ManualClock();
         var membership = new Membership { FailFirst = true, AutoSelf = true };
         var leases = new CapturingLeases();
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         var run = new FleetPartitionRunner(leases, membership, timeProvider: clock).RunAsync([Partitions[0]],
             (_, ct) => Task.Delay(Timeout.InfiniteTimeSpan, ct),
             Options with { WorkerId = null, LeaseTtl = TimeSpan.FromMilliseconds(milliseconds) }, cancellation.Token);
+
+        // Assert
         try
         {
             // The retry delay is chosen by the runner's backoff policy, so the test observes it
@@ -171,10 +181,13 @@ public sealed class FleetRedistributionTests
     [Fact]
     public async Task InventoryFailureStopsActiveWorkBeforeMembershipRetry()
     {
+        // Arrange
         var clock = new ManualClock();
         var membership = new Membership { AutoSelf = true };
         var active = 0;
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         var run = new FleetPartitionRunner(new InMemoryLeaseClient(), membership, timeProvider: clock).RunAsync(
             Partitions,
             async (partition, ct) =>
@@ -190,6 +203,8 @@ public sealed class FleetRedistributionTests
                     _ = Interlocked.Decrement(ref active);
                 }
             }, Options, cancellation.Token);
+
+        // Assert
         try
         {
             _ = await clock.WaitForDelayAsync();

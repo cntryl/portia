@@ -10,6 +10,7 @@ public sealed class FriendAssemblyGeneratorTests
     [InlineData("Friend.Core", "Friend_Core")]
     public void GeneratedHelpersDoNotConflictAcrossFriendAssemblies(string sourceAssembly, string friendAssembly)
     {
+        // Arrange
         var options = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
@@ -38,7 +39,11 @@ public sealed class FriendAssemblyGeneratorTests
                 """, options, "First.cs")], references, compileOptions);
         first = Generate(first, options);
         using var image = new MemoryStream();
+
+        // Act
         var emitted = first.Emit(image);
+
+        // Assert
         Assert.True(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
 
         var second = CSharpCompilation.Create(friendAssembly,

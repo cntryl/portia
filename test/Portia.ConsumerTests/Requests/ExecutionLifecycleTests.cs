@@ -9,6 +9,7 @@ public sealed class ExecutionLifecycleTests
     [Fact]
     public async Task StreamingAuthorizationAndHandlerShareExecutionWithoutSharingMutablePrincipals()
     {
+        // Arrange
         var services = new ServiceCollection();
         var handler = new Handler();
         var authorizer = new Authorizer();
@@ -25,8 +26,12 @@ public sealed class ExecutionLifecycleTests
         var parent = new RequestContext<Query>(new Query(), RequestActor.CreateSystem("parent"));
         var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
         var values = new List<int>();
+
+        // Act
         await foreach (var value in bus.StreamAsync(new Query(), parent))
             values.Add(value);
+
+        // Assert
         Assert.Equal([1, 2], values);
         var context = Assert.IsAssignableFrom<IRequestContext<Query>>(handler.Context);
         Assert.Equal(authorizer.Context!.ExecutionId, context.ExecutionId);

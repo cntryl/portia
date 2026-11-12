@@ -75,10 +75,13 @@ public sealed class UninterceptedCallSiteTests
     [InlineData(null, "   ")]
     public void UninterceptedEndpointMappingChecksItsArgumentsBeforeReportingTheCause(string? app, string? pattern)
     {
+        // Arrange
         var route = app is null
             ? "WebApplication.CreateBuilder().Build()"
             : "null!";
         var patternText = pattern is null ? "\"/binding\"" : "\"" + pattern + "\"";
+
+        // Act
         var error = RunGeneric($$"""
                                  using Cntryl.Portia;
                                  using Cntryl.Portia.Testing;
@@ -91,6 +94,7 @@ public sealed class UninterceptedCallSiteTests
                                  }
                                  """);
 
+        // Assert
         _ = app is null
             ? Assert.IsType<ArgumentException>(error, false)
             : Assert.IsType<ArgumentNullException>(error);

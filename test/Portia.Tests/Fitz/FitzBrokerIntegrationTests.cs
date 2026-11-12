@@ -23,13 +23,17 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldUpsertAndCancelDeclarativeScheduleAgainstRealFitzBroker()
     {
+        // Arrange
         await using var firstClient = await _broker.CreateClientAsync();
         await using var secondClient = await _broker.CreateClientAsync();
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var first = new FitzRequestScheduler(firstClient.Schedule, serializer);
         var second = new FitzRequestScheduler(secondClient.Schedule, serializer);
+
+        // Act
         const string route = "schedule://test/shared/action/run";
 
+        // Assert
         try
         {
             Assert.Equal(route, await first.EnsureAsync(new UniversalAction(1),
@@ -60,12 +64,17 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldPersistScheduleProducerContextAgainstRealFitzBroker()
     {
+        // Arrange
         using var listener = ListenToRequests(out var activities);
         await using var client = await _broker.CreateClientAsync();
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var scheduler = new FitzRequestScheduler(client.Schedule, serializer);
         const string route = "schedule://test/shared/action/run";
+
+        // Act
         string? scheduleId = null;
+
+        // Assert
         try
         {
             scheduleId = await scheduler.ScheduleAsync(new UniversalAction(73),
@@ -126,6 +135,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldReleaseRealFitzTransactionAfterMalformedCheckpointValidation()
     {
+        // Arrange
         await using var originalClient = await _broker.CreateClientAsync();
         await using var repairClient = await _broker.CreateClientAsync();
         var route = "kv://portia-integration/projection-cleanup/" + Uuid.CreateVersion4();
@@ -140,7 +150,10 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             await seed.CommitAsync(KvDurability.Sync);
         }
 
+        // Act
         var store = new FitzKvValueRepository(originalClient.Kv, route, identity.ComponentName);
+
+        // Assert
         _ = await Assert.ThrowsAsync<InvalidDataException>(async () =>
             await store.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)));
 
@@ -169,13 +182,17 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldPersistReactorCheckpointsThroughRealFitzKv()
     {
+        // Arrange
         await using var client = await _broker.CreateClientAsync();
         var route = "kv://portia-integration/conformance/" + Uuid.CreateVersion4();
         var store = new FitzKvCheckpointStore(client.Kv, route);
         var pattern = EventStreamPattern.ForPattern("portia-integration", "reactions");
         var live = new CheckpointIdentity("reactor", pattern);
+
+        // Act
         var rebuild = new CheckpointIdentity("reactor", pattern, "rebuild-1");
 
+        // Assert
         Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(live));
 
         await store.SaveAsync(live, new ProjectionCheckpoint(new EventCursor("42")));
@@ -199,6 +216,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldSaveOneTenantsReactorCheckpointWhileAnotherTenantsIsInFlight()
     {
+        // Arrange
         await using var client = await _broker.CreateClientAsync();
         var route = "kv://portia-integration/conformance/" + Uuid.CreateVersion4();
         var store = new FitzKvCheckpointStore(client.Kv, route);
@@ -207,8 +225,10 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         await using var inFlight = await client.Kv.BeginAsync(
             FitzKvCheckpoints.WorkloadRoute(route, tenantA));
 
+        // Act
         await store.SaveAsync(tenantB, new ProjectionCheckpoint(new EventCursor("7")));
 
+        // Assert
         Assert.Equal("7", (await store.LoadAsync(tenantB)).Cursor.ToString());
     }
 
@@ -218,6 +238,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldRoundTripDomainEventThroughRealFitzBroker()
     {
+        // Arrange
         await using var client = await _broker.CreateClientAsync();
         var serializer = TestJson.DomainSerializer(
             new DomainEventTypeCatalog().Register<ValueChanged>(1, "test.value.changed"));
@@ -236,9 +257,12 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
         await store.AppendAsync(stream, 0, [original]);
         var events = new List<DomainEvent>();
+
+        // Act
         await foreach (var ev in store.ReadAsync(stream))
             events.Add(ev.Event);
 
+        // Assert
         var roundTripped = Assert.IsType<ValueChanged>(Assert.Single(events));
         Assert.Equal(original.Value, roundTripped.Value);
         Assert.Equal(original.Metadata, roundTripped.Metadata);
@@ -254,6 +278,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldUpcastEventReadFromRealFitzStreamWrittenByOlderSchemaVersion()
     {
+        // Arrange
         await using var client = await _broker.CreateClientAsync();
         var aggregateId = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("portia-integration", "event-store-evolution", aggregateId.ToString());
@@ -271,9 +296,12 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
                 [new WidgetNamedToRenamedUpcaster()]));
 
         var events = new List<DomainEvent>();
+
+        // Act
         await foreach (var ev in readerStore.ReadAsync(stream))
             events.Add(ev.Event);
 
+        // Assert
         var widget = Assert.IsType<WidgetRenamed>(Assert.Single(events));
         Assert.Equal("Sprocket", widget.DisplayName);
     }
@@ -289,6 +317,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldThrowConcurrencyExceptionWhenAppendingWithStaleExpectedVersion()
     {
+        // Arrange
         await using var client = await _broker.CreateClientAsync();
         var serializer =
             TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<ValueChanged>(1, "test.value.changed"));
@@ -300,8 +329,11 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         await store.AppendAsync(stream, 0, [first]);
 
         var stale = new ValueChanged(2);
+
+        // Act
         stale.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, 1, DateTimeOffset.UtcNow));
 
+        // Assert
         _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() =>
             store.AppendAsync(stream, 0, [stale]).AsTask());
     }
@@ -350,6 +382,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldRoundTripRequestThroughRealFitzBroker()
     {
+        // Arrange
         using var activityListener = ListenToRequests(out var activities);
         using var meterListener = ListenToDeliveries(out var deliveries);
         await using var workerClient = await _broker.CreateClientAsync();
@@ -362,11 +395,13 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         await using var registration = await server.RegisterAsync<RpcGetValue, int>();
         var sender = new FitzRemoteRequestSender(callerClient.Rpc, serializer, serializer);
 
+        // Act
         var result = await sender.SendAsync<RpcGetValue, int>(
             new RpcGetValue(),
             new RequestRouteValues(),
             null);
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(7, result.Value);
         // The terminal response can arrive before the server records completion telemetry.
@@ -381,6 +416,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldEmitLinkedQueueTopologyAgainstRealFitzBroker()
     {
+        // Arrange
         await using var workerClient = await _broker.CreateClientAsync();
         await using var callerClient = await _broker.CreateClientAsync();
         const string route = "queue://test/shared/action";
@@ -398,8 +434,11 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var publisher = new FitzRequestQueuePublisher(callerClient.Queue, serializer);
 
         await publisher.EnqueueAsync(new UniversalAction(74), RequestRouteValues.None, "valid-token");
+
+        // Act
         await runner.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
+        // Assert
         Assert.Contains(74, handler.HandledValues);
         AssertLinkedFitzTopology(activities, "test.shared.universal-action", "queue");
         AssertCompletedDelivery(deliveries, "test.shared.universal-action", "queue");
@@ -409,6 +448,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldRedeliverTerminalQueueFailureThroughFitz()
     {
+        // Arrange
         await using var workerClient = await _broker.CreateClientAsync();
         await using var callerClient = await _broker.CreateClientAsync();
         var routeSuffix = Guid.NewGuid().ToString("N");
@@ -430,8 +470,11 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             terminalHandler: new RecordingTerminalRequest(failures)));
 
         await publisher.EnqueueAsync(new UniversalAction(76), RequestRouteValues.None, "expired-token");
+
+        // Act
         await runner.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
+        // Assert
         Assert.Equal(QueuedRequestTerminalReason.ActorValidationFailure, Assert.Single(failures).Reason);
         Assert.Empty(handler.HandledValues);
         var redelivered = Assert.Single(await workerClient.Queue.ReserveAsync(route, TimeSpan.FromSeconds(2),
@@ -452,6 +495,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldEmitLinkedNoticeTopologyAgainstRealFitzBroker()
     {
+        // Arrange
         await using var workerClient = await _broker.CreateClientAsync();
         await using var callerClient = await _broker.CreateClientAsync();
         using var activityListener = ListenToRequests(out var activities);
@@ -469,8 +513,11 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
         await new FitzNoticeRequestSender(callerClient.Notice, serializer)
             .PublishAsync(new UniversalAction(75), RequestRouteValues.None, "valid-token");
+
+        // Act
         await run.WaitAsync(TimeSpan.FromSeconds(10));
 
+        // Assert
         Assert.Contains(75, handler.HandledValues);
         AssertLinkedFitzTopology(activities, "test.shared.universal-action", "notice");
         AssertCompletedDelivery(deliveries, "test.shared.universal-action", "notice");
@@ -486,12 +533,16 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldFailFastWhenNoWorkerIsRegisteredForRoute()
     {
+        // Arrange
         await using var client = await _broker.CreateClientAsync();
         var serializer = TestJson.Serializer(typeof(NoWorkerRegisteredPing));
         var sender = new FitzRemoteRequestSender(client.Rpc, serializer, serializer);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
+        // Act
         var elapsed = Stopwatch.StartNew();
+
+        // Assert
         _ = await Assert.ThrowsAnyAsync<Exception>(() =>
             sender.SendAsync(new NoWorkerRegisteredPing(), new RequestRouteValues(), null, cts.Token).AsTask());
 

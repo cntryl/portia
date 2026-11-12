@@ -69,11 +69,16 @@ public sealed class HttpBindingConsumerTests
     [Fact]
     public async Task LiteralRouteBaselineCompilesAndExecutes()
     {
+        // Arrange
         var assembly = HttpConsumerScenario.Compile(
             "public sealed record Binding(int Id) : IRequest<string>, ICallable;",
             "request.Id.ToString(CultureInfo.InvariantCulture)",
             "app.MapPortiaGet<Binding, string>(\"/binding/{id}\");");
+
+        // Act
         var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding/7");
+
+        // Assert
         Assert.Equal(200, status);
         Assert.Equal("\"7\"", body);
     }
@@ -81,11 +86,16 @@ public sealed class HttpBindingConsumerTests
     [Fact]
     public async Task ConstantRouteBindsIdenticallyToLiteral()
     {
+        // Arrange
         var assembly = HttpConsumerScenario.Compile(
             "public sealed record Binding(int Id) : IRequest<string>, ICallable;",
             "request.Id.ToString(CultureInfo.InvariantCulture)",
             "const string Route = \"/binding/{id}\"; app.MapPortiaGet<Binding, string>(Route);");
+
+        // Act
         var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding/7");
+
+        // Assert
         Assert.Equal(200, status);
         Assert.Equal("\"7\"", body);
     }
@@ -98,11 +108,16 @@ public sealed class HttpBindingConsumerTests
     public async Task QueryBindingPreservesNullableDefaultAndRequiredValues(string query, int expectedStatus,
         string? expected)
     {
+        // Arrange
         var assembly = HttpConsumerScenario.Compile(
             "public sealed record Binding(string Required, int Limit = 7, int? Optional = null, string? Note = null) : IRequest<string>, ICallable;",
             "request.Required + \"/\" + request.Limit + \"/\" + (request.Optional?.ToString() ?? \"null\") + \"/\" + (request.Note ?? \"null\")",
             "app.MapPortiaGet<Binding, string>(\"/binding\");");
+
+        // Act
         var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding" + query);
+
+        // Assert
         Assert.Equal(expectedStatus, status);
         if (expected is not null)
         {
@@ -125,11 +140,16 @@ public sealed class HttpBindingConsumerTests
     public async Task JsonBindingHonorsOptionsNamesConvertersNullsAndKinds(bool snake, bool converter, string json,
         int expectedStatus, string? expected)
     {
+        // Arrange
         var assembly = HttpConsumerScenario.Compile(
             "public sealed record Binding(int Id, string DisplayName, int Quantity = 7, string? Note = null, [property: JsonPropertyName(\"memo\")] string? Comment = null) : IRequest<string>, ICallable;",
             "request.Id + \"/\" + request.DisplayName + \"/\" + request.Quantity + \"/\" + (request.Note ?? \"null\") + \"/\" + (request.Comment ?? \"null\")",
             "app.MapPortiaPost<Binding, string>(\"/binding/{id}\");");
+
+        // Act
         var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/binding/20", json, snake, converter);
+
+        // Assert
         Assert.Equal(expectedStatus, status);
         if (expected is not null)
         {

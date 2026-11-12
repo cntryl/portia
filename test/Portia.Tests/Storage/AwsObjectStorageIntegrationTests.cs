@@ -11,6 +11,7 @@ public sealed class AwsObjectStorageIntegrationTests
     [Fact]
     public async Task ShouldPassSharedConformanceAgainstSqrzl()
     {
+        // Arrange
         var endpoint = Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")
             ?? throw new InvalidOperationException("Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
         var bucketSuffix = Guid.NewGuid().ToString("N");
@@ -29,7 +30,11 @@ public sealed class AwsObjectStorageIntegrationTests
         var storage = host.GetRequiredService<IObjectStorage>();
 
         await client.PutBucketAsync(new PutBucketRequest { BucketName = firstBucket });
+
+        // Act
         await client.PutBucketAsync(new PutBucketRequest { BucketName = secondBucket });
+
+        // Assert
         try
         {
             await ObjectStorageConformance.VerifyAsync(storage, firstTenant, secondTenant,
@@ -57,11 +62,16 @@ public sealed class AwsObjectStorageIntegrationTests
     [Fact]
     public async Task ShouldRejectConditionalOverwriteAgainstSqrzl()
     {
+        // Arrange
         var endpoint = Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")
             ?? throw new InvalidOperationException("Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
         var bucket = $"portia-conditional-{Guid.NewGuid():N}";
         using var client = CreateClient(endpoint);
+
+        // Act
         await client.PutBucketAsync(new PutBucketRequest { BucketName = bucket });
+
+        // Assert
         try
         {
             // Sqrzl does not decode the SDK's default aws-chunked PUT body framing.
@@ -117,6 +127,7 @@ public sealed class AwsObjectStorageIntegrationTests
     [Fact]
     public async Task ShouldCompleteInApiAndReadInSeparateWorkerAgainstSqrzl()
     {
+        // Arrange
         var endpoint = Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")
             ?? throw new InvalidOperationException("Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
         var bucketSuffix = Guid.NewGuid().ToString("N");
@@ -135,7 +146,11 @@ public sealed class AwsObjectStorageIntegrationTests
         using var workerHost = BuildHost(workerClient, locations);
         using var transfer = new HttpClient();
         var api = apiHost.GetRequiredService<IObjectStorage>();
+
+        // Act
         var worker = workerHost.GetRequiredService<IObjectStorage>();
+
+        // Assert
         Assert.NotSame(api, worker);
 
         await apiClient.PutBucketAsync(new PutBucketRequest { BucketName = firstBucket });

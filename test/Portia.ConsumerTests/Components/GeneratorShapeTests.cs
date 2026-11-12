@@ -8,6 +8,7 @@ public sealed class GeneratorShapeTests
     [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, parent, new RequestQueueOptions(TtlHours: 1))")]
     public void ShouldRegisterOutboundQueueRequestGivenOptionsPublication(string invocation)
     {
+        // Arrange
         var source = $$"""
                        using Cntryl.Portia;
                        using Microsoft.Extensions.DependencyInjection;
@@ -25,8 +26,10 @@ public sealed class GeneratorShapeTests
                        }
                        """;
 
+        // Act
         var generated = GeneratorCompilation.GeneratedSource(source, new RegistrationCallInterceptorGenerator());
 
+        // Assert
         Assert.Contains("test.queued_options", generated, StringComparison.Ordinal);
         Assert.Contains("RequestTransportId(\"queue\")", generated, StringComparison.Ordinal);
     }
@@ -34,6 +37,7 @@ public sealed class GeneratorShapeTests
     [Fact]
     public void ShouldDiscoverAnExternalAnnotatedTransportMarker()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               using Microsoft.Extensions.DependencyInjection;
@@ -54,8 +58,10 @@ public sealed class GeneratorShapeTests
                               }
                               """;
 
+        // Act
         var generated = GeneratorCompilation.GeneratedSource(source, new RegistrationCallInterceptorGenerator());
 
+        // Assert
         Assert.Contains("RequestTransportId(\"custom-adapter\")", generated, StringComparison.Ordinal);
     }
 
@@ -66,6 +72,7 @@ public sealed class GeneratorShapeTests
         "scheduler.EnsureAsync(new Scheduled(), new RequestScheduleSpec(\"0 0 * * *\"), RequestRouteValues.None, RequestActor.System)")]
     public void ShouldRegisterOutboundSchedulableRequestGivenScheduleDeclarationOrEnsure(string invocation)
     {
+        // Arrange
         var source = $$"""
                        using Cntryl.Portia;
                        using Microsoft.Extensions.DependencyInjection;
@@ -82,8 +89,10 @@ public sealed class GeneratorShapeTests
                        }
                        """;
 
+        // Act
         var generated = GeneratorCompilation.GeneratedSource(source, new RegistrationCallInterceptorGenerator());
 
+        // Assert
         Assert.Contains("test.scheduled", generated, StringComparison.Ordinal);
         Assert.Contains("RequestTransportId(\"schedule\")", generated, StringComparison.Ordinal);
     }
@@ -121,6 +130,7 @@ public sealed class GeneratorShapeTests
     [Fact]
     public void ShouldResolveInheritedPropertyGivenPermissionTokenWhenRegisteringHandler()
     {
+        // Arrange
         const string source = """
                               using System;
                               using System.Threading;
@@ -144,8 +154,11 @@ public sealed class GeneratorShapeTests
                               """;
 
         var diagnostics = GeneratorCompilation.Diagnostics(source, new RegistrationCallInterceptorGenerator());
+
+        // Act
         var generated = GeneratorCompilation.GeneratedSource(source, new RegistrationCallInterceptorGenerator());
 
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "PORTIA011" or "PORTIA013");
         Assert.Contains("typed.AccountId", generated, StringComparison.Ordinal);
     }
@@ -153,6 +166,7 @@ public sealed class GeneratorShapeTests
     [Fact]
     public void ShouldEmitFailClosedInterceptorGivenInvalidPermissionWhenDiagnosticIsSuppressed()
     {
+        // Arrange
         var assembly = GeneratorCompilation.CompileSuppressing("""
                                                                using System;
                                                                using System.Threading;
@@ -178,7 +192,10 @@ public sealed class GeneratorShapeTests
                                                                """, "PORTIA011",
             new RegistrationCallInterceptorGenerator());
 
+        // Act
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>();
+
+        // Assert
         Assert.True(run());
     }
 
@@ -270,6 +287,7 @@ public sealed class GeneratorShapeTests
     [Fact]
     public void ShouldRegisterOnlyUsedExternalEventsGivenReferencedEventAssemblyWhenAddingPortia()
     {
+        // Arrange
         var contracts = GeneratorCompilation.Reference("""
                                                        using Cntryl.Portia;
                                                        using Cntryl.Portia.Testing;
@@ -279,6 +297,8 @@ public sealed class GeneratorShapeTests
                                                        [Discriminator("UnrelatedEvent")]
                                                        public sealed record UnrelatedEvent(string Value) : DomainEvent;
                                                        """);
+
+        // Act
         var generated = GeneratorCompilation.GeneratedSource("""
                                                              using Cntryl.Portia;
                                                              using Cntryl.Portia.Testing;
@@ -297,6 +317,7 @@ public sealed class GeneratorShapeTests
                                                              """, [contracts],
             new RegistrationCallInterceptorGenerator());
 
+        // Assert
         Assert.Contains("AddGeneratedEvent<global::Contracts.UsedEvent>(1, \"UsedEvent\")", generated,
             StringComparison.Ordinal);
         Assert.DoesNotContain("UnrelatedEvent", generated, StringComparison.Ordinal);
@@ -305,6 +326,7 @@ public sealed class GeneratorShapeTests
     [Fact]
     public void ShouldExcludeOpenGenericDomainEventFromAddPortiaRegistration()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               using Cntryl.Portia.Testing;
@@ -320,8 +342,11 @@ public sealed class GeneratorShapeTests
                               """;
 
         _ = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
+
+        // Act
         var generated = GeneratorCompilation.GeneratedSource(source, new RegistrationCallInterceptorGenerator());
 
+        // Assert
         Assert.Contains("AddGeneratedEvent<global::ClosedEvent>", generated, StringComparison.Ordinal);
         Assert.DoesNotContain("GenericEvent", generated, StringComparison.Ordinal);
     }
@@ -358,6 +383,7 @@ public sealed class GeneratorShapeTests
     [InlineData(true)]
     public async Task EveryImplementedRequestInterfaceDispatchesAndPartialDeclarationsAreUnique(bool partial)
     {
+        // Arrange
         var extra = partial ? "public partial class Handler { }" : "";
         var assembly = GeneratorCompilation.Compile("""
                                                     using System;
@@ -394,7 +420,11 @@ public sealed class GeneratorShapeTests
                                                         }
                                                     }
                                                     """ + extra, new RegistrationCallInterceptorGenerator());
+
+        // Act
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<int>>>();
+
+        // Assert
         Assert.Equal(5, await run());
     }
 }

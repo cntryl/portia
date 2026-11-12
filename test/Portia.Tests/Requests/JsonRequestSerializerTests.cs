@@ -13,12 +13,16 @@ public sealed class JsonRequestSerializerTests
     [Fact]
     public void ShouldRoundTripRequestWithActorToken()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(SerializerTestRequest));
         var request = new SerializerTestRequest("hello", 42);
 
         var bytes = serializer.Serialize(request, "some-token", RequestMetadata.Create(), null);
+
+        // Act
         var envelope = serializer.DeserializeEnvelope(bytes);
 
+        // Assert
         Assert.Equal(request, envelope.Request);
         Assert.Equal("some-token", envelope.ActorToken);
     }
@@ -30,12 +34,16 @@ public sealed class JsonRequestSerializerTests
     [Fact]
     public void ShouldRoundTripRequestWithNullActorToken()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(SerializerTestRequest));
         var request = new SerializerTestRequest("hello", 42);
 
         var bytes = serializer.Serialize(request, null, RequestMetadata.Create(), null);
+
+        // Act
         var envelope = serializer.DeserializeEnvelope(bytes);
 
+        // Assert
         Assert.Null(envelope.ActorToken);
     }
 
@@ -45,11 +53,15 @@ public sealed class JsonRequestSerializerTests
     [Fact]
     public void ShouldRoundTripSuccessfulOutcome()
     {
+        // Arrange
         var serializer = TestJson.Serializer();
 
         var bytes = serializer.SerializeOutcome(Result.Success);
+
+        // Act
         var outcome = serializer.DeserializeOutcome(bytes);
 
+        // Assert
         Assert.True(outcome.IsSuccess);
     }
 
@@ -60,12 +72,16 @@ public sealed class JsonRequestSerializerTests
     [Fact]
     public void ShouldRoundTripFailedOutcomeWithErrorDetails()
     {
+        // Arrange
         var serializer = TestJson.Serializer();
         var error = new RequestError(RequestErrorKind.Conflict, "Already exists.", true);
 
         var bytes = serializer.SerializeOutcome(Result.Failure(error));
+
+        // Act
         var outcome = serializer.DeserializeOutcome(bytes);
 
+        // Assert
         Assert.False(outcome.IsSuccess);
         Assert.Equal(RequestErrorKind.Conflict, outcome.Error.Kind);
         Assert.Equal("Already exists.", outcome.Error.Message);
@@ -78,11 +94,15 @@ public sealed class JsonRequestSerializerTests
     [Fact]
     public void ShouldRoundTripSuccessfulResultWithValue()
     {
+        // Arrange
         var serializer = TestJson.Serializer();
 
         var bytes = serializer.SerializeResult(Result<string>.Success("the-value"));
+
+        // Act
         var result = serializer.DeserializeResult<string>(bytes);
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal("the-value", result.Value);
     }
@@ -93,12 +113,16 @@ public sealed class JsonRequestSerializerTests
     [Fact]
     public void ShouldRoundTripFailedResult()
     {
+        // Arrange
         var serializer = TestJson.Serializer();
         var error = new RequestError(RequestErrorKind.NotFound, "Missing.");
 
         var bytes = serializer.SerializeResult(Result<string>.Failure(error));
+
+        // Act
         var result = serializer.DeserializeResult<string>(bytes);
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.NotFound, result.Error.Kind);
     }
@@ -111,13 +135,17 @@ public sealed class JsonRequestSerializerTests
     [Fact]
     public void ShouldRoundTripUuidFieldOnRequest()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(SerializerTestUuidRequest));
         var id = Uuid.CreateVersion4();
         var request = new SerializerTestUuidRequest(id);
 
         var bytes = serializer.Serialize(request, null, RequestMetadata.Create(), null);
+
+        // Act
         var envelope = serializer.DeserializeEnvelope(bytes);
 
+        // Assert
         Assert.Equal(id, Assert.IsType<SerializerTestUuidRequest>(envelope.Request).Id);
     }
 }

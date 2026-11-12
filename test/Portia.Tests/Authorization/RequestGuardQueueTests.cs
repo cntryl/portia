@@ -11,6 +11,7 @@ public sealed class RequestGuardQueueTests
     [Fact]
     public async Task ShouldResolveAndRunGuardAgainInFreshRedeliveryScope()
     {
+        // Arrange
         var state = new AttemptState();
         var services = new ServiceCollection();
         _ = services.AddSingleton(state);
@@ -27,8 +28,10 @@ public sealed class RequestGuardQueueTests
         var scopeFactory = new DependencyInjectionQueueDeliveryScopeFactory(
             provider.GetRequiredService<IServiceScopeFactory>());
 
+        // Act
         await new QueueRunner(new Queue([first, second]), scopeFactory).RunAsync();
 
+        // Assert
         Assert.True(first.Abandoned);
         Assert.False(first.Completed);
         Assert.True(second.Completed);

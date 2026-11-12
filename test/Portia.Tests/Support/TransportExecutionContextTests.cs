@@ -18,6 +18,7 @@ public sealed class TransportExecutionContextTests
     [Fact]
     public async Task ShouldReportConcreteHttpIngressWithoutQueryString()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         var bus = new RecordingBus();
@@ -28,7 +29,11 @@ public sealed class TransportExecutionContextTests
         await app.StartAsync();
         using var client = app.GetTestClient();
         using var response = await client.PostAsJsonAsync("/context/3?secret=hidden", new { });
+
+        // Act
         _ = response.EnsureSuccessStatusCode();
+
+        // Assert
         var context = Assert.Single(bus.Contexts);
         var http = Assert.IsType<HttpInvocation>(context.Invocation);
         Assert.Equal("POST", http.Method);
@@ -47,13 +52,18 @@ public sealed class TransportExecutionContextTests
     [Fact]
     public async Task ShouldKeepRequestIdentityButStartNewExecutionOnQueueRedelivery()
     {
+        // Arrange
         var metadata = RequestMetadata.Create();
         var first = new Queued(metadata, 1);
         var second = new Queued(metadata, 2);
         var bus = new RecordingBus();
+
+        // Act
         await new QueueRunner(new Consumer(first, second), RequestDeliveryScopes.FixedQueue(bus, new Validator(),
                 terminalHandler: new IgnoreTerminalRequest()))
             .RunAsync();
+
+        // Assert
         Assert.Equal(2, bus.Contexts.Count);
         Assert.All(bus.Contexts, ctx => Assert.Equal(metadata.RequestId, ctx.RequestId));
         Assert.NotEqual(bus.Contexts[0].ExecutionId, bus.Contexts[1].ExecutionId);

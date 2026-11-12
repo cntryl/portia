@@ -14,10 +14,14 @@ public sealed class ManualEffectIdentityTests
     [InlineData(OtherSourceId)]
     public void ShouldRejectManualNameContainingSourceIdentityDelimiter(string embeddedSource)
     {
+        // Arrange
         var first = new EffectProbe("billing");
         var second = new EffectProbe("billing:" + embeddedSource + ":reserve");
+
+        // Act
         var context = Context("acme", SourceId);
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() => second.EffectId(context, "audit"));
 
         Assert.Contains("ambiguous legacy effect-ID delimiter", error.Message, StringComparison.Ordinal);
@@ -45,9 +49,13 @@ public sealed class ManualEffectIdentityTests
     [InlineData("billing", "audit\0copy", "67eb83d1-7cb1-57cf-94b7-022c2375c6ee")]
     public void ShouldPreserveAcceptedLegacyManualEffectId(string name, string effect, string expected)
     {
+        // Arrange
         var reactor = new EffectProbe(name);
+
+        // Act
         var context = Context("acme", SourceId);
 
+        // Assert
         Assert.Equal(Uuid.Parse(expected, CultureInfo.InvariantCulture), reactor.EffectId(context, effect));
         Assert.Equal(reactor.EffectId(context, effect), reactor.EffectId(context, effect));
         Assert.NotEqual(reactor.EffectId(context, effect), reactor.EffectId(context, effect + ":another"));
@@ -57,11 +65,15 @@ public sealed class ManualEffectIdentityTests
     [Fact]
     public void ShouldRejectBoundTenantContainingLegacyClosingMarker()
     {
+        // Arrange
         var firstTenant = new TenantId("acme");
         var secondTenant = new TenantId("acme } }:billing:" + SourceId + ":reserve");
         var first = BoundProbe("billing", firstTenant);
+
+        // Act
         var second = BoundProbe("billing", secondTenant);
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() =>
             second.EffectId(Context(secondTenant.Value, OtherSourceId), "audit"));
 
@@ -85,9 +97,13 @@ public sealed class ManualEffectIdentityTests
     [Fact]
     public void ShouldPreserveAcceptedLegacyBoundEffectId()
     {
+        // Arrange
         var tenant = new TenantId("acme:west");
+
+        // Act
         var reactor = BoundProbe("billing:reserve", tenant);
 
+        // Assert
         Assert.Equal(Uuid.Parse("ef1b0d72-44e9-5743-b649-8e8d9bf6e7bb", CultureInfo.InvariantCulture),
             reactor.EffectId(Context(tenant.Value, SourceId), "audit"));
     }
@@ -98,10 +114,14 @@ public sealed class ManualEffectIdentityTests
     [InlineData(0xdc00)]
     public void ShouldRejectMalformedUtf16EffectNames(int codeUnit)
     {
+        // Arrange
         var reactor = new EffectProbe("billing");
         var context = Context("acme", SourceId);
+
+        // Act
         var malformed = "notify" + new string((char)codeUnit, 1);
 
+        // Assert
         var error = Assert.Throws<ArgumentException>(() => reactor.EffectId(context, malformed));
 
         Assert.Equal("effectName", error.ParamName);

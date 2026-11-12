@@ -294,9 +294,13 @@ public sealed class ConformanceRejectionTests
     [Fact]
     public async Task ShouldAcceptProjectionProbeGivenBatchOpenWaitsForAnExclusiveLock()
     {
+        // Arrange
         using var probe = new ShapedProjectionProbe(ProjectionStoreShape.LocksAtBegin);
+
+        // Act
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
+        // Assert
         await ProjectionStoreConformance.VerifyAsync(probe, timeout.Token);
     }
 

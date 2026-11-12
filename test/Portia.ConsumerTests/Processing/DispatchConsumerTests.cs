@@ -7,6 +7,7 @@ public sealed class DispatchConsumerTests
     [InlineData(false)]
     public async Task DispatchResolvesOnlySelectedHandlersAndSupportsNestedBus(bool nested)
     {
+        // Arrange
         var handler = nested
             ? "public sealed class OuterHandler(IRequestBus bus) : IRequestHandler<Outer, int> { public ValueTask<Result<int>> HandleAsync(IRequestContext<Outer> c, CancellationToken ct) => bus.SendAsync(new Inner(), RequestActor.System, ct); }"
             : "public sealed class OuterHandler : IRequestHandler<Outer, int> { public ValueTask<Result<int>> HandleAsync(IRequestContext<Outer> c, CancellationToken ct) => ValueTask.FromResult(Result<int>.Success(42)); }";
@@ -51,7 +52,11 @@ public sealed class DispatchConsumerTests
                                                         }
                                                     }
                                                     """ + handler, new RegistrationCallInterceptorGenerator());
+
+        // Act
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<int>>>();
+
+        // Assert
         Assert.Equal(42, await run());
     }
 }

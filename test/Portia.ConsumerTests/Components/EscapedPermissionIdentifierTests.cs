@@ -10,6 +10,7 @@ public sealed class EscapedPermissionIdentifierTests
     [InlineData("class")]
     public void ShouldCompilePermissionGivenEscapedRequestProperty(string property)
     {
+        // Arrange
         var permission = "objects/{" + property + "}";
         var source = $$"""
             using System.Threading;
@@ -29,9 +30,12 @@ public sealed class EscapedPermissionIdentifierTests
                     services.AddPortia().AddRequestHandler<Handler>();
             }
             """;
+
+        // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source,
             new RegistrationCallInterceptorGenerator());
 
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 }

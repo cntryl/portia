@@ -18,6 +18,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldRenewLeaseAutomaticallyWhileCallbackOutlivesTtl()
     {
+        // Arrange
         await using var client = await _broker.CreateClientAsync();
         var runner =
             new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(client.Lease), new SingleWorkerMembership());
@@ -46,6 +47,8 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
 
         await Task.Delay(TimeSpan.FromSeconds(7));
         cts.Cancel();
+
+        // Act
         try
         {
             await run;
@@ -59,6 +62,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
         // cancelled early" flag stayed at its unset default because the callback never ran at
         // all (e.g. the lease was never acquired in the first place, a real false-positive this
         // test hit once already with a malformed route).
+        // Assert
         Assert.Equal(6, iterationsCompleted);
         Assert.False(everCancelledBeforeWeAskedIt);
     }
@@ -72,6 +76,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
     [Fact]
     public async Task ShouldGrantPartitionToWaitingWorkerWhenHolderDisconnectsWithoutReleasing()
     {
+        // Arrange
         var holderClient = await _broker.CreateClientAsync();
         await using var waiterClient = await _broker.CreateClientAsync();
         var partition = $"lease://portia-integration/fleet/crash-recovery-{Uuid.CreateVersion4()}";
@@ -127,6 +132,8 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
         }
 
         holderCts.Cancel();
+
+        // Act
         try
         {
             await holderRun;
@@ -137,6 +144,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
             // point of this test — only that the waiter really did take over is.
         }
 
+        // Assert
         Assert.True(waiterAcquired.Task.IsCompletedSuccessfully);
     }
 }

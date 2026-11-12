@@ -9,6 +9,7 @@ public sealed class RequestRpcConsumerTests
     [InlineData(true)]
     public async Task RequestDescriptorsRegisterAllRpcWorkersAndOwnTheirLifetime(bool reverse)
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
                                                     using System;
                                                     using System.Threading.Tasks;
@@ -42,7 +43,11 @@ public sealed class RequestRpcConsumerTests
         await using var provider = ConsumerHost.Build(services);
         var rpc = new InMemoryRpcClient();
         var server = new FitzRpcRequestServer(rpc, provider.GetRequiredService<IServiceScopeFactory>());
+
+        // Act
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
+
+        // Assert
         await using (await register(server))
         {
             Assert.Equal(11,

@@ -12,6 +12,7 @@ public sealed class RegistrationInterceptorSizeTests
     [Fact]
     public void ShouldBoundCatalogAndSharedRegistrationMethods()
     {
+        // Arrange
         var options = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
@@ -22,7 +23,11 @@ public sealed class RegistrationInterceptorSizeTests
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [new RegistrationCallInterceptorGenerator().AsSourceGenerator(), new DomainEventCatalogGenerator().AsSourceGenerator()],
             parseOptions: options);
+
+        // Act
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+
+        // Assert
         Assert.DoesNotContain(diagnostics.Concat(output.GetDiagnostics()), item => item.Severity == DiagnosticSeverity.Error);
         var files = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
         var methods = files.SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();

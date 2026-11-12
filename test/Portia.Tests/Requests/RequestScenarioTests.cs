@@ -16,8 +16,10 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldPassWhenAuthorizedGuardedCommandIsHandledSuccessfully()
     {
+        // Arrange
         await using var provider = Provider();
 
+        // Act
         var result = await RequestScenario.For(provider)
             .GivenActor(Member)
             .When(new ScenarioCommand())
@@ -26,6 +28,7 @@ public sealed class RequestScenarioTests
             .ExpectHandled()
             .ExpectSuccess();
 
+        // Assert
         Assert.True(result.IsSuccess);
     }
 
@@ -115,11 +118,15 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldAssertQueryValue()
     {
+        // Arrange
         await using var provider = Provider();
 
+        // Act
         var result = await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioQuery())
             .ExpectHandled()
             .ExpectSuccess(42);
+
+        // Assert
         var mismatch = await Assert.ThrowsAsync<ScenarioExpectationException>(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioQuery()).ExpectSuccess(7));
 
@@ -131,13 +138,17 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldRunScenarioOnceWhenAwaitedTwice()
     {
+        // Arrange
         await using var provider = Provider();
         var log = provider.GetRequiredService<ScenarioLog>();
         var expectations = RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand()).ExpectHandled();
 
         _ = await expectations;
+
+        // Act
         _ = await expectations;
 
+        // Assert
         Assert.Equal(1, log.Handled);
     }
 
@@ -145,12 +156,16 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldLeaveEarlierExpectationsUnchangedWhenExtended()
     {
+        // Arrange
         await using var provider = Provider(RequestErrorKind.Conflict);
         var failing = RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand());
 
         var extended = failing.ExpectHandled();
 
+        // Act
         var result = await failing;
+
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Conflict, result.Error.Kind);
         await Assert.ThrowsAsync<ScenarioExpectationException>(async () => await extended);
@@ -185,12 +200,16 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldResolveScopedComponentsFromFreshScopePerRun()
     {
+        // Arrange
         await using var provider = Provider();
         var log = provider.GetRequiredService<ScenarioLog>();
 
         await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand()).ExpectHandled();
+
+        // Act
         await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand()).ExpectHandled();
 
+        // Assert
         Assert.Equal(2, log.Scopes.Distinct().Count());
     }
 
@@ -223,11 +242,15 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldTreatBehaviorsAsProceedingPastAuthorization()
     {
+        // Arrange
         await using var provider = Provider(RequestErrorKind.Conflict);
 
+        // Act
         await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand())
             .ExpectAuthorized()
             .ExpectGuardFailed<SlugGuard>();
+
+        // Assert
         Assert.Equal(["behavior", "guard"], provider.GetRequiredService<ScenarioLog>().Steps);
     }
 
@@ -247,14 +270,17 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldRunStreamedRequestLifecycle()
     {
+        // Arrange
         await using var provider = Provider();
 
+        // Act
         var items = await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioStream())
             .ExpectAuthorized()
             .ExpectGuardPassed<SlugGuard>()
             .ExpectHandled()
             .ExpectItems(1, 2);
 
+        // Assert
         Assert.Equal([1, 2], items);
     }
 
@@ -262,13 +288,16 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldReportStreamGuardFailure()
     {
+        // Arrange
         await using var provider = Provider(RequestErrorKind.Conflict);
 
+        // Act
         var items = await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioStream())
             .ExpectGuardFailed<SlugGuard>(RequestErrorKind.Conflict)
             .ExpectNotHandled()
             .ExpectFailure(RequestErrorKind.Conflict);
 
+        // Assert
         Assert.Empty(items);
     }
 
@@ -301,12 +330,17 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldRequireObservationOfTheReturnedAssertion()
     {
+        // Arrange
         await using var provider = Provider();
         var log = provider.GetRequiredService<ScenarioLog>();
         var kept = RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand());
+
 #pragma warning disable PORTIA107 // Deliberately reproduce the test pitfall the analyzer diagnoses.
+        // Act
         _ = kept.ExpectDenied();
+
 #pragma warning restore PORTIA107
+        // Assert
         Assert.Equal(0, log.Handled);
         await kept;
         Assert.Equal(1, log.Handled);
@@ -322,11 +356,16 @@ public sealed class RequestScenarioTests
     [InlineData(5, 2)]
     public async Task ShouldBoundStreamAndDisposeScope(int limit, int count)
     {
+        // Arrange
         await using var provider = Provider();
         var log = provider.GetRequiredService<ScenarioLog>();
         var expectations = RequestScenario.For(provider).GivenActor(Member)
             .When(new ScenarioStream(), limit).ExpectSuccess().ExpectHandled();
+
+        // Act
         var items = await expectations;
+
+        // Assert
         Assert.Equal(Enumerable.Range(1, count), items);
         Assert.Equal(items, await expectations);
         Assert.Equal(count, log.StreamProduced);
@@ -349,10 +388,15 @@ public sealed class RequestScenarioTests
     [Fact]
     public async Task ShouldCancelStreamAndDisposeScope()
     {
+        // Arrange
         await using var provider = Provider();
         using var cancellation = new CancellationTokenSource();
         var log = provider.GetRequiredService<ScenarioLog>();
+
+        // Act
         log.CancelStream = cancellation;
+
+        // Assert
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioStream(), cancellation.Token));
         Assert.Equal(1, log.StreamDisposed);
@@ -365,6 +409,7 @@ public sealed class RequestScenarioTests
     [InlineData(true)]
     public async Task ShouldCancelUnaryRequestAndDisposeScope(bool query)
     {
+        // Arrange
         await using var provider = Provider();
         using var cancellation = new CancellationTokenSource();
         var log = provider.GetRequiredService<ScenarioLog>();
@@ -372,7 +417,11 @@ public sealed class RequestScenarioTests
             ? RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCancelledQuery(), cancellation.Token).AsTask()
             : RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCancelledCommand(), cancellation.Token).AsTask();
         await log.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Act
         cancellation.Cancel();
+
+        // Assert
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
         Assert.True(Assert.Single(log.Scopes).Disposed);
         Assert.Equal(query ? 3 : 4, log.Tokens.Count);

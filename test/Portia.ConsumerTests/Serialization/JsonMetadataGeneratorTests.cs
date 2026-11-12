@@ -11,6 +11,7 @@ public sealed class JsonMetadataGeneratorTests
     [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, parent, new RequestQueueOptions(TtlHours: 1))")]
     public void RequiresRequestJsonMetadataForOptionsPublication(string invocation)
     {
+        // Arrange
         var source = $$"""
                        using Cntryl.Portia;
                        [RequestRoute("app", "jobs", "requests", "run")]
@@ -25,8 +26,10 @@ public sealed class JsonMetadataGeneratorTests
                        }
                        """;
 
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
 
+        // Assert
         Assert.Equal(["Queued"], diagnostics.Where(diagnostic => diagnostic.Id == "PORTIA025")
             .Select(diagnostic => diagnostic.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]));
     }
@@ -80,6 +83,7 @@ public sealed class JsonMetadataGeneratorTests
     [Fact]
     public void EndpointAcceptsRootAdvertisedByReferencedAssembly()
     {
+        // Arrange
         var contracts = GeneratorCompilation.Reference("""
                                                        using System;
                                                        using System.Text.Json;
@@ -97,6 +101,8 @@ public sealed class JsonMetadataGeneratorTests
                                                            public override JsonTypeInfo? GetTypeInfo(Type type) => null;
                                                        }
                                                        """, new JsonRootMarkerGenerator());
+
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
                                                            using Contracts;
@@ -107,12 +113,14 @@ public sealed class JsonMetadataGeneratorTests
                                                            }
                                                            """, [contracts], new JsonMetadataDiagnosticGenerator());
 
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
 
     [Fact]
     public void AddPortiaComposesReferencedContextFactory()
     {
+        // Arrange
         var contracts = GeneratorCompilation.Reference("""
                                                        using System;
                                                        using System.Text.Json;
@@ -131,6 +139,7 @@ public sealed class JsonMetadataGeneratorTests
                                                        }
                                                        """, new JsonRootMarkerGenerator());
 
+        // Act
         var generated = GeneratorCompilation.GeneratedSource("""
                                                              using Cntryl.Portia;
                                                              using Microsoft.Extensions.DependencyInjection;
@@ -141,6 +150,7 @@ public sealed class JsonMetadataGeneratorTests
                                                              """, [contracts],
             new RegistrationCallInterceptorGenerator());
 
+        // Assert
         Assert.Contains("global::Cntryl.Portia.Generated.PortiaJsonContextFactory_", generated,
             StringComparison.Ordinal);
         Assert.Contains(".Create(options)", generated, StringComparison.Ordinal);
@@ -149,8 +159,11 @@ public sealed class JsonMetadataGeneratorTests
     [Fact]
     public void McpToolRequiresRequestAndResultRoots()
     {
+        // Arrange
         var mcp = MetadataReference.CreateFromFile(
             typeof(PortiaMcpApplicationExtensions).Assembly.Location);
+
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
                                                            using Microsoft.Extensions.DependencyInjection;
@@ -163,6 +176,7 @@ public sealed class JsonMetadataGeneratorTests
                                                            }
                                                            """, [mcp], new JsonMetadataDiagnosticGenerator());
 
+        // Assert
         Assert.Equal(["Answer", "Query"], diagnostics.Where(d => d.Id == "PORTIA025")
             .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
     }
@@ -330,6 +344,7 @@ public sealed class JsonMetadataGeneratorTests
     [InlineData("MapPortiaDelete", false)]
     public void ConvertedRequestsRequireIndependentBodyMetadata(string mapping, bool bodyRoot)
     {
+        // Arrange
         var diagnostics = GeneratorCompilation.Diagnostics($$"""
                                                             using System;
                                                             using System.Text.Json;
@@ -354,7 +369,10 @@ public sealed class JsonMetadataGeneratorTests
                                                             internal sealed partial class AppJsonContext : JsonSerializerContext;
                                                             """, new JsonMetadataDiagnosticGenerator());
 
+        // Act
         var required = !bodyRoot && mapping is "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch";
+
+        // Assert
         Assert.Equal(required ? ["Body"] : Array.Empty<string>(), diagnostics.Where(d => d.Id == "PORTIA025")
             .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
     }
@@ -438,12 +456,15 @@ public sealed class JsonMetadataGeneratorTests
     [Fact]
     public void AcceptsAnUpcasterForAReferencedDomainEventUsedByTheApplication()
     {
+        // Arrange
         var contracts = GeneratorCompilation.Reference("""
                                                        using Cntryl.Portia;
                                                        namespace Contracts;
                                                        [Discriminator("external.changed", 2)]
                                                        public sealed record ExternalChanged : DomainEvent;
                                                        """);
+
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
                                                            using Contracts;
@@ -458,6 +479,7 @@ public sealed class JsonMetadataGeneratorTests
                                                            }
                                                            """, [contracts], new DomainEventCatalogGenerator());
 
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA012");
     }
 }

@@ -10,6 +10,7 @@ public sealed class GeneratorDiagnosticsTests
     [Fact]
     public void Portia100RecognizesKnownEffectDependenciesThroughTypeAncestry()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               using System.Data.Common;
@@ -27,9 +28,11 @@ public sealed class GeneratorDiagnosticsTests
                                   : Projector(null!, EventStreamPattern.ForPattern("events"));
                               """;
 
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer())
             .Where(diagnostic => diagnostic.Id == "PORTIA100").ToArray();
 
+        // Assert
         Assert.Equal(8, diagnostics.Length);
         Assert.All(diagnostics, diagnostic =>
         {
@@ -45,30 +48,36 @@ public sealed class GeneratorDiagnosticsTests
     [Fact]
     public void Portia100ReportsProjectorAggregateWriterAndExecutorButNotReader()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               public sealed class Projection(IAggregateWriter writer, IAggregateExecutor executor, IAggregateReader reader)
                                   : Projector(null!, EventStreamPattern.ForPattern("events"));
                               """;
 
+        // Act
         var locations = Locations(source, GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer())
             .Where(diagnostic => diagnostic.Id == "PORTIA100"));
 
+        // Assert
         Assert.Equal(["executor", "writer"], locations);
     }
 
     [Fact]
     public void Portia102ReportsAggregateReaderWriterAndExecutorDependencies()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               public sealed class Account(IAggregateReader reader, IAggregateWriter writer, IAggregateExecutor executor)
                                   : Aggregate(Uuid.CreateVersion4(), new EventStreamAddress("bank", "accounts", "one"));
                               """;
 
+        // Act
         var locations = Locations(source, GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer())
             .Where(diagnostic => diagnostic.Id == "PORTIA102"));
 
+        // Assert
         Assert.Equal(["executor", "reader", "writer"], locations);
     }
 
@@ -82,6 +91,7 @@ public sealed class GeneratorDiagnosticsTests
     public void Portia105And106ReportPreflightEffectCapableDependencies(string id, string role, string member,
         string messagePrefix)
     {
+        // Arrange
         var source = $$"""
                        using System.Net.Http;
                        using System.Threading;
@@ -97,9 +107,11 @@ public sealed class GeneratorDiagnosticsTests
                        }
                        """;
 
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer())
             .Where(diagnostic => diagnostic.Id == id).ToArray();
 
+        // Assert
         Assert.Equal(
             ["bus", "checkpoints", "events", "executor", "projections", "scheduler", "store", "writer"],
             Locations(source, diagnostics));
@@ -116,6 +128,7 @@ public sealed class GeneratorDiagnosticsTests
         "public ValueTask<Result> AuthorizeAsync(IRequestContext<Command> context, CancellationToken ct) => default;")]
     public void Portia105And106AllowReadOnlyDependencies(string role, string member)
     {
+        // Arrange
         var source = $$"""
                        using System.Threading;
                        using System.Threading.Tasks;
@@ -128,8 +141,10 @@ public sealed class GeneratorDiagnosticsTests
                        }
                        """;
 
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
 
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is "PORTIA105" or "PORTIA106");
     }
 
@@ -157,6 +172,7 @@ public sealed class GeneratorDiagnosticsTests
     [Fact]
     public void Portia101ReportsConstructorAndActivatorUtilitiesServiceLocationAtUse()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               using Microsoft.Extensions.DependencyInjection;
@@ -168,9 +184,11 @@ public sealed class GeneratorDiagnosticsTests
                               }
                               """;
 
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer())
             .Where(diagnostic => diagnostic.Id == "PORTIA101").ToArray();
 
+        // Assert
         Assert.Equal(4, diagnostics.Length);
         var invocation = Assert.Single(diagnostics, diagnostic => diagnostic
             .GetMessage(CultureInfo.InvariantCulture)
@@ -264,6 +282,7 @@ public sealed class GeneratorDiagnosticsTests
     [Fact]
     public void InferredExternalDomainEventLocalsDoNotReportDuplicateDiscriminator()
     {
+        // Arrange
         var contracts = GeneratorCompilation.Reference("""
                                                        using Cntryl.Portia;
                                                        namespace Contracts;
@@ -285,15 +304,18 @@ public sealed class GeneratorDiagnosticsTests
                               }
                               """;
 
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, [contracts],
             new DomainEventCatalogGenerator());
 
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA023");
     }
 
     [Fact]
     public void ExplicitBaseTypedExternalDomainEventLocalsDoNotReportDuplicateDiscriminator()
     {
+        // Arrange
         var contracts = GeneratorCompilation.Reference("""
                                                        using Cntryl.Portia;
                                                        namespace Contracts;
@@ -315,15 +337,18 @@ public sealed class GeneratorDiagnosticsTests
                               }
                               """;
 
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, [contracts],
             new DomainEventCatalogGenerator());
 
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA023");
     }
 
     [Fact]
     public void DistinctExternalDomainEventTypesStillReportDuplicateDiscriminator()
     {
+        // Arrange
         var contracts = GeneratorCompilation.Reference("""
                                                        using Cntryl.Portia;
                                                        namespace Contracts;
@@ -332,6 +357,8 @@ public sealed class GeneratorDiagnosticsTests
                                                        [Discriminator("boundary.draft.changed", 1)]
                                                        public sealed record BoundaryDraftRevised : DomainEvent;
                                                        """);
+
+        // Act
         const string source = """
                               #nullable enable
                               using Contracts;
@@ -345,6 +372,7 @@ public sealed class GeneratorDiagnosticsTests
                               }
                               """;
 
+        // Assert
         var diagnostic = Assert.Single(GeneratorCompilation.Diagnostics(source, [contracts],
             new DomainEventCatalogGenerator()), item => item.Id == "PORTIA023");
 
@@ -378,6 +406,7 @@ public sealed class GeneratorDiagnosticsTests
     [Fact]
     public void DuplicateRequestDiagnosticMovesWithDeclarationOnIncrementalRerun()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               [RequestRoute("*", "orders", "order", "create")]
@@ -407,7 +436,11 @@ public sealed class GeneratorDiagnosticsTests
         driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, movedTree));
 
         var result = driver.GetRunResult().Results.Single();
+
+        // Act
         var semanticOutputs = result.TrackedSteps["PortiaRequestTransports"].SelectMany(step => step.Outputs).ToArray();
+
+        // Assert
         Assert.NotEmpty(semanticOutputs);
         Assert.All(semanticOutputs, output => Assert.Equal(IncrementalStepRunReason.Cached, output.Reason));
         var diagnosticOutputs = result.TrackedSteps["PortiaRequestTransportLocations"]
@@ -447,6 +480,7 @@ public sealed class GeneratorDiagnosticsTests
     [Fact]
     public void BuildSoundnessErrorsAreReportedByGeneratorsAlone()
     {
+        // Arrange
         const string source = """
                               using System.Threading;
                               using System.Threading.Tasks;
@@ -470,8 +504,10 @@ public sealed class GeneratorDiagnosticsTests
                 .Select(type => (IIncrementalGenerator)Activator.CreateInstance(type)!)
         ];
 
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, generators);
 
+        // Assert
         _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA015");
         // Reported where the application maps the endpoint, never inside Portia's generated interceptor.
         var missing = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
@@ -774,6 +810,7 @@ public sealed class GeneratorDiagnosticsTests
     [Fact]
     public async Task PracticeDiagnosticsReportFromThePartialDeclarationHoldingTheParameter()
     {
+        // Arrange
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var handlers = CSharpSyntaxTree.ParseText("""
                                                   using System.Threading;
@@ -802,9 +839,12 @@ public sealed class GeneratorDiagnosticsTests
         // A fresh analysis per file, as an editor runs for the open document.
         var inHandlers = await compilation.WithAnalyzers([new ComponentPracticeAnalyzer()])
             .GetAnalyzerSemanticDiagnosticsAsync(compilation.GetSemanticModel(handlers), null, CancellationToken.None);
+
+        // Act
         var inState = await compilation.WithAnalyzers([new ComponentPracticeAnalyzer()])
             .GetAnalyzerSemanticDiagnosticsAsync(compilation.GetSemanticModel(stateTree), null, CancellationToken.None);
 
+        // Assert
         Assert.Equal(["http"], Locations(state, whole.Where(diagnostic => diagnostic.Id == "PORTIA100")));
         Assert.Equal(["http"], Locations(state, inState.Where(diagnostic => diagnostic.Id == "PORTIA100")));
         Assert.DoesNotContain(inHandlers, diagnostic => diagnostic.Id == "PORTIA100");

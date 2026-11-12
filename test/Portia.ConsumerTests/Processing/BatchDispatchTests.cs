@@ -117,13 +117,18 @@ public sealed class BatchDispatchTests
     [InlineData(true)]
     public void BatchHandlersRequireAnExplicitBatchBase(bool reactor)
     {
+        // Arrange
         var source = reactor
             ? "public partial class Bad(IProjectionCheckpointStore store) : Reactor(store, EventStreamPattern.ForPattern(\"test\")), IBatchReactorHandler<Ev> { public ValueTask<Result> HandleAsync(IReadOnlyList<IReactorContext<Ev>> contexts, CancellationToken ct) => ValueTask.FromResult(Result.Success); }"
             : "public partial class Bad(IProjectionStore store) : Projector(store, EventStreamPattern.ForPattern(\"test\")), IBatchProjectorHandler<Ev> { public ValueTask<Result> HandleAsync(IReadOnlyList<IProjectorContext<Ev>> contexts, CancellationToken ct) => ValueTask.FromResult(Result.Success); }";
+
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics(
             "using System.Collections.Generic; using System.Threading; using System.Threading.Tasks; using Cntryl.Portia; public sealed record Ev : DomainEvent; " +
             source,
             new ProjectorReactorEventDispatcherGenerator());
+
+        // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA017");
     }
 }

@@ -82,12 +82,16 @@ public sealed class GeneratorInvalidShapeTests
     [InlineData("public static class Outer { [RequestRoute(\"app\", \"orders\", \"order\", \"create\")] [Discriminator(\"app.orders.create\")] private sealed record CreateOrder : IRequest, IQueuable; }")]
     public void ShouldReportPortia015GivenInaccessibleTransportedRequest(string declaration)
     {
+        // Arrange
         var attributes = declaration.StartsWith("file", StringComparison.Ordinal)
             ? "[RequestRoute(\"app\", \"orders\", \"order\", \"create\")] [Discriminator(\"app.orders.create\")] "
             : string.Empty;
+
+        // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics("using Cntryl.Portia;\n" + attributes + declaration,
             new PortiaServiceRegistrationGenerator());
 
+        // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA015");
         AssertNoCompilerErrors(diagnostics);
     }
@@ -217,6 +221,7 @@ public sealed class GeneratorInvalidShapeTests
     [Fact]
     public void ShouldReportPortia011GivenInternalGetterInReferencedAssembly()
     {
+        // Arrange
         var reference = GeneratorCompilation.Reference("""
                                                        namespace Shared;
                                                        public abstract record RequestBase
@@ -224,6 +229,8 @@ public sealed class GeneratorInvalidShapeTests
                                                            internal string Secret => "hidden";
                                                        }
                                                        """);
+
+        // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics("""
                                                                  using System.Threading;
                                                                  using System.Threading.Tasks;
@@ -243,6 +250,7 @@ public sealed class GeneratorInvalidShapeTests
                                                                  }
                                                                  """, [reference], new RegistrationCallInterceptorGenerator());
 
+        // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA011");
         AssertNoCompilerErrors(diagnostics);
     }

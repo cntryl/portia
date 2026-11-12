@@ -43,10 +43,13 @@ public sealed class ResultConversionTests
     [Fact]
     public void ShouldConvertErrorToFailedResult()
     {
+        // Arrange
         var error = RequestError.NotFound("The account is not open.");
 
+        // Act
         Result result = error;
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Same(error, result.Error);
     }
@@ -55,10 +58,13 @@ public sealed class ResultConversionTests
     [Fact]
     public void ShouldConvertErrorToFailedValueResult()
     {
+        // Arrange
         var error = RequestError.Forbidden("The actor cannot access this account.");
 
+        // Act
         Result<int> result = error;
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Same(error, result.Error);
     }

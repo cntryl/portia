@@ -95,6 +95,7 @@ public sealed class ApplicationBoundaryAnalyzerTests
     [Fact]
     public void ShouldGroupOnlyUnsuppressedRegistrationsGivenScopedPragma()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               namespace Shop.Core.Features.Orders;
@@ -114,8 +115,12 @@ public sealed class ApplicationBoundaryAnalyzerTests
                                   public System.Threading.Tasks.ValueTask<Result> HandleAsync(IRequestContext<IRequest> context, System.Threading.CancellationToken ct) => System.Threading.Tasks.ValueTask.FromResult(Result.Success);
                               }
                               """;
+
+        // Act
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationBoundaryAnalyzer(),
             [("Features/Orders/Handlers/Setup.cs", source)]);
+
+        // Assert
         var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA207");
         Assert.Contains("2 feature", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
         Assert.Single(diagnostic.AdditionalLocations);

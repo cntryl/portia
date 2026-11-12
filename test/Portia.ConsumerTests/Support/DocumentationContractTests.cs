@@ -67,6 +67,7 @@ public sealed partial class DocumentationContractTests
     [Fact]
     public void AnalyzerManifestsListEveryCompilerDiagnostic()
     {
+        // Arrange
         var declared = DiagnosticSourceDirectories
             .SelectMany(directory => Directory.EnumerateFiles(Path.Combine(Root, directory), "*.cs",
                 SearchOption.AllDirectories))
@@ -74,9 +75,13 @@ public sealed partial class DocumentationContractTests
                 StringComparison.Ordinal))
             .SelectMany(path => DiagnosticId().Matches(File.ReadAllText(path)).Select(match => match.Value))
             .ToHashSet(StringComparer.Ordinal);
+
+        // Act
         var documented = DiagnosticReleaseManifests
             .SelectMany(path => DiagnosticId().Matches(File.ReadAllText(Path.Combine(Root, path))))
             .Select(match => match.Value).ToHashSet(StringComparer.Ordinal);
+
+        // Assert
         Assert.Subset(documented, declared);
     }
 

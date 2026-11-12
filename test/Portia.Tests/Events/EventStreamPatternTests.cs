@@ -67,11 +67,14 @@ public sealed class EventStreamPatternTests
     [Fact]
     public void ShouldBindTenantTemplateToTheWorkloadTenant()
     {
+        // Arrange
         var projector = new TestProjector(new RecordingProjectionTarget(),
             EventStreamPattern.ForTenant("orders"));
 
+        // Act
         projector.BindWorkload(new WorkloadIdentity("orders", new TenantId("acme")), null);
 
+        // Assert
         Assert.False(projector.Pattern.IsTenantTemplate);
         Assert.Equal("stream://acme/orders/*", projector.Pattern.ToString());
     }

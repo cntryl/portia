@@ -28,10 +28,14 @@ public sealed class FixedTenantDirectoryTests
     [Fact]
     public async Task ShouldKeepWatchOpenUntilCancelled()
     {
+        // Arrange
         var directory = new FixedTenantDirectory(new TenantId("acme"));
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         var watch = directory.WatchAsync(cancellation.Token).ToListAsync().AsTask();
 
+        // Assert
         await Assert.ThrowsAsync<TimeoutException>(() => watch.WaitAsync(TimeSpan.FromMilliseconds(100)));
 
         await cancellation.CancelAsync();
@@ -42,6 +46,7 @@ public sealed class FixedTenantDirectoryTests
     [Fact]
     public async Task ShouldStartEveryTenantUnderTheRunner()
     {
+        // Arrange
         var directory = new FixedTenantDirectory(new TenantId("acme"), new TenantId("beta"));
         var runner = new MultiTenantRunner(directory);
         var started = new ConcurrentDictionary<TenantId, TaskCompletionSource>();
@@ -56,8 +61,11 @@ public sealed class FixedTenantDirectoryTests
             started.GetOrAdd(new TenantId("acme"), _ => new TaskCompletionSource()).Task,
             started.GetOrAdd(new TenantId("beta"), _ => new TaskCompletionSource()).Task).WaitAsync(TimeSpan.FromSeconds(5));
         await shutdown.CancelAsync();
+
+        // Act
         await run.WaitAsync(TimeSpan.FromSeconds(5));
 
+        // Assert
         Assert.Equal(2, started.Count);
     }
 }

@@ -66,12 +66,15 @@ public sealed class RequestTransportMarkerTests
         // The real assertion is that this compiles: CreateUser only implements IRequest{Uuid}
         // and ICallable, not IRequest — so it could never be passed to EnqueueAsync/
         // PublishAsync/ScheduleAsync, all of which require plain IRequest.
+        // Arrange
         IRemoteRequestSender sender = new FakeRemoteRequestSender();
         var request = new CreateUser("ada@example.com", "Ada Lovelace");
         var routeValues = new RequestRouteValues("tenant-123");
 
+        // Act
         var result = await sender.SendAsync<CreateUser, Uuid>(request, routeValues, null);
 
+        // Assert
         Assert.True(result.IsSuccess);
     }
 
@@ -84,6 +87,7 @@ public sealed class RequestTransportMarkerTests
     {
         // The real assertion is that this compiles: SendWelcomeEmail implements IRequest plus
         // all four marker interfaces, so every transport signature below accepts it.
+        // Arrange
         IRemoteRequestSender remoteSender = new FakeRemoteRequestSender();
         IRequestQueuePublisher queuePublisher = new FakeRequestQueuePublisher();
         INoticeRequestSender noticeSender = new FakeNoticeRequestSender();
@@ -94,9 +98,12 @@ public sealed class RequestTransportMarkerTests
         var sendResult = await remoteSender.SendAsync(request, routeValues, null);
         await queuePublisher.EnqueueAsync(request, routeValues, null);
         await noticeSender.PublishAsync(request, routeValues, null);
+
+        // Act
         var scheduleId = await scheduler.ScheduleAsync(request, new RequestScheduleSpec("0 0 * * *"), routeValues,
             RequestActor.System);
 
+        // Assert
         Assert.True(sendResult.IsSuccess);
         Assert.NotNull(scheduleId);
     }
@@ -105,11 +112,14 @@ public sealed class RequestTransportMarkerTests
     [Fact]
     public async Task ShouldReportCompletedOutcomeForLegacySenderImplementation()
     {
+        // Arrange
         IRemoteRequestSender sender = new FakeRemoteRequestSender();
 
+        // Act
         var outcome = await sender.SendWithOutcomeAsync<CreateUser, Uuid>(
             new CreateUser("ada@example.com", "Ada Lovelace"), new RequestRouteValues("tenant-123"), null);
 
+        // Assert
         var completed = Assert.IsType<RemoteRequestOutcome<Uuid>.Completed>(outcome);
         Assert.True(completed.Result.IsSuccess);
     }
@@ -118,15 +128,18 @@ public sealed class RequestTransportMarkerTests
     [Fact]
     public async Task ShouldReportNotDispatchedOutcomeForPreCancelledLegacySender()
     {
+        // Arrange
         var implementation = new FakeRemoteRequestSender();
         IRemoteRequestSender sender = implementation;
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
+        // Act
         var outcome = await sender.SendWithOutcomeAsync<CreateUser, Uuid>(
             new CreateUser("ada@example.com", "Ada Lovelace"), new RequestRouteValues("tenant-123"), null,
             cancellation.Token);
 
+        // Assert
         _ = Assert.IsType<RemoteRequestOutcome<Uuid>.NotDispatched>(outcome);
         Assert.Equal(0, implementation.CallCount);
     }
@@ -135,6 +148,7 @@ public sealed class RequestTransportMarkerTests
     [Fact]
     public async Task ShouldReportUnknownOutcomeWhenLegacySenderIsCancelledAfterDispatch()
     {
+        // Arrange
         var implementation = new WaitingRemoteRequestSender();
         IRemoteRequestSender sender = implementation;
         using var cancellation = new CancellationTokenSource();
@@ -144,8 +158,11 @@ public sealed class RequestTransportMarkerTests
 
         await implementation.Dispatched.Task.WaitAsync(TimeSpan.FromSeconds(5));
         cancellation.Cancel();
+
+        // Act
         var outcome = await sending.WaitAsync(TimeSpan.FromSeconds(5));
 
+        // Assert
         _ = Assert.IsType<RemoteRequestOutcome<Uuid>.OutcomeUnknown>(outcome);
     }
 
@@ -153,6 +170,7 @@ public sealed class RequestTransportMarkerTests
     [Fact]
     public async Task ShouldPreserveParentContextWhenSendingOutcomeAwareRequests()
     {
+        // Arrange
         var parentMetadata = new RequestMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), Uuid.CreateVersion4());
         var parent = new RequestContext<ClockProbe>(new ClockProbe(),
             new RequestDispatchContext(RequestActor.System, metadata: parentMetadata));
@@ -160,8 +178,11 @@ public sealed class RequestTransportMarkerTests
         IRemoteRequestSender sender = implementation;
         var routeValues = new RequestRouteValues("tenant-123");
 
+        // Act
         var noResultOutcome = await sender.SendWithOutcomeAsync(
             new SendWelcomeEmail(Uuid.CreateVersion4()), routeValues, null, parent);
+
+        // Assert
         var noResultMetadata = Assert.IsType<RequestMetadata>(implementation.LastMetadata);
         _ = Assert.IsType<RemoteRequestOutcome.Completed>(noResultOutcome);
         Assert.NotEqual(parent.RequestId, noResultMetadata.RequestId);

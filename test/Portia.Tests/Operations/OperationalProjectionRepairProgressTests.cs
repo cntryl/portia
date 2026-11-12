@@ -6,11 +6,16 @@ public sealed partial class OperationalProjectionTests
     [Fact]
     public async Task ShouldPreserveIndeterminateRepairWhenCommitAcknowledgementIsLost()
     {
+        // Arrange
         var journal = new MemoryOperationalStore();
         var native = new NativeStore();
         var events = await OperationalExecutionTests.EventsAsync();
         var session = new OperationalSession(journal, new OperationalOptions(), new EmptyApplicationTopology(), TimeProvider.System);
+
+        // Act
         await session.AcquireAsync(Target, "projector", Settings with { FailureAttemptLimit = 3 }, ProjectionCheckpoint.Start, default);
+
+        // Assert
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events)
         { Operations = session }.RunAsync(new PermanentlyFailingProjector(native), ProjectionCheckpoint.Start).AsTask());
         Assert.Equal(ProjectionCheckpoint.Start, native.Checkpoint);

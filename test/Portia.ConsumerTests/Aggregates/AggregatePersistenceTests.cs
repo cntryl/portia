@@ -12,11 +12,16 @@ public sealed class AggregatePersistenceTests
     [InlineData(true)]
     public async Task AuditBatchesUseDistinctVersionFourSessionStreamsWithoutChangingAggregateVersion(bool fitz)
     {
+        // Arrange
         await using var fixture = await StoreFixture.CreateAsync(fitz);
         var repository = fixture.Repository;
         var account = new Account(Uuid.CreateVersion4());
         account.Deposit(10);
+
+        // Act
         await repository.SaveAsync(account, _saveContext);
+
+        // Assert
         var competingWriter = Assert.IsType<Account>(await repository.HydrateAsync(new Account(account.Id)));
         account.Audit(new Declined("limit"));
         account.Audit(new Declined("reviewed"));
@@ -72,10 +77,15 @@ public sealed class AggregatePersistenceTests
     [InlineData(true)]
     public async Task AuditBeforeCreationLeavesAggregateStreamAbsent(bool fitz)
     {
+        // Arrange
         await using var fixture = await StoreFixture.CreateAsync(fitz);
         var account = new Account(Uuid.CreateVersion4());
         account.Audit(new Declined("declined before creation"));
+
+        // Act
         await fixture.Repository.SaveAsync(account, _saveContext);
+
+        // Assert
         Assert.Equal(0UL, (await fixture.Repository.HydrateAsync(new Account(account.Id))).CommittedStreamPosition);
         Assert.Equal(0, account.Balance);
         Assert.Equal(0UL, account.Version);
@@ -90,10 +100,15 @@ public sealed class AggregatePersistenceTests
     [InlineData(true)]
     public async Task CompetingRaisedEventsStillConflictAndKeepPendingChanges(bool fitz)
     {
+        // Arrange
         await using var fixture = await StoreFixture.CreateAsync(fitz);
         var account = new Account(Uuid.CreateVersion4());
         account.Deposit(1);
+
+        // Act
         await fixture.Repository.SaveAsync(account, _saveContext);
+
+        // Assert
         var stale = Assert.IsType<Account>(await fixture.Repository.HydrateAsync(new Account(account.Id)));
         account.Deposit(2);
         await fixture.Repository.SaveAsync(account, _saveContext);
@@ -110,6 +125,7 @@ public sealed class AggregatePersistenceTests
     [Fact]
     public async Task PublicRegistrationSavesAndReloadsAggregate()
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
                                                     using System;
                                                     using System.Threading.Tasks;
@@ -141,7 +157,11 @@ public sealed class AggregatePersistenceTests
                                                         }
                                                     }
                                                     """);
+
+        // Act
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<int>>>();
+
+        // Assert
         Assert.Equal(12, await run());
     }
 }

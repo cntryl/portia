@@ -15,16 +15,20 @@ public sealed class TelemetryV2ContractTests
     [Fact]
     public void ShouldEmitExactOrderedTagsForAllActivityKinds()
     {
+        // Arrange
         using var listener = Listen(out var activities);
 
         using (var execute = PortiaTelemetry.StartExecute("test.request", "local"))
             PortiaTelemetry.RecordOutcome(execute, true, null);
         using (var send = PortiaTelemetry.StartSend("test.request", "queue", "fitz"))
             PortiaTelemetry.RecordOutcome(send, true, null);
+
+        // Act
         using (var process = PortiaTelemetry.StartProcess("test.request",
                    new QueueInvocation("queue://secret/route", 2) { MessagingSystem = "fitz" }, null))
             PortiaTelemetry.RecordOutcome(process, true, null);
 
+        // Assert
         var executeActivity = Assert.Single(activities,
             activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName);
         Assert.All(activities, activity =>
@@ -65,11 +69,14 @@ public sealed class TelemetryV2ContractTests
     [Fact]
     public void ShouldOmitMessagingAttributesWhenSystemIsUnknown()
     {
+        // Arrange
         using var listener = Listen(out var activities);
 
+        // Act
         using (var send = PortiaTelemetry.StartSend("test.request", "custom", null))
             PortiaTelemetry.RecordOutcome(send, true, null);
 
+        // Assert
         var activity = Assert.Single(activities);
         Assert.Equal(["portia.request.name", "portia.transport.name", "portia.outcome"],
             activity.TagObjects.Select(tag => tag.Key));
@@ -81,6 +88,7 @@ public sealed class TelemetryV2ContractTests
     [Fact]
     public void ShouldApplyInvocationTraceRelationship()
     {
+        // Arrange
         using var listener = Listen(out var activities);
         var propagated = new RequestTraceContext("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
 
@@ -89,11 +97,13 @@ public sealed class TelemetryV2ContractTests
         {
         }
 
+        // Act
         using (PortiaTelemetry.StartProcess("rpc.request",
                    new RpcInvocation("rpc://secret/route") { MessagingSystem = "fitz" }, propagated))
         {
         }
 
+        // Assert
         var queue = Assert.Single(activities,
             activity => Equals(activity.GetTagItem("portia.transport.name"), "queue"));
         Assert.NotEqual(propagated.TraceParent[3..35], queue.TraceId.ToString());
@@ -108,10 +118,13 @@ public sealed class TelemetryV2ContractTests
     [Fact]
     public void ShouldRecordTypedDeliveryOutcomeWithExactDimensions()
     {
+        // Arrange
         using var listener = ListenToDelivery(out var measurements);
 
+        // Act
         PortiaTelemetry.RecordDelivery("test.request", "queue", RequestDeliveryOutcome.Abandoned);
 
+        // Assert
         var measurement = Assert.Single(measurements);
         Assert.Equal(1, measurement.Value);
         Assert.Equal(["portia.request.name", "portia.transport.name", "portia.outcome"],
@@ -129,6 +142,7 @@ public sealed class TelemetryV2ContractTests
     [Fact]
     public async Task ShouldEmitExactRpcTopologyUsingGeneratedDiscriminator()
     {
+        // Arrange
         using var listener = Listen(out var activities);
         var rpc = new InMemoryRpcClient();
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
@@ -137,8 +151,10 @@ public sealed class TelemetryV2ContractTests
         await using var registration = await server.RegisterAsync<RpcGetValue, int>();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
+        // Act
         var result = await sender.SendAsync<RpcGetValue, int>(new RpcGetValue(), RequestRouteValues.None, null);
 
+        // Assert
         Assert.True(result.IsSuccess);
         var requestActivities = activities.Where(activity =>
             Equals(activity.GetTagItem("portia.request.name"), "test.rpc.get-value")).ToArray();
@@ -161,6 +177,7 @@ public sealed class TelemetryV2ContractTests
     [Fact]
     public async Task ShouldStartDistinctLinkedTraceForEveryScheduleFiring()
     {
+        // Arrange
         using var listener = Listen(out var activities);
         var propagated = new RequestTraceContext("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
         var invocation = new ScheduleInvocation("schedule://secret/route") { MessagingSystem = "fitz" };
@@ -181,9 +198,13 @@ public sealed class TelemetryV2ContractTests
         var processes = requestActivities
             .Where(activity => activity.OperationName == PortiaTelemetry.ProcessActivityName)
             .ToArray();
+
+        // Act
         var executions = requestActivities
             .Where(activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName)
             .ToArray();
+
+        // Assert
         Assert.Equal(2, processes.Length);
         Assert.Equal(2, executions.Length);
         Assert.Equal(2, processes.Select(activity => activity.TraceId).Distinct().Count());
@@ -197,15 +218,18 @@ public sealed class TelemetryV2ContractTests
     [Fact]
     public async Task ShouldCompleteProcessWithoutExecuteGivenActorValidationFailure()
     {
+        // Arrange
         using var listener = Listen(out var activities);
         using var busHost = TestRequestBus.Create();
         var delivery = new RequestDelivery("test.change-value",
             new QueueInvocation("queue://secret/route", 1) { MessagingSystem = "fitz" }, RequestMetadata.Create(),
             "expired-token");
 
+        // Act
         var result = await RequestDispatch.SendAsync(new TestRequestActorValidator("expired-token"), busHost.Bus,
             new ChangeValue(1), delivery);
 
+        // Assert
         Assert.False(result.WasDispatched);
         var process = Assert.Single(activities,
             activity => activity.OperationName == PortiaTelemetry.ProcessActivityName &&
@@ -221,14 +245,18 @@ public sealed class TelemetryV2ContractTests
     [Fact]
     public void ShouldDistinguishRequestedCancellationFromUnexpectedFault()
     {
+        // Arrange
         using var listener = Listen(out var activities);
         var exception = new InvalidOperationException("operator diagnostic");
 
         using (var canceled = PortiaTelemetry.StartExecute("test.canceled", "local"))
             PortiaTelemetry.RecordCanceled(canceled);
+
+        // Act
         using (var faulted = PortiaTelemetry.StartExecute("test.faulted", "local"))
             PortiaTelemetry.RecordFault(faulted, exception);
 
+        // Assert
         var canceledActivity = Assert.Single(activities,
             activity => Equals(activity.GetTagItem("portia.request.name"), "test.canceled"));
         Assert.Equal("canceled", canceledActivity.GetTagItem("portia.outcome"));
@@ -248,14 +276,17 @@ public sealed class TelemetryV2ContractTests
     [Fact]
     public async Task ShouldPersistScheduleProducerContext()
     {
+        // Arrange
         using var listener = Listen(out var activities);
         var schedule = new CapturingScheduleClient();
         var serializer = TestJson.Serializer(typeof(UniversalAction));
 
+        // Act
         _ = await new FitzRequestScheduler(schedule, serializer).ScheduleAsync(
             new UniversalAction(7), new RequestScheduleSpec("0 0 * * *"), RequestRouteValues.None,
             RequestActor.CreateSystem("scheduler"));
 
+        // Assert
         var producer = Assert.Single(activities,
             activity => activity.OperationName == PortiaTelemetry.SendActivityName &&
                         Equals(activity.GetTagItem("portia.transport.name"), "schedule"));
@@ -270,6 +301,7 @@ public sealed class TelemetryV2ContractTests
     [Fact]
     public void ShouldCountAndIgnoreInvalidPropagatedContext()
     {
+        // Arrange
         using var activityListener = Listen(out var activities);
         var measurements = new ConcurrentBag<Measurement>();
         using var meterListener = new MeterListener
@@ -287,11 +319,13 @@ public sealed class TelemetryV2ContractTests
             measurements.Add(new Measurement(value, tags.ToArray())));
         meterListener.Start();
 
+        // Act
         using (PortiaTelemetry.StartProcess("test.request", new QueueInvocation("queue://secret", 1),
                    new RequestTraceContext("not-a-trace-parent")))
         {
         }
 
+        // Assert
         var process = Assert.Single(activities);
         Assert.Equal(default, process.ParentSpanId);
         Assert.Empty(process.Links);
@@ -306,6 +340,7 @@ public sealed class TelemetryV2ContractTests
     [Fact]
     public void ShouldGateTagsAndExceptionEventsOnRequestedData()
     {
+        // Arrange
         var activities = new ConcurrentBag<Activity>();
         using var listener = new ActivityListener
         {
@@ -315,11 +350,13 @@ public sealed class TelemetryV2ContractTests
         };
         ActivitySource.AddActivityListener(listener);
 
+        // Act
         using (var activity = PortiaTelemetry.StartExecute("secret-request", "local"))
         {
             PortiaTelemetry.RecordFault(activity, new InvalidOperationException("secret-message"));
         }
 
+        // Assert
         var captured = Assert.Single(activities);
         Assert.Equal(ActivityStatusCode.Error, captured.Status);
         Assert.Empty(captured.TagObjects);
@@ -330,11 +367,15 @@ public sealed class TelemetryV2ContractTests
     [Fact]
     public async Task ShouldTreatUnrequestedCancellationAsFault()
     {
+        // Arrange
         using var listener = Listen(out var activities);
         using var busHost = TestRequestBus.Create();
+
+        // Act
         var delivery = new RequestDelivery("test.change-value", new QueueInvocation("queue://secret", 1),
             RequestMetadata.Create());
 
+        // Assert
         _ = await Assert.ThrowsAsync<OperationCanceledException>(() => RequestDispatch.SendAsync(
             new UnrequestedCancellationValidator(), busHost.Bus, new ChangeValue(1), delivery).AsTask());
 
@@ -348,13 +389,17 @@ public sealed class TelemetryV2ContractTests
     [Fact]
     public async Task ShouldTreatRequestedCancellationAsCanceled()
     {
+        // Arrange
         using var listener = Listen(out var activities);
         using var busHost = TestRequestBus.Create();
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
+
+        // Act
         var delivery = new RequestDelivery("test.change-value", new QueueInvocation("queue://secret", 1),
             RequestMetadata.Create());
 
+        // Assert
         _ = await Assert.ThrowsAsync<OperationCanceledException>(() => RequestDispatch.SendAsync(
                 new CooperativeCancellationValidator(), busHost.Bus, new ChangeValue(1), delivery, cancellation.Token)
             .AsTask());

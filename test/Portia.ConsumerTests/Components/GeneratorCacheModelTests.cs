@@ -22,6 +22,7 @@ public sealed class GeneratorCacheModelTests
     [Fact]
     public void HttpImplementationsAreSharedByShapeAndUnaffectedByCallSiteMovement()
     {
+        // Arrange
         const string source = """
             using Cntryl.Portia;
             using Microsoft.AspNetCore.Routing;
@@ -38,8 +39,12 @@ public sealed class GeneratorCacheModelTests
                 public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Query>("/second/{id}");
             }
             """;
+
+        // Act
         var options = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
+
+        // Assert
         Dictionary<string, string> Generate(string text)
         {
             var compilation = CSharpCompilation.Create("HttpSharing", [CSharpSyntaxTree.ParseText(text, options)],
@@ -72,9 +77,14 @@ public sealed class GeneratorCacheModelTests
     [Fact]
     public void LargeRequestRegistrationsHaveBoundedDeterministicFiles()
     {
+        // Arrange
         var declarations = Enumerable.Range(0, 1000).Select(index =>
             $"[RequestRoute(\"*\", \"orders\", \"order\", \"create{index}\")] [Discriminator(\"orders.create{index}\")] public sealed record Create{index} : IRequest, IQueuable;").ToArray();
+
+        // Act
         var options = new CSharpParseOptions(LanguageVersion.Preview);
+
+        // Assert
         Dictionary<string, string> Generate(IEnumerable<string> items)
         {
             var tree = CSharpSyntaxTree.ParseText("using Cntryl.Portia;\n" + string.Join("\n", items), options);
@@ -132,6 +142,7 @@ public sealed class GeneratorCacheModelTests
     [Fact]
     public void DomainEventCatalogCodeGenerationIgnoresDiagnosticLocationChanges()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
 
@@ -157,8 +168,12 @@ public sealed class GeneratorCacheModelTests
 
         var steps = driver.GetRunResult().Results.Single()
             .TrackedSteps["DomainEventCatalogRegistrations"];
+
+        // Act
         var reasons = steps.SelectMany(static step => step.Outputs)
             .Select(static output => output.Reason).ToArray();
+
+        // Assert
         Assert.NotEmpty(reasons);
         Assert.All(reasons, reason => Assert.Equal(IncrementalStepRunReason.Cached, reason));
     }
@@ -166,6 +181,7 @@ public sealed class GeneratorCacheModelTests
     [Fact]
     public void JsonRootEmissionIgnoresDiagnosticLocationChanges()
     {
+        // Arrange
         const string source = """
                               using Cntryl.Portia;
                               using System.Text.Json.Serialization;
@@ -183,8 +199,11 @@ public sealed class GeneratorCacheModelTests
         var moved = CSharpSyntaxTree.ParseText(Environment.NewLine + source, options, "Example.cs");
         driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, moved));
 
+        // Act
         var outputs = driver.GetRunResult().Results.Single().TrackedSteps["PortiaJsonRootEmission"]
             .SelectMany(step => step.Outputs).ToArray();
+
+        // Assert
         Assert.NotEmpty(outputs);
         Assert.All(outputs, output => Assert.True(output.Reason is IncrementalStepRunReason.Unchanged or IncrementalStepRunReason.Cached));
 

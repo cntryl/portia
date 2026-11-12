@@ -20,11 +20,15 @@ public sealed class FitzEventStoreSubscriptionTests
     [Fact]
     public async Task ShouldKeepSignallingAfterACallerCancelsOneWait()
     {
+        // Arrange
         var commits = Channel.CreateUnbounded<StreamCommitEvent>();
         var client = new SubscribingStreamClient(commits.Reader);
         var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
+
+        // Act
         await using var subscription = await store.SubscribeAsync(Pattern);
 
+        // Assert
         using (var backstop = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))
         {
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
@@ -45,11 +49,15 @@ public sealed class FitzEventStoreSubscriptionTests
     [Fact]
     public async Task ShouldReleaseTheUnderlyingSubscriptionOnDisposal()
     {
+        // Arrange
         var commits = Channel.CreateUnbounded<StreamCommitEvent>();
         var client = new SubscribingStreamClient(commits.Reader);
         var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
+
+        // Act
         var subscription = await store.SubscribeAsync(Pattern);
 
+        // Assert
         using (var backstop = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))
         {
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
@@ -68,11 +76,15 @@ public sealed class FitzEventStoreSubscriptionTests
     [Fact]
     public async Task ShouldReleaseTheUnderlyingSubscriptionOnDisposalAfterAFaultedWait()
     {
+        // Arrange
         var commits = Channel.CreateUnbounded<StreamCommitEvent>();
         var client = new SubscribingStreamClient(commits.Reader);
         var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
+
+        // Act
         var subscription = await store.SubscribeAsync(Pattern);
 
+        // Assert
         using (var backstop = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))
         {
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
@@ -95,10 +107,12 @@ public sealed class FitzEventStoreSubscriptionTests
     [Fact]
     public async Task ShouldDrainBufferedCommitsAtEachWait()
     {
+        // Arrange
         var client = new BoundedStreamClient(4);
         var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
         await using var subscription = await store.SubscribeAsync(Pattern);
 
+        // Act
         for (var round = 0; round < 5; round++)
         {
             client.Commit(3);
@@ -106,6 +120,7 @@ public sealed class FitzEventStoreSubscriptionTests
             await subscription.WaitAsync(wait.Token);
         }
 
+        // Assert
         Assert.Equal(0, client.Overflows);
         using var idle = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
@@ -120,14 +135,17 @@ public sealed class FitzEventStoreSubscriptionTests
     [Fact]
     public async Task ShouldTreatAnOverflowedSubscriptionAsAWakeUpAndResubscribe()
     {
+        // Arrange
         var client = new BoundedStreamClient(2);
         var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
         await using var subscription = await store.SubscribeAsync(Pattern);
         client.Commit(3);
 
+        // Act
         using (var wait = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
             await subscription.WaitAsync(wait.Token);
 
+        // Assert
         Assert.Equal(2, client.Subscriptions);
         Assert.Equal(1, client.Unsubscribes);
         using (var idle = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))

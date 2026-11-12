@@ -12,10 +12,15 @@ public sealed class OperationalRecoveryTests
     [Fact]
     public async Task ShouldRebuildRepairPlanGivenConcurrentOperationalWrite()
     {
+        // Arrange
         var store = new MemoryOperationalStore();
         var session = await BlockAsync(store);
         var current = session.State;
+
+        // Act
         var revisedSettings = Settings with { MaxBatchSize = 128 };
+
+        // Assert
         store.BeforeExchange = async () =>
         {
             store.BeforeExchange = null;
@@ -41,15 +46,19 @@ public sealed class OperationalRecoveryTests
     [Fact]
     public async Task ShouldStopOperationalConflictRecoveryGivenCancellation()
     {
+        // Arrange
         var store = new MemoryOperationalStore();
         _ = await BlockAsync(store);
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         store.BeforeExchange = () =>
         {
             cancellation.Cancel();
             throw new ProjectionConcurrencyException("A concurrent worker holds the resource lock.");
         };
 
+        // Assert
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Api(store)
             .PreviewRepairAsync(TestOperationalAuthorizer.AdministratorActor(), Target, cancellation.Token).AsTask());
 
@@ -70,11 +79,16 @@ public sealed class OperationalRecoveryTests
     [Fact]
     public async Task ShouldRequireSeparateApprovalAndQueueOnlyOnce()
     {
+        // Arrange
         var store = new MemoryOperationalStore();
         var session = await BlockAsync(store);
         var operations = Api(store);
         var agent = TestOperationalAuthorizer.AdministratorActor();
+
+        // Act
         var plan = await operations.PreviewRepairAsync(agent, Target);
+
+        // Assert
         Assert.Equal(session.State.OwnerSession, plan.OwnerSession);
         _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
             await operations.ExecuteRepairAsync(agent, Target, plan.Id));
@@ -93,6 +107,7 @@ public sealed class OperationalRecoveryTests
     [Fact]
     public async Task ShouldFenceOldOwnersAndInvalidatePlans()
     {
+        // Arrange
         var store = new MemoryOperationalStore();
         var old = await BlockAsync(store);
         var stale = old.State;
@@ -100,7 +115,11 @@ public sealed class OperationalRecoveryTests
         var actor = TestOperationalAuthorizer.AdministratorActor(true);
         var plan = await operations.PreviewRepairAsync(actor, Target);
         var next = new OperationalSession(store, new OperationalOptions(), new EmptyApplicationTopology(), TimeProvider.System);
+
+        // Act
         await next.AcquireAsync(Target, "reactor", Settings, ProjectionCheckpoint.Start, default);
+
+        // Assert
         Assert.NotEqual(stale.OwnerSession, next.State.OwnerSession);
         Assert.NotNull(next.State.Block);
         Assert.False(await store.CompareExchangeAsync(stale with { Revision = stale.Revision + 1 }, stale.Revision, stale.OwnerSession));
@@ -112,9 +131,14 @@ public sealed class OperationalRecoveryTests
     [Fact]
     public async Task ShouldIsolateTenantEvidence()
     {
+        // Arrange
         var store = new MemoryOperationalStore();
         _ = await BlockAsync(store);
+
+        // Act
         var operations = Api(store);
+
+        // Assert
         _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
             await operations.InspectProcessorAsync(TestOperationalAuthorizer.AdministratorActor(scope: "tenant-a"), Target));
         Assert.Empty(await operations.ListIssuesAsync(TestOperationalAuthorizer.AdministratorActor(scope: "tenant-a"),
@@ -128,6 +152,7 @@ public sealed class OperationalRecoveryTests
     [InlineData("checkpoint")]
     public async Task ShouldRejectInvalidatedApproval(string change)
     {
+        // Arrange
         var store = new MemoryOperationalStore();
         _ = await BlockAsync(store);
         var clock = new ManualTestClock();
@@ -138,8 +163,12 @@ public sealed class OperationalRecoveryTests
         _ = await operations.ApproveRepairAsync(actor, Target, plan.Id);
         if (change == "expired")
             clock.Advance(TimeSpan.FromMinutes(5));
+
+        // Act
         if (change == "revoked")
             await operations.RevokeRepairAsync(actor, Target, plan.Id);
+
+        // Assert
         if (change == "checkpoint")
         {
             var state = (await store.ReadAsync(Target))!;
@@ -160,6 +189,7 @@ public sealed class OperationalRecoveryTests
     [Fact]
     public async Task ShouldRecheckRevocationBeforeClaim()
     {
+        // Arrange
         var store = new MemoryOperationalStore();
         var session = await BlockAsync(store);
         var operations = Api(store);
@@ -167,7 +197,11 @@ public sealed class OperationalRecoveryTests
         var plan = await operations.PreviewRepairAsync(actor, Target);
         _ = await operations.ApproveRepairAsync(actor, Target, plan.Id);
         _ = await operations.ExecuteRepairAsync(actor, Target, plan.Id);
+
+        // Act
         await operations.RevokeRepairAsync(actor, Target, plan.Id);
+
+        // Assert
         Assert.False(await session.PrepareAsync(ProjectionCheckpoint.Start, default));
         Assert.Equal("invalidated", (await operations.VerifyRepairAsync(actor, Target, plan.Id)).Status);
         Assert.Single(session.State.Attempts);
@@ -177,13 +211,18 @@ public sealed class OperationalRecoveryTests
     [Fact]
     public async Task ShouldRetainUnresolvedFailuresAndExposeCompletedHistoryBoundary()
     {
+        // Arrange
         var store = new MemoryOperationalStore();
         var clock = new ManualTestClock();
         var session = new OperationalSession(store, new OperationalOptions(), new EmptyApplicationTopology(), clock);
         await session.AcquireAsync(Target, "reactor", Settings, ProjectionCheckpoint.Start, default);
         var failure = new ProcessorFailureException(Target.Identity, ProjectionCheckpoint.Start, ProcessorFailureStage.Reading,
             error: RequestError.Validation("dependency unavailable"));
+
+        // Act
         await session.RecordFailureAsync(failure, null, default);
+
+        // Assert
         var original = Assert.Single(session.State.Attempts).Id;
         var operations = new PortiaOperations(TestOperationalAuthorizer.Configuration(), store, new OperationalOptions(), new EmptyApplicationTopology(),
             new TestOperationalAuthorizer(), clock);

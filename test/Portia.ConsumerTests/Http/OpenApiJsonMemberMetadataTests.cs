@@ -9,6 +9,7 @@ public sealed class OpenApiJsonMemberMetadataTests
     [InlineData(true)]
     public async Task ShouldDocumentResolvedJsonMemberNameGivenApplicationMetadataRename(bool acceptsForm)
     {
+        // Arrange
         var assembly = HttpConsumerScenario.Compile(
             "public sealed record Binding(int Value) : IRequest<string>, ICallable;",
             "request.Value.ToString(CultureInfo.InvariantCulture)",
@@ -23,7 +24,11 @@ public sealed class OpenApiJsonMemberMetadataTests
                     Modifiers = { info => { if (info.Type == typeof(Binding)) info.Properties[0].Name = "custom"; } }
                 });
             """);
+
+        // Act
         var (runtimeStatus, runtimeBody) = await HttpConsumerScenario.RunAsync(assembly, "/binding", "{\"custom\":16}");
+
+        // Assert
         Assert.Equal(200, runtimeStatus);
         Assert.Equal("\"16\"", runtimeBody);
 
@@ -48,6 +53,7 @@ public sealed class OpenApiJsonMemberMetadataTests
     [Fact]
     public async Task ShouldDocumentMemberNumberHandlingGivenDifferentScalarContracts()
     {
+        // Arrange
         var assembly = HttpConsumerScenario.Compile(
             """
             public sealed record Binding(
@@ -60,8 +66,12 @@ public sealed class OpenApiJsonMemberMetadataTests
             app.MapPortiaOpenApi();
             """,
             "builder.Services.AddPortia().ConfigureJson(options => options.NumberHandling = JsonNumberHandling.Strict);");
+
+        // Act
         var (runtimeStatus, runtimeBody) = await HttpConsumerScenario.RunAsync(assembly, "/binding",
             "{\"first\":\"16\",\"second\":32}");
+
+        // Assert
         Assert.Equal(200, runtimeStatus);
         Assert.Equal("\"16,32\"", runtimeBody);
 

@@ -7,6 +7,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldResolveTenantKeyAndPromoteVerifiedContentConditionally()
     {
+        // Arrange
         var content = "object bytes"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var tenant = new TenantId("tenant-one");
@@ -21,7 +22,10 @@ public sealed class AwsObjectStorageTests
             .CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1");
         var storage = new AwsObjectStorage(client, resolver, protector);
 
+        // Act
         var session = await storage.CreateUploadAsync(tenant, digest);
+
+        // Assert
         Assert.DoesNotContain("tenant-one-bucket", session.Token, StringComparison.Ordinal);
         Assert.DoesNotContain("alias/tenant-one-key", session.Token, StringComparison.Ordinal);
         var signed = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(4));
@@ -48,6 +52,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldSignHttpUrlsForHttpS3Endpoints()
     {
+        // Arrange
         var content = "local endpoint"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -59,7 +64,10 @@ public sealed class AwsObjectStorageTests
         var tenant = new TenantId("tenant-one");
         var session = await storage.CreateUploadAsync(tenant, digest);
 
+        // Act
         await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1));
+
+        // Assert
         Assert.Equal(Protocol.HTTP, proxy.PresignedRequest?.Protocol);
 
         await storage.CreateDownloadAsync(tenant, digest, TimeSpan.FromMinutes(1));
@@ -70,6 +78,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldSignHttpUrlsWhenS3ClientUsesHttp()
     {
+        // Arrange
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
         var proxy = (TestS3ClientProxy)(object)client;
         proxy.UseHttp = true;
@@ -77,8 +86,10 @@ public sealed class AwsObjectStorageTests
         var digest = new ObjectDigest(new string('a', 64), 1);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
 
+        // Act
         await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1));
 
+        // Assert
         Assert.Equal(Protocol.HTTP, proxy.PresignedRequest?.Protocol);
     }
 
@@ -86,6 +97,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldRejectMismatchedStagedBytesAndCleanUpTheMultipartUpload()
     {
+        // Arrange
         var content = "correct"u8.ToArray();
         var wrongContent = "changed"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
@@ -99,8 +111,11 @@ public sealed class AwsObjectStorageTests
             client,
             new TestTenantResolver(),
             provider.GetRequiredService<IDataProtectionProvider>().CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
+
+        // Act
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
 
+        // Assert
         await Assert.ThrowsAsync<InvalidDataException>(async () =>
             await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]));
 
@@ -113,6 +128,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldTreatVerifiedPromotionAsSuccessfulWhenCompletionIsRetried()
     {
+        // Arrange
         var content = "retryable object"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -130,8 +146,11 @@ public sealed class AwsObjectStorageTests
         var parts = new[] { new ObjectPartReceipt(1, "etag") };
 
         await storage.CompleteUploadAsync(session, parts);
+
+        // Act
         await storage.CompleteUploadAsync(session, parts);
 
+        // Assert
         Assert.Equal(2, proxy.CompleteCount);
         Assert.Equal(1, proxy.CopyCount);
         Assert.Equal(2, proxy.AbortCount);
@@ -142,6 +161,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldKeepStagingWhenUploadIdIsGoneButPromotionIsNotVisibleYet()
     {
+        // Arrange
         var content = "concurrent completion"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -156,8 +176,11 @@ public sealed class AwsObjectStorageTests
             client,
             new TestTenantResolver(),
             provider.GetRequiredService<IDataProtectionProvider>().CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
+
+        // Act
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
 
+        // Assert
         await Assert.ThrowsAsync<AmazonS3Exception>(async () =>
             await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]));
 
@@ -169,6 +192,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldResumePromotionWhenTheMultipartUploadIdIsGone()
     {
+        // Arrange
         var content = "completed staging object"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -178,8 +202,10 @@ public sealed class AwsObjectStorageTests
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
 
+        // Act
         await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]);
 
+        // Assert
         Assert.Equal(1, proxy.CompleteCount);
         Assert.Equal(1, proxy.CopyCount);
         Assert.Equal(1, proxy.StagingDeleteCount);
@@ -190,6 +216,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldPreserveAndResumeAfterAmbiguousMultipartCompletion()
     {
+        // Arrange
         var content = "ambiguous completion"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -198,8 +225,11 @@ public sealed class AwsObjectStorageTests
         proxy.TimeoutAfterFirstCompletion = true;
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+
+        // Act
         var parts = new[] { new ObjectPartReceipt(1, "etag") };
 
+        // Assert
         await Assert.ThrowsAsync<TimeoutException>(async () => await storage.CompleteUploadAsync(session, parts));
         Assert.Equal(0, proxy.AbortCount);
         Assert.Equal(0, proxy.StagingDeleteCount);
@@ -221,6 +251,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldPreserveStagingWhenCompletionIsCanceledInFlight()
     {
+        // Arrange
         var content = "in-flight cancellation"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -230,8 +261,11 @@ public sealed class AwsObjectStorageTests
         proxy.CancelDuringFirstCompletion = source;
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+
+        // Act
         var parts = new[] { new ObjectPartReceipt(1, "etag") };
 
+        // Assert
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await storage.CompleteUploadAsync(session, parts, source.Token));
         Assert.Equal(0, proxy.AbortCount);
@@ -246,6 +280,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldRejectAndCleanMismatchedStagingOnResume()
     {
+        // Arrange
         var content = "expected content"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -253,8 +288,11 @@ public sealed class AwsObjectStorageTests
         proxy.Content = "corrupt content"u8.ToArray();
         proxy.FailAllCompletions = true;
         var storage = CreateStorage(client);
+
+        // Act
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
 
+        // Assert
         await Assert.ThrowsAsync<InvalidDataException>(async () =>
             await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]));
 
@@ -266,6 +304,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldRetryConditionalCopyConflict()
     {
+        // Arrange
         var content = "conflicting promotion"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -275,8 +314,10 @@ public sealed class AwsObjectStorageTests
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
 
+        // Act
         await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]);
 
+        // Assert
         Assert.Equal(2, proxy.CopyCount);
         Assert.Equal(1, proxy.StagingDeleteCount);
     }
@@ -285,6 +326,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldKeepStagingAfterRepeatedConditionalCopyConflicts()
     {
+        // Arrange
         var content = "persistent conflict"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -292,8 +334,11 @@ public sealed class AwsObjectStorageTests
         proxy.Content = content;
         proxy.ConditionalCopyConflictsRemaining = 10;
         var storage = CreateStorage(client);
+
+        // Act
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
 
+        // Assert
         await Assert.ThrowsAsync<AmazonS3Exception>(async () =>
             await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]));
 
@@ -305,6 +350,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldAcceptVerifiedConditionalCreateRace()
     {
+        // Arrange
         var content = "concurrent immutable object"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -315,8 +361,10 @@ public sealed class AwsObjectStorageTests
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
 
+        // Act
         await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]);
 
+        // Assert
         Assert.Equal(1, proxy.CopyCount);
         Assert.Equal(1, proxy.StagingDeleteCount);
     }
@@ -325,6 +373,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldReportMissingOrUnverifiedContentAsUnavailable()
     {
+        // Arrange
         var content = "existing object"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -333,7 +382,10 @@ public sealed class AwsObjectStorageTests
         var storage = CreateStorage(client);
         var tenant = new TenantId("tenant-one");
 
+        // Act
         proxy.MissingObject = true;
+
+        // Assert
         Assert.False(await storage.HeadAndVerifyAsync(tenant, digest));
         await Assert.ThrowsAsync<FileNotFoundException>(async () =>
             await storage.CreateDownloadAsync(tenant, digest, TimeSpan.FromMinutes(1)));
@@ -348,6 +400,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldReturnNoStreamWhenContentDisappearsAfterHead()
     {
+        // Arrange
         var content = "concurrent deletion"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -355,8 +408,11 @@ public sealed class AwsObjectStorageTests
         proxy.Content = content;
         proxy.ExistingObject = true;
         proxy.MissingPromotedObjectOnGet = true;
+
+        // Act
         var storage = CreateStorage(client);
 
+        // Assert
         Assert.Null(await storage.OpenReadAsync(new TenantId("tenant-one"), digest));
     }
 
@@ -364,6 +420,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldPreserveStagingWhenCompletionIsCanceledBeforeS3Request()
     {
+        // Arrange
         var content = "cancelled object"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -373,8 +430,11 @@ public sealed class AwsObjectStorageTests
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
         using var source = new CancellationTokenSource();
+
+        // Act
         source.Cancel();
 
+        // Assert
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")], source.Token));
 
@@ -391,6 +451,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldAbortWhenS3ReportsNoSuchUpload()
     {
+        // Arrange
         var content = "aborted object"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -399,8 +460,10 @@ public sealed class AwsObjectStorageTests
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
 
+        // Act
         await storage.AbortUploadAsync(session);
 
+        // Assert
         Assert.Equal(2, proxy.AbortCount);
         Assert.Equal(1, proxy.StagingDeleteCount);
     }

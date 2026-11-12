@@ -16,13 +16,16 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldRunCommandGuardBeforeHandlerWithSharedContext()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
             [new RequestRegistration<GuardedCommand, CommandHandler>()],
             guards: [new RequestGuardRegistration<GuardedCommand, RecordingCommandGuard>()]);
 
+        // Act
         var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System);
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(["guard", "handler"], calls);
         Assert.Same(RecordingCommandGuard.Context, CommandHandler.Context);
@@ -32,6 +35,7 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldShortCircuitCommandOnFirstGuardFailure()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
             [new RequestRegistration<GuardedCommand, CommandHandler>()],
@@ -41,8 +45,10 @@ public sealed class RequestGuardTests
                 new RequestGuardRegistration<GuardedCommand, RecordingCommandGuard>()
             ]);
 
+        // Act
         var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System);
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Same(GuardFailure, result.Error);
         Assert.Equal(["failing-guard"], calls);
@@ -52,13 +58,16 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldMapQueryGuardFailureWithoutCallingHandler()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
             [new RequestRegistration<GuardedQuery, QueryHandler, int>()],
             guards: [new RequestGuardRegistration<GuardedQuery, FailingQueryGuard>()]);
 
+        // Act
         var result = await Bus(provider).SendAsync(new GuardedQuery(), RequestActor.System);
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Same(GuardFailure, result.Error);
         Assert.Equal(["query-guard"], calls);
@@ -68,13 +77,16 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldPreserveHandlerResultAfterSuccessfulGuards()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
             [new RequestRegistration<FailingQuery, FailingQueryHandler, int>()],
             guards: [new RequestGuardRegistration<FailingQuery, SuccessfulQueryGuard>()]);
 
+        // Act
         var result = await Bus(provider).SendAsync(new FailingQuery(), RequestActor.System);
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Same(HandlerFailure, result.Error);
         Assert.Equal(["guard", "handler-failure"], calls);
@@ -84,6 +96,7 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldRunMatchingGuardsInRegistrationOrder()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
             [new RequestRegistration<GuardedCommand, CommandHandler>()],
@@ -93,8 +106,10 @@ public sealed class RequestGuardTests
                 new RequestGuardRegistration<IGuardedFamily, FirstFamilyGuard>()
             ]);
 
+        // Act
         var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System);
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(["second", "first-family", "handler"], calls);
     }
@@ -103,14 +118,17 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldRunGuardsInsidePipelineBehaviors()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
             [new RequestRegistration<GuardedCommand, CommandHandler>()],
             behaviors: [new RequestPipelineBehaviorRegistration<GuardedCommand, WrappingBehavior>(0)],
             guards: [new RequestGuardRegistration<GuardedCommand, RecordingCommandGuard>()]);
 
+        // Act
         var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System);
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(["behavior-before", "guard", "handler", "behavior-after"], calls);
     }
@@ -119,14 +137,17 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldSkipGuardsWhenBehaviorShortCircuits()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
             [new RequestRegistration<GuardedCommand, CommandHandler>()],
             behaviors: [new RequestPipelineBehaviorRegistration<GuardedCommand, ShortCircuitBehavior>(0)],
             guards: [new RequestGuardRegistration<GuardedCommand, RecordingCommandGuard>()]);
 
+        // Act
         var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System);
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Same(GuardFailure, result.Error);
         Assert.Equal(["behavior-short-circuit"], calls);
@@ -136,6 +157,7 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldKeepAuthorizationSeparateAndAheadOfGuards()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
             [new RequestRegistration<GuardedCommand, CommandHandler>()],
@@ -144,7 +166,10 @@ public sealed class RequestGuardTests
         var bus = Bus(provider);
         var request = new GuardedCommand();
 
+        // Act
         var authorization = await bus.AuthorizeAsync(request, bus.CreateContext(RequestActor.System));
+
+        // Assert
         Assert.True(authorization.IsSuccess);
         Assert.Equal(["authorizer"], calls);
 
@@ -158,6 +183,7 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldPropagateGuardCancellation()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
             [new RequestRegistration<GuardedCommand, CommandHandler>()],
@@ -167,7 +193,11 @@ public sealed class RequestGuardTests
 
         var dispatch = Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System, cancellation.Token).AsTask();
         await probe.Started.Task.WaitAsync(TimeSpan.FromSeconds(3));
+
+        // Act
         cancellation.Cancel();
+
+        // Assert
         var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => dispatch);
 
         Assert.Equal(cancellation.Token, error.CancellationToken);
@@ -179,13 +209,17 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldPropagateGuardException()
     {
+        // Arrange
         var calls = new List<string>();
         var expected = new GuardException();
+
+        // Act
         using var provider = Provider(calls,
             [new RequestRegistration<GuardedCommand, CommandHandler>()],
             guards: [new RequestGuardRegistration<GuardedCommand, ThrowingGuard>()],
             configure: services => services.AddSingleton(expected));
 
+        // Assert
         var error = await Assert.ThrowsAsync<GuardException>(async () =>
             await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System));
 
@@ -197,11 +231,15 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldNameGuardReturningUninitializedResult()
     {
+        // Arrange
         var calls = new List<string>();
+
+        // Act
         using var provider = Provider(calls,
             [new RequestRegistration<GuardedCommand, CommandHandler>()],
             guards: [new RequestGuardRegistration<GuardedCommand, UninitializedGuard>()]);
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System));
 
@@ -214,6 +252,7 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldReuseFamilyGuardAcrossConcreteRequests()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
         [
@@ -223,8 +262,11 @@ public sealed class RequestGuardTests
         var bus = Bus(provider);
 
         var command = await bus.SendAsync(new GuardedCommand(), RequestActor.System);
+
+        // Act
         var query = await bus.SendAsync(new FamilyQuery(), RequestActor.System);
 
+        // Assert
         Assert.True(command.IsSuccess);
         Assert.Equal(9, query.Value);
         Assert.Equal(["first-family", "handler", "first-family", "family-query-handler"], calls);
@@ -234,15 +276,18 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldRunGuardsBeforeStreamingHandler()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
             [new StreamRequestRegistration<GuardedStream, StreamHandler, int>()],
             guards: [new RequestGuardRegistration<IRequestBase, BroadGuard>()]);
         var items = new List<int>();
 
+        // Act
         await foreach (var item in Bus(provider).StreamAsync(new GuardedStream(), RequestActor.System))
             items.Add(item);
 
+        // Assert
         Assert.Equal([4, 5], items);
         Assert.Equal(["broad-guard", "stream-handler"], calls);
     }
@@ -251,6 +296,7 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldFailStreamBeforeFirstItemWhenGuardFails()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
             [new StreamRequestRegistration<GuardedStream, StreamHandler, int>()],
@@ -259,8 +305,11 @@ public sealed class RequestGuardTests
                 new RequestGuardRegistration<GuardedStream, FailingStreamGuard>(),
                 new RequestGuardRegistration<IRequestBase, BroadGuard>()
             ]);
+
+        // Act
         var items = new List<int>();
 
+        // Assert
         var error = await Assert.ThrowsAsync<RequestGuardException>(async () =>
         {
             await foreach (var item in Bus(provider).StreamAsync(new GuardedStream(), RequestActor.System))
@@ -276,16 +325,19 @@ public sealed class RequestGuardTests
     [Fact]
     public async Task ShouldRunStreamGuardsInsideStreamBehaviors()
     {
+        // Arrange
         var calls = new List<string>();
         using var provider = Provider(calls,
             [new StreamRequestRegistration<GuardedStream, StreamHandler, int>()],
             behaviors: [new StreamRequestPipelineBehaviorRegistration<GuardedStream, RecordingStreamBehavior, int>(0)],
             guards: [new RequestGuardRegistration<IRequestBase, BroadGuard>()]);
 
+        // Act
         await foreach (var _ in Bus(provider).StreamAsync(new GuardedStream(), RequestActor.System))
         {
         }
 
+        // Assert
         Assert.Equal(["stream-behavior-before", "broad-guard", "stream-handler", "stream-behavior-after"], calls);
     }
 

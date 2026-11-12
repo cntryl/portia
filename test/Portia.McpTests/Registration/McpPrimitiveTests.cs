@@ -19,6 +19,7 @@ public sealed class McpPrimitiveTests
     public async Task ShouldEmitPrivateZeroTtlHintsOnModernProtocol(string mode, string capability,
         string listMethod)
     {
+        // Arrange
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name
                             ?? throw new InvalidOperationException("Missing test configuration.");
         var host = Path.GetFullPath(
@@ -35,7 +36,11 @@ public sealed class McpPrimitiveTests
             }
         };
         process.StartInfo.ArgumentList.Add(host);
+
+        // Act
         process.StartInfo.ArgumentList.Add(mode);
+
+        // Assert
         Assert.True(process.Start());
         try
         {
@@ -79,6 +84,7 @@ public sealed class McpPrimitiveTests
     [InlineData("--prompt-only")]
     public async Task ShouldServeSinglePrimitiveFromStdioHost(string mode)
     {
+        // Arrange
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name
                             ?? throw new InvalidOperationException("Missing test configuration.");
         var host = Path.GetFullPath(
@@ -91,7 +97,11 @@ public sealed class McpPrimitiveTests
             Arguments = [host, mode],
             Name = "Portia primitive stdio test"
         }, NullLoggerFactory.Instance);
+
+        // Act
         await using var client = await McpClient.CreateAsync(transport, cancellationToken: timeout.Token);
+
+        // Assert
         if (mode == "--resource-only")
         {
             Assert.Single(await client.ListResourceTemplatesAsync(cancellationToken: timeout.Token));
@@ -112,6 +122,7 @@ public sealed class McpPrimitiveTests
     [Fact]
     public async Task ShouldServeResourceOnlyHostThroughRequestBus()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia()
@@ -141,7 +152,11 @@ public sealed class McpPrimitiveTests
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
         await using var raw = await McpClient.CreateAsync(transport);
+
+        // Act
         var templates = await raw.ListResourceTemplatesAsync();
+
+        // Assert
         var template = Assert.Single(templates);
         Assert.Equal("greetings://local/{name}", template.UriTemplate);
         Assert.Equal("Greeting resource", template.Name);
@@ -154,6 +169,7 @@ public sealed class McpPrimitiveTests
     [Fact]
     public async Task ShouldIndexFixedResourcesAndPromptsWhilePreservingTemplateOrder()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia()
@@ -188,7 +204,10 @@ public sealed class McpPrimitiveTests
         }, app.GetTestClient(), null);
         await using var client = await McpClient.CreateAsync(transport);
 
+        // Act
         var resources = await client.ListResourcesAsync();
+
+        // Assert
         Assert.Equal(["greetings://index/fixed-first", "greetings://index/fixed-second"],
             resources.Select(resource => resource.Uri));
         var templates = await client.ListResourceTemplatesAsync();
@@ -213,6 +232,7 @@ public sealed class McpPrimitiveTests
     [Fact]
     public async Task ShouldServePromptOnlyHostThroughRequestBus()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia()
@@ -240,7 +260,11 @@ public sealed class McpPrimitiveTests
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
+
+        // Act
         await using var client = await McpClient.CreateAsync(transport);
+
+        // Assert
         var prompt = Assert.Single(await client.ListPromptsAsync());
         Assert.Equal("greeting", prompt.Name);
         Assert.Equal("Greeting prompt", prompt.ProtocolPrompt.Title);
@@ -253,6 +277,7 @@ public sealed class McpPrimitiveTests
     [Fact]
     public async Task ShouldExposeOptionalPromptArgumentDescriptionOverProtocol()
     {
+        // Arrange
         const string argumentDescription = "Name to greet; defaults to Guest when omitted.";
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -275,8 +300,11 @@ public sealed class McpPrimitiveTests
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
+
+        // Act
         await using var client = await McpClient.CreateAsync(transport);
 
+        // Assert
         var prompt = Assert.Single(await client.ListPromptsAsync());
         var argument = Assert.Single(prompt.ProtocolPrompt.Arguments!);
         Assert.Equal("name", argument.Name);
@@ -290,6 +318,7 @@ public sealed class McpPrimitiveTests
     [Fact]
     public async Task ShouldHideFixedResourceAndPromptFromOtherActor()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddSingleton<NamedVisibilityPolicy>();
@@ -320,7 +349,11 @@ public sealed class McpPrimitiveTests
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, outsiderHttp, null);
+
+        // Act
         await using var outsider = await McpClient.CreateAsync(outsiderTransport);
+
+        // Assert
         Assert.Empty(await outsider.ListResourcesAsync());
         Assert.Empty(await outsider.ListPromptsAsync());
         var resourceError = await Assert.ThrowsAnyAsync<Exception>(async () =>
@@ -358,6 +391,7 @@ public sealed class McpPrimitiveTests
     [Fact]
     public async Task ShouldApplyTenantAuthorizerToGuessedResourceAndPrompt()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia()
@@ -387,7 +421,11 @@ public sealed class McpPrimitiveTests
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, http, null);
+
+        // Act
         await using var client = await McpClient.CreateAsync(transport);
+
+        // Assert
         Assert.Single(await client.ListResourceTemplatesAsync());
         Assert.Single(await client.ListPromptsAsync());
         var owned = await client.ReadResourceAsync("tenant://records/tenant-a");
@@ -496,10 +534,15 @@ public sealed class McpPrimitiveTests
     [Fact]
     public void ShouldRejectAmbiguousResourceRegistrations()
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia();
+
+        // Act
         _ = application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://local/{name}",
             values => new McpRegistrationTests.ReadGreeting(values["name"]),
             options => { options.Public(); options.AsJson(); });
+
+        // Assert
         Assert.Throws<InvalidOperationException>(() => application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
             "greetings://local/Portia", _ => new McpRegistrationTests.ReadGreeting("Portia"),
             options => { options.Public(); options.AsJson(); }));
@@ -508,10 +551,15 @@ public sealed class McpPrimitiveTests
     [Fact]
     public void ShouldRejectOverlappingTemplatesWithDifferentPlaceholderPositions()
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia();
+
+        // Act
         _ = application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://local/{name}/item",
             values => new McpRegistrationTests.ReadGreeting(values["name"]),
             options => { options.Public(); options.AsJson(); });
+
+        // Assert
         Assert.Throws<InvalidOperationException>(() => application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
             "greetings://local/alice/{item}", _ => new McpRegistrationTests.ReadGreeting("Alice"),
             options => { options.Public(); options.AsJson(); }));
@@ -520,10 +568,15 @@ public sealed class McpPrimitiveTests
     [Fact]
     public void ShouldRejectEncodedAliasOfFixedResource()
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia();
+
+        // Act
         _ = application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://local/A",
             _ => new McpRegistrationTests.ReadGreeting("A"),
             options => { options.Public(); options.AsJson(); });
+
+        // Assert
         Assert.Throws<InvalidOperationException>(() => application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
             "greetings://local/%41", _ => new McpRegistrationTests.ReadGreeting("A"),
             options => { options.Public(); options.AsJson(); }));
@@ -541,8 +594,13 @@ public sealed class McpPrimitiveTests
     [Fact]
     public void ShouldRejectResourceTemplateBeyondDefaultUriLimit()
     {
+        // Arrange
         var application = new ServiceCollection().AddPortia();
+
+        // Act
         var uri = "greetings://local/" + new string('a', 2048);
+
+        // Assert
         Assert.Throws<ArgumentException>(() => application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
             uri, _ => new McpRegistrationTests.ReadGreeting("Portia"),
             options => { options.Public(); options.AsJson(); }));
@@ -551,6 +609,7 @@ public sealed class McpPrimitiveTests
     [Fact]
     public async Task ShouldReturnBinaryResourceAndRejectUnknownPromptArgumentsBeforeBinding()
     {
+        // Arrange
         var bound = 0;
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -577,7 +636,11 @@ public sealed class McpPrimitiveTests
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
         await using var client = await McpClient.CreateAsync(transport);
+
+        // Act
         var result = await client.ReadResourceAsync("greetings://local/image");
+
+        // Assert
         Assert.Equal("Hello, Portia.", System.Text.Encoding.UTF8.GetString(
             Assert.IsType<BlobResourceContents>(Assert.Single(result.Contents)).DecodedData.Span));
         _ = await Assert.ThrowsAnyAsync<Exception>(async () => await client.GetPromptAsync("bound-greeting"));
@@ -594,6 +657,7 @@ public sealed class McpPrimitiveTests
     [InlineData("greetings://local/../item")]
     public async Task ShouldRejectUnsafeReadUriBeforeBinding(string uri)
     {
+        // Arrange
         var bound = 0;
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -610,7 +674,11 @@ public sealed class McpPrimitiveTests
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
+
+        // Act
         await using var client = await McpClient.CreateAsync(transport);
+
+        // Assert
         _ = await Assert.ThrowsAnyAsync<Exception>(async () => await client.ReadResourceAsync(uri));
         Assert.Equal(0, bound);
     }
@@ -618,6 +686,7 @@ public sealed class McpPrimitiveTests
     [Fact]
     public async Task ShouldEnforceConfiguredPromptAndOutputLimits()
     {
+        // Arrange
         var bound = 0;
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -649,7 +718,11 @@ public sealed class McpPrimitiveTests
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
+
+        // Act
         await using var client = await McpClient.CreateAsync(transport);
+
+        // Assert
         _ = await Assert.ThrowsAnyAsync<Exception>(async () =>
             await client.ReadResourceAsync("greetings://local/fixed"));
         _ = await Assert.ThrowsAnyAsync<Exception>(async () =>
@@ -666,6 +739,7 @@ public sealed class McpPrimitiveTests
     [Fact]
     public async Task ShouldCancelResourceDispatchAtConfiguredDeadline()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia()
@@ -683,7 +757,11 @@ public sealed class McpPrimitiveTests
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
         await using var client = await McpClient.CreateAsync(transport);
+
+        // Act
         var started = Stopwatch.StartNew();
+
+        // Assert
         var error = await Assert.ThrowsAnyAsync<Exception>(async () =>
             await client.ReadResourceAsync("slow://local/item"));
         Assert.True(started.Elapsed < TimeSpan.FromSeconds(2));

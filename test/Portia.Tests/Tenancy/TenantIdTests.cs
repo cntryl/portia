@@ -45,9 +45,13 @@ public sealed class TenantIdTests
     [Fact]
     public void ShouldFormatAsBareValue()
     {
+        // Arrange
         var tenant = new TenantId("acme");
+
+        // Act
         Span<char> buffer = stackalloc char[8];
 
+        // Assert
         Assert.True(tenant.TryFormat(buffer, out var written, default, CultureInfo.InvariantCulture));
         Assert.Equal("acme", buffer[..written].ToString());
         Assert.Equal("acme", tenant.ToString(null, CultureInfo.InvariantCulture));

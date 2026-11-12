@@ -7,12 +7,16 @@ public sealed class ReactorEffectPatternsTests
     [Fact]
     public async Task CommandReactionPreservesCheckpointGivenCommandFailure()
     {
+        // Arrange
         var aggregateId = Uuid.CreateVersion4();
         var store = await StoreWithDeposit(aggregateId);
         var checkpoints = new InMemoryProjectionCheckpointStore();
         var bus = new OutcomeBus(Result.Failure(new RequestError(RequestErrorKind.Conflict, "closed")));
+
+        // Act
         var reactor = new CommandReaction(checkpoints, bus, aggregateId);
 
+        // Assert
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
             new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start).AsTask());
 
@@ -26,13 +30,16 @@ public sealed class ReactorEffectPatternsTests
     [Fact]
     public async Task DirectEffectReactionRunsWithoutRequestBus()
     {
+        // Arrange
         var aggregateId = Uuid.CreateVersion4();
         var effects = new RecordingEffects();
         var reactor = new DirectEffectReaction(new InMemoryProjectionCheckpointStore(), effects, aggregateId);
 
+        // Act
         _ = await new ReactorRunner(await StoreWithDeposit(aggregateId))
             .RunAsync(reactor, ProjectionCheckpoint.Start);
 
+        // Assert
         Assert.Equal(1, effects.Receipts);
     }
 

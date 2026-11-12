@@ -14,6 +14,7 @@ public sealed class ReactorRunnerTests
     [Fact]
     public async Task ShouldDispatchReadableEventsAndAdvanceCheckpointWhenRun()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "reactors", id.ToString());
         var store = new InMemoryEventStore();
@@ -26,8 +27,10 @@ public sealed class ReactorRunnerTests
         var reactor = new TestReactor(repository);
         var runner = new ReactorRunner(store);
 
+        // Act
         var checkpoint = await runner.RunAsync(reactor, ProjectionCheckpoint.Start);
 
+        // Assert
         var target = Assert.Single(repository.SavedAggregates);
         Assert.Equal(40, target.Value);
         Assert.Equal(1, reactor.LastIncrementAmount);
@@ -40,13 +43,16 @@ public sealed class ReactorRunnerTests
     [Fact]
     public async Task ShouldKeepCheckpointWhenNothingIsReadable()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         var reactor = new TestReactor(new RecordingAggregateRepository());
         var runner = new ReactorRunner(store);
         var checkpoint = new ProjectionCheckpoint(new EventCursor("3"));
 
+        // Act
         var nextCheckpoint = await runner.RunAsync(reactor, checkpoint);
 
+        // Assert
         Assert.Equal(checkpoint, nextCheckpoint);
     }
 
@@ -56,9 +62,13 @@ public sealed class ReactorRunnerTests
     [InlineData(-1)]
     public async Task ShouldNameLegacyBatchSizeParameterWhenRejected(int maxBatchSize)
     {
+        // Arrange
         var runner = new ReactorRunner(new InMemoryEventStore());
+
+        // Act
         var reactor = new TestReactor(new RecordingAggregateRepository());
 
+        // Assert
         var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             runner.RunAsync(reactor, ProjectionCheckpoint.Start, maxBatchSize).AsTask());
 
@@ -69,6 +79,7 @@ public sealed class ReactorRunnerTests
     [Fact]
     public async Task ShouldBoundPassAndResumeWithOptionsEntryPoint()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "reactors", id.ToString());
         var store = new InMemoryEventStore();
@@ -82,8 +93,11 @@ public sealed class ReactorRunnerTests
         var options = new ProjectionRunOptions { MaxEventsPerPass = 2 };
 
         var first = await runner.RunPassAsync(reactor, ProjectionCheckpoint.Start, options);
+
+        // Act
         var second = await runner.RunPassAsync(reactor, first, options);
 
+        // Assert
         Assert.Equal("2", first.Cursor.ToString());
         Assert.Equal("3", second.Cursor.ToString());
     }
@@ -92,6 +106,7 @@ public sealed class ReactorRunnerTests
     [Fact]
     public async Task ShouldBoundBatchPassWithoutReadingAheadAndResume()
     {
+        // Arrange
         var store = await StoreValuesAsync(1, 2, 3);
         var checkpoints = new RecordingCheckpointStore();
         var reactor = new RecordingBatchReactor(checkpoints);
@@ -99,8 +114,11 @@ public sealed class ReactorRunnerTests
         var options = new ProjectionRunOptions { MaxBatchSize = 8, MaxEventsPerPass = 2 };
 
         var first = await runner.RunPassAsync(reactor, ProjectionCheckpoint.Start, options);
+
+        // Act
         var second = await runner.RunPassAsync(reactor, first, options);
 
+        // Assert
         Assert.Equal("2", first.Cursor.ToString());
         Assert.Equal("3", second.Cursor.ToString());
         Assert.Equal([2, 1], reactor.BatchSizes);
@@ -112,6 +130,7 @@ public sealed class ReactorRunnerTests
     [Fact]
     public async Task ShouldCommitPartialBatchAtNonDivisiblePassBudgetAndResume()
     {
+        // Arrange
         var store = await StoreValuesAsync(1, 2, 3, 4, 5, 6);
         var checkpoints = new RecordingCheckpointStore();
         var reactor = new RecordingBatchReactor(checkpoints);
@@ -119,8 +138,11 @@ public sealed class ReactorRunnerTests
         var options = new ProjectionRunOptions { MaxBatchSize = 3, MaxEventsPerPass = 5 };
 
         var first = await runner.RunPassAsync(reactor, ProjectionCheckpoint.Start, options);
+
+        // Act
         var second = await runner.RunPassAsync(reactor, first, options);
 
+        // Assert
         Assert.Equal("5", first.Cursor.ToString());
         Assert.Equal("6", second.Cursor.ToString());
         Assert.Equal([3, 2, 1], reactor.BatchSizes);
@@ -132,6 +154,7 @@ public sealed class ReactorRunnerTests
     [Fact]
     public async Task ShouldIsolateExposedActorsAcrossOnePass()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "reactors", id.ToString());
         var store = new InMemoryEventStore();
@@ -141,8 +164,10 @@ public sealed class ReactorRunnerTests
         ]);
         var reactor = new ActorIsolationReactor();
 
+        // Act
         _ = await new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start);
 
+        // Assert
         Assert.Equal([false, false], reactor.SawMutation);
     }
 
@@ -157,6 +182,7 @@ public sealed class ReactorRunnerTests
     [Fact]
     public async Task ShouldReprocessAlreadyHandledEventsOnRetryAfterMidPassFailure()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "reactors", id.ToString());
         var store = new InMemoryEventStore();
@@ -166,9 +192,13 @@ public sealed class ReactorRunnerTests
             Committed(new ValueChanged(3), id, 3)
         ]);
         var reactor = new FlakyOnSecondEventReactor();
+
+        // Act
         var runner = new ReactorRunner(store);
 
+
         // First pass fails on the second event — no checkpoint is returned at all.
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
             runner.RunAsync(reactor, ProjectionCheckpoint.Start).AsTask());
         Assert.IsType<InvalidOperationException>(failure.InnerException);
@@ -196,6 +226,7 @@ public sealed class ReactorRunnerTests
     [Fact]
     public async Task ShouldOnlyReprocessCurrentBatchWhenCheckpointStoreIsSuppliedAndMidPassFailureOccurs()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "reactors", id.ToString());
         var store = new InMemoryEventStore();
@@ -207,8 +238,11 @@ public sealed class ReactorRunnerTests
         ]);
         var runner = new ReactorRunner(store);
         var checkpointStore = new InMemoryProjectionCheckpointStore();
+
+        // Act
         var reactor = new FlakyOnThirdEventReactor(checkpointStore);
 
+        // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
             runner.RunAsync(reactor, ProjectionCheckpoint.Start, 2).AsTask());
         Assert.IsType<InvalidOperationException>(failure.InnerException);

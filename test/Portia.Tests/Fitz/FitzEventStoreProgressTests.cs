@@ -14,12 +14,16 @@ public sealed class FitzEventStoreProgressTests
     [InlineData(null, "")]
     public void ShouldRoundTripProgressCursorsThroughGeneratedJson(string? position, string? sourcePosition)
     {
+        // Arrange
         var expected = new EventStreamProgress(position is null ? EventCursor.Start : new EventCursor(position),
             sourcePosition is null ? null : sourcePosition.Length == 0 ? EventCursor.Start : new EventCursor(sourcePosition),
             5, false, new DateTimeOffset(2026, 11, 3, 12, 0, 0, TimeSpan.Zero), 5);
         var json = JsonSerializer.Serialize(expected, EventStreamProgressJsonContext.Default.EventStreamProgress);
+
+        // Act
         var actual = JsonSerializer.Deserialize(json, EventStreamProgressJsonContext.Default.EventStreamProgress);
 
+        // Assert
         Assert.Equal(expected, actual);
         using var document = JsonDocument.Parse(json);
         Assert.Equal(position ?? string.Empty, document.RootElement.GetProperty("position").GetString());
@@ -35,10 +39,14 @@ public sealed class FitzEventStoreProgressTests
     [InlineData(null, 30UL, 32UL)]
     public async Task ShouldObserveThePatternScopeWithoutDeserializingEvents(string? area, ulong position, ulong head)
     {
+        // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", area);
         var client = new ProgressClient(Page(false, Item(3, 10, 30), Item(4, 11, 31)));
+
+        // Act
         var progress = await Store(client).GetProgressAsync(pattern, Cursor(position));
 
+        // Assert
         Assert.Equal(Cursor(position), progress.Position);
         Assert.Equal(Cursor(head), progress.SourcePosition);
         Assert.Equal(2UL, progress.PendingEvents);
@@ -52,9 +60,13 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldPreserveUnknownHeadForAnUnexhaustedPatternPage()
     {
+        // Arrange
         var client = new ProgressClient(Page(true, Item(3, 10, 30), Item(4, 11, 31)));
+
+        // Act
         var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), Cursor(10));
 
+        // Assert
         Assert.Null(progress.SourcePosition);
         Assert.Null(progress.PendingEvents);
         Assert.Equal(2UL, progress.PendingEventsLowerBound);
@@ -66,9 +78,13 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldPreserveUnknownStatusWhenAnEmptyPatternCannotValidateTheCheckpoint()
     {
+        // Arrange
         var client = new ProgressClient(EmptyPage(100), previousPage: EmptyPage(99));
+
+        // Act
         var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant"), Cursor(100));
 
+        // Assert
         Assert.Null(progress.SourcePosition);
         Assert.Null(progress.PendingEvents);
         Assert.Null(progress.PendingEventsLowerBound);
@@ -79,9 +95,13 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldValidateAnEmptyPatternsCheckpointAgainstItsPrecedingRecord()
     {
+        // Arrange
         var client = new ProgressClient(EmptyPage(3), previousPage: Page(false, Item(2, 2, 2)));
+
+        // Act
         var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant"), Cursor(3));
 
+        // Assert
         Assert.Equal(Cursor(3), progress.SourcePosition);
         Assert.Equal(0UL, progress.PendingEvents);
         Assert.Equal(0UL, progress.PendingEventsLowerBound);
@@ -97,10 +117,14 @@ public sealed class FitzEventStoreProgressTests
     [InlineData(true)]
     public async Task ShouldPreserveSourceProgressWhenExpiredOffsetsPrecedeReadableRecords(bool resource)
     {
+        // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", "orders", resource ? "one" : null);
         var client = new ProgressClient(Page(false, Item(2, 2, 2)), new StreamMetadata(0, 2, 3));
+
+        // Act
         var progress = await Store(client).GetProgressAsync(pattern, EventCursor.Start);
 
+        // Assert
         Assert.Equal(Cursor(3), progress.SourcePosition);
         Assert.Null(progress.PendingEvents);
         Assert.Equal(1UL, progress.PendingEventsLowerBound);
@@ -111,9 +135,13 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldNotInventAZeroHeadWhenAnEmptyPageCursorAdvanced()
     {
+        // Arrange
         var client = new ProgressClient(EmptyPage(8));
+
+        // Act
         var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), EventCursor.Start);
 
+        // Assert
         Assert.Equal(Cursor(9), progress.SourcePosition);
         Assert.Null(progress.PendingEvents);
         Assert.Equal(0UL, progress.PendingEventsLowerBound);
@@ -124,9 +152,13 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldExcludeConcurrentAppendsBeyondTheSampledResourceHead()
     {
+        // Arrange
         var client = new ProgressClient(Page(false, Item(1, 1, 1), Item(2, 2, 2)), new StreamMetadata(0, 1, 2));
+
+        // Act
         var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), EventCursor.Start);
 
+        // Assert
         Assert.Equal(Cursor(2), progress.SourcePosition);
         Assert.Null(progress.PendingEvents);
         Assert.Equal(1UL, progress.PendingEventsLowerBound);
@@ -148,8 +180,13 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldRejectRecordsOutsideThePatternAfterAWithheldEntry()
     {
+        // Arrange
         var withheld = new StreamReadItem("stream://tenant/orders/one", StreamReadItemKind.Filtered, Offset: 0);
+
+        // Act
         var client = new ProgressClient(Page(false, withheld, Item(1, 1, 1, "stream://other/orders/one")));
+
+        // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), EventCursor.Start));
     }
@@ -158,10 +195,14 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldNotCountWithheldEntriesAsUnreadEvents()
     {
+        // Arrange
         var withheld = new StreamReadItem("stream://tenant/orders/one", StreamReadItemKind.Filtered, Offset: 10);
         var client = new ProgressClient(Page(false, withheld, Item(4, 11, 31)));
+
+        // Act
         var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), Cursor(10));
 
+        // Assert
         Assert.Equal(Cursor(12), progress.SourcePosition);
         Assert.Null(progress.PendingEvents);
         Assert.Equal(1UL, progress.PendingEventsLowerBound);
@@ -172,11 +213,15 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldUseMetadataAndBoundedRecordsForResourceProgress()
     {
+        // Arrange
         var client = new ProgressClient(Page(false, Item(2, 10, 30), Item(3, 11, 31), Item(4, 12, 32)),
             new StreamMetadata(0, 4, 5));
         var pattern = EventStreamPattern.ForPattern("tenant", "orders", "one");
+
+        // Act
         var progress = await Store(client).GetProgressAsync(pattern, Cursor(2));
 
+        // Assert
         Assert.Equal(Cursor(5), progress.SourcePosition);
         Assert.Equal(3UL, progress.PendingEvents);
         Assert.Equal(3UL, progress.PendingEventsLowerBound);
@@ -190,9 +235,13 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldKeepTheResourceHeadWhenItsBacklogExceedsTheProbe()
     {
+        // Arrange
         var client = new ProgressClient(Page(true, Item(0, 0, 0), Item(1, 1, 1)), new StreamMetadata(0, 9999, 10000));
+
+        // Act
         var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(0));
 
+        // Assert
         Assert.Equal(Cursor(10000), progress.SourcePosition);
         Assert.Null(progress.PendingEvents);
         Assert.Equal(2UL, progress.PendingEventsLowerBound);
@@ -203,9 +252,13 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldPreserveUnknownStatusForAResourceCheckpointBeyondTheSource()
     {
+        // Arrange
         var client = new ProgressClient(Page(false), new StreamMetadata(0, 2, 3));
+
+        // Act
         var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(5));
 
+        // Assert
         Assert.Equal(Cursor(3), progress.SourcePosition);
         Assert.Null(progress.PendingEvents);
         Assert.Null(progress.IsCaughtUp);
@@ -216,9 +269,13 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldPreserveUnknownCountWhenResourceRetentionPassedTheCheckpoint()
     {
+        // Arrange
         var client = new ProgressClient(Page(false), new StreamMetadata(3, 4, 2));
+
+        // Act
         var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(1));
 
+        // Assert
         Assert.Equal(Cursor(5), progress.SourcePosition);
         Assert.Null(progress.PendingEvents);
         Assert.False(progress.IsCaughtUp);
@@ -229,8 +286,13 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldRejectUnboundPatternsAndForeignCursorsBeforeCallingFitz()
     {
+        // Arrange
         var client = new ProgressClient(Page(false));
+
+        // Act
         var store = Store(client);
+
+        // Assert
         _ = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await store.GetProgressAsync(EventStreamPattern.ForTenant("orders"), EventCursor.Start));
         _ = await Assert.ThrowsAsync<ArgumentException>(async () =>
@@ -243,9 +305,14 @@ public sealed class FitzEventStoreProgressTests
     [Fact]
     public async Task ShouldRespectCancellationBeforeObservingTheSource()
     {
+        // Arrange
         var client = new ProgressClient(Page(false));
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         cancellation.Cancel();
+
+        // Assert
         var error = await Assert.ThrowsAsync<OperationCanceledException>(async () =>
             await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant"), EventCursor.Start, cancellation.Token));
         Assert.Equal(cancellation.Token, error.CancellationToken);

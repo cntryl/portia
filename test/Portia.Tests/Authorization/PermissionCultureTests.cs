@@ -17,11 +17,14 @@ public sealed class PermissionCultureTests
     [Fact]
     public async Task ShouldInterpolatePermissionTokensIndependentlyOfTheCurrentCulture()
     {
+        // Arrange
         var evaluator = TestPermissionEvaluator.AllowAll();
         using var busHost = TestRequestBus.Create(permissionEvaluator: evaluator);
         var original = CultureInfo.CurrentCulture;
 
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("sv-SE");
+
+        // Act
         try
         {
             _ = await busHost.Bus.SendAsync(new GetOrder(-42), RequestActor.System);
@@ -31,6 +34,7 @@ public sealed class PermissionCultureTests
             CultureInfo.CurrentCulture = original;
         }
 
+        // Assert
         Assert.Equal(["orders:-42:read"], evaluator.EvaluatedPermissions);
     }
 }

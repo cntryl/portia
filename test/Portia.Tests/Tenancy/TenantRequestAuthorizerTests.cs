@@ -77,11 +77,15 @@ public sealed class TenantRequestAuthorizerTests
     [Fact]
     public async Task ShouldRequireResolverAtStartup()
     {
+        // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia().AddRequestHandler<TenantScopedCommandHandler>()
             .AddRequestAuthorizer<TenantRequestAuthorizer>();
+
+        // Act
         using var host = builder.Build();
 
+        // Assert
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
         Assert.StartsWith("IActorTenantResolver is required by TenantRequestAuthorizer.", failure.Message,

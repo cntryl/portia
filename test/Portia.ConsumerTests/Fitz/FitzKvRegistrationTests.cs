@@ -22,10 +22,13 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void FitzPublishesItsKvClientForApplicationRepositories()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration());
 
+        // Assert
         var descriptor = Assert.Single(services, item => item.ServiceType == typeof(IKvClient));
         Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
     }
@@ -38,10 +41,13 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void FitzPublishesItsStreamClientForApplicationReaders()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration());
 
+        // Assert
         var descriptor = Assert.Single(services, item => item.ServiceType == typeof(IStreamClient));
         Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
     }
@@ -53,10 +59,13 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void ReactorCheckpointsAreNotRegisteredWithoutSelection()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration());
 
+        // Assert
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(IProjectionCheckpointStore));
     }
 
@@ -67,11 +76,14 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void SelectingKvTenantSnapshotsRegistersTheDurableStore()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration(),
             builder => builder.UseKvTenantSnapshots("kv://accounts/tenants/snapshots"));
 
+        // Assert
         var descriptor = Assert.Single(services, item => item.ServiceType == typeof(ITenantDirectorySnapshotStore));
         Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(IProjectionCheckpointStore));
@@ -91,10 +103,13 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void SelectingKvCheckpointsRegistersTheDurableStore()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration(), builder => builder.UseKvCheckpoints(Route));
 
+        // Assert
         var descriptor = Assert.Single(services, item => item.ServiceType == typeof(IProjectionCheckpointStore));
         Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
     }
@@ -124,11 +139,14 @@ public sealed class FitzKvRegistrationTests
     [Fact]
     public void RepeatingTheSameCheckpointRouteIsIdempotent()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().AddFitz(Configuration(), builder =>
             builder.UseKvCheckpoints(Route).UseKvCheckpoints(Route));
 
+        // Assert
         _ = Assert.Single(services, item => item.ServiceType == typeof(IProjectionCheckpointStore));
     }
 

@@ -7,8 +7,13 @@ public sealed class OperationalConfigurationTests
     [Fact]
     public async Task ShouldRequireQuiescedCutoverBeforeEnablingOperations()
     {
+        // Arrange
         await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
+
+        // Act
         var services = new ServiceCollection();
+
+        // Assert
         services.AddPortia().UseFitzClient(client, fitz =>
         {
             _ = Assert.Throws<InvalidOperationException>(() => fitz.UseOperations("kv://test/state/progress", _ => { }));
@@ -22,8 +27,13 @@ public sealed class OperationalConfigurationTests
     [InlineData(false)]
     public async Task ShouldRejectMixedCheckpointOwnership(bool operationsFirst)
     {
+        // Arrange
         await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
+
+        // Act
         var services = new ServiceCollection();
+
+        // Assert
         services.AddPortia().UseFitzClient(client, fitz =>
         {
             if (operationsFirst)
@@ -44,9 +54,14 @@ public sealed class OperationalConfigurationTests
     [Fact]
     public async Task ShouldKeepBorrowedFitzClientsOutsideServiceProviderDisposal()
     {
+        // Arrange
         await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
         var services = new ServiceCollection();
+
+        // Act
         services.AddPortia().UseFitzClient(client);
+
+        // Assert
         Assert.Same(client.Kv, Assert.Single(services, service => service.ServiceType == typeof(IKvClient)).ImplementationInstance);
         Assert.Same(client.Stream, Assert.Single(services, service => service.ServiceType == typeof(IStreamClient)).ImplementationInstance);
         Assert.Same(client.Schedule, Assert.Single(services, service => service.ServiceType == typeof(IScheduleClient)).ImplementationInstance);

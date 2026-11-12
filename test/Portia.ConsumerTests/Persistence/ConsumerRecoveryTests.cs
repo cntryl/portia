@@ -18,6 +18,7 @@ public sealed class ConsumerRecoveryTests
     public async Task HostedConsumerRestartsAfterFaultOrUnexpectedCompletion(bool notification, bool fault,
         bool stopDuringBackoff)
     {
+        // Arrange
         var clock = new ManualClock();
         var consumer = new RecoveringConsumer(fault);
         var services = ConsumerHost.CreateServices();
@@ -36,7 +37,10 @@ public sealed class ConsumerRecoveryTests
             _ = services.AddPortiaQueueRunner();
         }
 
+        // Act
         await using var provider = ConsumerHost.Build(services);
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         using var cancellation = new CancellationTokenSource();
         try

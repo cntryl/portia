@@ -18,10 +18,13 @@ public sealed class TestRequestActorValidatorTests
     [Fact]
     public async Task ShouldFailValidationWhenTokenIsNull()
     {
+        // Arrange
         var validator = new TestRequestActorValidator();
 
+        // Act
         var result = await validator.ValidateAsync(null);
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }
@@ -33,10 +36,13 @@ public sealed class TestRequestActorValidatorTests
     [Fact]
     public async Task ShouldSucceedAsSystemActorWhenTokenIsProvidedAndNotRejected()
     {
+        // Arrange
         var validator = new TestRequestActorValidator();
 
+        // Act
         var result = await validator.ValidateAsync("any-token");
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Value);
         Assert.True(RequestActor.IsSystem(result.Value));
@@ -49,10 +55,13 @@ public sealed class TestRequestActorValidatorTests
     [Fact]
     public async Task ShouldFailValidationForTheConfiguredRejectToken()
     {
+        // Arrange
         var validator = new TestRequestActorValidator("expired-token");
 
+        // Act
         var result = await validator.ValidateAsync("expired-token");
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Unauthorized, result.Error.Kind);
     }

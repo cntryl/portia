@@ -17,6 +17,7 @@ public sealed class FitzRpcCatalogResolutionTests
     [Fact]
     public async Task ShouldResolveTheTransportCatalogOnceUnderConcurrentRegistration()
     {
+        // Arrange
         using var busHost = TestRequestBus.Create();
         using var scopes = new CountingScopeFactory(busHost.ScopeFactory);
         var server = new FitzRpcRequestServer(new InMemoryRpcClient(), scopes);
@@ -25,9 +26,11 @@ public sealed class FitzRpcCatalogResolutionTests
             Task.Run(async () => await server.RegisterAsync<RpcChangeValue>()),
             Task.Run(async () => await server.RegisterAsync<RpcChangeValue>()));
 
+        // Act
         foreach (var registration in registrations)
             await registration.DisposeAsync();
 
+        // Assert
         Assert.Equal(1, scopes.Scopes);
     }
 

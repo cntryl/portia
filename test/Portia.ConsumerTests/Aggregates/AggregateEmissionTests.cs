@@ -7,10 +7,13 @@ public sealed class AggregateEmissionTests
     [InlineData(true)]
     public void RejectsMixingRaisedAndAuditedEventsBeforeMetadataOrStateChanges(bool auditFirst)
     {
+        // Arrange
         var factory = new CountingMetadataFactory();
         var account = new Account(Uuid.CreateVersion4(), factory);
         var first = new Deposited(10);
         var rejected = new Deposited(20);
+
+        // Act
         if (auditFirst)
         {
             account.Audit(first);
@@ -20,6 +23,7 @@ public sealed class AggregateEmissionTests
             account.Raise(first);
         }
 
+        // Assert
         _ = Assert.Throws<InvalidOperationException>(() =>
         {
             if (auditFirst)

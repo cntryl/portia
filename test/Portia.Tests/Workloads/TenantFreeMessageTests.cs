@@ -12,10 +12,13 @@ public sealed class TenantFreeMessageTests
     [Fact]
     public void ShouldOmitTenantGivenWorkloadFailure()
     {
+        // Arrange
         var identity = new WorkloadIdentity("orders", new TenantId(Tenant));
 
+        // Act
         var ex = new WorkloadFailureException(identity, 3, new InvalidOperationException("pass failed"));
 
+        // Assert
         Assert.DoesNotContain(Tenant, ex.Message, StringComparison.Ordinal);
         Assert.Contains("orders", ex.Message, StringComparison.Ordinal);
         Assert.Contains("3", ex.Message, StringComparison.Ordinal);
@@ -37,10 +40,14 @@ public sealed class TenantFreeMessageTests
     [Fact]
     public void ShouldOmitTenantGivenReactorRebound()
     {
+        // Arrange
         var reactor = new TestReactor(new RecordingAggregateRepository(),
             pattern: EventStreamPattern.ForTenant("reactors"));
+
+        // Act
         reactor.BindWorkload(new WorkloadIdentity("test-reactor", new TenantId(Tenant)), null);
 
+        // Assert
         var ex = Assert.Throws<InvalidOperationException>(() =>
             reactor.BindWorkload(new WorkloadIdentity("test-reactor", new TenantId("other-secret")), null));
 
@@ -53,9 +60,13 @@ public sealed class TenantFreeMessageTests
     [Fact]
     public void ShouldOmitTenantGivenProjectorRebound()
     {
+        // Arrange
         var projector = new TestProjector(new RecordingProjectionTarget(), EventStreamPattern.ForTenant("orders"));
+
+        // Act
         projector.BindWorkload(new WorkloadIdentity("orders", new TenantId(Tenant)), null);
 
+        // Assert
         var ex = Assert.Throws<InvalidOperationException>(() =>
             projector.BindWorkload(new WorkloadIdentity("orders", new TenantId("other-secret")), null));
 
@@ -77,11 +88,15 @@ public sealed class TenantFreeMessageTests
     [Fact]
     public void ShouldOmitAggregateIdsGivenForeignEvent()
     {
+        // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4());
         var foreignId = Uuid.CreateVersion4();
         var ev = new ValueChanged(42);
+
+        // Act
         ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), foreignId, 1, DateTimeOffset.UtcNow));
 
+        // Assert
         var ex = Assert.Throws<InvalidOperationException>(() => aggregate.Load([ev]));
 
         Assert.DoesNotContain(aggregate.Id.ToString(), ex.Message, StringComparison.OrdinalIgnoreCase);

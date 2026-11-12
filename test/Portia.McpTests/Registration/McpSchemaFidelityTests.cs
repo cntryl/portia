@@ -22,6 +22,7 @@ public sealed class McpSchemaFidelityTests
     [InlineData("trees.read", true)]
     public async Task ShouldValidateSuccessfulNullableRecursiveAndNoResultTools(string name, bool structured)
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia().AddRequestHandler<NullableReplyHandler>().AddMcpTool<NullableReply>()
@@ -38,7 +39,11 @@ public sealed class McpSchemaFidelityTests
         await app.StartAsync();
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         { Endpoint = new Uri("http://localhost/mcp") }, app.GetTestClient());
+
+        // Act
         await using var client = await McpClient.CreateAsync(transport);
+
+        // Assert
         var tool = Assert.Single(await client.ListToolsAsync(), candidate => candidate.Name == name);
         var result = await client.CallToolAsync(name, new Dictionary<string, object?>());
         Assert.False(result.IsError);
@@ -61,11 +66,16 @@ public sealed class McpSchemaFidelityTests
     [Fact]
     public void ShouldKeepProtocolContractsBoundToTheirConfiguredJsonOptions()
     {
+        // Arrange
         var naming = JsonNamingPolicy.CamelCase;
         var services = new ServiceCollection();
         _ = services.AddPortia().ConfigureJson(json => json.PropertyNamingPolicy = naming)
             .AddRequestHandler<SchemaProbeHandler>().AddMcpTool<SchemaProbe>();
+
+        // Act
         using var first = services.BuildServiceProvider();
+
+        // Assert
         var firstSchema = Assert.Single(first.GetServices<McpServerTool>()).ProtocolTool.InputSchema;
         naming = JsonNamingPolicy.SnakeCaseLower;
         using var second = services.BuildServiceProvider();
@@ -79,6 +89,7 @@ public sealed class McpSchemaFidelityTests
     [Fact]
     public void ShouldAttachPropertyDescriptionsUsingFinalJsonTypeInfoNames()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddPortia().ConfigureJson(json => json.TypeInfoResolver =
                 McpSchemaJsonContext.Default.WithAddedModifier(typeInfo =>
@@ -89,7 +100,10 @@ public sealed class McpSchemaFidelityTests
             .AddRequestHandler<ResolverRenamedGreetingHandler>()
             .AddMcpTool<ResolverRenamedGreeting>();
 
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         var tool = Assert.Single(provider.GetServices<McpServerTool>());
         var properties = tool.ProtocolTool.InputSchema.GetProperty("properties");
 
@@ -100,9 +114,14 @@ public sealed class McpSchemaFidelityTests
     [Fact]
     public void ShouldRejectConverterShapedToolInputBeforeServing()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddPortia().AddRequestHandler<ScalarProbeHandler>().AddMcpTool<ScalarProbe>();
+
+        // Act
         using var provider = services.BuildServiceProvider();
+
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() => provider.GetServices<McpServerTool>().ToArray());
         Assert.Contains("object", error.Message, StringComparison.Ordinal);
         Assert.Contains("schema.scalar", error.Message, StringComparison.Ordinal);
@@ -119,6 +138,7 @@ public sealed class McpSchemaFidelityTests
     [InlineData("{\"inherited\":\"base\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[],\"note\":null,\"restricted\":null}", false)]
     public async Task ShouldAdvertiseTheEffectiveBindingContract(string input, bool valid)
     {
+        // Arrange
         var probe = new InvocationCount();
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -136,7 +156,11 @@ public sealed class McpSchemaFidelityTests
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient());
+
+        // Act
         await using var client = await McpClient.CreateAsync(transport);
+
+        // Assert
         var tool = Assert.Single(await client.ListToolsAsync());
         var schema = JsonSchema.Build(tool.JsonSchema,
             new BuildOptions { Dialect = Dialect.Draft202012, SchemaRegistry = new() });
@@ -162,10 +186,13 @@ public sealed class McpSchemaFidelityTests
     [Fact]
     public async Task ShouldAdvertiseAndEnforceTheInputContractOverStdio()
     {
+        // Arrange
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         var host = Path.GetFullPath(
             $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll",
             AppContext.BaseDirectory);
+
+        // Act
         await using var client = await McpClient.CreateAsync(new StdioClientTransport(
             new StdioClientTransportOptions
             {
@@ -175,6 +202,7 @@ public sealed class McpSchemaFidelityTests
                 ShutdownTimeout = TimeSpan.FromSeconds(1)
             }));
 
+        // Assert
         var tool = Assert.Single(await client.ListToolsAsync());
         var schema = JsonSchema.Build(tool.JsonSchema,
             new BuildOptions { Dialect = Dialect.Draft202012, SchemaRegistry = new() });

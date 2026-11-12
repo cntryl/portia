@@ -37,12 +37,15 @@ public sealed class DomainEventCatalogGeneratorTests
     [Fact]
     public void ShouldResolveDomainEventSerializerAfterGeneratedRegistration()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddFrameworkTests();
         using var provider = services.BuildServiceProvider();
 
+        // Act
         var serializer = provider.GetRequiredService<IDomainEventSerializer>();
 
+        // Assert
         Assert.NotNull(serializer);
     }
 
@@ -58,6 +61,7 @@ public sealed class DomainEventCatalogGeneratorTests
     [Fact]
     public void ShouldUpcastThroughGeneratedSerializerWhenUpcasterIsRegisteredInDi()
     {
+        // Arrange
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
@@ -82,8 +86,10 @@ public sealed class DomainEventCatalogGeneratorTests
         using var provider = services.BuildServiceProvider();
         var reader = provider.GetRequiredService<IDomainEventSerializer>();
 
+        // Act
         var deserialized = reader.Deserialize(stored);
 
+        // Assert
         var gadget = Assert.IsType<GadgetRenamed>(deserialized);
         Assert.Equal("Sprocket", gadget.DisplayName);
     }

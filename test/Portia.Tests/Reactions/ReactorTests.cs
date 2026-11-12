@@ -14,14 +14,17 @@ public sealed class ReactorTests
     [Fact]
     public async Task ShouldDispatchAsyncHandlerAndRaiseCommandThroughRepository()
     {
+        // Arrange
         var sourceId = Uuid.CreateVersion4();
         var repository = new RecordingAggregateRepository();
         var reactor = new TestReactor(repository);
         var stream = new EventStreamAddress("test", "reactors", sourceId.ToString());
         var ev = Committed(new ValueChanged(42), sourceId, 1);
 
+        // Act
         await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, new EventCursor("1")), default);
 
+        // Assert
         var target = Assert.Single(repository.SavedAggregates);
         Assert.Equal(42, target.Value);
     }
@@ -32,13 +35,16 @@ public sealed class ReactorTests
     [Fact]
     public async Task ShouldDispatchMatchingHandler()
     {
+        // Arrange
         var repository = new RecordingAggregateRepository();
         var reactor = new TestReactor(repository);
         var stream = new EventStreamAddress("test", "reactors", "one");
         var ev = Committed(new ValueIncremented(3), Uuid.CreateVersion4(), 1);
 
+        // Act
         await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, new EventCursor("1")), default);
 
+        // Assert
         Assert.Equal(3, reactor.LastIncrementAmount);
     }
 
@@ -50,13 +56,16 @@ public sealed class ReactorTests
     [Fact]
     public async Task ShouldSkipUnhandledEventType()
     {
+        // Arrange
         var repository = new RecordingAggregateRepository();
         var reactor = new TestReactor(repository);
         var stream = new EventStreamAddress("test", "reactors", "one");
         var ev = Committed(new ValueAudited("unhandled"), Uuid.CreateVersion4(), 1);
 
+        // Act
         await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, new EventCursor("1")), default);
 
+        // Assert
         Assert.Empty(repository.SavedAggregates);
         Assert.Null(reactor.LastIncrementAmount);
     }
@@ -65,13 +74,17 @@ public sealed class ReactorTests
     [Fact]
     public void ShouldCreateStableDistinctEffectIdsGivenReactionContextWhenNamingEffects()
     {
+        // Arrange
         var reactor = new TestReactor(new RecordingAggregateRepository(),
             pattern: EventStreamPattern.ForTenant("reactors"));
         var ev = Committed(new ValueChanged(42), Uuid.CreateVersion4(), 1);
         var record = new DomainEventRecord(new EventStreamAddress("test", "reactors", "one"), ev, 0,
             new EventCursor("1"));
+
+        // Act
         var context = new ReactionExecutionContext(record, RequestActor.System);
 
+        // Assert
         Assert.Equal(reactor.EffectId(context, "email"), reactor.EffectId(context, "email"));
         Assert.NotEqual(reactor.EffectId(context, "email"), reactor.EffectId(context, "audit"));
     }
@@ -84,6 +97,7 @@ public sealed class ReactorTests
     public void ShouldPreservePersistedEffectIdGivenExistingReactionIdentity(
         string? workloadName, string? tenantValue, string expectedId)
     {
+        // Arrange
         var reactor = new TestReactor(new RecordingAggregateRepository(),
             pattern: EventStreamPattern.ForTenant("reactors"));
         if (workloadName is not null)
@@ -102,8 +116,10 @@ public sealed class ReactorTests
             new EventStreamAddress("acme", "reactors", "one"), ev, 0, new EventCursor("1"));
         var context = new ReactionExecutionContext(record, RequestActor.System);
 
+        // Act
         var effectId = reactor.EffectId(context, "email");
 
+        // Assert
         Assert.Equal(Uuid.Parse(expectedId, CultureInfo.InvariantCulture), effectId);
     }
 
@@ -111,12 +127,16 @@ public sealed class ReactorTests
     [Fact]
     public void ShouldRejectDifferentIdentityGivenAlreadyBoundReactorWhenBindingAgain()
     {
+        // Arrange
         var reactor = new TestReactor(new RecordingAggregateRepository(),
             pattern: EventStreamPattern.ForTenant("reactors"));
         var first = new WorkloadIdentity("test-reactor", new TenantId("one"));
         reactor.BindWorkload(first, null);
+
+        // Act
         reactor.BindWorkload(first, null);
 
+        // Assert
         _ = Assert.Throws<InvalidOperationException>(() =>
             reactor.BindWorkload(new WorkloadIdentity("test-reactor", new TenantId("two")), null));
     }

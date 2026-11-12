@@ -92,12 +92,16 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task CreatesAUniquelyNamedContextWhenPortiaJsonContextIsAlreadyTaken()
     {
+        // Arrange
         var source = UnrootedRequest + """
 
                                        internal sealed class PortiaJsonContext;
                                        """;
+
+        // Act
         var (actions, solution) = await FixAsync(source, "App.Query");
 
+        // Assert
         var created = await ApplyAsync(solution, Assert.Single(actions));
         var document = Assert.Single(created.Projects.Single().Documents,
             item => item.Name == "ApplicationJsonContext.cs");
@@ -112,6 +116,7 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task AddsTheMissingRootToTheOnlyApplicationContext()
     {
+        // Arrange
         var source = UnrootedRequest + """
 
                                        [PortiaJsonContext]
@@ -119,8 +124,10 @@ public sealed class JsonMetadataCodeFixTests
                                        internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
                                        """;
 
+        // Act
         var (actions, solution) = await FixAsync(source, "App.Query");
 
+        // Assert
         var action = Assert.Single(actions);
         Assert.Equal("Add global::App.Query to AppJsonContext", action.Title);
         var text = await SingleDocumentTextAsync(await ApplyAsync(solution, action));
@@ -135,6 +142,7 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task AddsAGloballyQualifiedRootThatBindsInsideTheContextNamespace()
     {
+        // Arrange
         const string source = """
                               using System.Threading;
                               using System.Threading.Tasks;
@@ -163,8 +171,11 @@ public sealed class JsonMetadataCodeFixTests
                                   internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
                               }
                               """;
+
+        // Act
         var (actions, solution) = await FixAsync(source, "Orders.Query");
 
+        // Assert
         var changed = await ApplyAsync(solution, Assert.Single(actions));
         var compilation = await changed.Projects.Single().GetCompilationAsync();
 
@@ -180,13 +191,18 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task LeavesTheContextUnchangedWhenTheRootIsAlreadyDeclared()
     {
+        // Arrange
         var source = UnrootedRequest + """
 
                                        [PortiaJsonContext]
                                        [System.Text.Json.Serialization.JsonSerializable(typeof(Answer))]
                                        internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
                                        """;
+
+        // Act
         var (actions, solution) = await FixAsync(source, "App.Query");
+
+        // Assert
         var once = await ApplyAsync(solution, Assert.Single(actions));
 
         // Re-running the same fix over the already-corrected document is exactly what a fix-all that
@@ -208,6 +224,7 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task PrefersTheContextDeclaredInTheTypesOwnNamespace()
     {
+        // Arrange
         var source = UnrootedRequestInBlockNamespace + """
 
                                                        namespace App
@@ -222,8 +239,10 @@ public sealed class JsonMetadataCodeFixTests
                                                        }
                                                        """;
 
+        // Act
         var (actions, _) = await FixAsync(source, "App.Query");
 
+        // Assert
         var action = Assert.Single(actions);
         Assert.Equal("Add global::App.Query to AppJsonContext", action.Title);
     }
@@ -235,6 +254,7 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task OffersEveryContextWhenNoneMatchesTheTypesNamespace()
     {
+        // Arrange
         var source = UnrootedRequestInBlockNamespace + """
 
                                                        namespace First
@@ -249,8 +269,10 @@ public sealed class JsonMetadataCodeFixTests
                                                        }
                                                        """;
 
+        // Act
         var (actions, _) = await FixAsync(source, "App.Query");
 
+        // Assert
         Assert.Equal(2, actions.Count);
         Assert.Contains(actions, item => item.Title == "Add global::App.Query to FirstJsonContext (First)");
         Assert.Contains(actions, item => item.Title == "Add global::App.Query to SecondJsonContext (Second)");
@@ -281,8 +303,13 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task OffersOneActionForAContextSplitAcrossPartialDeclarations()
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
+
+        // Act
         var document = AddProject(workspace, UnrootedRequest, SplitContext);
+
+        // Assert
         var diagnostic = Assert.Single(
             GeneratorCompilation.Diagnostics(UnrootedRequest, new JsonMetadataDiagnosticGenerator()),
             item => item.Id == "PORTIA025" && item.Properties["TypeName"] == "global::App.Query");
@@ -306,7 +333,10 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task AddsTheRootToTheHandWrittenPartWhenTheMarkerPartIsGenerated()
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
+
+        // Act
         var document = AddProject(workspace, UnrootedRequest,
         [
             ("AppJsonContext.g.cs", """
@@ -321,6 +351,8 @@ public sealed class JsonMetadataCodeFixTests
                                   internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
                                   """)
         ]);
+
+        // Assert
         var diagnostic = Assert.Single(
             GeneratorCompilation.Diagnostics(UnrootedRequest, new JsonMetadataDiagnosticGenerator()),
             item => item.Id == "PORTIA025" && item.Properties["TypeName"] == "global::App.Query");
@@ -345,12 +377,17 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task FixAllAddsEachRootOnceToAContextSplitAcrossPartialDeclarations()
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         var document = AddProject(workspace, UnrootedRequest, SplitContext);
+
         // Computed without the context, so the fix-all also carries a stale diagnostic for the root the
         // other part already declares — the case a revisiting fix-all meets.
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics(UnrootedRequest, new JsonMetadataDiagnosticGenerator())
             .Where(item => item.Id == "PORTIA025").ToArray();
+
+        // Assert
         Assert.Equal(2, diagnostics.Length);
         var provider = new JsonMetadataCodeFixProvider();
         var actions = new List<CodeAction>();
@@ -376,6 +413,7 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task RegistersNoFixForADiagnosticWithoutATypeName()
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         var document = AddProject(workspace, UnrootedRequest);
         var descriptor = new DiagnosticDescriptor("PORTIA025", "Missing Portia JSON metadata", "{0}", "Usage",
@@ -384,9 +422,11 @@ public sealed class JsonMetadataCodeFixTests
             Location.Create((await document.GetSyntaxTreeAsync())!, TextSpan.FromBounds(0, 1)), "no properties");
         var actions = new List<CodeAction>();
 
+        // Act
         await new JsonMetadataCodeFixProvider().RegisterCodeFixesAsync(
             new CodeFixContext(document, diagnostic, (action, _) => actions.Add(action), CancellationToken.None));
 
+        // Assert
         Assert.Empty(actions);
     }
 
@@ -406,10 +446,15 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task FixAllCreatesOneContextContainingEveryMissingRoot()
     {
+        // Arrange
         using var workspace = new AdhocWorkspace();
         var document = AddProject(workspace, UnrootedRequest);
+
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics(UnrootedRequest, new JsonMetadataDiagnosticGenerator())
             .Where(item => item.Id == "PORTIA025").ToArray();
+
+        // Assert
         Assert.Equal(2, diagnostics.Length);
         var provider = new JsonMetadataCodeFixProvider();
         var context = new FixAllContext(document, provider, FixAllScope.Project, "Portia.CreateJsonContext",
@@ -429,6 +474,7 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task FixAllAddsEveryMissingRootToTheChosenContextOnce()
     {
+        // Arrange
         var source = UnrootedRequest + """
 
                                        [PortiaJsonContext]
@@ -436,8 +482,12 @@ public sealed class JsonMetadataCodeFixTests
                                        """;
         using var workspace = new AdhocWorkspace();
         var document = AddProject(workspace, source);
+
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator())
             .Where(item => item.Id == "PORTIA025").ToArray();
+
+        // Assert
         Assert.Equal(2, diagnostics.Length);
         var provider = new JsonMetadataCodeFixProvider();
         var actions = new List<CodeAction>();
@@ -501,13 +551,17 @@ public sealed class JsonMetadataCodeFixTests
     [Fact]
     public async Task CreatesContextOutsideTheFrameworkNamespaceOfAGenericRoot()
     {
+        // Arrange
         var source = UnrootedGenericResult.Replace("[PortiaJsonContext]", string.Empty, StringComparison.Ordinal)
             .Replace("[System.Text.Json.Serialization.JsonSerializable(typeof(Query))]", string.Empty,
                 StringComparison.Ordinal)
             .Replace("internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;",
                 string.Empty, StringComparison.Ordinal);
+
+        // Act
         var (actions, solution) = await FixAsync(source, "System.Collections.Generic.List<App.Answer>");
 
+        // Assert
         var created = await ApplyAsync(solution, Assert.Single(actions));
         var text = (await Assert.Single(created.Projects.Single().Documents,
             item => item.Name == "PortiaJsonContext.cs").GetTextAsync()).ToString();

@@ -36,6 +36,7 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     [Fact]
     public async Task ShouldRejectCrossOriginUnsafeRequestsBeforeBinding()
     {
+        // Arrange
         var binderCalls = 0;
         var client = await StartAsync(app =>
         {
@@ -52,6 +53,7 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
                 }));
         });
 
+        // Act
         HttpResponseMessage[] responses =
         [
             await client.SendAsync(Request(HttpMethod.Post, "/optional", "cross-site", Attacker)),
@@ -64,6 +66,7 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
             await client.SendAsync(Request(HttpMethod.Post, "/custom", "cross-site", Attacker))
         ];
 
+        // Assert
         foreach (var response in responses)
         {
             Assert.True(response.StatusCode == HttpStatusCode.Forbidden,
@@ -81,12 +84,14 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     [Fact]
     public async Task ShouldAllowSameOriginNonBrowserAndSafeRequests()
     {
+        // Arrange
         var client = await StartAsync(app =>
         {
             _ = app.MapPortiaPost<HttpOptionalBody, string>("/optional");
             _ = app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");
         });
 
+        // Act
         HttpResponseMessage[] responses =
         [
             await client.SendAsync(Request(HttpMethod.Post, "/optional", null, null)),
@@ -96,6 +101,7 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
             await client.SendAsync(Request(HttpMethod.Get, $"/widgets/{Uuid.CreateVersion4()}", "cross-site", Attacker))
         ];
 
+        // Assert
         foreach (var response in responses)
         {
             Assert.True(response.IsSuccessStatusCode,
@@ -128,12 +134,16 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     public void ShouldCompareOriginWithRequestHostWithoutFetchMetadata(string host, string origin, string scheme,
         bool allowed)
     {
+        // Arrange
         var context = new DefaultHttpContext();
         context.Request.Method = HttpMethods.Post;
         context.Request.Scheme = scheme;
         context.Request.Host = new HostString(host);
+
+        // Act
         context.Request.Headers.Origin = origin;
 
+        // Assert
         Assert.Equal(allowed, PortiaHttpBinding.RejectCrossOrigin(context) is null);
     }
 
@@ -148,6 +158,7 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     [InlineData(false)]
     public async Task ShouldTrustOriginsTheCorsPipelineAllows(bool corsRegisteredFirst)
     {
+        // Arrange
         var client = await StartAsync(app =>
             {
                 _ = app.UseCors("spa");
@@ -171,8 +182,11 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
             await client.SendAsync(Request(HttpMethod.Put, "/endpoint-policy", "cross-site", Admin));
         using var endpointOverridden =
             await client.SendAsync(Request(HttpMethod.Put, "/endpoint-policy", "cross-site", Trusted));
+
+        // Act
         using var disabled = await client.SendAsync(Request(HttpMethod.Patch, "/cors-disabled", "cross-site", Trusted));
 
+        // Assert
         Assert.Equal(HttpStatusCode.OK, trusted.StatusCode);
         Assert.Equal(Trusted, Assert.Single(trusted.Headers.GetValues("Access-Control-Allow-Origin")));
         Assert.Equal(HttpStatusCode.Forbidden, attacker.StatusCode);
@@ -185,6 +199,7 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     [Fact]
     public async Task ShouldTrustOriginsTheDefaultCorsPolicyAllows()
     {
+        // Arrange
         var client = await StartAsync(app =>
             {
                 _ = app.UseCors();
@@ -193,8 +208,11 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
             services => services.AddCors(options => options.AddDefaultPolicy(policy => policy.WithOrigins(Trusted))));
 
         using var trusted = await client.SendAsync(Request(HttpMethod.Post, "/optional", "same-site", Trusted));
+
+        // Act
         using var attacker = await client.SendAsync(Request(HttpMethod.Post, "/optional", "same-site", Attacker));
 
+        // Assert
         Assert.Equal(HttpStatusCode.OK, trusted.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, attacker.StatusCode);
     }
@@ -206,10 +224,14 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     [Fact]
     public void ShouldRequireAddHttpBeforeMappingEndpoints()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.Services.AddPortia();
+
+        // Act
         _app = builder.Build();
 
+        // Assert
         var exception = Assert.Throws<InvalidOperationException>(() =>
             _app.MapPortiaPost<HttpOptionalBody, string>("/optional"));
 

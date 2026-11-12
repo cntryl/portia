@@ -7,6 +7,7 @@ public sealed partial class OperationalValidationAuthorityTests
     [Fact]
     public async Task ShouldRecordAuthoritativeRejectionAsSuccessfulProcessingAfterAdvisoryRace()
     {
+        // Arrange
         var events = new InMemoryEventStore();
         var repository = new AggregateRepository(events);
         var inventoryId = Uuid.CreateVersion4();
@@ -15,7 +16,11 @@ public sealed partial class OperationalValidationAuthorityTests
         var inventory = new Inventory(inventoryId);
         inventory.AddStock();
         await repository.SaveAsync(inventory, principal);
+
+        // Act
         var advisory = await repository.HydrateAsync(new Inventory(inventoryId));
+
+        // Assert
         Assert.Equal(1, advisory.Available);
         var order = new Order(orderId);
         order.Place(inventoryId);

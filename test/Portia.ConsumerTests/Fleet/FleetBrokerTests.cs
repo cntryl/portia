@@ -13,6 +13,7 @@ public sealed class FleetBrokerTests
     [InlineData(true)]
     public async Task HealthyScaleOutThenDepartureOrCrashRestoresAllPartitions(bool crash)
     {
+        // Arrange
         await using var first = await ConsumerBroker.ConnectAsync();
         var second = await ConsumerBroker.ConnectAsync();
         var realm = "fleet-" + Guid.NewGuid().ToString("N");
@@ -40,7 +41,11 @@ public sealed class FleetBrokerTests
             new FitzFleetMembership(second.Lease));
         var runA = runnerA.RunAsync(partitions, (route, ct) => Hold(route, activeA, startsA, ct), options,
             cancelA.Token);
+
+        // Act
         Task? runB = null;
+
+        // Assert
         try
         {
             await Until(() => activeA.Count == partitions.Length);
@@ -102,6 +107,7 @@ public sealed class FleetBrokerTests
     [Fact]
     public async Task UnrenewedMembershipAndPartitionExpireBeforeSurvivorTakesOver()
     {
+        // Arrange
         await using var stalled = await ConsumerBroker.ConnectAsync();
         await using var survivor = await ConsumerBroker.ConnectAsync();
         var realm = "expiry-" + Guid.NewGuid().ToString("N");
@@ -112,8 +118,12 @@ public sealed class FleetBrokerTests
             .OrderByDescending(candidate => candidate.Score, StringComparer.Ordinal)
             .ToArray();
         var ghost = rankedWorkers[0].Worker;
+
+        // Act
         var survivorWorkerId = rankedWorkers.First(candidate =>
             StringComparer.Ordinal.Compare(candidate.Score, rankedWorkers[0].Score) < 0).Worker;
+
+        // Assert
         Assert.Equal(ghost, Owner(partition, survivorWorkerId, ghost));
         // Unmanaged leases intentionally receive no renewals. Keep the connection alive to
         // distinguish TTL expiry from a broker's session-disconnect cleanup.

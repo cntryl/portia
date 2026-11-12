@@ -34,6 +34,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [Fact]
     public async Task ShouldDescribeConvertedCollectionsAtEveryContractPosition()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia().AddHttp(options =>
@@ -54,7 +55,11 @@ public sealed class OpenApiTests : IAsyncDisposable
             """{"payload":{"items":[{"item_id":"item-1","revision":2,"next":{"item_id":"child","revision":3}}],"optional_items":null}}""",
             Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
+
+        // Act
         using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        // Assert
         Assert.Equal("item-1", actual.RootElement[0].GetProperty("item_id").GetString());
         Assert.Equal(3, actual.RootElement[0].GetProperty("next").GetProperty("revision").GetInt64());
 
@@ -99,6 +104,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [InlineData("yml")]
     public async Task ShouldPreserveNullableMappedAndDeclaredCollectionElements(string format)
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia().AddHttp(options =>
@@ -125,7 +131,11 @@ public sealed class OpenApiTests : IAsyncDisposable
         var settings = new OpenApiReaderSettings();
         settings.AddYamlReader();
         var serialized = await client.GetStringAsync("/openapi/v1." + format);
+
+        // Act
         var parsed = OpenApiDocument.Parse(serialized, format == "yml" ? "yaml" : "json", settings);
+
+        // Assert
         Assert.Empty(parsed.Diagnostic!.Errors);
         var operation = parsed.Document!.Paths!["/collection-nullability"].Operations![HttpMethod.Post];
         var request = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
@@ -142,6 +152,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [Fact]
     public async Task ShouldSerializeAndDescribeMappedRequestAndResponseRoots()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia().AddHttp(options => options.OpenApiSchemaType = type => type switch
@@ -166,7 +177,11 @@ public sealed class OpenApiTests : IAsyncDisposable
         using var response = await client.PostAsync("/converted-root", new StringContent(
             """[{"item_id":"item-1","revision":2,"next":null}]""", Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
+
+        // Act
         using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        // Assert
         Assert.Equal("item-1", payload.RootElement[0].GetProperty("item_id").GetString());
 
         foreach (var format in new[] { "json", "yml" })
@@ -190,6 +205,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [InlineData(true)]
     public async Task ShouldRejectInvalidSchemaMappings(bool missingMetadata)
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia().AddHttp(options => options.OpenApiSchemaType = type =>
@@ -201,7 +217,11 @@ public sealed class OpenApiTests : IAsyncDisposable
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaPost<OpenApiConvertedRequest, OpenApiSelectionList>("/converted");
         await _app.StartAsync();
+
+        // Act
         using var client = _app.GetTestClient();
+
+        // Assert
         foreach (var format in new[] { "json", "yml" })
         {
             if (missingMetadata)
@@ -218,11 +238,15 @@ public sealed class OpenApiTests : IAsyncDisposable
     [Fact]
     public void ShouldLeaveAspNetCoreJsonOptionsOwnedByTheApplication()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.Configure<JsonOptions>(options => options.SerializerOptions.WriteIndented = true);
         _ = services.AddPortia().ConfigureJson(options => options.WriteIndented = false).AddHttp();
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         Assert.True(provider.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions.WriteIndented);
         Assert.False(provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json).WriteIndented);
     }
@@ -233,6 +257,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [InlineData(true)]
     public async Task ShouldDescribePortiaSerializerContractsSeparately(bool customizeMoney)
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.Configure<JsonOptions>(options =>
@@ -261,7 +286,11 @@ public sealed class OpenApiTests : IAsyncDisposable
             """{"payload":{"display_name":"nested","wire-name":"explicit","day_value":"Monday","custom_value":"42","team_id":"21f7f8de-8051-5b89-8680-0195ef798b6a","parent_team_id":null,"next_node":{"display_name":"child","wire-name":"child","day_value":"Tuesday","custom_value":"43","team_id":"6ba7b811-9dad-11d1-80b4-00c04fd430c8","parent_team_id":null}}}""",
             Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
+
+        // Act
         using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        // Assert
         Assert.Equal("nested", payload.RootElement.GetProperty("display_name").GetString());
         Assert.Equal("42", payload.RootElement.GetProperty("custom_value").GetString());
         using var stream = JsonDocument.Parse(await client.GetStringAsync("/contract-stream"));
@@ -339,6 +368,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [Fact]
     public async Task ShouldServeEquivalentOpenApi31DocumentsGivenPortiaApplicationWhenJsonAndYamlAreRequested()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddFrameworkTests();
@@ -378,7 +408,11 @@ public sealed class OpenApiTests : IAsyncDisposable
 
         using var client = _app.GetTestClient();
         var jsonResponse = await client.GetAsync("/openapi/v1.json");
+
+        // Act
         var yamlResponse = await client.GetAsync("/openapi/v1.yml");
+
+        // Assert
         Assert.Equal(HttpStatusCode.OK, jsonResponse.StatusCode);
         Assert.Equal(HttpStatusCode.OK, yamlResponse.StatusCode);
 
@@ -540,6 +574,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [Fact]
     public async Task ShouldNotMapOpenApiEndpointsUntilExplicitlyRequested()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddFrameworkTests();
@@ -552,8 +587,11 @@ public sealed class OpenApiTests : IAsyncDisposable
         using var client = _app.GetTestClient();
         var json = await client.GetAsync("/openapi/v1.json");
         var yaml = await client.GetAsync("/openapi/v1.yml");
+
+        // Act
         var widget = await client.GetAsync($"/widgets/{Uuid.CreateVersion4()}");
 
+        // Assert
         Assert.Equal(HttpStatusCode.NotFound, json.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, yaml.StatusCode);
         // Publishing the document is independent from whether the application runs.
@@ -564,6 +602,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [Fact]
     public async Task ShouldAvoidApplicationResponseComponentNameCollision()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddFrameworkTests();
@@ -583,7 +622,11 @@ public sealed class OpenApiTests : IAsyncDisposable
 
         using var client = _app.GetTestClient();
         var raw = await client.GetStringAsync("/openapi/v1.json");
+
+        // Act
         var parsed = OpenApiDocument.Parse(raw, "json", new OpenApiReaderSettings());
+
+        // Assert
         Assert.Empty(parsed.Diagnostic!.Errors);
         using var document = JsonDocument.Parse(raw);
         var responses = document.RootElement.GetProperty("components").GetProperty("responses");
@@ -600,6 +643,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [Fact]
     public async Task ShouldKeepThousandOperationOpenApiDocumentCompact()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddFrameworkTests();
@@ -624,7 +668,11 @@ public sealed class OpenApiTests : IAsyncDisposable
 
         await _app.StartAsync();
         using var client = _app.GetTestClient();
+
+        // Act
         var response = await client.GetAsync("/openapi/v1.json");
+
+        // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var json = await response.Content.ReadAsStringAsync();
@@ -658,6 +706,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [Fact]
     public async Task ShouldLetApplicationMapTheDocumentOnItsOwnProtectedRoute()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddFrameworkTests();
@@ -670,8 +719,11 @@ public sealed class OpenApiTests : IAsyncDisposable
 
         using var client = _app.GetTestClient();
         var response = await client.GetAsync("/internal/openapi/v1.json");
+
+        // Act
         var document = await response.Content.ReadAsStringAsync();
 
+        // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var raw = JsonDocument.Parse(document);
         Assert.Equal("3.1.2", raw.RootElement.GetProperty("openapi").GetString());
@@ -686,6 +738,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [Fact]
     public async Task ShouldDescribeFormContentOnlyWhenFormPostsAreAccepted()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddFrameworkTests();
@@ -703,8 +756,12 @@ public sealed class OpenApiTests : IAsyncDisposable
         var paths = raw.RootElement.GetProperty("paths");
         var unguarded = paths.GetProperty("/unguarded").GetProperty("post").GetProperty("requestBody")
             .GetProperty("content");
+
+        // Act
         var optedOut = paths.GetProperty("/opted-out/{widget_id}").GetProperty("post").GetProperty("requestBody")
             .GetProperty("content");
+
+        // Assert
         Assert.True(unguarded.TryGetProperty("application/json", out _), json);
         Assert.False(unguarded.TryGetProperty("application/x-www-form-urlencoded", out _), json);
         Assert.False(unguarded.TryGetProperty("multipart/form-data", out _), json);
@@ -716,6 +773,7 @@ public sealed class OpenApiTests : IAsyncDisposable
     [Fact]
     public async Task ShouldKeepApplicationRunningGivenCollisionWhenOpenApiDocumentFails()
     {
+        // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddFrameworkTests();
@@ -725,8 +783,11 @@ public sealed class OpenApiTests : IAsyncDisposable
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");
         _ = _app.MapGet("/ordinary", () => Results.Ok()).WithName("httpGetWidget");
+
+        // Act
         await _app.StartAsync();
 
+        // Assert
         var exception =
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 _app.GetTestClient().GetAsync("/openapi/v1.json"));

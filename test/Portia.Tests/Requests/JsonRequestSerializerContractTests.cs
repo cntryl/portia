@@ -22,10 +22,14 @@ public sealed class JsonRequestSerializerContractTests
     [InlineData("payload")]
     public void ShouldClassifyMissingRequiredRequestEnvelopePropertiesAsPermanent(string property)
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var envelope = Envelope(serializer);
+
+        // Act
         _ = envelope.Remove(property);
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() => serializer.DeserializeEnvelope(Bytes(envelope)));
 
         Assert.Equal(RequestEnvelopeFailureKind.Permanent, RequestEnvelopeFailure.GetKind(error));
@@ -51,10 +55,14 @@ public sealed class JsonRequestSerializerContractTests
     [Fact]
     public void ShouldRejectUnknownRequestContractName()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var envelope = Envelope(serializer);
+
+        // Act
         envelope["contract"] = "test.shared.not-deployed-here";
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() => serializer.DeserializeEnvelope(Bytes(envelope)));
 
         Assert.Contains("Unknown request contract", error.Message, StringComparison.Ordinal);
@@ -69,10 +77,14 @@ public sealed class JsonRequestSerializerContractTests
     [Fact]
     public void ShouldRejectKnownContractAtAnUnknownVersion()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var envelope = Envelope(serializer);
+
+        // Act
         envelope["contract_version"] = 99;
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() => serializer.DeserializeEnvelope(Bytes(envelope)));
 
         Assert.Contains("version 99", error.Message, StringComparison.Ordinal);
@@ -121,9 +133,13 @@ public sealed class JsonRequestSerializerContractTests
     [Fact]
     public void ShouldRejectSuccessfulResultEnvelopeWithNoValue()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
+
+        // Act
         var envelope = new JsonObject { ["is_success"] = true };
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() =>
             serializer.DeserializeResult<int>(Bytes(envelope)));
 
@@ -156,10 +172,14 @@ public sealed class JsonRequestSerializerContractTests
     [Fact]
     public void ShouldRejectUnsupportedEnvelopeVersion()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var envelope = Envelope(serializer);
+
+        // Act
         envelope["version"] = 3;
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() => serializer.DeserializeEnvelope(Bytes(envelope)));
 
         Assert.Contains("version 2 only", error.Message, StringComparison.Ordinal);
@@ -203,10 +223,13 @@ public sealed class JsonRequestSerializerContractTests
     [MemberData(nameof(MalformedEnvelopeCorpus))]
     public void ShouldClassifyEveryEnvelopeFailureGivenGeneratedCorpus(string cellId, byte[] input)
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
 
+        // Act
         var error = Record.Exception(() => serializer.DeserializeEnvelope(input));
 
+        // Assert
         Assert.NotNull(error);
         Assert.True(error is JsonException || RequestEnvelopeFailure.GetKind(error) is not null,
             $"{cellId} produced unclassified {error.GetType().FullName}: {error.Message}");
@@ -216,12 +239,15 @@ public sealed class JsonRequestSerializerContractTests
     [Fact]
     public void ShouldDeserializeValidEnvelopeGivenUnknownTopLevelProperties()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var envelope = Envelope(serializer);
         envelope["future"] = new JsonObject { ["nested"] = 7 };
 
+        // Act
         var result = serializer.DeserializeEnvelope(Bytes(envelope));
 
+        // Assert
         Assert.Equal(new UniversalAction(7), result.Request);
     }
 
@@ -232,10 +258,13 @@ public sealed class JsonRequestSerializerContractTests
     [Fact]
     public void ShouldRoundTripAKnownContract()
     {
+        // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
 
+        // Act
         var envelope = serializer.DeserializeEnvelope(Bytes(Envelope(serializer)));
 
+        // Assert
         Assert.Equal(new UniversalAction(7), envelope.Request);
         Assert.Equal("test.shared.universal-action", envelope.Name);
     }

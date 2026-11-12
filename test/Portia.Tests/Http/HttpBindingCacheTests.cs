@@ -12,14 +12,18 @@ public sealed class HttpBindingCacheTests
     [Fact]
     public void ShouldNotShareBindingMetadataAcrossApplicationOptions()
     {
+        // Arrange
         var alpha = Options("alpha");
         var beta = Options("beta");
         using var alphaBody = JsonDocument.Parse("{\"alpha\":1}");
         using var betaBody = JsonDocument.Parse("{\"beta\":2}");
 
         var first = Read<PlainBinding>(alphaBody.RootElement, alpha);
+
+        // Act
         var second = Read<PlainBinding>(betaBody.RootElement, beta);
 
+        // Assert
         Assert.Equal(1, first);
         Assert.Equal(2, second);
     }
@@ -28,10 +32,14 @@ public sealed class HttpBindingCacheTests
     [Fact]
     public void ShouldNotLeakCachedPropertyConverterToAnotherRequest()
     {
+        // Arrange
         var options = Options();
         using var converted = JsonDocument.Parse("{\"value\":\"0x10\"}");
+
+        // Act
         using var ordinary = JsonDocument.Parse("{\"value\":16}");
 
+        // Assert
         Assert.Equal(16, Read<ConvertedBinding>(converted.RootElement, options));
         Assert.Equal(16, Read<PlainBinding>(ordinary.RootElement, options));
     }
@@ -40,6 +48,7 @@ public sealed class HttpBindingCacheTests
     [Fact]
     public async Task ShouldResolveBindingMetadataOnceDuringConcurrentFirstUse()
     {
+        // Arrange
         var resolutions = 0;
         var resolver = new DefaultJsonTypeInfoResolver();
         resolver.Modifiers.Add(info =>
@@ -50,9 +59,11 @@ public sealed class HttpBindingCacheTests
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = resolver };
         using var body = JsonDocument.Parse("{\"value\":42}");
 
+        // Act
         var values = await Task.WhenAll(Enumerable.Range(0, 32)
             .Select(_ => Task.Run(() => Read<PlainBinding>(body.RootElement, options))));
 
+        // Assert
         Assert.All(values, value => Assert.Equal(42, value));
         Assert.Equal(1, resolutions);
     }
@@ -61,10 +72,14 @@ public sealed class HttpBindingCacheTests
     [Fact]
     public void ShouldHonorCachedPropertyNumberHandling()
     {
+        // Arrange
         var options = Options();
         options.NumberHandling = JsonNumberHandling.Strict;
+
+        // Act
         using var body = JsonDocument.Parse("{\"value\":\"42\"}");
 
+        // Assert
         Assert.Equal(42, Read<NumberBinding>(body.RootElement, options));
     }
 

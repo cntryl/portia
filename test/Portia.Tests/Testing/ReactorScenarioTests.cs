@@ -12,10 +12,15 @@ public sealed class ReactorScenarioTests
     [InlineData(8193)]
     public async Task ShouldDrainHistoryAcrossBoundedPasses(int count)
     {
+        // Arrange
         var ids = Enumerable.Range(0, count).Select(_ => Uuid.CreateVersion4()).ToArray();
         var scenario = new ReactorScenario().Given(ids.Select(id => (DomainEvent)new UserCreated(id)).ToArray());
         var reactor = new WelcomeReactor(scenario.Requests);
+
+        // Act
         await scenario.RunAsync(reactor);
+
+        // Assert
         Assert.Equal(ids.Select(id => (IRequestBase)new SendWelcomeEmail(id)), scenario.SentRequests);
         await scenario.RunAsync(reactor);
         Assert.Equal(ids.Concat(ids).Select(id => (IRequestBase)new SendWelcomeEmail(id)), scenario.SentRequests);
@@ -25,13 +30,16 @@ public sealed class ReactorScenarioTests
     [Fact]
     public async Task ShouldRecordRequestsSentForEachGivenEvent()
     {
+        // Arrange
         var scenario = new ReactorScenario();
         var reactor = new WelcomeReactor(scenario.Requests);
         var first = Uuid.CreateVersion4();
         var second = Uuid.CreateVersion4();
 
+        // Act
         await scenario.Given(new UserCreated(first), new UserCreated(second)).RunAsync(reactor);
 
+        // Assert
         Assert.Equal<IRequestBase>([new SendWelcomeEmail(first), new SendWelcomeEmail(second)],
             scenario.SentRequests);
     }
@@ -40,6 +48,7 @@ public sealed class ReactorScenarioTests
     [Fact]
     public async Task ShouldDeliverEventsFromSeveralAggregatesInGivenOrder()
     {
+        // Arrange
         var first = Uuid.CreateVersion4();
         var second = Uuid.CreateVersion4();
         var scenario = new ReactorScenario().Given(
@@ -47,8 +56,10 @@ public sealed class ReactorScenarioTests
             DomainEventSeed.Attach(new UserCreated(second), Uuid.CreateVersion4(), 1),
             new UserCreated(first));
 
+        // Act
         await scenario.RunAsync(new WelcomeReactor(scenario.Requests));
 
+        // Assert
         Assert.Equal<IRequestBase>(
             [new SendWelcomeEmail(first), new SendWelcomeEmail(second), new SendWelcomeEmail(first)],
             scenario.SentRequests);
@@ -81,12 +92,16 @@ public sealed class ReactorScenarioTests
     [Fact]
     public async Task ShouldRedeliverGivenEventsOnEachRun()
     {
+        // Arrange
         var scenario = new ReactorScenario().Given(new UserCreated(Uuid.CreateVersion4()));
         var reactor = new WelcomeReactor(scenario.Requests);
 
         await scenario.RunAsync(reactor);
+
+        // Act
         await scenario.RunAsync(reactor);
 
+        // Assert
         Assert.Equal(2, scenario.SentRequests.Count);
         Assert.Equal(scenario.SentRequests[0], scenario.SentRequests[1]);
     }
@@ -95,11 +110,14 @@ public sealed class ReactorScenarioTests
     [Fact]
     public async Task ShouldRunTenantScopedReactor()
     {
+        // Arrange
         var user = Uuid.CreateVersion4();
         var scenario = new ReactorScenario().Given(new UserCreated(user));
 
+        // Act
         await scenario.RunAsync(new WelcomeReactor(scenario.Requests, EventStreamPattern.ForTenant("users")));
 
+        // Assert
         Assert.Equal<IRequestBase>([new SendWelcomeEmail(user)], scenario.SentRequests);
     }
 
@@ -107,13 +125,16 @@ public sealed class ReactorScenarioTests
     [Fact]
     public async Task ShouldRunReactorUnderChosenTenant()
     {
+        // Arrange
         var tenant = new TenantId(Uuid.CreateVersion4().ToString());
         var user = Uuid.CreateVersion4();
         var scenario = new ReactorScenario(tenant).Given(new UserCreated(user));
         var reactor = new WelcomeReactor(scenario.Requests, EventStreamPattern.ForTenant("users"));
 
+        // Act
         await scenario.RunAsync(reactor);
 
+        // Assert
         Assert.Equal(tenant.Value, reactor.Pattern.Realm);
         Assert.Equal(tenant.Value, reactor.LastStreamRealm);
         Assert.Equal<IRequestBase>([new SendWelcomeEmail(user)], scenario.SentRequests);
@@ -128,14 +149,17 @@ public sealed class ReactorScenarioTests
     [Fact]
     public async Task ShouldDeliverSeededEventsUnchanged()
     {
+        // Arrange
         var eventId = Uuid.CreateVersion4();
         var scenario = new ReactorScenario()
             .Given(DomainEventSeed.Attach(new UserCreated(Uuid.CreateVersion4()), Uuid.CreateVersion4(), 1,
                 eventId: eventId));
         var reactor = new WelcomeReactor(scenario.Requests);
 
+        // Act
         await scenario.RunAsync(reactor);
 
+        // Assert
         Assert.Equal(eventId, reactor.LastEventId);
     }
 }

@@ -187,7 +187,10 @@ public sealed class DomainEventValidationTests
     [InlineData("version")]
     public void ShouldRejectBatchThatIsNotOneAggregatesContiguousHistory(string defect)
     {
+        // Arrange
         var aggregateId = Uuid.CreateVersion4();
+
+        // Act
         var second = defect switch
         {
             "aggregate" => Metadata(Uuid.CreateVersion4(), 2),
@@ -195,6 +198,7 @@ public sealed class DomainEventValidationTests
             _ => Metadata(aggregateId, 3)
         };
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() =>
             DomainEventValidation.ValidateBatch([Event(Metadata(aggregateId)), Event(second)]));
 
@@ -209,9 +213,13 @@ public sealed class DomainEventValidationTests
     [Fact]
     public void ShouldRejectBatchRepeatingOneEventIdentity()
     {
+        // Arrange
         var aggregateId = Uuid.CreateVersion4();
+
+        // Act
         var eventId = Uuid.CreateVersion4();
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() => DomainEventValidation.ValidateBatch([
             Event(Metadata(aggregateId) with { EventId = eventId }),
             Event(Metadata(aggregateId, 2) with { EventId = eventId })
@@ -233,10 +241,14 @@ public sealed class DomainEventValidationTests
     [Fact]
     public async Task ShouldRejectInvalidBatchThroughTheStoreWithoutWritingAnything()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         var stream = new EventStreamAddress("validation", "events", Uuid.CreateVersion4().ToString());
+
+        // Act
         var aggregateId = Uuid.CreateVersion4();
 
+        // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.AppendAsync(stream, 0,
                 [Event(Metadata(aggregateId)), Event(Metadata(Uuid.CreateVersion4(), 2))]));

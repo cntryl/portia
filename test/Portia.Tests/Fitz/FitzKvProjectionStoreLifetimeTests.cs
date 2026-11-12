@@ -19,13 +19,16 @@ public sealed class FitzKvProjectionStoreLifetimeTests
     [Fact]
     public async Task ShouldRejectRepositoryWritesAfterTheBatchIsDisposed()
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new StrayWriteRepository(client, "kv://portia/state/orders");
 
+        // Act
         await using (var batch =
                      await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
 
+        // Assert
         var stray = await Assert.ThrowsAsync<InvalidOperationException>(() => store.AddAsync("total", 12));
 
         Assert.Contains("batch", stray.Message, StringComparison.OrdinalIgnoreCase);

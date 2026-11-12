@@ -15,6 +15,7 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
     [Fact]
     public async Task ShouldReadTenantsThroughRegisteredReader()
     {
+        // Arrange
         var events = new InMemoryEventStore();
         await RegisterAsync(events, "acme");
         var services = new ServiceCollection();
@@ -22,8 +23,10 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
         _ = services.AddPortia().AddEventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(Registry, GetTenantId);
         await using var provider = services.BuildServiceProvider();
 
+        // Act
         var directory = provider.GetRequiredService<ITenantDirectory>();
 
+        // Assert
         _ = Assert.IsType<EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>>(directory);
         Assert.Equal([new TenantId("acme")], await directory.GetActiveTenantsAsync().ToListAsync());
     }
@@ -32,6 +35,7 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
     [Fact]
     public async Task ShouldSnapshotThroughRegisteredStore()
     {
+        // Arrange
         var events = new InMemoryEventStore();
         await RegisterAsync(events, "acme");
         var snapshots = new FitzKvTenantDirectorySnapshotStore(new FakeKvClient(), "kv://global/tenants/snapshots");
@@ -43,7 +47,10 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
 
         _ = await provider.GetRequiredService<ITenantDirectory>().GetActiveTenantsAsync().ToListAsync();
 
+        // Act
         var snapshot = await snapshots.LoadAsync(Registry);
+
+        // Assert
         Assert.NotNull(snapshot);
         Assert.Equal([new TenantId("acme")], snapshot.ActiveTenants);
     }
@@ -52,12 +59,16 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
     [Fact]
     public void ShouldKeepApplicationRegisteredDirectory()
     {
+        // Arrange
         var fixedDirectory = new FixedTenantDirectory(new TenantId("demo"));
         var services = new ServiceCollection();
         _ = services.AddSingleton<ITenantDirectory>(fixedDirectory);
         _ = services.AddPortia().AddEventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(Registry, GetTenantId);
+
+        // Act
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         Assert.Same(fixedDirectory, provider.GetRequiredService<ITenantDirectory>());
     }
 

@@ -42,6 +42,7 @@ public sealed class StableRegistrationIdentityTests
     [Fact]
     public async Task ShouldDispatchByFullTypeIdentityGivenSameSimpleHandlerNamesWhenRegistered()
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
                                                     using System.Threading;
                                                     using System.Threading.Tasks;
@@ -67,7 +68,11 @@ public sealed class StableRegistrationIdentityTests
                                                         }
                                                     }
                                                     """, new RegistrationCallInterceptorGenerator());
+
+        // Act
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<int>>>();
+
+        // Assert
         Assert.Equal(3, await run());
     }
 }

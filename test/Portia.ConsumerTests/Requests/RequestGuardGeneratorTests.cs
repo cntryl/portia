@@ -7,6 +7,7 @@ public sealed class RequestGuardGeneratorTests
     [Fact]
     public async Task ValidFamilyGuardRegistrationEmitsTypedDescriptorsAndDispatches()
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
                                                     using System.Collections.Generic;
                                                     using System.Threading;
@@ -42,7 +43,10 @@ public sealed class RequestGuardGeneratorTests
                                                     }
                                                     """, new RegistrationCallInterceptorGenerator());
 
+        // Act
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<int>>>();
+
+        // Assert
         Assert.Equal(12, await run());
     }
 
@@ -108,6 +112,7 @@ public sealed class RequestGuardGeneratorTests
     [Fact]
     public async Task StreamGuardRegistrationEmitsDescriptorAndRunsBeforeStreamHandler()
     {
+        // Arrange
         var assembly = GeneratorCompilation.Compile("""
                                                     using System.Collections.Generic;
                                                     using System.Runtime.CompilerServices;
@@ -144,7 +149,10 @@ public sealed class RequestGuardGeneratorTests
                                                     }
                                                     """, new RegistrationCallInterceptorGenerator());
 
+        // Act
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<string>>>();
+
+        // Assert
         Assert.Equal("guard,interface-guard,handler", await run());
     }
 

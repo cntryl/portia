@@ -24,10 +24,13 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldApplyAndTrackEventWhenRaised()
     {
+        // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4());
 
+        // Act
         aggregate.ChangeValue(42);
 
+        // Assert
         var ev = Assert.Single(aggregate.UncommittedEvents);
         var valueChanged = Assert.IsType<ValueChanged>(ev);
         Assert.NotEqual(Uuid.Empty, valueChanged.Metadata.EventId);
@@ -46,6 +49,7 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldUseConfiguredMetadataFactoryWhenEventIsRaised()
     {
+        // Arrange
         var aggregateId = Uuid.CreateVersion4();
         var eventId = Uuid.CreateVersion4();
         var correlationId = Uuid.CreateVersion4();
@@ -54,8 +58,10 @@ public sealed class AggregateTests
         var factory = new FixedDomainEventMetadataFactory(eventId, occurredOn, correlationId, causationId);
         var aggregate = new TestAggregate(aggregateId, factory);
 
+        // Act
         aggregate.ChangeValue(42);
 
+        // Assert
         var metadata = Assert.Single(aggregate.UncommittedEvents).Metadata;
         Assert.Equal(eventId, metadata.EventId);
         Assert.Equal(aggregateId, metadata.AggregateId);
@@ -72,10 +78,14 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldRejectFactoryEventIdAlreadyUsedByPendingEvent()
     {
+        // Arrange
         var eventId = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(Uuid.CreateVersion4(), new RepeatingDomainEventMetadataFactory(eventId));
+
+        // Act
         aggregate.ChangeValue(40);
 
+        // Assert
         var exception = Assert.Throws<InvalidOperationException>(() => aggregate.ChangeValue(42));
 
         Assert.Contains(eventId.ToString(), exception.Message, StringComparison.Ordinal);
@@ -91,11 +101,15 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldRejectFactoryEventIdAlreadyUsedByCommittedEvent()
     {
+        // Arrange
         var eventId = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(Uuid.CreateVersion4(), new RepeatingDomainEventMetadataFactory(eventId));
         aggregate.ChangeValue(40);
+
+        // Act
         aggregate.Save();
 
+        // Assert
         var exception = Assert.Throws<InvalidOperationException>(() => aggregate.ChangeValue(42));
 
         Assert.Contains(eventId.ToString(), exception.Message, StringComparison.Ordinal);
@@ -111,12 +125,15 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldTrackCommittedEventWhenReplayed()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
         var ev = Committed(new ValueChanged(42), id, 1);
 
+        // Act
         aggregate.Load([ev]);
 
+        // Assert
         Assert.Equal(42, aggregate.Value);
         Assert.Equal(1UL, aggregate.Version);
         Assert.Equal(1UL, aggregate.CommittedStreamPosition);
@@ -129,14 +146,17 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldDispatchEachEventToConcreteOnEventMethodWhenLoaded()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
 
+        // Act
         aggregate.Load([
             Committed(new ValueChanged(40), id, 1),
             Committed(new ValueIncremented(2), id, 2)
         ]);
 
+        // Assert
         Assert.Equal(42, aggregate.Value);
         Assert.Equal(2UL, aggregate.Version);
         Assert.Equal(2UL, aggregate.CommittedStreamPosition);
@@ -148,15 +168,18 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldLoadAdditionalCommittedEventsAfterCachedHistory()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
         aggregate.Load([Committed(new ValueChanged(40), id, 1)]);
 
+        // Act
         aggregate.Load([
             Committed(new ValueIncremented(1), id, 2),
             Committed(new ValueIncremented(1), id, 3)
         ]);
 
+        // Assert
         Assert.Equal(42, aggregate.Value);
         Assert.Equal(3UL, aggregate.Version);
         Assert.Equal(3UL, aggregate.CommittedStreamPosition);
@@ -169,10 +192,14 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldRejectAdditionalCommittedEventsWhenVersionIsNotContiguous()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
+
+        // Act
         aggregate.Load([Committed(new ValueChanged(40), id, 1)]);
 
+        // Assert
         _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([
             Committed(new ValueIncremented(2), id, 3)
         ]));
@@ -188,11 +215,15 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldRejectAdditionalCommittedEventWhenEventIdIsAlreadyLoaded()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var eventId = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
+
+        // Act
         aggregate.Load([Committed(new ValueChanged(40), eventId, id, 1)]);
 
+        // Assert
         _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([
             Committed(new ValueIncremented(2), eventId, id, 2)
         ]));
@@ -208,10 +239,14 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldRejectCommittedEventsWhenAggregateHasUncommittedChanges()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
+
+        // Act
         aggregate.ChangeValue(40);
 
+        // Assert
         _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([
             Committed(new ValueIncremented(2), id, 2)
         ]));
@@ -228,10 +263,13 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldTrackAuditWithoutChangingStateWhenAudited()
     {
+        // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4());
 
+        // Act
         aggregate.Audit("value inspected");
 
+        // Assert
         var audit = Assert.IsType<ValueAudited>(Assert.Single(aggregate.UncommittedAudits));
         Assert.Equal("value inspected", audit.Reason);
         Assert.Equal(aggregate.Id, audit.Metadata.AggregateId);
@@ -248,8 +286,13 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldPromoteEventsAndClearPendingChangesWhenCommitted()
     {
+        // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4());
+
+        // Act
         aggregate.ChangeValue(42);
+
+        // Assert
         var ev = Assert.Single(aggregate.UncommittedEvents);
 
         aggregate.Save();
@@ -276,9 +319,13 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldRejectEventWhenAggregateIdDoesNotMatch()
     {
+        // Arrange
         var aggregate = new TestAggregate(Uuid.CreateVersion4());
+
+        // Act
         var ev = Committed(new ValueChanged(42), Uuid.CreateVersion4(), 1);
 
+        // Assert
         _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([ev]));
         Assert.Equal(0, aggregate.Value);
         Assert.Equal(0UL, aggregate.Version);
@@ -293,10 +340,14 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldThrowWhenApplyingEventWithNoRegisteredHandler()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
+
+        // Act
         var ev = Committed(new UnhandledEvent(), id, 1);
 
+        // Assert
         var exception = Assert.Throws<InvalidOperationException>(() => aggregate.Load([ev]));
 
         Assert.Contains("UnhandledEvent", exception.Message, StringComparison.Ordinal);
@@ -309,10 +360,14 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldReleaseEventIdWhenApplyingCommittedEventFails()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var eventId = Uuid.CreateVersion4();
+
+        // Act
         var aggregate = new TestAggregate(id);
 
+        // Assert
         _ = Assert.Throws<InvalidOperationException>(() => aggregate.Load([
             Committed(new UnhandledEvent(), eventId, id, 1)
         ]));
@@ -346,14 +401,18 @@ public sealed class AggregateTests
     [Fact]
     public void ShouldReleaseReplayedEventsOnceHistoryIsApplied()
     {
+        // Arrange
         var id = Uuid.CreateVersion4();
         var aggregate = new TestAggregate(id);
 
         var replayed = LoadWithoutRetaining(aggregate, id);
         GC.Collect();
         GC.WaitForPendingFinalizers();
+
+        // Act
         GC.Collect();
 
+        // Assert
         Assert.All(replayed, reference => Assert.False(reference.IsAlive));
         Assert.Equal(3UL, aggregate.Version);
         Assert.Equal(3UL, aggregate.CommittedStreamPosition);

@@ -14,16 +14,19 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldHydrateInvokeAndCommitWhenOutcomeIsCommit()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var id = await SeedAsync(store, 3);
         var executor = Executor(store);
 
+        // Act
         var result = await executor.ExecuteAsync(new TestAggregate(id), aggregate =>
         {
             aggregate.ChangeValue(aggregate.Value + 1);
             return AggregateOutcome.Commit(Result.Success);
         }, Context());
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(4, await ValueAsync(store, id));
     }
@@ -32,15 +35,18 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldCommitAuditAndReturnFailureWhenFailedOutcomeIsCommit()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var executor = Executor(store);
 
+        // Act
         var result = await executor.ExecuteAsync(new TestAggregate(Uuid.CreateVersion4()), aggregate =>
         {
             aggregate.Audit("login-failed");
             return AggregateOutcome.Commit(Result.Failure(Rejected));
         }, Context());
 
+        // Assert
         Assert.Same(Rejected, result.Error);
         Assert.Equal(1, store.Appends);
         Assert.IsType<ValueAudited>(Assert.Single(store.Appended));
@@ -50,16 +56,19 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldCommitStateAndReturnFailureWhenFailedOutcomeIsCommit()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var id = Uuid.CreateVersion4();
         var executor = Executor(store);
 
+        // Act
         var result = await executor.ExecuteAsync(new TestAggregate(id), aggregate =>
         {
             aggregate.ChangeValue(9);
             return AggregateOutcome.Commit(Result.Failure(new RequestError(RequestErrorKind.Conflict, "locked")));
         }, Context());
 
+        // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Conflict, result.Error.Kind);
         Assert.Equal(9, await ValueAsync(store, id));
@@ -69,10 +78,12 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldCommitEveryChangeFromOneOperationTogether()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var id = Uuid.CreateVersion4();
         var executor = Executor(store);
 
+        // Act
         var result = await executor.ExecuteAsync(new TestAggregate(id), aggregate =>
         {
             aggregate.ChangeValue(1);
@@ -80,6 +91,7 @@ public sealed class AggregateExecutorTests
             return AggregateOutcome.Commit(Result.Success);
         }, Context());
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(1, store.Appends);
         Assert.Equal(2, store.Appended.Count);
@@ -90,16 +102,19 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldNotWriteWhenOutcomeIsDiscard()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var id = Uuid.CreateVersion4();
         var executor = Executor(store);
 
+        // Act
         var result = await executor.ExecuteAsync(new TestAggregate(id), aggregate =>
         {
             aggregate.ChangeValue(5);
             return AggregateOutcome.Discard(Result.Failure(Rejected));
         }, Context());
 
+        // Assert
         Assert.Same(Rejected, result.Error);
         Assert.Equal(0, store.Appends);
         Assert.Equal(0, await ValueAsync(store, id));
@@ -109,12 +124,15 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldTreatCommitWithNothingPendingAsNoOp()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var executor = Executor(store);
 
+        // Act
         var result = await executor.ExecuteAsync(new TestAggregate(Uuid.CreateVersion4()),
             _ => AggregateOutcome.Commit(Result.Success), Context());
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(0, store.Appends);
     }
@@ -123,13 +141,16 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldReturnTypedValue()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var id = await SeedAsync(store, 11);
         var executor = Executor(store);
 
+        // Act
         var result = await executor.ExecuteAsync(new TestAggregate(id),
             aggregate => AggregateOutcome.Discard(Result<int>.Success(aggregate.Value)), Context());
 
+        // Assert
         Assert.Equal(11, result.Value);
     }
 
@@ -137,16 +158,19 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldAttributeSavedEventsFromExplicitContext()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var executor = Executor(store);
         var context = Context();
 
+        // Act
         _ = await executor.ExecuteAsync(new TestAggregate(Uuid.CreateVersion4()), aggregate =>
         {
             aggregate.ChangeValue(1);
             return AggregateOutcome.Commit(Result.Success);
         }, context);
 
+        // Assert
         var metadata = Assert.Single(store.Appended).Metadata;
         Assert.Equal(context.ExecutionId, metadata.ExecutionId);
         Assert.Equal(context.CorrelationId, metadata.CorrelationId);
@@ -156,9 +180,13 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldPropagateOperationExceptionWithoutSaving()
     {
+        // Arrange
         var store = new RecordingEventStore();
+
+        // Act
         var executor = Executor(store);
 
+        // Assert
         _ = await Assert.ThrowsAsync<DivideByZeroException>(() => executor.ExecuteAsync(
             new TestAggregate(Uuid.CreateVersion4()), aggregate =>
             {
@@ -176,9 +204,13 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldPropagateConcurrencyExceptionWithoutRetrying()
     {
+        // Arrange
         var store = new RecordingEventStore { Conflict = true };
+
+        // Act
         var executor = Executor(store);
 
+        // Assert
         _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() => executor.ExecuteAsync(
             new TestAggregate(Uuid.CreateVersion4()), aggregate =>
             {
@@ -193,9 +225,13 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldRejectDefaultOutcome()
     {
+        // Arrange
         var store = new RecordingEventStore();
+
+        // Act
         var executor = Executor(store);
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(
             new TestAggregate(Uuid.CreateVersion4()), aggregate =>
             {
@@ -220,9 +256,13 @@ public sealed class AggregateExecutorTests
     [Fact]
     public void ShouldCommitUntypedResultOnlyWhenSuccessful()
     {
+        // Arrange
         var success = AggregateOutcome.CommitOnSuccess(Result.Success);
+
+        // Act
         var failure = AggregateOutcome.CommitOnSuccess(Result.Failure(Rejected));
 
+        // Assert
         Assert.Equal(AggregateDisposition.Commit, success.Disposition);
         Assert.True(success.Result.IsSuccess);
         Assert.Equal(AggregateDisposition.Discard, failure.Disposition);
@@ -233,9 +273,13 @@ public sealed class AggregateExecutorTests
     [Fact]
     public void ShouldCommitTypedResultOnlyWhenSuccessful()
     {
+        // Arrange
         var success = AggregateOutcome.CommitOnSuccess(Result<int>.Success(42));
+
+        // Act
         var failure = AggregateOutcome.CommitOnSuccess(Result<int>.Failure(Rejected));
 
+        // Assert
         Assert.Equal(AggregateDisposition.Commit, success.Disposition);
         Assert.Equal(42, success.Result.Value);
         Assert.Equal(AggregateDisposition.Discard, failure.Disposition);
@@ -257,15 +301,19 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldClearAndInvalidateDiscardedAggregateWithPendingRecords()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var executor = Executor(store);
         var aggregate = new TestAggregate(Uuid.CreateVersion4());
+
+        // Act
         _ = await executor.ExecuteAsync(aggregate, current =>
         {
             current.ChangeValue(5);
             return AggregateOutcome.Discard(Result.Success);
         }, Context());
 
+        // Assert
         Assert.Empty(aggregate.UncommittedEvents);
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(
             aggregate, _ => AggregateOutcome.Commit(Result.Success), Context()).AsTask());
@@ -281,10 +329,14 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldDiscardAndInvalidateWhenOperationThrows()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var executor = Executor(store);
+
+        // Act
         var aggregate = new TestAggregate(Uuid.CreateVersion4());
 
+        // Assert
         _ = await Assert.ThrowsAsync<DivideByZeroException>(() => executor.ExecuteAsync(aggregate, current =>
         {
             current.ChangeValue(5);
@@ -307,10 +359,14 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldInvalidateWhenAnEventHandlerThrowsPartWay()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var executor = Executor(store);
+
+        // Act
         var aggregate = new HalfApplyingAggregate(Uuid.CreateVersion4());
 
+        // Assert
         _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => executor.ExecuteAsync(aggregate, current =>
         {
             current.ChangeValue(-1);
@@ -329,10 +385,14 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldDiscardWhenValueOperationThrows()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var executor = Executor(store);
+
+        // Act
         var aggregate = new TestAggregate(Uuid.CreateVersion4());
 
+        // Assert
         _ = await Assert.ThrowsAsync<DivideByZeroException>(() => executor.ExecuteAsync<TestAggregate, int>(
             aggregate, current =>
             {
@@ -348,15 +408,18 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldKeepAggregateUsableAfterDiscardWithNothingPending()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var id = await SeedAsync(store, 2);
         var executor = Executor(store);
         var aggregate = new TestAggregate(id);
         _ = await executor.ExecuteAsync(aggregate, _ => AggregateOutcome.Discard(Result.Success), Context());
 
+        // Act
         var result = await executor.ExecuteAsync(aggregate,
             current => AggregateOutcome.Discard(Result<int>.Success(current.Value)), Context());
 
+        // Assert
         Assert.Equal(2, result.Value);
     }
 
@@ -364,12 +427,16 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldHonorCancellation()
     {
+        // Arrange
         var store = new RecordingEventStore();
         var executor = Executor(store);
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();
+
+        // Act
         var invoked = false;
 
+        // Assert
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => executor.ExecuteAsync(
             new TestAggregate(Uuid.CreateVersion4()), _ =>
             {
@@ -384,9 +451,13 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldSurfaceAggregateBatchRuleUnchanged()
     {
+        // Arrange
         var store = new RecordingEventStore();
+
+        // Act
         var executor = Executor(store);
 
+        // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(
             new TestAggregate(Uuid.CreateVersion4()), aggregate =>
             {
@@ -403,6 +474,7 @@ public sealed class AggregateExecutorTests
     [Fact]
     public async Task ShouldResolveScopedAggregateExecutor()
     {
+        // Arrange
         var services = new ServiceCollection();
         _ = services.AddSingleton<IEventStore>(new RecordingEventStore());
         _ = services.AddPortia();
@@ -410,8 +482,10 @@ public sealed class AggregateExecutorTests
         await using var first = provider.CreateAsyncScope();
         await using var second = provider.CreateAsyncScope();
 
+        // Act
         var executor = first.ServiceProvider.GetRequiredService<IAggregateExecutor>();
 
+        // Assert
         Assert.Same(executor, first.ServiceProvider.GetRequiredService<IAggregateExecutor>());
         Assert.NotSame(executor, second.ServiceProvider.GetRequiredService<IAggregateExecutor>());
     }

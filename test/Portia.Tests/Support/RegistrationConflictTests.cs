@@ -70,14 +70,18 @@ public sealed class RegistrationConflictTests
     [Fact]
     public void ShouldAcceptEquivalentTransportDescriptors()
     {
+        // Arrange
         var first = Transport();
         var second = Transport();
         var services = new ServiceCollection();
 
         _ = services.AddPortia().AddGeneratedRequest(first).AddGeneratedRequest(second);
         var registry = new RequestRegistry([], [], [], [first, second]);
+
+        // Act
         var catalog = new RequestTransportCatalog([first, second]);
 
+        // Assert
         _ = Assert.Single(services, item =>
             item.ImplementationInstance is RequestTransportRegistration registration &&
             registration.RequestType == typeof(TransportConflictRequest));
@@ -89,10 +93,14 @@ public sealed class RegistrationConflictTests
     [Fact]
     public void ShouldRejectConflictingTransportDescriptorsAtRegistration()
     {
+        // Arrange
         var services = new ServiceCollection();
         var builder = services.AddPortia().AddGeneratedRequest(Transport());
+
+        // Act
         var count = services.Count;
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() =>
             builder.AddGeneratedRequest(Transport("different")));
 
@@ -108,10 +116,14 @@ public sealed class RegistrationConflictTests
     [InlineData(true)]
     public void ShouldRejectConflictingTransportDescriptorsAtRegistryComposition(bool reverse)
     {
+        // Arrange
         var first = Transport();
         var second = Transport(discriminator: "different");
+
+        // Act
         RequestTransportRegistration[] requests = reverse ? [second, first] : [first, second];
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() => new RequestRegistry([], [], [], requests));
 
         Assert.Contains("conflicting transport descriptors", error.Message, StringComparison.Ordinal);
@@ -140,10 +152,14 @@ public sealed class RegistrationConflictTests
     [Fact]
     public void ShouldRejectUndefinedAuthorizationStageAtRegistration()
     {
+        // Arrange
         var services = new ServiceCollection();
         var builder = services.AddPortia();
+
+        // Act
         var count = services.Count;
 
+        // Assert
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => builder.AddGeneratedAuthorizer(
             new RequestAuthorizerRegistration<UniversalAction, UniversalActionAuthorizer>((AuthorizationStage)42)));
 
@@ -160,12 +176,16 @@ public sealed class RegistrationConflictTests
     [InlineData(true)]
     public void ShouldRejectOnlyConflictingAuthorizerStages(bool conflicting)
     {
+        // Arrange
         var services = new ServiceCollection();
         var builder = services.AddPortia()
             .AddGeneratedAuthorizer(new RequestAuthorizerRegistration<UniversalAction, UniversalActionAuthorizer>());
+
+        // Act
         var second = new RequestAuthorizerRegistration<UniversalAction, UniversalActionAuthorizer>(
             conflicting ? AuthorizationStage.Principal : AuthorizationStage.ResourceAccess);
 
+        // Assert
         if (conflicting)
         {
             var error = Assert.Throws<InvalidOperationException>(() => builder.AddGeneratedAuthorizer(second));
@@ -208,11 +228,15 @@ public sealed class RegistrationConflictTests
     [InlineData(true)]
     public void ShouldRejectOnlyConflictingBehaviorOrders(bool conflicting)
     {
+        // Arrange
         var services = new ServiceCollection();
         var builder = services.AddPortia()
             .AddGeneratedBehavior(new RequestPipelineBehaviorRegistration<UniversalAction, CountingBehavior>(5));
+
+        // Act
         var second = new RequestPipelineBehaviorRegistration<UniversalAction, CountingBehavior>(conflicting ? 6 : 5);
 
+        // Assert
         if (conflicting)
         {
             var error = Assert.Throws<InvalidOperationException>(() => builder.AddGeneratedBehavior(second));
@@ -249,10 +273,14 @@ public sealed class RegistrationConflictTests
     [Fact]
     public void ShouldRejectTwoComponentsClaimingOneWorkloadName()
     {
+        // Arrange
         var services = new ServiceCollection();
+
+        // Act
         var builder = services.AddPortia()
             .AddProjector<NamedProjector>("shared", WorkloadScope.Global);
 
+        // Assert
         var error = Assert.Throws<InvalidOperationException>(() =>
             builder.AddProjector<TestProjector>("shared", WorkloadScope.Global));
 
@@ -268,12 +296,15 @@ public sealed class RegistrationConflictTests
     [Fact]
     public void ShouldAcceptTwoComponentsWithDistinctWorkloadNames()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia()
             .AddProjector<NamedProjector>("first", WorkloadScope.Global)
             .AddProjector<TestProjector>("second", WorkloadScope.Global);
 
+        // Assert
         Assert.Equal(2, services.Count(item => item.ServiceType == typeof(WorkloadRegistration)));
     }
 
@@ -285,9 +316,13 @@ public sealed class RegistrationConflictTests
     [Fact]
     public void ShouldRejectAbstractComponent()
     {
+        // Arrange
         var services = new ServiceCollection();
+
+        // Act
         var builder = services.AddPortia();
 
+        // Assert
         var error = Assert.Throws<ArgumentException>(() =>
             builder.AddProjector<AbstractProjector>("AbstractProjector", WorkloadScope.Global));
 

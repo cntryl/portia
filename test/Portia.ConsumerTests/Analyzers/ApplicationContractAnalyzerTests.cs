@@ -42,6 +42,7 @@ public sealed class ApplicationContractAnalyzerTests
     [Fact]
     public void ShouldAllowValueConstructionGivenSealedRecordInValues()
     {
+        // Arrange
         const string source = """
                               namespace Shop.Common.Features.Orders.Values;
                               public sealed record Price
@@ -51,8 +52,12 @@ public sealed class ApplicationContractAnalyzerTests
                                   public decimal Total() => Amount;
                               }
                               """;
+
+        // Act
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationContractAnalyzer(),
             [("Features/Orders/Values/Price.cs", source)]);
+
+        // Assert
         var behavior = Assert.Single(diagnostics, item => item.Id == "PORTIA209");
         Assert.Contains("Total", behavior.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
@@ -83,8 +88,13 @@ public sealed class ApplicationContractAnalyzerTests
     [InlineData("public sealed class Price", "Features/Orders/Values/Price.cs")]
     public void ShouldReportConstructorOutsideSealedValueRecord(string declaration, string path)
     {
+        // Arrange
         var source = $"{declaration} {{ public Price() {{ }} }}";
+
+        // Act
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationContractAnalyzer(), [(path, source)]);
+
+        // Assert
         _ = Assert.Single(diagnostics, item => item.Id == "PORTIA209");
     }
 

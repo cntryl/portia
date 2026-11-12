@@ -16,6 +16,7 @@ public sealed class FitzPersistenceFailureTests
     public async Task SessionAlwaysDisposesWhileFailurePreservesOriginalErrorAndPendingBatch(string failureAt,
         bool cleanupFails)
     {
+        // Arrange
         var session = new Session(failureAt, cleanupFails);
         var streams = new Streams(session);
         var store = new FitzEventStore(streams,
@@ -30,8 +31,11 @@ public sealed class FitzPersistenceFailureTests
         var account = new Account(Uuid.CreateVersion4());
         var payload = new Declined("failure contract");
         account.Audit(payload);
+
+        // Act
         var scenario = new AggregateScenario<Account>(account);
 
+        // Assert
         if (failureAt == "success")
         {
             await repository.SaveAsync(account, _saveContext);
@@ -56,6 +60,7 @@ public sealed class FitzPersistenceFailureTests
     [Fact]
     public async Task ConfirmedCommitRemainsSuccessfulWhenSessionDisposalFails()
     {
+        // Arrange
         var session = new Session("success", cleanupFails: true);
         var store = new FitzEventStore(new Streams(session),
             ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Declined>(1, "Declined")));
@@ -63,8 +68,10 @@ public sealed class FitzPersistenceFailureTests
         account.Audit(new Declined("committed before cleanup failure"));
         using var listener = ListenToCleanupFaults(out var faults);
 
+        // Act
         await new AggregateRepository(store).SaveAsync(account, _saveContext);
 
+        // Assert
         Assert.Empty(new AggregateScenario<Account>(account).PendingAudits);
         Assert.True(session.Committed);
         Assert.Equal(0, session.Rollbacks);
@@ -82,6 +89,7 @@ public sealed class FitzPersistenceFailureTests
     public async Task OnlyStructuredConflictCodeIsTranslatedDespiteCleanupFailures(string failureAt, uint? code,
         string message, bool conflict)
     {
+        // Arrange
         var original = new StreamException(message, "APPEND_FAILED", domainCode: code);
         var session = new Session(failureAt, true) { Failure = original };
         var store = new FitzEventStore(new Streams(session),
@@ -91,7 +99,11 @@ public sealed class FitzPersistenceFailureTests
         var account = new Account(Uuid.CreateVersion4());
         var payload = new Declined("pending");
         account.Audit(payload);
+
+        // Act
         var error = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext).AsTask());
+
+        // Assert
         if (conflict)
         {
             Assert.Same(original, Assert.IsType<EventStreamConcurrencyException>(error).InnerException);
@@ -139,6 +151,7 @@ public sealed class FitzPersistenceFailureTests
     [InlineData(FitzErrorCodes.StreamConcurrencyConflict)]
     public async Task ConcurrencyFailuresKeepTenantAndAggregateIdentifiersOutOfTheirMessage(uint code)
     {
+        // Arrange
         var original = new StreamException("rejected", "APPEND_FAILED", domainCode: code);
         var admission = code == FitzErrorCodes.StreamSessionAlreadyActive;
         var session = new Session(admission ? "success" : "append", false) { Failure = original };
@@ -146,8 +159,11 @@ public sealed class FitzPersistenceFailureTests
         var store = new FitzEventStore(streams,
             ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Declined>(1, "Declined")));
         var account = new Account(Uuid.CreateVersion4());
+
+        // Act
         account.Audit(new Declined("pending"));
 
+        // Assert
         var error = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() =>
             new AggregateRepository(store).SaveAsync(account, _saveContext).AsTask());
 

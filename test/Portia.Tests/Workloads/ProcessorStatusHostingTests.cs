@@ -10,6 +10,7 @@ public sealed class ProcessorStatusHostingTests
     [Fact]
     public async Task ShouldProcessWhileStatusRegistrationFailsAndEventuallyRegisterBothEndpoints()
     {
+        // Arrange
         var source = new InMemoryEventStore();
         var aggregate = Uuid.CreateVersion4();
         var changed = new ValueChanged(1);
@@ -31,7 +32,11 @@ public sealed class ProcessorStatusHostingTests
             .AddWorkers();
         await using var provider = services.BuildServiceProvider();
         var worker = provider.GetServices<IHostedService>().OfType<PortiaWorkloadService>().Single();
+
+        // Act
         await worker.StartAsync(default);
+
+        // Assert
         try
         {
             await Task.WhenAll(control.Projected.Task, control.Reacted.Task).WaitAsync(TimeSpan.FromSeconds(5));

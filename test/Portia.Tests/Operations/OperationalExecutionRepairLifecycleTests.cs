@@ -6,9 +6,14 @@ public sealed partial class OperationalExecutionTests
     [Fact]
     public async Task ShouldInvalidateQueuedRepairsWhenAuthoritativeCheckpointChanges()
     {
+        // Arrange
         var journal = new MemoryOperationalStore();
         var session = await SessionAsync(journal);
+
+        // Act
         var events = await EventsAsync();
+
+        // Assert
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events)
         { Operations = session }.RunAsync(Reactor(journal, new Effects { Fail = true }), ProjectionCheckpoint.Start).AsTask());
         var api = Api(journal);
@@ -42,12 +47,17 @@ public sealed partial class OperationalExecutionTests
     [Fact]
     public async Task ShouldKeepQueuedRepairWhileApprovedRetryRemainsIncomplete()
     {
+        // Arrange
         var journal = new MemoryOperationalStore();
         var session = new OperationalSession(journal, new OperationalOptions(), new EmptyApplicationTopology(), TimeProvider.System);
         await session.AcquireAsync(Target, "reactor", Settings with { FailureAttemptLimit = 3 }, ProjectionCheckpoint.Start, default);
         var events = await EventsAsync();
         var unavailable = false;
+
+        // Act
         var effects = new Effects { Fail = true, Before = () => { if (unavailable) throw new IOException("offline"); } };
+
+        // Assert
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events)
         { Operations = session }.RunAsync(Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
         var originalBlock = session.State.Block;
@@ -80,10 +90,15 @@ public sealed partial class OperationalExecutionTests
     [Fact]
     public async Task ShouldPreserveNewBlockWhenApprovedRetryFails()
     {
+        // Arrange
         var journal = new MemoryOperationalStore();
         var session = await SessionAsync(journal);
         var events = await EventsAsync();
+
+        // Act
         var effects = new Effects { Fail = true };
+
+        // Assert
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events)
         { Operations = session }.RunAsync(Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
         var originalBlock = session.State.Block;

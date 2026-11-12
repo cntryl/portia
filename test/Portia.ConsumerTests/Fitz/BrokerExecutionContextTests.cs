@@ -9,6 +9,7 @@ public sealed class BrokerExecutionContextTests
     [Fact]
     public async Task RpcChildKeepsCausalityAndStampsReceiverRouteAndActor()
     {
+        // Arrange
         await using var client = await ConsumerBroker.ConnectAsync();
         var handler = new Handler();
         var services = Services(handler);
@@ -19,7 +20,11 @@ public sealed class BrokerExecutionContextTests
         var serializer = ConsumerJson.CreateSerializer();
         var sender = new FitzRemoteRequestSender(client.Rpc, serializer, serializer);
         var parent = new RequestContext<Command>(new Command(1), RequestActor.CreateSystem("sender"));
+
+        // Act
         var resource = Uuid.CreateVersion4().ToString();
+
+        // Assert
         Assert.True((await sender.SendAsync(new Command(2), new RequestRouteValues(Resource: resource), "credential",
             parent)).IsSuccess);
         var execution = Assert.Single(handler.Contexts);
@@ -35,6 +40,7 @@ public sealed class BrokerExecutionContextTests
     [Fact]
     public async Task QueueBrokerRedeliveryPreservesEnvelopeAndReportsTransportAttempt()
     {
+        // Arrange
         await using var client = await ConsumerBroker.ConnectAsync();
         var serializer = ConsumerJson.CreateSerializer();
         var parent = new RequestContext<Command>(new Command(1), RequestActor.System);
@@ -47,7 +53,11 @@ public sealed class BrokerExecutionContextTests
         // Envelope identity is independent of lease duration and redelivery delay.
         var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog());
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
+        // Act
         await using var deliveries = consumer.ReadAsync(deadline.Token).GetAsyncEnumerator(deadline.Token);
+
+        // Assert
         Assert.True(await deliveries.MoveNextAsync());
         var first = deliveries.Current;
         Assert.Equal(metadata, first.Metadata);

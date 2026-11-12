@@ -35,6 +35,7 @@ public sealed class ConditionalRegistrationTests
     [InlineData("null_receiver")]
     public void ShouldRegisterConcreteHandlerGivenConditionalReceiver(string form)
     {
+        // Arrange
         var call = form == "ordinary" ? "app!.AddRequestHandler<Handler>();" : "app?.AddRequestHandler<Handler>();";
         var receiver = form == "null_receiver" ? "null" : "new ServiceCollection().AddPortia()";
         var source = $$"""
@@ -61,8 +62,10 @@ public sealed class ConditionalRegistrationTests
         var assembly = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!;
 
+        // Act
         var error = Record.Exception(() => run.Invoke(null, null));
 
+        // Assert
         Assert.Null(error is TargetInvocationException invoked ? invoked.InnerException : error);
     }
 }

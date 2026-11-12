@@ -202,12 +202,15 @@ public sealed class GeneratorFalsePositiveTests
     [Fact]
     public void UpcasterForAnEventDeclaredInAReferencedFeatureIsKnown()
     {
+        // Arrange
         var feature = GeneratorCompilation.Reference("""
                                                      using Cntryl.Portia;
                                                      namespace FeatureOne;
                                                      [Discriminator("f1.created", 2)]
                                                      public sealed record Created : DomainEvent;
                                                      """);
+
+        // Act
         var diagnostics = GeneratorCompilation.Diagnostics("""
                                                            using Cntryl.Portia;
                                                            public sealed class Upcaster : IJsonDomainEventUpcaster
@@ -218,6 +221,7 @@ public sealed class GeneratorFalsePositiveTests
                                                            }
                                                            """, [feature], new DomainEventCatalogGenerator());
 
+        // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA012");
     }
 
@@ -227,6 +231,7 @@ public sealed class GeneratorFalsePositiveTests
     [InlineData("_ = UsedEvent.Create(); return 0;")]
     public void RegistersReferencedEventsNamedOnlyInPatternsOrStaticCalls(string body)
     {
+        // Arrange
         var contracts = GeneratorCompilation.Reference("""
                                                        using Cntryl.Portia;
                                                        namespace Contracts;
@@ -236,6 +241,8 @@ public sealed class GeneratorFalsePositiveTests
                                                            public static UsedEvent Create() => new("x");
                                                        }
                                                        """);
+
+        // Act
         var generated = GeneratorCompilation.GeneratedSource($$"""
                                                               using Cntryl.Portia;
                                                               using Contracts;
@@ -247,12 +254,14 @@ public sealed class GeneratorFalsePositiveTests
                                                               }
                                                               """, [contracts], new RegistrationCallInterceptorGenerator());
 
+        // Assert
         Assert.Contains("Contracts.UsedEvent", generated, StringComparison.Ordinal);
     }
 
     [Fact]
     public void UpcasterSplitAcrossFilesDoesNotCrashTheCatalog()
     {
+        // Arrange
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var compilation = CSharpCompilation.Create("SplitUpcaster",
         [
@@ -275,9 +284,11 @@ public sealed class GeneratorFalsePositiveTests
             .Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
+        // Act
         var result = CSharpGeneratorDriver.Create([new DomainEventCatalogGenerator().AsSourceGenerator()],
             parseOptions: parseOptions).RunGenerators(compilation).GetRunResult();
 
+        // Assert
         Assert.Null(result.Results.Single().Exception);
         Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Id == "PORTIA012");
     }

@@ -43,6 +43,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task ShouldRecoverAfterWorkerKillAndBrokerRecreationWithoutDuplicatingEffects()
     {
+        // Arrange
         await using (var client = await ConnectAsync())
         {
             var events = Events(client);
@@ -54,7 +55,11 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         }
         var failed = await StartWorkerAsync("blocked");
         Guid failedAttempt;
+
+        // Act
         Guid failedOwner;
+
+        // Assert
         await using (var client = await ConnectAsync())
         {
             var state = (await new FitzOperationalStore(client.Kv, Route).ReadAsync(Target))!;

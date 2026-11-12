@@ -9,12 +9,15 @@ public sealed class ExplicitWorkloadTests
     [Fact]
     public void ShouldActivateDeclaredWorkloadsGivenApplicationWhenAddingWorkers()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia()
             .AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)
             .AddWorkers();
 
+        // Assert
         Assert.Equal(2, services.Count(service => service.ServiceType == typeof(IHostedService)));
         _ = Assert.Single(services, service => service.ServiceType == typeof(IHostedService)
                                                && service.ImplementationType?.Name == "PortiaWorkloadService");
@@ -23,10 +26,15 @@ public sealed class ExplicitWorkloadTests
     [Fact]
     public async Task UnexpectedCoordinatorCompletionFailsVisibly()
     {
+        // Arrange
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<IWorkloadCoordinator, CompletedCoordinator>();
         _ = services.AddPortia().AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global).AddWorkers();
+
+        // Act
         await using var provider = services.BuildServiceProvider();
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await worker.StartAsync(default);
         try
@@ -44,9 +52,14 @@ public sealed class ExplicitWorkloadTests
     [Fact]
     public async Task ShouldFailStartGivenNoCoordinatorWhenStartingWorkers()
     {
+        // Arrange
         var services = ConsumerHost.CreateServices();
         _ = services.AddPortia().AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global).AddWorkers();
+
+        // Act
         await using var provider = services.BuildServiceProvider();
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => worker.StartAsync(default));
@@ -58,11 +71,16 @@ public sealed class ExplicitWorkloadTests
     [Fact]
     public async Task ShouldFailStartGivenTwoCoordinatorsWhenStartingWorkers()
     {
+        // Arrange
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<IWorkloadCoordinator, CompletedCoordinator>();
         _ = services.AddPortia().AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)
             .UseSingleProcessWorkloads().AddWorkers();
+
+        // Act
         await using var provider = services.BuildServiceProvider();
+
+        // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => worker.StartAsync(default));
@@ -73,10 +91,13 @@ public sealed class ExplicitWorkloadTests
     [Fact]
     public void ShouldRegisterSingleProcessCoordinatorGivenOptInWhenUsingSingleProcessWorkloads()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         _ = services.AddPortia().UseSingleProcessWorkloads();
 
+        // Assert
         var descriptor = Assert.Single(services, item => item.ServiceType == typeof(IWorkloadCoordinator));
         using var provider = services.BuildServiceProvider();
         _ = Assert.IsType<SingleProcessWorkloadCoordinator>(provider.GetRequiredService<IWorkloadCoordinator>());
@@ -118,11 +139,16 @@ public sealed class ExplicitWorkloadTests
     [Fact]
     public void MixedScopesRegisterWithoutFitzOrStartingWorkers()
     {
+        // Arrange
         var services = new ServiceCollection();
+
+        // Act
         var portia = services.AddPortia()
             .AddProjector<TenantFirstProjector>("first-projector", WorkloadScope.PerTenant)
             .AddProjector<SecondProjector>("second-projector", WorkloadScope.Global)
             .AddReactor<TenantFirstReactor>("first-reactor", WorkloadScope.PerTenant);
+
+        // Assert
         var workloads = services.Where(service => service.ServiceType == typeof(WorkloadRegistration))
             .Select(service => Assert.IsType<WorkloadRegistration>(service.ImplementationInstance)).ToArray();
         Assert.Equal(3, workloads.Length);
@@ -141,10 +167,14 @@ public sealed class ExplicitWorkloadTests
     [Fact]
     public void DuplicateWorkloadRejectsDifferentFailurePolicy()
     {
+        // Arrange
         var services = new ServiceCollection();
+
+        // Act
         var portia = services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
             options => options.FailureAttemptLimit = 3);
 
+        // Assert
         var exception = Assert.Throws<InvalidOperationException>(() =>
             portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
                 options => options.FailureAttemptLimit = 4));
@@ -156,9 +186,14 @@ public sealed class ExplicitWorkloadTests
     [Fact]
     public void ShouldPreserveServicesGivenInvalidOrConflictingScopeWhenRegisteringWorkload()
     {
+        // Arrange
         var services = new ServiceCollection();
         var portia = services.AddPortia();
+
+        // Act
         var count = services.Count;
+
+        // Assert
         _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
             portia.AddProjector<FirstProjector>("first-projector", (WorkloadScope)42));
         Assert.Equal(count, services.Count);

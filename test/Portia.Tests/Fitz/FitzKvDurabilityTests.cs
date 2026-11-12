@@ -16,12 +16,15 @@ public sealed class FitzKvDurabilityTests
     [InlineData(KvDurability.Sync)]
     public async Task ShouldUseSelectedDurabilityGivenCheckpointStore(KvDurability durability)
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new FitzKvCheckpointStore(client, Route, durability);
         var checkpoint = new ProjectionCheckpoint(new EventCursor("1"));
 
+        // Act
         await store.SaveAsync(Identity, checkpoint);
 
+        // Assert
         Assert.Equal(durability, client.LastTransaction.Durability);
         Assert.Equal(checkpoint, await store.LoadAsync(Identity));
     }
@@ -32,10 +35,14 @@ public sealed class FitzKvDurabilityTests
     [InlineData(KvDurability.Sync)]
     public async Task ShouldCommitDataAndCheckpointTogetherGivenSelectedDurability(KvDurability durability)
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new Projection(client, durability);
+
+        // Act
         var checkpoint = new ProjectionCheckpoint(new EventCursor("1"));
 
+        // Assert
         await using (var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
         {
             await store.WriteAsync();
@@ -55,10 +62,14 @@ public sealed class FitzKvDurabilityTests
     [InlineData(KvDurability.Sync)]
     public async Task ShouldUseSelectedDurabilityGivenTenantSnapshotStore(KvDurability durability)
     {
+        // Arrange
         var client = new FakeKvClient();
         var store = new FitzKvTenantDirectorySnapshotStore(client, Route, durability);
+
+        // Act
         var snapshot = new TenantDirectorySnapshot(new EventCursor("1"), [new TenantId("acme")]);
 
+        // Assert
         Assert.True(await store.TrySaveAsync(Pattern, null, snapshot));
 
         Assert.Equal(durability, client.LastTransaction.Durability);
@@ -73,6 +84,7 @@ public sealed class FitzKvDurabilityTests
     [InlineData(KvDurability.Sync)]
     public async Task ShouldConfigureResolvedCheckpointDurabilityGivenRepeatedSelection(KvDurability durability)
     {
+        // Arrange
         var services = new ServiceCollection();
         var client = new FakeKvClient();
         _ = services.AddSingleton<IKvClient>(client);
@@ -81,8 +93,10 @@ public sealed class FitzKvDurabilityTests
         using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IProjectionCheckpointStore>();
 
+        // Act
         await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1")));
 
+        // Assert
         Assert.Equal(durability, client.LastTransaction.Durability);
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IProjectionCheckpointStore));
     }
@@ -91,15 +105,18 @@ public sealed class FitzKvDurabilityTests
     [Fact]
     public async Task ShouldUseBufferedDurabilityGivenDefaultCheckpointSelection()
     {
+        // Arrange
         var services = new ServiceCollection();
         var client = new FakeKvClient();
         _ = services.AddSingleton<IKvClient>(client);
         _ = services.AddPortia().AddFitz(Configuration(), builder => builder.UseKvCheckpoints(Route));
         using var provider = services.BuildServiceProvider();
 
+        // Act
         await provider.GetRequiredService<IProjectionCheckpointStore>()
             .SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1")));
 
+        // Assert
         Assert.Equal(KvDurability.Buffered, client.LastTransaction.Durability);
     }
 
@@ -124,8 +141,13 @@ public sealed class FitzKvDurabilityTests
     [InlineData(2)]
     public void ShouldRejectUnknownDurabilityGivenStoreOrBuilder(int value)
     {
+        // Arrange
         var durability = (KvDurability)value;
+
+        // Act
         var client = new FakeKvClient();
+
+        // Assert
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new FitzKvCheckpointStore(client, Route, durability));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new Projection(client, durability));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new FitzKvTenantDirectorySnapshotStore(client, Route, durability));

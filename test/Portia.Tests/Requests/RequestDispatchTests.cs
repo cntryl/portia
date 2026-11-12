@@ -11,6 +11,7 @@ public sealed class RequestDispatchTests
     [Fact]
     public async Task ShouldDispatchBothRequestShapesGivenOneDelivery()
     {
+        // Arrange
         using var busHost = TestRequestBus.Create();
         using var cancellation = new CancellationTokenSource();
         var invocation = new QueueInvocation("queue://test/work/item", 1);
@@ -19,11 +20,14 @@ public sealed class RequestDispatchTests
             new TestRequestActorValidator(), busHost.Bus, new ChangeValue(1),
             new RequestDelivery("test.change_value", invocation, RequestMetadata.Create(), "valid-token"),
             cancellation.Token);
+
+        // Act
         var query = await RequestDispatch.SendAsync(
             new TestRequestActorValidator(), busHost.Bus, new GetValue(),
             new RequestDelivery("test.get_value", invocation, RequestMetadata.Create(), "valid-token"),
             cancellation.Token);
 
+        // Assert
         Assert.True(command.WasDispatched);
         Assert.True(query.WasDispatched);
     }
@@ -35,15 +39,18 @@ public sealed class RequestDispatchTests
     [Fact]
     public async Task ShouldReturnValidationFailureWithoutDispatchingWhenActorValidationFails()
     {
+        // Arrange
         var handler = new ChangeValueHandler();
         using var busHost = TestRequestBus.Create(handler);
         var bus = busHost.Bus;
         var validator = new TestRequestActorValidator("expired-token");
 
+        // Act
         var dispatch = await RequestDispatch.SendAsync(validator, bus, new ChangeValue(1),
             new RequestDelivery("test.change_value", new QueueInvocation("queue://test/work/item", 1),
                 RequestMetadata.Create(), "expired-token"));
 
+        // Assert
         Assert.False(dispatch.WasDispatched);
         Assert.False(dispatch.Outcome.IsSuccess);
         Assert.Equal("Token expired.", dispatch.Outcome.Error.Message);
@@ -57,15 +64,18 @@ public sealed class RequestDispatchTests
     [Fact]
     public async Task ShouldDispatchToBusAndReturnItsResultWhenActorValidationSucceeds()
     {
+        // Arrange
         var handler = new ChangeValueHandler();
         using var busHost = TestRequestBus.Create(handler);
         var bus = busHost.Bus;
         var validator = new TestRequestActorValidator();
 
+        // Act
         var dispatch = await RequestDispatch.SendAsync(validator, bus, new ChangeValue(42),
             new RequestDelivery("test.change_value", new QueueInvocation("queue://test/work/item", 1),
                 RequestMetadata.Create(), "valid-token"));
 
+        // Assert
         Assert.True(dispatch.WasDispatched);
         Assert.True(dispatch.Outcome.IsSuccess);
         Assert.Equal(42, handler.LastValue);

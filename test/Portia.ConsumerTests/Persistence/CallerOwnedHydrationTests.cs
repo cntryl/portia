@@ -13,6 +13,7 @@ public sealed class CallerOwnedHydrationTests
     [InlineData(true)]
     public async Task CallerConstructsHydratesChangesAndSavesWithoutAnyFactory(bool fitz)
     {
+        // Arrange
         await using var fixture = await StoreFixture.CreateAsync(fitz);
         var services = new ServiceCollection();
         _ = services.AddSingleton(fixture.Store);
@@ -21,7 +22,11 @@ public sealed class CallerOwnedHydrationTests
         await using var scope = provider.CreateAsyncScope();
         var repository = scope.ServiceProvider.Aggregates();
         var id = Uuid.CreateVersion4();
+
+        // Act
         var original = new Account(id);
+
+        // Assert
         Assert.Same(original, await repository.HydrateAsync(original));
         Assert.Equal(0UL, original.Version);
         original.Deposit(12);
@@ -42,10 +47,13 @@ public sealed class CallerOwnedHydrationTests
     [InlineData(true)]
     public async Task HydrationRejectsPendingChangesWithoutDiscardingThem(bool audit)
     {
+        // Arrange
         var store = new InMemoryEventStore();
         await using var provider = new ServiceCollection().BuildServiceProvider();
         var repository = new AggregateRepository(store);
         var account = new Account(Uuid.CreateVersion4());
+
+        // Act
         if (audit)
         {
             account.Audit(new Declined("pending"));
@@ -55,6 +63,7 @@ public sealed class CallerOwnedHydrationTests
             account.Deposit(5);
         }
 
+        // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await repository.HydrateAsync(account));
         await repository.SaveAsync(account, _saveContext);
         Assert.Equal(audit ? 0UL : 1UL, account.CommittedStreamPosition);
@@ -66,6 +75,7 @@ public sealed class CallerOwnedHydrationTests
     [InlineData(true)]
     public async Task HydrationResumesAfterCommittedEventsAndCanSaveAgain(bool fitz)
     {
+        // Arrange
         await using var fixture = await StoreFixture.CreateAsync(fitz);
         var repository = fixture.Repository;
         var id = Uuid.CreateVersion4();
@@ -74,7 +84,11 @@ public sealed class CallerOwnedHydrationTests
         await repository.SaveAsync(first, _saveContext);
         var second = await repository.HydrateAsync(new Account(id));
         second.Deposit(20);
+
+        // Act
         await repository.SaveAsync(second, _saveContext);
+
+        // Assert
         Assert.Same(first, await repository.HydrateAsync(first));
         Assert.Equal(30, first.Balance);
         Assert.Equal(2UL, first.Version);
@@ -89,6 +103,7 @@ public sealed class CallerOwnedHydrationTests
     [Fact]
     public async Task ReadsOnlyNewOffsetsAndExcludesConcurrentMutationForEntireRead()
     {
+        // Arrange
         var store = new TrackingStore();
         await using var provider = new ServiceCollection().BuildServiceProvider();
         var repository = new AggregateRepository(store);
@@ -100,7 +115,11 @@ public sealed class CallerOwnedHydrationTests
         await repository.SaveAsync(peer, _saveContext);
         store.Pause = true;
         var hydration = repository.HydrateAsync(account).AsTask();
+
+        // Act
         await store.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Assert
         try
         {
             _ = Assert.Throws<InvalidOperationException>(() => account.Deposit(100));
@@ -122,12 +141,17 @@ public sealed class CallerOwnedHydrationTests
     [Fact]
     public async Task CancellationLeavesFreshInstanceAvailableForRetry()
     {
+        // Arrange
         var store = new InMemoryEventStore();
         await using var provider = new ServiceCollection().BuildServiceProvider();
         var repository = new AggregateRepository(store);
         var account = new Account(Uuid.CreateVersion4());
         using var cancellation = new CancellationTokenSource();
+
+        // Act
         await cancellation.CancelAsync();
+
+        // Assert
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await repository.HydrateAsync(account, cancellation.Token));
         Assert.Same(account, await repository.HydrateAsync(account));
