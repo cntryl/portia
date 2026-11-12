@@ -38,8 +38,8 @@ The unit of value is not `command → handler → route`. It is the complete pat
 - **One composition, independent deployments.** An API and its workers share application setup but can be deployed and
   scaled separately. Workers support global, per-tenant, and fleet-coordinated ownership.
 - **Compile-time wiring.** Registration, transport descriptors, HTTP binding, and JSON roots are source-generated and
-  checked by Portia analyzers. The supported runtime path uses no assembly scanning or reflection and is exercised as a
-  packed NativeAOT application in CI.
+  checked by Portia analyzers. The supported runtime path uses no assembly scanning or reflection, and NativeAOT smoke
+  consumers under `smoke/` exercise it.
 - **Reusable request preflight.** Scoped asynchronous guards run at the unary handler boundary, can target one request
   or an application-owned request family, and short-circuit with the ordinary `Result` contract.
 

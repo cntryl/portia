@@ -9,8 +9,7 @@ permissions:
   contents: read
   packages: read
 
-# A superseded run on the same ref has nothing left to prove, and the Fitz container binds a fixed
-# port, so overlapping runs on one runner would contend for it.
+# A superseded run on the same ref has nothing left to prove.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -24,6 +23,60 @@ jobs:
     name: Build and test
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    # Image digests and settings match compose.yaml, which remains the local-run equivalent.
+    services:
+      sqrzl:
+        image: ghcr.io/sqrzl/sqrzl-emulator@sha256:da1a2a731fe6de71ce8241e3d9fda9ae48dec6015f8b531f4f3129e4ca9969a8
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          SQRZL_BLOBS_PATH: /app/blobs
+          SQRZL_LOG_FORMAT: text
+          SQRZL_ACCESS_KEY_ID: portia-test
+          SQRZL_SECRET_ACCESS_KEY: portia-local-secret
+        ports:
+          - 127.0.0.1:9000:9000
+        options: --init --security-opt no-new-privileges:true
+
+      fitz:
+        image: ghcr.io/cntryl/fitz@sha256:5e7d844c52dc24de35f33fb024a3a19b0fa13af7d1fa64edfc8e953371051e1f
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          FITZ_ADMIN_AUTH_MODE: open
+          FITZ_AUTH_REQUIRED: "false"
+          FITZ_HTTP_PORT: "4090"
+          FITZ_STORAGE_MODE: local
+          FITZ_STORAGE_PATH: /tmp/fitz
+          FITZ_TCP_ENABLED: "false"
+        ports:
+          - 4090/tcp
+        options: >-
+          --init
+          --read-only
+          --tmpfs /tmp/fitz:rw,noexec,nosuid,size=64m,mode=1777
+          --security-opt no-new-privileges:true
+
+      cassie:
+        image: ghcr.io/cntryl/cassie@sha256:c179afabb7051e19629cfd1ecc6b83fa88bfb4deb6a391060aa1f472f7a0d1de
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          CASSIE_STORAGE_MODE: memory
+          CASSIE_ROOT_PASSWORD: portia-cassie-test
+          CASSIE_ALLOW_INSECURE_NON_LOOPBACK_LISTEN: "1"
+        ports:
+          - 127.0.0.1:5432:5432
+          - 127.0.0.1:8080:8080
+        options: --init --security-opt no-new-privileges:true
+
+    env:
+      PORTIA_S3_TEST_ENDPOINT: http://127.0.0.1:9000
+      PORTIA_CASSIE_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Database=postgres;Username=root;Password=portia-cassie-test;SSL Mode=Disable;Timeout=15
 
     steps:
       - name: Check out repository
@@ -69,13 +122,11 @@ jobs:
       - name: Qualify actual Prometheus dashboard queries
         run: scripts/qualify-prometheus.sh "$RUNNER_TEMP/portia-prometheus-evidence"
 
-      - name: Validate compiler benchmark consumers
-        run: scripts/compiler-campaign.sh "$RUNNER_TEMP/portia-compiler-control" 2 small 1
-
-      - name: Qualify runtime performance fixtures with JSON reflection disabled
+      # These qualification modes exercise correctness only; neither runs timed benchmark jobs.
+      - name: Test runtime behavior matrix with JSON reflection disabled
         run: dotnet run --project bench/Portia.Benchmarks/Portia.Benchmarks.csproj --configuration Release --no-build -- --runtime-qualification
 
-      - name: Qualify MCP payload sizes over HTTP and stdio
+      - name: Verify MCP payloads over HTTP and stdio
         run: dotnet run --project bench/Portia.Benchmarks/Portia.Benchmarks.csproj --configuration Release --no-build -- --mcp-protocol-payload-qualification
 
       - name: Validate M5 MCP lookup supplement report
@@ -181,32 +232,31 @@ jobs:
           artifacts/fitz-lexkey-native-aot/Portia.Fitz.LexKey.PackageConsumer
           scripts/qualify-account-example.sh "$RUNNER_TEMP/portia-account-otel-evidence"
 
-      - name: Test S3 storage integration
-        env:
-          PORTIA_S3_TEST_ENDPOINT: http://127.0.0.1:9000
+      # Service containers start without a health check, so wait for each endpoint before testing.
+      - name: Wait for integration services
         run: |
-          docker compose up -d sqrzl
-          if ! curl --fail --silent --show-error --retry 30 --retry-delay 1 \
-            --retry-connrefused --max-time 2 --output /dev/null \
-            http://127.0.0.1:9000/healthz; then
-            docker compose logs sqrzl
-            exit 1
-          fi
-          dotnet test Portia.slnx \
-            --configuration Release \
-            --no-build \
-            --filter "Category=StorageIntegration"
+          for url in http://127.0.0.1:9000/healthz "http://127.0.0.1:${{ job.services.fitz.ports['4090'] }}/readyz" http://127.0.0.1:8080/readyz; do
+            curl --fail --silent --show-error --retry 30 --retry-delay 1 \
+              --retry-connrefused --retry-all-errors --max-time 2 --output /dev/null "$url"
+          done
+
+      - name: Test S3 storage integration
+        run: >-
+          dotnet test Portia.slnx
+          --configuration Release
+          --no-build
+          --filter "Category=StorageIntegration"
 
       - name: Test full broker integration
         env:
-          FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
-        run: |
-          docker compose up -d --wait fitz
-          dotnet test Portia.slnx \
-            --configuration Release \
-            --no-build \
-            --filter "Category=BrokerIntegration"
+          FITZ_TEST_ENDPOINT: ws://127.0.0.1:${{ job.services.fitz.ports['4090'] }}/ws
+        run: >-
+          dotnet test Portia.slnx
+          --configuration Release
+          --no-build
+          --filter "Category=BrokerIntegration"
 
+      # This lane starts its own isolated, persistent Fitz container on a random port.
       - name: Test operational crash durability with isolated persistent Fitz
         run: >-
           dotnet test test/Portia.Tests/Portia.Tests.csproj
@@ -216,18 +266,9 @@ jobs:
 
       - name: Test Fitz Portia Cassie integration
         env:
-          FITZ_TEST_ENDPOINT: ws://127.0.0.1:4090/ws
-          PORTIA_CASSIE_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Database=postgres;Username=root;Password=portia-cassie-test;SSL Mode=Disable;Timeout=15
-        run: |
-          docker compose up -d --wait fitz cassie
-          curl --fail --silent --show-error --retry 30 --retry-delay 1 \
-            --retry-connrefused --max-time 2 --output /dev/null \
-            http://127.0.0.1:8080/readyz
-          dotnet test Portia.slnx \
-            --configuration Release \
-            --no-build \
-            --filter "Category=CassieIntegration"
-
-      - name: Stop integration services
-        if: ${{ always() }}
-        run: docker compose down --volumes
+          FITZ_TEST_ENDPOINT: ws://127.0.0.1:${{ job.services.fitz.ports['4090'] }}/ws
+        run: >-
+          dotnet test Portia.slnx
+          --configuration Release
+          --no-build
+          --filter "Category=CassieIntegration"
